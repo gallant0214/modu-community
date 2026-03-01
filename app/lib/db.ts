@@ -1,4 +1,9 @@
 import { neon } from "@neondatabase/serverless";
 
-const dbUrl = process.env.DATABASE_URL!.replace(/&channel_binding=[^&]*/g, "");
-export const sql = neon(dbUrl);
+function getDb() {
+  const raw = process.env.DATABASE_URL || "";
+  const cleaned = raw.replace(/&channel_binding=[^&]*/g, "").trim();
+  return neon(cleaned);
+}
+
+export const sql = getDb();

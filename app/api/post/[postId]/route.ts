@@ -1,6 +1,8 @@
 import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 function maskIp(ip: string): string {
   if (!ip || ip === "unknown") return "";
   // IPv6-mapped IPv4 (::ffff:1.2.3.4) → IPv4 부분 추출
