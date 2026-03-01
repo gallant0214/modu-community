@@ -641,8 +641,7 @@ export default function PostDetailPage() {
                             <button
                               onClick={async () => {
                                 const wasLiked = likedCommentIds.has(comment.id);
-                                const result = await likeComment(comment.id, Number(postId), Number(categoryId));
-                                if (result?.error) { alert(result.error); return; }
+                                const result = await likeComment(comment.id, Number(postId), Number(categoryId)) as { unliked?: boolean } | undefined;
                                 if (wasLiked || result?.unliked) {
                                   setLikedCommentIds((prev) => { const s = new Set(prev); s.delete(comment.id); return s; });
                                   setComments((prev) => prev.map((c) => c.id === comment.id ? { ...c, likes: Math.max((c.likes ?? 0) - 1, 0) } : c));
