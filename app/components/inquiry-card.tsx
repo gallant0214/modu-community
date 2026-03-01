@@ -9,7 +9,9 @@ export function InquiryCard({ inquiry }: { inquiry: Inquiry }) {
   const [error, setError] = useState("");
 
   async function handleDelete(formData: FormData) {
-    const result = await deleteInquiry(formData);
+    const id = Number(formData.get("id"));
+    const password = formData.get("password") as string;
+    const result = await deleteInquiry(id, password);
     if (result?.error) {
       setError(result.error);
     }
