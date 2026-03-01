@@ -30,15 +30,15 @@ export function PostForm({ categoryId, post, onCancel }: PostFormProps) {
   return (
     <form ref={formRef} action={handleAction} className="space-y-3">
       <input type="hidden" name="category_id" value={post?.category_id ?? categoryId} />
-      {isEdit && <input type="hidden" name="id" value={post.id} />}
+      {isEdit && post && <input type="hidden" name="id" value={post.id} />}
       {!isEdit && (
         <div className="flex gap-2">
-          <input name="author" defaultValue={post?.author ?? ""} placeholder="닉네임" required className={inputClass} />
-          <input name="region" defaultValue={post?.region ?? "전국"} placeholder="지역" className={inputClass} />
+          <input name="author" defaultValue="" placeholder="닉네임" required className={inputClass} />
+          <input name="region" defaultValue="전국" placeholder="지역" className={inputClass} />
         </div>
       )}
       {!isEdit && (
-        <input name="tags" defaultValue={post?.tags ?? ""} placeholder="태그 (쉼표로 구분)" className={inputClass} />
+        <input name="tags" defaultValue="" placeholder="태그 (쉼표로 구분)" className={inputClass} />
       )}
       <input name="title" defaultValue={post?.title ?? ""} placeholder="제목" required className={inputClass} />
       <textarea

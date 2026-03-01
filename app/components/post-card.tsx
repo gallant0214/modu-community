@@ -53,9 +53,15 @@ export function PostCard({ post, index }: { post: Post; index: number }) {
             >
               수정
             </button>
-            <form action={deletePost}>
+            <form action={async (formData: FormData) => {
+              const id = Number(formData.get("id"));
+              const categoryId = Number(formData.get("category_id"));
+              const password = formData.get("password") as string;
+              await deletePost(id, categoryId, password);
+            }}>
               <input type="hidden" name="id" value={post.id} />
               <input type="hidden" name="category_id" value={post.category_id} />
+              <input type="hidden" name="password" value="" />
               <button
                 type="submit"
                 className="rounded-lg px-3 py-1 text-xs text-red-500 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
