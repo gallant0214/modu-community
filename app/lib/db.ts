@@ -1,3 +1,4 @@
 import { neon } from "@neondatabase/serverless";
 
-export const sql = neon(process.env.DATABASE_URL!);
+const dbUrl = process.env.DATABASE_URL!.replace(/&channel_binding=[^&]*/g, "");
+export const sql = neon(dbUrl);
