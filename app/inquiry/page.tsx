@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { sql } from "@/app/lib/db";
 import { InquiryRow } from "@/app/components/inquiry-row";

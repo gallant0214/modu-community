@@ -5,9 +5,14 @@ let _sql: any = null;
 
 function get_sql() {
   if (!_sql) {
-    const raw = process.env.DATABASE_URL || "";
-    const cleaned = raw.replace(/&channel_binding=[^&]*/g, "").trim();
-    _sql = neon(cleaned);
+    let raw = process.env.DATABASE_URL || "";
+    // Vercel 환경변수 오류 대비: "Value:" 접두사 제거
+    raw = raw.replace(/^Value:\s*/i, "");
+    // channel_binding 파라미터 제거 (neon serverless 미지원)
+    raw = raw.replace(/&channel_binding=[^&]*/g, "").trim();
+    // postgresql:// → postgres:// 변환 (neon 호환성)
+    raw = raw.replace(/^postgresql:\/\//, "postgres://");
+    _sql = neon(raw);
   }
   return _sql;
 }
