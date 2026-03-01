@@ -24,9 +24,9 @@ export async function GET(
       (SELECT COUNT(*) FROM comments r WHERE r.parent_id = c.id) AS reply_count,
       c.ip_address, c.created_at
     FROM comments c WHERE c.post_id = ${Number(postId)} ORDER BY c.created_at ASC`;
-  const result = rows.map((c) => ({
+  const result = rows.map((c: Record<string, unknown>) => ({
     ...c,
-    ip_display: maskIp(c.ip_address || ""),
+    ip_display: maskIp(String(c.ip_address || "")),
     ip_address: undefined,
   }));
   return NextResponse.json(result);
