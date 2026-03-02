@@ -1,4 +1,5 @@
 import { sql } from "@/app/lib/db";
+import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -30,4 +31,27 @@ export async function GET(
     ip_address: undefined,
   }));
   return NextResponse.json(result);
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ postId: string }> }
+) {
+  const { postId } = await params;
+  const pid = Number(postId);
+  const body = await request.json();
+  const { author, password, content, parent_id, category_id } = body;
+
+  if (!author?.trim() || !password?.trim() || !content?.trim()) {
+    return NextResponse.json({ error: "모든 항목을 입력해주세요" }, { status: 400 });
+  }
+
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
+
+  await sql`INSERT INTO comments (post_id, parent_id, author, password, content, ip_address)
+    VALUES (${pid}, ${parent_id ?? null}, ${author.trim()}, ${password.trim()}, ${content.trim()}, ${ip})`;
+  await sql`UPDATE posts SET comments_count = (SELECT COUNT(*) FROM comments WHERE post_id = ${pid}) WHERE id = ${pid}`;
+
+  return NextResponse.json({ success: true });
 }

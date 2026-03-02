@@ -30,3 +30,46 @@ export async function GET(
     ip_address: undefined,
   });
 }
+
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ postId: string }> }
+) {
+  const { postId } = await params;
+  const body = await request.json();
+  const { title, content, region, tags } = body;
+
+  if (!title?.trim() || !content?.trim()) {
+    return NextResponse.json({ error: "제목과 내용을 입력해주세요" }, { status: 400 });
+  }
+
+  await sql`
+    UPDATE posts
+    SET title = ${title.trim()}, content = ${content.trim()}, region = ${region || ""}, tags = ${tags || ""}, updated_at = NOW()
+    WHERE id = ${Number(postId)}
+  `;
+  return NextResponse.json({ success: true });
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ postId: string }> }
+) {
+  const { postId } = await params;
+  const body = await request.json();
+  const { password } = body;
+  const id = Number(postId);
+
+  const rows = await sql`SELECT password FROM posts WHERE id = ${id}`;
+  if (rows.length === 0) {
+    return NextResponse.json({ error: "게시글을 찾을 수 없습니다" }, { status: 404 });
+  }
+
+  const isAdmin = password === process.env.ADMIN_PASSWORD;
+  if (!isAdmin && rows[0].password !== password) {
+    return NextResponse.json({ error: "비밀번호가 일치하지 않습니다" }, { status: 403 });
+  }
+
+  await sql`DELETE FROM posts WHERE id = ${id}`;
+  return NextResponse.json({ success: true });
+}
