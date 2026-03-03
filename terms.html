@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>이용약관 — 모두의 지도사 커뮤니티</title>
+  <meta name="description" content="모두의 지도사 커뮨니티 이용약관. 시행일: 2026년 3월 1일." />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Noto Sans KR', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #F6F1E8;
+      color: #2F2A24;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ===== Header ===== */
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(246, 241, 232, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(47, 42, 36, 0.06);
+    }
+
+    .header-inner {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+
+    .site-logo {
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: -0.3px;
+      color: #4A6D5E;
+    }
+
+    .header-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #6E665D;
+      transition: color 0.2s;
+    }
+
+    .header-back:hover { color: #4A6D5E; }
+
+    .header-back svg { flex-shrink: 0; }
+
+    /* ===== Page Title ===== */
+    .page-title-area {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 48px 20px 0;
+      text-align: center;
+    }
+
+    .page-title {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 10px;
+    }
+
+    .page-date {
+      font-size: 14px;
+      color: #6E665D;
+    }
+
+    .page-date span {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 999px;
+      background: rgba(207, 175, 123, 0.18);
+      color: #8B7340;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    /* ===== Content ===== */
+    .terms-content {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+
+    .terms-card {
+      background: #FFFFFF;
+      border-radius: 16px;
+      padding: 32px 28px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 16px rgba(47, 42, 36, 0.04);
+    }
+
+    .article-number {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: rgba(74, 109, 94, 0.1);
+      color: #4A6D5E;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .article-title {
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 16px;
+      letter-spacing: -0.2px;
+      line-height: 1.4;
+    }
+
+    .article-body {
+      font-size: 14.5px;
+      color: #2F2A24;
+      line-height: 1.85;
+      word-break: keep-all;
+    }
+
+    .article-body p {
+      margin-bottom: 12px;
+    }
+
+    .article-body p:last-child {
+      margin-bottom: 0;
+    }
+
+    .clause-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .clause-list li {
+      position: relative;
+      padding-left: 24px;
+      margin-bottom: 8px;
+      font-size: 14.5px;
+      line-height: 1.8;
+      word-break: keep-all;
+    }
+
+    .clause-list li:last-child {
+      margin-bottom: 0;
+    }
+
+    .clause-list li::before {
+      content: attr(data-num);
+      position: absolute;
+      left: 0;
+      top: 0;
+      font-weight: 600;
+      color: #4A6D5E;
+      font-size: 13px;
+    }
+
+    .clause-divider {
+      height: 1px;
+      background: #E5DED3;
+      border: none;
+      margin: 16px 0;
+    }
+
+    .clause-warning {
+      margin-top: 16px;
+      padding: 14px 18px;
+      border-radius: 10px;
+      background: rgba(207, 175, 123, 0.1);
+      border: 1px solid rgba(207, 175, 123, 0.2);
+      font-size: 13.5px;
+      color: #8B7340;
+      font-weight: 600;
+      line-height: 1.7;
+      word-break: keep-all;
+    }
+
+    /* ===== Footer ===== */
+    .site-footer {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 0 20px 48px;
+      text-align: center;
+    }
+
+    .footer-divider {
+      height: 1px;
+      background: #E5DED3;
+      border: none;
+      margin-bottom: 28px;
+    }
+
+    .footer-logo {
+      font-weight: 800;
+      font-size: 15px;
+      color: #4A6D5E;
+      margin-bottom: 8px;
+    }
+
+    .footer-text {
+      font-size: 12px;
+      color: #6E665D;
+      line-height: 1.8;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 14px;
+    }
+
+    .footer-links a {
+      font-size: 12px;
+      color: #6E665D;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover { color: #4A6D5E; }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 640px) {
+      .page-title-area { padding-top: 36px; }
+
+      .page-title { font-size: 26px; }
+
+      .terms-card {
+        padding: 24px 20px;
+        border-radius: 14px;
+      }
+
+      .article-title { font-size: 16px; }
+
+      .article-body,
+      .clause-list li { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-logo">모두의 지도사 커뮤니티</a>
+      <a href="index.html" class="header-back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        홈으로 돌아가기
+      </a>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- Page Title -->
+    <div class="page-title-area">
+      <h1 class="page-title">이용약관</h1>
+      <p class="page-date"><span>시행일: 2026년 3월 1일</span></p>
+    </div>
+
+    <div class="terms-content">
+
+      <!-- 제1조 -->
+      <article class="terms-card">
+        <div class="article-number">제1조</div>
+        <h2 class="article-title">목적</h2>
+        <div class="article-body">
+          <p>본 약관은 모두의 지도사 커뮤니티(이하 "회사")가 제공하는 온라인 커뮤니티 및 구인 정보 게시 서비스(이하 "서비스")의 이용과 관련하여 회사와 이용자 간의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.</p>
+        </div>
+      </article>
+
+      <!-- 제2조 -->
+      <article class="terms-card">
+        <div class="article-number">제2조</div>
+        <h2 class="article-title">서비스의 법적 성격</h2>
+        <div class="article-body">
+          <ol class="clause-list">
+            <li data-num="1.">본 서비스는 정보 공유를 위한 온라인 게시판 서비스입니다.</li>
+            <li data-num="2.">회사는 직업소개사업자, 채용 알선자, 인력 중개업자가 아닙니다.</li>
+            <li data-num="3.">회사는 구직자와 구인자 사이의 계약, 채용, 협상, 근로조건 결정에 관여하지 않습니다.</li>
+            <li data-num="4.">회사는 어떠한 고용 보장도 하지 않습니다.</li>
+          </ol>
+        </div>
+      </article>
+
+      <!-- 제3조 -->
+      <article class="terms-card">
+        <div class="article-number">제3조</div>
+        <h2 class="article-title">서비스 내용</h2>
+        <div class="article-body">
+          <ol class="clause-list">
+            <li data-num="1.">스포츠지도사 실기·구술 후기 공유 게시판</li>
+            <li data-num="2.">종목·지역·시험장별 커뮤니티 게시판</li>
+            <li data-num="3.">스포츠·운동 업계 전용 구인 정보 게시판</li>
+            <li data-num="4.">기타 회사가 정하는 정보 공유 기능</li>
+          </ol>
+        </div>
+      </article>
+
+      <!-- 제4조 -->
+      <article class="terms-card">
+        <div class="article-number">제4조</div>
+        <h2 class="article-title">시험 관련 면책</h2>
+        <div class="article-body">
+          <ol class="clause-list">
+            <li data-num="1.">시험 관련 정보는 이용자의 경험 및 의견입니다.</li>
+            <li data-num="2.">회사는 시험 합격 여부, 문제 출제 경향 등에 대해 보증하지 않습니다.</li>
+            <li data-num="3.">시험 문제 원문, 교재, 저작권 보호 자료 게시를 금지합니다.</li>
+            <li data-num="4.">시험 주관 기관과 본 서비스는 관련이 없습니다.</li>
+          </ol>
+        </div>
+      </article>
+
+      <!-- 제5조 -->
+      <article class="terms-card">
+        <div class="article-number">제5조</div>
+        <h2 class="article-title">게시물 책임</h2>
+        <div class="article-body">
+          <ol class="clause-list">
+            <li data-num="1.">게시물의 법적 책임은 작성자에게 있습니다.</li>
+            <li data-num="2.">회사는 게시물의 정확성, 적법성에 대해 보증하지 않습니다.</li>
+            <li data-num="3.">약관 위반 게시물은 사전 통지 없이 삭제될 수 있습니다.</li>
+          </ol>
+        </div>
+      </article>
+
+      <!-- 제6조 -->
+      <article class="terms-card">
+        <div class="article-number">제6조</div>
+        <h2 class="article-title">구인 공고 특별 규정</h2>
+        <div class="article-body">
+          <ol class="clause-list">
+            <li data-num="1.">본 서비스는 구인 정보를 게시할 수 있는 공간만 제공합니다.</li>
+            <li data-num="2.">회사는 채용 과정에 관여하지 않습니다.</li>
+            <li data-num="3.">구직 활동은 이용자의 판단과 책임 하에 이루어집니다.</li>
+            <li data-num="4.">회사는 근로조건, 임금 지급, 계약 분쟁에 대해 책임을 지지 않습니다.</li>
+            <li data-num="5.">회사는 구직자와 구인자 간 분쟁에 개입하지 않습니다.</li>
+          </ol>
+        </div>
+      </article>
+
+      <!-- 제7조 -->
+      <article class="terms-card">
+        <div class="article-number">제7조</div>
+        <h2 class="article-title">허위·위법 공고 금지</h2>
+        <div class="article-body">
+          <p>다음 각 호에 해당하는 구인 공고 게시를 금지합니다.</p>
+          <hr class="clause-divider" />
+          <ol class="clause-list">
+            <li data-num="1.">허위 채용 조건 기재</li>
+            <li data-num="2.">급여 및 근로 조건 왜곡</li>
+            <li data-num="3.">근로기준법 위반 조건 게시</li>
+            <li data-num="4.">채용을 가장한 영업·투자 행위</li>
+            <li data-num="5.">스포츠 업계와 무관한 광고성 게시물</li>
+          </ol>
+          <div class="clause-warning">위반 시 게시물 삭제 및 계정 정지 조치가 이루어집니다.</div>
+        </div>
+      </article>
+
+      <!-- 제8조 -->
+      <article class="terms-card">
+        <div class="article-number">제8조</div>
+        <h2 class="article-title">광고 게재</h2>
+        <div class="article-body">
+          <ol class="clause-list">
+            <li data-num="1.">회사는 서비스 내 광고를 게재할 수 있습니다.</li>
+            <li data-num="2.">이용자는 광고 노출에 동의합니다.</li>
+            <li data-num="3.">광고와 관련한 거래에 대해 회사는 책임지지 않습니다.</li>
+          </ol>
+        </div>
+      </article>
+
+      <!-- 제9조 -->
+      <article class="terms-card">
+        <div class="article-number">제9조</div>
+        <h2 class="article-title">향후 유료 서비스 전환</h2>
+        <div class="article-body">
+          <ol class="clause-list">
+            <li data-num="1.">회사는 일부 기능을 유료로 전환할 수 있습니다.</li>
+            <li data-num="2.">구인 공고 등록 기능은 향후 유료화될 수 있습니다.</li>
+            <li data-num="3.">유료 전환 시 사전 공지합니다.</li>
+            <li data-num="4.">유료 서비스라도 채용 성사 보장은 하지 않습니다.</li>
+          </ol>
+        </div>
+      </article>
+
+      <!-- 제10조 -->
+      <article class="terms-card">
+        <div class="article-number">제10조</div>
+        <h2 class="article-title">운영 권한</h2>
+        <div class="article-body">
+          <ol class="clause-list">
+            <li data-num="1.">회사는 게시물 노출 순서를 조정할 수 있습니다.</li>
+            <li data-num="2.">회사는 약관 위반 게시물을 삭제할 수 있습니다.</li>
+            <li data-num="3.">회사는 계정을 제한 또는 종료할 수 있습니다.</li>
+          </ol>
+        </div>
+      </article>
+
+      <!-- 제11조 -->
+      <article class="terms-card">
+        <div class="article-number">제11조</div>
+        <h2 class="article-title">면책조항</h2>
+        <div class="article-body">
+          <p>회사는 이용자가 게시한 정보의 정확성, 채용 성사 여부, 계약 이후 분쟁에 대해 책임을 지지 않습니다.</p>
+        </div>
+      </article>
+
+      <!-- 제12조 -->
+      <article class="terms-card">
+        <div class="article-number">제12조</div>
+        <h2 class="article-title">준거법 및 관할</h2>
+        <div class="article-body">
+          <p>본 약관은 대한민국 법률에 따르며, 분쟁 발생 시 회사 소재지 관할 법원을 전속 관할로 합니다.</p>
+        </div>
+      </article>
+
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <hr class="footer-divider" />
+    <div class="footer-logo">모두의 지도사</div>
+    <p class="footer-text">
+      비공식 스포츠지도사 학습·커뮤니티 서비스입니다.<br />
+      공식 시험 정보는 대한체육회 등 해당 기관에서 확인해 주세요.
+    </p>
+    <div class="footer-links">
+      <a href="index.html">홈</a>
+      <a href="terms.html">이용약관</a>
+    </div>
+    <p class="footer-text" style="margin-top: 20px;">© 2026 모두의 지도사. All rights reserved.</p>
+  </footer>
+
+</body>
+</html>
