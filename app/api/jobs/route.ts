@@ -4,75 +4,162 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/jobs?region_code=GUMI&sort=latest&page=1&q=&searchType=title
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const regionCode = url.searchParams.get("region_code") || "";
-  const sort = url.searchParams.get("sort") || "latest";
-  const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
-  const limit = 20;
-  const offset = (page - 1) * limit;
-  const q = url.searchParams.get("q")?.trim() || "";
-  const searchType = url.searchParams.get("searchType") || "title";
-
-  let whereClause = "WHERE 1=1";
-  const params: unknown[] = [];
-  let paramIdx = 1;
-
-  if (regionCode) {
-    whereClause += ` AND region_code = $${paramIdx++}`;
-    params.push(regionCode);
-  }
-
-  if (q) {
-    const words = q.split(/\s+/).filter(Boolean);
-    for (const word of words) {
-      const like = `%${word}%`;
-      switch (searchType) {
-        case "sport":
-          whereClause += ` AND sport ILIKE $${paramIdx++}`;
-          break;
-        case "title":
-          whereClause += ` AND title ILIKE $${paramIdx++}`;
-          break;
-        case "author":
-          whereClause += ` AND center_name ILIKE $${paramIdx++}`;
-          break;
-        case "content":
-          whereClause += ` AND description ILIKE $${paramIdx++}`;
-          break;
-        case "title_content":
-          whereClause += ` AND (title ILIKE $${paramIdx} OR description ILIKE $${paramIdx++})`;
-          break;
-        default:
-          whereClause += ` AND title ILIKE $${paramIdx++}`;
-      }
-      params.push(like);
+async function queryWithSearch(
+  regionCode: string,
+  searchPattern: string,
+  searchType: string,
+  limit: number,
+  offset: number,
+  orderCol: string,
+) {
+  if (searchType === "title_content") {
+    if (regionCode) {
+      const countResult = await sql`SELECT COUNT(*) as total FROM job_posts WHERE region_code = ${regionCode} AND (title ILIKE ${searchPattern} OR description ILIKE ${searchPattern})`;
+      const rows = orderCol === "views"
+        ? await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND (title ILIKE ${searchPattern} OR description ILIKE ${searchPattern}) ORDER BY views DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : orderCol === "likes"
+        ? await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND (title ILIKE ${searchPattern} OR description ILIKE ${searchPattern}) ORDER BY likes DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND (title ILIKE ${searchPattern} OR description ILIKE ${searchPattern}) ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+      return [countResult, rows];
+    } else {
+      const countResult = await sql`SELECT COUNT(*) as total FROM job_posts WHERE title ILIKE ${searchPattern} OR description ILIKE ${searchPattern}`;
+      const rows = orderCol === "views"
+        ? await sql`SELECT * FROM job_posts WHERE title ILIKE ${searchPattern} OR description ILIKE ${searchPattern} ORDER BY views DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : orderCol === "likes"
+        ? await sql`SELECT * FROM job_posts WHERE title ILIKE ${searchPattern} OR description ILIKE ${searchPattern} ORDER BY likes DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : await sql`SELECT * FROM job_posts WHERE title ILIKE ${searchPattern} OR description ILIKE ${searchPattern} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+      return [countResult, rows];
     }
   }
 
-  let orderBy = "ORDER BY created_at DESC";
-  if (sort === "popular") orderBy = "ORDER BY views DESC, created_at DESC";
-  if (sort === "likes") orderBy = "ORDER BY likes DESC, created_at DESC";
+  if (searchType === "sport") {
+    if (regionCode) {
+      const countResult = await sql`SELECT COUNT(*) as total FROM job_posts WHERE region_code = ${regionCode} AND sport ILIKE ${searchPattern}`;
+      const rows = orderCol === "views"
+        ? await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND sport ILIKE ${searchPattern} ORDER BY views DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : orderCol === "likes"
+        ? await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND sport ILIKE ${searchPattern} ORDER BY likes DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND sport ILIKE ${searchPattern} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+      return [countResult, rows];
+    } else {
+      const countResult = await sql`SELECT COUNT(*) as total FROM job_posts WHERE sport ILIKE ${searchPattern}`;
+      const rows = orderCol === "views"
+        ? await sql`SELECT * FROM job_posts WHERE sport ILIKE ${searchPattern} ORDER BY views DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : orderCol === "likes"
+        ? await sql`SELECT * FROM job_posts WHERE sport ILIKE ${searchPattern} ORDER BY likes DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : await sql`SELECT * FROM job_posts WHERE sport ILIKE ${searchPattern} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+      return [countResult, rows];
+    }
+  }
 
-  const countQuery = `SELECT COUNT(*) as total FROM job_posts ${whereClause}`;
-  const dataQuery = `SELECT * FROM job_posts ${whereClause} ${orderBy} LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
+  if (searchType === "author") {
+    if (regionCode) {
+      const countResult = await sql`SELECT COUNT(*) as total FROM job_posts WHERE region_code = ${regionCode} AND center_name ILIKE ${searchPattern}`;
+      const rows = orderCol === "views"
+        ? await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND center_name ILIKE ${searchPattern} ORDER BY views DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : orderCol === "likes"
+        ? await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND center_name ILIKE ${searchPattern} ORDER BY likes DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND center_name ILIKE ${searchPattern} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+      return [countResult, rows];
+    } else {
+      const countResult = await sql`SELECT COUNT(*) as total FROM job_posts WHERE center_name ILIKE ${searchPattern}`;
+      const rows = orderCol === "views"
+        ? await sql`SELECT * FROM job_posts WHERE center_name ILIKE ${searchPattern} ORDER BY views DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : orderCol === "likes"
+        ? await sql`SELECT * FROM job_posts WHERE center_name ILIKE ${searchPattern} ORDER BY likes DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : await sql`SELECT * FROM job_posts WHERE center_name ILIKE ${searchPattern} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+      return [countResult, rows];
+    }
+  }
 
-  params.push(limit, offset);
+  if (searchType === "content") {
+    if (regionCode) {
+      const countResult = await sql`SELECT COUNT(*) as total FROM job_posts WHERE region_code = ${regionCode} AND description ILIKE ${searchPattern}`;
+      const rows = orderCol === "views"
+        ? await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND description ILIKE ${searchPattern} ORDER BY views DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : orderCol === "likes"
+        ? await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND description ILIKE ${searchPattern} ORDER BY likes DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND description ILIKE ${searchPattern} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+      return [countResult, rows];
+    } else {
+      const countResult = await sql`SELECT COUNT(*) as total FROM job_posts WHERE description ILIKE ${searchPattern}`;
+      const rows = orderCol === "views"
+        ? await sql`SELECT * FROM job_posts WHERE description ILIKE ${searchPattern} ORDER BY views DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : orderCol === "likes"
+        ? await sql`SELECT * FROM job_posts WHERE description ILIKE ${searchPattern} ORDER BY likes DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : await sql`SELECT * FROM job_posts WHERE description ILIKE ${searchPattern} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+      return [countResult, rows];
+    }
+  }
 
-  const [countResult, rows] = await Promise.all([
-    sql(countQuery, params.slice(0, paramIdx - 3)),
-    sql(dataQuery, params),
-  ]);
+  // Default: title search
+  if (regionCode) {
+    const countResult = await sql`SELECT COUNT(*) as total FROM job_posts WHERE region_code = ${regionCode} AND title ILIKE ${searchPattern}`;
+    const rows = orderCol === "views"
+      ? await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND title ILIKE ${searchPattern} ORDER BY views DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+      : orderCol === "likes"
+      ? await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND title ILIKE ${searchPattern} ORDER BY likes DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+      : await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} AND title ILIKE ${searchPattern} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+    return [countResult, rows];
+  } else {
+    const countResult = await sql`SELECT COUNT(*) as total FROM job_posts WHERE title ILIKE ${searchPattern}`;
+    const rows = orderCol === "views"
+      ? await sql`SELECT * FROM job_posts WHERE title ILIKE ${searchPattern} ORDER BY views DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+      : orderCol === "likes"
+      ? await sql`SELECT * FROM job_posts WHERE title ILIKE ${searchPattern} ORDER BY likes DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+      : await sql`SELECT * FROM job_posts WHERE title ILIKE ${searchPattern} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+    return [countResult, rows];
+  }
+}
 
-  const total = Number(countResult[0].total);
+// GET /api/jobs?region_code=GUMI&sort=latest&page=1&q=&searchType=title
+export async function GET(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const regionCode = url.searchParams.get("region_code") || "";
+    const sort = url.searchParams.get("sort") || "latest";
+    const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+    const limit = 20;
+    const offset = (page - 1) * limit;
+    const q = url.searchParams.get("q")?.trim() || "";
+    const searchType = url.searchParams.get("searchType") || "title";
 
-  return NextResponse.json({
-    posts: rows,
-    total,
-    page,
-    totalPages: Math.ceil(total / limit),
-  });
+    const searchPattern = q ? `%${q}%` : "";
+    const orderCol = sort === "popular" ? "views" : sort === "likes" ? "likes" : "created_at";
+
+    let countResult;
+    let rows;
+
+    if (searchPattern) {
+      [countResult, rows] = await queryWithSearch(regionCode, searchPattern, searchType, limit, offset, orderCol);
+    } else if (regionCode) {
+      countResult = await sql`SELECT COUNT(*) as total FROM job_posts WHERE region_code = ${regionCode}`;
+      rows = orderCol === "views"
+        ? await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} ORDER BY views DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : orderCol === "likes"
+        ? await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} ORDER BY likes DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : await sql`SELECT * FROM job_posts WHERE region_code = ${regionCode} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+    } else {
+      countResult = await sql`SELECT COUNT(*) as total FROM job_posts`;
+      rows = orderCol === "views"
+        ? await sql`SELECT * FROM job_posts ORDER BY views DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : orderCol === "likes"
+        ? await sql`SELECT * FROM job_posts ORDER BY likes DESC, created_at DESC LIMIT ${limit} OFFSET ${offset}`
+        : await sql`SELECT * FROM job_posts ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
+    }
+
+    const total = Number(countResult[0].total);
+
+    return NextResponse.json({
+      posts: rows,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    });
+  } catch (e) {
+    console.error("GET /api/jobs error:", e);
+    return NextResponse.json({ error: "서버 오류" }, { status: 500 });
+  }
 }
 
 // POST /api/jobs — 구인 글 등록
