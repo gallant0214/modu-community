@@ -1,4 +1,3 @@
 User-agent: *
 Allow: /
-
-Sitemap: https://moducm.netlify.app/sitemap.xml
+Sitemap: https://moducm.pages.dev/sitemap.xml
