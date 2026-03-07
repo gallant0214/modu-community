@@ -1,7 +1,17 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">모두의 지도사</string>
-    <string name="title_activity_main">모두의 지도사</string>
+    <!-- 앱 이름 -->
+    <string name="app_name">모두의 지도사 커뮤니티</string>
+    <string name="title_activity_main">모두의 지도사 커뮤니티</string>
     <string name="package_name">com.moduji.app</string>
     <string name="custom_url_scheme">com.moduji.app</string>
+
+    <!-- Google Sign-In Web Client ID (google-services.json 배치 시 자동 대체됨) -->
+    <string name="default_web_client_id">PLACEHOLDER</string>
+
+    <!-- 하단 탭 라벨 -->
+    <string name="tab_home">홈</string>
+    <string name="tab_community">종목후기</string>
+    <string name="tab_jobs">구인</string>
+    <string name="tab_profile">My</string>
 </resources>

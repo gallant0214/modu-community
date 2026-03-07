@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 지역 선택 리스트: 섹션 헤더 (도/광역시 이름) -->
+<!-- 클릭 불가, 그룹 구분용으로만 사용 -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/app_surface">
+
+    <TextView
+        android:id="@+id/tv_header_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="경상북도"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:textColor="@color/app_text_section"
+        android:background="@color/app_section_bg"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="10dp" />
+</LinearLayout>

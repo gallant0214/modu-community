@@ -1,0 +1,35 @@
+package com.moduji.app.ui.jobs
+
+import android.os.Bundle
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import androidx.fragment.app.Fragment
+import com.moduji.app.databinding.FragmentJobsBinding
+
+/**
+ * 구인(Jobs) 탭 Fragment
+ *
+ * - 서브 네비게이션 호스트 컨테이너
+ * - 내부적으로 RegionSelectFragment → JobsListFragment 2단계 구조
+ * - BottomNavigationView에서 이 Fragment를 호스팅
+ */
+class JobsFragment : Fragment() {
+
+    private var _binding: FragmentJobsBinding? = null
+    private val binding get() = _binding!!
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View {
+        _binding = FragmentJobsBinding.inflate(inflater, container, false)
+        return binding.root
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
+}

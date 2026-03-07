@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Navigation Graph: 각 탭의 Fragment 목적지 정의 -->
+<!-- id 값은 bottom_nav_menu.xml의 item id와 반드시 일치해야 함 -->
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/navigation_home">
+
+    <!-- 홈 탭 -->
+    <fragment
+        android:id="@+id/navigation_home"
+        android:name="com.moduji.app.ui.home.HomeFragment"
+        android:label="@string/tab_home"
+        tools:layout="@layout/fragment_home">
+
+        <action
+            android:id="@+id/action_home_to_postDetail"
+            app:destination="@id/postDetailFromHomeFragment" />
+    </fragment>
+
+    <!-- 게시글 상세 (홈에서 진입) -->
+    <fragment
+        android:id="@+id/postDetailFromHomeFragment"
+        android:name="com.moduji.app.ui.community.PostDetailFragment"
+        android:label="게시글 상세"
+        tools:layout="@layout/fragment_post_detail">
+
+        <argument android:name="postId" app:argType="integer" />
+        <argument android:name="categoryId" app:argType="integer" />
+    </fragment>
+
+    <!-- 후기(커뮤니티) 탭 -->
+    <fragment
+        android:id="@+id/navigation_community"
+        android:name="com.moduji.app.ui.community.CommunityFragment"
+        android:label="@string/tab_community"
+        tools:layout="@layout/fragment_community" />
+
+    <!-- 구인 탭 -->
+    <fragment
+        android:id="@+id/navigation_jobs"
+        android:name="com.moduji.app.ui.jobs.JobsFragment"
+        android:label="@string/tab_jobs"
+        tools:layout="@layout/fragment_jobs" />
+
+    <!-- My 탭 -->
+    <fragment
+        android:id="@+id/navigation_profile"
+        android:name="com.moduji.app.ui.my.MyFragment"
+        android:label="@string/tab_profile"
+        tools:layout="@layout/fragment_my">
+
+        <action
+            android:id="@+id/action_profile_to_inquiry"
+            app:destination="@id/inquiryFromMyFragment" />
+
+        <action
+            android:id="@+id/action_profile_to_admin"
+            app:destination="@id/adminFromMyFragment" />
+
+        <action
+            android:id="@+id/action_profile_to_postDetail"
+            app:destination="@id/postDetailFromMyFragment" />
+    </fragment>
+
+    <!-- 문의하기 (My 탭에서 진입) -->
+    <fragment
+        android:id="@+id/inquiryFromMyFragment"
+        android:name="com.moduji.app.ui.community.InquiryListFragment"
+        android:label="문의하기"
+        tools:layout="@layout/fragment_inquiry_list">
+
+        <action
+            android:id="@+id/action_inquiry_to_write"
+            app:destination="@id/inquiryWriteFromMyFragment" />
+    </fragment>
+
+    <!-- 문의 작성 (My 탭에서 진입) -->
+    <fragment
+        android:id="@+id/inquiryWriteFromMyFragment"
+        android:name="com.moduji.app.ui.community.InquiryWriteFragment"
+        android:label="문의 작성"
+        tools:layout="@layout/fragment_inquiry_write" />
+
+    <!-- 관리자 (My 탭에서 진입) -->
+    <fragment
+        android:id="@+id/adminFromMyFragment"
+        android:name="com.moduji.app.ui.community.AdminFragment"
+        android:label="관리자"
+        tools:layout="@layout/fragment_admin">
+
+        <action
+            android:id="@+id/action_admin_to_postDetail"
+            app:destination="@id/postDetailFromAdminFragment" />
+
+        <action
+            android:id="@+id/action_admin_to_jobDetail"
+            app:destination="@id/jobDetailFromAdminFragment" />
+    </fragment>
+
+    <!-- 게시글 상세 (관리자에서 바로가기) -->
+    <fragment
+        android:id="@+id/postDetailFromAdminFragment"
+        android:name="com.moduji.app.ui.community.PostDetailFragment"
+        android:label="게시글 상세"
+        tools:layout="@layout/fragment_post_detail">
+
+        <argument android:name="postId" app:argType="integer" />
+        <argument android:name="categoryId" app:argType="integer" />
+    </fragment>
+
+    <!-- 게시글 상세 (MY에서 북마크 진입) -->
+    <fragment
+        android:id="@+id/postDetailFromMyFragment"
+        android:name="com.moduji.app.ui.community.PostDetailFragment"
+        android:label="게시글 상세"
+        tools:layout="@layout/fragment_post_detail">
+
+        <argument android:name="postId" app:argType="integer" />
+        <argument android:name="categoryId" app:argType="integer" />
+    </fragment>
+
+    <!-- 구인게시글 상세 (관리자에서 바로가기) -->
+    <fragment
+        android:id="@+id/jobDetailFromAdminFragment"
+        android:name="com.moduji.app.ui.jobs.JobDetailFragment"
+        android:label="구인 상세"
+        tools:layout="@layout/fragment_job_detail">
+
+        <argument android:name="postId" app:argType="integer" />
+    </fragment>
+
+</navigation>

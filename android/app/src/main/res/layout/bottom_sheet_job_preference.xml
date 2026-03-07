@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 우대 조건 선택 바텀시트 (다중 선택) -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_bottom_sheet"
+    android:paddingBottom="16dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_handle_bar" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="우대 조건"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:textColor="@color/app_text_primary"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="12dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="20dp">
+
+        <CheckBox android:id="@+id/cb_experienced" android:layout_width="match_parent" android:layout_height="44dp" android:text="동종업계 경력자" android:textSize="15sp" android:textColor="@color/app_text_secondary" />
+        <CheckBox android:id="@+id/cb_certified" android:layout_width="match_parent" android:layout_height="44dp" android:text="관련 자격증 소지자" android:textSize="15sp" android:textColor="@color/app_text_secondary" />
+        <CheckBox android:id="@+id/cb_long_term" android:layout_width="match_parent" android:layout_height="44dp" android:text="장기근무 가능자" android:textSize="15sp" android:textColor="@color/app_text_secondary" />
+        <CheckBox android:id="@+id/cb_beginner" android:layout_width="match_parent" android:layout_height="44dp" android:text="초보 가능" android:textSize="15sp" android:textColor="@color/app_text_secondary" />
+        <CheckBox android:id="@+id/cb_nearby" android:layout_width="match_parent" android:layout_height="44dp" android:text="인근 거주자" android:textSize="15sp" android:textColor="@color/app_text_secondary" />
+        <CheckBox android:id="@+id/cb_student" android:layout_width="match_parent" android:layout_height="44dp" android:text="대학생 가능" android:textSize="15sp" android:textColor="@color/app_text_secondary" />
+        <CheckBox android:id="@+id/cb_driver" android:layout_width="match_parent" android:layout_height="44dp" android:text="운전 가능자" android:textSize="15sp" android:textColor="@color/app_text_secondary" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="12dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="취소"
+            android:textSize="14sp"
+            style="@style/Widget.Material3.Button.TextButton" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_confirm"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="선택 완료"
+            android:textSize="14sp"
+            android:layout_marginStart="8dp"
+            style="@style/Widget.Material3.Button.TonalButton" />
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/app_surface">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="16dp">
+
+        <!-- 상단: 종목 + 지역 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="6dp">
+
+            <TextView
+                android:id="@+id/tv_job_category"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="수영"
+                android:textSize="11sp"
+                android:textColor="@color/app_tag_sport_text"
+                android:background="@drawable/bg_tag"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="2dp" />
+
+            <TextView
+                android:id="@+id/tv_job_region"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="서울 강남"
+                android:textSize="11sp"
+                android:textColor="@color/app_text_hint"
+                android:layout_marginStart="6dp" />
+        </LinearLayout>
+
+        <!-- 제목 -->
+        <TextView
+            android:id="@+id/tv_job_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="OO스포츠센터 수영 지도사 모집"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="@color/app_text_primary"
+            android:maxLines="2"
+            android:ellipsize="end" />
+
+        <!-- 급여 + 날짜 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                android:id="@+id/tv_job_salary"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="월 250~300만원"
+                android:textSize="14sp"
+                android:textColor="@color/app_salary_text"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_job_date"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="03.01"
+                android:textSize="11sp"
+                android:textColor="@color/app_text_hint" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 구분선 (풀 너비) -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:background="@color/app_divider" />
+</LinearLayout>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 마감 뱃지 배경 (회색 pill – 비활성 느낌) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/app_badge_closed_bg" />
+    <corners android:radius="12dp" />
+</shape>

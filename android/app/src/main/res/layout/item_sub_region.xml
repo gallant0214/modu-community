@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 하위 지역 아이템 (강남구, 수원시 등) — 들여쓰기, 클릭 시 구인 리스트로 이동 -->
+<!-- 구조:    [지역명 · 게시글 수 .................. N배지] -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/app_surface_variant">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="40dp"
+        android:paddingEnd="16dp"
+        android:background="?attr/selectableItemBackground">
+
+        <!-- 지역명 -->
+        <TextView
+            android:id="@+id/tv_sub_region_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="강남구"
+            android:textSize="14sp"
+            android:textColor="@color/app_text_tertiary" />
+
+        <!-- 게시글 수 -->
+        <TextView
+            android:id="@+id/tv_sub_region_count"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text=" · 5개"
+            android:textSize="12sp"
+            android:textColor="@color/app_text_disabled" />
+
+        <!-- N 배지 (오늘 등록글 있을 때만 표시) -->
+        <TextView
+            android:id="@+id/tv_badge_new"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="N"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="@color/app_badge_new_text"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 구분선 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:layout_marginStart="40dp"
+        android:background="@color/app_divider" />
+</LinearLayout>

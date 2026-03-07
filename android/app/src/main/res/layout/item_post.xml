@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 게시글 아이템 (웹 디자인 동일) -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="16dp"
+    android:paddingTop="14dp"
+    android:paddingBottom="0dp"
+    android:background="?attr/selectableItemBackground">
+
+    <!-- 1줄: [태그뱃지] [지역뱃지] 제목 [댓글수] -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <!-- 태그 뱃지 (실기/구술 등) -->
+        <TextView
+            android:id="@+id/tv_tag_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="22dp"
+            android:gravity="center"
+            android:textSize="11sp"
+            android:textColor="@color/md_theme_primary"
+            android:background="@drawable/bg_tag"
+            android:paddingHorizontal="8dp"
+            android:layout_marginEnd="6dp"
+            android:visibility="gone" />
+
+        <!-- 지역 뱃지 -->
+        <TextView
+            android:id="@+id/tv_region_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="22dp"
+            android:gravity="center"
+            android:textSize="11sp"
+            android:textColor="@color/app_tag_sport_text"
+            android:background="@drawable/bg_tag_region"
+            android:paddingHorizontal="8dp"
+            android:layout_marginEnd="6dp"
+            android:visibility="gone" />
+
+        <!-- 제목 -->
+        <TextView
+            android:id="@+id/tv_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="@color/app_text_primary"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <!-- 댓글 수 -->
+        <TextView
+            android:id="@+id/tv_comments"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="@color/md_theme_primary"
+            android:layout_marginStart="6dp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 2줄: 작성자 · 지역 · 날짜    ♥ n · 조회 n -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="6dp">
+
+        <TextView
+            android:id="@+id/tv_meta"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="12sp"
+            android:textColor="@color/app_text_hint"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <!-- 좋아요 -->
+        <TextView
+            android:id="@+id/tv_likes"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/app_badge_new_text"
+            android:layout_marginStart="8dp"
+            android:visibility="gone" />
+
+        <!-- 조회수 -->
+        <TextView
+            android:id="@+id/tv_views"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/app_text_hint"
+            android:layout_marginStart="6dp" />
+    </LinearLayout>
+
+    <!-- 하단 구분선 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:background="@color/app_divider"
+        android:layout_marginTop="14dp" />
+
+</LinearLayout>

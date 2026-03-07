@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 재사용 가능한 메뉴 행 아이템 -->
+<!-- 구조: [아이콘] [텍스트 ............. ] [화살표] -->
+<!-- My 탭의 내 활동, 알림, 설정 섹션에서 공통 사용 -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/app_surface">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:background="?attr/selectableItemBackground">
+
+        <!-- 아이콘 -->
+        <ImageView
+            android:id="@+id/iv_menu_icon"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:tint="@color/app_icon_tint"
+            android:contentDescription="메뉴 아이콘" />
+
+        <!-- 메뉴 텍스트 -->
+        <TextView
+            android:id="@+id/tv_menu_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="14dp"
+            android:text="메뉴"
+            android:textSize="15sp"
+            android:textColor="@color/app_text_secondary" />
+
+        <!-- 우측 화살표 -->
+        <ImageView
+            android:id="@+id/iv_menu_arrow"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:src="@drawable/ic_arrow_right"
+            android:tint="@color/app_icon_tint_arrow"
+            android:contentDescription="이동" />
+    </LinearLayout>
+
+    <!-- 하단 구분선 -->
+    <View
+        android:id="@+id/divider"
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:layout_marginStart="52dp"
+        android:background="@color/app_divider" />
+</LinearLayout>

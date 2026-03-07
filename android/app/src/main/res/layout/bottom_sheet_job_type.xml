@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 근무형태 선택 바텀시트 -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_bottom_sheet"
+    android:paddingBottom="16dp">
+
+    <!-- 핸들 바 -->
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_handle_bar" />
+
+    <!-- 타이틀 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="근무형태 선택"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:textColor="@color/app_text_primary"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="12dp" />
+
+    <!-- 라디오 그룹 -->
+    <RadioGroup
+        android:id="@+id/rg_job_type"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="20dp">
+
+        <RadioButton android:id="@+id/rb_full_time" android:layout_width="match_parent" android:layout_height="44dp" android:text="정규직" android:textSize="15sp" android:textColor="@color/app_text_secondary" />
+        <RadioButton android:id="@+id/rb_contract" android:layout_width="match_parent" android:layout_height="44dp" android:text="계약직" android:textSize="15sp" android:textColor="@color/app_text_secondary" />
+        <RadioButton android:id="@+id/rb_part_time_job" android:layout_width="match_parent" android:layout_height="44dp" android:text="아르바이트" android:textSize="15sp" android:textColor="@color/app_text_secondary" />
+        <RadioButton android:id="@+id/rb_freelancer" android:layout_width="match_parent" android:layout_height="44dp" android:text="프리랜서(위촉직)" android:textSize="15sp" android:textColor="@color/app_text_secondary" />
+        <RadioButton android:id="@+id/rb_part_time" android:layout_width="match_parent" android:layout_height="44dp" android:text="파트타임" android:textSize="15sp" android:textColor="@color/app_text_secondary" />
+        <RadioButton android:id="@+id/rb_trainee" android:layout_width="match_parent" android:layout_height="44dp" android:text="교육생/연수생" android:textSize="15sp" android:textColor="@color/app_text_secondary" />
+        <RadioButton android:id="@+id/rb_intern" android:layout_width="match_parent" android:layout_height="44dp" android:text="인턴" android:textSize="15sp" android:textColor="@color/app_text_secondary" />
+    </RadioGroup>
+
+</LinearLayout>

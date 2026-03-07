@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 근무요일·시간 선택 바텀시트 -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_bottom_sheet"
+    android:paddingBottom="16dp">
+
+    <!-- 핸들 바 -->
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_handle_bar" />
+
+    <!-- 타이틀 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="근무요일·시간"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:textColor="@color/app_text_primary"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="12dp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginBottom="8dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="20dp">
+
+            <!-- 근무요일 섹션 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="근무요일"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/app_text_tertiary" />
+
+            <RadioGroup
+                android:id="@+id/rg_day_option"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp">
+
+                <RadioButton android:id="@+id/rb_weekdays" android:layout_width="match_parent" android:layout_height="40dp" android:text="평일(월~금)" android:textSize="14sp" android:textColor="@color/app_text_secondary" />
+                <RadioButton android:id="@+id/rb_weekends" android:layout_width="match_parent" android:layout_height="40dp" android:text="주말(토·일)" android:textSize="14sp" android:textColor="@color/app_text_secondary" />
+                <RadioButton android:id="@+id/rb_five_days" android:layout_width="match_parent" android:layout_height="40dp" android:text="주 5일" android:textSize="14sp" android:textColor="@color/app_text_secondary" />
+                <RadioButton android:id="@+id/rb_six_days" android:layout_width="match_parent" android:layout_height="40dp" android:text="주 6일" android:textSize="14sp" android:textColor="@color/app_text_secondary" />
+                <RadioButton android:id="@+id/rb_custom_days" android:layout_width="match_parent" android:layout_height="40dp" android:text="요일 직접 선택" android:textSize="14sp" android:textColor="@color/app_text_secondary" />
+                <RadioButton android:id="@+id/rb_day_negotiable" android:layout_width="match_parent" android:layout_height="40dp" android:text="협의 가능" android:textSize="14sp" android:textColor="@color/app_text_secondary" />
+            </RadioGroup>
+
+            <!-- 요일 직접 선택 (CUSTOM_DAYS 선택 시만 표시) -->
+            <LinearLayout
+                android:id="@+id/layout_custom_days"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp"
+                android:layout_marginStart="16dp"
+                android:visibility="gone">
+
+                <CheckBox android:id="@+id/cb_mon" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="월" android:textSize="13sp" android:textColor="@color/app_text_secondary" />
+                <CheckBox android:id="@+id/cb_tue" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="화" android:textSize="13sp" android:textColor="@color/app_text_secondary" />
+                <CheckBox android:id="@+id/cb_wed" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="수" android:textSize="13sp" android:textColor="@color/app_text_secondary" />
+                <CheckBox android:id="@+id/cb_thu" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="목" android:textSize="13sp" android:textColor="@color/app_text_secondary" />
+                <CheckBox android:id="@+id/cb_fri" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="금" android:textSize="13sp" android:textColor="@color/app_text_secondary" />
+                <CheckBox android:id="@+id/cb_sat" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="토" android:textSize="13sp" android:textColor="@color/app_text_secondary" />
+                <CheckBox android:id="@+id/cb_sun" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:text="일" android:textSize="13sp" android:textColor="@color/app_text_secondary" />
+            </LinearLayout>
+
+            <!-- 구분선 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="0.5dp"
+                android:background="@color/app_divider"
+                android:layout_marginVertical="12dp" />
+
+            <!-- 근무시간 섹션 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="근무시간"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/app_text_tertiary" />
+
+            <RadioGroup
+                android:id="@+id/rg_time_option"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp">
+
+                <RadioButton android:id="@+id/rb_fixed_time" android:layout_width="match_parent" android:layout_height="40dp" android:text="시간 직접 선택" android:textSize="14sp" android:textColor="@color/app_text_secondary" />
+                <RadioButton android:id="@+id/rb_time_negotiable" android:layout_width="match_parent" android:layout_height="40dp" android:text="시간 협의" android:textSize="14sp" android:textColor="@color/app_text_secondary" />
+            </RadioGroup>
+
+            <!-- 시간 선택 영역 (FIXED 선택 시만 표시) -->
+            <LinearLayout
+                android:id="@+id/layout_time_picker"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="8dp"
+                android:layout_marginStart="16dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/tv_start_time"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:text="시작 시간"
+                    android:textSize="14sp"
+                    android:textColor="@color/app_text_hint"
+                    android:gravity="center"
+                    android:background="@drawable/bg_selector_row" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=" ~ "
+                    android:textSize="14sp"
+                    android:textColor="@color/app_text_secondary"
+                    android:paddingHorizontal="8dp" />
+
+                <TextView
+                    android:id="@+id/tv_end_time"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:text="종료 시간"
+                    android:textSize="14sp"
+                    android:textColor="@color/app_text_hint"
+                    android:gravity="center"
+                    android:background="@drawable/bg_selector_row" />
+            </LinearLayout>
+
+            <!-- 추가 체크박스 -->
+            <CheckBox
+                android:id="@+id/cb_break_time"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:text="휴게시간 포함"
+                android:textSize="14sp"
+                android:textColor="@color/app_text_secondary"
+                android:layout_marginTop="12dp" />
+
+            <CheckBox
+                android:id="@+id/cb_shift_work"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:text="교대근무"
+                android:textSize="14sp"
+                android:textColor="@color/app_text_secondary" />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- 버튼 영역 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="12dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="취소"
+            android:textSize="14sp"
+            style="@style/Widget.Material3.Button.TextButton" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_confirm"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:text="선택 완료"
+            android:textSize="14sp"
+            android:layout_marginStart="8dp"
+            style="@style/Widget.Material3.Button.TonalButton" />
+    </LinearLayout>
+</LinearLayout>

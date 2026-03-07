@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 지역 선택 화면: 게시글 검색 + 지역 검색 + 지역 리스트 + 글쓰기 FAB -->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/app_surface"
+    tools:context="com.moduji.app.ui.jobs.RegionSelectFragment">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- 상단 헤더 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="16dp"
+            android:paddingBottom="12dp">
+
+            <!-- 타이틀 + 알림 아이콘 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="구인 게시판"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/app_text_primary" />
+
+                <ImageButton
+                    android:id="@+id/btn_keyword_alert"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:src="@drawable/ic_notification"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="키워드 알림 설정"
+                    android:scaleType="centerInside"
+                    android:padding="6dp"
+                    android:tint="@color/app_icon_tint" />
+            </LinearLayout>
+
+            <!-- 안내 텍스트 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="지역을 선택해 주세요"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_hint"
+                android:layout_marginTop="2dp" />
+
+            <!-- 게시글 검색 바 (검색유형 + 입력) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/bg_search_bar">
+
+                <!-- 검색 유형 선택 -->
+                <LinearLayout
+                    android:id="@+id/btn_search_type"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="4dp"
+                    android:background="?attr/selectableItemBackground">
+
+                    <TextView
+                        android:id="@+id/tv_search_type"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="제목"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/md_theme_primary" />
+
+                    <ImageView
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
+                        android:layout_marginStart="2dp"
+                        android:src="@drawable/ic_expand_more"
+                        android:contentDescription="검색 유형"
+                        app:tint="@color/md_theme_primary" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="20dp"
+                    android:background="@color/app_divider"
+                    android:layout_marginHorizontal="4dp" />
+
+                <!-- 검색 입력 -->
+                <EditText
+                    android:id="@+id/et_post_search"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@android:color/transparent"
+                    android:hint="게시글 검색"
+                    android:textSize="14sp"
+                    android:textColor="@color/app_text_secondary"
+                    android:textColorHint="@color/app_text_hint"
+                    android:paddingHorizontal="8dp"
+                    android:inputType="text"
+                    android:imeOptions="actionSearch"
+                    android:maxLines="1"
+                    android:importantForAutofill="no" />
+            </LinearLayout>
+
+            <!-- 종목 추천 리스트 (종목 검색 시 초성 매칭) -->
+            <ListView
+                android:id="@+id/lv_sport_suggestions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/bg_search_bar"
+                android:divider="@color/app_divider"
+                android:dividerHeight="0.5dp"
+                android:visibility="gone"
+                android:maxHeight="200dp"
+                android:nestedScrollingEnabled="false" />
+
+            <!-- 지역 검색 바 -->
+            <EditText
+                android:id="@+id/et_search"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_search_bar"
+                android:drawableStart="@drawable/ic_search"
+                android:drawablePadding="8dp"
+                android:drawableTint="@color/app_icon_tint_muted"
+                android:hint="지역명 검색 (예: 구미, 서울)"
+                android:textSize="14sp"
+                android:textColor="@color/app_text_secondary"
+                android:textColorHint="@color/app_text_hint"
+                android:paddingHorizontal="12dp"
+                android:inputType="text"
+                android:imeOptions="actionSearch"
+                android:maxLines="1"
+                android:importantForAutofill="no" />
+        </LinearLayout>
+
+        <!-- 구분선 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0.5dp"
+            android:background="@color/app_divider" />
+
+        <!-- 지역 리스트 -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_regions"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            tools:listitem="@layout/item_region_group" />
+
+        <!-- 검색 결과 리스트 (게시글 검색 시 표시) -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_search_results"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:visibility="gone"
+            tools:listitem="@layout/item_job" />
+
+        <!-- 검색 결과 없음 -->
+        <LinearLayout
+            android:id="@+id/empty_search"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="검색 결과가 없습니다."
+                android:textSize="14sp"
+                android:textColor="@color/app_text_hint" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 글쓰기 FAB -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_write"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="72dp"
+        android:src="@drawable/ic_edit"
+        android:contentDescription="구인 글 작성"
+        app:backgroundTint="@color/md_theme_primary"
+        app:tint="@color/md_theme_onPrimary" />
+
+</FrameLayout>

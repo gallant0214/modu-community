@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 화면 테마 선택 바텀시트 -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_bottom_sheet"
+    android:paddingBottom="16dp">
+
+    <!-- 핸들 바 -->
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_handle_bar" />
+
+    <!-- 타이틀 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="화면 테마"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:textColor="@color/app_text_primary"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="12dp" />
+
+    <!-- 화이트 -->
+    <LinearLayout
+        android:id="@+id/option_light"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="20dp"
+        android:background="?attr/selectableItemBackground">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="화이트"
+            android:textSize="15sp"
+            android:textColor="@color/app_text_secondary" />
+
+        <ImageView
+            android:id="@+id/ic_check_light"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/ic_check"
+            android:contentDescription="선택됨"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 다크 -->
+    <LinearLayout
+        android:id="@+id/option_dark"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="20dp"
+        android:background="?attr/selectableItemBackground">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="다크"
+            android:textSize="15sp"
+            android:textColor="@color/app_text_secondary" />
+
+        <ImageView
+            android:id="@+id/ic_check_dark"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/ic_check"
+            android:contentDescription="선택됨"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- 시스템 모드 -->
+    <LinearLayout
+        android:id="@+id/option_system"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="20dp"
+        android:background="?attr/selectableItemBackground">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="시스템 모드"
+            android:textSize="15sp"
+            android:textColor="@color/app_text_secondary" />
+
+        <ImageView
+            android:id="@+id/ic_check_system"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/ic_check"
+            android:contentDescription="선택됨"
+            android:visibility="gone" />
+    </LinearLayout>
+
+</LinearLayout>

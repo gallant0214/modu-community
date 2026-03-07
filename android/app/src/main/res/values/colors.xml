@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material3 기본 컬러 (Light 모드) -->
+    <!-- 올리브 그린 Primary (앱 아이콘 월계관과 조화) -->
+    <color name="md_theme_primary">#6B7A3D</color>           <!-- olive green -->
+    <color name="md_theme_onPrimary">#FFFFFF</color>
+    <color name="md_theme_primaryContainer">#E8EDCE</color>   <!-- light olive -->
+    <color name="md_theme_onPrimaryContainer">#283618</color>
+
+    <color name="md_theme_secondary">#5E5C52</color>          <!-- warm gray -->
+    <color name="md_theme_onSecondary">#FFFFFF</color>
+    <color name="md_theme_secondaryContainer">#E7E4D5</color>
+    <color name="md_theme_onSecondaryContainer">#1C1B12</color>
+
+    <color name="md_theme_background">#F5F3E7</color>         <!-- warm beige -->
+    <color name="md_theme_onBackground">#1C1B16</color>
+    <color name="md_theme_surface">#FEFCF3</color>            <!-- warm white -->
+    <color name="md_theme_onSurface">#1C1B16</color>
+    <color name="md_theme_surfaceVariant">#EDEADB</color>
+    <color name="md_theme_onSurfaceVariant">#5C5A4E</color>
+
+    <color name="md_theme_error">#EF4444</color>               <!-- red-500 -->
+    <color name="md_theme_onError">#FFFFFF</color>
+
+    <color name="md_theme_outline">#D6D3C5</color>
+
+    <!-- 하단 네비게이션 전용 색상 -->
+    <color name="nav_bar_background">#FEFCF3</color>
+    <color name="nav_bar_divider">#D6D3C5</color>
+    <color name="nav_bar_selected">#6B7A3D</color>         <!-- olive green -->
+    <color name="nav_bar_unselected_icon">#8A8578</color>
+    <color name="nav_bar_unselected_text">#8A8578</color>
+    <color name="nav_bar_indicator">#6B7A3D</color>
+
+    <!-- 레거시 호환용 -->
+    <color name="colorPrimary">#6B7A3D</color>
+    <color name="colorPrimaryDark">#566530</color>
+    <color name="colorAccent">#7D8E47</color>
+
+    <!-- ============================================== -->
+    <!-- 시맨틱 앱 컬러 (라이트)                          -->
+    <!-- ============================================== -->
+    <color name="app_bg">#F5F3E7</color>
+    <color name="app_surface">#FEFCF3</color>
+    <color name="app_surface_variant">#F0EDE0</color>
+    <color name="app_section_bg">#EDEADB</color>
+
+    <color name="app_text_primary">#1C1B16</color>
+    <color name="app_text_secondary">#3E3B32</color>
+    <color name="app_text_tertiary">#5C5A4E</color>
+    <color name="app_text_hint">#8A8578</color>
+    <color name="app_text_disabled">#B0AC9F</color>
+    <color name="app_text_faint">#C5C1B5</color>
+    <color name="app_text_section">#3E3B32</color>
+    <color name="app_text_google">#3C4043</color>
+    <color name="app_text_job_meta">#5C5A4E</color>
+
+    <color name="app_divider">#D6D3C5</color>
+    <color name="app_divider_strong">#C5C1B5</color>
+    <color name="app_divider_profile">#D6D3C5</color>
+
+    <color name="app_icon_tint">#5C5A4E</color>
+    <color name="app_icon_tint_muted">#8A8578</color>
+    <color name="app_icon_tint_arrow">#B0AC9F</color>
+    <color name="app_icon_dark">#3E3B32</color>
+
+    <color name="app_search_bar_bg">#EDEADB</color>
+    <color name="app_chip_employment_bg">#E8EDCE</color>
+    <color name="app_handle_bar">#B0AC9F</color>
+    <color name="app_google_btn_bg">#FEFCF3</color>
+    <color name="app_google_btn_border">#D6D3C5</color>
+    <color name="app_nav_bar_bg">#FEFCF3</color>
+
+    <!-- 급여 강조 -->
+    <color name="app_salary_text">#4D7C0F</color>
+    <color name="app_salary_bg">#F0F7E4</color>
+
+    <!-- 배지 -->
+    <color name="app_badge_new_text">#EF4444</color>
+    <color name="app_badge_closing_text">#F59E0B</color>
+    <color name="app_badge_closed_bg">#EDEADB</color>
+    <color name="app_badge_closed_text">#6B7280</color>
+
+    <!-- 종목 태그 (중립 톤) -->
+    <color name="app_tag_sport_bg">#EDEADB</color>
+    <color name="app_tag_sport_text">#3E3B32</color>
+
+    <!-- 좋아요 빨간색 -->
+    <color name="app_like_red">#E53E3E</color>
+</resources>

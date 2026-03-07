@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { category_id, title, content, author, password, region, tags } = body;
 
-  if (!title?.trim() || !content?.trim() || !author?.trim() || !password?.trim()) {
+  if (!title?.trim() || !content?.trim() || !author?.trim()) {
     return NextResponse.json({ error: "필수 항목을 입력해주세요" }, { status: 400 });
   }
 
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 
   await sql`INSERT INTO posts (category_id, title, content, author, password, region, tags, ip_address)
-    VALUES (${Number(category_id)}, ${title.trim()}, ${content.trim()}, ${author.trim()}, ${password.trim()}, ${(region || "전국").trim()}, ${(tags || "").trim()}, ${ip})`;
+    VALUES (${Number(category_id)}, ${title.trim()}, ${content.trim()}, ${author.trim()}, ${(password || "").trim()}, ${(region || "전국").trim()}, ${(tags || "").trim()}, ${ip})`;
 
   return NextResponse.json({ success: true });
 }

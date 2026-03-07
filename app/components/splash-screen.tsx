@@ -3,10 +3,15 @@
 import { useState, useEffect } from "react";
 
 export default function SplashScreen() {
-  const [visible, setVisible] = useState(true);
+  // 앱 내 WebView에서 접근 시 스플래시 스킵 (?nosplash=1)
+  const skipSplash = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("nosplash");
+
+  const [visible, setVisible] = useState(!skipSplash);
   const [fadeOut, setFadeOut] = useState(false);
 
   useEffect(() => {
+    if (skipSplash) return;
+
     const timer = setTimeout(() => {
       setFadeOut(true);
     }, 1000);
@@ -19,7 +24,7 @@ export default function SplashScreen() {
       clearTimeout(timer);
       clearTimeout(removeTimer);
     };
-  }, []);
+  }, [skipSplash]);
 
   if (!visible) return null;
 

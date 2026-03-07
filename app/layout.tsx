@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import SplashScreen from "@/app/components/splash-screen";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -52,7 +51,6 @@ export default function RootLayout({
           }}
           className="bg-white dark:bg-zinc-950"
         />
-        <SplashScreen />
         {children}
       </body>
     </html>

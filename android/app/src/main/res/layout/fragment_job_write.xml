@@ -1,0 +1,628 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 구인 글쓰기 화면 -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/app_surface"
+    tools:context="com.moduji.app.ui.jobs.JobWriteFragment">
+
+    <!-- ============================================== -->
+    <!-- 상단 AppBar: 뒤로가기 + 제목                      -->
+    <!-- ============================================== -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="4dp">
+
+        <ImageButton
+            android:id="@+id/btn_back"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_arrow_back"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="뒤로가기"
+            android:scaleType="centerInside"
+            android:padding="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="구인 글쓰기"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/app_text_primary"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:background="@color/app_divider" />
+
+    <!-- ============================================== -->
+    <!-- 스크롤 가능한 내용 영역                           -->
+    <!-- ============================================== -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scroll_view"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- ======================================== -->
+            <!-- 지역 정보 표시                              -->
+            <!-- ======================================== -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/tv_region_display"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="📍 지역 정보"
+                    android:textSize="14sp"
+                    android:textColor="@color/app_text_secondary" />
+
+                <TextView
+                    android:id="@+id/tv_change_region"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="지역 변경"
+                    android:textSize="13sp"
+                    android:textColor="@color/md_theme_primary"
+                    android:padding="4dp"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+            </LinearLayout>
+
+            <!-- 지역 미선택 에러 메시지 -->
+            <TextView
+                android:id="@+id/tv_region_error"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="지역을 선택해주세요"
+                android:textSize="12sp"
+                android:textColor="@color/app_badge_new_text"
+                android:layout_marginTop="6dp"
+                android:visibility="gone" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="0.5dp"
+                android:background="@color/app_divider"
+                android:layout_marginTop="12dp" />
+
+            <!-- (1) 종목 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="종목 (필수)"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_tertiary"
+                android:layout_marginTop="14dp" />
+
+            <LinearLayout
+                android:id="@+id/row_sport"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="12dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_selector_row">
+
+                <TextView
+                    android:id="@+id/tv_sport"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="종목을 선택하세요"
+                    android:textSize="14sp"
+                    android:textColor="@color/app_text_hint" />
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_expand_more"
+                    android:contentDescription="선택" />
+            </LinearLayout>
+
+            <!-- (2) 센터/업체명 -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_center_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                app:counterEnabled="true"
+                app:counterMaxLength="30"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_center_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="센터 또는 업체명을 입력하세요"
+                    android:textSize="14sp"
+                    android:maxLength="30"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:importantForAutofill="no" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- (2-1) 업체 주소 -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_address"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_address"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="업체의 주소를 입력해주세요"
+                    android:textSize="14sp"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:importantForAutofill="no" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- (3) 작성자 정보 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="작성자 정보 (필수)"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_tertiary"
+                android:layout_marginTop="14dp" />
+
+            <LinearLayout
+                android:id="@+id/layout_author"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/toggle_author_role"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    app:singleSelection="true"
+                    app:selectionRequired="true">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_role_manager"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:text="관리자"
+                        android:textSize="13sp"
+                        android:paddingHorizontal="12dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_role_ceo"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:text="대표"
+                        android:textSize="13sp"
+                        android:paddingHorizontal="12dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_role_other"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:text="기타"
+                        android:textSize="13sp"
+                        android:paddingHorizontal="12dp" />
+                </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/til_author_name"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_author_name"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="실명 입력"
+                        android:textSize="14sp"
+                        android:textColorHint="@color/app_badge_new_text"
+                        android:inputType="textPersonName"
+                        android:maxLines="1"
+                        android:importantForAutofill="no" />
+                </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
+
+            <!-- (4) 연락처 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="연락처 (필수)"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_tertiary"
+                android:layout_marginTop="14dp" />
+
+            <LinearLayout
+                android:id="@+id/layout_contact"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <LinearLayout
+                    android:id="@+id/row_contact_type"
+                    android:layout_width="wrap_content"
+                    android:layout_height="50dp"
+                    android:minWidth="100dp"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:paddingHorizontal="12dp"
+                    android:background="@drawable/bg_selector_row">
+
+                    <TextView
+                        android:id="@+id/tv_contact_type"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="연락처"
+                        android:textSize="14sp"
+                        android:textColor="@color/app_text_primary" />
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_marginStart="4dp"
+                        android:src="@drawable/ic_expand_more"
+                        android:contentDescription="선택" />
+                </LinearLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/til_contact"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_contact"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textSize="14sp"
+                        android:inputType="phone"
+                        android:maxLines="1"
+                        android:importantForAutofill="no" />
+                </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
+
+            <!-- (5) 제목 -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                app:counterEnabled="true"
+                app:counterMaxLength="50"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="예) 강남구 프리랜서 트레이너 정규직 채용"
+                    android:textSize="14sp"
+                    android:maxLength="50"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:importantForAutofill="no" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- (6) 내용 -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/til_description"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                app:hintEnabled="false"
+                app:counterEnabled="true"
+                app:counterMaxLength="1000"
+                style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/et_description"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="업무 내용, 우대 조건, 근무 분위기 등을 자유롭게 작성하세요."
+                    android:textSize="14sp"
+                    android:inputType="textMultiLine"
+                    android:minLines="5"
+                    android:gravity="top"
+                    android:importantForAutofill="no" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- (6-1) 모집기간 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="모집기간 (필수)"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_tertiary"
+                android:layout_marginTop="14dp" />
+
+            <LinearLayout
+                android:id="@+id/row_deadline"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="12dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_selector_row">
+
+                <TextView
+                    android:id="@+id/tv_deadline"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="모집기간을 선택하세요"
+                    android:textSize="14sp"
+                    android:textColor="@color/app_text_hint" />
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_expand_more"
+                    android:contentDescription="선택" />
+            </LinearLayout>
+
+            <!-- (7) 근무형태 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="근무형태 (필수)"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_tertiary"
+                android:layout_marginTop="14dp" />
+
+            <LinearLayout
+                android:id="@+id/row_job_type"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="12dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_selector_row">
+
+                <TextView
+                    android:id="@+id/tv_job_type"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="근무형태를 선택하세요"
+                    android:textSize="14sp"
+                    android:textColor="@color/app_text_hint" />
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_expand_more"
+                    android:contentDescription="선택" />
+            </LinearLayout>
+
+            <!-- (8) 급여 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="급여 (필수)"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_tertiary"
+                android:layout_marginTop="14dp" />
+
+            <LinearLayout
+                android:id="@+id/row_salary"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="12dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_selector_row">
+
+                <TextView
+                    android:id="@+id/tv_salary"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="급여를 선택하세요"
+                    android:textSize="14sp"
+                    android:textColor="@color/app_text_hint" />
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_expand_more"
+                    android:contentDescription="선택" />
+            </LinearLayout>
+
+            <!-- (9) 모집 인원 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="모집 인원 (필수)"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_tertiary"
+                android:layout_marginTop="14dp" />
+
+            <LinearLayout
+                android:id="@+id/row_headcount"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="12dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_selector_row">
+
+                <TextView
+                    android:id="@+id/tv_headcount"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="모집 인원을 선택하세요"
+                    android:textSize="14sp"
+                    android:textColor="@color/app_text_hint" />
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_expand_more"
+                    android:contentDescription="선택" />
+            </LinearLayout>
+
+            <!-- (10) 우대 조건 (선택) -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="우대 조건 (선택)"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_tertiary"
+                android:layout_marginTop="14dp" />
+
+            <LinearLayout
+                android:id="@+id/row_preferences"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="12dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_selector_row">
+
+                <TextView
+                    android:id="@+id/tv_preferences"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="우대 조건을 선택하세요"
+                    android:textSize="14sp"
+                    android:textColor="@color/app_text_hint" />
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_expand_more"
+                    android:contentDescription="선택" />
+            </LinearLayout>
+
+            <!-- (11) 복리후생 (선택) -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="복리후생 (선택)"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_tertiary"
+                android:layout_marginTop="14dp" />
+
+            <LinearLayout
+                android:id="@+id/row_benefits"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="12dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_selector_row">
+
+                <TextView
+                    android:id="@+id/tv_benefits"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="복리후생을 선택하세요"
+                    android:textSize="14sp"
+                    android:textColor="@color/app_text_hint" />
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_expand_more"
+                    android:contentDescription="선택" />
+            </LinearLayout>
+
+            <!-- ======================================== -->
+            <!-- 책임 동의 체크박스                           -->
+            <!-- ======================================== -->
+            <LinearLayout
+                android:id="@+id/layout_agreement"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="16dp">
+
+                <CheckBox
+                    android:id="@+id/cb_agreement"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
+
+                <TextView
+                    android:id="@+id/tv_agreement"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_gravity="center_vertical"
+                    android:text="작성한 구인 정보는 사실이며, 허위·불법 내용에 대한 책임은 작성자 본인에게 있습니다.\n모두의 지도사는 채용 및 고용 계약에 관여하지 않습니다."
+                    android:textSize="12sp"
+                    android:textColor="@color/app_text_hint"
+                    android:lineSpacingMultiplier="1.3" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- ============================================== -->
+    <!-- 하단 등록 버튼                                   -->
+    <!-- ============================================== -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:background="@color/app_divider" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_submit"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_margin="16dp"
+        android:text="구인 등록하기"
+        android:textSize="15sp"
+        android:enabled="true"
+        app:cornerRadius="8dp" />
+
+</LinearLayout>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 모집기간 선택 바텀시트 -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_bottom_sheet"
+    android:paddingBottom="16dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_handle_bar" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="모집기간 선택"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:textColor="@color/app_text_primary"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="12dp" />
+
+    <RadioGroup
+        android:id="@+id/rg_deadline"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="20dp">
+
+        <RadioButton
+            android:id="@+id/rb_custom_date"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:text="직접 입력"
+            android:textSize="15sp"
+            android:textColor="@color/app_text_secondary" />
+
+        <RadioButton
+            android:id="@+id/rb_always"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:text="상시모집"
+            android:textSize="15sp"
+            android:textColor="@color/app_text_secondary" />
+
+        <RadioButton
+            android:id="@+id/rb_until_full"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:text="정원마감시"
+            android:textSize="15sp"
+            android:textColor="@color/app_text_secondary" />
+    </RadioGroup>
+</LinearLayout>

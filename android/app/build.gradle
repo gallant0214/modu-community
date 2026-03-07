@@ -1,54 +1,93 @@
 apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+// google-services.json 배치 후 아래 주석을 해제하세요
+// apply plugin: 'com.google.gms.google-services'
 
 android {
     namespace = "com.moduji.app"
     compileSdk = rootProject.ext.compileSdkVersion
+
     defaultConfig {
         applicationId "com.moduji.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        aaptOptions {
-             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
-             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
-            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
-        }
     }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
-}
 
-repositories {
-    flatDir{
-        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    // Kotlin JVM 타겟 설정
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    // ViewBinding 활성화 (findViewById 대체)
+    buildFeatures {
+        viewBinding true
     }
 }
 
 dependencies {
-    implementation fileTree(include: ['*.jar'], dir: 'libs')
-    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
-    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
-    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
-    implementation project(':capacitor-android')
-    testImplementation "junit:junit:$junitVersion"
-    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
-    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
-    implementation project(':capacitor-cordova-android-plugins')
-}
+    // Kotlin
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
 
-apply from: 'capacitor.build.gradle'
+    // AndroidX 핵심 라이브러리
+    implementation "androidx.core:core-ktx:${rootProject.ext.androidxCoreVersion}"
+    implementation "androidx.appcompat:appcompat:${rootProject.ext.androidxAppCompatVersion}"
+    implementation "androidx.constraintlayout:constraintlayout:2.2.1"
 
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
-    }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+    // Material Design 3
+    implementation "com.google.android.material:material:1.12.0"
+
+    // Jetpack Navigation Component (Fragment 간 이동)
+    implementation "androidx.navigation:navigation-fragment-ktx:2.8.9"
+    implementation "androidx.navigation:navigation-ui-ktx:2.8.9"
+
+    // Lifecycle (ViewModel, LiveData 등 향후 확장용)
+    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.0"
+    implementation "androidx.lifecycle:lifecycle-livedata-ktx:2.9.0"
+
+    // Splash Screen
+    implementation "androidx.core:core-splashscreen:${rootProject.ext.coreSplashScreenVersion}"
+
+    // SwipeRefreshLayout (Pull-to-Refresh)
+    implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0"
+
+    // WorkManager (백그라운드 알림 폴링)
+    implementation "androidx.work:work-runtime-ktx:2.9.1"
+
+    // Retrofit + Gson (REST API 통신)
+    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
+    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
+
+    // Coroutines (Retrofit suspend 함수 지원)
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+
+    // Firebase BoM (버전 통합 관리)
+    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+    // Firebase Auth
+    implementation 'com.google.firebase:firebase-auth-ktx'
+    // Google Sign-In (Play Services)
+    implementation 'com.google.android.gms:play-services-auth:21.3.0'
+
+    // Google AdMob
+    implementation 'com.google.android.gms:play-services-ads:23.6.0'
+
+    // 테스트
+    testImplementation "junit:junit:${rootProject.ext.junitVersion}"
+    androidTestImplementation "androidx.test.ext:junit:${rootProject.ext.androidxJunitVersion}"
+    androidTestImplementation "androidx.test.espresso:espresso-core:${rootProject.ext.androidxEspressoCoreVersion}"
 }

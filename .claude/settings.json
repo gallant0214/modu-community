@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vercel inspect https://diary-a7xg6n5fq-parklove22-5686s-projects.vercel.app)",
+      "Bash(npx vercel inspect https://diary-a7xg6n5fq-parklove22-5686s-projects.vercel.app --logs)",
+      "Bash(curl -s \"https://diary-a7xg6n5fq-parklove22-5686s-projects.vercel.app/\")",
+      "Bash(grep -n \"createReport\\\\|submitReport\\\\|신고\" /c/Users/User/diary-app/app/category/[id]/post/[postId]/page.tsx)",
+      "Bash(npm install)",
+      "Bash(JAVA_HOME=\"C:/Program Files/Android/Android Studio/jbr\" ./android/gradlew -p android signingReport)",
+      "Bash(keytool -list -keystore \"C:/Users/User/moduji-keystore\" -storepass \"\")",
+      "Bash(xargs grep -l \"delete.*user\\\\|user.*delete\\\\|withdraw\\\\|탈퇴\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://diary-app-seven-indol.vercel.app/api/posts/latest\")",
+      "Bash(curl -s \"https://diary-app-seven-indol.vercel.app/api/posts/latest\")",
+      "Bash(xargs grep -l \"android\")",
+      "Bash(xargs grep -l \"community\\\\|user\\\\|nickname\")",
+      "Bash(curl -s \"https://diary-app-seven-indol.vercel.app/api/posts/my?author=test\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\User\\diary-app\\app\\api\\admin\\reports\\[id]"
+    ]
+  }
+}

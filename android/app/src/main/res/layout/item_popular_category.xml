@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@drawable/bg_category_chip"
+    android:paddingHorizontal="14dp"
+    android:paddingVertical="10dp"
+    android:layout_marginEnd="8dp">
+
+    <TextView
+        android:id="@+id/tv_category_emoji"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="18sp"
+        android:text="⚽" />
+
+    <TextView
+        android:id="@+id/tv_category_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="축구"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:textColor="@color/app_text_secondary"
+        android:maxLines="1"
+        android:layout_marginStart="6dp" />
+
+    <TextView
+        android:id="@+id/tv_category_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="128"
+        android:textSize="12sp"
+        android:textColor="@color/app_text_hint"
+        android:layout_marginStart="4dp" />
+</LinearLayout>

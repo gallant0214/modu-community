@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 구인 게시판 아이템 -->
+<!-- 기존 item_post_card.xml과 동일한 폰트/간격/스타일 유지 -->
+<!-- 추가: 급여 정보, 마감 뱃지 -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="?attr/colorSurface"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="14dp">
+
+    <!-- 상단: 종목 태그 + 지역 + 마감 뱃지 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="6dp">
+
+        <!-- 종목 태그 (게시판과 동일한 bg_tag 배경) -->
+        <TextView
+            android:id="@+id/tv_job_tag"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="수영"
+            android:textSize="11sp"
+            android:textColor="?attr/colorPrimary"
+            android:background="@drawable/bg_tag"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="2dp" />
+
+        <!-- 지역 -->
+        <TextView
+            android:id="@+id/tv_job_region"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="서울 강남"
+            android:textSize="11sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginStart="6dp" />
+
+        <!-- 모집 상태 뱃지 -->
+        <TextView
+            android:id="@+id/tv_job_closed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="[모집중]"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:textColor="@color/app_salary_text" />
+    </LinearLayout>
+
+    <!-- 제목 (14sp bold - 게시판과 동일) -->
+    <TextView
+        android:id="@+id/tv_job_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="OO스포츠센터 수영 지도사 모집"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="?attr/colorOnSurface"
+        android:maxLines="2"
+        android:ellipsize="end" />
+
+    <!-- 내용 미리보기 (13sp - 게시판과 동일) -->
+    <TextView
+        android:id="@+id/tv_job_preview"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="주 5일 근무, 경력자 우대..."
+        android:textSize="13sp"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:layout_marginTop="4dp" />
+
+    <!-- 급여 정보 (Primary 색상으로 강조) -->
+    <TextView
+        android:id="@+id/tv_job_salary"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="월 250~300만원"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:textColor="?attr/colorPrimary"
+        android:layout_marginTop="6dp" />
+
+    <!-- 모집기간 (있으면 표시) -->
+    <TextView
+        android:id="@+id/tv_job_deadline"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="12sp"
+        android:textColor="@color/app_text_job_meta"
+        android:layout_marginTop="2dp"
+        android:visibility="gone" />
+
+    <!-- 하단: 작성자 · 날짜 · 조회 · 댓글 (게시판과 동일 구조) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="10dp">
+
+        <!-- 작성자 -->
+        <TextView
+            android:id="@+id/tv_job_author"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="업체명"
+            android:textSize="11sp"
+            android:textColor="?attr/colorOnSurfaceVariant" />
+
+        <!-- 구분점 (게시판과 동일) -->
+        <View
+            android:layout_width="3dp"
+            android:layout_height="3dp"
+            android:layout_marginHorizontal="6dp"
+            android:background="?attr/colorOutline" />
+
+        <!-- 날짜 -->
+        <TextView
+            android:id="@+id/tv_job_date"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="2026.03.01"
+            android:textSize="11sp"
+            android:textColor="?attr/colorOnSurfaceVariant" />
+
+        <!-- 조회수 -->
+        <TextView
+            android:id="@+id/tv_job_views"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="👁 45"
+            android:textSize="11sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:layout_marginEnd="10dp" />
+
+        <!-- 댓글 -->
+        <TextView
+            android:id="@+id/tv_job_comments"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="💬 3"
+            android:textSize="11sp"
+            android:textColor="?attr/colorOnSurfaceVariant" />
+    </LinearLayout>
+</LinearLayout>

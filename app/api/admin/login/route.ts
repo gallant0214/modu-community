@@ -15,11 +15,13 @@ export async function POST(request: Request) {
     SELECT r.*,
       p.title AS post_title, p.author AS post_author,
       c.content AS comment_content, c.author AS comment_author,
-      cat.name AS category_name
+      cat.name AS category_name,
+      jp.title AS job_post_title, jp.center_name AS job_post_author
     FROM reports r
-    LEFT JOIN posts p ON r.post_id = p.id
+    LEFT JOIN posts p ON r.target_type = 'post' AND r.target_id = p.id
     LEFT JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.id
-    LEFT JOIN categories cat ON r.category_id = cat.id
+    LEFT JOIN categories cat ON r.target_type != 'job_post' AND r.category_id = cat.id
+    LEFT JOIN job_posts jp ON r.target_type = 'job_post' AND r.target_id = jp.id
     ORDER BY r.created_at DESC
   `;
 

@@ -1,0 +1,316 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- My 탭 레이아웃 -->
+<!-- 구조: 프로필 영역 → 내 활동 → 알림 → 설정 -->
+<!-- 각 섹션은 흰 배경 + 회색 구분선으로 분리 -->
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/app_bg"
+    tools:context="com.moduji.app.ui.profile.ProfileFragment">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- ================================================ -->
+        <!-- 상단 헤더                                          -->
+        <!-- ================================================ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/app_surface"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="16dp"
+            android:paddingBottom="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="My"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="@color/app_text_primary" />
+        </LinearLayout>
+
+        <!-- ================================================ -->
+        <!-- 프로필 영역                                        -->
+        <!-- ================================================ -->
+
+        <!-- 로그인 된 상태 -->
+        <LinearLayout
+            android:id="@+id/layout_profile_loggedin"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/app_surface"
+            android:paddingHorizontal="16dp"
+            android:paddingBottom="20dp"
+            android:visibility="gone">
+
+            <!-- 닉네임 -->
+            <TextView
+                android:id="@+id/tv_nickname"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="닉네임"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@color/app_text_primary" />
+
+            <!-- 가입일 -->
+            <TextView
+                android:id="@+id/tv_join_date"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="2026.01.01 가입"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_hint"
+                android:layout_marginTop="4dp" />
+
+            <!-- 작성글 / 북마크 카운트 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/bg_search_bar"
+                android:padding="14dp">
+
+                <!-- 작성글 수 -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center">
+
+                    <TextView
+                        android:id="@+id/tv_post_count"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/app_text_primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="작성글"
+                        android:textSize="12sp"
+                        android:textColor="@color/app_text_hint"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+
+                <!-- 구분선 -->
+                <View
+                    android:layout_width="0.5dp"
+                    android:layout_height="match_parent"
+                    android:background="@color/app_divider_profile" />
+
+                <!-- 북마크 수 -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center">
+
+                    <TextView
+                        android:id="@+id/tv_bookmark_count"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/app_text_primary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="북마크"
+                        android:textSize="12sp"
+                        android:textColor="@color/app_text_hint"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 로그인 안된 상태 -->
+        <LinearLayout
+            android:id="@+id/layout_profile_guest"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/app_surface"
+            android:paddingHorizontal="16dp"
+            android:paddingBottom="20dp"
+            android:gravity="center_horizontal"
+            android:visibility="visible">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="로그인하고 더 많은 기능을 이용하세요"
+                android:textSize="15sp"
+                android:textColor="@color/app_text_tertiary" />
+
+            <TextView
+                android:id="@+id/btn_login"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:gravity="center"
+                android:layout_marginTop="12dp"
+                android:text="로그인 / 회원가입"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:background="@drawable/bg_login_button" />
+        </LinearLayout>
+
+        <!-- 섹션 구분 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:background="@color/app_bg" />
+
+        <!-- ================================================ -->
+        <!-- 내 활동 섹션                                       -->
+        <!-- ================================================ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/app_surface">
+
+            <!-- 섹션 헤더 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="내 활동"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/app_text_hint"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="14dp"
+                android:paddingBottom="4dp" />
+
+            <!-- 내가 쓴 글 -->
+            <include
+                android:id="@+id/menu_my_posts"
+                layout="@layout/item_menu_row" />
+
+            <!-- 내가 댓글 단 글 -->
+            <include
+                android:id="@+id/menu_my_comments"
+                layout="@layout/item_menu_row" />
+
+            <!-- 북마크 -->
+            <include
+                android:id="@+id/menu_bookmarks"
+                layout="@layout/item_menu_row" />
+
+            <!-- 내가 등록한 구인글 -->
+            <include
+                android:id="@+id/menu_my_jobs"
+                layout="@layout/item_menu_row" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:background="@color/app_bg" />
+
+        <!-- ================================================ -->
+        <!-- 알림 섹션                                          -->
+        <!-- ================================================ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/app_surface">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="알림"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/app_text_hint"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="14dp"
+                android:paddingBottom="4dp" />
+
+            <!-- 댓글 알림 -->
+            <include
+                android:id="@+id/menu_noti_comment"
+                layout="@layout/item_menu_row" />
+
+            <!-- 좋아요 알림 -->
+            <include
+                android:id="@+id/menu_noti_like"
+                layout="@layout/item_menu_row" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:background="@color/app_bg" />
+
+        <!-- ================================================ -->
+        <!-- 설정 섹션                                          -->
+        <!-- ================================================ -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/app_surface">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="설정"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/app_text_hint"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="14dp"
+                android:paddingBottom="4dp" />
+
+            <!-- 다크모드 -->
+            <include
+                android:id="@+id/menu_dark_mode"
+                layout="@layout/item_menu_row" />
+
+            <!-- 알림 설정 -->
+            <include
+                android:id="@+id/menu_noti_settings"
+                layout="@layout/item_menu_row" />
+
+            <!-- 이용약관 -->
+            <include
+                android:id="@+id/menu_terms"
+                layout="@layout/item_menu_row" />
+
+            <!-- 로그아웃 -->
+            <include
+                android:id="@+id/menu_logout"
+                layout="@layout/item_menu_row" />
+        </LinearLayout>
+
+        <!-- 앱 버전 -->
+        <TextView
+            android:id="@+id/tv_app_version"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="앱 버전 1.1"
+            android:textSize="12sp"
+            android:textColor="@color/app_text_faint"
+            android:gravity="center"
+            android:paddingVertical="20dp" />
+
+    </LinearLayout>
+</ScrollView>

@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 후기 탭 내부 서브 네비게이션 -->
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph_community"
+    app:startDestination="@id/communityHomeFragment">
+
+    <!-- 1. 카테고리 브라우저 (메인) -->
+    <fragment
+        android:id="@+id/communityHomeFragment"
+        android:name="com.moduji.app.ui.community.CommunityHomeFragment"
+        android:label="카테고리"
+        tools:layout="@layout/fragment_community_home">
+
+        <action
+            android:id="@+id/action_home_to_postList"
+            app:destination="@id/postListFragment" />
+
+    </fragment>
+
+    <!-- 2. 게시글 목록 -->
+    <fragment
+        android:id="@+id/postListFragment"
+        android:name="com.moduji.app.ui.community.PostListFragment"
+        android:label="게시글 목록"
+        tools:layout="@layout/fragment_post_list">
+
+        <argument android:name="categoryId" app:argType="integer" />
+        <argument android:name="categoryName" app:argType="string" />
+        <argument android:name="categoryEmoji" app:argType="string" android:defaultValue="" />
+
+        <action
+            android:id="@+id/action_postList_to_postDetail"
+            app:destination="@id/postDetailFragment" />
+
+        <action
+            android:id="@+id/action_postList_to_postWrite"
+            app:destination="@id/postWriteFragment" />
+    </fragment>
+
+    <!-- 3. 게시글 상세 -->
+    <fragment
+        android:id="@+id/postDetailFragment"
+        android:name="com.moduji.app.ui.community.PostDetailFragment"
+        android:label="게시글 상세"
+        tools:layout="@layout/fragment_post_detail">
+
+        <argument android:name="postId" app:argType="integer" />
+        <argument android:name="categoryId" app:argType="integer" />
+
+        <action
+            android:id="@+id/action_postDetail_to_postEdit"
+            app:destination="@id/postEditFragment" />
+    </fragment>
+
+    <!-- 4. 게시글 작성 -->
+    <fragment
+        android:id="@+id/postWriteFragment"
+        android:name="com.moduji.app.ui.community.PostWriteFragment"
+        android:label="글쓰기"
+        tools:layout="@layout/fragment_post_write">
+
+        <argument android:name="categoryId" app:argType="integer" />
+    </fragment>
+
+    <!-- 5. 게시글 수정 -->
+    <fragment
+        android:id="@+id/postEditFragment"
+        android:name="com.moduji.app.ui.community.PostEditFragment"
+        android:label="글 수정"
+        tools:layout="@layout/fragment_post_edit">
+
+        <argument android:name="postId" app:argType="integer" />
+        <argument android:name="categoryId" app:argType="integer" />
+    </fragment>
+
+    <!-- 6. 문의 목록 -->
+    <fragment
+        android:id="@+id/inquiryListFragment"
+        android:name="com.moduji.app.ui.community.InquiryListFragment"
+        android:label="문의하기"
+        tools:layout="@layout/fragment_inquiry_list">
+
+        <action
+            android:id="@+id/action_inquiry_to_write"
+            app:destination="@id/inquiryWriteFragment" />
+    </fragment>
+
+    <!-- 7. 문의 작성 -->
+    <fragment
+        android:id="@+id/inquiryWriteFragment"
+        android:name="com.moduji.app.ui.community.InquiryWriteFragment"
+        android:label="문의 작성"
+        tools:layout="@layout/fragment_inquiry_write" />
+
+    <!-- 8. 관리자 -->
+    <fragment
+        android:id="@+id/adminFragment"
+        android:name="com.moduji.app.ui.community.AdminFragment"
+        android:label="관리자"
+        tools:layout="@layout/fragment_admin" />
+
+</navigation>

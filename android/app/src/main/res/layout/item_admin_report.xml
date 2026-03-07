@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 관리자 신고 카드 -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="16dp"
+    android:paddingTop="14dp"
+    android:paddingBottom="0dp"
+    android:background="@color/app_surface">
+
+    <!-- 1행: [게시글/댓글] [카테고리명] ... 날짜 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <!-- 대상 유형 뱃지 -->
+        <TextView
+            android:id="@+id/tv_target_type"
+            android:layout_width="wrap_content"
+            android:layout_height="22dp"
+            android:gravity="center"
+            android:textSize="11sp"
+            android:textColor="@color/md_theme_onPrimary"
+            android:background="@drawable/bg_login_button"
+            android:paddingHorizontal="8dp" />
+
+        <!-- 카테고리명 뱃지 -->
+        <TextView
+            android:id="@+id/tv_category_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="22dp"
+            android:gravity="center"
+            android:textSize="11sp"
+            android:textColor="@color/app_tag_sport_text"
+            android:background="@drawable/bg_tag"
+            android:paddingHorizontal="8dp"
+            android:layout_marginStart="6dp"
+            android:visibility="gone" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- 날짜 -->
+        <TextView
+            android:id="@+id/tv_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/app_text_hint" />
+    </LinearLayout>
+
+    <!-- 2행: 신고된 콘텐츠 (제목 또는 댓글 내용) -->
+    <TextView
+        android:id="@+id/tv_target_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="@color/app_text_primary"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:layout_marginTop="8dp" />
+
+    <!-- 3행: 작성자 정보 -->
+    <TextView
+        android:id="@+id/tv_author"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="12sp"
+        android:textColor="@color/app_text_hint"
+        android:layout_marginTop="4dp" />
+
+    <!-- 4행: 관련 게시글 (댓글 신고 시) -->
+    <TextView
+        android:id="@+id/tv_related_post"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="12sp"
+        android:textColor="@color/app_text_tertiary"
+        android:layout_marginTop="2dp"
+        android:visibility="gone" />
+
+    <!-- 5행: 신고 사유 박스 -->
+    <TextView
+        android:id="@+id/tv_reason"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="13sp"
+        android:textColor="@color/md_theme_error"
+        android:background="@drawable/bg_search_bar"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:layout_marginTop="8dp" />
+
+    <!-- 6행: 처리 상태 (처리완료 탭에서만 표시) -->
+    <TextView
+        android:id="@+id/tv_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="12sp"
+        android:textColor="@color/app_text_hint"
+        android:layout_marginTop="6dp"
+        android:visibility="gone" />
+
+    <!-- 7행: 액션 버튼 (미처리 탭에서만 표시) -->
+    <LinearLayout
+        android:id="@+id/layout_actions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="10dp">
+
+        <!-- 1행: 삭제하기 / 바로가기 / 처리완료 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- 삭제하기 (빨간) -->
+            <TextView
+                android:id="@+id/btn_delete_target"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="삭제하기"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/md_theme_onPrimary"
+                android:background="@drawable/bg_btn_delete" />
+
+            <!-- 바로가기 (보라) -->
+            <TextView
+                android:id="@+id/btn_navigate"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="바로가기"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/md_theme_onPrimary"
+                android:background="@drawable/bg_login_button"
+                android:layout_marginStart="6dp" />
+
+            <!-- 처리 완료 (외곽선) -->
+            <TextView
+                android:id="@+id/btn_resolve"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="처리 완료"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/app_text_secondary"
+                android:background="@drawable/bg_category_chip"
+                android:layout_marginStart="6dp" />
+        </LinearLayout>
+
+        <!-- 2행: 숨기기 / 숨기기해지 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="6dp">
+
+            <!-- 숨기기 -->
+            <TextView
+                android:id="@+id/btn_hide"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="숨기기"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/app_text_secondary"
+                android:background="@drawable/bg_category_chip" />
+
+            <!-- 숨기기해지 -->
+            <TextView
+                android:id="@+id/btn_unhide"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="숨기기해지"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/app_text_secondary"
+                android:background="@drawable/bg_category_chip"
+                android:layout_marginStart="6dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 하단 구분선 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:background="@color/app_divider"
+        android:layout_marginTop="14dp" />
+</LinearLayout>

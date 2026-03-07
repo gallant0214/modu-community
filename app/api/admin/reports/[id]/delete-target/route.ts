@@ -22,7 +22,10 @@ export async function POST(
 
   const { target_type, target_id, post_id } = rows[0];
 
-  if (target_type === "post") {
+  if (target_type === "job_post") {
+    await sql`DELETE FROM job_post_likes WHERE job_post_id = ${target_id}`;
+    await sql`DELETE FROM job_posts WHERE id = ${target_id}`;
+  } else if (target_type === "post") {
     await sql`DELETE FROM comments WHERE post_id = ${target_id}`;
     await sql`DELETE FROM posts WHERE id = ${target_id}`;
   } else {

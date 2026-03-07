@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 값 표시가 포함된 메뉴 행 아이템 -->
+<!-- 구조: [아이콘] [텍스트 ............. ] [값 텍스트] -->
+<!-- 테마 선택 등 현재 설정값을 표시하는 항목에 사용 -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/app_surface">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:background="?attr/selectableItemBackground">
+
+        <!-- 아이콘 -->
+        <ImageView
+            android:id="@+id/iv_menu_icon"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:tint="@color/app_icon_tint"
+            android:contentDescription="메뉴 아이콘" />
+
+        <!-- 메뉴 텍스트 -->
+        <TextView
+            android:id="@+id/tv_menu_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="14dp"
+            android:text="메뉴"
+            android:textSize="15sp"
+            android:textColor="@color/app_text_secondary" />
+
+        <!-- 현재 값 텍스트 -->
+        <TextView
+            android:id="@+id/tv_menu_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="시스템"
+            android:textSize="13sp"
+            android:textColor="@color/app_text_hint" />
+    </LinearLayout>
+
+    <!-- 하단 구분선 -->
+    <View
+        android:id="@+id/divider"
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:layout_marginStart="52dp"
+        android:background="@color/app_divider" />
+</LinearLayout>
