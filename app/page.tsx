@@ -20,24 +20,6 @@ export default async function Home() {
   return (
     <div className="lp" style={{ margin: "calc(-1 * (env(safe-area-inset-top, 0px) + 48px)) 0 calc(-1 * (env(safe-area-inset-bottom, 0px) + 20px)) 0" }}>
 
-      {/* ===== Header ===== */}
-      <header className="lp-header">
-        <div className="lp-header-inner">
-          <a href="/" className="lp-logo">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="모두의 지도사" className="lp-logo-icon" />
-            <span className="lp-logo-text">모두의 지도사</span>
-          </a>
-          <nav className="lp-nav">
-            <a href="#about">서비스 소개</a>
-            <a href="#community">실기·구술 후기</a>
-            <a href="#jobs">스포츠 구인</a>
-            <a href="#faq">FAQ</a>
-          </nav>
-          <a href="https://play.google.com/store/apps/details?id=com.moduji.app" target="_blank" rel="noopener" className="lp-dl-btn">앱 다운로드</a>
-        </div>
-      </header>
-
       <main>
 
         {/* ===== 1. 히어로 ===== */}
