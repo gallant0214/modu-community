@@ -1,4 +1,4 @@
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 import { sql } from "@/app/lib/db";
 import type { Category } from "@/app/lib/types";
