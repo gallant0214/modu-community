@@ -114,17 +114,24 @@ class PostDetailViewModel : ViewModel() {
         }
 
         val currentPost = _post.value ?: return
+        val wasLiked = _isLiked.value == true
 
+        // 즉시 색상 + 숫자 변경 (optimistic)
+        _isLiked.value = !wasLiked
+        val optimisticLikes = if (wasLiked) (currentPost.likes - 1).coerceAtLeast(0) else currentPost.likes + 1
+        _post.value = currentPost.copy(likes = optimisticLikes)
+
+        // 서버 반영 후 실제 수치로 보정
         viewModelScope.launch {
             CommunityRepository.likePost(postId).fold(
                 onSuccess = { resp ->
-                    // 서버 응답의 실제 likes 수와 상태 반영
-                    val newLiked = !resp.unliked
-                    _isLiked.value = newLiked
-                    _post.value = currentPost.copy(likes = resp.likes)
-                    _actionResult.value = if (resp.unliked) "좋아요를 취소했습니다" else "좋아요!"
+                    _isLiked.value = !resp.unliked
+                    _post.value = _post.value?.copy(likes = resp.likes) ?: currentPost.copy(likes = resp.likes)
                 },
                 onFailure = {
+                    // 실패 시 원복
+                    _isLiked.value = wasLiked
+                    _post.value = currentPost
                     val msg = it.message ?: ""
                     _actionResult.value = if (msg.contains("401") || msg.contains("로그인")) "로그인을 해주세요" else "오류: $msg"
                 }
@@ -138,20 +145,38 @@ class PostDetailViewModel : ViewModel() {
             return
         }
 
+        // 즉시 색상 + 숫자 변경 (optimistic)
+        val rawList = _rawComments.value?.toMutableList() ?: return
+        val idx = rawList.indexOfFirst { it.id == commentId }
+        if (idx < 0) return
+        val comment = rawList[idx]
+        val wasLiked = comment.isLiked == true
+        val optimisticLikes = if (wasLiked) (comment.likes - 1).coerceAtLeast(0) else comment.likes + 1
+        rawList[idx] = comment.copy(likes = optimisticLikes, isLiked = !wasLiked)
+        _rawComments.value = rawList
+        applySortAndUpdate()
+
+        // 서버 반영 후 실제 수치로 보정
         viewModelScope.launch {
             CommunityRepository.likeComment(commentId).fold(
                 onSuccess = { resp ->
-                    // 서버 응답으로 해당 댓글만 업데이트
-                    val rawList = _rawComments.value?.toMutableList() ?: mutableListOf()
-                    val idx = rawList.indexOfFirst { it.id == commentId }
-                    if (idx >= 0) {
-                        val comment = rawList[idx]
-                        rawList[idx] = comment.copy(likes = resp.likes, isLiked = !resp.unliked)
-                        _rawComments.value = rawList
+                    val list = _rawComments.value?.toMutableList() ?: return@fold
+                    val i = list.indexOfFirst { it.id == commentId }
+                    if (i >= 0) {
+                        list[i] = list[i].copy(likes = resp.likes, isLiked = !resp.unliked)
+                        _rawComments.value = list
                         applySortAndUpdate()
                     }
                 },
                 onFailure = {
+                    // 실패 시 원복
+                    val list = _rawComments.value?.toMutableList() ?: return@fold
+                    val i = list.indexOfFirst { it.id == commentId }
+                    if (i >= 0) {
+                        list[i] = comment
+                        _rawComments.value = list
+                        applySortAndUpdate()
+                    }
                     val msg = it.message ?: ""
                     _actionResult.value = if (msg.contains("401") || msg.contains("로그인")) "로그인을 해주세요" else "오류: $msg"
                 }

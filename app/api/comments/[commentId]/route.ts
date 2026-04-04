@@ -1,6 +1,7 @@
 import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
+import { verifyAuth } from "@/app/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,9 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ commentId: string }> }
 ) {
+  const user = await verifyAuth(request);
+  if (!user) return NextResponse.json({ error: "로그인을 해주세요" }, { status: 401 });
+
   const ip = getClientIp(request);
   const rateLimitResponse = checkRateLimit(ip, "write");
   if (rateLimitResponse) return rateLimitResponse;
@@ -38,6 +42,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ commentId: string }> }
 ) {
+  const user = await verifyAuth(request);
+  if (!user) return NextResponse.json({ error: "로그인을 해주세요" }, { status: 401 });
+
   const ip = getClientIp(request);
   const rateLimitResponse = checkRateLimit(ip, "write");
   if (rateLimitResponse) return rateLimitResponse;

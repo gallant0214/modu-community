@@ -53,6 +53,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ postId: string }> }
 ) {
+  const user = await verifyAuth(request);
+  if (!user) return NextResponse.json({ error: "로그인을 해주세요" }, { status: 401 });
+
   const ip = getClientIp(request);
   const rateLimitResponse = checkRateLimit(ip, "write");
   if (rateLimitResponse) return rateLimitResponse;
@@ -62,7 +65,7 @@ export async function POST(
   const body = await request.json();
   const { author, password, content, parent_id } = body;
 
-  if (!author?.trim() || !password?.trim() || !content?.trim()) {
+  if (!author?.trim() || !content?.trim()) {
     return NextResponse.json({ error: "모든 항목을 입력해주세요" }, { status: 400 });
   }
 
@@ -70,8 +73,7 @@ export async function POST(
   const ipAddr = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 
   await sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
-  const user = await verifyAuth(request);
-  const uid = user?.uid || null;
+  const uid = user.uid;
 
   await sql`INSERT INTO comments (post_id, parent_id, author, password, content, ip_address, firebase_uid)
     VALUES (${pid}, ${parent_id ?? null}, ${sanitize(validateLength(author.trim(), 50))}, ${password.trim()}, ${sanitize(validateLength(content.trim(), 5000))}, ${ipAddr}, ${uid})`;

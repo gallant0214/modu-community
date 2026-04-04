@@ -52,6 +52,9 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ postId: string }> }
 ) {
+  const user = await verifyAuth(request);
+  if (!user) return NextResponse.json({ error: "로그인을 해주세요" }, { status: 401 });
+
   const ip = getClientIp(request);
   const rateLimitResponse = checkRateLimit(ip, "write");
   if (rateLimitResponse) return rateLimitResponse;
@@ -76,6 +79,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ postId: string }> }
 ) {
+  const user = await verifyAuth(request);
+  if (!user) return NextResponse.json({ error: "로그인을 해주세요" }, { status: 401 });
+
   const ip = getClientIp(request);
   const rateLimitResponse = checkRateLimit(ip, "write");
   if (rateLimitResponse) return rateLimitResponse;

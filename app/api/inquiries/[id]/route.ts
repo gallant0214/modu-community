@@ -2,6 +2,7 @@ import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
 import { sanitize, validateLength } from "@/app/lib/security";
 import { verifyAdminPassword } from "@/app/lib/admin-auth";
+import { verifyAuth } from "@/app/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,8 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await verifyAuth(request);
+  if (!user) return NextResponse.json({ error: "로그인을 해주세요" }, { status: 401 });
   const { id } = await params;
   const body = await request.json();
   const { password, title, content } = body;
@@ -37,6 +40,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const userDel = await verifyAuth(request);
+  if (!userDel) return NextResponse.json({ error: "로그인을 해주세요" }, { status: 401 });
+
   const { id } = await params;
   const body = await request.json();
   const { password } = body;
