@@ -1,9 +1,14 @@
 import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
+import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  const rateLimitResponse = checkRateLimit(ip, "write");
+  if (rateLimitResponse) return rateLimitResponse;
+
   const body = await request.json();
   const { target_type, target_id, post_id, category_id, reason, custom_reason } = body;
 
@@ -12,6 +17,6 @@ export async function POST(request: Request) {
   }
 
   await sql`INSERT INTO reports (target_type, target_id, post_id, category_id, reason, custom_reason)
-    VALUES (${target_type}, ${Number(target_id)}, ${Number(post_id)}, ${Number(category_id)}, ${reason.trim()}, ${custom_reason?.trim() || null})`;
+    VALUES (${target_type}, ${Number(target_id)}, ${Number(post_id)}, ${Number(category_id)}, ${sanitize(validateLength(reason.trim(), 200))}, ${custom_reason ? sanitize(validateLength(custom_reason.trim(), 500)) : null})`;
   return NextResponse.json({ success: true });
 }

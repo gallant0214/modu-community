@@ -1,5 +1,6 @@
 import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
+import { verifyAdmin } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +12,8 @@ export async function POST(
   const body = await request.json();
   const { password } = body;
 
-  if (password !== process.env.ADMIN_PASSWORD) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const authError = await verifyAdmin(request, password);
+  if (authError) return authError;
 
   await sql`UPDATE inquiries SET hidden = true WHERE id = ${Number(id)}`;
   return NextResponse.json({ success: true });

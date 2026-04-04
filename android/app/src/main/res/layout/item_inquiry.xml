@@ -27,6 +27,18 @@
             android:paddingVertical="1dp"
             android:layout_marginEnd="8dp" />
 
+        <!-- 관리자 미확인 뱃지 -->
+        <TextView
+            android:id="@+id/tv_new_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="NEW"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:textColor="#FF5722"
+            android:layout_marginEnd="6dp"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/tv_title"
             android:layout_width="0dp"
@@ -42,6 +54,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:layout_marginTop="4dp">
 
         <TextView
@@ -60,10 +73,24 @@
 
         <TextView
             android:id="@+id/tv_date"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:textSize="12sp"
             android:textColor="@color/app_text_hint" />
+
+        <TextView
+            android:id="@+id/btn_view_reply"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="답변보기"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="@color/md_theme_primary"
+            android:background="?attr/selectableItemBackground"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <View

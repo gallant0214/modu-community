@@ -1,35 +1,35 @@
 import { sql } from "@/app/lib/db";
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+import { verifyAuth } from "@/app/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ postId: string }> }
 ) {
+  const user = await verifyAuth(request);
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+  }
+
   const { postId } = await params;
   const id = Number(postId);
 
-  const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
+  await sql`ALTER TABLE post_likes ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
 
-  await sql`CREATE TABLE IF NOT EXISTS post_likes (
-    id SERIAL PRIMARY KEY,
-    post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-    ip_address TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(post_id, ip_address)
-  )`;
+  // firebase_uid로 좋아요 여부 확인
+  const existing = await sql`
+    SELECT id FROM post_likes WHERE post_id = ${id} AND firebase_uid = ${user.uid}
+  `;
 
-  const existing = await sql`SELECT id FROM post_likes WHERE post_id = ${id} AND ip_address = ${ip}`;
   if (existing.length > 0) {
-    await sql`DELETE FROM post_likes WHERE post_id = ${id} AND ip_address = ${ip}`;
+    await sql`DELETE FROM post_likes WHERE post_id = ${id} AND firebase_uid = ${user.uid}`;
     await sql`UPDATE posts SET likes = GREATEST(COALESCE(likes, 0) - 1, 0) WHERE id = ${id}`;
     return NextResponse.json({ unliked: true });
   }
 
-  await sql`INSERT INTO post_likes (post_id, ip_address) VALUES (${id}, ${ip})`;
+  await sql`INSERT INTO post_likes (post_id, ip_address, firebase_uid) VALUES (${id}, '', ${user.uid})`;
   await sql`UPDATE posts SET likes = COALESCE(likes, 0) + 1 WHERE id = ${id}`;
   return NextResponse.json({ unliked: false });
 }

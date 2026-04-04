@@ -21,6 +21,13 @@ export async function POST(
     return NextResponse.json({ error: "비밀번호가 일치하지 않습니다" }, { status: 403 });
   }
 
+  // 관리자가 조회 시 읽음 처리
+  if (isAdmin) {
+    try {
+      await sql`UPDATE inquiries SET read_at = NOW() WHERE id = ${Number(id)} AND read_at IS NULL`;
+    } catch { /* read_at 컬럼 미존재 시 무시 */ }
+  }
+
   return NextResponse.json({
     content: rows[0].content,
     reply: rows[0].reply,

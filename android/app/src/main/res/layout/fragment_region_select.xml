@@ -35,7 +35,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="구인 게시판"
-                    android:textSize="18sp"
+                    android:textSize="27sp"
                     android:textStyle="bold"
                     android:textColor="@color/app_text_primary" />
 

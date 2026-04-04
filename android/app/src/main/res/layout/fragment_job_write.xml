@@ -76,18 +76,21 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="📍 지역 정보"
-                    android:textSize="14sp"
+                    android:textSize="21sp"
+                    android:textStyle="bold"
                     android:textColor="@color/app_text_secondary" />
 
                 <TextView
                     android:id="@+id/tv_change_region"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_height="36dp"
+                    android:gravity="center"
                     android:text="지역 변경"
                     android:textSize="13sp"
+                    android:textStyle="bold"
                     android:textColor="@color/md_theme_primary"
-                    android:padding="4dp"
-                    android:background="?attr/selectableItemBackgroundBorderless" />
+                    android:paddingHorizontal="14dp"
+                    android:background="@drawable/bg_btn_region_change" />
             </LinearLayout>
 
             <!-- 지역 미선택 에러 메시지 -->
@@ -109,9 +112,9 @@
 
             <!-- (1) 종목 -->
             <TextView
+                android:id="@+id/label_sport"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="종목 (필수)"
                 android:textSize="13sp"
                 android:textColor="@color/app_text_tertiary"
                 android:layout_marginTop="14dp" />
@@ -143,11 +146,19 @@
             </LinearLayout>
 
             <!-- (2) 센터/업체명 -->
+            <TextView
+                android:id="@+id/label_center_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_tertiary"
+                android:layout_marginTop="14dp" />
+
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/til_center_name"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
+                android:layout_marginTop="6dp"
                 app:counterEnabled="true"
                 app:counterMaxLength="30"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
@@ -158,6 +169,7 @@
                     android:layout_height="wrap_content"
                     android:hint="센터 또는 업체명을 입력하세요"
                     android:textSize="14sp"
+                    android:textColorHint="@color/app_text_hint"
                     android:maxLength="30"
                     android:inputType="text"
                     android:maxLines="1"
@@ -165,19 +177,28 @@
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- (2-1) 업체 주소 -->
+            <TextView
+                android:id="@+id/label_address"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_tertiary"
+                android:layout_marginTop="10dp" />
+
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/til_address"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="6dp"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/et_address"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="업체의 주소를 입력해주세요"
+                    android:hint="예 : 중구 세종대로 110"
                     android:textSize="14sp"
+                    android:textColorHint="@color/app_text_hint"
                     android:inputType="text"
                     android:maxLines="1"
                     android:importantForAutofill="no" />
@@ -185,9 +206,9 @@
 
             <!-- (3) 작성자 정보 -->
             <TextView
+                android:id="@+id/label_author"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="작성자 정보 (필수)"
                 android:textSize="13sp"
                 android:textColor="@color/app_text_tertiary"
                 android:layout_marginTop="14dp" />
@@ -214,7 +235,8 @@
                         android:layout_height="40dp"
                         android:text="관리자"
                         android:textSize="13sp"
-                        android:paddingHorizontal="12dp" />
+                        android:paddingHorizontal="12dp"
+                        android:minWidth="0dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_role_ceo"
@@ -223,7 +245,8 @@
                         android:layout_height="40dp"
                         android:text="대표"
                         android:textSize="13sp"
-                        android:paddingHorizontal="12dp" />
+                        android:paddingHorizontal="12dp"
+                        android:minWidth="0dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_role_other"
@@ -232,7 +255,8 @@
                         android:layout_height="40dp"
                         android:text="기타"
                         android:textSize="13sp"
-                        android:paddingHorizontal="12dp" />
+                        android:paddingHorizontal="12dp"
+                        android:minWidth="0dp" />
                 </com.google.android.material.button.MaterialButtonToggleGroup>
 
                 <com.google.android.material.textfield.TextInputLayout
@@ -249,6 +273,7 @@
                         android:layout_height="wrap_content"
                         android:hint="실명 입력"
                         android:textSize="14sp"
+                        android:textStyle="bold"
                         android:textColorHint="@color/app_badge_new_text"
                         android:inputType="textPersonName"
                         android:maxLines="1"
@@ -258,9 +283,9 @@
 
             <!-- (4) 연락처 -->
             <TextView
+                android:id="@+id/label_contact"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="연락처 (필수)"
                 android:textSize="13sp"
                 android:textColor="@color/app_text_tertiary"
                 android:layout_marginTop="14dp" />
@@ -311,6 +336,8 @@
                         android:id="@+id/et_contact"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:hint="010-1234-1234 또는 02-123-1234"
+                        android:textColorHint="@color/app_text_hint"
                         android:textSize="14sp"
                         android:inputType="phone"
                         android:maxLines="1"
@@ -319,11 +346,19 @@
             </LinearLayout>
 
             <!-- (5) 제목 -->
+            <TextView
+                android:id="@+id/label_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_tertiary"
+                android:layout_marginTop="14dp" />
+
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/til_title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
+                android:layout_marginTop="6dp"
                 app:counterEnabled="true"
                 app:counterMaxLength="50"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
@@ -334,6 +369,7 @@
                     android:layout_height="wrap_content"
                     android:hint="예) 강남구 프리랜서 트레이너 정규직 채용"
                     android:textSize="14sp"
+                    android:textColorHint="@color/app_text_hint"
                     android:maxLength="50"
                     android:inputType="text"
                     android:maxLines="1"
@@ -341,11 +377,19 @@
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- (6) 내용 -->
+            <TextView
+                android:id="@+id/label_description"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:textColor="@color/app_text_tertiary"
+                android:layout_marginTop="10dp" />
+
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/til_description"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="6dp"
                 app:hintEnabled="false"
                 app:counterEnabled="true"
                 app:counterMaxLength="1000"
@@ -357,6 +401,7 @@
                     android:layout_height="wrap_content"
                     android:hint="업무 내용, 우대 조건, 근무 분위기 등을 자유롭게 작성하세요."
                     android:textSize="14sp"
+                    android:textStyle="bold"
                     android:inputType="textMultiLine"
                     android:minLines="5"
                     android:gravity="top"
@@ -365,9 +410,9 @@
 
             <!-- (6-1) 모집기간 -->
             <TextView
+                android:id="@+id/label_deadline"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="모집기간 (필수)"
                 android:textSize="13sp"
                 android:textColor="@color/app_text_tertiary"
                 android:layout_marginTop="14dp" />
@@ -400,9 +445,9 @@
 
             <!-- (7) 근무형태 -->
             <TextView
+                android:id="@+id/label_job_type"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="근무형태 (필수)"
                 android:textSize="13sp"
                 android:textColor="@color/app_text_tertiary"
                 android:layout_marginTop="14dp" />
@@ -435,9 +480,9 @@
 
             <!-- (8) 급여 -->
             <TextView
+                android:id="@+id/label_salary"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="급여 (필수)"
                 android:textSize="13sp"
                 android:textColor="@color/app_text_tertiary"
                 android:layout_marginTop="14dp" />
@@ -470,9 +515,9 @@
 
             <!-- (9) 모집 인원 -->
             <TextView
+                android:id="@+id/label_headcount"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="모집 인원 (필수)"
                 android:textSize="13sp"
                 android:textColor="@color/app_text_tertiary"
                 android:layout_marginTop="14dp" />

@@ -11,10 +11,12 @@
     <!-- 상단 헤더: 뒤로가기 + 타이틀 -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="48dp"
+        android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingHorizontal="4dp"
+        android:paddingHorizontal="8dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="10dp"
         android:background="@color/app_surface">
 
         <ImageButton
@@ -32,27 +34,10 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="구인 상세"
-            android:textSize="16sp"
+            android:textSize="24sp"
             android:textStyle="bold"
             android:textColor="@color/app_text_primary"
             android:layout_marginStart="4dp" />
-
-        <ImageButton
-            android:id="@+id/btn_bookmark"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:src="@drawable/ic_bookmark"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="북마크"
-            android:scaleType="centerInside"
-            android:padding="8dp" />
-
-        <!-- 북마크/신고 구분선 -->
-        <View
-            android:layout_width="1dp"
-            android:layout_height="20dp"
-            android:background="@color/app_divider"
-            android:layout_marginHorizontal="2dp" />
 
         <TextView
             android:id="@+id/btn_report"
@@ -134,6 +119,26 @@
                         android:layout_height="0dp"
                         android:layout_weight="1" />
 
+                    <TextView
+                        android:id="@+id/tv_bookmark_count"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="12sp"
+                        android:textColor="@color/app_text_hint"
+                        android:layout_marginEnd="2dp" />
+
+                    <ImageView
+                        android:id="@+id/btn_bookmark"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:src="@drawable/ic_bookmark"
+                        android:contentDescription="북마크"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        app:tint="@color/app_icon_tint"
+                        android:scaleType="centerInside"
+                        android:padding="2dp"
+                        android:layout_marginEnd="8dp" />
+
                     <ImageView
                         android:id="@+id/btn_more"
                         android:layout_width="24dp"
@@ -174,6 +179,95 @@
                     android:layout_marginTop="8dp" />
             </LinearLayout>
 
+            <!-- 업체 주소 -->
+            <LinearLayout
+                android:id="@+id/layout_address"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@color/app_surface"
+                android:paddingHorizontal="16dp"
+                android:paddingBottom="12dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="업체 주소"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/app_text_secondary" />
+
+                <TextView
+                    android:id="@+id/tv_address"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="14sp"
+                    android:textColor="@color/app_text_primary"
+                    android:layout_marginTop="4dp" />
+            </LinearLayout>
+
+            <!-- 작성자 정보 + 연락처 (한 행) -->
+            <LinearLayout
+                android:id="@+id/layout_author"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:background="@color/app_surface"
+                android:paddingHorizontal="16dp"
+                android:paddingBottom="12dp"
+                android:visibility="gone">
+
+                <!-- 작성자 정보 (왼쪽) -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="작성자 정보"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/app_text_secondary" />
+
+                    <TextView
+                        android:id="@+id/tv_author_info"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="14sp"
+                        android:textColor="@color/app_text_primary"
+                        android:layout_marginTop="4dp" />
+                </LinearLayout>
+
+                <!-- 연락처 (오른쪽) -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tv_contact_label"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="연락처"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/app_text_secondary" />
+
+                    <TextView
+                        android:id="@+id/tv_contact"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="14sp"
+                        android:textColor="@color/app_text_primary"
+                        android:layout_marginTop="4dp" />
+                </LinearLayout>
+            </LinearLayout>
+
             <!-- 구분 -->
             <View
                 android:layout_width="match_parent"
@@ -193,7 +287,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="급여"
-                    android:textSize="13sp"
+                    android:textSize="15sp"
                     android:textStyle="bold"
                     android:textColor="@color/app_text_secondary" />
 
@@ -213,34 +307,6 @@
                 android:layout_marginHorizontal="16dp"
                 android:background="@color/app_divider" />
 
-            <!-- 연락처 -->
-            <LinearLayout
-                android:id="@+id/layout_contact"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:background="@color/app_surface"
-                android:paddingHorizontal="16dp"
-                android:paddingVertical="16dp"
-                android:visibility="gone">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="연락처"
-                    android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/app_text_secondary" />
-
-                <TextView
-                    android:id="@+id/tv_contact"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="16sp"
-                    android:textColor="@color/app_text_primary"
-                    android:layout_marginTop="4dp" />
-            </LinearLayout>
-
             <!-- 모집 인원 -->
             <LinearLayout
                 android:id="@+id/layout_headcount"
@@ -249,8 +315,7 @@
                 android:orientation="vertical"
                 android:background="@color/app_surface"
                 android:paddingHorizontal="16dp"
-                android:paddingVertical="16dp"
-                android:visibility="gone">
+                android:paddingVertical="16dp">
 
                 <View
                     android:layout_width="match_parent"
@@ -262,7 +327,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="모집 인원"
-                    android:textSize="13sp"
+                    android:textSize="15sp"
                     android:textStyle="bold"
                     android:textColor="@color/app_text_secondary" />
 
@@ -283,8 +348,7 @@
                 android:orientation="vertical"
                 android:background="@color/app_surface"
                 android:paddingHorizontal="16dp"
-                android:paddingVertical="16dp"
-                android:visibility="gone">
+                android:paddingVertical="16dp">
 
                 <View
                     android:layout_width="match_parent"
@@ -296,7 +360,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="모집기간"
-                    android:textSize="13sp"
+                    android:textSize="15sp"
                     android:textStyle="bold"
                     android:textColor="@color/app_text_secondary" />
 
@@ -328,7 +392,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="상세 내용"
-                    android:textSize="13sp"
+                    android:textSize="15sp"
                     android:textStyle="bold"
                     android:textColor="@color/app_text_secondary"
                     android:layout_marginBottom="8dp" />
@@ -350,8 +414,7 @@
                 android:orientation="vertical"
                 android:background="@color/app_surface"
                 android:paddingHorizontal="16dp"
-                android:paddingBottom="16dp"
-                android:visibility="gone">
+                android:paddingBottom="16dp">
 
                 <View
                     android:layout_width="match_parent"
@@ -363,7 +426,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="우대조건"
-                    android:textSize="13sp"
+                    android:textSize="15sp"
                     android:textStyle="bold"
                     android:textColor="@color/app_text_secondary" />
 
@@ -384,8 +447,7 @@
                 android:orientation="vertical"
                 android:background="@color/app_surface"
                 android:paddingHorizontal="16dp"
-                android:paddingBottom="20dp"
-                android:visibility="gone">
+                android:paddingBottom="20dp">
 
                 <View
                     android:layout_width="match_parent"
@@ -397,7 +459,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="복리후생"
-                    android:textSize="13sp"
+                    android:textSize="15sp"
                     android:textStyle="bold"
                     android:textColor="@color/app_text_secondary" />
 

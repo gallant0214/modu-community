@@ -16,10 +16,10 @@ class JobWriteViewModel : ViewModel() {
     private val _isLoading = MutableLiveData(false)
     val isLoading: LiveData<Boolean> = _isLoading
 
-    fun submitJobPost(request: JobPostRequest, authorName: String = "") {
+    fun submitJobPost(request: JobPostRequest) {
         viewModelScope.launch {
             _isLoading.value = true
-            JobsRepository.addJobPost(request, authorName).fold(
+            JobsRepository.addJobPost(request).fold(
                 onSuccess = { _submitResult.value = true },
                 onFailure = { _submitResult.value = false }
             )

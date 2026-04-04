@@ -77,7 +77,7 @@ class PostListFragment : Fragment() {
             }
         }
 
-        binding.btnWrite.setOnClickListener {
+        binding.fabWrite.setOnClickListener {
             val bundle = Bundle().apply {
                 putInt("categoryId", categoryId)
                 putString("categoryName", categoryName)
@@ -169,32 +169,39 @@ class PostListFragment : Fragment() {
         binding.btnNext.setOnClickListener { viewModel.nextPage() }
     }
 
+    private fun buildNoticeHeader(notices: List<CommunityPost>) {
+        binding.layoutNotices.removeAllViews()
+
+        if (notices.isEmpty()) {
+            binding.layoutNotices.visibility = View.GONE
+            binding.dividerNotices.visibility = View.GONE
+            return
+        }
+
+        binding.layoutNotices.visibility = View.VISIBLE
+        binding.dividerNotices.visibility = View.VISIBLE
+
+        val inflater = LayoutInflater.from(requireContext())
+        notices.forEach { notice ->
+            val itemView = inflater.inflate(R.layout.item_post_notice, binding.layoutNotices, false)
+            itemView.findViewById<TextView>(R.id.tv_notice_title).text = notice.title
+            itemView.setOnClickListener { navigateToDetail(notice) }
+            binding.layoutNotices.addView(itemView)
+        }
+    }
+
     private fun buildListItems() {
-        val notices = viewModel.noticePosts.value ?: emptyList()
-        val topPosts = viewModel.topPosts.value ?: emptyList()
         val posts = viewModel.posts.value ?: emptyList()
 
         val items = mutableListOf<PostListItem>()
-
-        // 공지 게시글
-        notices.forEach { items.add(PostListItem.NoticeItem(it)) }
-
-        // 인기 게시글 섹션
-        if (topPosts.isNotEmpty()) {
-            items.add(PostListItem.SectionHeader("\uD83D\uDD25 이번 달 인기 게시글"))
-            topPosts.forEach { items.add(PostListItem.PostItem(it)) }
-            items.add(PostListItem.SectionDivider)
-        }
-
-        // 최신 게시글 섹션
-        if (posts.isNotEmpty()) {
-            items.add(PostListItem.SectionHeader("최신 게시글"))
-        }
         posts.forEach { items.add(PostListItem.PostItem(it)) }
 
-        postAdapter.submitList(items)
+        postAdapter.submitList(items) {
+            _binding?.rvPosts?.scrollToPosition(0)
+        }
 
-        val isEmpty = notices.isEmpty() && topPosts.isEmpty() && posts.isEmpty()
+        val notices = viewModel.noticePosts.value ?: emptyList()
+        val isEmpty = notices.isEmpty() && posts.isEmpty()
         binding.tvEmpty.visibility = if (isEmpty) View.VISIBLE else View.GONE
     }
 
@@ -211,8 +218,10 @@ class PostListFragment : Fragment() {
         }
 
         viewModel.posts.observe(viewLifecycleOwner) { buildListItems() }
-        viewModel.noticePosts.observe(viewLifecycleOwner) { buildListItems() }
-        viewModel.topPosts.observe(viewLifecycleOwner) { buildListItems() }
+        viewModel.noticePosts.observe(viewLifecycleOwner) { notices ->
+            buildNoticeHeader(notices)
+            buildListItems()
+        }
 
         viewModel.currentPage.observe(viewLifecycleOwner) { page ->
             val total = viewModel.totalPages.value ?: 1

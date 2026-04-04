@@ -157,8 +157,8 @@ class HomeFragment : Fragment() {
 
         viewModel.latestJobs.observe(viewLifecycleOwner) { jobs ->
             binding.rvLatestJobs.adapter = JobCardAdapter(jobs) { job ->
-                val bottomNav = requireActivity().findViewById<BottomNavigationView>(R.id.bottom_navigation)
-                bottomNav?.selectedItemId = R.id.navigation_jobs
+                val bundle = Bundle().apply { putInt("postId", job.id) }
+                findNavController().navigate(R.id.action_home_to_jobDetail, bundle)
             }
         }
 
@@ -185,21 +185,15 @@ class HomeFragment : Fragment() {
 
     private fun setupClickListeners() {
         binding.btnMoreReviews.setOnClickListener {
-            (activity as? MainActivity)?.resetCommunityNavigation()
-            val bottomNav = requireActivity().findViewById<BottomNavigationView>(R.id.bottom_navigation)
-            bottomNav?.selectedItemId = R.id.navigation_community
+            findNavController().navigate(R.id.action_home_to_popularPosts)
         }
 
         binding.btnMoreJobs.setOnClickListener {
-            (activity as? MainActivity)?.resetJobsNavigation()
-            val bottomNav = requireActivity().findViewById<BottomNavigationView>(R.id.bottom_navigation)
-            bottomNav?.selectedItemId = R.id.navigation_jobs
+            findNavController().navigate(R.id.action_home_to_latestJobs)
         }
 
         binding.btnMorePosts.setOnClickListener {
-            (activity as? MainActivity)?.resetCommunityNavigation()
-            val bottomNav = requireActivity().findViewById<BottomNavigationView>(R.id.bottom_navigation)
-            bottomNav?.selectedItemId = R.id.navigation_community
+            findNavController().navigate(R.id.action_home_to_latestPosts)
         }
     }
 

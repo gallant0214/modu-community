@@ -151,4 +151,42 @@
             android:textSize="11sp"
             android:textColor="?attr/colorOnSurfaceVariant" />
     </LinearLayout>
+
+    <!-- 내 구인글 관리 버튼 (기본 숨김) -->
+    <LinearLayout
+        android:id="@+id/layout_actions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="10dp"
+        android:gravity="end"
+        android:visibility="gone">
+
+        <!-- 구인완료 버튼 -->
+        <TextView
+            android:id="@+id/btn_close_job"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:gravity="center"
+            android:text="구인완료"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurface"
+            android:background="@drawable/bg_tag"
+            android:paddingHorizontal="14dp"
+            android:layout_marginEnd="8dp" />
+
+        <!-- 재게시 버튼 -->
+        <TextView
+            android:id="@+id/btn_repost"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:gravity="center"
+            android:text="재게시"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorPrimary"
+            android:background="@drawable/bg_tag"
+            android:paddingHorizontal="14dp" />
+    </LinearLayout>
 </LinearLayout>

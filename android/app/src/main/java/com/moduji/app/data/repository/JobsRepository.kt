@@ -86,7 +86,12 @@ object JobsRepository {
             views = views,
             date = dateLabel,
             createdAt = parsedDateTime,
-            isClosed = isClosed
+            isClosed = isClosed,
+            bookmarkCount = bookmarkCount,
+            address = address,
+            authorRole = authorRole,
+            authorName = authorName,
+            contactType = contactType
         )
     }
 
@@ -97,13 +102,15 @@ object JobsRepository {
     /**
      * 구인 글 등록 → 서버 저장
      */
-    suspend fun addJobPost(request: JobPostRequest, authorName: String = ""): Result<Int> {
+    suspend fun addJobPost(request: JobPostRequest): Result<Int> {
         val apiRequest = JobCreateRequest(
             title = request.title,
             description = request.description,
             centerName = request.centerName,
             address = request.address,
-            authorName = authorName,
+            authorRole = request.authorRole,
+            authorName = request.authorName,
+            contactType = request.contactType,
             contact = request.contact,
             sport = request.sport,
             regionName = request.regionName,
@@ -158,6 +165,15 @@ object JobsRepository {
     }
 
     /**
+     * 최신 구인 게시글 (페이지네이션)
+     */
+    suspend fun getLatestJobsPaginated(page: Int, limit: Int = 20): Result<Triple<List<JobPost>, Int, Int>> {
+        return safeCall { api.getLatestJobsPaginated(page, limit) }.map { resp ->
+            Triple(resp.posts.map { it.toJobPost() }, resp.totalPages, resp.total)
+        }
+    }
+
+    /**
      * 지역별 구인 게시글 목록
      */
     suspend fun getJobPostsByRegion(
@@ -204,6 +220,22 @@ object JobsRepository {
     }
 
     /**
+     * 북마크 토글 (서버)
+     */
+    suspend fun bookmarkJobPost(jobId: Int): Result<com.moduji.app.data.network.JobBookmarkResponse> {
+        return safeCall { api.bookmarkJobPost(jobId) }
+    }
+
+    /**
+     * 구인완료 처리 (is_closed = true)
+     */
+    suspend fun closeJobPost(jobId: Int): Result<Boolean> {
+        return safeCall {
+            api.updateJobPost(jobId, mapOf("is_closed" to "true"))
+        }.map { true }
+    }
+
+    /**
      * 구인글 삭제
      */
     suspend fun deleteJobPost(jobId: Int): Result<Boolean> {
@@ -211,35 +243,17 @@ object JobsRepository {
     }
 
     // ====================================================
-    // 지역 그룹 (서버에서 게시글 수 가져오기)
+    // 지역 그룹 (로컬 데이터 즉시 반환 + 서버 카운트 비동기)
     // ====================================================
 
     /**
-     * 전체 지역 그룹 반환 (지역 데이터는 로컬, 게시글 수는 서버)
+     * 로컬 지역 그룹 즉시 반환 (카운트 0, 서버 호출 없음)
      */
-    suspend fun getRegionGroups(): List<RegionGroup> {
-        // 전체 게시글을 가져와서 지역별 카운트
-        val allPostsResult = safeCall {
-            api.getJobPosts(sort = "latest", page = 1)
-        }
-
-        // 지역별 카운트 맵 생성
-        val regionCounts = mutableMapOf<String, Int>()
-        val todayRegions = mutableSetOf<String>()
-        val today = LocalDate.now()
-
-        allPostsResult.getOrNull()?.posts?.forEach { post ->
-            regionCounts[post.regionCode] = (regionCounts[post.regionCode] ?: 0) + 1
-            try {
-                val createdDate = ZonedDateTime.parse(post.createdAt).toLocalDate()
-                if (createdDate == today) todayRegions.add(post.regionCode)
-            } catch (_: Exception) { }
-        }
-
+    fun getRegionGroupsLocal(): List<RegionGroup> {
         val metroGroups = metroData.map { (groupInfo, subList) ->
             val (groupCode, groupName) = groupInfo
             val subRegions = subList.map { (code, name) ->
-                SubRegion(code, name, regionCounts[code] ?: 0, todayRegions.contains(code))
+                SubRegion(code, name, 0, false)
             }
             RegionGroup(groupCode, groupName, RegionGroupType.METROPOLITAN, subRegions)
         }
@@ -247,12 +261,37 @@ object JobsRepository {
         val provinceGroups = provinceData.map { (groupInfo, subList) ->
             val (groupCode, groupName) = groupInfo
             val subRegions = subList.map { (code, name) ->
-                SubRegion(code, name, regionCounts[code] ?: 0, todayRegions.contains(code))
+                SubRegion(code, name, 0, false)
             }
             RegionGroup(groupCode, groupName, RegionGroupType.PROVINCE, subRegions)
         }
 
         return metroGroups + provinceGroups
+    }
+
+    /**
+     * 서버에서 지역별 게시글 수 조회 (경량 API)
+     */
+    suspend fun getRegionCounts(): Result<Pair<Map<String, Int>, Set<String>>> {
+        return safeCall { api.getRegionCounts() }.map { resp ->
+            Pair(resp.counts, resp.todayRegions.toSet())
+        }
+    }
+
+    /**
+     * 로컬 지역 그룹에 서버 카운트 적용
+     */
+    fun applyCountsToGroups(
+        groups: List<RegionGroup>,
+        counts: Map<String, Int>,
+        todayRegions: Set<String>
+    ): List<RegionGroup> {
+        return groups.map { group ->
+            val updatedSubs = group.subRegions.map { sub ->
+                SubRegion(sub.code, sub.name, counts[sub.code] ?: 0, todayRegions.contains(sub.code))
+            }
+            group.copy(subRegions = updatedSubs)
+        }
     }
 
     // ====================================================

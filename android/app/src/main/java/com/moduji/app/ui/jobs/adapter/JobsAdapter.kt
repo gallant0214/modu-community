@@ -59,7 +59,7 @@ class JobsAdapter(
 
             // 모집 상태 뱃지 + 마감 여부 UI
             if (item.isClosed) {
-                binding.tvStatus.text = "[기간 만료]"
+                binding.tvStatus.text = "[모집종료]"
                 binding.tvStatus.setTextColor(
                     binding.root.context.getColor(R.color.app_badge_closed_text)
                 )

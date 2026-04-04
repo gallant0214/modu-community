@@ -20,7 +20,11 @@
 
         <action
             android:id="@+id/action_regionSelect_to_jobWrite"
-            app:destination="@id/jobWriteFragment" />
+            app:destination="@id/jobWriteFragment"
+            app:enterAnim="@anim/slide_up_enter"
+            app:exitAnim="@anim/no_anim"
+            app:popEnterAnim="@anim/no_anim"
+            app:popExitAnim="@anim/slide_down_exit" />
 
         <action
             android:id="@+id/action_regionSelect_to_jobDetail"
@@ -43,7 +47,11 @@
 
         <action
             android:id="@+id/action_jobsList_to_jobWrite"
-            app:destination="@id/jobWriteFragment" />
+            app:destination="@id/jobWriteFragment"
+            app:enterAnim="@anim/slide_up_enter"
+            app:exitAnim="@anim/no_anim"
+            app:popEnterAnim="@anim/no_anim"
+            app:popExitAnim="@anim/slide_down_exit" />
 
         <action
             android:id="@+id/action_jobsList_to_jobDetail"

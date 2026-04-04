@@ -23,10 +23,10 @@ object ThemeHelper {
     /** 테마 선택지 라벨 배열 반환 */
     fun getThemeLabels(): Array<String> = themeLabels
 
-    /** 저장된 테마 모드 반환 (기본: 시스템) */
+    /** 저장된 테마 모드 반환 (기본: 화이트) */
     fun getSavedTheme(context: Context): Int {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getInt(KEY_THEME, THEME_SYSTEM)
+        return prefs.getInt(KEY_THEME, THEME_LIGHT)
     }
 
     /** 테마 모드 저장 + 즉시 적용 */

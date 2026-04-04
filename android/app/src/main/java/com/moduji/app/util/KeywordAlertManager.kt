@@ -16,7 +16,7 @@ object KeywordAlertManager {
     private const val MAX_KEYWORDS = 20
 
     private fun getPrefs(context: Context) =
-        context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        SecurePrefs.get(context, PREF_NAME)
 
     /**
      * 등록된 키워드 목록 반환

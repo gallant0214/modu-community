@@ -47,7 +47,21 @@ class CommentAdapter(
             binding.tvIp.text = if (!comment.ipDisplay.isNullOrBlank()) "(${comment.ipDisplay})" else ""
             binding.tvContent.text = comment.content
             binding.tvDate.text = formatDate(comment.createdAt)
-            binding.btnLike.text = if (comment.likes > 0) "♥ ${comment.likes}" else "♡"
+            val ctx = binding.root.context
+            val red = ctx.getColor(com.moduji.app.R.color.app_like_red)
+            if (comment.isLiked == true) {
+                binding.btnLike.text = if (comment.likes > 0) "${comment.likes}" else ""
+                binding.btnLike.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                    com.moduji.app.R.drawable.ic_heart_filled, 0, 0, 0
+                )
+                binding.btnLike.setTextColor(red)
+            } else {
+                binding.btnLike.text = if (comment.likes > 0) "${comment.likes}" else ""
+                binding.btnLike.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                    com.moduji.app.R.drawable.ic_heart_outline, 0, 0, 0
+                )
+                binding.btnLike.setTextColor(red)
+            }
 
             binding.btnLike.setOnClickListener { onLike(comment) }
             binding.btnReply.visibility = if (isReply) View.GONE else View.VISIBLE

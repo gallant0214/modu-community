@@ -18,8 +18,8 @@
         <item name="colorError">@color/md_theme_error</item>
         <item name="colorOnError">@color/md_theme_onError</item>
         <item name="colorOutline">@color/md_theme_outline</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">@color/app_bg</item>
         <item name="android:navigationBarColor">@color/app_nav_bar_bg</item>
     </style>
 

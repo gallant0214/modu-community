@@ -1,5 +1,7 @@
 import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
+import { verifyAdmin } from "@/app/lib/admin-auth";
+import { sanitize, validateLength } from "@/app/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +13,8 @@ export async function PUT(
   const body = await request.json();
   const { password, title, content } = body;
 
-  if (password !== process.env.ADMIN_PASSWORD) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const authError = await verifyAdmin(request, password);
+  if (authError) return authError;
 
   if (!title?.trim() || !content?.trim()) {
     return NextResponse.json({ error: "제목과 내용을 입력해주세요" }, { status: 400 });
@@ -24,6 +25,6 @@ export async function PUT(
     return NextResponse.json({ error: "공지를 찾을 수 없습니다" }, { status: 404 });
   }
 
-  await sql`UPDATE posts SET title = ${title.trim()}, content = ${content.trim()}, updated_at = NOW() WHERE id = ${Number(id)}`;
+  await sql`UPDATE posts SET title = ${sanitize(validateLength(title.trim(), 200))}, content = ${sanitize(validateLength(content.trim(), 50000))}, updated_at = NOW() WHERE id = ${Number(id)}`;
   return NextResponse.json({ success: true });
 }

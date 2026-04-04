@@ -36,7 +36,11 @@
 
         <action
             android:id="@+id/action_postList_to_postWrite"
-            app:destination="@id/postWriteFragment" />
+            app:destination="@id/postWriteFragment"
+            app:enterAnim="@anim/slide_up_enter"
+            app:exitAnim="@anim/no_anim"
+            app:popEnterAnim="@anim/no_anim"
+            app:popExitAnim="@anim/slide_down_exit" />
     </fragment>
 
     <!-- 3. 게시글 상세 -->
@@ -85,6 +89,23 @@
         <action
             android:id="@+id/action_inquiry_to_write"
             app:destination="@id/inquiryWriteFragment" />
+
+        <action
+            android:id="@+id/action_inquiry_to_detail"
+            app:destination="@id/inquiryDetailFragment" />
+    </fragment>
+
+    <!-- 6-1. 문의 상세 -->
+    <fragment
+        android:id="@+id/inquiryDetailFragment"
+        android:name="com.moduji.app.ui.community.InquiryDetailFragment"
+        android:label="문의 상세"
+        tools:layout="@layout/fragment_inquiry_detail">
+
+        <argument android:name="inquiryId" app:argType="integer" />
+        <argument android:name="inquiryTitle" app:argType="string" android:defaultValue="" />
+        <argument android:name="inquiryAuthor" app:argType="string" android:defaultValue="" />
+        <argument android:name="inquiryDate" app:argType="string" android:defaultValue="" />
     </fragment>
 
     <!-- 7. 문의 작성 -->

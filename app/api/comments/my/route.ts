@@ -2,14 +2,16 @@ export const dynamic = "force-dynamic";
 
 import { sql } from "@/app/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAuth } from "@/app/lib/firebase-admin";
 
-// GET /api/comments/my?author=닉네임
-// 내가 댓글 단 게시글 목록 반환
+// GET /api/comments/my — 내가 댓글 단 게시글 (firebase_uid 기반)
 export async function GET(req: NextRequest) {
-  const author = req.nextUrl.searchParams.get("author")?.trim();
-  if (!author) {
-    return NextResponse.json({ posts: [] });
+  const user = await verifyAuth(req);
+  if (!user) {
+    return NextResponse.json({ posts: [], error: "로그인이 필요합니다" }, { status: 401 });
   }
+
+  await sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
 
   const rows = await sql`
     SELECT DISTINCT ON (p.id)
@@ -19,12 +21,11 @@ export async function GET(req: NextRequest) {
     FROM comments cm
     INNER JOIN posts p ON cm.post_id = p.id
     LEFT JOIN categories c ON p.category_id = c.id
-    WHERE cm.author = ${author}
+    WHERE cm.firebase_uid = ${user.uid}
     ORDER BY p.id, p.created_at DESC
     LIMIT 50
   `;
 
-  // 최신순 정렬
   rows.sort((a: { created_at: string }, b: { created_at: string }) =>
     new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );

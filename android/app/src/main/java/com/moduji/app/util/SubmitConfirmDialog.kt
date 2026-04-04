@@ -2,15 +2,13 @@ package com.moduji.app.util
 
 import android.content.Context
 import android.view.LayoutInflater
+import android.view.View
 import android.widget.CheckBox
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import android.widget.TextView
 import com.moduji.app.R
 
-// TODO: 신고 시스템 연동 가능
-// TODO: 허위 구인 반복 시 자동 차단 로직 추가 가능
-
 /**
- * 구인 등록 최종 확인 다이얼로그
+ * 구인 등록 최종 확인 다이얼로그 (iOS 스타일)
  *
  * - 경고 메시지 + 체크박스 동의 후 등록 가능
  * - Fragment / Activity 어디서든 재사용 가능
@@ -23,26 +21,26 @@ fun showSubmitConfirmDialog(context: Context, onConfirm: () -> Unit) {
         .inflate(R.layout.dialog_submit_confirm, null)
 
     val cbConfirm = dialogView.findViewById<CheckBox>(R.id.cb_confirm)
+    val btnConfirm = dialogView.findViewById<TextView>(R.id.btn_confirm)
+    val btnCancel = dialogView.findViewById<View>(R.id.btn_cancel)
 
-    val dialog = MaterialAlertDialogBuilder(context)
-        .setTitle("등록 전 확인")
+    val dialog = androidx.appcompat.app.AlertDialog.Builder(context)
         .setView(dialogView)
-        .setNegativeButton("취소") { d, _ -> d.dismiss() }
-        .setPositiveButton("최종 등록하기", null)
         .create()
+    dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
-    dialog.setOnShowListener {
-        val positiveBtn = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
-        positiveBtn.isEnabled = false
+    btnConfirm.alpha = 0.5f
+    btnConfirm.isEnabled = false
 
-        cbConfirm.setOnCheckedChangeListener { _, isChecked ->
-            positiveBtn.isEnabled = isChecked
-        }
+    cbConfirm.setOnCheckedChangeListener { _, isChecked ->
+        btnConfirm.isEnabled = isChecked
+        btnConfirm.alpha = if (isChecked) 1f else 0.5f
+    }
 
-        positiveBtn.setOnClickListener {
-            dialog.dismiss()
-            onConfirm()
-        }
+    btnCancel.setOnClickListener { dialog.dismiss() }
+    btnConfirm.setOnClickListener {
+        dialog.dismiss()
+        onConfirm()
     }
 
     dialog.show()

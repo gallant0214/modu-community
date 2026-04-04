@@ -18,8 +18,20 @@ interface CommunityApi {
     @GET("api/posts/popular")
     suspend fun getPopularPosts(@Query("limit") limit: Int = 3): Response<List<CommunityPost>>
 
+    @GET("api/posts/popular")
+    suspend fun getPopularPostsPaginated(
+        @Query("page") page: Int,
+        @Query("limit") limit: Int = 20
+    ): Response<PopularPostsResponse>
+
     @GET("api/posts/latest")
     suspend fun getLatestPosts(@Query("limit") limit: Int = 5): Response<List<CommunityPost>>
+
+    @GET("api/posts/latest")
+    suspend fun getLatestPostsPaginated(
+        @Query("page") page: Int,
+        @Query("limit") limit: Int = 20
+    ): Response<PopularPostsResponse>
 
     // ---- 게시글 목록 ----
     @GET("api/categories/{categoryId}/posts")
@@ -89,6 +101,12 @@ interface CommunityApi {
     @GET("api/inquiries")
     suspend fun getInquiries(): Response<List<CommunityInquiry>>
 
+    @GET("api/inquiries")
+    suspend fun getMyInquiries(
+        @Query("author") author: String,
+        @Query("password") password: String
+    ): Response<List<CommunityInquiry>>
+
     @POST("api/inquiries")
     suspend fun createInquiry(@Body body: CreateInquiryRequest): Response<ApiResponse>
 
@@ -129,4 +147,7 @@ interface CommunityApi {
 
     @POST("api/admin/inquiries/{id}/unhide")
     suspend fun unhideInquiry(@Path("id") id: Int, @Body body: PasswordRequest): Response<ApiResponse>
+
+    @POST("api/admin/change-password")
+    suspend fun changeAdminPassword(@Body body: ChangePasswordRequest): Response<ApiResponse>
 }

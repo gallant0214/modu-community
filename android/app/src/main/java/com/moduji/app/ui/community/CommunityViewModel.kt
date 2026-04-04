@@ -11,6 +11,48 @@ import kotlinx.coroutines.launch
 
 class CommunityViewModel : ViewModel() {
 
+    companion object {
+        /** 서버 오류 시 사용할 기본 카테고리 목록 */
+        private val DEFAULT_CATEGORIES = listOf(
+            CommunityCategory(1, "보디빌딩", "🏋️", 1, true),
+            CommunityCategory(2, "축구", "⚽", 2, true),
+            CommunityCategory(3, "야구", "⚾", 3, true),
+            CommunityCategory(4, "테니스", "🎾", 4, true),
+            CommunityCategory(5, "수영", "🏊", 5, true),
+            CommunityCategory(6, "골프", "🏌️", 0, false),
+            CommunityCategory(7, "농구", "🏀", 0, false),
+            CommunityCategory(8, "배구", "🏐", 0, false),
+            CommunityCategory(9, "탁구", "🏓", 0, false),
+            CommunityCategory(10, "배드민턴", "🏸", 0, false),
+            CommunityCategory(11, "복싱", "🥊", 0, false),
+            CommunityCategory(12, "유도", "🥋", 0, false),
+            CommunityCategory(13, "태권도", "🥋", 0, false),
+            CommunityCategory(14, "합기도", "🥋", 0, false),
+            CommunityCategory(15, "주짓수", "🤼", 0, false),
+            CommunityCategory(16, "MMA", "🤼", 0, false),
+            CommunityCategory(17, "검도", "⚔️", 0, false),
+            CommunityCategory(18, "양궁", "🏹", 0, false),
+            CommunityCategory(19, "사격", "🎯", 0, false),
+            CommunityCategory(20, "요가", "🧘", 0, false),
+            CommunityCategory(21, "필라테스", "🤸", 0, false),
+            CommunityCategory(22, "게이트볼", "🏑", 0, false),
+            CommunityCategory(23, "크로스핏", "💪", 0, false),
+            CommunityCategory(24, "스쿼시", "🎾", 0, false),
+            CommunityCategory(25, "스키/보드", "⛷️", 0, false),
+            CommunityCategory(26, "클라이밍", "🧗", 0, false),
+            CommunityCategory(27, "승마", "🏇", 0, false),
+            CommunityCategory(28, "펜싱", "🤺", 0, false),
+            CommunityCategory(29, "조정", "🚣", 0, false),
+            CommunityCategory(30, "육상", "🏃", 0, false),
+            CommunityCategory(31, "체조", "🤸", 0, false),
+            CommunityCategory(32, "핸드볼", "🤾", 0, false),
+            CommunityCategory(33, "역도", "🏋️", 0, false),
+            CommunityCategory(34, "사이클", "🚴", 0, false),
+            CommunityCategory(35, "철인3종", "🏊", 0, false),
+            CommunityCategory(36, "기타종목", "🏅", 99, false),
+        )
+    }
+
     private val _categories = MutableLiveData<List<CommunityCategory>>()
     val categories: LiveData<List<CommunityCategory>> = _categories
 
@@ -34,35 +76,18 @@ class CommunityViewModel : ViewModel() {
     }
 
     fun loadCategories() {
-        // 캐시가 있으면 즉시 표시 (로딩 스피너 없음)
+        // 1단계: 캐시 또는 로컬 기본 데이터로 즉시 표시 (로딩 없음)
         val cached = CommunityRepository.getCachedCategories()
-        if (cached != null) {
-            applyCategoryData(cached)
-        }
+        applyCategoryData(cached ?: DEFAULT_CATEGORIES)
 
+        // 2단계: 서버에서 최신 데이터 백그라운드 갱신
         viewModelScope.launch {
-            if (cached == null) _isLoading.value = true
             _error.value = null
 
-            CommunityRepository.getCategories(forceRefresh = cached != null).fold(
+            CommunityRepository.getCategories(forceRefresh = true).fold(
                 onSuccess = { list -> applyCategoryData(list) },
-                onFailure = { e ->
-                    if (cached == null) {
-                        val msg = when {
-                            e.message?.contains("resolve host", ignoreCase = true) == true ||
-                            e.message?.contains("Unable to resolve", ignoreCase = true) == true ||
-                            e.message?.contains("No address associated", ignoreCase = true) == true ->
-                                "서버에 연결할 수 없습니다\n인터넷 연결을 확인해주세요"
-                            e.message?.contains("timeout", ignoreCase = true) == true ->
-                                "서버 응답 시간이 초과되었습니다\n잠시 후 다시 시도해주세요"
-                            else -> "오류: [${e.javaClass.simpleName}]\n${e.message ?: "알 수 없는 오류"}"
-                        }
-                        _error.value = msg
-                    }
-                }
+                onFailure = { /* 로컬 데이터가 이미 표시되어 있으므로 무시 */ }
             )
-
-            _isLoading.value = false
         }
     }
 
@@ -70,7 +95,7 @@ class CommunityViewModel : ViewModel() {
         allCategories = list
         _categories.value = list
         _popularCategories.value = list
-            .filter { it.isPopular }
+            .filter { it.postCountInt > 0 }
             .sortedByDescending { it.postCountInt }
             .take(5)
         applyFilter(currentQuery)
@@ -83,14 +108,14 @@ class CommunityViewModel : ViewModel() {
 
     private fun applyFilter(query: String) {
         if (query.isBlank()) {
-            _filteredCategories.value = allCategories.sortedBy { it.sortOrder }
+            _filteredCategories.value = allCategories.sortedBy { it.name }
         } else {
             _filteredCategories.value = allCategories
                 .filter { cat ->
                     ChosungSearch.matches(cat.name, query) ||
                     ChosungSearch.matches(cat.emoji, query)
                 }
-                .sortedBy { it.sortOrder }
+                .sortedBy { it.name }
         }
     }
 }

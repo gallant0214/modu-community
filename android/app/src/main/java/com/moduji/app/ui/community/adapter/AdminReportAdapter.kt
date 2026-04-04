@@ -90,7 +90,15 @@ class AdminReportAdapter(
                 binding.layoutActions.visibility = View.GONE
                 binding.tvStatus.visibility = View.VISIBLE
                 val isDeleted = report.deletedAt != null
-                binding.tvStatus.text = if (isDeleted) "삭제됨" else "처리 완료"
+                val isHidden = report.targetHidden == true
+                binding.tvStatus.text = when {
+                    isDeleted -> "삭제됨"
+                    isHidden -> "숨김처리"
+                    else -> "처리 완료"
+                }
+
+                // 처리완료 탭에서 클릭 시 상세보기
+                binding.root.setOnClickListener { onNavigate(report) }
             } else {
                 binding.layoutActions.visibility = View.VISIBLE
                 binding.tvStatus.visibility = View.GONE
@@ -100,6 +108,8 @@ class AdminReportAdapter(
                 binding.btnResolve.setOnClickListener { onResolve(report) }
                 binding.btnHide.setOnClickListener { onHide(report) }
                 binding.btnUnhide.setOnClickListener { onUnhide(report) }
+
+                binding.root.setOnClickListener(null)
             }
         }
 

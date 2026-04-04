@@ -68,3 +68,31 @@ export interface Post {
   category_name?: string;
   ip_display?: string;
 }
+
+export interface JobPost {
+  id: number;
+  title: string;
+  description: string;
+  center_name: string;
+  address: string;
+  author_role: string;
+  author_name: string;
+  contact_type: string;
+  contact: string;
+  sport: string;
+  region_name: string;
+  region_code: string;
+  employment_type: string;
+  salary: string;
+  headcount: string;
+  benefits: string;
+  preferences: string;
+  deadline: string;
+  likes: number;
+  views: number;
+  is_closed: boolean;
+  bookmark_count: number;
+  firebase_uid: string;
+  created_at: string;
+  updated_at: string;
+}

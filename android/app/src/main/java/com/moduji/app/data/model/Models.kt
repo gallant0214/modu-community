@@ -68,7 +68,12 @@ data class JobPost(
     val headcount: String = "",    // 모집 인원
     val benefits: String = "",     // 복리후생
     val preferences: String = "",  // 우대조건
-    val deadline: String = ""      // 모집기간 (상시모집, 정원마감시, 날짜)
+    val deadline: String = "",      // 모집기간 (상시모집, 정원마감시, 날짜)
+    val bookmarkCount: Int = 0,     // 서버 북마크 수
+    val address: String = "",       // 업체 주소
+    val authorRole: String = "",    // 작성자 역할 (관리자, 대표, 기타)
+    val authorName: String = "",    // 작성자 실명
+    val contactType: String = ""    // 연락처 유형 (연락처, 이메일 등)
 )
 
 // ====================================================
@@ -239,6 +244,9 @@ data class JobPostRequest(
     val jobType: JobType,
     val centerName: String,
     val address: String = "",
+    val authorRole: String = "",
+    val authorName: String = "",
+    val contactType: String = "연락처",
     val title: String,
     val salary: SalaryInfo,
     val contact: String,

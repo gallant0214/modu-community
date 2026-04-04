@@ -45,14 +45,28 @@ class JobsViewModel : ViewModel() {
     }
 
     /**
-     * 서버에서 지역 그룹 데이터 로드
+     * 지역 그룹 2단계 로드:
+     * 1단계 - 로컬 데이터 즉시 표시 (카운트 0)
+     * 2단계 - 서버에서 카운트 비동기 로드 후 업데이트
      */
     fun loadRegionGroups() {
+        // 1단계: 로컬 데이터 즉시 표시
+        allRegionGroups = JobsRepository.getRegionGroupsLocal()
+        _regionGroups.value = allRegionGroups
+
+        // 2단계: 서버 카운트 비동기 로드
         viewModelScope.launch {
-            _isLoading.value = true
-            allRegionGroups = JobsRepository.getRegionGroups()
-            _regionGroups.value = allRegionGroups
-            _isLoading.value = false
+            JobsRepository.getRegionCounts().onSuccess { (counts, todayRegions) ->
+                val expandedCodes = _regionGroups.value
+                    ?.filter { it.isExpanded }
+                    ?.map { it.code }
+                    ?.toSet() ?: emptySet()
+
+                allRegionGroups = JobsRepository.applyCountsToGroups(allRegionGroups, counts, todayRegions)
+                _regionGroups.value = allRegionGroups.map {
+                    it.copy(isExpanded = it.code in expandedCodes)
+                }
+            }
         }
     }
 

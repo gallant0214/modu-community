@@ -21,6 +21,7 @@ object NotificationPrefsManager {
     const val KEY_JOB = "noti_job"
     const val KEY_NOTICE = "noti_notice"
     const val KEY_PROMO = "noti_promo"
+    const val KEY_KEYWORD = "noti_keyword"
 
     data class NotificationSettings(
         val postComment: Boolean,
@@ -34,7 +35,7 @@ object NotificationPrefsManager {
     }
 
     private fun getPrefs(context: Context) =
-        context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        SecurePrefs.get(context, PREF_NAME)
 
     fun getSettings(context: Context): NotificationSettings {
         val prefs = getPrefs(context)

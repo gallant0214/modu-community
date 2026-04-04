@@ -1,5 +1,6 @@
 import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
+import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +8,10 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ commentId: string }> }
 ) {
+  const ip = getClientIp(request);
+  const rateLimitResponse = checkRateLimit(ip, "write");
+  if (rateLimitResponse) return rateLimitResponse;
+
   const { commentId } = await params;
   const body = await request.json();
   const { password, content } = body;
@@ -25,7 +30,7 @@ export async function PUT(
     return NextResponse.json({ error: "비밀번호가 일치하지 않습니다" }, { status: 403 });
   }
 
-  await sql`UPDATE comments SET content = ${content.trim()} WHERE id = ${Number(commentId)}`;
+  await sql`UPDATE comments SET content = ${sanitize(validateLength(content.trim(), 5000))} WHERE id = ${Number(commentId)}`;
   return NextResponse.json({ success: true });
 }
 
@@ -33,6 +38,10 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ commentId: string }> }
 ) {
+  const ip = getClientIp(request);
+  const rateLimitResponse = checkRateLimit(ip, "write");
+  if (rateLimitResponse) return rateLimitResponse;
+
   const { commentId } = await params;
   const body = await request.json();
   const { password, post_id } = body;

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { sql } from "./db";
+import { verifyAdminPassword } from "./admin-auth";
 
 export async function createPost(formData: FormData) {
   const categoryId = formData.get("category_id") as string;
@@ -80,7 +81,7 @@ export async function verifyPostPassword(id: number, password: string) {
   const rows = await sql`SELECT password FROM posts WHERE id = ${id}`;
   if (rows.length === 0) return { error: "게시글을 찾을 수 없습니다" };
 
-  const isAdmin = password === process.env.ADMIN_PASSWORD;
+  const isAdmin = await verifyAdminPassword(password);
   if (!isAdmin && rows[0].password !== password) {
     return { error: "비밀번호가 일치하지 않습니다" };
   }
@@ -91,7 +92,7 @@ export async function deletePost(id: number, categoryId: number, password: strin
   const rows = await sql`SELECT password FROM posts WHERE id = ${id}`;
   if (rows.length === 0) return { error: "게시글을 찾을 수 없습니다" };
 
-  const isAdmin = password === process.env.ADMIN_PASSWORD;
+  const isAdmin = await verifyAdminPassword(password);
   if (!isAdmin && rows[0].password !== password) {
     return { error: "비밀번호가 일치하지 않습니다" };
   }
@@ -117,7 +118,7 @@ export async function deleteComment(commentId: number, postId: number, categoryI
   const rows = await sql`SELECT password FROM comments WHERE id = ${commentId}`;
   if (rows.length === 0) return { error: "댓글을 찾을 수 없습니다" };
 
-  const isAdmin = password === process.env.ADMIN_PASSWORD;
+  const isAdmin = await verifyAdminPassword(password);
   if (!isAdmin && rows[0].password !== password) {
     return { error: "비밀번호가 일치하지 않습니다" };
   }
@@ -158,7 +159,7 @@ export async function viewInquiry(id: number, password: string) {
 }
 
 export async function viewInquiryAdmin(id: number, adminPassword: string) {
-  if (adminPassword !== process.env.ADMIN_PASSWORD) {
+  if (!(await verifyAdminPassword(adminPassword))) {
     return { error: "관리자 비밀번호가 일치하지 않습니다" };
   }
   const rows = await sql`SELECT content, reply, replied_at FROM inquiries WHERE id = ${id}`;
@@ -172,7 +173,7 @@ export async function viewInquiryAdmin(id: number, adminPassword: string) {
 }
 
 export async function replyToInquiry(id: number, adminPassword: string, replyContent: string) {
-  if (adminPassword !== process.env.ADMIN_PASSWORD) {
+  if (!(await verifyAdminPassword(adminPassword))) {
     return { error: "관리자 비밀번호가 일치하지 않습니다" };
   }
   if (!replyContent?.trim()) {
@@ -186,7 +187,7 @@ export async function updateInquiry(id: number, password: string, title: string,
   const rows = await sql`SELECT password FROM inquiries WHERE id = ${id}`;
   if (rows.length === 0) return { error: "문의를 찾을 수 없습니다" };
 
-  const isAdmin = password === process.env.ADMIN_PASSWORD;
+  const isAdmin = await verifyAdminPassword(password);
   if (!isAdmin && rows[0].password !== password) {
     return { error: "비밀번호가 일치하지 않습니다" };
   }
@@ -199,7 +200,7 @@ export async function updateInquiry(id: number, password: string, title: string,
 }
 
 export async function updateNotice(id: number, adminPassword: string, title: string, content: string) {
-  if (adminPassword !== process.env.ADMIN_PASSWORD) {
+  if (!(await verifyAdminPassword(adminPassword))) {
     return { error: "관리자 비밀번호가 일치하지 않습니다" };
   }
   if (!title?.trim() || !content?.trim()) {
@@ -226,7 +227,7 @@ export async function createReport(
 }
 
 export async function getReports(adminPassword: string) {
-  if (adminPassword !== process.env.ADMIN_PASSWORD) {
+  if (!(await verifyAdminPassword(adminPassword))) {
     return { error: "관리자 비밀번호가 일치하지 않습니다" };
   }
   const rows = await sql`
@@ -244,7 +245,7 @@ export async function getReports(adminPassword: string) {
 }
 
 export async function getInquiries(adminPassword: string) {
-  if (adminPassword !== process.env.ADMIN_PASSWORD) {
+  if (!(await verifyAdminPassword(adminPassword))) {
     return { error: "관리자 비밀번호가 일치하지 않습니다" };
   }
   const rows = await sql`
@@ -255,14 +256,14 @@ export async function getInquiries(adminPassword: string) {
 }
 
 export async function resolveReport(id: number, adminPassword: string) {
-  if (adminPassword !== process.env.ADMIN_PASSWORD) {
+  if (!(await verifyAdminPassword(adminPassword))) {
     return { error: "관리자 비밀번호가 일치하지 않습니다" };
   }
   await sql`UPDATE reports SET resolved = true, resolved_at = NOW() WHERE id = ${id}`;
 }
 
 export async function deleteReportTarget(reportId: number, adminPassword: string) {
-  if (adminPassword !== process.env.ADMIN_PASSWORD) {
+  if (!(await verifyAdminPassword(adminPassword))) {
     return { error: "관리자 비밀번호가 일치하지 않습니다" };
   }
   const rows = await sql`SELECT target_type, target_id, post_id, category_id FROM reports WHERE id = ${reportId}`;
@@ -283,7 +284,7 @@ export async function deleteReportTarget(reportId: number, adminPassword: string
 }
 
 export async function hideInquiry(id: number, adminPassword: string) {
-  if (adminPassword !== process.env.ADMIN_PASSWORD) {
+  if (!(await verifyAdminPassword(adminPassword))) {
     return { error: "관리자 비밀번호가 일치하지 않습니다" };
   }
   await sql`UPDATE inquiries SET hidden = true WHERE id = ${id}`;
@@ -291,7 +292,7 @@ export async function hideInquiry(id: number, adminPassword: string) {
 }
 
 export async function unhideInquiry(id: number, adminPassword: string) {
-  if (adminPassword !== process.env.ADMIN_PASSWORD) {
+  if (!(await verifyAdminPassword(adminPassword))) {
     return { error: "관리자 비밀번호가 일치하지 않습니다" };
   }
   await sql`UPDATE inquiries SET hidden = false WHERE id = ${id}`;
@@ -302,7 +303,7 @@ export async function deleteInquiry(id: number, password: string) {
   const rows = await sql`SELECT password FROM inquiries WHERE id = ${id}`;
   if (rows.length === 0) return { error: "문의를 찾을 수 없습니다" };
 
-  const isAdmin = password === process.env.ADMIN_PASSWORD;
+  const isAdmin = await verifyAdminPassword(password);
   if (!isAdmin && rows[0].password !== password) {
     return { error: "비밀번호가 일치하지 않습니다" };
   }
@@ -318,7 +319,7 @@ export async function updateComment(commentId: number, postId: number, categoryI
   const rows = await sql`SELECT password FROM comments WHERE id = ${commentId}`;
   if (rows.length === 0) return { error: "댓글을 찾을 수 없습니다" };
 
-  const isAdmin = password === process.env.ADMIN_PASSWORD;
+  const isAdmin = await verifyAdminPassword(password);
   if (!isAdmin && rows[0].password !== password) {
     return { error: "비밀번호가 일치하지 않습니다" };
   }

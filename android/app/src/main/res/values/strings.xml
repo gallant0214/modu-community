@@ -7,7 +7,7 @@
     <string name="custom_url_scheme">com.moduji.app</string>
 
     <!-- Google Sign-In Web Client ID (google-services.json 배치 시 자동 대체됨) -->
-    <string name="default_web_client_id">PLACEHOLDER</string>
+    <string name="default_web_client_id">480587636282-veruvlpl56puq27ta6709toehguitjq6.apps.googleusercontent.com</string>
 
     <!-- 하단 탭 라벨 -->
     <string name="tab_home">홈</string>

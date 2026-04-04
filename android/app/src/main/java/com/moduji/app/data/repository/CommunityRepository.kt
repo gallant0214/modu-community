@@ -54,8 +54,16 @@ object CommunityRepository {
         api.getPopularPosts(limit)
     }
 
+    suspend fun getPopularPostsPaginated(page: Int, limit: Int = 20): Result<PopularPostsResponse> = safeCall {
+        api.getPopularPostsPaginated(page, limit)
+    }
+
     suspend fun getLatestPosts(limit: Int = 5): Result<List<CommunityPost>> = safeCall {
         api.getLatestPosts(limit)
+    }
+
+    suspend fun getLatestPostsPaginated(page: Int, limit: Int = 20): Result<PopularPostsResponse> = safeCall {
+        api.getLatestPostsPaginated(page, limit)
     }
 
     // ---- 게시글 ----
@@ -106,6 +114,10 @@ object CommunityRepository {
 
     // ---- 문의 ----
     suspend fun getInquiries(): Result<List<CommunityInquiry>> = safeCall { api.getInquiries() }
+
+    suspend fun getMyInquiries(author: String, password: String): Result<List<CommunityInquiry>> = safeCall {
+        api.getMyInquiries(author, password)
+    }
 
     suspend fun createInquiry(request: CreateInquiryRequest): Result<ApiResponse> = safeCall { api.createInquiry(request) }
 
@@ -169,5 +181,9 @@ object CommunityRepository {
 
     suspend fun unhideInquiry(id: Int, password: String): Result<ApiResponse> = safeCall {
         api.unhideInquiry(id, PasswordRequest(password))
+    }
+
+    suspend fun changeAdminPassword(currentPassword: String, newPassword: String): Result<ApiResponse> = safeCall {
+        api.changeAdminPassword(ChangePasswordRequest(currentPassword, newPassword))
     }
 }

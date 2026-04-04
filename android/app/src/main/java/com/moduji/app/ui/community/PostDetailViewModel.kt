@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.moduji.app.data.model.*
 import com.moduji.app.data.repository.CommunityRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class CommentSort { LATEST, POPULAR, LIKES }
@@ -50,7 +51,10 @@ class PostDetailViewModel : ViewModel() {
             CommunityRepository.viewPost(postId)
 
             CommunityRepository.getPost(postId).fold(
-                onSuccess = { _post.value = it },
+                onSuccess = {
+                    _post.value = it
+                    _isLiked.value = it.isLiked == true
+                },
                 onFailure = { _error.value = it.message }
             )
 
@@ -104,23 +108,54 @@ class PostDetailViewModel : ViewModel() {
     }
 
     fun likePost() {
+        val currentPost = _post.value ?: return
+        val wasLiked = _isLiked.value == true
+
+        // 즉시 UI 업데이트 (optimistic)
+        _isLiked.value = !wasLiked
+        val newLikes = if (wasLiked) (currentPost.likes - 1).coerceAtLeast(0) else currentPost.likes + 1
+        _post.value = currentPost.copy(likes = newLikes)
+
+        // 서버에 반영 (백그라운드)
         viewModelScope.launch {
             CommunityRepository.likePost(postId).fold(
                 onSuccess = { resp ->
-                    _isLiked.value = !resp.unliked
                     _actionResult.value = if (resp.unliked) "좋아요를 취소했습니다" else "좋아요!"
+                    // 서버의 실제 데이터로 동기화
                     loadPost()
                 },
-                onFailure = { _actionResult.value = "오류: ${it.message}" }
+                onFailure = {
+                    // 실패 시 원래 상태로 복원
+                    _isLiked.value = wasLiked
+                    _post.value = currentPost
+                    _actionResult.value = "오류: ${it.message}"
+                }
             )
         }
     }
 
     fun likeComment(commentId: Int) {
+        // 즉시 UI 업데이트 (optimistic)
+        val rawList: List<CommunityComment> = _rawComments.value?.toMutableList() ?: emptyList()
+        val idx = rawList.indexOfFirst { it.id == commentId }
+        if (idx >= 0) {
+            val updated = rawList.toMutableList()
+            val comment = rawList[idx]
+            val wasLiked = comment.isLiked == true
+            val newLikes = if (wasLiked) (comment.likes - 1).coerceAtLeast(0) else comment.likes + 1
+            updated[idx] = comment.copy(likes = newLikes, isLiked = !wasLiked)
+            _rawComments.value = updated
+            applySortAndUpdate()
+        }
+
+        // 서버에 반영 (백그라운드)
         viewModelScope.launch {
             CommunityRepository.likeComment(commentId).fold(
                 onSuccess = { loadComments() },
-                onFailure = { _actionResult.value = "오류: ${it.message}" }
+                onFailure = {
+                    loadComments() // 실패 시 서버 데이터로 복원
+                    _actionResult.value = "오류: ${it.message}"
+                }
             )
         }
     }
@@ -137,6 +172,7 @@ class PostDetailViewModel : ViewModel() {
             CommunityRepository.createComment(postId, request).fold(
                 onSuccess = {
                     _actionResult.value = "댓글이 등록되었습니다"
+                    delay(800)
                     loadComments()
                     loadPost() // 댓글 수 갱신
                 },

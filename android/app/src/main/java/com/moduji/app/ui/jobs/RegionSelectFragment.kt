@@ -11,7 +11,6 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.widget.ArrayAdapter
 import com.moduji.app.R
@@ -40,6 +39,7 @@ class RegionSelectFragment : Fragment() {
     private lateinit var regionAdapter: RegionAdapter
     private lateinit var searchAdapter: JobsAdapter
     private var isSelectForWriteMode = false
+    private var isReturnRegionResult = false
 
     private var currentSearchType = JobSearchType.TITLE
     private var savedRecyclerState: Parcelable? = null
@@ -60,6 +60,8 @@ class RegionSelectFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        isReturnRegionResult = arguments?.getBoolean("returnRegionResult", false) ?: false
+
         checkSelectForWriteMode()
         setupRecyclerView()
         setupSearch()
@@ -69,6 +71,14 @@ class RegionSelectFragment : Fragment() {
 
         binding.btnKeywordAlert.setOnClickListener {
             KeywordAlertBottomSheet.show(this)
+        }
+
+        // 지역 선택 결과 반환 모드일 때 불필요한 UI 숨김
+        if (isReturnRegionResult) {
+            binding.fabWrite.visibility = View.GONE
+            binding.btnKeywordAlert.visibility = View.GONE
+            binding.btnSearchType.visibility = View.GONE
+            binding.etPostSearch.visibility = View.GONE
         }
     }
 
@@ -85,15 +95,24 @@ class RegionSelectFragment : Fragment() {
     private fun setupRecyclerView() {
         regionAdapter = RegionAdapter(
             onSubRegionClick = { code, name ->
-                val bundle = Bundle().apply {
-                    putString("regionCode", code)
-                    putString("regionName", name)
-                }
-                if (isSelectForWriteMode) {
-                    isSelectForWriteMode = false
-                    findNavController().navigate(R.id.action_regionSelect_to_jobWrite, bundle)
+                if (isReturnRegionResult) {
+                    // 결과 반환 모드: 이전 화면에 결과 전달 후 복귀
+                    findNavController().previousBackStackEntry?.savedStateHandle?.apply {
+                        set("selectedRegionCode", code)
+                        set("selectedRegionName", name)
+                    }
+                    findNavController().popBackStack()
                 } else {
-                    findNavController().navigate(R.id.action_regionSelect_to_jobsList, bundle)
+                    val bundle = Bundle().apply {
+                        putString("regionCode", code)
+                        putString("regionName", name)
+                    }
+                    if (isSelectForWriteMode) {
+                        isSelectForWriteMode = false
+                        findNavController().navigate(R.id.action_regionSelect_to_jobWrite, bundle)
+                    } else {
+                        findNavController().navigate(R.id.action_regionSelect_to_jobsList, bundle)
+                    }
                 }
             },
             onGroupToggle = { groupCode ->
@@ -182,26 +201,20 @@ class RegionSelectFragment : Fragment() {
 
     private fun showSearchTypeBottomSheet() {
         val options = JobSearchType.values().map { it.label }.toTypedArray()
-        val dialog = BottomSheetDialog(requireContext())
-        val listView = android.widget.ListView(requireContext()).apply {
-            adapter = android.widget.ArrayAdapter(
-                requireContext(),
-                android.R.layout.simple_list_item_1,
-                options
-            )
-            setOnItemClickListener { _, _, position, _ ->
-                currentSearchType = JobSearchType.values()[position]
+        val currentIndex = JobSearchType.values().indexOf(currentSearchType)
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("검색 유형")
+            .setSingleChoiceItems(options, currentIndex) { dialog, which ->
+                currentSearchType = JobSearchType.values()[which]
                 binding.tvSearchType.text = currentSearchType.label
-                // 이미 입력된 검색어가 있으면 다시 검색
                 val query = binding.etPostSearch.text?.toString()?.trim() ?: ""
                 if (query.isNotEmpty()) {
                     viewModel.searchGlobal(query, currentSearchType)
                 }
                 dialog.dismiss()
             }
-        }
-        dialog.setContentView(listView)
-        dialog.show()
+            .setNegativeButton("취소", null)
+            .show()
     }
 
     private fun setupFab() {

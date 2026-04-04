@@ -75,6 +75,10 @@
     <color name="app_salary_text">#4D7C0F</color>
     <color name="app_salary_bg">#F0F7E4</color>
 
+    <!-- 모집 상태 -->
+    <color name="app_status_active">#16A34A</color>
+    <color name="app_status_closed">#1C1B16</color>
+
     <!-- 배지 -->
     <color name="app_badge_new_text">#EF4444</color>
     <color name="app_badge_closing_text">#F59E0B</color>

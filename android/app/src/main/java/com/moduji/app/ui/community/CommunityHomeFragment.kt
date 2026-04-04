@@ -23,6 +23,7 @@ class CommunityHomeFragment : Fragment() {
     private val viewModel: CommunityViewModel by activityViewModels()
     private lateinit var popularAdapter: CategoryAdapter
     private lateinit var allAdapter: CategoryAdapter
+    private var isSportsExpanded = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -38,10 +39,18 @@ class CommunityHomeFragment : Fragment() {
         setupAdapters()
         setupSearch()
         setupLinks()
+        setupShowMore()
+        setupSwipeRefresh()
         observeData()
 
         binding.btnKeywordAlert.setOnClickListener {
             KeywordAlertBottomSheet.show(this)
+        }
+    }
+
+    private fun setupSwipeRefresh() {
+        binding.swipeRefresh.setOnRefreshListener {
+            viewModel.loadCategories()
         }
     }
 
@@ -86,13 +95,20 @@ class CommunityHomeFragment : Fragment() {
         }
     }
 
+    private fun setupShowMore() {
+        binding.btnShowMore.setOnClickListener {
+            isSportsExpanded = !isSportsExpanded
+            binding.rvAll.visibility = if (isSportsExpanded) View.VISIBLE else View.GONE
+            binding.btnShowMore.text = if (isSportsExpanded) "종목 접기 ▲" else "종목 더 보기 ▼"
+        }
+    }
+
     private fun showContentSections(isSearching: Boolean) {
         binding.layoutError.visibility = View.GONE
         binding.tvEmpty.visibility = View.GONE
         binding.sectionPopular.visibility = if (isSearching) View.GONE else View.VISIBLE
         binding.dividerPopular.visibility = if (isSearching) View.GONE else View.VISIBLE
         binding.sectionAll.visibility = View.VISIBLE
-        binding.tvAllTitle.text = if (isSearching) "검색 결과" else "전체 카테고리"
     }
 
     private fun showErrorState(message: String) {
@@ -107,6 +123,7 @@ class CommunityHomeFragment : Fragment() {
     private fun observeData() {
         viewModel.isLoading.observe(viewLifecycleOwner) { loading ->
             binding.progressBar.visibility = if (loading) View.VISIBLE else View.GONE
+            if (!loading) binding.swipeRefresh.isRefreshing = false
         }
 
         viewModel.error.observe(viewLifecycleOwner) { error ->
@@ -133,10 +150,20 @@ class CommunityHomeFragment : Fragment() {
                 binding.sectionAll.visibility = View.VISIBLE
             }
 
-            // 검색 중에는 인기 카테고리 숨김
+            // 검색 중에는 인기 카테고리 숨김 + 종목 목록 바로 표시
             binding.sectionPopular.visibility = if (isSearching) View.GONE else View.VISIBLE
             binding.dividerPopular.visibility = if (isSearching) View.GONE else View.VISIBLE
-            binding.tvAllTitle.text = if (isSearching) "검색 결과" else "전체 카테고리"
+            binding.tvAllTitle.text = if (isSearching) "검색 결과" else "📋 전체 카테고리"
+
+            if (isSearching) {
+                // 검색 중에는 버튼 숨기고 목록 바로 표시
+                binding.btnShowMore.visibility = View.GONE
+                binding.rvAll.visibility = View.VISIBLE
+            } else {
+                // 일반 상태에서는 토글 버튼으로 제어
+                binding.btnShowMore.visibility = View.VISIBLE
+                binding.rvAll.visibility = if (isSportsExpanded) View.VISIBLE else View.GONE
+            }
         }
     }
 

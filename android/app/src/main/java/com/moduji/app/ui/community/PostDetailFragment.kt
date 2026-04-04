@@ -6,16 +6,13 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.RadioGroup
+import android.text.InputType
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
 import com.moduji.app.R
 import com.moduji.app.data.model.CommunityComment
 import com.moduji.app.databinding.FragmentPostDetailBinding
@@ -69,20 +66,17 @@ class PostDetailFragment : Fragment() {
     }
 
     private fun showPostMenu() {
-        val dialog = BottomSheetDialog(requireContext())
-        val sheetView = layoutInflater.inflate(R.layout.dialog_post_menu, null)
-        dialog.setContentView(sheetView)
-
-        sheetView.findViewById<View>(R.id.btn_edit).setOnClickListener {
-            dialog.dismiss()
-            showPasswordDialogForEdit()
-        }
-        sheetView.findViewById<View>(R.id.btn_delete).setOnClickListener {
-            dialog.dismiss()
-            showPasswordDialogForDelete()
-        }
-
-        dialog.show()
+        val items = arrayOf("수정", "삭제")
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("게시글 관리")
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> showPasswordDialogForEdit()
+                    1 -> showPasswordDialogForDelete()
+                }
+            }
+            .setNegativeButton("취소", null)
+            .show()
     }
 
     private fun showPasswordDialogForEdit() {
@@ -102,17 +96,24 @@ class PostDetailFragment : Fragment() {
             return
         }
 
-        val dialog = BottomSheetDialog(requireContext())
-        val sheetView = layoutInflater.inflate(R.layout.dialog_password, null)
-        dialog.setContentView(sheetView)
+        val etPassword = EditText(requireContext()).apply {
+            hint = "비밀번호"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setPadding(64, 32, 64, 16)
+        }
 
-        val tilPassword = sheetView.findViewById<TextInputLayout>(R.id.til_password)
-        val etPassword = sheetView.findViewById<TextInputEditText>(R.id.et_password)
+        val dialog = MaterialAlertDialogBuilder(requireContext())
+            .setTitle("비밀번호 확인")
+            .setView(etPassword)
+            .setPositiveButton("확인", null)
+            .setNegativeButton("취소", null)
+            .create()
 
-        sheetView.findViewById<View>(R.id.btn_confirm).setOnClickListener {
-            val pw = etPassword.text?.toString() ?: ""
+        dialog.show()
+        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val pw = etPassword.text.toString()
             if (pw.isEmpty()) {
-                tilPassword.error = "비밀번호를 입력하세요"
+                Toast.makeText(requireContext(), "비밀번호를 입력하세요", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             viewModel.verifyPassword(pw) { ok ->
@@ -124,85 +125,170 @@ class PostDetailFragment : Fragment() {
                     }
                     findNavController().navigate(R.id.action_postDetail_to_postEdit, bundle)
                 } else {
-                    tilPassword.error = "비밀번호가 틀렸습니다"
+                    Toast.makeText(requireContext(), "비밀번호가 틀렸습니다", Toast.LENGTH_SHORT).show()
                 }
             }
         }
-
-        dialog.show()
     }
 
     private fun showPasswordDialogForDelete() {
-        val dialog = BottomSheetDialog(requireContext())
-        val sheetView = layoutInflater.inflate(R.layout.dialog_delete_confirm, null)
-        dialog.setContentView(sheetView)
-
-        val tilPassword = sheetView.findViewById<TextInputLayout>(R.id.til_password)
-        val etPassword = sheetView.findViewById<TextInputEditText>(R.id.et_password)
-
-        if (!AuthManager.isLoggedIn) {
-            tilPassword.visibility = View.VISIBLE
-        }
-
-        sheetView.findViewById<View>(R.id.btn_cancel).setOnClickListener {
-            dialog.dismiss()
-        }
-
-        sheetView.findViewById<View>(R.id.btn_delete).setOnClickListener {
-            val pw = if (AuthManager.isLoggedIn) {
-                AuthManager.loginPassword ?: ""
-            } else {
-                val input = etPassword.text?.toString() ?: ""
-                if (input.isEmpty()) {
-                    tilPassword.error = "비밀번호를 입력하세요"
-                    return@setOnClickListener
+        if (AuthManager.isLoggedIn) {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle("게시글 삭제")
+                .setMessage("정말 삭제하시겠습니까?")
+                .setPositiveButton("삭제") { _, _ ->
+                    viewModel.deletePost(AuthManager.loginPassword ?: "")
                 }
-                input
+                .setNegativeButton("취소", null)
+                .show()
+            return
+        }
+
+        val etPassword = EditText(requireContext()).apply {
+            hint = "비밀번호"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setPadding(64, 32, 64, 16)
+        }
+
+        val dialog = MaterialAlertDialogBuilder(requireContext())
+            .setTitle("게시글 삭제")
+            .setMessage("정말 삭제하시겠습니까?")
+            .setView(etPassword)
+            .setPositiveButton("삭제", null)
+            .setNegativeButton("취소", null)
+            .create()
+
+        dialog.show()
+        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val pw = etPassword.text.toString()
+            if (pw.isEmpty()) {
+                Toast.makeText(requireContext(), "비밀번호를 입력하세요", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
             dialog.dismiss()
             viewModel.deletePost(pw)
         }
-
-        dialog.show()
     }
 
     private fun showReportDialog(targetType: String, targetId: Int) {
-        val dialog = BottomSheetDialog(requireContext())
-        val sheetView = layoutInflater.inflate(R.layout.dialog_post_report, null)
-        dialog.setContentView(sheetView)
+        val ctx = requireContext()
+        val reasons = listOf(
+            "스팸/광고" to R.drawable.ic_report,
+            "욕설/비방" to R.drawable.ic_report,
+            "음란물" to R.drawable.ic_report,
+            "개인정보 노출" to R.drawable.ic_report,
+            "기타" to R.drawable.ic_edit
+        )
 
-        val rgReason = sheetView.findViewById<RadioGroup>(R.id.rg_report_reason)
-        val tilOther = sheetView.findViewById<TextInputLayout>(R.id.til_other_reason)
-        val etOther = sheetView.findViewById<TextInputEditText>(R.id.et_other_reason)
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_list, null)
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon)
+            .setImageResource(R.drawable.ic_report)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "신고하기"
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "신고 사유를 선택해주세요"
 
-        rgReason.setOnCheckedChangeListener { _, checkedId ->
-            tilOther.visibility = if (checkedId == R.id.rb_other) View.VISIBLE else View.GONE
-        }
+        val container = dialogView.findViewById<android.widget.LinearLayout>(R.id.layout_items)
+        dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm).visibility = android.view.View.GONE
 
-        sheetView.findViewById<View>(R.id.btn_submit_report).setOnClickListener {
-            val reason = when (rgReason.checkedRadioButtonId) {
-                R.id.rb_spam -> "스팸/광고"
-                R.id.rb_abuse -> "욕설/비방"
-                R.id.rb_obscene -> "음란물"
-                R.id.rb_privacy -> "개인정보 노출"
-                R.id.rb_other -> {
-                    val text = etOther.text?.toString()?.trim() ?: ""
-                    if (text.isEmpty()) {
-                        tilOther.error = "신고 사유를 입력하세요"
-                        return@setOnClickListener
-                    }
-                    text
-                }
-                else -> {
-                    Toast.makeText(requireContext(), "신고 사유를 선택하세요", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(ctx)
+            .setView(dialogView)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        val dp = resources.displayMetrics.density
+        for ((index, pair) in reasons.withIndex()) {
+            val (label, iconRes) = pair
+            val row = android.widget.LinearLayout(ctx).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding((12 * dp).toInt(), 0, (12 * dp).toInt(), 0)
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (44 * dp).toInt()
+                )
+                background = ctx.getDrawable(androidx.appcompat.R.drawable.abc_item_background_holo_light)
+            }
+            val icon = android.widget.ImageView(ctx).apply {
+                setImageResource(iconRes)
+                layoutParams = android.widget.LinearLayout.LayoutParams((20 * dp).toInt(), (20 * dp).toInt())
+                imageTintList = android.content.res.ColorStateList.valueOf(
+                    resources.getColor(R.color.app_badge_new_text, null)
+                )
+            }
+            val text = android.widget.TextView(ctx).apply {
+                this.text = label
+                textSize = 14f
+                setTextColor(resources.getColor(R.color.app_text_primary, null))
+                val lp = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                lp.marginStart = (12 * dp).toInt()
+                layoutParams = lp
+            }
+            row.addView(icon)
+            row.addView(text)
+            row.setOnClickListener {
+                dialog.dismiss()
+                if (index == reasons.size - 1) {
+                    showCustomReportInput(targetType, targetId)
+                } else {
+                    viewModel.report(targetType, targetId, label, null)
                 }
             }
+            container.addView(row)
 
-            val customReason = if (rgReason.checkedRadioButtonId == R.id.rb_other) reason else null
-            val reasonLabel = if (rgReason.checkedRadioButtonId == R.id.rb_other) "기타" else reason
-            viewModel.report(targetType, targetId, reasonLabel, customReason)
+            if (index < reasons.size - 1) {
+                val divider = android.view.View(ctx).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT, (0.5f * dp).toInt()
+                    )
+                    setBackgroundColor(resources.getColor(R.color.app_divider, null))
+                }
+                container.addView(divider)
+            }
+        }
+
+        dialogView.findViewById<android.view.View>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+        dialog.show()
+    }
+
+    private fun showCustomReportInput(targetType: String, targetId: Int) {
+        val ctx = requireContext()
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_list, null)
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon)
+            .setImageResource(R.drawable.ic_edit)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "기타 신고 사유"
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "신고 사유를 직접 입력해주세요"
+
+        val container = dialogView.findViewById<android.widget.LinearLayout>(R.id.layout_items)
+        val dp = resources.displayMetrics.density
+
+        val input = EditText(ctx).apply {
+            hint = "신고 사유를 입력하세요"
+            minLines = 2
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            setBackgroundResource(R.drawable.bg_search_bar)
+            setPadding((16 * dp).toInt(), (12 * dp).toInt(), (16 * dp).toInt(), (12 * dp).toInt())
+            textSize = 14f
+            setTextColor(resources.getColor(R.color.app_text_secondary, null))
+            setHintTextColor(resources.getColor(R.color.app_text_hint, null))
+        }
+        container.addView(input)
+
+        val btnConfirm = dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm)
+        btnConfirm.visibility = android.view.View.VISIBLE
+        btnConfirm.text = "신고"
+
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(ctx)
+            .setView(dialogView)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        dialogView.findViewById<android.view.View>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+        btnConfirm.setOnClickListener {
+            val reason = input.text.toString().trim()
+            if (reason.isEmpty()) {
+                Toast.makeText(ctx, "신고 사유를 입력하세요", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             dialog.dismiss()
+            viewModel.report(targetType, targetId, "기타", reason)
         }
 
         dialog.show()
@@ -231,40 +317,65 @@ class PostDetailFragment : Fragment() {
     }
 
     private fun showCommentMenu(comment: CommunityComment) {
-        val dialog = BottomSheetDialog(requireContext())
-        val sheetView = layoutInflater.inflate(R.layout.dialog_delete_confirm, null)
-        dialog.setContentView(sheetView)
+        val ctx = requireContext()
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_list, null)
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon)
+            .setImageResource(R.drawable.ic_comment)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "댓글 삭제"
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "정말 삭제하시겠습니까?"
+        dialogView.findViewById<android.widget.LinearLayout>(R.id.layout_items).visibility = android.view.View.GONE
 
-        sheetView.findViewById<android.widget.TextView>(R.id.tv_title).text = "댓글 삭제"
-        sheetView.findViewById<android.widget.TextView>(R.id.tv_message).text = "정말 삭제하시겠습니까?"
+        val btnConfirm = dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm)
+        btnConfirm.visibility = android.view.View.VISIBLE
+        btnConfirm.text = "삭제"
+        btnConfirm.setTextColor(resources.getColor(R.color.md_theme_onPrimary, null))
 
-        val tilPassword = sheetView.findViewById<TextInputLayout>(R.id.til_password)
-        val etPassword = sheetView.findViewById<TextInputEditText>(R.id.et_password)
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(ctx)
+            .setView(dialogView)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
-        if (!AuthManager.isLoggedIn) {
-            tilPassword.visibility = View.VISIBLE
-        }
-
-        sheetView.findViewById<View>(R.id.btn_cancel).setOnClickListener {
+        dialogView.findViewById<android.view.View>(R.id.btn_cancel).setOnClickListener {
             dialog.dismiss()
         }
 
-        sheetView.findViewById<View>(R.id.btn_delete).setOnClickListener {
-            val pw = if (AuthManager.isLoggedIn) {
-                AuthManager.loginPassword ?: ""
-            } else {
-                val input = etPassword.text?.toString() ?: ""
-                if (input.isEmpty()) {
-                    tilPassword.error = "비밀번호를 입력하세요"
+        if (AuthManager.isLoggedIn) {
+            btnConfirm.setOnClickListener {
+                dialog.dismiss()
+                viewModel.deleteComment(comment.id, AuthManager.loginPassword ?: "")
+            }
+            dialog.show()
+        } else {
+            // 비밀번호 입력 필드 추가
+            val dp = resources.displayMetrics.density
+            val container = dialogView.findViewById<android.widget.LinearLayout>(R.id.layout_items)
+            container.visibility = android.view.View.VISIBLE
+            val etPassword = EditText(ctx).apply {
+                hint = "비밀번호"
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                setBackgroundResource(R.drawable.bg_search_bar)
+                setPadding((16 * dp).toInt(), (12 * dp).toInt(), (16 * dp).toInt(), (12 * dp).toInt())
+                textSize = 14f
+                setTextColor(resources.getColor(R.color.app_text_secondary, null))
+                setHintTextColor(resources.getColor(R.color.app_text_hint, null))
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
+            container.addView(etPassword)
+
+            btnConfirm.setOnClickListener {
+                val pw = etPassword.text.toString()
+                if (pw.isEmpty()) {
+                    Toast.makeText(ctx, "비밀번호를 입력하세요", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
-                input
+                dialog.dismiss()
+                viewModel.deleteComment(comment.id, pw)
             }
-            dialog.dismiss()
-            viewModel.deleteComment(comment.id, pw)
+            dialog.show()
         }
-
-        dialog.show()
     }
 
     private fun setupCommentSort() {
@@ -292,13 +403,31 @@ class PostDetailFragment : Fragment() {
 
     private fun setupCommentInput() {
         binding.btnSubmitComment.setOnClickListener {
-            val content = binding.etComment.text?.toString()?.trim()
-            if (content.isNullOrEmpty()) {
-                Toast.makeText(requireContext(), "댓글을 입력하세요", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            showCommentAuthorDialog(content, replyToCommentId)
+            submitComment()
         }
+
+        // 키보드에서 전송 버튼 누를 때도 댓글 등록
+        binding.etComment.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+                submitComment()
+                true
+            } else false
+        }
+    }
+
+    private fun submitComment() {
+        val content = binding.etComment.text?.toString()?.trim()
+        if (content.isNullOrEmpty()) {
+            Toast.makeText(requireContext(), "댓글을 입력하세요", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // 키보드 숨기기
+        val imm = requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                as android.view.inputmethod.InputMethodManager
+        imm.hideSoftInputFromWindow(binding.etComment.windowToken, 0)
+
+        showCommentAuthorDialog(content, replyToCommentId)
     }
 
     private fun showCommentAuthorDialog(content: String, parentId: Int?) {

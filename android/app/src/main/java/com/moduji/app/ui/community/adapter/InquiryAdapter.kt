@@ -1,10 +1,13 @@
 package com.moduji.app.ui.community.adapter
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.moduji.app.R
 import com.moduji.app.data.model.CommunityInquiry
 import com.moduji.app.databinding.ItemInquiryBinding
 import java.text.SimpleDateFormat
@@ -12,6 +15,8 @@ import java.util.Locale
 import java.util.TimeZone
 
 class InquiryAdapter(
+    private val isAdminMode: Boolean = false,
+    private val onViewReplyClick: ((CommunityInquiry) -> Unit)? = null,
     private val onClick: (CommunityInquiry) -> Unit
 ) : ListAdapter<CommunityInquiry, InquiryAdapter.ViewHolder>(DIFF) {
 
@@ -32,7 +37,24 @@ class InquiryAdapter(
             binding.tvDate.text = formatDate(item.createdAt)
 
             val hasReply = !item.reply.isNullOrBlank()
-            binding.tvStatus.text = if (hasReply) "답변완료" else "대기중"
+
+            if (hasReply) {
+                binding.tvStatus.text = "답변완료"
+                binding.tvStatus.setTextColor(ContextCompat.getColor(binding.root.context, R.color.md_theme_onPrimary))
+                binding.tvStatus.setBackgroundResource(R.drawable.bg_badge_replied)
+                binding.btnViewReply.visibility = View.VISIBLE
+                binding.btnViewReply.setOnClickListener {
+                    (onViewReplyClick ?: onClick).invoke(item)
+                }
+            } else {
+                binding.tvStatus.text = "대기중"
+                binding.tvStatus.setTextColor(ContextCompat.getColor(binding.root.context, R.color.md_theme_onPrimary))
+                binding.tvStatus.setBackgroundResource(R.drawable.bg_login_button)
+                binding.btnViewReply.visibility = View.GONE
+            }
+
+            // 관리자 모드: 미확인 문의에 NEW 뱃지
+            binding.tvNewBadge.visibility = if (isAdminMode && item.readAt == null) View.VISIBLE else View.GONE
 
             binding.root.setOnClickListener { onClick(item) }
         }

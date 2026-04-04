@@ -1,7 +1,6 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
-// google-services.json 배치 후 아래 주석을 해제하세요
-// apply plugin: 'com.google.gms.google-services'
+apply plugin: 'com.google.gms.google-services'
 
 android {
     namespace = "com.moduji.app"
@@ -11,15 +10,31 @@ android {
         applicationId "com.moduji.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.1"
+        versionCode 26
+        versionName "1.9.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        release {
+            def localProps = new Properties()
+            def localFile = rootProject.file('local.properties')
+            if (localFile.exists()) {
+                localProps.load(new FileInputStream(localFile))
+            }
+            storeFile file('moduji-release.jks')
+            storePassword localProps.getProperty('RELEASE_STORE_PASSWORD', '')
+            keyAlias 'moduji'
+            keyPassword localProps.getProperty('RELEASE_KEY_PASSWORD', '')
+        }
     }
 
     buildTypes {
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 
@@ -36,6 +51,7 @@ android {
     // ViewBinding 활성화 (findViewById 대체)
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
 }
 
@@ -67,6 +83,9 @@ dependencies {
 
     // WorkManager (백그라운드 알림 폴링)
     implementation "androidx.work:work-runtime-ktx:2.9.1"
+
+    // EncryptedSharedPreferences
+    implementation "androidx.security:security-crypto:1.0.0"
 
     // Retrofit + Gson (REST API 통신)
     implementation 'com.squareup.retrofit2:retrofit:2.9.0'

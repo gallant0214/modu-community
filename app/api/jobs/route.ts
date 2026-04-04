@@ -1,6 +1,8 @@
 import { sql } from "@/app/lib/db";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+import { verifyAuth } from "@/app/lib/firebase-admin";
+import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -162,8 +164,19 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/jobs — 구인 글 등록
+// POST /api/jobs — 구인 글 등록 (인증 필수)
 export async function POST(request: Request) {
+  // 인증 확인
+  const user = await verifyAuth(request);
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+  }
+
+  // Rate limiting
+  const ip = getClientIp(request);
+  const rateLimitResponse = checkRateLimit(ip, "write");
+  if (rateLimitResponse) return rateLimitResponse;
+
   const body = await request.json();
   const {
     title, description, center_name, address,
@@ -178,7 +191,10 @@ export async function POST(request: Request) {
   }
 
   const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
+  const ipAddr = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
+
+  // firebase_uid 컬럼이 없으면 추가
+  await sql`ALTER TABLE job_posts ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
 
   const rows = await sql`
     INSERT INTO job_posts (
@@ -186,13 +202,13 @@ export async function POST(request: Request) {
       author_role, author_name, contact_type, contact,
       sport, region_name, region_code,
       employment_type, salary, headcount,
-      benefits, preferences, deadline, ip_address
+      benefits, preferences, deadline, ip_address, firebase_uid
     ) VALUES (
-      ${title.trim()}, ${description.trim()}, ${center_name.trim()}, ${(address || "").trim()},
-      ${(author_role || "").trim()}, ${(author_name || "").trim()}, ${contact_type || "연락처"}, ${contact.trim()},
-      ${sport.trim()}, ${(region_name || "").trim()}, ${(region_code || "").trim()},
-      ${(employment_type || "").trim()}, ${(salary || "").trim()}, ${(headcount || "").trim()},
-      ${(benefits || "").trim()}, ${(preferences || "").trim()}, ${(deadline || "").trim()}, ${ip}
+      ${sanitize(validateLength(title.trim(), 200))}, ${sanitize(validateLength(description.trim(), 10000))}, ${sanitize(validateLength(center_name.trim(), 100))}, ${sanitize(validateLength((address || "").trim(), 200))},
+      ${sanitize(validateLength((author_role || "").trim(), 50))}, ${sanitize(validateLength((author_name || "").trim(), 50))}, ${contact_type || "연락처"}, ${sanitize(validateLength(contact.trim(), 100))},
+      ${sanitize(validateLength(sport.trim(), 50))}, ${sanitize(validateLength((region_name || "").trim(), 50))}, ${(region_code || "").trim()},
+      ${sanitize(validateLength((employment_type || "").trim(), 50))}, ${sanitize(validateLength((salary || "").trim(), 100))}, ${sanitize(validateLength((headcount || "").trim(), 50))},
+      ${sanitize(validateLength((benefits || "").trim(), 500))}, ${sanitize(validateLength((preferences || "").trim(), 500))}, ${(deadline || "").trim()}, ${ipAddr}, ${user.uid}
     ) RETURNING id
   `;
 

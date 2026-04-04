@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/app/components/auth-provider";
+import { NavBar } from "@/app/components/nav-bar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "모두의 지도사 게시판",
-  description: "모두의 지도사 게시판 게시판",
+  title: "모두의 지도사 커뮤니티",
+  description: "모두의 지도사 커뮤니티 - 종목후기, 구인 게시판",
   other: {
     "color-scheme": "light dark",
   },
@@ -33,25 +35,15 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         style={{
-          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 36px)',
+          // NavBar(48px) + safe-area-top
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 48px)',
           paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)',
         }}
       >
-        {/* 상단 상태바 고정 배경 - 스크롤 시 콘텐츠가 시계 뒤로 가리지 않도록 */}
-        <div
-          aria-hidden="true"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 'calc(env(safe-area-inset-top, 0px) + 36px)',
-            zIndex: 9990,
-            pointerEvents: 'none',
-          }}
-          className="bg-white dark:bg-zinc-950"
-        />
-        {children}
+        <AuthProvider>
+          <NavBar />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

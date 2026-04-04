@@ -1,6 +1,11 @@
 package com.moduji.app.ui.jobs
 
+import android.graphics.Color
 import android.graphics.Rect
+import android.graphics.Typeface
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -10,16 +15,26 @@ import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.app.DatePickerDialog
+import android.widget.ArrayAdapter
+import android.widget.CheckBox
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.moduji.app.R
 import com.moduji.app.data.model.*
+import com.moduji.app.data.repository.JobsRepository
 import com.moduji.app.databinding.FragmentJobWriteBinding
-import com.moduji.app.util.NicknameManager
+import com.moduji.app.util.showCenterSplash
+import com.moduji.app.util.ChosungSearch
 import com.moduji.app.util.showSubmitConfirmDialog
+import kotlinx.coroutines.launch
+import java.util.Calendar
 
 /**
  * 구인 글쓰기 Fragment
@@ -48,11 +63,13 @@ class JobWriteFragment : Fragment() {
     private var selectedContactType: String = "연락처"
     private var selectedDeadline: String? = null
     private var lastSelectedDate: String? = null // 직접 입력으로 선택한 날짜 (재편집용)
+    private var repostJobId: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         regionCode = arguments?.getString("regionCode") ?: ""
         regionName = arguments?.getString("regionName") ?: ""
+        repostJobId = arguments?.getInt("repostJobId", 0) ?: 0
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -63,11 +80,42 @@ class JobWriteFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        setupLabels()
         setupRegionInfo()
         setupClickListeners()
         setupTextWatchers()
-        setupBottomSheetResultListeners()
         observeViewModel()
+        observeRegionResult()
+
+        if (repostJobId > 0) {
+            loadRepostData()
+        }
+    }
+
+    // ====================================================
+    // 라벨 설정 (필수 빨간색)
+    // ====================================================
+    private fun setupLabels() {
+        val redColor = resources.getColor(R.color.app_badge_new_text, null)
+
+        fun requiredLabel(base: String, required: String = "(필수)"): SpannableString {
+            val full = "$base $required"
+            return SpannableString(full).apply {
+                setSpan(ForegroundColorSpan(redColor), base.length + 1, full.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
+
+        binding.labelSport.text = requiredLabel("종목")
+        binding.labelCenterName.text = requiredLabel("업체명")
+        binding.labelAddress.text = requiredLabel("업체 주소")
+        binding.labelAuthor.text = requiredLabel("작성자 정보")
+        binding.labelContact.text = requiredLabel("연락처")
+        binding.labelTitle.text = requiredLabel("제목")
+        binding.labelDescription.text = requiredLabel("내용")
+        binding.labelDeadline.text = requiredLabel("모집기간")
+        binding.labelJobType.text = requiredLabel("근무형태")
+        binding.labelSalary.text = requiredLabel("급여")
+        binding.labelHeadcount.text = requiredLabel("모집 인원")
     }
 
     // ====================================================
@@ -83,74 +131,52 @@ class JobWriteFragment : Fragment() {
         }
 
         binding.tvChangeRegion.setOnClickListener {
-            findNavController().getBackStackEntry(R.id.regionSelectFragment)
-                .savedStateHandle["selectForWrite"] = true
-            findNavController().popBackStack(R.id.regionSelectFragment, false)
+            val sheet = RegionSelectBottomSheet.newInstance()
+            sheet.onRegionSelected = { code, name ->
+                regionCode = code
+                regionName = name
+                setupRegionInfo()
+            }
+            sheet.show(parentFragmentManager, "region_select_write")
         }
+    }
+
+    // ====================================================
+    // 지역 선택 결과 관찰 (재게시 경로에서 지역 변경 시)
+    // ====================================================
+    private fun observeRegionResult() {
+        findNavController().currentBackStackEntry?.savedStateHandle
+            ?.getLiveData<String>("selectedRegionCode")?.observe(viewLifecycleOwner) { code ->
+                if (!code.isNullOrEmpty()) {
+                    regionCode = code
+                    regionName = findNavController().currentBackStackEntry
+                        ?.savedStateHandle?.get<String>("selectedRegionName") ?: ""
+                    findNavController().currentBackStackEntry?.savedStateHandle?.remove<String>("selectedRegionCode")
+                    findNavController().currentBackStackEntry?.savedStateHandle?.remove<String>("selectedRegionName")
+                    setupRegionInfo()
+                }
+            }
     }
 
     // ====================================================
     // 클릭 리스너 설정
     // ====================================================
     private fun setupClickListeners() {
-        // 뒤로가기
         binding.btnBack.setOnClickListener {
             findNavController().navigateUp()
         }
 
-        // (1) 종목 선택
-        binding.rowSport.setOnClickListener {
-            JobSportBottomSheet.newInstance(selectedSport)
-                .show(childFragmentManager, JobSportBottomSheet.TAG)
-        }
+        binding.rowSport.setOnClickListener { showSportDialog() }
+        binding.rowJobType.setOnClickListener { showJobTypeDialog() }
+        binding.rowSalary.setOnClickListener { showSalaryDialog() }
+        binding.rowHeadcount.setOnClickListener { showHeadcountDialog() }
+        binding.rowPreferences.setOnClickListener { showPreferencesDialog() }
+        binding.rowBenefits.setOnClickListener { showBenefitsDialog() }
+        binding.rowDeadline.setOnClickListener { showDeadlineDialog() }
+        binding.rowContactType.setOnClickListener { showContactTypeDialog() }
 
-        // (7) 근무형태 선택
-        binding.rowJobType.setOnClickListener {
-            JobTypeBottomSheet.newInstance(selectedJobType)
-                .show(childFragmentManager, JobTypeBottomSheet.TAG)
-        }
-
-        // (8) 급여 선택
-        binding.rowSalary.setOnClickListener {
-            JobSalaryBottomSheet.newInstance(
-                type = selectedSalary?.type,
-                amount = selectedSalary?.amount,
-                hasIncentive = selectedSalary?.hasIncentive ?: false,
-                canDailyWeekly = selectedSalary?.canDailyOrWeeklyPay ?: false
-            ).show(childFragmentManager, JobSalaryBottomSheet.TAG)
-        }
-
-        // (9) 모집 인원
-        binding.rowHeadcount.setOnClickListener {
-            JobHeadcountBottomSheet.newInstance(selectedHeadcount)
-                .show(childFragmentManager, JobHeadcountBottomSheet.TAG)
-        }
-
-        // (10) 우대 조건
-        binding.rowPreferences.setOnClickListener {
-            JobPreferenceBottomSheet.newInstance(selectedPreferences)
-                .show(childFragmentManager, JobPreferenceBottomSheet.TAG)
-        }
-
-        // (11) 복리후생
-        binding.rowBenefits.setOnClickListener {
-            JobBenefitBottomSheet.newInstance(selectedBenefits)
-                .show(childFragmentManager, JobBenefitBottomSheet.TAG)
-        }
-
-        // (6-1) 모집기간
-        binding.rowDeadline.setOnClickListener {
-            JobDeadlineBottomSheet.newInstance(selectedDeadline, lastSelectedDate)
-                .show(childFragmentManager, JobDeadlineBottomSheet.TAG)
-        }
-
-        // (4) 연락처 유형 선택
-        binding.rowContactType.setOnClickListener { showContactTypeBottomSheet() }
-
-        // 등록 버튼
         binding.btnSubmit.isEnabled = true
         binding.btnSubmit.setOnClickListener {
-            // 지역 미선택 검증
             if (regionCode.isBlank()) {
                 showRegionError()
                 return@setOnClickListener
@@ -237,132 +263,470 @@ class JobWriteFragment : Fragment() {
     }
 
     // ====================================================
-    // BottomSheet 결과 수신
+    // 선택값 설정 헬퍼 (볼드 + 색상)
     // ====================================================
-    private fun setupBottomSheetResultListeners() {
-
-        // (1) 종목 결과
-        childFragmentManager.setFragmentResultListener(
-            JobSportBottomSheet.RESULT_KEY, viewLifecycleOwner
-        ) { _, bundle ->
-            selectedSport = bundle.getString("value")
-            binding.tvSport.text = selectedSport
-            binding.tvSport.setTextColor(resources.getColor(R.color.app_text_secondary, null))
-        }
-
-        // (7) 근무형태 결과
-        childFragmentManager.setFragmentResultListener(
-            JobTypeBottomSheet.RESULT_KEY, viewLifecycleOwner
-        ) { _, bundle ->
-            selectedJobType = JobType.valueOf(bundle.getString("value")!!)
-            binding.tvJobType.text = selectedJobType!!.label
-            binding.tvJobType.setTextColor(resources.getColor(R.color.app_text_secondary, null))
-        }
-
-        // (8) 급여 결과
-        childFragmentManager.setFragmentResultListener(
-            JobSalaryBottomSheet.RESULT_KEY, viewLifecycleOwner
-        ) { _, bundle ->
-            val type = SalaryType.valueOf(bundle.getString("type")!!)
-            val amount = bundle.getInt("amount").let { if (it == -1) null else it }
-            selectedSalary = SalaryInfo(
-                type = type,
-                amount = amount,
-                hasIncentive = bundle.getBoolean("incentive"),
-                canDailyOrWeeklyPay = bundle.getBoolean("daily_weekly")
-            )
-            binding.tvSalary.text = selectedSalary!!.toSummary()
-            binding.tvSalary.setTextColor(resources.getColor(R.color.app_text_secondary, null))
-        }
-
-        // (9) 모집 인원 결과
-        childFragmentManager.setFragmentResultListener(
-            JobHeadcountBottomSheet.RESULT_KEY, viewLifecycleOwner
-        ) { _, bundle ->
-            selectedHeadcount = bundle.getString("value")
-            binding.tvHeadcount.text = selectedHeadcount
-            binding.tvHeadcount.setTextColor(resources.getColor(R.color.app_text_secondary, null))
-        }
-
-        // (6-1) 모집기간 결과
-        childFragmentManager.setFragmentResultListener(
-            JobDeadlineBottomSheet.RESULT_KEY, viewLifecycleOwner
-        ) { _, bundle ->
-            selectedDeadline = bundle.getString("value")
-            binding.tvDeadline.text = selectedDeadline
-            binding.tvDeadline.setTextColor(resources.getColor(R.color.app_text_secondary, null))
-            // 날짜 직접 입력인 경우 저장 (재편집용)
-            if (selectedDeadline?.endsWith("까지") == true) {
-                lastSelectedDate = selectedDeadline!!.removeSuffix("까지")
-            }
-        }
-
-        // (10) 우대 조건 결과
-        childFragmentManager.setFragmentResultListener(
-            JobPreferenceBottomSheet.RESULT_KEY, viewLifecycleOwner
-        ) { _, bundle ->
-            selectedPreferences = bundle.getStringArray("values")
-                ?.map { JobPreference.valueOf(it) } ?: emptyList()
-            binding.tvPreferences.text = if (selectedPreferences.isEmpty()) "우대 조건을 선택하세요"
-            else selectedPreferences.joinToString(", ") { it.label }
-            binding.tvPreferences.setTextColor(
-                resources.getColor(
-                    if (selectedPreferences.isEmpty()) R.color.app_text_hint else R.color.app_text_secondary, null
-                )
-            )
-        }
-
-        // (11) 복리후생 결과
-        childFragmentManager.setFragmentResultListener(
-            JobBenefitBottomSheet.RESULT_KEY, viewLifecycleOwner
-        ) { _, bundle ->
-            selectedBenefits = bundle.getStringArray("values")
-                ?.map { JobBenefit.valueOf(it) } ?: emptyList()
-            binding.tvBenefits.text = if (selectedBenefits.isEmpty()) "복리후생을 선택하세요"
-            else selectedBenefits.joinToString(", ") { it.label }
-            binding.tvBenefits.setTextColor(
-                resources.getColor(
-                    if (selectedBenefits.isEmpty()) R.color.app_text_hint else R.color.app_text_secondary, null
-                )
-            )
-        }
+    private fun setSelectedValue(tv: android.widget.TextView, text: String) {
+        tv.text = text
+        tv.setTextColor(resources.getColor(R.color.app_text_secondary, null))
+        tv.setTypeface(null, Typeface.BOLD)
     }
 
     // ====================================================
-    // 연락처 유형 선택 BottomSheet
+    // iOS 스타일 다이얼로그 헬퍼
     // ====================================================
-    private fun showContactTypeBottomSheet() {
-        val options = arrayOf("연락처", "카카오ID", "이메일")
-        val dialog = BottomSheetDialog(requireContext())
-        val listView = android.widget.ListView(requireContext()).apply {
-            adapter = android.widget.ArrayAdapter(
-                requireContext(),
-                android.R.layout.simple_list_item_1,
-                options
+    private fun showIosDialog(
+        iconRes: Int,
+        title: String,
+        subtitle: String?,
+        items: List<String>,
+        selectedIndex: Int = -1,
+        onSelect: (Int) -> Unit
+    ) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_list, null)
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setView(dialogView)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon).setImageResource(iconRes)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = title
+        val tvSubtitle = dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle)
+        if (subtitle != null) tvSubtitle.text = subtitle else tvSubtitle.visibility = View.GONE
+
+        val container = dialogView.findViewById<LinearLayout>(R.id.layout_items)
+        items.forEachIndexed { index, label ->
+            val itemView = layoutInflater.inflate(R.layout.item_ios_dialog_option, container, false)
+            val rb = itemView.findViewById<android.widget.RadioButton>(R.id.rb_item)
+            rb.isChecked = (index == selectedIndex)
+            itemView.findViewById<android.widget.TextView>(R.id.tv_label).apply {
+                text = label
+                if (index == selectedIndex) {
+                    setTypeface(null, Typeface.BOLD)
+                    setTextColor(resources.getColor(R.color.md_theme_primary, null))
+                }
+            }
+            if (index == items.lastIndex) {
+                itemView.findViewById<View>(R.id.divider).visibility = View.GONE
+            }
+            itemView.setOnClickListener { onSelect(index); dialog.dismiss() }
+            container.addView(itemView)
+        }
+
+        dialogView.findViewById<View>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+        dialog.show()
+    }
+
+    private fun showIosMultiChoiceDialog(
+        iconRes: Int,
+        title: String,
+        subtitle: String?,
+        items: List<String>,
+        checked: BooleanArray,
+        onConfirm: (BooleanArray) -> Unit
+    ) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_list, null)
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setView(dialogView)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon).setImageResource(iconRes)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = title
+        val tvSubtitle = dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle)
+        if (subtitle != null) tvSubtitle.text = subtitle else tvSubtitle.visibility = View.GONE
+
+        val container = dialogView.findViewById<LinearLayout>(R.id.layout_items)
+        items.forEachIndexed { index, label ->
+            val itemView = layoutInflater.inflate(R.layout.item_ios_dialog_check, container, false)
+            val cb = itemView.findViewById<CheckBox>(R.id.cb_item)
+            itemView.findViewById<android.widget.TextView>(R.id.tv_label).text = label
+            cb.isChecked = checked[index]
+            if (index == items.lastIndex) {
+                itemView.findViewById<View>(R.id.divider).visibility = View.GONE
+            }
+            itemView.setOnClickListener { cb.isChecked = !cb.isChecked }
+            cb.setOnCheckedChangeListener { _, isChecked -> checked[index] = isChecked }
+            container.addView(itemView)
+        }
+
+        dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm).apply {
+            visibility = View.VISIBLE
+            setOnClickListener { onConfirm(checked); dialog.dismiss() }
+        }
+        dialogView.findViewById<View>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+        dialog.show()
+    }
+
+    // ====================================================
+    // 드롭다운 다이얼로그
+    // ====================================================
+
+    // (1) 종목 선택
+    private fun showSportDialog() {
+        val allSports = JobSportBottomSheet.ALL_SPORTS
+
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_list, null)
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setView(dialogView)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon).setImageResource(R.drawable.ic_search)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "종목 선택"
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "종목을 검색하거나 선택하세요"
+
+        val container = dialogView.findViewById<LinearLayout>(R.id.layout_items)
+        val dp = resources.displayMetrics.density
+
+        // 검색 바
+        val etSearch = EditText(requireContext()).apply {
+            hint = "종목 검색 (예: 축구, ㅊㄱ)"
+            inputType = InputType.TYPE_CLASS_TEXT
+            textSize = 14f
+            background = resources.getDrawable(R.drawable.bg_search_bar, null)
+            setPadding((12 * dp).toInt(), (10 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = (8 * dp).toInt() }
+        }
+        container.addView(etSearch)
+
+        // 스크롤 가능한 종목 리스트
+        val scrollView = android.widget.ScrollView(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (280 * dp).toInt()
             )
-            setOnItemClickListener { _, _, position, _ ->
-                selectedContactType = options[position]
-                binding.tvContactType.text = selectedContactType
-                binding.etContact.text?.clear()
-                when (selectedContactType) {
-                    "연락처" -> {
-                        binding.etContact.hint = ""
-                        binding.etContact.inputType = InputType.TYPE_CLASS_PHONE
-                    }
-                    "카카오ID" -> {
-                        binding.etContact.hint = "아이디를 입력하세요"
-                        binding.etContact.inputType = InputType.TYPE_CLASS_TEXT
-                    }
-                    "이메일" -> {
-                        binding.etContact.hint = "이메일을 입력하세요"
-                        binding.etContact.inputType = InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+        }
+        val itemsLayout = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        scrollView.addView(itemsLayout)
+        container.addView(scrollView)
+
+        fun buildItems(sports: List<String>) {
+            itemsLayout.removeAllViews()
+            sports.forEachIndexed { index, label ->
+                val itemView = layoutInflater.inflate(R.layout.item_ios_dialog_option, itemsLayout, false)
+                val rb = itemView.findViewById<android.widget.RadioButton>(R.id.rb_item)
+                rb.isChecked = (label == selectedSport)
+                itemView.findViewById<android.widget.TextView>(R.id.tv_label).apply {
+                    text = label
+                    if (label == selectedSport) {
+                        setTypeface(null, Typeface.BOLD)
+                        setTextColor(resources.getColor(R.color.md_theme_primary, null))
                     }
                 }
+                if (index == sports.lastIndex) {
+                    itemView.findViewById<View>(R.id.divider).visibility = View.GONE
+                }
+                itemView.setOnClickListener {
+                    if (label == "기타") {
+                        dialog.dismiss()
+                        showCustomSportInput()
+                    } else {
+                        selectedSport = label
+                        setSelectedValue(binding.tvSport, label)
+                        dialog.dismiss()
+                    }
+                }
+                itemsLayout.addView(itemView)
+            }
+        }
+
+        buildItems(allSports)
+
+        etSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                val query = s?.toString()?.trim() ?: ""
+                if (query.isEmpty()) {
+                    buildItems(allSports)
+                } else {
+                    buildItems(allSports.filter {
+                        it.contains(query, ignoreCase = true) || ChosungSearch.matches(it, query)
+                    })
+                }
+            }
+        })
+
+        dialogView.findViewById<View>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+        dialog.show()
+    }
+
+    private fun showCustomSportInput() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_list, null)
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setView(dialogView)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon).setImageResource(R.drawable.ic_edit)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "종목 직접 입력"
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "종목명을 입력하세요"
+
+        val container = dialogView.findViewById<LinearLayout>(R.id.layout_items)
+        val et = EditText(requireContext()).apply {
+            hint = "종목명"
+            inputType = InputType.TYPE_CLASS_TEXT
+            textSize = 15f
+        }
+        container.addView(et)
+
+        dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm).apply {
+            visibility = View.VISIBLE
+            text = "확인"
+            setOnClickListener {
+                val text = et.text.toString().trim()
+                if (text.isNotEmpty()) {
+                    selectedSport = text
+                    setSelectedValue(binding.tvSport, text)
+                    dialog.dismiss()
+                }
+            }
+        }
+        dialogView.findViewById<View>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+        dialog.show()
+    }
+
+    // (7) 근무형태
+    private fun showJobTypeDialog() {
+        val items = JobType.entries.map { it.label }
+        val currentIndex = selectedJobType?.let { JobType.entries.indexOf(it) } ?: -1
+        showIosDialog(R.drawable.ic_work, "근무형태", "근무형태를 선택하세요", items, currentIndex) { which ->
+            selectedJobType = JobType.entries[which]
+            setSelectedValue(binding.tvJobType, selectedJobType!!.label)
+        }
+    }
+
+    // (8) 급여
+    private fun showSalaryDialog() {
+        val items = listOf("시급", "월급", "건당", "협의")
+        val currentIndex = selectedSalary?.let { SalaryType.entries.indexOf(it.type) } ?: -1
+        showIosDialog(R.drawable.ic_work, "급여", "급여 유형을 선택하세요", items, currentIndex) { which ->
+            val type = SalaryType.entries[which]
+            if (type == SalaryType.NEGOTIABLE) {
+                selectedSalary = SalaryInfo(type, null,
+                    selectedSalary?.hasIncentive ?: false,
+                    selectedSalary?.canDailyOrWeeklyPay ?: false)
+                setSelectedValue(binding.tvSalary, selectedSalary!!.toSummary())
+            } else {
+                showSalaryAmountInput(type)
+            }
+        }
+    }
+
+    private fun showSalaryAmountInput(type: SalaryType) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_list, null)
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setView(dialogView)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon).setImageResource(R.drawable.ic_work)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "${type.label} 금액 입력"
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "금액을 입력하고 옵션을 선택하세요"
+
+        val container = dialogView.findViewById<LinearLayout>(R.id.layout_items)
+        val dp8 = (8 * resources.displayMetrics.density).toInt()
+
+        val etAmount = EditText(requireContext()).apply {
+            hint = "금액을 입력하세요"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            textSize = 15f
+            selectedSalary?.let { if (it.type == type && it.amount != null) setText(it.amount.toString()) }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp8 }
+        }
+        val cbIncentive = CheckBox(requireContext()).apply {
+            text = "인센티브 있음"
+            textSize = 14f
+            isChecked = selectedSalary?.hasIncentive ?: false
+        }
+        val cbDailyWeekly = CheckBox(requireContext()).apply {
+            text = "주급/당일지급 가능"
+            textSize = 14f
+            isChecked = selectedSalary?.canDailyOrWeeklyPay ?: false
+        }
+        container.addView(etAmount)
+        container.addView(cbIncentive)
+        container.addView(cbDailyWeekly)
+
+        dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm).apply {
+            visibility = View.VISIBLE
+            text = "확인"
+            setOnClickListener {
+                val amount = etAmount.text.toString().replace(",", "").trim().toIntOrNull()
+                if (amount == null || amount <= 0) {
+                    Toast.makeText(requireContext(), "올바른 금액을 입력하세요", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                selectedSalary = SalaryInfo(type, amount, cbIncentive.isChecked, cbDailyWeekly.isChecked)
+                setSelectedValue(binding.tvSalary, selectedSalary!!.toSummary())
                 dialog.dismiss()
             }
         }
-        dialog.setContentView(listView)
+        dialogView.findViewById<View>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
         dialog.show()
+    }
+
+    // (9) 모집 인원
+    private fun showHeadcountDialog() {
+        val items = listOf("1명", "2~3명", "4명 이상", "직접 입력")
+        val currentIndex = when (selectedHeadcount) {
+            "1명" -> 0; "2~3명" -> 1; "4명 이상" -> 2; else -> -1
+        }
+        showIosDialog(R.drawable.ic_profile, "모집 인원", "모집 인원을 선택하세요", items, currentIndex) { which ->
+            if (which == 3) {
+                showCustomHeadcountInput()
+            } else {
+                selectedHeadcount = items[which]
+                setSelectedValue(binding.tvHeadcount, selectedHeadcount!!)
+            }
+        }
+    }
+
+    private fun showCustomHeadcountInput() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_list, null)
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setView(dialogView)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon).setImageResource(R.drawable.ic_profile)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "모집 인원 직접 입력"
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "인원 수를 입력하세요"
+
+        val container = dialogView.findViewById<LinearLayout>(R.id.layout_items)
+        val et = EditText(requireContext()).apply {
+            hint = "인원 수"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            textSize = 15f
+        }
+        container.addView(et)
+
+        dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm).apply {
+            visibility = View.VISIBLE
+            text = "확인"
+            setOnClickListener {
+                val text = et.text.toString().trim()
+                if (text.isNotEmpty()) {
+                    selectedHeadcount = "${text}명"
+                    setSelectedValue(binding.tvHeadcount, selectedHeadcount!!)
+                    dialog.dismiss()
+                }
+            }
+        }
+        dialogView.findViewById<View>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+        dialog.show()
+    }
+
+    // (10) 우대 조건
+    private fun showPreferencesDialog() {
+        val items = JobPreference.entries.map { it.label }
+        val checked = BooleanArray(items.size) { selectedPreferences.contains(JobPreference.entries[it]) }
+        showIosMultiChoiceDialog(R.drawable.ic_check, "우대 조건", "해당 항목을 선택하세요", items, checked) { result ->
+            selectedPreferences = JobPreference.entries.filterIndexed { i, _ -> result[i] }
+            if (selectedPreferences.isEmpty()) {
+                binding.tvPreferences.text = "우대 조건을 선택하세요"
+                binding.tvPreferences.setTextColor(resources.getColor(R.color.app_text_hint, null))
+                binding.tvPreferences.setTypeface(null, Typeface.NORMAL)
+            } else {
+                setSelectedValue(binding.tvPreferences, selectedPreferences.joinToString(", ") { it.label })
+            }
+        }
+    }
+
+    // (11) 복리후생
+    private fun showBenefitsDialog() {
+        val items = JobBenefit.entries.map { it.label }
+        val checked = BooleanArray(items.size) { selectedBenefits.contains(JobBenefit.entries[it]) }
+        showIosMultiChoiceDialog(R.drawable.ic_favorite, "복리후생", "해당 항목을 선택하세요", items, checked) { result ->
+            selectedBenefits = JobBenefit.entries.filterIndexed { i, _ -> result[i] }
+            if (selectedBenefits.isEmpty()) {
+                binding.tvBenefits.text = "복리후생을 선택하세요"
+                binding.tvBenefits.setTextColor(resources.getColor(R.color.app_text_hint, null))
+                binding.tvBenefits.setTypeface(null, Typeface.NORMAL)
+            } else {
+                setSelectedValue(binding.tvBenefits, selectedBenefits.joinToString(", ") { it.label })
+            }
+        }
+    }
+
+    // (6-1) 모집기간
+    private fun showDeadlineDialog() {
+        val items = listOf("상시모집", "정원마감시", "직접 입력")
+        val currentIndex = when (selectedDeadline) {
+            "상시모집" -> 0; "정원마감시" -> 1; else -> -1
+        }
+        showIosDialog(R.drawable.ic_description, "모집기간", "모집기간을 선택하세요", items, currentIndex) { which ->
+            when (which) {
+                0 -> {
+                    selectedDeadline = "상시모집"
+                    setSelectedValue(binding.tvDeadline, selectedDeadline!!)
+                }
+                1 -> {
+                    selectedDeadline = "정원마감시"
+                    setSelectedValue(binding.tvDeadline, selectedDeadline!!)
+                }
+                2 -> showDatePickerDialog()
+            }
+        }
+    }
+
+    private fun showDatePickerDialog() {
+        val cal = Calendar.getInstance()
+        lastSelectedDate?.let {
+            try {
+                val parts = it.split(".")
+                if (parts.size == 3) cal.set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt())
+            } catch (_: Exception) {}
+        }
+        DatePickerDialog(
+            requireContext(),
+            { _, year, month, dayOfMonth ->
+                val dateStr = String.format("%d.%02d.%02d", year, month + 1, dayOfMonth)
+                selectedDeadline = "${dateStr}까지"
+                lastSelectedDate = dateStr
+                setSelectedValue(binding.tvDeadline, selectedDeadline!!)
+            },
+            cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)
+        ).apply {
+            datePicker.minDate = System.currentTimeMillis() - 1000
+            setOnShowListener {
+                getButton(DatePickerDialog.BUTTON_POSITIVE).text = "확인"
+                getButton(DatePickerDialog.BUTTON_NEGATIVE).text = "취소"
+            }
+        }.show()
+    }
+
+    // (4) 연락처 유형
+    private fun showContactTypeDialog() {
+        val options = listOf("연락처", "카카오ID", "이메일")
+        val currentIndex = options.indexOf(selectedContactType)
+        showIosDialog(R.drawable.ic_description, "연락처 유형", "연락처 유형을 선택하세요", options, currentIndex) { which ->
+            selectedContactType = options[which]
+            setSelectedValue(binding.tvContactType, selectedContactType)
+            binding.etContact.text?.clear()
+            when (selectedContactType) {
+                "연락처" -> {
+                    binding.etContact.hint = "010-1234-1234 또는 02-123-1234"
+                    binding.etContact.inputType = InputType.TYPE_CLASS_PHONE
+                }
+                "카카오ID" -> {
+                    binding.etContact.hint = "아이디를 입력하세요"
+                    binding.etContact.inputType = InputType.TYPE_CLASS_TEXT
+                }
+                "이메일" -> {
+                    binding.etContact.hint = "이메일을 입력하세요"
+                    binding.etContact.inputType = InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+                }
+            }
+        }
     }
 
     // ====================================================
@@ -387,16 +751,20 @@ class JobWriteFragment : Fragment() {
     // ====================================================
     private fun validateForm(): Pair<List<String>, View?> {
         val centerName = binding.etCenterName.text?.toString()?.trim() ?: ""
+        val address = binding.etAddress.text?.toString()?.trim() ?: ""
         val title = binding.etTitle.text?.toString()?.trim() ?: ""
         val contact = binding.etContact.text?.toString()?.trim() ?: ""
         val description = binding.etDescription.text?.toString()?.trim() ?: ""
         val authorName = binding.etAuthorName.text?.toString()?.trim() ?: ""
         val authorRoleSelected = binding.toggleAuthorRole.checkedButtonId != -1
 
-        // 에러 표시
-        binding.tilContact.error = if (contact.isEmpty()) "필수 입력사항입니다" else null
-        binding.tilDescription.error = if (description.length < 20) "필수 입력사항입니다" else null
+        // TextInputLayout 에러 표시
+        binding.tilCenterName.error = if (centerName.isEmpty()) "필수 입력사항입니다" else null
+        binding.tilAddress.error = if (address.isEmpty()) "필수 입력사항입니다" else null
         binding.tilAuthorName.error = if (authorName.isEmpty()) "필수 입력사항입니다" else null
+        binding.tilContact.error = if (contact.isEmpty()) "필수 입력사항입니다" else null
+        binding.tilTitle.error = if (title.isEmpty()) "필수 입력사항입니다" else null
+        binding.tilDescription.error = if (description.length < 20) "20자 이상 입력해 주세요" else null
 
         val errors = mutableListOf<String>()
         var firstErrorView: View? = null
@@ -408,7 +776,8 @@ class JobWriteFragment : Fragment() {
 
         // 순서대로 검증 (화면 배치 순서)
         if (selectedSport == null) addError("종목", binding.rowSport)
-        if (centerName.isEmpty()) addError("센터/업체명", binding.tilCenterName)
+        if (centerName.isEmpty()) addError("업체명", binding.tilCenterName)
+        if (address.isEmpty()) addError("업체 주소", binding.tilAddress)
         if (!authorRoleSelected) addError("작성자 직책", binding.layoutAuthor)
         if (authorName.isEmpty()) addError("작성자 이름", binding.tilAuthorName)
         if (contact.isEmpty()) addError("담당자 연락처", binding.layoutContact)
@@ -444,6 +813,14 @@ class JobWriteFragment : Fragment() {
         val title = binding.etTitle.text?.toString()?.trim() ?: ""
         val contact = binding.etContact.text?.toString()?.trim() ?: ""
         val description = binding.etDescription.text?.toString()?.trim() ?: ""
+        val authorName = binding.etAuthorName.text?.toString()?.trim() ?: ""
+
+        val authorRole = when (binding.toggleAuthorRole.checkedButtonId) {
+            R.id.btn_role_manager -> "관리자"
+            R.id.btn_role_ceo -> "대표"
+            R.id.btn_role_other -> "기타"
+            else -> ""
+        }
 
         if (description.length < 20) {
             binding.tilDescription.error = "내용은 20자 이상 입력해 주세요."
@@ -458,6 +835,9 @@ class JobWriteFragment : Fragment() {
             jobType = selectedJobType!!,
             centerName = centerName,
             address = address,
+            authorRole = authorRole,
+            authorName = authorName,
+            contactType = selectedContactType,
             title = title,
             salary = selectedSalary!!,
             contact = contact,
@@ -468,8 +848,7 @@ class JobWriteFragment : Fragment() {
             deadline = selectedDeadline ?: ""
         )
 
-        val nickname = NicknameManager.getNickname(requireContext()) ?: ""
-        viewModel.submitJobPost(request, nickname)
+        viewModel.submitJobPost(request)
     }
 
     // ====================================================
@@ -479,12 +858,17 @@ class JobWriteFragment : Fragment() {
         viewModel.submitResult.observe(viewLifecycleOwner) { success ->
             if (success) {
                 com.moduji.app.util.MyActivityTracker.incrementJobPostCount(requireContext())
-                Toast.makeText(requireContext(), "구인 글이 등록되었습니다.", Toast.LENGTH_SHORT).show()
-                val bundle = Bundle().apply {
-                    putString("regionCode", regionCode)
-                    putString("regionName", regionName)
+                showCenterSplash("게시되었습니다")
+                if (repostJobId > 0) {
+                    // 재게시 완료 → 이전 화면으로 돌아감
+                    findNavController().popBackStack()
+                } else {
+                    val bundle = Bundle().apply {
+                        putString("regionCode", regionCode)
+                        putString("regionName", regionName)
+                    }
+                    findNavController().navigate(R.id.action_jobWrite_to_jobsList, bundle)
                 }
-                findNavController().navigate(R.id.action_jobWrite_to_jobsList, bundle)
             } else {
                 Toast.makeText(requireContext(), "등록에 실패했습니다. 다시 시도해 주세요.", Toast.LENGTH_SHORT).show()
             }
@@ -494,6 +878,126 @@ class JobWriteFragment : Fragment() {
             binding.btnSubmit.isEnabled = !loading
             binding.btnSubmit.text = if (loading) "등록 중..." else "구인 등록하기"
         }
+    }
+
+    // ====================================================
+    // 재게시 데이터 로드 (기존 구인글 내용 프리필)
+    // ====================================================
+    private fun loadRepostData() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            val raw = JobsRepository.getJobPostRaw(repostJobId).getOrNull() ?: return@launch
+
+            // 텍스트 필드
+            binding.etCenterName.setText(raw.centerName)
+            binding.etAddress.setText(raw.address)
+            binding.etTitle.setText(raw.title)
+            binding.etDescription.setText(raw.description)
+            binding.etContact.setText(raw.contact)
+
+            // 작성자 역할
+            when (raw.authorRole) {
+                "관리자" -> binding.toggleAuthorRole.check(R.id.btn_role_manager)
+                "대표" -> binding.toggleAuthorRole.check(R.id.btn_role_ceo)
+                "기타" -> binding.toggleAuthorRole.check(R.id.btn_role_other)
+            }
+            binding.etAuthorName.setText(raw.authorName)
+
+            // 연락처 유형
+            if (raw.contactType.isNotEmpty()) {
+                selectedContactType = raw.contactType
+                setSelectedValue(binding.tvContactType, selectedContactType)
+                when (selectedContactType) {
+                    "카카오ID" -> binding.etContact.inputType = InputType.TYPE_CLASS_TEXT
+                    "이메일" -> binding.etContact.inputType = InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+                }
+            }
+
+            // 종목
+            if (raw.sport.isNotEmpty()) {
+                selectedSport = raw.sport
+                setSelectedValue(binding.tvSport, selectedSport!!)
+            }
+
+            // 근무형태
+            val jobType = JobType.entries.find { it.label == raw.employmentType }
+            if (jobType != null) {
+                selectedJobType = jobType
+                setSelectedValue(binding.tvJobType, jobType.label)
+            }
+
+            // 급여 파싱
+            parseSalary(raw.salary)
+
+            // 모집 인원
+            if (raw.headcount.isNotEmpty()) {
+                selectedHeadcount = raw.headcount
+                setSelectedValue(binding.tvHeadcount, selectedHeadcount!!)
+            }
+
+            // 모집기간
+            if (raw.deadline.isNotEmpty()) {
+                selectedDeadline = raw.deadline
+                setSelectedValue(binding.tvDeadline, selectedDeadline!!)
+            }
+
+            // 우대조건
+            if (raw.preferences.isNotEmpty()) {
+                selectedPreferences = raw.preferences.split(", ").mapNotNull { label ->
+                    JobPreference.entries.find { it.label == label }
+                }
+                if (selectedPreferences.isNotEmpty()) {
+                    setSelectedValue(binding.tvPreferences, selectedPreferences.joinToString(", ") { it.label })
+                }
+            }
+
+            // 복리후생
+            if (raw.benefits.isNotEmpty()) {
+                selectedBenefits = raw.benefits.split(", ").mapNotNull { label ->
+                    JobBenefit.entries.find { it.label == label }
+                }
+                if (selectedBenefits.isNotEmpty()) {
+                    setSelectedValue(binding.tvBenefits, selectedBenefits.joinToString(", ") { it.label })
+                }
+            }
+        }
+    }
+
+    private fun parseSalary(salaryStr: String) {
+        if (salaryStr.isEmpty()) return
+
+        val hasIncentive = salaryStr.contains("인센티브")
+        val canDailyWeekly = salaryStr.contains("주급/당일지급")
+        val base = salaryStr.split(" + ").firstOrNull()?.trim() ?: salaryStr
+
+        val type: SalaryType
+        val amount: Int?
+
+        when {
+            base.startsWith("급여 협의") || base == "협의" -> {
+                type = SalaryType.NEGOTIABLE
+                amount = null
+            }
+            base.startsWith("시급") -> {
+                type = SalaryType.HOURLY
+                amount = base.replace(Regex("[^0-9]"), "").toIntOrNull()
+            }
+            base.startsWith("월급") -> {
+                type = SalaryType.MONTHLY
+                amount = base.replace(Regex("[^0-9]"), "").toIntOrNull()
+            }
+            base.startsWith("건당") -> {
+                type = SalaryType.PER_CASE
+                amount = base.replace(Regex("[^0-9]"), "").toIntOrNull()
+            }
+            else -> {
+                // 파싱 실패 - 텍스트만 표시
+                setSelectedValue(binding.tvSalary, salaryStr)
+                return
+            }
+        }
+
+        selectedSalary = SalaryInfo(type, amount, hasIncentive, canDailyWeekly)
+        setSelectedValue(binding.tvSalary, selectedSalary!!.toSummary())
     }
 
     override fun onDestroyView() {

@@ -1,5 +1,6 @@
 import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
+import { verifyAdmin } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +12,8 @@ export async function POST(
   const body = await request.json();
   const { password } = body;
 
-  if (password !== process.env.ADMIN_PASSWORD) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const authError = await verifyAdmin(request, password);
+  if (authError) return authError;
 
   const rows = await sql`SELECT target_type, target_id FROM reports WHERE id = ${Number(id)}`;
   if (rows.length === 0) {
@@ -32,6 +32,10 @@ export async function POST(
     await sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT false`;
     await sql`UPDATE comments SET hidden = true WHERE id = ${target_id}`;
   }
+
+  // 숨김 처리 시 자동으로 신고 처리 완료 + 숨김 플래그
+  await sql`ALTER TABLE reports ADD COLUMN IF NOT EXISTS target_hidden BOOLEAN DEFAULT false`;
+  await sql`UPDATE reports SET resolved = true, resolved_at = NOW(), target_hidden = true WHERE id = ${Number(id)}`;
 
   return NextResponse.json({ success: true });
 }

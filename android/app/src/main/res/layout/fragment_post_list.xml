@@ -46,20 +46,7 @@
             android:padding="2dp"
             android:src="@drawable/ic_search"
             android:contentDescription="검색"
-            app:tint="@color/app_icon_tint"
-            android:layout_marginEnd="8dp" />
-
-        <TextView
-            android:id="@+id/btn_write"
-            android:layout_width="wrap_content"
-            android:layout_height="34dp"
-            android:gravity="center"
-            android:text="글쓰기"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:textColor="@android:color/white"
-            android:background="@drawable/bg_write_button"
-            android:paddingHorizontal="16dp" />
+            app:tint="@color/app_icon_tint" />
     </LinearLayout>
 
     <!-- 검색 바 (토글) -->
@@ -196,6 +183,23 @@
             android:background="@color/app_divider" />
     </LinearLayout>
 
+    <!-- 공지 고정 영역 -->
+    <LinearLayout
+        android:id="@+id/layout_notices"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@color/app_surface"
+        android:visibility="gone" />
+
+    <!-- 공지-게시글 구분선 -->
+    <View
+        android:id="@+id/divider_notices"
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:background="@color/app_divider"
+        android:visibility="gone" />
+
     <!-- 게시글 리스트 -->
     <FrameLayout
         android:layout_width="match_parent"
@@ -227,6 +231,19 @@
             android:gravity="center"
             android:padding="40dp"
             android:visibility="gone" />
+
+        <!-- 글쓰기 FAB -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fab_write"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="16dp"
+            android:src="@drawable/ic_edit"
+            android:contentDescription="글쓰기"
+            app:backgroundTint="@color/md_theme_primary"
+            app:tint="@color/md_theme_onPrimary" />
     </FrameLayout>
 
     <!-- 페이지네이션 -->

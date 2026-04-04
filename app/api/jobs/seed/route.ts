@@ -1,9 +1,21 @@
 import { sql } from "@/app/lib/db";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyAdmin } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  // 관리자 인증 필수
+  const body = await request.json();
+  const { password } = body;
+
+  if (!password) {
+    return NextResponse.json({ error: "관리자 비밀번호가 필요합니다" }, { status: 401 });
+  }
+
+  const authError = await verifyAdmin(request, password);
+  if (authError) return authError;
+
   // job_posts 테이블 생성
   await sql`
     CREATE TABLE IF NOT EXISTS job_posts (

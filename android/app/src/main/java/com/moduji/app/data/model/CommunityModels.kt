@@ -34,7 +34,8 @@ data class CommunityPost(
     @SerializedName("created_at") val createdAt: String,
     @SerializedName("updated_at") val updatedAt: String?,
     @SerializedName("category_name") val categoryName: String?,
-    @SerializedName("ip_display") val ipDisplay: String?
+    @SerializedName("ip_display") val ipDisplay: String?,
+    @SerializedName("is_liked") val isLiked: Boolean? = false
 )
 
 data class PostsListResponse(
@@ -57,7 +58,8 @@ data class CommunityComment(
     val likes: Int,
     @SerializedName("reply_count") val replyCount: Int,
     @SerializedName("created_at") val createdAt: String,
-    @SerializedName("ip_display") val ipDisplay: String?
+    @SerializedName("ip_display") val ipDisplay: String?,
+    @SerializedName("is_liked") val isLiked: Boolean? = false
 )
 
 // ============================================================
@@ -72,6 +74,7 @@ data class CommunityInquiry(
     val reply: String?,
     @SerializedName("replied_at") val repliedAt: String?,
     val hidden: Boolean?,
+    @SerializedName("read_at") val readAt: String? = null,
     @SerializedName("created_at") val createdAt: String
 )
 
@@ -96,7 +99,8 @@ data class CommunityReport(
     @SerializedName("comment_author") val commentAuthor: String?,
     @SerializedName("category_name") val categoryName: String?,
     @SerializedName("job_post_title") val jobPostTitle: String?,
-    @SerializedName("job_post_author") val jobPostAuthor: String?
+    @SerializedName("job_post_author") val jobPostAuthor: String?,
+    @SerializedName("target_hidden") val targetHidden: Boolean? = false
 )
 
 // ============================================================
@@ -175,6 +179,11 @@ data class AdminReplyRequest(
     val reply: String
 )
 
+data class ChangePasswordRequest(
+    val password: String,
+    val newPassword: String
+)
+
 // ============================================================
 // Response Bodies
 // ============================================================
@@ -218,6 +227,13 @@ data class NicknameRegisterRequest(
 data class SearchResponse(
     val posts: List<CommunityPost>,
     val jobs: List<SearchJobItem>
+)
+
+data class PopularPostsResponse(
+    val posts: List<CommunityPost>,
+    val page: Int,
+    val totalPages: Int,
+    val total: Int
 )
 
 data class SearchJobItem(

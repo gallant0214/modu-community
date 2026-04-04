@@ -1,5 +1,7 @@
 import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
+import { verifyAdmin } from "@/app/lib/admin-auth";
+import { verifyAuth } from "@/app/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -7,10 +9,10 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { password } = body;
 
-  if (password !== process.env.ADMIN_PASSWORD) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const authError = await verifyAdmin(request, password);
+  if (authError) return authError;
 
+  await sql`ALTER TABLE reports ADD COLUMN IF NOT EXISTS target_hidden BOOLEAN DEFAULT false`;
   const reports = await sql`
     SELECT r.*,
       p.title AS post_title, p.author AS post_author,
@@ -26,8 +28,9 @@ export async function POST(request: Request) {
   `;
 
   await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS email TEXT DEFAULT ''`;
+  await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS read_at TIMESTAMP WITH TIME ZONE`;
   const inquiries = await sql`
-    SELECT id, author, email, title, content, reply, replied_at, hidden, created_at
+    SELECT id, author, email, title, content, reply, replied_at, hidden, read_at, created_at
     FROM inquiries ORDER BY created_at DESC
   `;
 

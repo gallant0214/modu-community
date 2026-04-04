@@ -35,7 +35,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="후기 게시판"
-                    android:textSize="18sp"
+                    android:textSize="27sp"
                     android:textStyle="bold"
                     android:textColor="@color/app_text_primary" />
 
@@ -88,11 +88,16 @@
             android:background="@color/app_divider" />
 
         <!-- 스크롤 영역 -->
-        <ScrollView
-            android:id="@+id/scroll_view"
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/swipe_refresh"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
+            android:layout_weight="1">
+
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/scroll_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:fillViewport="true">
 
             <LinearLayout
@@ -192,10 +197,23 @@
                         android:id="@+id/tv_all_title"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="📋 전체 카테고리"
+                        android:text="전체 카테고리"
                         android:textSize="15sp"
                         android:textStyle="bold"
                         android:textColor="@color/app_text_primary" />
+
+                    <!-- 종목 더 보기 버튼 -->
+                    <TextView
+                        android:id="@+id/btn_show_more"
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center"
+                        android:text="종목 더 보기 ▼"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/md_theme_primary"
+                        android:background="?attr/selectableItemBackground" />
 
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/rv_all"
@@ -203,6 +221,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
                         android:nestedScrollingEnabled="false"
+                        android:visibility="gone"
                         tools:listitem="@layout/item_community_category" />
                 </LinearLayout>
 
@@ -219,6 +238,7 @@
                     android:visibility="gone" />
 
             </LinearLayout>
-        </ScrollView>
+        </androidx.core.widget.NestedScrollView>
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
     </LinearLayout>
 </FrameLayout>

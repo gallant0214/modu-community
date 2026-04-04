@@ -17,6 +17,22 @@
         <action
             android:id="@+id/action_home_to_postDetail"
             app:destination="@id/postDetailFromHomeFragment" />
+
+        <action
+            android:id="@+id/action_home_to_jobDetail"
+            app:destination="@id/jobDetailFromHomeFragment" />
+
+        <action
+            android:id="@+id/action_home_to_popularPosts"
+            app:destination="@id/popularPostsFromHomeFragment" />
+
+        <action
+            android:id="@+id/action_home_to_latestPosts"
+            app:destination="@id/latestPostsFromHomeFragment" />
+
+        <action
+            android:id="@+id/action_home_to_latestJobs"
+            app:destination="@id/latestJobsFromHomeFragment" />
     </fragment>
 
     <!-- 게시글 상세 (홈에서 진입) -->
@@ -28,6 +44,84 @@
 
         <argument android:name="postId" app:argType="integer" />
         <argument android:name="categoryId" app:argType="integer" />
+    </fragment>
+
+    <!-- 구인 상세 (홈에서 진입) -->
+    <fragment
+        android:id="@+id/jobDetailFromHomeFragment"
+        android:name="com.moduji.app.ui.jobs.JobDetailFragment"
+        android:label="구인 상세"
+        tools:layout="@layout/fragment_job_detail">
+
+        <argument android:name="postId" app:argType="integer" />
+    </fragment>
+
+    <!-- 인기 게시글 목록 (홈에서 진입) -->
+    <fragment
+        android:id="@+id/popularPostsFromHomeFragment"
+        android:name="com.moduji.app.ui.community.PopularPostsFragment"
+        android:label="인기 게시글"
+        tools:layout="@layout/fragment_popular_posts">
+
+        <action
+            android:id="@+id/action_popularPosts_to_postDetail"
+            app:destination="@id/postDetailFromPopularPosts" />
+    </fragment>
+
+    <!-- 게시글 상세 (인기 게시글에서 진입) -->
+    <fragment
+        android:id="@+id/postDetailFromPopularPosts"
+        android:name="com.moduji.app.ui.community.PostDetailFragment"
+        android:label="게시글 상세"
+        tools:layout="@layout/fragment_post_detail">
+
+        <argument android:name="postId" app:argType="integer" />
+        <argument android:name="categoryId" app:argType="integer" />
+    </fragment>
+
+    <!-- 최신 게시글 목록 (홈에서 진입) -->
+    <fragment
+        android:id="@+id/latestPostsFromHomeFragment"
+        android:name="com.moduji.app.ui.community.LatestPostsFragment"
+        android:label="최신 게시글"
+        tools:layout="@layout/fragment_popular_posts">
+
+        <action
+            android:id="@+id/action_latestPosts_to_postDetail"
+            app:destination="@id/postDetailFromLatestPosts" />
+    </fragment>
+
+    <!-- 게시글 상세 (최신 게시글에서 진입) -->
+    <fragment
+        android:id="@+id/postDetailFromLatestPosts"
+        android:name="com.moduji.app.ui.community.PostDetailFragment"
+        android:label="게시글 상세"
+        tools:layout="@layout/fragment_post_detail">
+
+        <argument android:name="postId" app:argType="integer" />
+        <argument android:name="categoryId" app:argType="integer" />
+    </fragment>
+
+    <!-- 최신 구인 목록 (홈에서 진입) -->
+    <fragment
+        android:id="@+id/latestJobsFromHomeFragment"
+        android:name="com.moduji.app.ui.jobs.LatestJobsFragment"
+        android:label="최신 구인"
+        tools:layout="@layout/fragment_latest_jobs">
+
+        <action
+            android:id="@+id/action_latestJobs_to_jobDetail"
+            app:destination="@id/jobDetailFromLatestJobs" />
+    </fragment>
+
+    <!-- 구인 상세 (최신 구인에서 진입) -->
+    <fragment
+        android:id="@+id/jobDetailFromLatestJobs"
+        android:name="com.moduji.app.ui.jobs.JobDetailFragment"
+        android:label="구인 상세"
+        tools:layout="@layout/fragment_job_detail">
+
+        <argument android:name="postId" app:argType="integer" />
     </fragment>
 
     <!-- 후기(커뮤니티) 탭 -->
@@ -62,6 +156,10 @@
         <action
             android:id="@+id/action_profile_to_postDetail"
             app:destination="@id/postDetailFromMyFragment" />
+
+        <action
+            android:id="@+id/action_profile_to_activityList"
+            app:destination="@id/activityListFromMyFragment" />
     </fragment>
 
     <!-- 문의하기 (My 탭에서 진입) -->
@@ -74,6 +172,23 @@
         <action
             android:id="@+id/action_inquiry_to_write"
             app:destination="@id/inquiryWriteFromMyFragment" />
+
+        <action
+            android:id="@+id/action_inquiry_to_detail"
+            app:destination="@id/inquiryDetailFromMyFragment" />
+    </fragment>
+
+    <!-- 문의 상세 (My 탭에서 진입) -->
+    <fragment
+        android:id="@+id/inquiryDetailFromMyFragment"
+        android:name="com.moduji.app.ui.community.InquiryDetailFragment"
+        android:label="문의 상세"
+        tools:layout="@layout/fragment_inquiry_detail">
+
+        <argument android:name="inquiryId" app:argType="integer" />
+        <argument android:name="inquiryTitle" app:argType="string" android:defaultValue="" />
+        <argument android:name="inquiryAuthor" app:argType="string" android:defaultValue="" />
+        <argument android:name="inquiryDate" app:argType="string" android:defaultValue="" />
     </fragment>
 
     <!-- 문의 작성 (My 탭에서 진입) -->
@@ -97,6 +212,24 @@
         <action
             android:id="@+id/action_admin_to_jobDetail"
             app:destination="@id/jobDetailFromAdminFragment" />
+
+        <action
+            android:id="@+id/action_admin_to_inquiryDetail"
+            app:destination="@id/inquiryDetailFromAdminFragment" />
+    </fragment>
+
+    <!-- 문의 상세 (관리자에서 진입) -->
+    <fragment
+        android:id="@+id/inquiryDetailFromAdminFragment"
+        android:name="com.moduji.app.ui.community.InquiryDetailFragment"
+        android:label="문의 상세"
+        tools:layout="@layout/fragment_inquiry_detail">
+
+        <argument android:name="inquiryId" app:argType="integer" />
+        <argument android:name="inquiryTitle" app:argType="string" android:defaultValue="" />
+        <argument android:name="inquiryAuthor" app:argType="string" android:defaultValue="" />
+        <argument android:name="inquiryDate" app:argType="string" android:defaultValue="" />
+        <argument android:name="adminPassword" app:argType="string" android:defaultValue="" />
     </fragment>
 
     <!-- 게시글 상세 (관리자에서 바로가기) -->
@@ -119,6 +252,80 @@
 
         <argument android:name="postId" app:argType="integer" />
         <argument android:name="categoryId" app:argType="integer" />
+    </fragment>
+
+    <!-- 내 활동 목록 (My 탭에서 진입) -->
+    <fragment
+        android:id="@+id/activityListFromMyFragment"
+        android:name="com.moduji.app.ui.my.MyActivityListFragment"
+        android:label="내 활동"
+        tools:layout="@layout/fragment_my_activity_list">
+
+        <argument android:name="type" app:argType="string" />
+        <argument android:name="title" app:argType="string" />
+
+        <action
+            android:id="@+id/action_activityList_to_postDetail"
+            app:destination="@id/postDetailFromActivityList" />
+
+        <action
+            android:id="@+id/action_activityList_to_jobDetail"
+            app:destination="@id/jobDetailFromActivityList" />
+
+        <action
+            android:id="@+id/action_activityList_to_jobWrite"
+            app:destination="@id/jobWriteFromActivityList"
+            app:enterAnim="@anim/slide_up_enter"
+            app:exitAnim="@anim/no_anim"
+            app:popEnterAnim="@anim/no_anim"
+            app:popExitAnim="@anim/slide_down_exit" />
+    </fragment>
+
+    <!-- 게시글 상세 (내 활동에서 진입) -->
+    <fragment
+        android:id="@+id/postDetailFromActivityList"
+        android:name="com.moduji.app.ui.community.PostDetailFragment"
+        android:label="게시글 상세"
+        tools:layout="@layout/fragment_post_detail">
+
+        <argument android:name="postId" app:argType="integer" />
+        <argument android:name="categoryId" app:argType="integer" />
+    </fragment>
+
+    <!-- 구인 상세 (내 활동에서 진입) -->
+    <fragment
+        android:id="@+id/jobDetailFromActivityList"
+        android:name="com.moduji.app.ui.jobs.JobDetailFragment"
+        android:label="구인 상세"
+        tools:layout="@layout/fragment_job_detail">
+
+        <argument android:name="postId" app:argType="integer" />
+    </fragment>
+
+    <!-- 구인 글쓰기 (재게시 - 내 활동에서 진입) -->
+    <fragment
+        android:id="@+id/jobWriteFromActivityList"
+        android:name="com.moduji.app.ui.jobs.JobWriteFragment"
+        android:label="구인 글쓰기"
+        tools:layout="@layout/fragment_job_write">
+
+        <argument android:name="regionCode" app:argType="string" />
+        <argument android:name="regionName" app:argType="string" />
+        <argument android:name="repostJobId" app:argType="integer" android:defaultValue="0" />
+
+        <action
+            android:id="@+id/action_jobWriteActivityList_to_regionSelect"
+            app:destination="@id/regionSelectForRepost" />
+    </fragment>
+
+    <!-- 지역 선택 (재게시 - 지역 변경용) -->
+    <fragment
+        android:id="@+id/regionSelectForRepost"
+        android:name="com.moduji.app.ui.jobs.RegionSelectFragment"
+        android:label="지역 선택"
+        tools:layout="@layout/fragment_region_select">
+
+        <argument android:name="returnRegionResult" app:argType="boolean" android:defaultValue="true" />
     </fragment>
 
     <!-- 구인게시글 상세 (관리자에서 바로가기) -->

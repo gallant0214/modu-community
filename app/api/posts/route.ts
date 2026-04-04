@@ -1,10 +1,17 @@
 import { sql } from "@/app/lib/db";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
+import { verifyAuth } from "@/app/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  // Rate limiting
+  const ip = getClientIp(request);
+  const rateLimitResponse = checkRateLimit(ip, "write");
+  if (rateLimitResponse) return rateLimitResponse;
+
   const body = await request.json();
   const { category_id, title, content, author, password, region, tags } = body;
 
@@ -13,10 +20,15 @@ export async function POST(request: Request) {
   }
 
   const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
+  const ipAddr = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 
-  await sql`INSERT INTO posts (category_id, title, content, author, password, region, tags, ip_address)
-    VALUES (${Number(category_id)}, ${title.trim()}, ${content.trim()}, ${author.trim()}, ${(password || "").trim()}, ${(region || "전국").trim()}, ${(tags || "").trim()}, ${ip})`;
+  // firebase_uid 컬럼 확보 + 로그인 사용자 UID 저장
+  await sql`ALTER TABLE posts ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
+  const user = await verifyAuth(request);
+  const uid = user?.uid || null;
+
+  await sql`INSERT INTO posts (category_id, title, content, author, password, region, tags, ip_address, firebase_uid)
+    VALUES (${Number(category_id)}, ${sanitize(validateLength(title.trim(), 200))}, ${sanitize(validateLength(content.trim(), 50000))}, ${sanitize(validateLength(author.trim(), 50))}, ${(password || "").trim()}, ${sanitize(validateLength((region || "전국").trim(), 50))}, ${sanitize(validateLength((tags || "").trim(), 200))}, ${ipAddr}, ${uid})`;
 
   return NextResponse.json({ success: true });
 }

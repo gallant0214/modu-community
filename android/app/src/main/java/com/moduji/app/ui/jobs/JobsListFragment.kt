@@ -10,7 +10,6 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.widget.ArrayAdapter
 import com.moduji.app.R
@@ -66,9 +65,16 @@ class JobsListFragment : Fragment() {
         setupSearch()
         setupClickListeners()
         setupFab()
+        setupSwipeRefresh()
         observeData()
 
         viewModel.loadJobPosts(regionCode)
+    }
+
+    private fun setupSwipeRefresh() {
+        binding.swipeRefresh.setOnRefreshListener {
+            viewModel.loadJobPosts(regionCode)
+        }
     }
 
     private fun setupRecyclerView() {
@@ -120,15 +126,11 @@ class JobsListFragment : Fragment() {
 
     private fun showSearchTypeBottomSheet() {
         val options = JobSearchType.values().map { it.label }.toTypedArray()
-        val dialog = BottomSheetDialog(requireContext())
-        val listView = android.widget.ListView(requireContext()).apply {
-            adapter = android.widget.ArrayAdapter(
-                requireContext(),
-                android.R.layout.simple_list_item_1,
-                options
-            )
-            setOnItemClickListener { _, _, position, _ ->
-                currentSearchType = JobSearchType.values()[position]
+        val currentIndex = JobSearchType.values().indexOf(currentSearchType)
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("검색 유형")
+            .setSingleChoiceItems(options, currentIndex) { dialog, which ->
+                currentSearchType = JobSearchType.values()[which]
                 binding.tvSearchType.text = currentSearchType.label
                 val query = binding.etSearch.text?.toString()?.trim() ?: ""
                 if (query.isNotEmpty()) {
@@ -136,9 +138,8 @@ class JobsListFragment : Fragment() {
                 }
                 dialog.dismiss()
             }
-        }
-        dialog.setContentView(listView)
-        dialog.show()
+            .setNegativeButton("취소", null)
+            .show()
     }
 
     private fun showSportSuggestions(query: String) {
@@ -159,6 +160,19 @@ class JobsListFragment : Fragment() {
     private fun setupClickListeners() {
         binding.btnBack.setOnClickListener {
             findNavController().navigateUp()
+        }
+
+        binding.btnChangeRegion.setOnClickListener {
+            val sheet = RegionSelectBottomSheet.newInstance()
+            sheet.onRegionSelected = { code, name ->
+                regionCode = code
+                regionName = name
+                binding.tvRegionTitle.text = name
+                viewModel.clearRegionSearch()
+                binding.etSearch.setText("")
+                viewModel.loadJobPosts(code)
+            }
+            sheet.show(parentFragmentManager, "region_select")
         }
     }
 
@@ -195,6 +209,7 @@ class JobsListFragment : Fragment() {
     private fun observeData() {
         // 기본 게시글 목록
         viewModel.jobPosts.observe(viewLifecycleOwner) { posts ->
+            binding.swipeRefresh.isRefreshing = false
             // 검색 중이면 무시
             if (viewModel.regionSearchResults.value != null) return@observe
             showPosts(posts)

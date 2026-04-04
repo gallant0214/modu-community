@@ -1,12 +1,13 @@
 import { sql } from "@/app/lib/db";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
+import { verifyAuth } from "@/app/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
 function maskIp(ip: string): string {
   if (!ip || ip === "unknown") return "";
-  // IPv6-mapped IPv4 (::ffff:1.2.3.4) → IPv4 부분 추출
   const v4Match = ip.match(/(\d+\.\d+\.\d+\.\d+)/);
   if (v4Match) {
     const parts = v4Match[1].split(".");
@@ -16,19 +17,34 @@ function maskIp(ip: string): string {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ postId: string }> }
 ) {
   const { postId } = await params;
+  const user = await verifyAuth(request);
+
+  await sql`ALTER TABLE comment_likes ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
+
   const rows = await sql`
     SELECT c.id, c.post_id, c.parent_id, c.author, c.content, COALESCE(c.likes, 0) AS likes,
       (SELECT COUNT(*) FROM comments r WHERE r.parent_id = c.id) AS reply_count,
       c.ip_address, c.created_at
     FROM comments c WHERE c.post_id = ${Number(postId)} ORDER BY c.created_at ASC`;
+
+  // 현재 사용자가 좋아요한 댓글 ID 목록
+  let likedCommentIds: Set<number> = new Set();
+  if (user) {
+    const liked = await sql`
+      SELECT comment_id FROM comment_likes WHERE firebase_uid = ${user.uid}
+    `;
+    likedCommentIds = new Set(liked.map((r: { comment_id: number }) => r.comment_id));
+  }
+
   const result = rows.map((c: Record<string, unknown>) => ({
     ...c,
     ip_display: maskIp(String(c.ip_address || "")),
     ip_address: undefined,
+    is_liked: likedCommentIds.has(c.id as number),
   }));
   return NextResponse.json(result);
 }
@@ -37,20 +53,28 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ postId: string }> }
 ) {
+  const ip = getClientIp(request);
+  const rateLimitResponse = checkRateLimit(ip, "write");
+  if (rateLimitResponse) return rateLimitResponse;
+
   const { postId } = await params;
   const pid = Number(postId);
   const body = await request.json();
-  const { author, password, content, parent_id, category_id } = body;
+  const { author, password, content, parent_id } = body;
 
   if (!author?.trim() || !password?.trim() || !content?.trim()) {
     return NextResponse.json({ error: "모든 항목을 입력해주세요" }, { status: 400 });
   }
 
   const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
+  const ipAddr = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 
-  await sql`INSERT INTO comments (post_id, parent_id, author, password, content, ip_address)
-    VALUES (${pid}, ${parent_id ?? null}, ${author.trim()}, ${password.trim()}, ${content.trim()}, ${ip})`;
+  await sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
+  const user = await verifyAuth(request);
+  const uid = user?.uid || null;
+
+  await sql`INSERT INTO comments (post_id, parent_id, author, password, content, ip_address, firebase_uid)
+    VALUES (${pid}, ${parent_id ?? null}, ${sanitize(validateLength(author.trim(), 50))}, ${password.trim()}, ${sanitize(validateLength(content.trim(), 5000))}, ${ipAddr}, ${uid})`;
   await sql`UPDATE posts SET comments_count = (SELECT COUNT(*) FROM comments WHERE post_id = ${pid}) WHERE id = ${pid}`;
 
   return NextResponse.json({ success: true });

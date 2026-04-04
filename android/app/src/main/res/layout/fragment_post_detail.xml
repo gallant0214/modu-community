@@ -41,15 +41,6 @@
             android:singleLine="true"
             android:ellipsize="end" />
 
-        <ImageButton
-            android:id="@+id/btn_bookmark"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:src="@drawable/ic_bookmark"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="북마크"
-            android:scaleType="centerInside"
-            android:padding="8dp" />
     </LinearLayout>
 
     <View
@@ -122,6 +113,18 @@
                         android:layout_width="0dp"
                         android:layout_height="0dp"
                         android:layout_weight="1" />
+
+                    <ImageView
+                        android:id="@+id/btn_bookmark"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:src="@drawable/ic_bookmark"
+                        android:contentDescription="북마크"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        app:tint="@color/app_icon_tint"
+                        android:scaleType="centerInside"
+                        android:padding="2dp"
+                        android:layout_marginEnd="8dp" />
 
                     <ImageView
                         android:id="@+id/btn_more"
@@ -241,14 +244,7 @@
                         android:id="@+id/btn_write_comment"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="댓글달기"
-                        android:drawableStart="@drawable/ic_comment_outline"
-                        android:drawablePadding="4dp"
-                        android:textSize="13sp"
-                        android:textColor="@color/app_text_secondary"
-                        android:background="?attr/selectableItemBackground"
-                        android:paddingVertical="4dp"
-                        android:layout_marginStart="16dp" />
+                        android:visibility="gone" />
                 </LinearLayout>
 
                 <!-- 구분선 -->
@@ -359,6 +355,7 @@
             android:textColorHint="@color/app_text_hint"
             android:paddingHorizontal="12dp"
             android:inputType="text"
+            android:imeOptions="actionSend"
             android:maxLines="1"
             android:importantForAutofill="no" />
 

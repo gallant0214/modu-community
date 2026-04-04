@@ -20,14 +20,11 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.materialswitch.MaterialSwitch
 import androidx.navigation.fragment.findNavController
 import com.moduji.app.R
 import com.moduji.app.databinding.FragmentMyBinding
 import com.moduji.app.data.repository.CommunityRepository
-import com.moduji.app.data.repository.JobsRepository
-import com.moduji.app.ui.jobs.adapter.JobPostAdapter
 import com.moduji.app.ui.common.KeywordAlertBottomSheet
 import com.moduji.app.util.BookmarkManager
 import com.moduji.app.util.KeywordAlertManager
@@ -39,6 +36,7 @@ import com.moduji.app.util.WithdrawalManager
 
 /**
  * My 탭 Fragment
+ *
  *
  * 로그인 상태에 따라 두 가지 UI를 전환:
  * - 게스트: 앱 소개 + Google 로그인 버튼 + 약관 안내
@@ -55,6 +53,7 @@ class MyFragment : Fragment() {
 
     private var googleSignInClient: GoogleSignInClient? = null
     private lateinit var signInLauncher: ActivityResultLauncher<Intent>
+    private var pendingLoginSplash = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,6 +81,7 @@ class MyFragment : Fragment() {
                 }
 
                 if (idToken != null) {
+                    pendingLoginSplash = true
                     viewModel.handleSignInResult(idToken)
                 } else {
                     viewModel.onSignInFailed("Google 계정 정보를 가져올 수 없습니다.")
@@ -123,10 +123,18 @@ class MyFragment : Fragment() {
         setupGoogleLoginButton()
         setupMenuItems()
         setupAppVersion()
+        setupSwipeRefresh()
         observeLoginState()
         observeSignInEvent()
         observeError()
         applyNickname()
+    }
+
+    private fun setupSwipeRefresh() {
+        binding.swipeRefresh.setOnRefreshListener {
+            updateCounts()
+            binding.swipeRefresh.isRefreshing = false
+        }
     }
 
     // ====================================================
@@ -134,6 +142,12 @@ class MyFragment : Fragment() {
     // ====================================================
     private fun observeLoginState() {
         viewModel.isLoggedIn.observe(viewLifecycleOwner) { isLoggedIn ->
+            // 로그인 직후 스플래시 (실제 로그인 액션 시에만)
+            if (isLoggedIn && pendingLoginSplash) {
+                pendingLoginSplash = false
+                showCenterSplash("로그인 되었습니다")
+            }
+
             // 프로필 영역
             binding.layoutProfile.visibility = if (isLoggedIn) View.VISIBLE else View.GONE
             // Google 로그인 버튼
@@ -255,35 +269,35 @@ class MyFragment : Fragment() {
             binding.menuMyPosts.root,
             R.drawable.ic_article, "내가 쓴 글"
         ) {
-            requireLogin { showMyPosts() }
+            requireLogin { navigateToActivityList("my_posts", "내가 쓴 글") }
         }
 
         setupMenuItem(
             binding.menuMyComments.root,
-            R.drawable.ic_comment, "내가 댓글 단 글"
+            R.drawable.ic_comment, "내가 쓴 댓글"
         ) {
-            requireLogin { showMyCommentedPosts() }
+            requireLogin { navigateToActivityList("my_comments", "내가 쓴 댓글") }
         }
 
         setupMenuItem(
             binding.menuBookmarks.root,
             R.drawable.ic_bookmark, "북마크"
         ) {
-            showBookmarkedPosts()
+            navigateToActivityList("bookmarks", "북마크")
         }
 
         setupMenuItem(
             binding.menuMyJobs.root,
             R.drawable.ic_work, "내가 등록한 구인글"
         ) {
-            requireLogin { showMyJobPosts() }
+            requireLogin { navigateToActivityList("my_jobs", "내가 등록한 구인글") }
         }
 
         setupMenuItem(
             binding.menuJobBookmarks.root,
             R.drawable.ic_bookmark, "구인 북마크"
         ) {
-            showBookmarkedJobs()
+            navigateToActivityList("job_bookmarks", "구인 북마크")
         }
 
         // --- 설정 섹션 ---
@@ -294,15 +308,20 @@ class MyFragment : Fragment() {
             showNotificationSettingsSheet()
         }
 
+        setupMenuItem(
+            binding.menuKeywordSettings.root,
+            R.drawable.ic_search, "키워드 설정"
+        ) {
+            KeywordAlertBottomSheet.show(this)
+        }
+
         setupThemeMenu()
 
         setupMenuItem(
             binding.menuLogout.root,
             R.drawable.ic_logout, "로그아웃"
         ) {
-            viewModel.onLogout()
-            googleSignInClient?.signOut()
-            Toast.makeText(requireContext(), "로그아웃되었습니다", Toast.LENGTH_SHORT).show()
+            showLogoutDialog()
         }
 
         // 로그아웃: 설정 섹션 마지막 항목이므로 하단 divider 숨김
@@ -350,9 +369,7 @@ class MyFragment : Fragment() {
     // ====================================================
     private fun showNotificationSettingsSheet() {
         val ctx = requireContext()
-        val dialog = BottomSheetDialog(ctx)
         val sheetView = layoutInflater.inflate(R.layout.bottom_sheet_notification_settings, null)
-        dialog.setContentView(sheetView)
 
         val settings = NotificationPrefsManager.getSettings(ctx)
 
@@ -384,16 +401,27 @@ class MyFragment : Fragment() {
             NotificationPrefsManager.setSetting(ctx, NotificationPrefsManager.KEY_PROMO, checked)
         }
 
-        // 이용자 설정 알림 (키워드) 항목
+        // 키워드 알림 스위치
+        val switchKeyword = sheetView.findViewById<MaterialSwitch>(R.id.switch_keyword)
+        switchKeyword.isChecked = NotificationPrefsManager.isEnabled(ctx, NotificationPrefsManager.KEY_KEYWORD)
+        switchKeyword.setOnCheckedChangeListener { _, checked ->
+            NotificationPrefsManager.setSetting(ctx, NotificationPrefsManager.KEY_KEYWORD, checked)
+        }
+
         val keywordCount = KeywordAlertManager.getKeywords(ctx).size
         val tvKeywordCount = sheetView.findViewById<TextView>(R.id.tv_keyword_count)
         if (keywordCount > 0) {
             tvKeywordCount.text = "등록된 키워드 ${keywordCount}개"
         }
 
-        sheetView.findViewById<View>(R.id.btn_keyword_settings).setOnClickListener {
+        val dialog = AlertDialog.Builder(ctx)
+            .setView(sheetView)
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        sheetView.findViewById<View>(R.id.btn_close).setOnClickListener {
             dialog.dismiss()
-            KeywordAlertBottomSheet.show(this)
         }
 
         dialog.show()
@@ -419,30 +447,43 @@ class MyFragment : Fragment() {
     }
 
     private fun showThemeDialog() {
-        val saved = ThemeHelper.getSavedTheme(requireContext())
-        val dialog = BottomSheetDialog(requireContext())
-        val sheetView = layoutInflater.inflate(R.layout.dialog_theme_select, null)
-        dialog.setContentView(sheetView)
+        val ctx = requireContext()
+        val saved = ThemeHelper.getSavedTheme(ctx)
+        val items = listOf("화이트 모드", "다크 모드", "시스템 설정")
 
-        val checks = listOf(
-            sheetView.findViewById<ImageView>(R.id.ic_check_light),
-            sheetView.findViewById<ImageView>(R.id.ic_check_dark),
-            sheetView.findViewById<ImageView>(R.id.ic_check_system)
-        )
-        checks[saved]?.visibility = View.VISIBLE
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_list, null)
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon)
+            .setImageResource(R.drawable.ic_dark_mode)
+        dialogView.findViewById<TextView>(R.id.tv_title).text = "화면 테마"
+        dialogView.findViewById<TextView>(R.id.tv_subtitle).text = "원하는 테마를 선택하세요"
 
-        val options = listOf(
-            sheetView.findViewById<View>(R.id.option_light) to ThemeHelper.THEME_LIGHT,
-            sheetView.findViewById<View>(R.id.option_dark) to ThemeHelper.THEME_DARK,
-            sheetView.findViewById<View>(R.id.option_system) to ThemeHelper.THEME_SYSTEM
-        )
-        options.forEach { (view, theme) ->
-            view?.setOnClickListener {
-                ThemeHelper.applyTheme(requireContext(), theme)
+        val container = dialogView.findViewById<android.widget.LinearLayout>(R.id.layout_items)
+
+        val dialog = AlertDialog.Builder(ctx)
+            .setView(dialogView)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        items.forEachIndexed { index, label ->
+            val itemView = layoutInflater.inflate(R.layout.item_ios_dialog_option, container, false)
+            val rb = itemView.findViewById<android.widget.RadioButton>(R.id.rb_item)
+            val tv = itemView.findViewById<TextView>(R.id.tv_label)
+            tv.text = label
+            rb.isChecked = index == saved
+
+            if (index == items.size - 1) {
+                itemView.findViewById<View>(R.id.divider).visibility = View.GONE
+            }
+
+            itemView.findViewById<View>(R.id.row).setOnClickListener {
+                ThemeHelper.applyTheme(ctx, index)
                 updateThemeLabel()
                 dialog.dismiss()
             }
+            container.addView(itemView)
         }
+
+        dialogView.findViewById<View>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
 
         dialog.show()
     }
@@ -644,245 +685,14 @@ class MyFragment : Fragment() {
     }
 
     // ====================================================
-    // 구인 북마크 목록 표시
+    // 내 활동 목록 페이지로 이동
     // ====================================================
-    private fun showBookmarkedJobs() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            val bookmarkedIds = BookmarkManager.getBookmarkedIds()
-            val bookmarkedPosts = bookmarkedIds.mapNotNull { id ->
-                JobsRepository.getJobPostById(id).getOrNull()
-            }
-
-            if (bookmarkedPosts.isEmpty()) {
-                Toast.makeText(requireContext(), "등록한 게시글이 없습니다", Toast.LENGTH_SHORT).show()
-                return@launch
-            }
-
-            val ctx = requireContext()
-            val dialog = BottomSheetDialog(ctx)
-
-        val container = android.widget.LinearLayout(ctx).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(0, 24, 0, 0)
+    private fun navigateToActivityList(type: String, title: String) {
+        val bundle = Bundle().apply {
+            putString("type", type)
+            putString("title", title)
         }
-
-        // 타이틀
-        val title = TextView(ctx).apply {
-            text = "구인 북마크"
-            textSize = 18f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setTextColor(ctx.getColor(R.color.app_text_primary))
-            setPadding(48, 16, 48, 24)
-        }
-        container.addView(title)
-
-        // RecyclerView
-        val recyclerView = androidx.recyclerview.widget.RecyclerView(ctx).apply {
-            layoutManager = androidx.recyclerview.widget.LinearLayoutManager(ctx)
-            adapter = JobPostAdapter(bookmarkedPosts) { post ->
-                dialog.dismiss()
-                Toast.makeText(ctx, post.title, Toast.LENGTH_SHORT).show()
-            }
-        }
-        container.addView(recyclerView, ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
-
-            dialog.setContentView(container)
-            dialog.show()
-        }
-    }
-
-    // ====================================================
-    // 커뮤니티 북마크 목록 표시
-    // ====================================================
-    private fun showBookmarkedPosts() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            BookmarkManager.init(requireContext())
-            val bookmarkedIds = BookmarkManager.getCommunityBookmarkedIds()
-
-            if (bookmarkedIds.isEmpty()) {
-                Toast.makeText(requireContext(), "북마크한 게시글이 없습니다", Toast.LENGTH_SHORT).show()
-                return@launch
-            }
-
-            val bookmarkedPosts = bookmarkedIds.mapNotNull { id ->
-                CommunityRepository.getPost(id).getOrNull()
-            }
-
-            if (bookmarkedPosts.isEmpty()) {
-                Toast.makeText(requireContext(), "북마크한 게시글이 없습니다", Toast.LENGTH_SHORT).show()
-                return@launch
-            }
-
-            val ctx = requireContext()
-            val dialog = BottomSheetDialog(ctx)
-
-            val container = android.widget.LinearLayout(ctx).apply {
-                orientation = android.widget.LinearLayout.VERTICAL
-                setPadding(0, 24, 0, 0)
-            }
-
-            val title = TextView(ctx).apply {
-                text = "북마크"
-                textSize = 18f
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                setTextColor(ctx.getColor(R.color.app_text_primary))
-                setPadding(48, 16, 48, 24)
-            }
-            container.addView(title)
-
-            val recyclerView = androidx.recyclerview.widget.RecyclerView(ctx).apply {
-                layoutManager = androidx.recyclerview.widget.LinearLayoutManager(ctx)
-                adapter = com.moduji.app.ui.community.adapter.PostListAdapter({ post ->
-                    dialog.dismiss()
-                    val bundle = Bundle().apply {
-                        putInt("postId", post.id)
-                        putInt("categoryId", post.categoryId)
-                    }
-                    findNavController().navigate(R.id.action_profile_to_postDetail, bundle)
-                }).also { adapter ->
-                    adapter.submitList(bookmarkedPosts.map {
-                        com.moduji.app.ui.community.adapter.PostListItem.PostItem(it)
-                    })
-                }
-            }
-            container.addView(recyclerView, ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ))
-
-            dialog.setContentView(container)
-            dialog.show()
-        }
-    }
-
-    // ====================================================
-    // 내가 쓴 글
-    // ====================================================
-    private fun showMyPosts() {
-        val nickname = NicknameManager.getNickname(requireContext())
-        if (nickname.isNullOrBlank()) {
-            Toast.makeText(requireContext(), "닉네임을 먼저 설정하세요", Toast.LENGTH_SHORT).show()
-            return
-        }
-        viewLifecycleOwner.lifecycleScope.launch {
-            val posts = CommunityRepository.getMyPosts(nickname).getOrNull() ?: emptyList()
-            if (posts.isEmpty()) {
-                Toast.makeText(requireContext(), "작성한 게시글이 없습니다", Toast.LENGTH_SHORT).show()
-                return@launch
-            }
-            showPostListBottomSheet("내가 쓴 글", posts)
-        }
-    }
-
-    // ====================================================
-    // 내가 댓글 단 글
-    // ====================================================
-    private fun showMyCommentedPosts() {
-        val nickname = NicknameManager.getNickname(requireContext())
-        if (nickname.isNullOrBlank()) {
-            Toast.makeText(requireContext(), "닉네임을 먼저 설정하세요", Toast.LENGTH_SHORT).show()
-            return
-        }
-        viewLifecycleOwner.lifecycleScope.launch {
-            val posts = CommunityRepository.getMyCommentedPosts(nickname).getOrNull() ?: emptyList()
-            if (posts.isEmpty()) {
-                Toast.makeText(requireContext(), "댓글을 작성한 게시글이 없습니다", Toast.LENGTH_SHORT).show()
-                return@launch
-            }
-            showPostListBottomSheet("내가 댓글 단 글", posts)
-        }
-    }
-
-    // ====================================================
-    // 내가 등록한 구인글
-    // ====================================================
-    private fun showMyJobPosts() {
-        val nickname = NicknameManager.getNickname(requireContext())
-        if (nickname.isNullOrBlank()) {
-            Toast.makeText(requireContext(), "닉네임을 먼저 설정하세요", Toast.LENGTH_SHORT).show()
-            return
-        }
-        viewLifecycleOwner.lifecycleScope.launch {
-            val posts = JobsRepository.getMyJobPosts(nickname).getOrNull() ?: emptyList()
-            if (posts.isEmpty()) {
-                Toast.makeText(requireContext(), "등록한 구인글이 없습니다", Toast.LENGTH_SHORT).show()
-                return@launch
-            }
-
-            val ctx = requireContext()
-            val dialog = BottomSheetDialog(ctx)
-            val container = android.widget.LinearLayout(ctx).apply {
-                orientation = android.widget.LinearLayout.VERTICAL
-                setPadding(0, 24, 0, 0)
-            }
-            val title = TextView(ctx).apply {
-                text = "내가 등록한 구인글"
-                textSize = 18f
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                setTextColor(ctx.getColor(R.color.app_text_primary))
-                setPadding(48, 16, 48, 24)
-            }
-            container.addView(title)
-
-            val recyclerView = androidx.recyclerview.widget.RecyclerView(ctx).apply {
-                layoutManager = androidx.recyclerview.widget.LinearLayoutManager(ctx)
-                adapter = JobPostAdapter(posts) { post ->
-                    dialog.dismiss()
-                    Toast.makeText(ctx, post.title, Toast.LENGTH_SHORT).show()
-                }
-            }
-            container.addView(recyclerView, ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ))
-            dialog.setContentView(container)
-            dialog.show()
-        }
-    }
-
-    // ====================================================
-    // 게시글 목록 BottomSheet 공통
-    // ====================================================
-    private fun showPostListBottomSheet(titleText: String, posts: List<com.moduji.app.data.model.CommunityPost>) {
-        val ctx = requireContext()
-        val dialog = BottomSheetDialog(ctx)
-        val container = android.widget.LinearLayout(ctx).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(0, 24, 0, 0)
-        }
-        val title = TextView(ctx).apply {
-            text = titleText
-            textSize = 18f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setTextColor(ctx.getColor(R.color.app_text_primary))
-            setPadding(48, 16, 48, 24)
-        }
-        container.addView(title)
-
-        val recyclerView = androidx.recyclerview.widget.RecyclerView(ctx).apply {
-            layoutManager = androidx.recyclerview.widget.LinearLayoutManager(ctx)
-            adapter = com.moduji.app.ui.community.adapter.PostListAdapter({ post ->
-                dialog.dismiss()
-                val bundle = Bundle().apply {
-                    putInt("postId", post.id)
-                    putInt("categoryId", post.categoryId)
-                }
-                findNavController().navigate(R.id.action_profile_to_postDetail, bundle)
-            }).also { adapter ->
-                adapter.submitList(posts.map {
-                    com.moduji.app.ui.community.adapter.PostListItem.PostItem(it)
-                })
-            }
-        }
-        container.addView(recyclerView, ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
-        dialog.setContentView(container)
-        dialog.show()
+        findNavController().navigate(R.id.action_profile_to_activityList, bundle)
     }
 
     // ====================================================
@@ -893,14 +703,25 @@ class MyFragment : Fragment() {
         BookmarkManager.init(ctx)
         binding.tvPostCount.text = MyActivityTracker.getTotalPostCount(ctx).toString()
         binding.tvBookmarkCount.text = BookmarkManager.totalCount().toString()
+
+        // 각 메뉴 행에 개별 카운트 표시
+        setMenuCount(binding.menuMyPosts.root, MyActivityTracker.getPostCount(ctx))
+        setMenuCount(binding.menuMyComments.root, MyActivityTracker.getCommentCount(ctx))
+        setMenuCount(binding.menuBookmarks.root, BookmarkManager.communityCount())
+        setMenuCount(binding.menuMyJobs.root, MyActivityTracker.getJobPostCount(ctx))
+        setMenuCount(binding.menuJobBookmarks.root, BookmarkManager.count())
+    }
+
+    private fun setMenuCount(menuView: View, count: Int) {
+        val tvCount = menuView.findViewById<TextView>(R.id.tv_menu_count)
+        tvCount?.text = "($count)"
+        tvCount?.visibility = View.VISIBLE
     }
 
     override fun onResume() {
         super.onResume()
         applyNickname()
-        if (viewModel.isLoggedIn.value == true) {
-            updateCounts()
-        }
+        updateCounts()
     }
 
     // ====================================================
@@ -921,6 +742,70 @@ class MyFragment : Fragment() {
      */
     private fun resetOtherTabsNavigation() {
         (activity as? com.moduji.app.MainActivity)?.resetCommunityNavigation()
+    }
+
+    // ====================================================
+    // 로그아웃 확인 다이얼로그 (커스텀 디자인)
+    // ====================================================
+    private fun showLogoutDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_logout_confirm, null)
+        val dialog = AlertDialog.Builder(requireContext())
+            .setView(dialogView)
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        dialogView.findViewById<View>(R.id.btn_cancel).setOnClickListener {
+            dialog.dismiss()
+        }
+        dialogView.findViewById<View>(R.id.btn_confirm).setOnClickListener {
+            viewModel.onLogout()
+            googleSignInClient?.signOut()
+            dialog.dismiss()
+            showCenterSplash("로그아웃 되었습니다")
+        }
+
+        dialog.show()
+    }
+
+    // ====================================================
+    // 화면 중앙 스플래시 메시지 (페이드 인/아웃)
+    // ====================================================
+    private fun showCenterSplash(message: String) {
+        val activity = activity ?: return
+        val contentView = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+
+        val textView = android.widget.TextView(requireContext()).apply {
+            text = message
+            textSize = 15f
+            setTextColor(android.graphics.Color.WHITE)
+            setBackgroundResource(R.drawable.bg_splash_message)
+            setPadding(56, 28, 56, 28)
+            alpha = 0f
+        }
+
+        val params = android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = android.view.Gravity.CENTER
+        }
+
+        contentView.addView(textView, params)
+
+        textView.animate()
+            .alpha(1f)
+            .setDuration(300)
+            .withEndAction {
+                textView.postDelayed({
+                    textView.animate()
+                        .alpha(0f)
+                        .setDuration(500)
+                        .withEndAction { contentView.removeView(textView) }
+                        .start()
+                }, 1500)
+            }
+            .start()
     }
 
     override fun onDestroyView() {

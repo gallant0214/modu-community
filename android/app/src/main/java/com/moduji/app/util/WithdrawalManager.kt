@@ -16,7 +16,7 @@ object WithdrawalManager {
     private const val TWO_WEEKS_MILLIS = 14L * 24 * 60 * 60 * 1000
 
     private fun getPrefs(context: Context) =
-        context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        SecurePrefs.get(context, PREF_NAME)
 
     /**
      * 탈퇴 처리: 이메일과 탈퇴 시각 기록

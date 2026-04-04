@@ -45,7 +45,7 @@ class NotificationWorker(
             }
         }
 
-        val prefs = applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = SecurePrefs.get(applicationContext, PREFS_NAME)
         val lastPostId = prefs.getInt(KEY_LAST_POST_ID, 0)
         val lastJobId = prefs.getInt(KEY_LAST_JOB_ID, 0)
 

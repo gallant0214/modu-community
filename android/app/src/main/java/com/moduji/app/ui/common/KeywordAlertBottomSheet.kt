@@ -10,7 +10,7 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.bottomsheet.BottomSheetDialog
+import androidx.appcompat.app.AlertDialog
 import com.moduji.app.R
 import com.moduji.app.util.KeywordAlertManager
 
@@ -24,11 +24,9 @@ object KeywordAlertBottomSheet {
 
     fun show(fragment: Fragment) {
         val ctx = fragment.requireContext()
-        val dialog = BottomSheetDialog(ctx)
         val sheetView = fragment.layoutInflater.inflate(
             R.layout.bottom_sheet_keyword_alert, null
         )
-        dialog.setContentView(sheetView)
 
         val etKeyword = sheetView.findViewById<EditText>(R.id.et_keyword)
         val btnAdd = sheetView.findViewById<TextView>(R.id.btn_add_keyword)
@@ -71,6 +69,16 @@ object KeywordAlertBottomSheet {
                 addAction()
                 true
             } else false
+        }
+
+        val dialog = AlertDialog.Builder(ctx)
+            .setView(sheetView)
+            .create()
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        sheetView.findViewById<View>(R.id.btn_close).setOnClickListener {
+            dialog.dismiss()
         }
 
         dialog.show()

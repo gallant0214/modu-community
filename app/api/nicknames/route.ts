@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { sql } from "@/app/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAuth } from "@/app/lib/firebase-admin";
+import { sanitize, validateLength } from "@/app/lib/security";
 
 // 닉네임 테이블 자동 생성
 async function ensureTable() {
@@ -27,15 +29,23 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ available: rows.length === 0 });
 }
 
-// POST /api/nicknames — 닉네임 등록
+// POST /api/nicknames — 닉네임 등록 (Firebase 인증 필수)
 export async function POST(req: NextRequest) {
+  // Firebase 인증 확인
+  const user = await verifyAuth(req);
+  if (!user) {
+    return NextResponse.json({ success: false, error: "로그인이 필요합니다" }, { status: 401 });
+  }
+
   const body = await req.json();
-  const name = (body.name || "").trim();
+  const rawName = (body.name || "").trim();
   const oldName = (body.oldName || "").trim();
 
-  if (!name) {
+  if (!rawName) {
     return NextResponse.json({ success: false, error: "name required" }, { status: 400 });
   }
+
+  const name = sanitize(validateLength(rawName, 50));
 
   await ensureTable();
 

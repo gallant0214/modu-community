@@ -98,6 +98,17 @@ class JobSalaryBottomSheet : BottomSheetDialogFragment() {
         binding.rgSalaryType.setOnCheckedChangeListener { _, checkedId ->
             val type = radioIdToSalaryType(checkedId)
             updateAmountVisibility(type)
+
+            // 협의 선택 시 즉시 결과 전달 후 닫기
+            if (type == SalaryType.NEGOTIABLE) {
+                setFragmentResult(RESULT_KEY, bundleOf(
+                    "type" to SalaryType.NEGOTIABLE.name,
+                    "amount" to -1,
+                    "incentive" to binding.cbIncentive.isChecked,
+                    "daily_weekly" to binding.cbDailyWeekly.isChecked
+                ))
+                dismiss()
+            }
         }
 
         binding.btnCancel.setOnClickListener { dismiss() }

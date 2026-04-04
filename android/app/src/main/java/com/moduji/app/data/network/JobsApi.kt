@@ -28,6 +28,7 @@ data class JobPostResponse(
     val likes: Int = 0,
     val views: Int = 0,
     @SerializedName("is_closed") val isClosed: Boolean = false,
+    @SerializedName("bookmark_count") val bookmarkCount: Int = 0,
     @SerializedName("created_at") val createdAt: String = "",
     @SerializedName("updated_at") val updatedAt: String = ""
 )
@@ -87,6 +88,13 @@ interface JobsApi {
     @GET("api/jobs/latest")
     suspend fun getLatestJobs(@Query("limit") limit: Int = 3): Response<List<JobPostResponse>>
 
+    // 최신 구인글 (페이지네이션)
+    @GET("api/jobs/latest")
+    suspend fun getLatestJobsPaginated(
+        @Query("page") page: Int,
+        @Query("limit") limit: Int = 20
+    ): Response<JobPostsListResponse>
+
     // 내가 등록한 구인글
     @GET("api/jobs/my")
     suspend fun getMyJobPosts(@Query("author") author: String): Response<JobPostsListResponse>
@@ -114,4 +122,22 @@ interface JobsApi {
     // 좋아요 토글
     @POST("api/jobs/{jobId}/like")
     suspend fun likeJobPost(@Path("jobId") jobId: Int): Response<JobLikeResponse>
+
+    // 북마크 토글
+    @POST("api/jobs/{jobId}/bookmark")
+    suspend fun bookmarkJobPost(@Path("jobId") jobId: Int): Response<JobBookmarkResponse>
+
+    // 지역별 게시글 수 (경량 API)
+    @GET("api/jobs/region-counts")
+    suspend fun getRegionCounts(): Response<RegionCountsResponse>
 }
+
+data class JobBookmarkResponse(
+    val unbookmarked: Boolean = false,
+    @SerializedName("bookmark_count") val bookmarkCount: Int = 0
+)
+
+data class RegionCountsResponse(
+    val counts: Map<String, Int> = emptyMap(),
+    val todayRegions: List<String> = emptyList()
+)

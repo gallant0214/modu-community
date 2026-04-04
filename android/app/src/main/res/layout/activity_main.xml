@@ -36,13 +36,20 @@
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottom_navigation"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="62dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="3dp"
+        android:clipToPadding="false"
         android:background="@color/app_nav_bar_bg"
         app:menu="@menu/bottom_nav_menu"
         app:labelVisibilityMode="labeled"
         app:itemIconTint="@color/nav_item_icon_color"
         app:itemTextColor="@color/nav_item_text_color"
         app:itemActiveIndicatorStyle="@style/Widget.Moduji.NoIndicator"
+        app:itemIconSize="22dp"
+        app:itemIconPadding="-6dp"
+        app:itemPaddingTop="0dp"
+        app:itemPaddingBottom="0dp"
         app:elevation="0dp" />
 
 </LinearLayout>
