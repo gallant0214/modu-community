@@ -133,31 +133,25 @@ class PostDetailViewModel : ViewModel() {
     }
 
     fun likeComment(commentId: Int) {
-        // 로그인 체크
         if (!com.moduji.app.util.AuthManager.isLoggedIn) {
             _actionResult.value = "로그인을 해주세요"
             return
         }
 
-        // 즉시 UI 업데이트 (optimistic)
-        val rawList: List<CommunityComment> = _rawComments.value?.toMutableList() ?: emptyList()
-        val idx = rawList.indexOfFirst { it.id == commentId }
-        if (idx >= 0) {
-            val updated = rawList.toMutableList()
-            val comment = rawList[idx]
-            val wasLiked = comment.isLiked == true
-            val newLikes = if (wasLiked) (comment.likes - 1).coerceAtLeast(0) else comment.likes + 1
-            updated[idx] = comment.copy(likes = newLikes, isLiked = !wasLiked)
-            _rawComments.value = updated
-            applySortAndUpdate()
-        }
-
-        // 서버에 반영 (백그라운드)
         viewModelScope.launch {
             CommunityRepository.likeComment(commentId).fold(
-                onSuccess = { loadComments() },
+                onSuccess = { resp ->
+                    // 서버 응답으로 해당 댓글만 업데이트
+                    val rawList = _rawComments.value?.toMutableList() ?: mutableListOf()
+                    val idx = rawList.indexOfFirst { it.id == commentId }
+                    if (idx >= 0) {
+                        val comment = rawList[idx]
+                        rawList[idx] = comment.copy(likes = resp.likes, isLiked = !resp.unliked)
+                        _rawComments.value = rawList
+                        applySortAndUpdate()
+                    }
+                },
                 onFailure = {
-                    loadComments() // 실패 시 서버 데이터로 복원
                     val msg = it.message ?: ""
                     _actionResult.value = if (msg.contains("401") || msg.contains("로그인")) "로그인을 해주세요" else "오류: $msg"
                 }
