@@ -160,7 +160,6 @@ export default function JobsPage() {
               <option value="popular">조회순</option>
               <option value="likes">추천순</option>
             </select>
-            <span className="ml-auto text-xs text-zinc-400">{total.toLocaleString()}개</span>
           </div>
         </div>
 
