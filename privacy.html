@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>개인정보처리방침 — 모두의 지도사 커뮤니티</title>
+  <meta name="description" content="모두의 지도사 커뮤니티 개인정보처리방침. 시행일: 2026년 3월 1일." />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="개인정보처리방침 — 모두의 지도사 커뮤니티" />
+  <meta property="og:description" content="모두의 지도사 커뮤니티 개인정보처리방침. 시행일: 2026년 3월 1일." />
+  <meta property="og:url" content="https://moducm.pages.dev/privacy.html" />
+  <meta property="og:image" content="https://moducm.pages.dev/og-community.png" />
+  <meta property="og:site_name" content="모두의 지도사 커뮤니티" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="개인정보처리방침 — 모두의 지도사 커뮤니티" />
+  <meta name="twitter:description" content="모두의 지도사 커뮤니티 개인정보처리방침. 시행일: 2026년 3월 1일." />
+
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="icon" type="image/png" href="favicon.png" />
+  <link rel="apple-touch-icon" href="favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Noto Sans KR', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #F6F1E8;
+      color: #2F2A24;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ===== Header ===== */
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(246, 241, 232, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(47, 42, 36, 0.06);
+    }
+
+    .header-inner {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+
+    .site-logo {
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: -0.3px;
+      color: #4A6D5E;
+    }
+
+    .header-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #6E665D;
+      transition: color 0.2s;
+    }
+
+    .header-back:hover { color: #4A6D5E; }
+
+    .header-back svg { flex-shrink: 0; }
+
+    /* ===== Page Title ===== */
+    .page-title-area {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 48px 20px 0;
+      text-align: center;
+    }
+
+    .page-title {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 10px;
+    }
+
+    .page-date {
+      font-size: 14px;
+      color: #6E665D;
+    }
+
+    .page-date span {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 999px;
+      background: rgba(207, 175, 123, 0.18);
+      color: #8B7340;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    /* ===== Content ===== */
+    .privacy-content {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+
+    .privacy-card {
+      background: #FFFFFF;
+      border-radius: 16px;
+      padding: 32px 28px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 16px rgba(47, 42, 36, 0.04);
+    }
+
+    .article-number {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: rgba(74, 109, 94, 0.1);
+      color: #4A6D5E;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .article-title {
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 16px;
+      letter-spacing: -0.2px;
+      line-height: 1.4;
+    }
+
+    .article-body {
+      font-size: 14.5px;
+      color: #2F2A24;
+      line-height: 1.85;
+      word-break: keep-all;
+    }
+
+    .article-body p {
+      margin-bottom: 12px;
+    }
+
+    .article-body p:last-child {
+      margin-bottom: 0;
+    }
+
+    .clause-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .clause-list li {
+      position: relative;
+      padding-left: 24px;
+      margin-bottom: 8px;
+      font-size: 14.5px;
+      line-height: 1.8;
+      word-break: keep-all;
+    }
+
+    .clause-list li:last-child {
+      margin-bottom: 0;
+    }
+
+    .clause-list li::before {
+      content: attr(data-num);
+      position: absolute;
+      left: 0;
+      top: 0;
+      font-weight: 600;
+      color: #4A6D5E;
+      font-size: 13px;
+    }
+
+    .sub-list {
+      list-style: none;
+      padding: 0;
+      margin: 8px 0 0;
+    }
+
+    .sub-list li {
+      position: relative;
+      padding-left: 16px;
+      margin-bottom: 4px;
+      font-size: 13.5px;
+      color: #6E665D;
+      line-height: 1.75;
+    }
+
+    .sub-list li::before {
+      content: "·";
+      position: absolute;
+      left: 4px;
+      top: 0;
+      font-weight: 700;
+      color: #4A6D5E;
+    }
+
+    .clause-divider {
+      height: 1px;
+      background: #E5DED3;
+      border: none;
+      margin: 16px 0;
+    }
+
+    .info-box {
+      margin-top: 16px;
+      padding: 18px 20px;
+      border-radius: 12px;
+      background: #FAF8F5;
+      border: 1px solid #E5DED3;
+    }
+
+    .info-box p {
+      font-size: 13.5px;
+      color: #6E665D;
+      line-height: 1.75;
+      margin-bottom: 6px;
+    }
+
+    .info-box p:last-child {
+      margin-bottom: 0;
+    }
+
+    .info-box strong {
+      color: #2F2A24;
+    }
+
+    .table-wrap {
+      margin-top: 16px;
+      overflow-x: auto;
+    }
+
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+
+    .info-table th,
+    .info-table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid #E5DED3;
+      line-height: 1.7;
+      word-break: keep-all;
+    }
+
+    .info-table th {
+      background: #FAF8F5;
+      font-weight: 600;
+      color: #2F2A24;
+      white-space: nowrap;
+    }
+
+    .info-table td {
+      color: #6E665D;
+    }
+
+    .info-table tr:last-child th,
+    .info-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .highlight-box {
+      margin-top: 16px;
+      padding: 14px 18px;
+      border-radius: 10px;
+      background: rgba(207, 175, 123, 0.1);
+      border: 1px solid rgba(207, 175, 123, 0.2);
+      font-size: 13.5px;
+      color: #8B7340;
+      font-weight: 600;
+      line-height: 1.7;
+      word-break: keep-all;
+    }
+
+    /* ===== Footer ===== */
+    .site-footer {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 20px 48px;
+    }
+
+    .footer-divider {
+      height: 1px;
+      background: #E5DED3;
+      border: none;
+      margin-bottom: 28px;
+    }
+
+    .footer-inner {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .footer-left {
+      font-size: 12px;
+      color: #6E665D;
+      line-height: 1.8;
+    }
+
+    .footer-left .footer-logo {
+      font-weight: 800;
+      font-size: 15px;
+      color: #4A6D5E;
+      margin-bottom: 6px;
+    }
+
+    .footer-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 20px;
+      list-style: none;
+    }
+
+    .footer-nav a {
+      font-size: 13px;
+      color: #6E665D;
+      transition: color 0.2s;
+      white-space: nowrap;
+    }
+
+    .footer-nav a:hover { color: #4A6D5E; }
+
+    @media (max-width: 640px) {
+      .page-title-area { padding-top: 36px; }
+
+      .page-title { font-size: 26px; }
+
+      .privacy-card {
+        padding: 24px 20px;
+        border-radius: 14px;
+      }
+
+      .article-title { font-size: 16px; }
+
+      .article-body,
+      .clause-list li { font-size: 14px; }
+
+      .footer-inner {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+
+      .footer-nav {
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-logo">모두의 지도사 커뮤니티</a>
+      <a href="index.html" class="header-back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        홈으로 돌아가기
+      </a>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- Page Title -->
+    <div class="page-title-area">
+      <h1 class="page-title">개인정보처리방침</h1>
+      <p class="page-date"><span>시행일: 2026년 3월 1일</span></p>
+    </div>
+
+    <div class="privacy-content">
+
+      <!-- 제1조 -->
+      <article class="privacy-card">
+        <div class="article-number">제1조</div>
+        <h2 class="article-title">개인정보의 수집 항목</h2>
+        <div class="article-body">
+          <p>회사는 서비스 제공을 위해 다음과 같은 개인정보를 수집합니다.</p>
+
+          <ol class="clause-list">
+            <li data-num="1.">회원가입 시 수집 항목
+              <ul class="sub-list">
+                <li>이메일 주소</li>
+                <li>닉네임</li>
+                <li>비밀번호 (암호화 저장)</li>
+                <li>프로필 이미지 (선택)</li>
+              </ul>
+            </li>
+            <li data-num="2.">구인 공고 작성 시 수집 항목
+              <ul class="sub-list">
+                <li>업체명 또는 기관명</li>
+                <li>담당자 연락처 (전화번호 또는 이메일)</li>
+                <li>근무 지역</li>
+                <li>종목 및 근무형태</li>
+              </ul>
+            </li>
+            <li data-num="3.">서비스 이용 과정에서 자동으로 수집되는 항목
+              <ul class="sub-list">
+                <li>IP 주소</li>
+                <li>쿠키 정보</li>
+                <li>기기 정보 (OS, 브라우저 종류, 기기 모델)</li>
+                <li>서비스 이용 기록, 접속 일시</li>
+                <li>광고 식별자 (ADID/IDFA)</li>
+              </ul>
+            </li>
+          </ol>
+        </div>
+      </article>
+
+      <!-- 제2조 -->
+      <article class="privacy-card">
+        <div class="article-number">제2조</div>
+        <h2 class="article-title">개인정보의 수집 및 이용 목적</h2>
+        <div class="article-body">
+          <p>수집된 개인정보는 다음의 목적을 위해 이용됩니다.</p>
+          <hr class="clause-divider" />
+          <ol class="clause-list">
+            <li data-num="1.">회원 식별 및 가입 의사 확인, 본인 인증</li>
+            <li data-num="2.">실기·구술 후기 게시판 및 커뮤니티 운영</li>
+            <li data-num="3.">구인 공고 게시 및 관리</li>
+            <li data-num="4.">서비스 내 광고 게재 및 맞춤형 광고 제공</li>
+            <li data-num="5.">서비스 개선, 통계 분석, 이용 현황 파악</li>
+            <li data-num="6.">부정 이용 방지 및 비인가 사용 탐지</li>
+            <li data-num="7.">공지사항 전달 및 고객 문의 대응</li>
+          </ol>
+        </div>
+      </article>
+
+      <!-- 제3조 -->
+      <article class="privacy-card">
+        <div class="article-number">제3조</div>
+        <h2 class="article-title">개인정보 보유 및 이용 기간</h2>
+        <div class="article-body">
+          <p>회원 탈퇴 시 개인정보는 지체 없이 파기합니다. 다만, 관련 법령에 따라 아래 정보는 일정 기간 보관할 수 있습니다.</p>
+
+          <div class="table-wrap">
+            <table class="info-table">
+              <tr>
+                <th>보관 항목</th>
+                <th>보관 기간</th>
+                <th>근거 법령</th>
+              </tr>
+              <tr>
+                <td>계약 또는 청약 철회 기록</td>
+                <td>5년</td>
+                <td>전자상거래법</td>
+              </tr>
+              <tr>
+                <td>대금 결제 및 재화 공급 기록</td>
+                <td>5년</td>
+                <td>전자상거래법</td>
+              </tr>
+              <tr>
+                <td>소비자 불만 또는 분쟁 처리 기록</td>
+                <td>3년</td>
+                <td>전자상거래법</td>
+              </tr>
+              <tr>
+                <td>접속 기록 (로그)</td>
+                <td>3개월</td>
+                <td>통신비밀보호법</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <!-- 제4조 -->
+      <article class="privacy-card">
+        <div class="article-number">제4조</div>
+        <h2 class="article-title">개인정보의 제3자 제공</h2>
+        <div class="article-body">
+          <ol class="clause-list">
+            <li data-num="1.">회사는 원칙적으로 이용자의 개인정보를 제3자에게 제공하지 않습니다.</li>
+            <li data-num="2.">다만, 다음의 경우에는 예외로 합니다.
+              <ul class="sub-list">
+                <li>이용자가 사전에 동의한 경우</li>
+                <li>법령에 의해 요구되는 경우</li>
+                <li>수사 목적으로 법령에 정해진 절차에 따라 요청이 있는 경우</li>
+              </ul>
+            </li>
+          </ol>
+        </div>
+      </article>
+
+      <!-- 제5조 -->
+      <article class="privacy-card">
+        <div class="article-number">제5조</div>
+        <h2 class="article-title">개인정보 처리 위탁</h2>
+        <div class="article-body">
+          <p>회사는 원활한 서비스 제공을 위해 아래와 같이 개인정보 처리 업무를 위탁할 수 있습니다.</p>
+
+          <div class="table-wrap">
+            <table class="info-table">
+              <tr>
+                <th>위탁 업무</th>
+                <th>수탁업체</th>
+              </tr>
+              <tr>
+                <td>클라우드 서버 운영 및 데이터 저장</td>
+                <td>클라우드 서비스 제공업체</td>
+              </tr>
+              <tr>
+                <td>광고 게재 및 성과 측정</td>
+                <td>광고 플랫폼 (Google AdMob 등)</td>
+              </tr>
+              <tr>
+                <td>앱 사용 통계 분석</td>
+                <td>분석 도구 제공업체 (Firebase 등)</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="info-box" style="margin-top: 16px;">
+            <p>위탁 업체가 변경되는 경우, 본 방침을 통해 공지합니다.</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 제6조 -->
+      <article class="privacy-card">
+        <div class="article-number">제6조</div>
+        <h2 class="article-title">이용자의 권리</h2>
+        <div class="article-body">
+          <p>이용자는 언제든지 다음의 권리를 행사할 수 있습니다.</p>
+          <hr class="clause-divider" />
+          <ol class="clause-list">
+            <li data-num="1.">개인정보 열람 요청</li>
+            <li data-num="2.">개인정보 수정 요청</li>
+            <li data-num="3.">개인정보 삭제 요청</li>
+            <li data-num="4.">개인정보 처리 정지 요청</li>
+            <li data-num="5.">회원 탈퇴 요청</li>
+          </ol>
+          <div class="info-box">
+            <p>위 권리는 앱 내 설정 메뉴 또는 개인정보 보호책임자 이메일을 통해 행사할 수 있습니다.</p>
+            <p>요청 접수 후 <strong>10일 이내</strong>에 처리하며, 처리 결과를 이메일로 안내드립니다.</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 제7조 -->
+      <article class="privacy-card">
+        <div class="article-number">제7조</div>
+        <h2 class="article-title">개인정보의 파기 절차 및 방법</h2>
+        <div class="article-body">
+          <p>개인정보는 수집 목적이 달성되거나 보유 기간이 경과한 후 지체 없이 파기합니다.</p>
+          <hr class="clause-divider" />
+          <ol class="clause-list">
+            <li data-num="1."><strong>파기 절차</strong><br />이용자의 개인정보는 목적 달성 후 내부 방침 및 관련 법령에 따라 일정 기간 저장된 후 파기됩니다.</li>
+            <li data-num="2."><strong>파기 방법</strong>
+              <ul class="sub-list">
+                <li>전자적 파일: 기술적 방법을 사용하여 복구 불가능하게 삭제</li>
+                <li>종이 문서: 분쇄기로 분쇄하거나 소각하여 파기</li>
+              </ul>
+            </li>
+          </ol>
+        </div>
+      </article>
+
+      <!-- 제8조 -->
+      <article class="privacy-card">
+        <div class="article-number">제8조</div>
+        <h2 class="article-title">쿠키 및 광고 식별자 사용</h2>
+        <div class="article-body">
+          <ol class="clause-list">
+            <li data-num="1.">회사는 서비스 이용 편의 제공 및 광고 노출을 위해 쿠키(Cookie) 및 광고 식별자(ADID/IDFA)를 사용합니다.</li>
+            <li data-num="2.">쿠키 및 광고 식별자를 통해 수집되는 정보는 다음의 목적으로 사용됩니다.
+              <ul class="sub-list">
+                <li>이용자의 서비스 이용 패턴 분석</li>
+                <li>맞춤형 광고 제공</li>
+                <li>광고 성과 측정</li>
+              </ul>
+            </li>
+            <li data-num="3.">이용자는 쿠키 및 광고 식별자 수집을 거부할 수 있습니다.
+              <ul class="sub-list">
+                <li>웹 브라우저: 설정 → 개인정보 → 쿠키 차단</li>
+                <li>Android: 설정 → Google → 광고 → 광고 맞춤설정 선택 해제</li>
+                <li>iOS: 설정 → 개인 정보 보호 → 추적 → 앱의 추적 요청 허용 해제</li>
+              </ul>
+            </li>
+          </ol>
+          <div class="highlight-box">쿠키 및 광고 식별자 수집을 거부하는 경우, 일부 서비스 기능 이용에 제한이 있을 수 있습니다.</div>
+        </div>
+      </article>
+
+      <!-- 제9조 -->
+      <article class="privacy-card">
+        <div class="article-number">제9조</div>
+        <h2 class="article-title">개인정보 보호책임자</h2>
+        <div class="article-body">
+          <p>개인정보 처리에 관한 업무를 총괄하고, 이용자의 불만 및 피해 구제를 위해 아래와 같이 개인정보 보호책임자를 지정하고 있습니다.</p>
+
+          <div class="info-box">
+            <p><strong>개인정보 보호책임자</strong></p>
+            <p>책임자 : 박준익</p>
+            <p>이메일: <strong>gallant0214@naver.com</strong></p>
+          </div>
+
+          <div class="info-box" style="margin-top: 12px;">
+            <p>기타 개인정보 침해 신고 및 상담은 아래 기관으로 문의하실 수 있습니다.</p>
+            <p>· 개인정보침해신고센터 (privacy.kisa.or.kr / 국번없이 118)</p>
+            <p>· 대검찰청 사이버수사과 (spo.go.kr / 국번없이 1301)</p>
+            <p>· 경찰청 사이버수사국 (ecrm.police.go.kr / 국번없이 182)</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- 제10조 -->
+      <article class="privacy-card">
+        <div class="article-number">제10조</div>
+        <h2 class="article-title">고지의 의무</h2>
+        <div class="article-body">
+          <ol class="clause-list">
+            <li data-num="1.">본 개인정보처리방침이 변경되는 경우, 시행일로부터 최소 <strong>7일 전</strong>에 앱 내 공지사항 또는 서비스 화면을 통해 사전 고지합니다.</li>
+            <li data-num="2.">이용자의 권리에 중대한 변경이 발생하는 경우에는 최소 <strong>30일 전</strong>에 고지합니다.</li>
+          </ol>
+          <div class="info-box">
+            <p><strong>현재 방침 시행일:</strong> 2026년 3월 1일</p>
+          </div>
+        </div>
+      </article>
+
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <hr class="footer-divider" />
+    <div class="footer-inner">
+      <div class="footer-left">
+        <div class="footer-logo">모두의 지도사</div>
+        <p>© 2026 모두의 지도사. All rights reserved.</p>
+      </div>
+      <nav>
+        <ul class="footer-nav">
+          <li><a href="index.html">서비스 소개</a></li>
+          <li><a href="index.html#community">실기·구술 커뮤니티</a></li>
+          <li><a href="index.html#jobs">구인 공고</a></li>
+          <li><a href="terms.html">이용약관</a></li>
+          <li><a href="privacy.html">개인정보처리방침</a></li>
+        </ul>
+      </nav>
+    </div>
+  </footer>
+
+</body>
+</html>
