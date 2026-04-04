@@ -62,28 +62,29 @@ object NicknameManager {
      * 닉네임 설정 + 서버 동기화
      * Firebase 인증된 상태에서 호출
      */
-    suspend fun setNicknameWithSync(context: Context, nickname: String, oldName: String? = null) {
+    suspend fun setNicknameWithSync(context: Context, nickname: String, oldName: String? = null): Boolean {
         val oldNickname = oldName ?: getNickname(context)
-        setNickname(context, nickname)
 
-        // 서버에 동기화
+        // 서버에 먼저 동기화 (서버 성공해야 로컬 저장)
+        var serverSuccess = false
         try {
-            val user = FirebaseAuth.getInstance().currentUser ?: return
-            val token = withContext(Dispatchers.IO) {
-                com.google.android.gms.tasks.Tasks.await(user.getIdToken(false))
-            }?.token ?: return
-
             withContext(Dispatchers.IO) {
-                val client = RetrofitClient.communityApi
-                // AuthInterceptor가 토큰을 자동으로 붙이므로 직접 호출
-                client.registerNickname(NicknameRegisterRequest(
-                    name = nickname,
-                    oldName = oldNickname
-                ))
+                val response = RetrofitClient.communityApi.registerNickname(
+                    NicknameRegisterRequest(name = nickname, oldName = oldNickname)
+                )
+                serverSuccess = response.isSuccessful
             }
-        } catch (_: Exception) {
-            // 서버 동기화 실패해도 로컬은 저장됨
+        } catch (_: Exception) { }
+
+        // 서버 성공 시 로컬에도 저장
+        if (serverSuccess) {
+            setNickname(context, nickname)
+        } else {
+            // 서버 실패해도 로컬 저장 (오프라인 대비)
+            setNickname(context, nickname)
         }
+
+        return serverSuccess
     }
 
     /**

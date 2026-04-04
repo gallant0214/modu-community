@@ -159,8 +159,10 @@ class MainActivity : AppCompatActivity() {
         binding.adView.loadAd(AdRequest.Builder().build())
 
         // 후기 탭 카테고리를 앱 시작 시 미리 로드 (Vercel 콜드 스타트 대비)
+        // + 닉네임 서버 동기화 (앱 시작 시 항상)
         lifecycleScope.launch {
             CommunityRepository.preloadCategories()
+            com.moduji.app.util.NicknameManager.syncFromServer(this@MainActivity)
         }
 
         // 알림 권한 요청 (Android 13+)

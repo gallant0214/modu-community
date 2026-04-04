@@ -389,19 +389,30 @@ ID Token 획득 (user.getIdToken())
 API 요청 시 Header에 포함: Authorization: Bearer <token>
 ```
 
-### 8-2. 게시글 작성 (비로그인 방식)
+### 8-2. 게시글 작성 (로그인 필수)
 
-- 로그인 없이도 게시글 작성 가능
-- 작성 시 **닉네임 + 비밀번호** 입력
-- 수정/삭제 시 비밀번호 확인 필요
+- **모든 쓰기 행위는 로그인 필수** (글쓰기, 댓글, 좋아요, 북마크, 신고)
+- 읽기만 비로그인 허용
 - API: `POST /api/posts` body: `{ category_id, title, content, author, password, region, tags }`
+- 서버에서 401 응답 시 "로그인을 해주세요" 메시지 표시
 
-### 8-3. 닉네임 시스템
+### 8-3. 닉네임 시스템 (중요 — 크로스 플랫폼 동기화)
 
-- 로그인 후 닉네임 설정 (필수)
-- Firebase UID ↔ 닉네임 매핑 (서버 저장)
-- 앱 ↔ 웹 닉네임 동기화
-- 변경 후 3주간 재변경 불가
+- **서버 DB에서 관리** (`nicknames` 테이블: name, firebase_uid, changed_at)
+- Firebase UID ↔ 닉네임 1:1 매핑
+- **앱 시작 시 항상 서버에서 닉네임 동기화** (`GET /api/nicknames?uid={uid}`)
+  - 서버에 닉네임 있으면 → 로컬에 저장
+  - 서버에 없고 로컬에 있으면 → 서버에 업로드
+- 닉네임 설정/변경 시 **서버에 먼저 저장** 후 로컬에 반영
+- **변경 후 3주간 재변경 불가** (서버 `changed_at` 기준)
+  - `GET /api/nicknames?uid={uid}` 응답: `{ nickname, canChange, remainingDays }`
+  - `POST /api/nicknames` 요청 시 서버에서 3주 체크 (429 응답)
+  - 첫 설정 시에는 제한 없음 (`firstSetup: true`)
+- 자동 추천 닉네임: 형용사(20개) + 명사(20개) 랜덤 조합 (2~8자)
+  - 형용사: 행복한, 졸린, 용감한, 배고픈, 신나는 등
+  - 명사: 수달, 판다, 고양이, 강아지, 토끼 등
+- **Android ↔ iOS ↔ 웹 모두 같은 서버 API 사용 → 자동 동기화**
+- 탈퇴 후 재가입해도 서버에 닉네임 + 변경 시각이 남아있어 3주 제한 유지
 
 ### 8-4. 북마크
 
