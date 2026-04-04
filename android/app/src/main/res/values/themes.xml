@@ -30,6 +30,14 @@
         <item name="android:height">0dp</item>
     </style>
 
+    <!-- iOS 스타일 투명 다이얼로그 -->
+    <style name="Theme.App.Dialog.Transparent" parent="Theme.AppCompat.Dialog">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">true</item>
+    </style>
+
     <style name="AppTheme.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#F5F3E7</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>

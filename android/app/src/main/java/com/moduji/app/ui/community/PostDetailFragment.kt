@@ -66,17 +66,57 @@ class PostDetailFragment : Fragment() {
     }
 
     private fun showPostMenu() {
-        val items = arrayOf("수정", "삭제")
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle("게시글 관리")
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> showPasswordDialogForEdit()
-                    1 -> showPasswordDialogForDelete()
-                }
-            }
-            .setNegativeButton("취소", null)
-            .show()
+        val ctx = requireContext()
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_list, null)
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon).setImageResource(R.drawable.ic_edit)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "게시글 관리"
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "원하는 작업을 선택하세요"
+
+        val container = dialogView.findViewById<android.widget.LinearLayout>(R.id.layout_items)
+        container.visibility = android.view.View.VISIBLE
+        container.orientation = android.widget.LinearLayout.VERTICAL
+
+        val dp = resources.displayMetrics.density
+
+        val btnEdit = android.widget.TextView(ctx).apply {
+            text = "수정하기"
+            textSize = 15f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(resources.getColor(R.color.app_text_primary, null))
+            setPadding(0, (14 * dp).toInt(), 0, (14 * dp).toInt())
+            setBackgroundResource(R.drawable.bg_search_bar)
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = (8 * dp).toInt() }
+        }
+        container.addView(btnEdit)
+
+        val btnDelete = android.widget.TextView(ctx).apply {
+            text = "삭제하기"
+            textSize = 15f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(resources.getColor(R.color.md_theme_error, null))
+            setPadding(0, (14 * dp).toInt(), 0, (14 * dp).toInt())
+            setBackgroundResource(R.drawable.bg_search_bar)
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        container.addView(btnDelete)
+
+        dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm).visibility = android.view.View.GONE
+
+        val dialog = android.app.AlertDialog.Builder(ctx, R.style.Theme_App_Dialog_Transparent)
+            .setView(dialogView).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
+        dialogView.findViewById<android.view.View>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+        btnEdit.setOnClickListener { dialog.dismiss(); showPasswordDialogForEdit() }
+        btnDelete.setOnClickListener { dialog.dismiss(); showPasswordDialogForDelete() }
+
+        dialog.show()
     }
 
     private fun showPasswordDialogForEdit() {
@@ -96,24 +136,26 @@ class PostDetailFragment : Fragment() {
             return
         }
 
-        val etPassword = EditText(requireContext()).apply {
-            hint = "비밀번호"
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setPadding(64, 32, 64, 16)
-        }
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_password, null)
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon).setImageResource(R.drawable.ic_lock)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "비밀번호 확인"
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "게시글 작성 시 입력한 비밀번호를 입력하세요"
 
-        val dialog = MaterialAlertDialogBuilder(requireContext())
-            .setTitle("비밀번호 확인")
-            .setView(etPassword)
-            .setPositiveButton("확인", null)
-            .setNegativeButton("취소", null)
+        val etPassword = dialogView.findViewById<EditText>(R.id.et_password)
+        val tvError = dialogView.findViewById<android.widget.TextView>(R.id.tv_error)
+
+        val dialog = android.app.AlertDialog.Builder(requireContext(), R.style.Theme_App_Dialog_Transparent)
+            .setView(dialogView)
             .create()
-
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
-        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+
+        dialogView.findViewById<android.widget.TextView>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+        dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm).setOnClickListener {
             val pw = etPassword.text.toString()
             if (pw.isEmpty()) {
-                Toast.makeText(requireContext(), "비밀번호를 입력하세요", Toast.LENGTH_SHORT).show()
+                tvError.text = "비밀번호를 입력하세요"
+                tvError.visibility = android.view.View.VISIBLE
                 return@setOnClickListener
             }
             viewModel.verifyPassword(pw) { ok ->
@@ -125,7 +167,8 @@ class PostDetailFragment : Fragment() {
                     }
                     findNavController().navigate(R.id.action_postDetail_to_postEdit, bundle)
                 } else {
-                    Toast.makeText(requireContext(), "비밀번호가 틀렸습니다", Toast.LENGTH_SHORT).show()
+                    tvError.text = "비밀번호가 틀렸습니다"
+                    tvError.visibility = android.view.View.VISIBLE
                 }
             }
         }
@@ -133,36 +176,49 @@ class PostDetailFragment : Fragment() {
 
     private fun showPasswordDialogForDelete() {
         if (AuthManager.isLoggedIn) {
-            MaterialAlertDialogBuilder(requireContext())
-                .setTitle("게시글 삭제")
-                .setMessage("정말 삭제하시겠습니까?")
-                .setPositiveButton("삭제") { _, _ ->
-                    viewModel.deletePost(AuthManager.loginPassword ?: "")
-                }
-                .setNegativeButton("취소", null)
-                .show()
+            val dialogView = layoutInflater.inflate(R.layout.dialog_ios_list, null)
+            dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon).setImageResource(R.drawable.ic_delete)
+            dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "게시글 삭제"
+            dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "정말 삭제하시겠습니까?"
+            val btnConfirm = dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm)
+            btnConfirm.text = "삭제"
+            btnConfirm.setTextColor(resources.getColor(R.color.md_theme_onPrimary, null))
+            btnConfirm.visibility = android.view.View.VISIBLE
+
+            val dialog = android.app.AlertDialog.Builder(requireContext(), R.style.Theme_App_Dialog_Transparent)
+                .setView(dialogView).create()
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            dialog.show()
+
+            dialogView.findViewById<android.widget.TextView>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+            btnConfirm.setOnClickListener {
+                dialog.dismiss()
+                viewModel.deletePost(AuthManager.loginPassword ?: "")
+            }
             return
         }
 
-        val etPassword = EditText(requireContext()).apply {
-            hint = "비밀번호"
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setPadding(64, 32, 64, 16)
-        }
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_password, null)
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon).setImageResource(R.drawable.ic_delete)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "게시글 삭제"
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "비밀번호를 입력하면 게시글이 삭제됩니다"
+        val btnConfirm = dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm)
+        btnConfirm.text = "삭제"
 
-        val dialog = MaterialAlertDialogBuilder(requireContext())
-            .setTitle("게시글 삭제")
-            .setMessage("정말 삭제하시겠습니까?")
-            .setView(etPassword)
-            .setPositiveButton("삭제", null)
-            .setNegativeButton("취소", null)
-            .create()
+        val etPassword = dialogView.findViewById<EditText>(R.id.et_password)
+        val tvError = dialogView.findViewById<android.widget.TextView>(R.id.tv_error)
 
+        val dialog = android.app.AlertDialog.Builder(requireContext(), R.style.Theme_App_Dialog_Transparent)
+            .setView(dialogView).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
-        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+
+        dialogView.findViewById<android.widget.TextView>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+        btnConfirm.setOnClickListener {
             val pw = etPassword.text.toString()
             if (pw.isEmpty()) {
-                Toast.makeText(requireContext(), "비밀번호를 입력하세요", Toast.LENGTH_SHORT).show()
+                tvError.text = "비밀번호를 입력하세요"
+                tvError.visibility = android.view.View.VISIBLE
                 return@setOnClickListener
             }
             dialog.dismiss()
@@ -318,63 +374,193 @@ class PostDetailFragment : Fragment() {
 
     private fun showCommentMenu(comment: CommunityComment) {
         val ctx = requireContext()
+
+        // iOS 스타일 메뉴: 수정 / 삭제 선택
         val dialogView = layoutInflater.inflate(R.layout.dialog_ios_list, null)
         dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon)
             .setImageResource(R.drawable.ic_comment)
-        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "댓글 삭제"
-        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "정말 삭제하시겠습니까?"
-        dialogView.findViewById<android.widget.LinearLayout>(R.id.layout_items).visibility = android.view.View.GONE
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "댓글 관리"
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "원하는 작업을 선택하세요"
 
-        val btnConfirm = dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm)
-        btnConfirm.visibility = android.view.View.VISIBLE
-        btnConfirm.text = "삭제"
-        btnConfirm.setTextColor(resources.getColor(R.color.md_theme_onPrimary, null))
+        val container = dialogView.findViewById<android.widget.LinearLayout>(R.id.layout_items)
+        container.visibility = android.view.View.VISIBLE
+        container.orientation = android.widget.LinearLayout.VERTICAL
 
-        val dialog = androidx.appcompat.app.AlertDialog.Builder(ctx)
-            .setView(dialogView)
-            .create()
+        val dp = resources.displayMetrics.density
+
+        // 수정 버튼
+        val btnEdit = android.widget.TextView(ctx).apply {
+            text = "수정하기"
+            textSize = 15f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(resources.getColor(R.color.app_text_primary, null))
+            setPadding(0, (14 * dp).toInt(), 0, (14 * dp).toInt())
+            setBackgroundResource(R.drawable.bg_search_bar)
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = (8 * dp).toInt() }
+        }
+        container.addView(btnEdit)
+
+        // 삭제 버튼
+        val btnDelete = android.widget.TextView(ctx).apply {
+            text = "삭제하기"
+            textSize = 15f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(resources.getColor(R.color.md_theme_error, null))
+            setPadding(0, (14 * dp).toInt(), 0, (14 * dp).toInt())
+            setBackgroundResource(R.drawable.bg_search_bar)
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        container.addView(btnDelete)
+
+        // 확인 버튼 숨기기 (메뉴 선택 방식)
+        dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm).visibility = android.view.View.GONE
+
+        val dialog = android.app.AlertDialog.Builder(ctx, R.style.Theme_App_Dialog_Transparent)
+            .setView(dialogView).create()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
-        dialogView.findViewById<android.view.View>(R.id.btn_cancel).setOnClickListener {
+        dialogView.findViewById<android.view.View>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+
+        btnEdit.setOnClickListener {
             dialog.dismiss()
+            showCommentEditDialog(comment)
         }
 
+        btnDelete.setOnClickListener {
+            dialog.dismiss()
+            showCommentDeleteDialog(comment)
+        }
+
+        dialog.show()
+    }
+
+    private fun showCommentEditDialog(comment: CommunityComment) {
+        val ctx = requireContext()
+
         if (AuthManager.isLoggedIn) {
+            // 로그인 상태: 바로 수정 다이얼로그
+            showCommentEditInput(comment, null)
+            return
+        }
+
+        // 비로그인: 비밀번호 확인 후 수정
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_password, null)
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon).setImageResource(R.drawable.ic_lock)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "댓글 수정"
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "댓글 작성 시 입력한 비밀번호를 입력하세요"
+        val etPassword = dialogView.findViewById<EditText>(R.id.et_password)
+        val tvError = dialogView.findViewById<android.widget.TextView>(R.id.tv_error)
+
+        val dialog = android.app.AlertDialog.Builder(ctx, R.style.Theme_App_Dialog_Transparent)
+            .setView(dialogView).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+
+        dialogView.findViewById<android.widget.TextView>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+        dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm).setOnClickListener {
+            val pw = etPassword.text.toString()
+            if (pw.isEmpty()) {
+                tvError.text = "비밀번호를 입력하세요"
+                tvError.visibility = android.view.View.VISIBLE
+                return@setOnClickListener
+            }
+            dialog.dismiss()
+            showCommentEditInput(comment, pw)
+        }
+    }
+
+    private fun showCommentEditInput(comment: CommunityComment, password: String?) {
+        val ctx = requireContext()
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_password, null)
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon).setImageResource(R.drawable.ic_edit)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "댓글 수정"
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "수정할 내용을 입력하세요"
+        val etContent = dialogView.findViewById<EditText>(R.id.et_password)
+        etContent.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        etContent.hint = "댓글 내용"
+        etContent.setText(comment.content)
+        etContent.setSelection(comment.content.length)
+        etContent.minLines = 3
+        val tvError = dialogView.findViewById<android.widget.TextView>(R.id.tv_error)
+        val btnConfirm = dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm)
+        btnConfirm.text = "수정"
+
+        val dialog = android.app.AlertDialog.Builder(ctx, R.style.Theme_App_Dialog_Transparent)
+            .setView(dialogView).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+
+        dialogView.findViewById<android.widget.TextView>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+        btnConfirm.setOnClickListener {
+            val newContent = etContent.text.toString().trim()
+            if (newContent.isEmpty()) {
+                tvError.text = "내용을 입력하세요"
+                tvError.visibility = android.view.View.VISIBLE
+                return@setOnClickListener
+            }
+            dialog.dismiss()
+            viewModel.updateComment(comment.id, newContent, password ?: AuthManager.loginPassword ?: "")
+        }
+    }
+
+    private fun showCommentDeleteDialog(comment: CommunityComment) {
+        val ctx = requireContext()
+
+        if (AuthManager.isLoggedIn) {
+            val dialogView = layoutInflater.inflate(R.layout.dialog_ios_list, null)
+            dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon).setImageResource(R.drawable.ic_delete)
+            dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "댓글 삭제"
+            dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "정말 삭제하시겠습니까?"
+            dialogView.findViewById<android.widget.LinearLayout>(R.id.layout_items).visibility = android.view.View.GONE
+            val btnConfirm = dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm)
+            btnConfirm.visibility = android.view.View.VISIBLE
+            btnConfirm.text = "삭제"
+            btnConfirm.setTextColor(resources.getColor(R.color.md_theme_onPrimary, null))
+
+            val dialog = android.app.AlertDialog.Builder(ctx, R.style.Theme_App_Dialog_Transparent)
+                .setView(dialogView).create()
+            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            dialog.show()
+
+            dialogView.findViewById<android.view.View>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
             btnConfirm.setOnClickListener {
                 dialog.dismiss()
                 viewModel.deleteComment(comment.id, AuthManager.loginPassword ?: "")
             }
-            dialog.show()
-        } else {
-            // 비밀번호 입력 필드 추가
-            val dp = resources.displayMetrics.density
-            val container = dialogView.findViewById<android.widget.LinearLayout>(R.id.layout_items)
-            container.visibility = android.view.View.VISIBLE
-            val etPassword = EditText(ctx).apply {
-                hint = "비밀번호"
-                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                setBackgroundResource(R.drawable.bg_search_bar)
-                setPadding((16 * dp).toInt(), (12 * dp).toInt(), (16 * dp).toInt(), (12 * dp).toInt())
-                textSize = 14f
-                setTextColor(resources.getColor(R.color.app_text_secondary, null))
-                setHintTextColor(resources.getColor(R.color.app_text_hint, null))
-                layoutParams = android.widget.LinearLayout.LayoutParams(
-                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-            }
-            container.addView(etPassword)
+            return
+        }
 
-            btnConfirm.setOnClickListener {
-                val pw = etPassword.text.toString()
-                if (pw.isEmpty()) {
-                    Toast.makeText(ctx, "비밀번호를 입력하세요", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
-                dialog.dismiss()
-                viewModel.deleteComment(comment.id, pw)
+        // 비로그인: 비밀번호 입력
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ios_password, null)
+        dialogView.findViewById<android.widget.ImageView>(R.id.iv_icon).setImageResource(R.drawable.ic_delete)
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_title).text = "댓글 삭제"
+        dialogView.findViewById<android.widget.TextView>(R.id.tv_subtitle).text = "비밀번호를 입력하면 댓글이 삭제됩니다"
+        val btnConfirm = dialogView.findViewById<android.widget.TextView>(R.id.btn_confirm)
+        btnConfirm.text = "삭제"
+        val etPassword = dialogView.findViewById<EditText>(R.id.et_password)
+        val tvError = dialogView.findViewById<android.widget.TextView>(R.id.tv_error)
+
+        val dialog = android.app.AlertDialog.Builder(ctx, R.style.Theme_App_Dialog_Transparent)
+            .setView(dialogView).create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+
+        dialogView.findViewById<android.widget.TextView>(R.id.btn_cancel).setOnClickListener { dialog.dismiss() }
+        btnConfirm.setOnClickListener {
+            val pw = etPassword.text.toString()
+            if (pw.isEmpty()) {
+                tvError.text = "비밀번호를 입력하세요"
+                tvError.visibility = android.view.View.VISIBLE
+                return@setOnClickListener
             }
-            dialog.show()
+            dialog.dismiss()
+            viewModel.deleteComment(comment.id, pw)
         }
     }
 

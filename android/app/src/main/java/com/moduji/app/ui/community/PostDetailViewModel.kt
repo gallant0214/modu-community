@@ -181,6 +181,24 @@ class PostDetailViewModel : ViewModel() {
         }
     }
 
+    fun updateComment(commentId: Int, content: String, password: String) {
+        viewModelScope.launch {
+            val request = UpdateCommentRequest(
+                password = password,
+                content = content,
+                postId = postId,
+                categoryId = categoryId
+            )
+            CommunityRepository.updateComment(commentId, request).fold(
+                onSuccess = {
+                    _actionResult.value = "댓글이 수정되었습니다"
+                    loadComments()
+                },
+                onFailure = { _actionResult.value = "오류: ${it.message}" }
+            )
+        }
+    }
+
     fun deleteComment(commentId: Int, password: String) {
         viewModelScope.launch {
             val request = DeleteCommentRequest(

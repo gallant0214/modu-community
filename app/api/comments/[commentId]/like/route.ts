@@ -16,7 +16,18 @@ export async function POST(
   const { commentId } = await params;
   const cid = Number(commentId);
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS comment_likes (
+      id SERIAL PRIMARY KEY,
+      comment_id INT NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+      ip_address TEXT NOT NULL DEFAULT '',
+      firebase_uid TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      UNIQUE(comment_id, ip_address)
+    )
+  `;
   await sql`ALTER TABLE comment_likes ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
+  try { await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_comment_likes_uid ON comment_likes (comment_id, firebase_uid) WHERE firebase_uid IS NOT NULL`; } catch {}
 
   const existing = await sql`
     SELECT id FROM comment_likes WHERE comment_id = ${cid} AND firebase_uid = ${user.uid}
