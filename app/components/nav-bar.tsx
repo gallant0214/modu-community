@@ -26,17 +26,17 @@ export function NavBar() {
 
         {/* 탭 메뉴 */}
         <div className="flex items-center gap-0.5 flex-1">
-          <NavLink href="/" active={isActive("/") && !isActive("/category") && !isActive("/jobs") && !isActive("/practical") && !isActive("/my")}>
-            홈
+          <NavLink href="/" active={isActive("/") && !isActive("/community") && !isActive("/category") && !isActive("/jobs") && !isActive("/practical") && !isActive("/my")}>
+            서비스소개
           </NavLink>
           <NavLink href="/community" active={isActive("/community") || isActive("/category")}>
-            커뮤니티
+            종목후기
           </NavLink>
           <NavLink href="/jobs" active={isActive("/jobs")}>
-            구인
+            스포츠구인
           </NavLink>
-          <NavLink href="/practical" active={isActive("/practical")}>
-            실기/구술
+          <NavLink href="/#faq" active={false}>
+            FAQ
           </NavLink>
           <NavLink href="/my" active={isActive("/my")}>
             MY
