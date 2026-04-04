@@ -48,8 +48,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(u);
       if (u) {
         const token = await u.getIdToken();
+        localStorage.setItem("fb_token", token);
         await fetchNickname(u.uid, token);
       } else {
+        localStorage.removeItem("fb_token");
         setNickname(null);
       }
       setLoading(false);

@@ -15,7 +15,7 @@ function formatDate(dateStr: string) {
   return `${d.getMonth() + 1}.${d.getDate()}`;
 }
 
-type Tab = "posts" | "comments" | "jobs";
+type Tab = "posts" | "comments" | "jobs" | "bookmarkPosts" | "bookmarkJobs";
 
 interface MyComment {
   id: number;
@@ -33,6 +33,8 @@ export default function MyPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [comments, setComments] = useState<MyComment[]>([]);
   const [jobs, setJobs] = useState<JobPost[]>([]);
+  const [bookmarkPosts, setBookmarkPosts] = useState<Post[]>([]);
+  const [bookmarkJobs, setBookmarkJobs] = useState<JobPost[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
 
   const [showNicknameForm, setShowNicknameForm] = useState(false);
@@ -60,6 +62,14 @@ export default function MyPage() {
           const res = await fetch(`/api/jobs/my?uid=${user.uid}`, { headers });
           const data = await res.json();
           setJobs(data.posts || []);
+        } else if (tab === "bookmarkPosts") {
+          const res = await fetch(`/api/bookmarks?type=posts`, { headers });
+          const data = await res.json();
+          setBookmarkPosts(data.bookmarks || []);
+        } else if (tab === "bookmarkJobs") {
+          const res = await fetch(`/api/bookmarks?type=jobs`, { headers });
+          const data = await res.json();
+          setBookmarkJobs(data.bookmarks || []);
         }
       } catch {}
       setDataLoading(false);
@@ -177,15 +187,18 @@ export default function MyPage() {
         </div>
 
         {/* 탭 */}
-        <div className="flex border-b border-zinc-100 dark:border-zinc-800">
-          {(["posts", "comments", "jobs"] as Tab[]).map((t) => {
-            const label = t === "posts" ? "내 게시글" : t === "comments" ? "내 댓글" : "내 구인글";
+        <div className="flex border-b border-zinc-100 dark:border-zinc-800 overflow-x-auto">
+          {(["posts", "comments", "jobs", "bookmarkPosts", "bookmarkJobs"] as Tab[]).map((t) => {
+            const labels: Record<Tab, string> = {
+              posts: "내 게시글", comments: "내 댓글", jobs: "내 구인글",
+              bookmarkPosts: "후기 북마크", bookmarkJobs: "구인 북마크"
+            };
             return (
               <button key={t} onClick={() => setTab(t)}
-                className={`flex-1 py-3 text-sm font-medium transition-colors ${
+                className={`shrink-0 px-3 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
                   tab === t ? "text-blue-600 border-b-2 border-blue-600" : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
                 }`}
-              >{label}</button>
+              >{labels[t]}</button>
             );
           })}
         </div>
@@ -264,6 +277,50 @@ export default function MyPage() {
                             <p className="text-xs text-zinc-400 mt-0.5">{job.region_name} · {formatDate(job.created_at)}</p>
                           </div>
                         </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )
+            )}
+
+            {tab === "bookmarkPosts" && (
+              bookmarkPosts.length === 0 ? (
+                <EmptyState text="북마크한 게시글이 없습니다" />
+              ) : (
+                <ul>
+                  {bookmarkPosts.map((post) => (
+                    <li key={post.id} className="border-b border-zinc-100 dark:border-zinc-800 last:border-0">
+                      <Link href={`/category/${post.category_id}/post/${post.id}`}
+                        className="block px-4 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-900">
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-1 leading-snug">{post.title}</p>
+                        <div className="flex items-center gap-2 text-xs text-zinc-400">
+                          <span>{post.category_name || "게시판"}</span>
+                          <span>·</span><span>{post.author}</span>
+                          <span>·</span><span>{formatDate(post.created_at)}</span>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )
+            )}
+
+            {tab === "bookmarkJobs" && (
+              bookmarkJobs.length === 0 ? (
+                <EmptyState text="북마크한 구인글이 없습니다" />
+              ) : (
+                <ul>
+                  {bookmarkJobs.map((job) => (
+                    <li key={job.id} className="border-b border-zinc-100 dark:border-zinc-800 last:border-0">
+                      <Link href={`/jobs/${job.id}`}
+                        className="block px-4 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-900">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="inline-block px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-600 text-xs rounded">{job.sport}</span>
+                          {job.is_closed && <span className="inline-block px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-400 text-xs rounded">모집종료</span>}
+                        </div>
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-snug">{job.title}</p>
+                        <p className="text-xs text-zinc-400 mt-0.5">{job.region_name} · {job.center_name}</p>
                       </Link>
                     </li>
                   ))}

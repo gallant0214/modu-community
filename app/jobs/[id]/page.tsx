@@ -33,6 +33,7 @@ export default function JobDetailPage() {
   const [showContact, setShowContact] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [bookmarked, setBookmarked] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -43,6 +44,12 @@ export default function JobDetailPage() {
         setJob(data);
         // 조회수 증가
         fetch(`/api/jobs/${jobId}/view`, { method: "POST" }).catch(() => {});
+        // 북마크 상태
+        const token = await getIdToken();
+        if (token) {
+          fetch(`/api/jobs/${jobId}/bookmark`, { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.json()).then(d => { if (d.bookmarked) setBookmarked(true); }).catch(() => {});
+        }
       } catch {
         router.replace("/jobs");
       } finally {
@@ -210,8 +217,8 @@ export default function JobDetailPage() {
             )}
           </div>
 
-          {/* 좋아요 */}
-          <div className="flex justify-center mb-8">
+          {/* 좋아요 + 북마크 */}
+          <div className="flex justify-center gap-3 mb-8">
             <button
               onClick={handleLike}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-full border-2 transition-all ${
@@ -224,6 +231,26 @@ export default function JobDetailPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
               </svg>
               <span className="text-sm font-medium">{job.likes}</span>
+            </button>
+            <button
+              onClick={async () => {
+                const token = await getIdToken();
+                const res = await fetch(`/api/jobs/${jobId}/bookmark`, {
+                  method: "POST",
+                  headers: token ? { Authorization: `Bearer ${token}` } : {},
+                });
+                if (res.ok) setBookmarked(!bookmarked);
+              }}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-full border-2 transition-all ${
+                bookmarked
+                  ? "border-yellow-400 text-yellow-500 bg-yellow-50 dark:bg-yellow-950"
+                  : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-yellow-300 hover:text-yellow-400"
+              }`}
+            >
+              <svg className="w-5 h-5" fill={bookmarked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              </svg>
+              <span className="text-sm font-medium">북마크</span>
             </button>
           </div>
         </div>

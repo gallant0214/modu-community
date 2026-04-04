@@ -65,6 +65,9 @@ export default function PostDetailPage() {
   // 답글
   const [replyTargetId, setReplyTargetId] = useState<number | null>(null);
 
+  // 북마크
+  const [bookmarked, setBookmarked] = useState(false);
+
   // 게시글 더보기 메뉴 (...)
   const [showPostMenu, setShowPostMenu] = useState(false);
 
@@ -116,6 +119,12 @@ export default function PostDetailPage() {
       setLoading(false);
       viewPost(Number(postId));
     }).catch(() => setLoading(false));
+
+    // 북마크 상태 로드
+    fetch(`/api/posts/${postId}/bookmark`)
+      .then((r) => r.json())
+      .then((data) => { if (data.bookmarked) setBookmarked(true); })
+      .catch(() => {});
   }, [postId]);
 
   // ··· 드롭다운 외부 클릭 시 닫기
@@ -421,6 +430,26 @@ export default function PostDetailPage() {
               <span>신고</span>
             </button>
             <div className="ml-auto flex items-center gap-5">
+            <button
+              onClick={async () => {
+                const token = localStorage.getItem("fb_token");
+                const res = await fetch(`/api/posts/${postId}/bookmark`, {
+                  method: "POST",
+                  headers: token ? { Authorization: `Bearer ${token}` } : {},
+                });
+                if (res.ok) setBookmarked(!bookmarked);
+              }}
+              className={`flex items-center gap-1.5 text-sm font-medium transition-all ${
+                bookmarked
+                  ? "text-yellow-500"
+                  : "text-[#65676B] hover:text-yellow-500 dark:text-zinc-400 dark:hover:text-yellow-500"
+              }`}
+            >
+              <svg className="h-4 w-4" fill={bookmarked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              </svg>
+              <span>북마크</span>
+            </button>
             <button
               onClick={handleLike}
               className={`flex items-center gap-1.5 text-sm font-medium transition-all ${
