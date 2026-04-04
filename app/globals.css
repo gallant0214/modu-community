@@ -62,7 +62,7 @@ summary {
 .lp-hero-sub{font-size:15px;color:#6B6560;margin-bottom:32px;line-height:1.8}
 .lp-hero-ctas{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 .lp-btn{display:inline-flex;align-items:center;gap:8px;padding:14px 28px;border-radius:12px;font-weight:700;font-size:14px;transition:all .2s;cursor:pointer;border:none}
-.lp-btn-primary{background:#4A6D5E;color:#fff}
+.lp-btn-primary{background:#4A6D5E;color:#fff !important}
 .lp-btn-primary:hover{background:#3d5c4f}
 .lp-btn-outline{background:#fff;color:#4A6D5E;border:1.5px solid rgba(74,109,94,.3)}
 .lp-btn-outline:hover{border-color:#4A6D5E;background:rgba(74,109,94,.04)}
