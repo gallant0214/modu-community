@@ -25,7 +25,7 @@ export default async function Home() {
               <Link href="/community" className="lp-btn lp-btn-primary">실기·구술 후기 보기</Link>
               <Link href="/jobs" className="lp-btn lp-btn-outline">구인 공고 탐색</Link>
             </div>
-            <p className="lp-hero-note">무료 이용 · 가입 후 바로 시작 · iOS 준비 중</p>
+            <p className="lp-hero-note">무료 이용 · 가입 후 바로 시작</p>
           </div>
         </section>
 
