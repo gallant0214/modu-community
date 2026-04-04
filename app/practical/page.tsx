@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { exercises, categories } from "@/app/lib/data/practical";
 import { practicalSports, type PracticalSport } from "@/app/lib/data/practical_sports";
@@ -55,7 +55,24 @@ export default function PracticalPage() {
   const [openItem, setOpenItem] = useState<string | null>(null);
   const [openQuestionId, setOpenQuestionId] = useState<number | null>(null);
 
-  const resetToList = () => { setSelectedSport(null); setOpenItem(null); setOpenQuestionId(null); };
+  const resetToList = useCallback(() => { setSelectedSport(null); setOpenItem(null); setOpenQuestionId(null); }, []);
+
+  // 브라우저 뒤로가기 처리
+  useEffect(() => {
+    if (selectedSport) {
+      history.pushState({ sport: selectedSport }, "");
+    }
+  }, [selectedSport]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (selectedSport) {
+        resetToList();
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [selectedSport, resetToList]);
 
   // ===== 실기 종목 상세 =====
   if (tab === "practical" && selectedSport === "bodybuilding") {
