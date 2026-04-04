@@ -96,17 +96,22 @@ object NicknameManager {
                 RetrofitClient.communityApi.getNicknameByUid(user.uid)
             }
             if (response.isSuccessful) {
-                val serverNickname = response.body()?.nickname
+                val body = response.body()
+                val serverNickname = body?.nickname
                 if (!serverNickname.isNullOrBlank()) {
-                    // 서버에 닉네임이 있으면 로컬에 저장
                     val localNickname = getNickname(context)
+                    val editor = getPrefs(context).edit()
                     if (localNickname != serverNickname) {
-                        getPrefs(context).edit()
-                            .putString(KEY_NICKNAME, serverNickname)
-                            .apply()
+                        editor.putString(KEY_NICKNAME, serverNickname)
                     }
+                    // 서버의 변경 제한 정보를 로컬에 동기화
+                    if (body.canChange == false && body.remainingDays > 0) {
+                        // 서버에서 아직 변경 불가 → 로컬 last_changed_at을 역산
+                        val elapsed = (THREE_WEEKS_MILLIS - body.remainingDays.toLong() * 24 * 60 * 60 * 1000)
+                        editor.putLong(KEY_LAST_CHANGED, System.currentTimeMillis() - elapsed)
+                    }
+                    editor.apply()
                 } else {
-                    // 서버에 없고 로컬에 있으면 서버에 업로드
                     val localNickname = getNickname(context)
                     if (!localNickname.isNullOrBlank()) {
                         setNicknameWithSync(context, localNickname)
@@ -114,7 +119,6 @@ object NicknameManager {
                 }
             }
         } catch (_: Exception) {
-            // 네트워크 오류 시 무시 (로컬 닉네임 유지)
         }
     }
 

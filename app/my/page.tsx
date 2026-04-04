@@ -107,7 +107,7 @@ export default function MyPage() {
       const res = await fetch("/api/nicknames", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ nickname: nicknameInput.trim(), uid: user?.uid }),
+        body: JSON.stringify({ nickname: nicknameInput.trim(), uid: user?.uid, firstSetup: !nickname }),
       });
       const data = await res.json();
       if (!res.ok) { setNicknameError(data.error || "저장에 실패했습니다."); return; }
@@ -171,13 +171,27 @@ export default function MyPage() {
               <p className="text-xs text-zinc-400 truncate">{user.email}</p>
             </div>
             <button
-              onClick={() => {
-                const opening = !showNicknameForm;
-                setShowNicknameForm(opening);
-                setNicknameError("");
-                if (opening) {
-                  setNicknameInput(nickname || generateRandomNickname());
+              onClick={async () => {
+                if (showNicknameForm) { setShowNicknameForm(false); return; }
+                // 서버에서 변경 가능 여부 체크
+                if (nickname) {
+                  try {
+                    const token = await getIdToken();
+                    const res = await fetch(`/api/nicknames?uid=${user?.uid}`, {
+                      headers: token ? { Authorization: `Bearer ${token}` } : {},
+                    });
+                    const data = await res.json();
+                    if (data.canChange === false) {
+                      setNicknameError(`닉네임 변경은 ${data.remainingDays}일 후에 가능합니다`);
+                      setShowNicknameForm(true);
+                      setNicknameInput(nickname);
+                      return;
+                    }
+                  } catch {}
                 }
+                setShowNicknameForm(true);
+                setNicknameError("");
+                setNicknameInput(nickname || generateRandomNickname());
               }}
               className="text-xs px-3 py-1.5 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
             >닉네임 변경</button>

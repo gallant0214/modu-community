@@ -220,7 +220,9 @@ data class NicknameCheckResponse(
 )
 
 data class NicknameByUidResponse(
-    val nickname: String?
+    val nickname: String?,
+    val canChange: Boolean = true,
+    val remainingDays: Int = 0
 )
 
 data class NicknameRegisterRequest(
