@@ -1,21 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { sql } from "@/app/lib/db";
 
 export default async function Home() {
-  // 실시간 신뢰 지표 가져오기
-  let postCount = 0, jobCount = 0, categoryCount = 0;
-  try {
-    const [posts, jobs, cats] = await Promise.all([
-      sql`SELECT COUNT(*)::int AS c FROM posts WHERE is_notice = false OR is_notice IS NULL`,
-      sql`SELECT COUNT(*)::int AS c FROM job_posts`,
-      sql`SELECT COUNT(*)::int AS c FROM categories`,
-    ]);
-    postCount = posts[0]?.c || 0;
-    jobCount = jobs[0]?.c || 0;
-    categoryCount = cats[0]?.c || 0;
-  } catch {}
 
   return (
     <div className="lp" style={{ margin: "calc(-1 * (env(safe-area-inset-top, 0px) + 48px)) 0 calc(-1 * (env(safe-area-inset-bottom, 0px) + 20px)) 0" }}>
@@ -41,27 +28,6 @@ export default async function Home() {
           </div>
         </section>
 
-        {/* ===== 2. 신뢰 지표 ===== */}
-        <section className="lp-stats">
-          <div className="lp-c">
-            <div className="lp-stats-grid">
-              <div className="lp-stat">
-                <span className="lp-stat-num">{postCount.toLocaleString()}</span>
-                <span className="lp-stat-label">종목 후기</span>
-              </div>
-              <div className="lp-stat-divider" />
-              <div className="lp-stat">
-                <span className="lp-stat-num">{jobCount.toLocaleString()}</span>
-                <span className="lp-stat-label">구인 공고</span>
-              </div>
-              <div className="lp-stat-divider" />
-              <div className="lp-stat">
-                <span className="lp-stat-num">{categoryCount}</span>
-                <span className="lp-stat-label">등록 종목</span>
-              </div>
-            </div>
-          </div>
-        </section>
 
         {/* ===== 3. Before → After ===== */}
         <section className="lp-section">
