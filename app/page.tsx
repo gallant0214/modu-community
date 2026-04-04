@@ -180,17 +180,24 @@ export default async function Home() {
         <section className="lp-section">
           <div className="lp-c">
             <div className="lp-final-cta">
-              <h2 className="lp-final-title">지금 바로 시작하세요.</h2>
-              <p className="lp-final-sub">실기·구술 후기도, 스포츠 구인 공고도 — 무료로 이용할 수 있습니다.</p>
+              <div className="lp-label" style={{background:"rgba(255,255,255,.15)",color:"#fff"}}>앱 다운로드</div>
+              <h2 className="lp-final-title">{`'모두의 지도사 커뮤니티' 앱에서`}<br />더 편하게 이용하세요.</h2>
+              <p className="lp-final-sub">시험 후기 알림, 관심 종목 즐겨찾기, 구인 공고 필터링까지<br />앱에서 더 빠르고 편리하게 사용할 수 있습니다.</p>
               <div className="lp-final-buttons">
-                <a href="https://play.google.com/store/apps/details?id=com.moduji.app" target="_blank" rel="noopener" className="lp-store-btn">
-                  <span className="lp-store-sub">GET IT ON</span>
-                  <span className="lp-store-main">Google Play</span>
+                <a href="#" className="lp-badge-btn">
+                  <svg className="lp-badge-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+                  <span>
+                    <span className="lp-badge-sub">Download on the</span>
+                    <span className="lp-badge-main">App Store</span>
+                  </span>
                 </a>
-                <Link href="/community" className="lp-store-btn lp-store-web">
-                  <span className="lp-store-sub">바로 시작</span>
-                  <span className="lp-store-main">웹에서 이용하기</span>
-                </Link>
+                <a href="https://play.google.com/store/apps/details?id=com.moduji.app" target="_blank" rel="noopener" className="lp-badge-btn">
+                  <svg className="lp-badge-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.34.17.72.24 1.1.17.27-.05.53-.15.77-.3l7.94-4.56-3.22-3.2-6.8 6.76c-.12.12-.18.28-.16.44.03.24.16.47.37.6v.09zM.47 21.27c.02.11.05.22.09.33l.02.02c.03-.05.06-.1.1-.14l7.3-7.26L.9 7.18c-.28.39-.44.86-.44 1.35l.01 12.74zM20.89 11.32L17.3 9.26l-3.65 3.63 3.65 3.63 3.59-2.06c.68-.4 1.09-1.12 1.09-1.91v-.32c-.1-.48-.41-.89-.84-1.12l-.25.21zM4.55.26C4.3.1 4.02.02 3.73 0c-.37-.03-.73.09-1.01.32l-.05.05 9.89 9.83 3.23-3.2L5.33.56c-.25-.14-.51-.24-.78-.3z"/></svg>
+                  <span>
+                    <span className="lp-badge-sub">GET IT ON</span>
+                    <span className="lp-badge-main">Google Play</span>
+                  </span>
+                </a>
               </div>
             </div>
           </div>
@@ -199,20 +206,18 @@ export default async function Home() {
       </main>
 
       {/* ===== Footer ===== */}
-      <footer className="lp-footer">
+      <footer className="lp-footer-dark">
         <div className="lp-c">
-          <p className="lp-footer-info">
-            <strong>모두의 지도사 커뮤니티</strong> · 서비스 운영 박준익 · gallant0214@naver.com
-          </p>
-          <div className="lp-footer-links">
-            <a href="https://open.kakao.com/o/soLx7Eei" target="_blank" rel="noopener">카카오톡 문의</a>
-            <a href="mailto:gallant0214@naver.com">이메일 문의</a>
+          <div className="lp-footer-inner">
+            <p className="lp-footer-copy">© 2026 모두의 지도사. All rights reserved.</p>
+            <nav className="lp-footer-nav-right">
+              <a href="/">맨 위로</a>
+              <a href="#about">서비스 소개</a>
+              <a href="#faq">FAQ</a>
+              <a href="/terms.html">이용약관</a>
+              <a href="/privacy.html">개인정보처리방침</a>
+            </nav>
           </div>
-          <nav className="lp-footer-nav">
-            <a href="/terms.html">이용약관</a>
-            <a href="/privacy.html">개인정보처리방침</a>
-          </nav>
-          <p className="lp-footer-copy">© 2026 모두의 지도사. All rights reserved.</p>
         </div>
       </footer>
 
