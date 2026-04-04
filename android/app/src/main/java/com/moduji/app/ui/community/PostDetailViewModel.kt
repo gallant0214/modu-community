@@ -135,6 +135,12 @@ class PostDetailViewModel : ViewModel() {
     }
 
     fun likeComment(commentId: Int) {
+        // 로그인 체크
+        if (!com.moduji.app.util.AuthManager.isLoggedIn) {
+            _actionResult.value = "로그인을 해주세요"
+            return
+        }
+
         // 즉시 UI 업데이트 (optimistic)
         val rawList: List<CommunityComment> = _rawComments.value?.toMutableList() ?: emptyList()
         val idx = rawList.indexOfFirst { it.id == commentId }
@@ -154,7 +160,8 @@ class PostDetailViewModel : ViewModel() {
                 onSuccess = { loadComments() },
                 onFailure = {
                     loadComments() // 실패 시 서버 데이터로 복원
-                    _actionResult.value = "오류: ${it.message}"
+                    val msg = it.message ?: ""
+                    _actionResult.value = if (msg.contains("401") || msg.contains("로그인")) "로그인을 해주세요" else "오류: $msg"
                 }
             )
         }

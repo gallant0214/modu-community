@@ -9,6 +9,11 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ commentId: string }> }
 ) {
+  const user = await verifyAuth(request);
+  if (!user) {
+    return NextResponse.json({ error: "로그인을 해주세요" }, { status: 401 });
+  }
+
   const { commentId } = await params;
   const cid = Number(commentId);
 
@@ -23,35 +28,18 @@ export async function POST(
   `;
   await sql`ALTER TABLE comment_likes ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
 
-  const user = await verifyAuth(request);
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 
+  const existing = await sql`SELECT id FROM comment_likes WHERE comment_id = ${cid} AND firebase_uid = ${user.uid}`;
   let unliked = false;
 
-  if (user) {
-    // UID 기반
-    const existing = await sql`SELECT id FROM comment_likes WHERE comment_id = ${cid} AND firebase_uid = ${user.uid}`;
-    if (existing.length > 0) {
-      await sql`DELETE FROM comment_likes WHERE comment_id = ${cid} AND firebase_uid = ${user.uid}`;
-      unliked = true;
-    } else {
-      try { await sql`INSERT INTO comment_likes (comment_id, ip_address, firebase_uid) VALUES (${cid}, ${ip}, ${user.uid})`; } catch {}
-    }
-  } else {
-    // IP 기반 폴백
-    const existing = await sql`SELECT id FROM comment_likes WHERE comment_id = ${cid} AND ip_address = ${ip} AND firebase_uid IS NULL`;
-    if (existing.length > 0) {
-      await sql`DELETE FROM comment_likes WHERE comment_id = ${cid} AND ip_address = ${ip} AND firebase_uid IS NULL`;
-      unliked = true;
-    } else {
-      try { await sql`INSERT INTO comment_likes (comment_id, ip_address) VALUES (${cid}, ${ip})`; } catch {}
-    }
-  }
-
-  if (unliked) {
+  if (existing.length > 0) {
+    await sql`DELETE FROM comment_likes WHERE comment_id = ${cid} AND firebase_uid = ${user.uid}`;
     await sql`UPDATE comments SET likes = GREATEST(COALESCE(likes, 0) - 1, 0) WHERE id = ${cid}`;
+    unliked = true;
   } else {
+    try { await sql`INSERT INTO comment_likes (comment_id, ip_address, firebase_uid) VALUES (${cid}, ${ip}, ${user.uid})`; } catch {}
     await sql`UPDATE comments SET likes = COALESCE(likes, 0) + 1 WHERE id = ${cid}`;
   }
 
