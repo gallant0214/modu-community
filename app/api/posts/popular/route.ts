@@ -18,8 +18,6 @@ export async function GET(request: Request) {
       SELECT COUNT(*)::int AS total
       FROM posts p
       WHERE (p.is_notice = false OR p.is_notice IS NULL)
-        AND p.created_at >= ${monthStart}
-        AND p.likes > 0
     `;
     const total = countResult[0]?.total || 0;
     const totalPages = Math.ceil(total / limit) || 1;
@@ -29,17 +27,15 @@ export async function GET(request: Request) {
       FROM posts p
       LEFT JOIN categories c ON p.category_id = c.id
       WHERE (p.is_notice = false OR p.is_notice IS NULL)
-        AND p.created_at >= ${monthStart}
-        AND p.likes > 0
-      ORDER BY p.likes DESC, p.created_at DESC
+      ORDER BY p.views DESC, p.likes DESC, p.created_at DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
 
     return NextResponse.json({ posts, page, totalPages, total });
   }
 
-  // 기존: 단순 리스트 (홈 화면용)
-  const posts = await sql`
+  // 기존: 단순 리스트 (홈 화면용) — 조회수+좋아요 기준, 조건 완화
+  let posts = await sql`
     SELECT p.*, c.name AS category_name
     FROM posts p
     LEFT JOIN categories c ON p.category_id = c.id
@@ -49,6 +45,18 @@ export async function GET(request: Request) {
     ORDER BY p.likes DESC, p.created_at DESC
     LIMIT ${limit}
   `;
+
+  // 이번 달 좋아요 글이 부족하면 조회수 기준으로 보충
+  if (posts.length < limit) {
+    posts = await sql`
+      SELECT p.*, c.name AS category_name
+      FROM posts p
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE (p.is_notice = false OR p.is_notice IS NULL)
+      ORDER BY p.views DESC, p.likes DESC, p.created_at DESC
+      LIMIT ${limit}
+    `;
+  }
 
   return NextResponse.json(posts);
 }
