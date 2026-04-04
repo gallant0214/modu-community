@@ -29,7 +29,7 @@ export function NavBar() {
           <NavLink href="/" active={isActive("/") && !isActive("/category") && !isActive("/jobs") && !isActive("/practical") && !isActive("/my")}>
             홈
           </NavLink>
-          <NavLink href="/category/1" active={isActive("/category")}>
+          <NavLink href="/community" active={isActive("/community") || isActive("/category")}>
             커뮤니티
           </NavLink>
           <NavLink href="/jobs" active={isActive("/jobs")}>
