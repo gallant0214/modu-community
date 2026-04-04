@@ -166,8 +166,26 @@ export default function JobsPage() {
 
         {/* 목록 */}
         {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <div>
+            <div className="flex items-center px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+              <span className="flex-1 min-w-0">제목</span>
+              <span className="w-16 text-center shrink-0">작성자</span>
+              <span className="w-20 text-center shrink-0">작성일</span>
+              <span className="w-12 text-center shrink-0">조회</span>
+              <span className="w-12 text-center shrink-0">좋아요</span>
+            </div>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3 w-10 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
+                  <div className="h-4 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" style={{ width: `${50 + i * 8}%` }} />
+                </div>
+                <div className="h-3 w-12 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse shrink-0" />
+                <div className="h-3 w-16 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse shrink-0" />
+                <div className="h-3 w-8 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse shrink-0" />
+                <div className="h-3 w-8 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse shrink-0" />
+              </div>
+            ))}
           </div>
         ) : jobs.length === 0 ? (
           <div className="text-center py-20 text-zinc-400 text-sm">
