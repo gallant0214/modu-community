@@ -42,6 +42,18 @@ export default function MyPage() {
   const [nicknameError, setNicknameError] = useState("");
   const [nicknameLoading, setNicknameLoading] = useState(false);
 
+  const generateRandomNickname = () => {
+    const adjectives = ["행복한","졸린","용감한","배고픈","신나는","깜찍한","수줍은","엉뚱한","느긋한","씩씩한","귀여운","당당한","활발한","조용한","멋진","반짝이는","소심한","든든한","장난친","심심한"];
+    const nouns = ["수달","판다","고양이","강아지","토끼","펭귄","다람쥐","해달","코알라","여우","오리","곰돌이","부엉이","햄스터","거북이","미어캣","알파카","치타","수박","감자"];
+    for (let i = 0; i < 20; i++) {
+      const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+      const noun = nouns[Math.floor(Math.random() * nouns.length)];
+      const nick = adj + noun;
+      if (nick.length >= 2 && nick.length <= 8) return nick;
+    }
+    return nouns[Math.floor(Math.random() * nouns.length)] + Math.floor(Math.random() * 99 + 1);
+  };
+
   useEffect(() => {
     if (!user) return;
     const load = async () => {
@@ -76,6 +88,14 @@ export default function MyPage() {
     };
     load();
   }, [user, tab, getIdToken]);
+
+  // 로그인 후 닉네임이 없으면 자동으로 닉네임 설정 폼 열기 + 추천
+  useEffect(() => {
+    if (user && !loading && !nickname) {
+      setShowNicknameForm(true);
+      setNicknameInput(generateRandomNickname());
+    }
+  }, [user, loading, nickname]);
 
   const handleSaveNickname = async () => {
     if (!nicknameInput.trim()) { setNicknameError("닉네임을 입력해주세요."); return; }
@@ -151,7 +171,14 @@ export default function MyPage() {
               <p className="text-xs text-zinc-400 truncate">{user.email}</p>
             </div>
             <button
-              onClick={() => { setShowNicknameForm(!showNicknameForm); setNicknameInput(nickname || ""); setNicknameError(""); }}
+              onClick={() => {
+                const opening = !showNicknameForm;
+                setShowNicknameForm(opening);
+                setNicknameError("");
+                if (opening) {
+                  setNicknameInput(nickname || generateRandomNickname());
+                }
+              }}
               className="text-xs px-3 py-1.5 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
             >닉네임 변경</button>
           </div>
@@ -164,14 +191,19 @@ export default function MyPage() {
                   value={nicknameInput}
                   onChange={(e) => setNicknameInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSaveNickname()}
-                  placeholder="새 닉네임 입력"
-                  maxLength={20}
+                  placeholder="새 닉네임 입력 (2~8자)"
+                  maxLength={8}
                   className="flex-1 px-3 py-2 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
                 <button
+                  onClick={() => setNicknameInput(generateRandomNickname())}
+                  className="px-3 py-2 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 shrink-0"
+                  title="랜덤 추천"
+                >🎲</button>
+                <button
                   onClick={handleSaveNickname}
                   disabled={nicknameLoading}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg disabled:opacity-50"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg disabled:opacity-50 shrink-0"
                 >{nicknameLoading ? "저장 중" : "저장"}</button>
               </div>
               {nicknameError && <p className="text-xs text-red-500 mt-1">{nicknameError}</p>}
