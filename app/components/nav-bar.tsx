@@ -19,7 +19,9 @@ export function NavBar() {
       <div className="mx-auto max-w-5xl px-4 h-12 flex items-center gap-1">
         {/* 로고 */}
         <Link href="/" className="flex items-center gap-1.5 mr-3 shrink-0">
-          <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">모두의 지도사</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="로고" className="w-6 h-6 rounded" />
+          <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">모두의 지도사 커뮤니티</span>
         </Link>
 
         {/* 탭 메뉴 */}
