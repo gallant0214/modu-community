@@ -10,12 +10,11 @@ import { useAuth } from "@/app/components/auth-provider";
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);
   const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return "오늘";
-  if (diffDays === 1) return "어제";
-  if (diffDays <= 7) return `${diffDays}일 전`;
-  return `${d.getMonth() + 1}.${d.getDate()}`;
+  const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  if (isToday) {
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}.`;
 }
 
 export default function JobsPage() {
@@ -175,40 +174,41 @@ export default function JobsPage() {
             {searchQuery ? "검색 결과가 없습니다." : "아직 구인 글이 없습니다."}
           </div>
         ) : (
+          <>
+          {/* 헤더 */}
+          <div className="flex items-center px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+            <span className="flex-1 min-w-0">제목</span>
+            <span className="w-16 text-center shrink-0">작성자</span>
+            <span className="w-20 text-center shrink-0">작성일</span>
+            <span className="w-12 text-center shrink-0">조회</span>
+            <span className="w-12 text-center shrink-0">좋아요</span>
+          </div>
           <ul>
             {jobs.map((job) => (
               <li key={job.id} className="border-b border-zinc-100 dark:border-zinc-800 last:border-0">
-                <Link href={`/jobs/${job.id}`} className="block px-4 py-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors">
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className="inline-block px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 text-xs rounded font-medium">
-                          {job.sport}
-                        </span>
-                        {job.employment_type && (
-                          <span className="inline-block px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs rounded">
-                            {job.employment_type}
-                          </span>
-                        )}
-                        {job.is_closed && (
-                          <span className="inline-block px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-700 text-zinc-400 text-xs rounded">모집종료</span>
-                        )}
-                      </div>
-                      <p className={`text-sm font-medium leading-snug mb-1 ${job.is_closed ? "text-zinc-400 dark:text-zinc-500 line-through" : "text-zinc-900 dark:text-zinc-100"}`}>
-                        {job.title}
-                      </p>
-                      <div className="flex items-center gap-2 text-xs text-zinc-400">
-                        <span>{job.center_name}</span>
-                        {job.region_name && <><span>·</span><span>{job.region_name}</span></>}
-                        {job.salary && <><span>·</span><span className="text-zinc-500 dark:text-zinc-400">{job.salary}</span></>}
-                      </div>
+                <Link href={`/jobs/${job.id}`} className="flex items-center px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="inline-block px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 text-[10px] rounded font-medium">
+                        {job.sport}
+                      </span>
+                      {job.is_closed && (
+                        <span className="inline-block px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-700 text-zinc-400 text-[10px] rounded">모집종료</span>
+                      )}
                     </div>
-                    <span className="text-xs text-zinc-400 shrink-0 mt-0.5">{formatDate(job.created_at)}</span>
+                    <p className={`text-sm font-medium leading-snug truncate ${job.is_closed ? "text-zinc-400 dark:text-zinc-500 line-through" : "text-zinc-900 dark:text-zinc-100"}`}>
+                      {job.title}
+                    </p>
                   </div>
+                  <span className="w-16 text-center text-xs text-zinc-500 dark:text-zinc-400 truncate shrink-0">{job.center_name}</span>
+                  <span className="w-20 text-center text-xs text-zinc-400 shrink-0">{formatDate(job.created_at)}</span>
+                  <span className="w-12 text-center text-xs text-zinc-400 shrink-0">{job.views || 0}</span>
+                  <span className="w-12 text-center text-xs text-zinc-400 shrink-0">{job.likes || 0}</span>
                 </Link>
               </li>
             ))}
           </ul>
+          </>
         )}
 
         {/* 페이지네이션 */}
