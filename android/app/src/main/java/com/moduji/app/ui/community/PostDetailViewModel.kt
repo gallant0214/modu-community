@@ -108,27 +108,25 @@ class PostDetailViewModel : ViewModel() {
     }
 
     fun likePost() {
+        if (!com.moduji.app.util.AuthManager.isLoggedIn) {
+            _actionResult.value = "로그인을 해주세요"
+            return
+        }
+
         val currentPost = _post.value ?: return
-        val wasLiked = _isLiked.value == true
 
-        // 즉시 UI 업데이트 (optimistic)
-        _isLiked.value = !wasLiked
-        val newLikes = if (wasLiked) (currentPost.likes - 1).coerceAtLeast(0) else currentPost.likes + 1
-        _post.value = currentPost.copy(likes = newLikes)
-
-        // 서버에 반영 (백그라운드)
         viewModelScope.launch {
             CommunityRepository.likePost(postId).fold(
                 onSuccess = { resp ->
+                    // 서버 응답의 실제 likes 수와 상태 반영
+                    val newLiked = !resp.unliked
+                    _isLiked.value = newLiked
+                    _post.value = currentPost.copy(likes = resp.likes)
                     _actionResult.value = if (resp.unliked) "좋아요를 취소했습니다" else "좋아요!"
-                    // 서버의 실제 데이터로 동기화
-                    loadPost()
                 },
                 onFailure = {
-                    // 실패 시 원래 상태로 복원
-                    _isLiked.value = wasLiked
-                    _post.value = currentPost
-                    _actionResult.value = "오류: ${it.message}"
+                    val msg = it.message ?: ""
+                    _actionResult.value = if (msg.contains("401") || msg.contains("로그인")) "로그인을 해주세요" else "오류: $msg"
                 }
             )
         }

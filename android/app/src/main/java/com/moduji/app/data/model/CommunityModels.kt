@@ -192,7 +192,7 @@ data class ApiResponse(
     val error: String? = null
 )
 
-data class LikeResponse(val unliked: Boolean)
+data class LikeResponse(val unliked: Boolean, val likes: Int = 0)
 
 data class InquiryViewResponse(
     val content: String?,
