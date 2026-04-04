@@ -219,6 +219,10 @@ data class NicknameCheckResponse(
     val available: Boolean
 )
 
+data class NicknameByUidResponse(
+    val nickname: String?
+)
+
 data class NicknameRegisterRequest(
     val name: String,
     val oldName: String? = null

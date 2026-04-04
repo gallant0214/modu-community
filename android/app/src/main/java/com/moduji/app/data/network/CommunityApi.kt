@@ -94,6 +94,9 @@ interface CommunityApi {
     @GET("api/nicknames")
     suspend fun checkNickname(@Query("name") name: String): Response<NicknameCheckResponse>
 
+    @GET("api/nicknames")
+    suspend fun getNicknameByUid(@Query("uid") uid: String): Response<NicknameByUidResponse>
+
     @POST("api/nicknames")
     suspend fun registerNickname(@Body body: NicknameRegisterRequest): Response<ApiResponse>
 

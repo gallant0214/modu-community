@@ -1,13 +1,18 @@
 package com.moduji.app.util
 
 import android.content.Context
+import com.google.firebase.auth.FirebaseAuth
+import com.moduji.app.data.model.NicknameRegisterRequest
+import com.moduji.app.data.network.RetrofitClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
- * 닉네임 관리 (SharedPreferences 기반)
+ * 닉네임 관리 (SharedPreferences + 서버 동기화)
  *
- * - 닉네임 저장/조회
+ * - 로컬 저장/조회 + 서버 동기화
  * - 변경 후 3주(21일) 동안 재변경 불가
- * - 중복 닉네임 체크
+ * - 중복 닉네임 체크 (서버)
  * - 랜덤 재미있는 닉네임 생성
  */
 object NicknameManager {
@@ -43,7 +48,6 @@ object NicknameManager {
 
     fun setNickname(context: Context, nickname: String) {
         val used = getUsedNicknames(context).toMutableSet()
-        // 기존 닉네임 제거 후 새 닉네임 등록
         getNickname(context)?.let { used.remove(it) }
         used.add(nickname)
 
@@ -52,6 +56,66 @@ object NicknameManager {
             .putLong(KEY_LAST_CHANGED, System.currentTimeMillis())
             .putStringSet(KEY_USED_NICKNAMES, used)
             .apply()
+    }
+
+    /**
+     * 닉네임 설정 + 서버 동기화
+     * Firebase 인증된 상태에서 호출
+     */
+    suspend fun setNicknameWithSync(context: Context, nickname: String, oldName: String? = null) {
+        val oldNickname = oldName ?: getNickname(context)
+        setNickname(context, nickname)
+
+        // 서버에 동기화
+        try {
+            val user = FirebaseAuth.getInstance().currentUser ?: return
+            val token = withContext(Dispatchers.IO) {
+                com.google.android.gms.tasks.Tasks.await(user.getIdToken(false))
+            }?.token ?: return
+
+            withContext(Dispatchers.IO) {
+                val client = RetrofitClient.communityApi
+                // AuthInterceptor가 토큰을 자동으로 붙이므로 직접 호출
+                client.registerNickname(NicknameRegisterRequest(
+                    name = nickname,
+                    oldName = oldNickname
+                ))
+            }
+        } catch (_: Exception) {
+            // 서버 동기화 실패해도 로컬은 저장됨
+        }
+    }
+
+    /**
+     * 서버에서 닉네임 가져와서 로컬에 저장 (앱 시작/로그인 시 호출)
+     */
+    suspend fun syncFromServer(context: Context) {
+        try {
+            val user = FirebaseAuth.getInstance().currentUser ?: return
+            val response = withContext(Dispatchers.IO) {
+                RetrofitClient.communityApi.getNicknameByUid(user.uid)
+            }
+            if (response.isSuccessful) {
+                val serverNickname = response.body()?.nickname
+                if (!serverNickname.isNullOrBlank()) {
+                    // 서버에 닉네임이 있으면 로컬에 저장
+                    val localNickname = getNickname(context)
+                    if (localNickname != serverNickname) {
+                        getPrefs(context).edit()
+                            .putString(KEY_NICKNAME, serverNickname)
+                            .apply()
+                    }
+                } else {
+                    // 서버에 없고 로컬에 있으면 서버에 업로드
+                    val localNickname = getNickname(context)
+                    if (!localNickname.isNullOrBlank()) {
+                        setNicknameWithSync(context, localNickname)
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            // 네트워크 오류 시 무시 (로컬 닉네임 유지)
+        }
     }
 
     fun canChangeNickname(context: Context): Boolean {
@@ -74,13 +138,8 @@ object NicknameManager {
     private fun getUsedNicknames(context: Context): Set<String> =
         getPrefs(context).getStringSet(KEY_USED_NICKNAMES, emptySet()) ?: emptySet()
 
-    /**
-     * 중복되지 않는 랜덤 재미있는 닉네임 생성
-     * 형식: 형용사+명사 (8자 이내)
-     */
     fun generateRandomNickname(context: Context): String {
         val used = getUsedNicknames(context)
-        // 형용사+명사 조합 시도 (8자 이내만)
         val candidates = mutableListOf<String>()
         for (adj in ADJECTIVES.shuffled()) {
             for (noun in NOUNS.shuffled()) {
@@ -94,7 +153,6 @@ object NicknameManager {
         }
         if (candidates.isNotEmpty()) return candidates.random()
 
-        // 명사+숫자 조합 폴백
         for (i in 0 until 50) {
             val nick = "${NOUNS.random()}${(1..99).random()}"
             if (nick.length in MIN_LENGTH..MAX_LENGTH && nick !in used) return nick

@@ -161,9 +161,17 @@ class MyFragment : Fragment() {
                 resetOtherTabsNavigation()
             }
 
-            // 로그인 직후 닉네임 미설정 시 설정 다이얼로그 표시
-            if (isLoggedIn && NicknameManager.getNickname(requireContext()) == null) {
-                showInitialNicknameDialog()
+            // 로그인 직후: 서버에서 닉네임 동기화 후, 없으면 설정 다이얼로그
+            if (isLoggedIn) {
+                lifecycleScope.launch {
+                    NicknameManager.syncFromServer(requireContext())
+                    val synced = NicknameManager.getNickname(requireContext())
+                    if (synced.isNullOrBlank()) {
+                        showInitialNicknameDialog()
+                    } else {
+                        binding.tvNickname.text = synced
+                    }
+                }
             }
         }
 
@@ -545,7 +553,7 @@ class MyFragment : Fragment() {
                     val oldName = NicknameManager.getNickname(ctx)
                     CommunityRepository.registerNickname(nickname, oldName)
                     dialog.dismiss()
-                    NicknameManager.setNickname(ctx, nickname)
+                    NicknameManager.setNicknameWithSync(ctx, nickname, oldName)
                     binding.tvNickname.text = nickname
 
                     AlertDialog.Builder(ctx)
@@ -621,7 +629,7 @@ class MyFragment : Fragment() {
                     }
                     CommunityRepository.registerNickname(newNickname, currentNickname)
                     dialog.dismiss()
-                    NicknameManager.setNickname(ctx, newNickname)
+                    NicknameManager.setNicknameWithSync(ctx, newNickname, currentNickname)
                     binding.tvNickname.text = newNickname
                     Toast.makeText(ctx, "닉네임이 설정되었습니다", Toast.LENGTH_SHORT).show()
                 }
