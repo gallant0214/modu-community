@@ -32,7 +32,7 @@ export function NavBar() {
             소개
           </NavLink>
           <NavLink href="/community" active={isActive("/community") || isActive("/category")}>
-            커뮤니티
+            종목별 커뮤니티
           </NavLink>
           <NavLink href="/jobs" active={isActive("/jobs")}>
             구인
