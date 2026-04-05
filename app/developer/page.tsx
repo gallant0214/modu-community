@@ -27,6 +27,7 @@ export default function AdminPage() {
   // 비밀번호 변경 상태
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
   const [pwMsg, setPwMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [changingPw, setChangingPw] = useState(false);
 
@@ -109,8 +110,9 @@ export default function AdminPage() {
   }
 
   async function handleChangePassword() {
-    if (!currentPw.trim() || !newPw.trim()) { setPwMsg({ type: "error", text: "비밀번호를 입력해주세요" }); return; }
+    if (!currentPw.trim() || !newPw.trim() || !confirmPw.trim()) { setPwMsg({ type: "error", text: "모든 항목을 입력해주세요" }); return; }
     if (newPw.length < 4) { setPwMsg({ type: "error", text: "새 비밀번호는 4자 이상이어야 합니다" }); return; }
+    if (newPw !== confirmPw) { setPwMsg({ type: "error", text: "새 비밀번호가 일치하지 않습니다" }); return; }
     setChangingPw(true);
     try {
       const res = await fetch("/api/admin/change-password", {
@@ -120,7 +122,7 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (data.error) { setPwMsg({ type: "error", text: data.error }); }
-      else { setPwMsg({ type: "success", text: "비밀번호가 변경되었습니다" }); setStoredPassword(newPw); setCurrentPw(""); setNewPw(""); }
+      else { setPwMsg({ type: "success", text: "비밀번호가 변경되었습니다" }); setStoredPassword(newPw); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }
     } catch { setPwMsg({ type: "error", text: "오류가 발생했습니다" }); }
     setChangingPw(false);
   }
@@ -320,6 +322,8 @@ export default function AdminPage() {
                 <input type="password" value={currentPw} onChange={(e) => { setCurrentPw(e.target.value); setPwMsg(null); }} placeholder="현재 비밀번호"
                   className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
                 <input type="password" value={newPw} onChange={(e) => { setNewPw(e.target.value); setPwMsg(null); }} placeholder="새 비밀번호 (4자 이상)"
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
+                <input type="password" value={confirmPw} onChange={(e) => { setConfirmPw(e.target.value); setPwMsg(null); }} placeholder="새 비밀번호 확인"
                   className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
                   onKeyDown={(e) => { if (e.key === "Enter") handleChangePassword(); }} />
                 {pwMsg && <p className={`text-sm ${pwMsg.type === "error" ? "text-red-500" : "text-green-500"}`}>{pwMsg.text}</p>}
