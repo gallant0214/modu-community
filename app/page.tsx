@@ -6,7 +6,7 @@ import { AppStoreButton } from "@/app/components/app-store-button";
 export default async function Home() {
 
   return (
-    <div className="lp" style={{ margin: "calc(-1 * (env(safe-area-inset-top, 0px) + 48px)) 0 calc(-1 * (env(safe-area-inset-bottom, 0px) + 20px)) 0" }}>
+    <div className="lp" style={{ margin: "calc(-1 * (env(safe-area-inset-top, 0px) + 56px)) 0 calc(-1 * (env(safe-area-inset-bottom, 0px) + 20px)) 0" }}>
 
       <main>
 

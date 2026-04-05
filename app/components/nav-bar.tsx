@@ -14,47 +14,65 @@ export function NavBar() {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800"
-      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
-      <div className="mx-auto max-w-5xl px-4 h-12 flex items-center gap-1">
+    <nav
+      className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+    >
+      <div className="mx-auto max-w-5xl px-4 h-14 flex items-center gap-2">
         {/* 로고 */}
-        <Link href="/" className="flex items-center gap-1.5 mr-3 shrink-0">
+        <Link href="/" className="flex items-center gap-2 mr-4 shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="로고" className="w-6 h-6 rounded" />
-          <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">모두의 지도사 커뮤니티</span>
+          <img src="/logo.png" alt="로고" className="w-7 h-7 rounded" />
+          <span className="text-base font-bold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">모두의 지도사</span>
         </Link>
 
-        {/* 탭 메뉴 */}
-        <div className="flex items-center gap-0.5 flex-1">
+        {/* 메뉴 */}
+        <div className="flex items-center gap-1 flex-1">
           <NavLink href="/" active={isActive("/") && !isActive("/community") && !isActive("/category") && !isActive("/jobs") && !isActive("/practical") && !isActive("/my")}>
-            서비스소개
+            소개
           </NavLink>
           <NavLink href="/community" active={isActive("/community") || isActive("/category")}>
-            종목후기
+            커뮤니티
           </NavLink>
           <NavLink href="/jobs" active={isActive("/jobs")}>
-            스포츠구인
-          </NavLink>
-          <NavLink href="/#faq" active={false}>
-            FAQ
-          </NavLink>
-          <NavLink href="/my" active={isActive("/my")}>
-            MY
+            구인
           </NavLink>
         </div>
 
-        {/* 로그인/로그아웃 */}
-        <div className="shrink-0">
+        {/* 우측: CTA + 프로필 */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* 공고 등록 CTA */}
+          <Link
+            href="/jobs/write"
+            className="hidden sm:flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            공고 등록
+          </Link>
+
+          {/* 로그인/프로필 */}
           {loading ? (
-            <div className="w-16 h-7 bg-zinc-100 dark:bg-zinc-800 rounded-md animate-pulse" />
+            <div className="w-16 h-8 bg-zinc-100 dark:bg-zinc-800 rounded-lg animate-pulse" />
           ) : user ? (
             <div className="flex items-center gap-2">
-              <span className="hidden sm:block text-xs text-zinc-600 dark:text-zinc-400 max-w-[80px] truncate">
-                {nickname || user.displayName || "사용자"}
-              </span>
+              <Link
+                href="/my"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <div className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+                  <svg className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <span className="hidden sm:block text-xs text-zinc-600 dark:text-zinc-400 max-w-[80px] truncate">
+                  {nickname || user.displayName || "사용자"}
+                </span>
+              </Link>
               <button
                 onClick={signOutUser}
-                className="text-xs px-3 py-1.5 rounded-md text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="text-xs px-2 py-1 rounded-md text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 로그아웃
               </button>
@@ -62,7 +80,7 @@ export function NavBar() {
           ) : (
             <button
               onClick={signInWithGoogle}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors font-medium"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors font-medium"
             >
               <GoogleIcon />
               로그인
@@ -78,13 +96,16 @@ function NavLink({ href, active, children }: { href: string; active: boolean; ch
   return (
     <Link
       href={href}
-      className={`text-sm px-3 py-1.5 rounded-md transition-colors font-medium ${
+      className={`relative text-sm px-3 py-1.5 rounded-md transition-colors ${
         active
-          ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+          ? "text-blue-600 dark:text-blue-400 font-semibold"
+          : "text-zinc-500 dark:text-zinc-400 font-medium hover:text-zinc-900 dark:hover:text-zinc-100"
       }`}
     >
       {children}
+      {active && (
+        <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />
+      )}
     </Link>
   );
 }

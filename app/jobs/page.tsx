@@ -454,7 +454,7 @@ export default function JobsPage() {
       </div>
 
       {/* ─── 필터 바 ─── */}
-      <div className="sticky top-12 z-30 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-b border-zinc-100 dark:border-zinc-800">
+      <div className="sticky top-14 z-30 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-b border-zinc-100 dark:border-zinc-800">
         <div className="mx-auto max-w-5xl px-4 py-2.5">
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
             {/* 지역 필터 */}
