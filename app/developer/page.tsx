@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { signInWithPopup, onAuthStateChanged, signOut, type User } from "firebase/auth";
+import { auth, googleProvider } from "@/app/lib/firebase-client";
 import { getReports, resolveReport, deleteReportTarget, getInquiries, hideInquiry, unhideInquiry, deleteInquiry, replyToInquiry } from "@/app/lib/actions";
 import type { Report, Inquiry } from "@/app/lib/types";
 
+type AuthStep = "loading" | "google" | "blocked" | "password" | "authenticated";
+
 export default function AdminPage() {
-  const [authenticated, setAuthenticated] = useState(false);
+  const [authStep, setAuthStep] = useState<AuthStep>("loading");
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [password, setPassword] = useState("");
   const [storedPassword, setStoredPassword] = useState("");
   const [error, setError] = useState("");
@@ -31,6 +36,57 @@ export default function AdminPage() {
   const [pwMsg, setPwMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [changingPw, setChangingPw] = useState(false);
 
+  // 관리자 이메일 관리 상태
+  const [adminEmails, setAdminEmails] = useState<{ id: number; email: string; created_at: string }[]>([]);
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [emailMsg, setEmailMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [deleteEmailConfirm, setDeleteEmailConfirm] = useState<string | null>(null);
+
+  // Firebase 인증 상태 감지
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user && user.email) {
+        setFirebaseUser(user);
+        // 관리자 이메일 확인
+        try {
+          const token = await user.getIdToken();
+          const res = await fetch("/api/admin/verify-email", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token}` },
+          });
+          if (res.ok) {
+            setAuthStep("password");
+          } else {
+            setAuthStep("blocked");
+          }
+        } catch {
+          setAuthStep("blocked");
+        }
+      } else {
+        setFirebaseUser(null);
+        setAuthStep("google");
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  async function handleGoogleLogin() {
+    setLoading(true);
+    setError("");
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch {
+      setError("Google 로그인에 실패했습니다");
+      setLoading(false);
+    }
+  }
+
+  async function handleGoogleLogout() {
+    await signOut(auth);
+    setAuthStep("google");
+    setFirebaseUser(null);
+  }
+
   const fetchData = useCallback(async (pw: string) => {
     const [reportResult, inquiryResult] = await Promise.all([
       getReports(pw),
@@ -49,7 +105,7 @@ export default function AdminPage() {
     setLoading(false);
     if (!ok) { setError("비밀번호가 일치하지 않습니다"); return; }
     setStoredPassword(password);
-    setAuthenticated(true);
+    setAuthStep("authenticated");
   }
 
   async function handleRefresh() {
@@ -127,6 +183,46 @@ export default function AdminPage() {
     setChangingPw(false);
   }
 
+  async function fetchAdminEmails() {
+    try {
+      const res = await fetch(`/api/admin/admins?password=${encodeURIComponent(storedPassword)}`);
+      const data = await res.json();
+      if (data.emails) setAdminEmails(data.emails);
+    } catch { /* ignore */ }
+  }
+
+  async function handleAddAdminEmail() {
+    if (!newAdminEmail.trim() || !newAdminEmail.includes("@")) { setEmailMsg({ type: "error", text: "올바른 이메일을 입력해주세요" }); return; }
+    try {
+      const res = await fetch("/api/admin/admins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: storedPassword, email: newAdminEmail.trim() }),
+      });
+      const data = await res.json();
+      if (data.error) { setEmailMsg({ type: "error", text: data.error }); }
+      else { setEmailMsg({ type: "success", text: "관리자 이메일이 추가되었습니다" }); setNewAdminEmail(""); fetchAdminEmails(); }
+    } catch { setEmailMsg({ type: "error", text: "오류가 발생했습니다" }); }
+  }
+
+  async function handleDeleteAdminEmail(email: string) {
+    try {
+      await fetch("/api/admin/admins", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: storedPassword, email }),
+      });
+      setAdminEmails((prev) => prev.filter((e) => e.email !== email));
+      setDeleteEmailConfirm(null);
+    } catch { /* ignore */ }
+  }
+
+  // 설정 탭 열릴 때 관리자 이메일 로드
+  useEffect(() => {
+    if (tab === "settings" && storedPassword) fetchAdminEmails();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, storedPassword]);
+
   const pendingReports = reports.filter((r) => !r.resolved);
   const resolvedReports = reports.filter((r) => r.resolved);
   const pendingInquiries = inquiries.filter((inq) => !inq.hidden);
@@ -135,8 +231,20 @@ export default function AdminPage() {
 
   const selectedInq = inquiries.find((inq) => inq.id === selectedInquiry);
 
-  // ===== 로그인 화면 =====
-  if (!authenticated) {
+  // ===== 로딩 화면 =====
+  if (authStep === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+        <div className="text-center">
+          <svg className="mx-auto mb-3 h-8 w-8 animate-spin text-violet-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+          <p className="text-sm text-zinc-400">인증 확인 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== Google 로그인 화면 =====
+  if (authStep === "google") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
         <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg dark:bg-zinc-900">
@@ -145,6 +253,54 @@ export default function AdminPage() {
             돌아가기
           </Link>
           <h1 className="mb-1 text-lg font-bold text-zinc-900 dark:text-zinc-100">관리자 페이지</h1>
+          <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">관리자 계정으로 로그인해주세요.</p>
+          {error && <p className="mb-3 text-sm text-red-500">{error}</p>}
+          <button onClick={handleGoogleLogin} disabled={loading}
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-zinc-200 bg-white py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-750">
+            <svg className="h-5 w-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            {loading ? "로그인 중..." : "Google 계정으로 로그인"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== 접근 차단 화면 =====
+  if (authStep === "blocked") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+        <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-lg dark:bg-zinc-900">
+          <svg className="mx-auto mb-3 h-12 w-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+          <h1 className="mb-1 text-lg font-bold text-zinc-900 dark:text-zinc-100">접근 권한이 없습니다</h1>
+          <p className="mb-2 text-sm text-zinc-500 dark:text-zinc-400">이 이메일은 관리자로 등록되어 있지 않습니다.</p>
+          <p className="mb-5 text-xs text-zinc-400">{firebaseUser?.email}</p>
+          <button onClick={handleGoogleLogout} className="w-full rounded-xl border border-zinc-200 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+            다른 계정으로 로그인
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== 비밀번호 입력 화면 =====
+  if (authStep === "password") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+        <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg dark:bg-zinc-900">
+          <Link href="/" className="mb-4 inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            돌아가기
+          </Link>
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-950 dark:text-green-400">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{firebaseUser?.displayName || "관리자"}</p>
+              <p className="text-xs text-zinc-400">{firebaseUser?.email}</p>
+            </div>
+          </div>
+          <h1 className="mb-1 text-lg font-bold text-zinc-900 dark:text-zinc-100">관리자 인증</h1>
           <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">관리자 비밀번호를 입력해주세요.</p>
           <input
             type="password" value={password}
@@ -155,8 +311,11 @@ export default function AdminPage() {
             autoFocus
           />
           {error && <p className="mb-3 text-sm text-red-500">{error}</p>}
-          <button onClick={handleLogin} disabled={loading} className="w-full rounded-xl bg-violet-500 py-3 text-sm font-semibold text-white hover:bg-violet-600 disabled:opacity-50">
+          <button onClick={handleLogin} disabled={loading} className="mb-3 w-full rounded-xl bg-violet-500 py-3 text-sm font-semibold text-white hover:bg-violet-600 disabled:opacity-50">
             {loading ? "확인 중..." : "로그인"}
+          </button>
+          <button onClick={handleGoogleLogout} className="w-full text-center text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+            다른 계정으로 전환
           </button>
         </div>
       </div>
@@ -314,7 +473,51 @@ export default function AdminPage() {
 
         {/* ===== 설정 탭 ===== */}
         {tab === "settings" && (
-          <div className="p-4">
+          <div className="space-y-4 p-4">
+            {/* 관리자 이메일 관리 */}
+            <div className="rounded-2xl bg-white p-6 dark:bg-zinc-900">
+              <h3 className="mb-1 text-base font-bold text-zinc-900 dark:text-zinc-100">관리자 계정 관리</h3>
+              <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">등록된 Google 이메일만 이 페이지에 접근할 수 있습니다.</p>
+
+              {/* 현재 등록된 이메일 목록 */}
+              {adminEmails.length > 0 && (
+                <div className="mb-4 space-y-2">
+                  {adminEmails.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800">
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{item.email}</p>
+                        <p className="text-xs text-zinc-400">등록일: {new Date(item.created_at).toLocaleDateString("ko-KR")}</p>
+                      </div>
+                      {deleteEmailConfirm === item.email ? (
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => handleDeleteAdminEmail(item.email)} className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600">삭제</button>
+                          <button onClick={() => setDeleteEmailConfirm(null)} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400">취소</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setDeleteEmailConfirm(item.email)} className="text-xs text-red-400 hover:text-red-600">삭제</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {adminEmails.length === 0 && (
+                <div className="mb-4 rounded-xl bg-amber-50 px-4 py-3 dark:bg-amber-950/30">
+                  <p className="text-sm text-amber-600 dark:text-amber-400">등록된 관리자 이메일이 없습니다. 이메일을 등록하지 않으면 Google 로그인 없이 비밀번호만으로 접근합니다.</p>
+                </div>
+              )}
+
+              {/* 이메일 추가 */}
+              <div className="flex gap-2">
+                <input type="email" value={newAdminEmail} onChange={(e) => { setNewAdminEmail(e.target.value); setEmailMsg(null); }} placeholder="Google 이메일 주소 입력"
+                  className="flex-1 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddAdminEmail(); }} />
+                <button onClick={handleAddAdminEmail} className="shrink-0 rounded-xl bg-violet-500 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-600">추가</button>
+              </div>
+              {emailMsg && <p className={`mt-2 text-sm ${emailMsg.type === "error" ? "text-red-500" : "text-green-500"}`}>{emailMsg.text}</p>}
+            </div>
+
+            {/* 비밀번호 변경 */}
             <div className="rounded-2xl bg-white p-6 dark:bg-zinc-900">
               <h3 className="mb-1 text-base font-bold text-zinc-900 dark:text-zinc-100">비밀번호 변경</h3>
               <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">관리자 비밀번호를 변경합니다.</p>
