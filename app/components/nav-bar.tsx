@@ -35,7 +35,7 @@ export function NavBar() {
             종목별 커뮤니티
           </NavLink>
           <NavLink href="/jobs" active={isActive("/jobs")}>
-            구인
+            스포츠 구인
           </NavLink>
           <NavLink href="/#faq" active={false}>
             FAQ
