@@ -15,6 +15,27 @@ const SPORTS = [
 ];
 const EMPLOYMENT_TYPES = ["정규직","계약직","파트타임","프리랜서","인턴","기타"];
 
+/* ── 초성 유틸 ── */
+const CHOSUNG = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+function getChosung(str: string): string {
+  return [...str].map((ch) => {
+    const code = ch.charCodeAt(0) - 0xAC00;
+    if (code < 0 || code > 11171) return ch;
+    return CHOSUNG[Math.floor(code / 588)];
+  }).join("");
+}
+function matchChosung(text: string, query: string): boolean {
+  if (!query) return true;
+  const tCs = getChosung(text);
+  const qCs = getChosung(query);
+  // 초성만으로 이루어진 쿼리인지 확인
+  const isChosungOnly = [...query].every((c) => CHOSUNG.includes(c));
+  if (isChosungOnly) {
+    return tCs.includes(qCs);
+  }
+  return text.toLowerCase().includes(query.toLowerCase());
+}
+
 /* ── 유틸 ── */
 function relativeTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -89,7 +110,6 @@ function JobCard({ job }: { job: JobPost }) {
           : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
       }`}
     >
-      {/* 1행: 상태 + 종목 + D-day */}
       <div className="flex items-center gap-1.5 mb-2.5">
         <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold ${cfg.bg} ${cfg.text}`}>
           {cfg.label}
@@ -103,15 +123,11 @@ function JobCard({ job }: { job: JobPost }) {
           </span>
         )}
       </div>
-
-      {/* 2행: 제목 */}
       <h3 className={`text-[15px] font-bold leading-snug mb-2 line-clamp-2 ${
         isClosed ? "text-zinc-400 dark:text-zinc-500 line-through" : "text-zinc-900 dark:text-zinc-100"
       }`}>
         {job.title}
       </h3>
-
-      {/* 3행: 급여 + 고용형태 */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2 text-sm">
         <span className={`flex items-center gap-1 font-medium ${isClosed ? "text-zinc-400" : "text-zinc-800 dark:text-zinc-200"}`}>
           <svg className="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,8 +144,6 @@ function JobCard({ job }: { job: JobPost }) {
           </span>
         )}
       </div>
-
-      {/* 4행: 지역 */}
       {job.region_name && (
         <div className="flex items-center gap-1 mb-2.5 text-sm text-zinc-500 dark:text-zinc-400">
           <svg className="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -139,15 +153,9 @@ function JobCard({ job }: { job: JobPost }) {
           {job.region_name}
         </div>
       )}
-
-      {/* 5행: 센터명 + 시간 */}
       <div className="flex items-center justify-between pt-2.5 border-t border-zinc-100 dark:border-zinc-800">
-        <span className="text-xs text-zinc-400 truncate max-w-[60%]">
-          {job.center_name || "등록자"}
-        </span>
-        <span className="text-xs text-zinc-400">
-          {relativeTime(job.created_at)}
-        </span>
+        <span className="text-xs text-zinc-400 truncate max-w-[60%]">{job.center_name || "등록자"}</span>
+        <span className="text-xs text-zinc-400">{relativeTime(job.created_at)}</span>
       </div>
     </Link>
   );
@@ -175,172 +183,292 @@ function CardSkeleton() {
   );
 }
 
-/* ── 필터 드롭다운 ── */
-function FilterDropdown({
-  label,
-  value,
-  options,
-  onChange,
-  onClear,
+/* ══════════════════════════════════════════════
+   바텀시트 공통 컴포넌트
+   ══════════════════════════════════════════════ */
+function BottomSheet({
+  open,
+  onClose,
+  title,
+  children,
 }: {
-  label: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (val: string) => void;
-  onClear: () => void;
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  const isActive = !!value;
-
+  if (!open) return null;
   return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm border transition-colors whitespace-nowrap ${
-          isActive
-            ? "border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400"
-            : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-        }`}
-      >
-        {isActive ? options.find((o) => o.value === value)?.label || label : label}
-        <svg className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-        {isActive && (
-          <span
-            onClick={(e) => { e.stopPropagation(); onClear(); setOpen(false); }}
-            className="ml-0.5 text-blue-400 hover:text-blue-600"
-          >&times;</span>
-        )}
-      </button>
-
-      {open && (
-        <div className="absolute top-full left-0 mt-1 z-40 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-lg max-h-64 overflow-y-auto min-w-[160px]">
-          <button
-            onClick={() => { onClear(); setOpen(false); }}
-            className={`w-full text-left px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 ${!value ? "text-blue-600 font-medium" : "text-zinc-500"}`}
-          >전체</button>
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => { onChange(opt.value); setOpen(false); }}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 ${value === opt.value ? "text-blue-600 font-medium" : "text-zinc-700 dark:text-zinc-300"}`}
-            >{opt.label}</button>
-          ))}
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full sm:max-w-md bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[75vh] flex flex-col">
+        {/* 모바일 핸들 */}
+        <div className="flex justify-center pt-2 pb-0 sm:hidden">
+          <div className="w-10 h-1 bg-zinc-300 dark:bg-zinc-600 rounded-full" />
         </div>
-      )}
+        {/* 헤더 */}
+        <div className="flex items-center px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
+          <span className="font-semibold text-zinc-900 dark:text-zinc-100 flex-1">{title}</span>
+          <button onClick={onClose} className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        {/* 콘텐츠 */}
+        <div className="overflow-y-auto flex-1">{children}</div>
+      </div>
     </div>
   );
 }
 
-/* ── 지역 필터 (2단계 모달) ── */
-function RegionFilter({
+/* ── 필터 칩 버튼 ── */
+function FilterChip({
+  label,
   value,
-  valueName,
+  displayValue,
+  onClick,
+  onClear,
+  icon,
+}: {
+  label: string;
+  value: string;
+  displayValue?: string;
+  onClick: () => void;
+  onClear: () => void;
+  icon?: React.ReactNode;
+}) {
+  const isActive = !!value;
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm border transition-colors whitespace-nowrap ${
+        isActive
+          ? "border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400"
+          : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+      }`}
+    >
+      {icon}
+      {isActive ? (displayValue || value) : label}
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+      {isActive && (
+        <span
+          onClick={(e) => { e.stopPropagation(); onClear(); }}
+          className="ml-0.5 text-blue-400 hover:text-blue-600"
+        >&times;</span>
+      )}
+    </button>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   지역 바텀시트 (2단계)
+   ══════════════════════════════════════════════ */
+function RegionBottomSheet({
+  open,
+  onClose,
+  value,
   onChange,
   onClear,
 }: {
+  open: boolean;
+  onClose: () => void;
   value: string;
-  valueName: string;
   onChange: (code: string, name: string) => void;
   onClear: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"group" | "sub">("group");
   const [selectedGroup, setSelectedGroup] = useState<RegionGroup | null>(null);
-  const isActive = !!value;
+
+  useEffect(() => {
+    if (open) { setStep("group"); setSelectedGroup(null); }
+  }, [open]);
 
   return (
-    <>
-      <button
-        onClick={() => { setOpen(true); setStep("group"); setSelectedGroup(null); }}
-        className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm border transition-colors whitespace-nowrap ${
-          isActive
-            ? "border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400"
-            : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-        }`}
-      >
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-        {isActive ? valueName : "지역"}
-        {isActive && (
-          <span
-            onClick={(e) => { e.stopPropagation(); onClear(); }}
-            className="ml-0.5 text-blue-400 hover:text-blue-600"
-          >&times;</span>
-        )}
-      </button>
-
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="relative w-full sm:max-w-md bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[70vh] flex flex-col">
-            <div className="flex items-center gap-2 px-4 py-3.5 border-b border-zinc-100 dark:border-zinc-800">
-              {step === "sub" && (
-                <button onClick={() => setStep("group")} className="p-1 -ml-1 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-              )}
-              <span className="font-semibold text-zinc-900 dark:text-zinc-100 flex-1">
-                {step === "group" ? "지역 선택" : selectedGroup?.name}
-              </span>
-              <button onClick={() => setOpen(false)} className="text-zinc-400 hover:text-zinc-600">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="overflow-y-auto flex-1 py-1">
-              {step === "group" ? (
-                <>
-                  <button
-                    onClick={() => { onClear(); setOpen(false); }}
-                    className="w-full flex items-center px-4 py-3 text-sm text-blue-600 dark:text-blue-400 font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50"
-                  >전체 지역</button>
-                  {REGION_GROUPS.map((group) => (
-                    <button
-                      key={group.code}
-                      onClick={() => { setSelectedGroup(group); setStep("sub"); }}
-                      className="w-full flex items-center justify-between px-4 py-3 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0"
-                    >
-                      <span>{group.name}</span>
-                      <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  ))}
-                </>
-              ) : (
-                selectedGroup?.subRegions.map((sub) => (
-                  <button
-                    key={sub.code}
-                    onClick={() => { onChange(sub.code, sub.name); setOpen(false); }}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0 ${
-                      value === sub.code ? "text-blue-600 font-medium" : "text-zinc-800 dark:text-zinc-200"
-                    }`}
-                  >{sub.name}</button>
-                ))
-              )}
-            </div>
-          </div>
+    <BottomSheet open={open} onClose={onClose} title={step === "group" ? "지역 선택" : selectedGroup?.name || ""}>
+      {step === "group" ? (
+        <div className="py-1">
+          <button
+            onClick={() => { onClear(); onClose(); }}
+            className="w-full flex items-center px-4 py-3 text-sm text-blue-600 dark:text-blue-400 font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50"
+          >전체 지역</button>
+          {REGION_GROUPS.map((group) => (
+            <button
+              key={group.code}
+              onClick={() => { setSelectedGroup(group); setStep("sub"); }}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0"
+            >
+              <span>{group.name}</span>
+              <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="py-1">
+          <button
+            onClick={() => setStep("group")}
+            className="w-full flex items-center gap-1 px-4 py-2.5 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            뒤로
+          </button>
+          {selectedGroup?.subRegions.map((sub) => (
+            <button
+              key={sub.code}
+              onClick={() => { onChange(sub.code, sub.name); onClose(); }}
+              className={`w-full text-left px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0 ${
+                value === sub.code ? "text-blue-600 font-medium" : "text-zinc-800 dark:text-zinc-200"
+              }`}
+            >{sub.name}</button>
+          ))}
         </div>
       )}
-    </>
+    </BottomSheet>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   종목 바텀시트 (초성 검색)
+   ══════════════════════════════════════════════ */
+const CHOSUNG_BUTTONS = ["ㄱ","ㄴ","ㄷ","ㄹ","ㅁ","ㅂ","ㅅ","ㅇ","ㅈ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+
+function SportBottomSheet({
+  open,
+  onClose,
+  value,
+  onChange,
+  onClear,
+}: {
+  open: boolean;
+  onClose: () => void;
+  value: string;
+  onChange: (val: string) => void;
+  onClear: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) { setQuery(""); setTimeout(() => inputRef.current?.focus(), 100); }
+  }, [open]);
+
+  const filtered = SPORTS.filter((s) => matchChosung(s, query));
+
+  return (
+    <BottomSheet open={open} onClose={onClose} title="종목 선택">
+      {/* 검색 입력 */}
+      <div className="px-4 pt-3 pb-2">
+        <div className="flex items-center gap-2 px-3 py-2 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-800">
+          <svg className="w-4 h-4 text-zinc-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="종목명 또는 초성 검색 (ㅍㄹㅌ → 필라테스)"
+            className="flex-1 text-sm bg-transparent text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none"
+          />
+          {query && (
+            <button onClick={() => setQuery("")} className="text-zinc-400 hover:text-zinc-600">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 초성 버튼 */}
+      <div className="px-4 pb-2">
+        <div className="flex flex-wrap gap-1">
+          {CHOSUNG_BUTTONS.map((ch) => (
+            <button
+              key={ch}
+              onClick={() => setQuery(query === ch ? "" : ch)}
+              className={`w-8 h-8 flex items-center justify-center rounded-md text-xs font-medium transition-colors ${
+                query === ch
+                  ? "bg-blue-600 text-white"
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+              }`}
+            >{ch}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="border-t border-zinc-100 dark:border-zinc-800" />
+
+      {/* 종목 리스트 */}
+      <div className="py-1">
+        <button
+          onClick={() => { onClear(); onClose(); }}
+          className={`w-full text-left px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 ${
+            !value ? "text-blue-600 font-medium" : "text-zinc-500"
+          }`}
+        >전체 종목</button>
+        {filtered.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-zinc-400">
+            일치하는 종목이 없습니다
+          </div>
+        ) : (
+          filtered.map((sport) => (
+            <button
+              key={sport}
+              onClick={() => { onChange(sport); onClose(); }}
+              className={`w-full text-left px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0 ${
+                value === sport ? "text-blue-600 font-medium" : "text-zinc-800 dark:text-zinc-200"
+              }`}
+            >{sport}</button>
+          ))
+        )}
+      </div>
+    </BottomSheet>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   고용형태 바텀시트
+   ══════════════════════════════════════════════ */
+function EmploymentBottomSheet({
+  open,
+  onClose,
+  value,
+  onChange,
+  onClear,
+}: {
+  open: boolean;
+  onClose: () => void;
+  value: string;
+  onChange: (val: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <BottomSheet open={open} onClose={onClose} title="고용형태 선택">
+      <div className="py-1">
+        <button
+          onClick={() => { onClear(); onClose(); }}
+          className={`w-full text-left px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 ${
+            !value ? "text-blue-600 font-medium" : "text-zinc-500"
+          }`}
+        >전체</button>
+        {EMPLOYMENT_TYPES.map((type) => (
+          <button
+            key={type}
+            onClick={() => { onChange(type); onClose(); }}
+            className={`w-full text-left px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0 ${
+              value === type ? "text-blue-600 font-medium" : "text-zinc-800 dark:text-zinc-200"
+            }`}
+          >{type}</button>
+        ))}
+      </div>
+    </BottomSheet>
   );
 }
 
@@ -367,6 +495,11 @@ export default function JobsPage() {
   /* 검색 */
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+
+  /* 바텀시트 open 상태 */
+  const [regionOpen, setRegionOpen] = useState(false);
+  const [sportOpen, setSportOpen] = useState(false);
+  const [employmentOpen, setEmploymentOpen] = useState(false);
 
   /* 데이터 로드 */
   const loadJobs = useCallback(async (p = 1) => {
@@ -457,29 +590,34 @@ export default function JobsPage() {
       <div className="sticky top-14 z-30 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-b border-zinc-100 dark:border-zinc-800">
         <div className="mx-auto max-w-5xl px-4 py-2.5">
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
-            {/* 지역 필터 */}
-            <RegionFilter
+            {/* 지역 */}
+            <FilterChip
+              label="지역"
               value={regionCode}
-              valueName={regionName}
-              onChange={(code, name) => { setRegionCode(code); setRegionName(name); }}
+              displayValue={regionName}
+              onClick={() => setRegionOpen(true)}
               onClear={() => { setRegionCode(""); setRegionName(""); }}
+              icon={
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              }
             />
 
-            {/* 종목 필터 */}
-            <FilterDropdown
+            {/* 종목 */}
+            <FilterChip
               label="종목"
               value={sportFilter}
-              options={SPORTS.map((s) => ({ value: s, label: s }))}
-              onChange={setSportFilter}
+              onClick={() => setSportOpen(true)}
               onClear={() => setSportFilter("")}
             />
 
-            {/* 고용형태 필터 */}
-            <FilterDropdown
+            {/* 고용형태 */}
+            <FilterChip
               label="고용형태"
               value={employmentFilter}
-              options={EMPLOYMENT_TYPES.map((t) => ({ value: t, label: t }))}
-              onChange={setEmploymentFilter}
+              onClick={() => setEmploymentOpen(true)}
               onClear={() => setEmploymentFilter("")}
             />
 
@@ -510,6 +648,29 @@ export default function JobsPage() {
           </div>
         </div>
       </div>
+
+      {/* ─── 바텀시트들 ─── */}
+      <RegionBottomSheet
+        open={regionOpen}
+        onClose={() => setRegionOpen(false)}
+        value={regionCode}
+        onChange={(code, name) => { setRegionCode(code); setRegionName(name); }}
+        onClear={() => { setRegionCode(""); setRegionName(""); }}
+      />
+      <SportBottomSheet
+        open={sportOpen}
+        onClose={() => setSportOpen(false)}
+        value={sportFilter}
+        onChange={setSportFilter}
+        onClear={() => setSportFilter("")}
+      />
+      <EmploymentBottomSheet
+        open={employmentOpen}
+        onClose={() => setEmploymentOpen(false)}
+        value={employmentFilter}
+        onChange={setEmploymentFilter}
+        onClear={() => setEmploymentFilter("")}
+      />
 
       {/* ─── 메인 콘텐츠 ─── */}
       <div className="mx-auto max-w-5xl px-4 py-4">
@@ -551,7 +712,6 @@ export default function JobsPage() {
             {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
           </div>
         ) : jobs.length === 0 ? (
-          /* ── 빈 상태 ── */
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-16 h-16 mb-4 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
               <svg className="w-8 h-8 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -601,12 +761,10 @@ export default function JobsPage() {
               ))}
             </div>
 
-            {/* 공고가 적을 때 보조 문구 */}
             {total <= 5 && total > 0 && (
               <p className="text-center text-sm text-zinc-400 mt-6">새로운 공고가 매일 올라오고 있어요</p>
             )}
 
-            {/* 페이지네이션 */}
             {totalPages > 1 && (
               <div className="flex justify-center gap-1 py-8">
                 <button
