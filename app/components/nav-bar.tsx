@@ -14,26 +14,28 @@ export function NavBar() {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800"
-      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
-      <div className="mx-auto max-w-5xl px-4 h-12 flex items-center gap-1">
+    <nav
+      className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.2)]"
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+    >
+      <div className="mx-auto max-w-5xl px-4 h-14 flex items-center gap-1">
         {/* 로고 */}
-        <Link href="/" className="flex items-center gap-1.5 mr-3 shrink-0">
+        <Link href="/" className="flex items-center gap-2 mr-3 shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="로고" className="w-6 h-6 rounded" />
-          <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">모두의 지도사 커뮤니티</span>
+          <img src="/logo.png" alt="로고" className="w-7 h-7 rounded" />
+          <span className="text-base font-bold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">모두의 지도사</span>
         </Link>
 
-        {/* 탭 메뉴 */}
+        {/* 메뉴 */}
         <div className="flex items-center gap-0.5 flex-1">
           <NavLink href="/" active={isActive("/") && !isActive("/community") && !isActive("/category") && !isActive("/jobs") && !isActive("/practical") && !isActive("/my")}>
-            서비스소개
+            소개
           </NavLink>
           <NavLink href="/community" active={isActive("/community") || isActive("/category")}>
-            종목후기
+            종목별 커뮤니티
           </NavLink>
           <NavLink href="/jobs" active={isActive("/jobs")}>
-            스포츠구인
+            스포츠 구인
           </NavLink>
           <NavLink href="/#faq" active={false}>
             FAQ
@@ -78,13 +80,16 @@ function NavLink({ href, active, children }: { href: string; active: boolean; ch
   return (
     <Link
       href={href}
-      className={`text-sm px-3 py-1.5 rounded-md transition-colors font-medium ${
+      className={`relative text-sm px-3 py-1.5 rounded-md transition-colors font-medium ${
         active
-          ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+          ? "text-blue-600 dark:text-blue-400 font-semibold"
           : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
       }`}
     >
       {children}
+      {active && (
+        <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />
+      )}
     </Link>
   );
 }

@@ -6,7 +6,7 @@ import { AppStoreButton } from "@/app/components/app-store-button";
 export default async function Home() {
 
   return (
-    <div className="lp" style={{ margin: "calc(-1 * (env(safe-area-inset-top, 0px) + 48px)) 0 calc(-1 * (env(safe-area-inset-bottom, 0px) + 20px)) 0" }}>
+    <div className="lp" style={{ margin: "calc(-1 * (env(safe-area-inset-top, 0px) + 56px)) 0 calc(-1 * (env(safe-area-inset-bottom, 0px) + 20px)) 0" }}>
 
       <main>
 
@@ -59,7 +59,7 @@ export default async function Home() {
         </section>
 
         {/* ===== 4. 실기·구술 후기 ===== */}
-        <section className="lp-section" id="community">
+        <section className="lp-section" id="section-community">
           <div className="lp-c"><div className="lp-card">
             <div className="lp-label">실기·구술 후기</div>
             <h2 className="lp-title">합격한 선배의 시험장 후기,<br />바로 확인하세요.</h2>
@@ -91,7 +91,7 @@ export default async function Home() {
         </section>
 
         {/* ===== 5. 스포츠 구인 공고 ===== */}
-        <section className="lp-section" id="jobs">
+        <section className="lp-section" id="section-jobs">
           <div className="lp-c"><div className="lp-card">
             <div className="lp-label">스포츠 구인 공고</div>
             <h2 className="lp-title">스포츠 업계 전용 채용 정보,<br />여기서 찾으세요.</h2>

@@ -29,16 +29,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [nickname, setNickname] = useState<string | null>(null);
 
-  const fetchNickname = async (uid: string, token: string) => {
-    try {
-      const res = await fetch(`/api/nicknames?uid=${uid}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setNickname(data.nickname || null);
+  const NICKNAME_CACHE_KEY = "cached_nickname";
+  const NICKNAME_UID_KEY = "cached_nickname_uid";
+
+  const fetchNickname = async (uid: string, token: string, retries = 2) => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const res = await fetch(`/api/nicknames?uid=${uid}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const name = data.nickname || null;
+          setNickname(name);
+          // 서버 조회 성공 시 localStorage에 캐싱
+          if (name) {
+            localStorage.setItem(NICKNAME_CACHE_KEY, name);
+            localStorage.setItem(NICKNAME_UID_KEY, uid);
+          }
+          return;
+        }
+        // 4xx 에러는 재시도 불필요
+        if (res.status >= 400 && res.status < 500) break;
+      } catch {
+        if (attempt < retries) {
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
       }
-    } catch {
+    }
+    // 모든 시도 실패 시 캐시에서 복원
+    const cachedUid = localStorage.getItem(NICKNAME_UID_KEY);
+    const cachedNickname = localStorage.getItem(NICKNAME_CACHE_KEY);
+    if (cachedUid === uid && cachedNickname) {
+      setNickname(cachedNickname);
+    } else {
       setNickname(null);
     }
   };
@@ -70,6 +95,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOutUser = async () => {
     await signOut(auth);
     setNickname(null);
+    localStorage.removeItem(NICKNAME_CACHE_KEY);
+    localStorage.removeItem(NICKNAME_UID_KEY);
   };
 
   const getIdToken = async () => {

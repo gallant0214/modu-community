@@ -4,8 +4,17 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createInquiry } from "@/app/lib/actions";
+import { LoginRequired } from "@/app/components/login-required";
 
 export default function InquiryWritePage() {
+  return (
+    <LoginRequired>
+      <InquiryWriteContent />
+    </LoginRequired>
+  );
+}
+
+function InquiryWriteContent() {
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 

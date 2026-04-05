@@ -35,8 +35,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         style={{
-          // NavBar(48px) + safe-area-top
-          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 48px)',
+          // NavBar(56px) + safe-area-top
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 56px)',
           paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)',
         }}
       >
