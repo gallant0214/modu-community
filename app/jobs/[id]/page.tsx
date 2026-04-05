@@ -60,6 +60,7 @@ export default function JobDetailPage() {
   }, [jobId, router]);
 
   const handleLike = async () => {
+    if (!user) { alert("로그인 후 이용 가능합니다"); return; }
     if (!job) return;
     try {
       const token = await getIdToken();
@@ -234,6 +235,7 @@ export default function JobDetailPage() {
             </button>
             <button
               onClick={async () => {
+                if (!user) { alert("로그인 후 이용 가능합니다"); return; }
                 const token = await getIdToken();
                 const res = await fetch(`/api/jobs/${jobId}/bookmark`, {
                   method: "POST",

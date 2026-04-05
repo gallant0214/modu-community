@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { deletePost, likePost, viewPost, createComment, deleteComment, createReport, updateNotice, likeComment, updateComment, verifyPostPassword } from "@/app/lib/actions";
 import type { Post, Comment } from "@/app/lib/types";
+import { useAuth } from "@/app/components/auth-provider";
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);
@@ -29,6 +30,7 @@ function timeAgo(dateStr: string) {
 export default function PostDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const { user, signInWithGoogle } = useAuth();
   const categoryId = params.id as string;
   const postId = params.postId as string;
 
@@ -144,6 +146,7 @@ export default function PostDetailPage() {
   }, [showPostMenu]);
 
   async function handleLike() {
+    if (!user) { alert("로그인 후 이용 가능합니다"); return; }
     const result = await likePost(Number(postId), Number(categoryId));
     if (result?.unliked) {
       setLiked(false);
@@ -168,6 +171,7 @@ export default function PostDetailPage() {
   }
 
   async function handleCommentSubmit() {
+    if (!user) { alert("로그인 후 이용 가능합니다"); return; }
     if (!commentAuthor.trim() || !commentPassword.trim() || !commentContent.trim()) {
       setCommentError("모든 항목을 입력해주세요");
       return;
@@ -1069,6 +1073,7 @@ export default function PostDetailPage() {
                   </button>
                   <button
                     onClick={async () => {
+                      if (!user) { alert("로그인 후 이용 가능합니다"); return; }
                       if (!commentReportReason || commentReportTargetId === null) return;
                       await createReport(
                         "comment",
@@ -1179,6 +1184,7 @@ export default function PostDetailPage() {
                   </button>
                   <button
                     onClick={async () => {
+                      if (!user) { alert("로그인 후 이용 가능합니다"); return; }
                       if (!reportReason) return;
                       await createReport(
                         "post",

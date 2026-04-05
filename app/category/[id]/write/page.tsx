@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createPost } from "@/app/lib/actions";
+import { LoginRequired } from "@/app/components/login-required";
 
 const regions = [
   "서울", "세종", "부산", "인천", "대전", "대구", "광주", "울산",
@@ -13,6 +14,14 @@ const regions = [
 const examTypes = ["기타", "실기", "구술"];
 
 export default function WritePage() {
+  return (
+    <LoginRequired>
+      <WritePageContent />
+    </LoginRequired>
+  );
+}
+
+function WritePageContent() {
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const params = useParams();
