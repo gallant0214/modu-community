@@ -59,7 +59,7 @@ export default async function Home() {
         </section>
 
         {/* ===== 4. 실기·구술 후기 ===== */}
-        <section className="lp-section" id="community">
+        <section className="lp-section" id="section-community">
           <div className="lp-c"><div className="lp-card">
             <div className="lp-label">실기·구술 후기</div>
             <h2 className="lp-title">합격한 선배의 시험장 후기,<br />바로 확인하세요.</h2>
