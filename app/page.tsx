@@ -91,7 +91,7 @@ export default async function Home() {
         </section>
 
         {/* ===== 5. 스포츠 구인 공고 ===== */}
-        <section className="lp-section" id="jobs">
+        <section className="lp-section" id="section-jobs">
           <div className="lp-c"><div className="lp-card">
             <div className="lp-label">스포츠 구인 공고</div>
             <h2 className="lp-title">스포츠 업계 전용 채용 정보,<br />여기서 찾으세요.</h2>
