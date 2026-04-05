@@ -26,7 +26,7 @@ object ThemeHelper {
     /** 저장된 테마 모드 반환 (기본: 화이트) */
     fun getSavedTheme(context: Context): Int {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getInt(KEY_THEME, THEME_LIGHT)
+        return prefs.getInt(KEY_THEME, THEME_SYSTEM)
     }
 
     /** 테마 모드 저장 + 즉시 적용 */

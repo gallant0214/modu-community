@@ -356,20 +356,13 @@ class MyFragment : Fragment() {
         ) {
             val intent = android.content.Intent(
                 android.content.Intent.ACTION_VIEW,
-                android.net.Uri.parse("https://moducm.pages.dev/terms")
+                android.net.Uri.parse("https://moducm.com/terms.html")
             )
             startActivity(intent)
         }
 
-        setupMenuItem(
-            binding.menuAdmin.root,
-            R.drawable.ic_settings, "관리자"
-        ) {
-            findNavController().navigate(R.id.action_profile_to_admin)
-        }
-
-        // 관리자: 마지막 항목이므로 하단 divider 숨김
-        binding.menuAdmin.root.findViewById<View>(R.id.divider)?.visibility = View.GONE
+        // 이용약관: 마지막 항목이므로 하단 divider 숨김
+        binding.menuTerms.root.findViewById<View>(R.id.divider)?.visibility = View.GONE
     }
 
     // ====================================================

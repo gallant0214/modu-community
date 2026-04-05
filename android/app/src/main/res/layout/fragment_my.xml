@@ -373,10 +373,6 @@
                     android:id="@+id/menu_terms"
                     layout="@layout/item_menu_row" />
 
-                <!-- 관리자 -->
-                <include
-                    android:id="@+id/menu_admin"
-                    layout="@layout/item_menu_row" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
