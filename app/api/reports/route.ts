@@ -21,6 +21,6 @@ export async function POST(request: Request) {
   }
 
   await sql`INSERT INTO reports (target_type, target_id, post_id, category_id, reason, custom_reason)
-    VALUES (${target_type}, ${Number(target_id)}, ${Number(post_id)}, ${Number(category_id)}, ${sanitize(validateLength(reason.trim(), 200))}, ${custom_reason ? sanitize(validateLength(custom_reason.trim(), 500)) : null})`;
+    VALUES (${target_type}, ${Number(target_id)}, ${post_id ? Number(post_id) : null}, ${category_id ? Number(category_id) : null}, ${sanitize(validateLength(reason.trim(), 200))}, ${custom_reason ? sanitize(validateLength(custom_reason.trim(), 500)) : null})`;
   return NextResponse.json({ success: true });
 }

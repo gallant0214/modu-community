@@ -48,10 +48,12 @@ export default function AdminPage() {
   const [pushTitle, setPushTitle] = useState("");
   const [pushBody, setPushBody] = useState("");
   const [pushUrl, setPushUrl] = useState("");
+  const [pushType, setPushType] = useState<"notice" | "event" | "ad">("notice");
   const [pushSending, setPushSending] = useState(false);
   const [pushMsg, setPushMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [pushLogs, setPushLogs] = useState<{ id: number; title: string; body: string; data: string; created_at: string }[]>([]);
   const [pushConfirm, setPushConfirm] = useState(false);
+  const [pushHistory, setPushHistory] = useState<any[]>([]);
 
   // 관리자 이메일 관리 상태
   const [adminEmails, setAdminEmails] = useState<{ id: number; email: string; created_at: string }[]>([]);
@@ -214,18 +216,18 @@ export default function AdminPage() {
     setPushMsg(null);
     try {
       const token = await firebaseUser?.getIdToken();
-      const res = await fetch("/api/admin/push", {
+      const res = await fetch("/api/admin/broadcast", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ password: storedPassword, title: pushTitle.trim(), body: pushBody.trim(), url: pushUrl.trim() || undefined }),
+        body: JSON.stringify({ title: pushTitle.trim(), body: pushBody.trim(), broadcast_type: pushType || "notice" }),
       });
       const data = await res.json();
       if (data.error) { setPushMsg({ type: "error", text: data.error }); }
       else {
-        setPushMsg({ type: "success", text: `전송 완료! (성공: ${data.sent}건, 실패: ${data.failed}건)` });
+        setPushMsg({ type: "success", text: `전송 완료! (${data.sentCount}명에게 발송)` });
         setPushTitle("");
         setPushBody("");
         setPushUrl("");

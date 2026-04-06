@@ -240,7 +240,7 @@ export default function AdminPage() {
                               ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400"
                               : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
                           }`}>
-                            {report.target_type === "post" ? "게시글" : "댓글"}
+                            {report.target_type === "post" ? "게시글" : report.target_type === "job" ? "구인글" : "댓글"}
                           </span>
                           {report.category_name && (
                             <span className="text-xs text-zinc-400">{report.category_name}</span>
@@ -285,7 +285,7 @@ export default function AdminPage() {
                         <div className="mb-3 rounded-xl bg-zinc-100 px-4 py-3 dark:bg-zinc-800">
                           <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">삭제 기록</p>
                           <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-                            관리자에 의해 {report.target_type === "post" ? "게시글이" : "댓글이"} 삭제되었습니다.
+                            관리자에 의해 {report.target_type === "post" ? "게시글이" : report.target_type === "job" ? "구인글이" : "댓글이"} 삭제되었습니다.
                           </p>
                           <p className="mt-0.5 text-xs text-zinc-400">삭제 시각: {new Date(report.deleted_at).toLocaleString("ko-KR")}</p>
                         </div>
@@ -451,7 +451,7 @@ export default function AdminPage() {
           <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
             <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">삭제하시겠습니까?</h3>
             <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-              신고된 {reports.find((r) => r.id === deleteConfirmId)?.target_type === "post" ? "게시글" : "댓글"}을 삭제하고 처리 완료로 이동합니다.
+              신고된 {reports.find((r) => r.id === deleteConfirmId)?.target_type === "post" ? "게시글" : reports.find((r) => r.id === deleteConfirmId)?.target_type === "job" ? "구인글" : "댓글"}을 삭제하고 처리 완료로 이동합니다.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button

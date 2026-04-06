@@ -33,7 +33,7 @@ export interface Comment {
 
 export interface Report {
   id: number;
-  target_type: "post" | "comment";
+  target_type: "post" | "comment" | "job";
   target_id: number;
   post_id: number;
   category_id: number;

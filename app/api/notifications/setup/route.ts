@@ -27,25 +27,43 @@ export async function POST() {
         notify_notice BOOLEAN DEFAULT true,
         notify_promo BOOLEAN DEFAULT false,
         notify_keyword BOOLEAN DEFAULT true,
+        notify_like BOOLEAN DEFAULT true,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `;
+    await sql`ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS notify_like BOOLEAN DEFAULT true`;
 
-    // 알림 히스토리 테이블
+    // 알림 히스토리 테이블 (확장)
     await sql`
       CREATE TABLE IF NOT EXISTS notification_logs (
         id SERIAL PRIMARY KEY,
         firebase_uid VARCHAR(128) NOT NULL,
-        type VARCHAR(20) NOT NULL,
+        type VARCHAR(30) NOT NULL,
         title VARCHAR(255) NOT NULL,
         body TEXT,
         data JSONB,
         read BOOLEAN DEFAULT false,
+        like_count INT DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `;
+    await sql`ALTER TABLE notification_logs ADD COLUMN IF NOT EXISTS like_count INT DEFAULT 0`;
+
+    // 관리자 브로드캐스트 테이블
+    await sql`
+      CREATE TABLE IF NOT EXISTS admin_broadcasts (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        body TEXT NOT NULL,
+        image_url TEXT,
+        link_url TEXT,
+        broadcast_type VARCHAR(20) DEFAULT 'notice',
+        sent_count INT DEFAULT 0,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `;
 
-    return NextResponse.json({ success: true, message: "Notification tables created" });
+    return NextResponse.json({ success: true, message: "All notification tables created/updated" });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

@@ -30,7 +30,7 @@ function timeAgo(dateStr: string) {
 export default function PostDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const { user, signInWithGoogle, getIdToken } = useAuth();
+  const { user, nickname, signInWithGoogle, getIdToken } = useAuth();
   const categoryId = params.id as string;
   const postId = params.postId as string;
 
@@ -53,7 +53,7 @@ export default function PostDetailPage() {
 
   // 답글 작성
   const [showCommentForm, setShowCommentForm] = useState(false);
-  const [commentAuthor, setCommentAuthor] = useState("");
+  const [commentAuthor, setCommentAuthor] = useState(nickname || "");
   const [commentPassword, setCommentPassword] = useState("");
   const [commentContent, setCommentContent] = useState("");
   const [commentError, setCommentError] = useState("");
@@ -114,6 +114,11 @@ export default function PostDetailPage() {
   const [isNoticeEditing, setIsNoticeEditing] = useState(false);
   const [noticeEditTitle, setNoticeEditTitle] = useState("");
   const [noticeEditContent, setNoticeEditContent] = useState("");
+
+  // 닉네임 로드 시 댓글 작성자 자동 입력
+  useEffect(() => {
+    if (nickname && !commentAuthor) setCommentAuthor(nickname);
+  }, [nickname]);
 
   useEffect(() => {
     Promise.all([

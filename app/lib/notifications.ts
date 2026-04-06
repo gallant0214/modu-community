@@ -44,6 +44,7 @@ export async function sendPushToUser(
         notice: "notify_notice",
         promo: "notify_promo",
         keyword: "notify_keyword",
+        like: "notify_like",
       };
       const prefKey = typeMap[type];
       if (prefKey && pref[prefKey] === false) {
@@ -51,18 +52,18 @@ export async function sendPushToUser(
       }
     }
 
-    // 2. 디바이스 토큰 조회
+    // 2. 알림 로그 저장 (설정 ON이면 항상 저장, 푸시 토큰과 무관)
+    await sql`
+      INSERT INTO notification_logs (firebase_uid, type, title, body, data)
+      VALUES (${firebaseUid}, ${type}, ${title}, ${body}, ${JSON.stringify(data || {})})
+    `;
+
+    // 3. 디바이스 토큰 조회 (푸시 발송용)
     const tokens = await sql`
       SELECT token FROM device_tokens WHERE firebase_uid = ${firebaseUid}
     `;
 
     if (tokens.length === 0) return;
-
-    // 3. 알림 로그 저장
-    await sql`
-      INSERT INTO notification_logs (firebase_uid, type, title, body, data)
-      VALUES (${firebaseUid}, ${type}, ${title}, ${body}, ${JSON.stringify(data || {})})
-    `;
 
     // 4. FCM 발송
     const app = getAdmin();
