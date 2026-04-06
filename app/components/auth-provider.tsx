@@ -127,18 +127,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      await signInWithPopup(auth, googleProvider);
+      // redirect 방식 사용 (팝업 차단/통신 실패 문제 방지)
+      await signInWithRedirect(auth, googleProvider);
     } catch (e: any) {
-      // popup이 차단된 경우 redirect 방식으로 폴백
-      if (e?.code === "auth/popup-blocked" || e?.code === "auth/popup-closed-by-user") {
-        try {
-          await signInWithRedirect(auth, googleProvider);
-        } catch {
-          console.error("Google 로그인 실패 (redirect)", e);
-        }
-      } else {
-        console.error("Google 로그인 실패", e);
-      }
+      console.error("Google 로그인 실패", e);
     }
   };
 
