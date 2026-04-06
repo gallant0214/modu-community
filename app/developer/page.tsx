@@ -18,7 +18,7 @@ export default function AdminPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"pending" | "resolved" | "inquiries" | "notice" | "settings">("pending");
+  const [tab, setTab] = useState<"pending" | "resolved" | "inquiries" | "notice" | "push" | "settings">("pending");
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,6 +43,15 @@ export default function AdminPage() {
   const [noticeLoading, setNoticeLoading] = useState(false);
   const [noticeMsg, setNoticeMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [noticeMode, setNoticeMode] = useState<"view" | "edit" | "create">("view");
+
+  // 푸시 알림 상태
+  const [pushTitle, setPushTitle] = useState("");
+  const [pushBody, setPushBody] = useState("");
+  const [pushUrl, setPushUrl] = useState("");
+  const [pushSending, setPushSending] = useState(false);
+  const [pushMsg, setPushMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [pushLogs, setPushLogs] = useState<{ id: number; title: string; body: string; data: string; created_at: string }[]>([]);
+  const [pushConfirm, setPushConfirm] = useState(false);
 
   // 관리자 이메일 관리 상태
   const [adminEmails, setAdminEmails] = useState<{ id: number; email: string; created_at: string }[]>([]);
@@ -190,6 +199,47 @@ export default function AdminPage() {
     } catch { setPwMsg({ type: "error", text: "오류가 발생했습니다" }); }
     setChangingPw(false);
   }
+
+  async function fetchPushLogs() {
+    try {
+      const res = await fetch(`/api/admin/push?password=${encodeURIComponent(storedPassword)}`);
+      const data = await res.json();
+      if (data.logs) setPushLogs(data.logs);
+    } catch { /* ignore */ }
+  }
+
+  async function handleSendPush() {
+    if (!pushTitle.trim() || !pushBody.trim()) { setPushMsg({ type: "error", text: "제목과 내용을 입력해주세요" }); return; }
+    setPushSending(true);
+    setPushMsg(null);
+    try {
+      const token = await firebaseUser?.getIdToken();
+      const res = await fetch("/api/admin/push", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ password: storedPassword, title: pushTitle.trim(), body: pushBody.trim(), url: pushUrl.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (data.error) { setPushMsg({ type: "error", text: data.error }); }
+      else {
+        setPushMsg({ type: "success", text: `전송 완료! (성공: ${data.sent}건, 실패: ${data.failed}건)` });
+        setPushTitle("");
+        setPushBody("");
+        setPushUrl("");
+        setPushConfirm(false);
+        fetchPushLogs();
+      }
+    } catch { setPushMsg({ type: "error", text: "전송 중 오류가 발생했습니다" }); }
+    setPushSending(false);
+  }
+
+  useEffect(() => {
+    if (tab === "push" && storedPassword) fetchPushLogs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, storedPassword]);
 
   async function fetchNotice() {
     try {
@@ -452,6 +502,9 @@ export default function AdminPage() {
           <button onClick={() => setTab("notice")} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "notice" ? "border-b-2 border-amber-500 text-amber-600 dark:text-amber-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
             공지
           </button>
+          <button onClick={() => setTab("push")} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "push" ? "border-b-2 border-violet-500 text-violet-600 dark:text-violet-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
+            푸시
+          </button>
           <button onClick={() => setTab("settings")} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "settings" ? "border-b-2 border-zinc-500 text-zinc-700 dark:text-zinc-200" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
             설정
           </button>
@@ -616,6 +669,102 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ===== 푸시 알림 탭 ===== */}
+        {tab === "push" && (
+          <div className="p-4 space-y-4">
+            {/* 전송 폼 */}
+            <div className="rounded-2xl bg-white p-6 dark:bg-zinc-900">
+              <h3 className="mb-1 text-base font-bold text-zinc-900 dark:text-zinc-100">광고/알림 전송</h3>
+              <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">앱을 사용하는 모든 사용자에게 푸시 알림을 보냅니다. (프로모션 알림을 끈 사용자 제외)</p>
+
+              {pushMsg && <p className={`mb-4 rounded-lg px-3 py-2 text-sm ${pushMsg.type === "error" ? "bg-red-50 text-red-500 dark:bg-red-950" : "bg-green-50 text-green-600 dark:bg-green-950"}`}>{pushMsg.text}</p>}
+
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">알림 제목 *</label>
+                  <input type="text" value={pushTitle} onChange={(e) => { setPushTitle(e.target.value); setPushMsg(null); }}
+                    placeholder="예: 새로운 기능이 추가되었어요!"
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">알림 내용 *</label>
+                  <textarea value={pushBody} onChange={(e) => { setPushBody(e.target.value); setPushMsg(null); }}
+                    placeholder="알림 내용을 입력해주세요"
+                    rows={3}
+                    className="w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">링크 URL (선택)</label>
+                  <input type="text" value={pushUrl} onChange={(e) => setPushUrl(e.target.value)}
+                    placeholder="알림 클릭 시 이동할 URL (선택)"
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
+                </div>
+
+                {/* 미리보기 */}
+                {(pushTitle.trim() || pushBody.trim()) && (
+                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
+                    <p className="mb-1 text-xs font-medium text-zinc-400">미리보기</p>
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-950">
+                        <svg className="h-5 w-5 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{pushTitle || "(제목)"}</p>
+                        <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-300">{pushBody || "(내용)"}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {!pushConfirm ? (
+                  <button onClick={() => { if (!pushTitle.trim() || !pushBody.trim()) { setPushMsg({ type: "error", text: "제목과 내용을 입력해주세요" }); return; } setPushConfirm(true); }}
+                    className="w-full rounded-xl bg-violet-500 py-3 text-sm font-semibold text-white hover:bg-violet-600">
+                    전송하기
+                  </button>
+                ) : (
+                  <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30">
+                    <p className="mb-3 text-sm font-semibold text-red-600 dark:text-red-400">정말 모든 사용자에게 푸시 알림을 보내시겠습니까?</p>
+                    <p className="mb-4 text-xs text-red-500 dark:text-red-400">전송 후 취소할 수 없습니다.</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => setPushConfirm(false)}
+                        className="flex-1 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">취소</button>
+                      <button onClick={handleSendPush} disabled={pushSending}
+                        className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50">
+                        {pushSending ? "전송 중..." : "전송 확인"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 전송 이력 */}
+            {pushLogs.length > 0 && (
+              <div className="rounded-2xl bg-white p-6 dark:bg-zinc-900">
+                <h3 className="mb-4 text-base font-bold text-zinc-900 dark:text-zinc-100">전송 이력</h3>
+                <div className="space-y-3">
+                  {pushLogs.map((log) => {
+                    let logData: { sent?: number; failed?: number } = {};
+                    try { logData = JSON.parse(log.data); } catch { /* ignore */ }
+                    return (
+                      <div key={log.id} className="rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{log.title}</p>
+                          <span className="text-xs text-zinc-400">{new Date(log.created_at).toLocaleString("ko-KR")}</span>
+                        </div>
+                        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{log.body}</p>
+                        {(logData.sent !== undefined) && (
+                          <p className="mt-1 text-xs text-zinc-400">성공: {logData.sent}건 · 실패: {logData.failed}건</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
