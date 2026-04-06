@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 import { useAuth } from "@/app/components/auth-provider";
@@ -13,6 +13,18 @@ const SPORTS = ["축구", "풋살", "농구", "배구", "배드민턴", "테니�
 const EMPLOYMENT_TYPES = ["정규직", "계약직", "파트타임", "프리랜서", "인턴", "기타"];
 const AUTHOR_ROLES = ["원장", "팀장", "매니저", "담당자", "기타"];
 const CONTACT_TYPES = ["전화", "문자", "카카오톡", "이메일", "기타"];
+
+/* 필수 필드 키 목록 */
+const REQUIRED_FIELDS = ["title", "sport", "center_name", "contact", "description"] as const;
+type RequiredField = typeof REQUIRED_FIELDS[number];
+
+const REQUIRED_LABELS: Record<RequiredField, string> = {
+  title: "제목",
+  sport: "종목",
+  center_name: "센터명",
+  contact: "연락처",
+  description: "상세 내용",
+};
 
 export default function JobWritePage() {
   const router = useRouter();
@@ -32,17 +44,55 @@ export default function JobWritePage() {
   const [selectedGroup, setSelectedGroup] = useState<RegionGroup | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Set<RequiredField>>(new Set());
 
-  const set = (key: string, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
+  /* 각 필수 필드의 ref */
+  const fieldRefs: Record<RequiredField, React.RefObject<HTMLElement | null>> = {
+    title: useRef<HTMLElement>(null),
+    sport: useRef<HTMLElement>(null),
+    center_name: useRef<HTMLElement>(null),
+    contact: useRef<HTMLElement>(null),
+    description: useRef<HTMLElement>(null),
+  };
+
+  const set = (key: string, value: string) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    // 입력 시 해당 필드 에러 해제
+    if (REQUIRED_FIELDS.includes(key as RequiredField)) {
+      setFieldErrors((prev) => {
+        const next = new Set(prev);
+        next.delete(key as RequiredField);
+        return next;
+      });
+    }
+  };
 
   const handleSubmit = async () => {
     if (!user) { setError("로그인이 필요합니다."); return; }
-    if (!form.title.trim()) { setError("제목을 입력해주세요."); return; }
-    if (!form.description.trim()) { setError("내용을 입력해주세요."); return; }
-    if (!form.center_name.trim()) { setError("센터명을 입력해주세요."); return; }
-    if (!form.contact.trim()) { setError("연락처를 입력해주세요."); return; }
-    if (!form.sport) { setError("종목을 선택해주세요."); return; }
 
+    // 필수값 검증
+    const errors = new Set<RequiredField>();
+    for (const field of REQUIRED_FIELDS) {
+      if (!form[field]?.trim()) {
+        errors.add(field);
+      }
+    }
+
+    if (errors.size > 0) {
+      setFieldErrors(errors);
+      // 첫 번째 에러 필드로 스크롤
+      const firstError = REQUIRED_FIELDS.find((f) => errors.has(f));
+      if (firstError && fieldRefs[firstError].current) {
+        fieldRefs[firstError].current.scrollIntoView({ behavior: "smooth", block: "center" });
+        // input에 포커스
+        const input = fieldRefs[firstError].current.querySelector("input, select, textarea");
+        if (input) (input as HTMLElement).focus({ preventScroll: true });
+      }
+      setError(`${REQUIRED_LABELS[firstError!]}을(를) 입력해주세요.`);
+      return;
+    }
+
+    setFieldErrors(new Set());
     setSubmitting(true);
     setError("");
     try {
@@ -86,6 +136,9 @@ export default function JobWritePage() {
     );
   }
 
+  const hasError = (field: RequiredField) => fieldErrors.has(field);
+  const errorBorder = "border-red-400 dark:border-red-500 ring-1 ring-red-400";
+
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-950">
       <div className="mx-auto max-w-2xl">
@@ -107,22 +160,32 @@ export default function JobWritePage() {
         <div className="px-4 py-4 space-y-4">
           {error && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-950 px-3 py-2 rounded-lg">{error}</p>}
 
-          {/* 필수 항목 */}
+          {/* 필수 항목 안내 */}
+          <p className="text-xs text-zinc-400"><span className="text-red-500">*</span> 표시는 필수 입력 항목입니다</p>
+
+          {/* 기본 정보 */}
           <Section title="기본 정보">
-            <Field label="제목 *">
-              <input type="text" value={form.title} onChange={(e) => set("title", e.target.value)}
-                placeholder="구인 제목을 입력해주세요" className={inputCls} />
-            </Field>
-            <Field label="종목 *">
-              <select value={form.sport} onChange={(e) => set("sport", e.target.value)} className={inputCls}>
-                <option value="">종목 선택</option>
-                {SPORTS.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </Field>
-            <Field label="센터명 *">
-              <input type="text" value={form.center_name} onChange={(e) => set("center_name", e.target.value)}
-                placeholder="센터명 또는 기관명" className={inputCls} />
-            </Field>
+            <div ref={fieldRefs.title as React.RefObject<HTMLDivElement>}>
+              <Field label="제목" required error={hasError("title")}>
+                <input type="text" value={form.title} onChange={(e) => set("title", e.target.value)}
+                  placeholder="구인 제목을 입력해주세요" className={`${inputCls} ${hasError("title") ? errorBorder : ""}`} />
+              </Field>
+            </div>
+            <div ref={fieldRefs.sport as React.RefObject<HTMLDivElement>}>
+              <Field label="종목" required error={hasError("sport")}>
+                <select value={form.sport} onChange={(e) => set("sport", e.target.value)}
+                  className={`${inputCls} ${hasError("sport") ? errorBorder : ""}`}>
+                  <option value="">종목 선택</option>
+                  {SPORTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div ref={fieldRefs.center_name as React.RefObject<HTMLDivElement>}>
+              <Field label="센터명" required error={hasError("center_name")}>
+                <input type="text" value={form.center_name} onChange={(e) => set("center_name", e.target.value)}
+                  placeholder="센터명 또는 기관명" className={`${inputCls} ${hasError("center_name") ? errorBorder : ""}`} />
+              </Field>
+            </div>
             <Field label="주소">
               <input type="text" value={form.address} onChange={(e) => set("address", e.target.value)}
                 placeholder="상세 주소 (선택)" className={inputCls} />
@@ -178,21 +241,27 @@ export default function JobWritePage() {
                 {CONTACT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </Field>
-            <Field label="연락처 *">
-              <input type="text" value={form.contact} onChange={(e) => set("contact", e.target.value)}
-                placeholder="전화번호, 이메일 등" className={inputCls} />
-            </Field>
+            <div ref={fieldRefs.contact as React.RefObject<HTMLDivElement>}>
+              <Field label="연락처" required error={hasError("contact")}>
+                <input type="text" value={form.contact} onChange={(e) => set("contact", e.target.value)}
+                  placeholder="전화번호, 이메일 등" className={`${inputCls} ${hasError("contact") ? errorBorder : ""}`} />
+              </Field>
+            </div>
           </Section>
 
-          <Section title="상세 내용">
-            <textarea
-              value={form.description}
-              onChange={(e) => set("description", e.target.value)}
-              placeholder="채용 상세 내용을 입력해주세요 *"
-              rows={8}
-              className={`${inputCls} resize-none`}
-            />
-          </Section>
+          <div ref={fieldRefs.description as React.RefObject<HTMLDivElement>}>
+            <Section title="상세 내용">
+              <Field label="채용 상세" required error={hasError("description")}>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => set("description", e.target.value)}
+                  placeholder="채용 상세 내용을 입력해주세요"
+                  rows={8}
+                  className={`${inputCls} resize-none ${hasError("description") ? errorBorder : ""}`}
+                />
+              </Field>
+            </Section>
+          </div>
 
           <button
             onClick={handleSubmit}
@@ -264,10 +333,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, required, error, children }: { label: string; required?: boolean; error?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="text-xs text-zinc-500 dark:text-zinc-400 mb-1 block">{label}</label>
+      <label className={`text-xs mb-1 block ${error ? "text-red-500 font-medium" : "text-zinc-500 dark:text-zinc-400"}`}>
+        {label}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
+        {error && <span className="ml-1 text-[11px] text-red-400">필수 입력</span>}
+      </label>
       {children}
     </div>
   );
