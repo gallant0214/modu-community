@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, type User } from "firebase/auth";
 import { auth, googleProvider } from "@/app/lib/firebase-client";
 
 interface AuthContextType {
@@ -24,6 +24,36 @@ const AuthContext = createContext<AuthContextType>({
   refreshNickname: async () => {},
 });
 
+/**
+ * 인앱 브라우저(WebView) 감지
+ * 네이버앱, 카카오톡, 인스타그램, 페이스북, 라인, 밴드 등
+ */
+function isInAppBrowser(): boolean {
+  if (typeof window === "undefined") return false;
+  const ua = navigator.userAgent.toLowerCase();
+  return /naver|kakaotalk|instagram|fbav|fban|line\/|band\/|everytimeapp/i.test(ua)
+    || (/wv\)/.test(ua) && /android/i.test(ua)); // Android WebView 일반 감지
+}
+
+/**
+ * 현재 URL을 외부 브라우저(Chrome/Safari)로 여는 시도
+ */
+function openInExternalBrowser() {
+  const url = window.location.href;
+  const ua = navigator.userAgent.toLowerCase();
+
+  // Android: intent scheme으로 Chrome 열기
+  if (/android/i.test(ua)) {
+    const intentUrl = `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;end`;
+    window.location.href = intentUrl;
+    return;
+  }
+
+  // iOS: Safari로 열기 시도 (일부 인앱 브라우저에서 동작)
+  // window.open으로 시도 후 실패하면 안내 메시지
+  window.open(url, "_blank");
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,14 +72,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const data = await res.json();
           const name = data.nickname || null;
           setNickname(name);
-          // 서버 조회 성공 시 localStorage에 캐싱
           if (name) {
             localStorage.setItem(NICKNAME_CACHE_KEY, name);
             localStorage.setItem(NICKNAME_UID_KEY, uid);
           }
           return;
         }
-        // 4xx 에러는 재시도 불필요
         if (res.status >= 400 && res.status < 500) break;
       } catch {
         if (attempt < retries) {
@@ -58,7 +86,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-    // 모든 시도 실패 시 캐시에서 복원
     const cachedUid = localStorage.getItem(NICKNAME_UID_KEY);
     const cachedNickname = localStorage.getItem(NICKNAME_CACHE_KEY);
     if (cachedUid === uid && cachedNickname) {
@@ -69,6 +96,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // redirect 로그인 결과 처리
+    getRedirectResult(auth).catch(() => {});
+
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
@@ -85,10 +115,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = async () => {
+    // 인앱 브라우저에서는 외부 브라우저로 유도
+    if (isInAppBrowser()) {
+      const confirmed = confirm(
+        "인앱 브라우저에서는 Google 로그인이 제한됩니다.\n\n외부 브라우저(Chrome/Safari)에서 열어서 로그인해 주세요.\n\n[확인]을 누르면 외부 브라우저로 이동합니다."
+      );
+      if (confirmed) {
+        openInExternalBrowser();
+      }
+      return;
+    }
+
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (e) {
-      console.error("Google 로그인 실패", e);
+    } catch (e: any) {
+      // popup이 차단된 경우 redirect 방식으로 폴백
+      if (e?.code === "auth/popup-blocked" || e?.code === "auth/popup-closed-by-user") {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+        } catch {
+          console.error("Google 로그인 실패 (redirect)", e);
+        }
+      } else {
+        console.error("Google 로그인 실패", e);
+      }
     }
   };
 
