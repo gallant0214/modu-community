@@ -131,8 +131,6 @@ export default function MyPage() {
   /* 모달 상태 */
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
-  const [showKeywordModal, setShowKeywordModal] = useState(false);
-  const [showNotifModal, setShowNotifModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   /* 닉네임 */
@@ -145,24 +143,11 @@ export default function MyPage() {
   /* 테마 */
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
 
-  /* 키워드 */
-  const [keywords, setKeywords] = useState<string[]>([]);
-  const [keywordInput, setKeywordInput] = useState("");
-
-  /* 알림 설정 */
-  const [notifSettings, setNotifSettings] = useState({
-    comments: true, replies: true, jobs: true, notice: true, ads: false, keywords: true,
-  });
-
   /* 초기화 */
   useEffect(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("theme_preference");
       if (saved === "light" || saved === "dark" || saved === "system") setTheme(saved);
-      const kw = localStorage.getItem("notification_keywords");
-      if (kw) try { setKeywords(JSON.parse(kw)); } catch {}
-      const notif = localStorage.getItem("notification_settings");
-      if (notif) try { setNotifSettings(JSON.parse(notif)); } catch {}
     }
   }, []);
 
@@ -219,7 +204,7 @@ export default function MyPage() {
       } else if (tab === "comments") {
         const res = await fetch(`/api/comments/my?uid=${user.uid}`, { headers });
         const data = await res.json();
-        setComments(data.comments || []);
+        setComments(data.comments || data.posts || []);
       } else if (tab === "jobs") {
         const res = await fetch(`/api/jobs/my?uid=${user.uid}`, { headers });
         const data = await res.json();
@@ -303,31 +288,6 @@ export default function MyPage() {
         root.classList.remove("dark");
       }
     }
-  };
-
-  /* 키워드 추가 */
-  const addKeyword = () => {
-    const kw = keywordInput.trim();
-    if (!kw) return;
-    if (keywords.length >= 20) return;
-    if (keywords.includes(kw)) return;
-    const updated = [...keywords, kw];
-    setKeywords(updated);
-    localStorage.setItem("notification_keywords", JSON.stringify(updated));
-    setKeywordInput("");
-  };
-
-  const removeKeyword = (kw: string) => {
-    const updated = keywords.filter((k) => k !== kw);
-    setKeywords(updated);
-    localStorage.setItem("notification_keywords", JSON.stringify(updated));
-  };
-
-  /* 알림 설정 저장 */
-  const toggleNotif = (key: keyof typeof notifSettings) => {
-    const updated = { ...notifSettings, [key]: !notifSettings[key] };
-    setNotifSettings(updated);
-    localStorage.setItem("notification_settings", JSON.stringify(updated));
   };
 
   /* 구인 완료/재게시 */
@@ -568,8 +528,6 @@ export default function MyPage() {
 
         {/* ── 3. 설정 카드 ── */}
         <Card title="설정">
-          <SettingRow label="알림 설정" onClick={() => setShowNotifModal(true)} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>} />
-          <SettingRow label="키워드 설정" onClick={() => setShowKeywordModal(true)} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" /></svg>} />
           <SettingRow label="화면 테마" onClick={() => setShowThemeModal(true)} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>} />
           <SettingRow label="로그아웃" onClick={signOutUser} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>} />
         </Card>
@@ -618,66 +576,6 @@ export default function MyPage() {
               className="w-full py-2.5 bg-[#6B7B3A] hover:bg-[#5A6930] text-white font-medium rounded-xl text-sm disabled:opacity-50 transition-colors"
             >{nicknameLoading ? "저장 중..." : "저장하기"}</button>
           </>
-        )}
-      </Modal>
-
-      {/* 알림 설정 모달 */}
-      <Modal open={showNotifModal} onClose={() => setShowNotifModal(false)} title="알림 설정">
-        <div className="space-y-1">
-          {([
-            ["comments", "게시글 댓글 알림"],
-            ["replies", "대댓글 알림"],
-            ["jobs", "구인 알림"],
-            ["notice", "공지사항 알림"],
-            ["ads", "광고성 알림"],
-            ["keywords", "키워드 알림"],
-          ] as const).map(([key, label]) => (
-            <div key={key} className="flex items-center justify-between py-3 border-b border-[#E8E0D0]/50 dark:border-zinc-800 last:border-0">
-              <span className="text-sm text-[#333] dark:text-zinc-200">{label}</span>
-              <button
-                onClick={() => toggleNotif(key)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${
-                  notifSettings[key] ? "bg-[#6B7B3A]" : "bg-[#E8E0D0] dark:bg-zinc-600"
-                }`}
-              >
-                <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                  notifSettings[key] ? "translate-x-[22px]" : "translate-x-0.5"
-                }`} />
-              </button>
-            </div>
-          ))}
-        </div>
-      </Modal>
-
-      {/* 키워드 설정 모달 */}
-      <Modal open={showKeywordModal} onClose={() => setShowKeywordModal(false)} title="키워드 설정">
-        <div className="flex gap-2 mb-3">
-          <input
-            type="text"
-            value={keywordInput}
-            onChange={(e) => setKeywordInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addKeyword()}
-            placeholder="키워드 입력"
-            className="flex-1 px-3 py-2 bg-[#F5F0E5] dark:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-600 rounded-lg text-sm text-[#333] dark:text-zinc-100 placeholder-[#CCC] focus:outline-none focus:ring-2 focus:ring-[#6B7B3A]"
-          />
-          <button
-            onClick={addKeyword}
-            disabled={keywords.length >= 20}
-            className="px-4 py-2 bg-[#6B7B3A] text-white text-sm rounded-lg disabled:opacity-50 hover:bg-[#5A6930] transition-colors shrink-0"
-          >추가</button>
-        </div>
-        <p className="text-xs text-[#999] mb-2">등록된 키워드 ({keywords.length}/20)</p>
-        {keywords.length === 0 ? (
-          <p className="text-sm text-[#CCC] text-center py-4">등록된 키워드가 없습니다</p>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {keywords.map((kw) => (
-              <span key={kw} className="flex items-center gap-1 px-2.5 py-1 bg-[#6B7B3A]/10 text-[#6B7B3A] text-sm rounded-full">
-                {kw}
-                <button onClick={() => removeKeyword(kw)} className="text-[#6B7B3A]/60 hover:text-[#6B7B3A]">&times;</button>
-              </span>
-            ))}
-          </div>
         )}
       </Modal>
 
