@@ -22,15 +22,20 @@ export default async function CommunityPage() {
     .sort((a, b) => Number(b.post_count) - Number(a.post_count));
 
   return (
-    <div className="min-h-screen bg-white dark:bg-zinc-950">
-      <div className="mx-auto max-w-2xl">
-        <header className="px-4 pt-4 pb-2">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-            종목후기 게시판
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      {/* 브랜드 히어로 */}
+      <div className="bg-gradient-to-b from-blue-50 to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="mx-auto max-w-5xl px-4 pt-8 pb-6 lg:text-center">
+          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100 mb-1">
+            합격한 선배의 시험장 이야기
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">종목을 선택하여 후기를 확인하세요</p>
-        </header>
+          <p className="text-sm sm:text-base text-zinc-500 dark:text-zinc-400">
+            종목별 실기·구술 후기를 한곳에서 확인하세요
+          </p>
+        </div>
+      </div>
 
+      <div className="mx-auto max-w-5xl">
         <CategorySearch popular={popular} all={all} />
       </div>
     </div>
