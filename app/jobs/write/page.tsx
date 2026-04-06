@@ -1,347 +1,635 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 import { useAuth } from "@/app/components/auth-provider";
 
-const SPORTS = ["축구", "풋살", "농구", "배구", "배드민턴", "테니스", "탁구", "수영", "골프", "야구", "소프트볼",
-  "클라이밍", "필라테스", "요가", "헬스/PT", "태권도", "유도", "검도", "복싱", "킥복싱",
-  "무에타이", "주짓수", "합기도", "씨름", "핸드볼", "럭비", "아이스하키", "스케이트",
-  "스키/스노보드", "사이클", "트라이애슬론", "육상", "체조", "승마", "댄스스포츠", "기타"];
+/* ══════════════════════════════════
+   유틸
+   ══════════════════════════════════ */
+const CHOSUNG = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+function getChosung(str: string) {
+  return [...str].map(ch => {
+    const c = ch.charCodeAt(0) - 0xAC00;
+    if (c < 0 || c > 11171) return ch;
+    return CHOSUNG[Math.floor(c / 588)];
+  }).join("");
+}
+function matchSearch(text: string, q: string) {
+  if (!q) return true;
+  if (text.toLowerCase().includes(q.toLowerCase())) return true;
+  const isCs = [...q].every(c => CHOSUNG.includes(c) || new Set(CHOSUNG).has(c));
+  if (isCs) return getChosung(text).includes(getChosung(q));
+  return false;
+}
 
-const EMPLOYMENT_TYPES = ["정규직", "계약직", "파트타임", "프리랜서", "인턴", "기타"];
-const AUTHOR_ROLES = ["원장", "팀장", "매니저", "담당자", "기타"];
-const CONTACT_TYPES = ["전화", "문자", "카카오톡", "이메일", "기타"];
+function formatPhone(v: string) {
+  const n = v.replace(/\D/g, "").slice(0, 11);
+  if (n.startsWith("02")) {
+    if (n.length <= 2) return n;
+    if (n.length <= 5) return `${n.slice(0, 2)}-${n.slice(2)}`;
+    if (n.length <= 9) return `${n.slice(0, 2)}-${n.slice(2, 5)}-${n.slice(5)}`;
+    return `${n.slice(0, 2)}-${n.slice(2, 6)}-${n.slice(6)}`;
+  }
+  if (n.length <= 3) return n;
+  if (n.length <= 7) return `${n.slice(0, 3)}-${n.slice(3)}`;
+  return `${n.slice(0, 3)}-${n.slice(3, 7)}-${n.slice(7)}`;
+}
 
-/* 필수 필드 키 목록 */
-const REQUIRED_FIELDS = ["title", "sport", "center_name", "contact", "description"] as const;
-type RequiredField = typeof REQUIRED_FIELDS[number];
+function formatMoney(v: string) {
+  const n = v.replace(/\D/g, "");
+  if (!n) return "";
+  return Number(n).toLocaleString();
+}
 
-const REQUIRED_LABELS: Record<RequiredField, string> = {
-  title: "제목",
-  sport: "종목",
-  center_name: "센터명",
-  contact: "연락처",
-  description: "상세 내용",
-};
+/* ══════════════════════════════════
+   공통 모달
+   ══════════════════════════════════ */
+function Modal({ open, onClose, icon, title, subtitle, children, footer }: {
+  open: boolean; onClose: () => void; icon?: React.ReactNode; title: string; subtitle?: string;
+  children: React.ReactNode; footer?: React.ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-white dark:bg-zinc-900 rounded-[20px] shadow-2xl max-h-[80vh] flex flex-col overflow-hidden">
+        <div className="px-5 pt-5 pb-3 text-center shrink-0">
+          {icon && <div className="flex justify-center mb-2">{icon}</div>}
+          <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">{title}</h3>
+          {subtitle && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{subtitle}</p>}
+        </div>
+        <div className="flex-1 overflow-y-auto">{children}</div>
+        {footer && <div className="px-5 py-3 border-t border-zinc-100 dark:border-zinc-800 shrink-0">{footer}</div>}
+      </div>
+    </div>
+  );
+}
 
+/* 라디오 모달 항목 */
+function RadioItem({ label, selected, onSelect }: { label: string; selected: boolean; onSelect: () => void }) {
+  return (
+    <button onClick={onSelect} className="w-full flex items-center gap-3 px-5 py-3.5 text-left border-b border-zinc-100 dark:border-zinc-800 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? "border-blue-600 bg-blue-600" : "border-zinc-300 dark:border-zinc-600"}`}>
+        {selected && <span className="w-2 h-2 bg-white rounded-full" />}
+      </span>
+      <span className="text-sm text-zinc-900 dark:text-zinc-100">{label}</span>
+    </button>
+  );
+}
+
+/* 체크박스 모달 항목 */
+function CheckItem({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
+  return (
+    <button onClick={onToggle} className="w-full flex items-center gap-3 px-5 py-3.5 text-left border-b border-zinc-100 dark:border-zinc-800 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+      <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${checked ? "bg-blue-600" : "border-2 border-zinc-300 dark:border-zinc-600"}`}>
+        {checked && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+      </span>
+      <span className="text-sm text-zinc-900 dark:text-zinc-100">{label}</span>
+    </button>
+  );
+}
+
+/* 필드 래퍼 */
+function Field({ label, required, children, count, max }: { label: string; required?: boolean; children: React.ReactNode; count?: number; max?: number }) {
+  return (
+    <div className="space-y-1">
+      <label className="text-xs text-zinc-500 dark:text-zinc-400 block">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      {children}
+      {max !== undefined && count !== undefined && (
+        <p className={`text-right text-[11px] ${count > max ? "text-red-500" : "text-zinc-400"}`}>{count}/{max}</p>
+      )}
+    </div>
+  );
+}
+
+/* 선택 버튼 (모달 트리거용) */
+function SelectButton({ value, placeholder, onClick }: { value: string; placeholder: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="w-full flex items-center justify-between px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-900 text-left">
+      <span className={value ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400"}>{value || placeholder}</span>
+      <svg className="w-4 h-4 text-zinc-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    </button>
+  );
+}
+
+const inputCls = "w-full px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500";
+
+const EMPLOYMENT_TYPES = ["정규직", "계약직", "아르바이트", "프리랜서(위촉직)", "파트타임", "교육생/연수생", "인턴"];
+const SALARY_TYPES = ["시급", "월급", "건당", "협의"];
+const HEADCOUNT_OPTIONS = ["1명", "2~3명", "4명 이상", "직접 입력"];
+const PREFERENCES_OPTIONS = ["동종업계 경력자", "관련 자격증 소지자", "장기근무 가능자", "초보 가능", "인근 거주자", "대학생 가능", "운전 가능자"];
+const BENEFITS_OPTIONS = ["4대보험", "인센티브", "식대지원", "회원권 제공", "교육 지원", "퇴직금"];
+const DEADLINE_OPTIONS = ["상시모집", "정원마감시", "직접 입력"];
+const AUTHOR_ROLES = ["관리자", "대표", "기타"];
+
+/* ══════════════════════════════════
+   메인 페이지
+   ══════════════════════════════════ */
 export default function JobWritePage() {
   const router = useRouter();
   const { user, loading, signInWithGoogle, getIdToken, nickname } = useAuth();
 
-  const [form, setForm] = useState({
-    title: "", description: "", center_name: "", address: "",
-    author_role: AUTHOR_ROLES[0], author_name: "",
-    contact_type: CONTACT_TYPES[0], contact: "",
-    sport: "", region_name: "", region_code: "",
-    employment_type: EMPLOYMENT_TYPES[0], salary: "",
-    headcount: "", benefits: "", preferences: "", deadline: "",
-  });
+  /* 카테고리(종목) 서버에서 로드 */
+  const [categories, setCategories] = useState<{ id: number; name: string; emoji: string }[]>([]);
+  useEffect(() => {
+    fetch("/api/categories").then(r => r.json()).then(data => {
+      setCategories(Array.isArray(data) ? data.map((c: any) => ({ id: c.id, name: c.name, emoji: c.emoji })) : []);
+    }).catch(() => {});
+  }, []);
 
-  const [showRegionModal, setShowRegionModal] = useState(false);
+  /* 폼 상태 */
+  const [regionCode, setRegionCode] = useState("");
+  const [regionName, setRegionName] = useState("");
+  const [sport, setSport] = useState("");
+  const [centerName, setCenterName] = useState("");
+  const [address, setAddress] = useState("");
+  const [authorRole, setAuthorRole] = useState("관리자");
+  const [authorName, setAuthorName] = useState("");
+  const [contact, setContact] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [deadlineType, setDeadlineType] = useState("");
+  const [deadlineDate, setDeadlineDate] = useState("");
+  const [employmentType, setEmploymentType] = useState("");
+  const [salaryType, setSalaryType] = useState("");
+  const [salaryAmount, setSalaryAmount] = useState("");
+  const [salaryIncentive, setSalaryIncentive] = useState(false);
+  const [salaryQuickPay, setSalaryQuickPay] = useState(false);
+  const [headcount, setHeadcount] = useState("");
+  const [headcountCustom, setHeadcountCustom] = useState("");
+  const [preferences, setPreferences] = useState<string[]>([]);
+  const [benefits, setBenefits] = useState<string[]>([]);
+  const [agreed, setAgreed] = useState(false);
+
+  /* 모달 상태 */
+  const [showRegion, setShowRegion] = useState(false);
+  const [showSport, setShowSport] = useState(false);
+  const [showDeadline, setShowDeadline] = useState(false);
+  const [showEmployment, setShowEmployment] = useState(false);
+  const [showSalary, setShowSalary] = useState(false);
+  const [showHeadcount, setShowHeadcount] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [showBenefits, setShowBenefits] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmChecked, setConfirmChecked] = useState(false);
+
   const [regionStep, setRegionStep] = useState<"group" | "sub">("group");
   const [selectedGroup, setSelectedGroup] = useState<RegionGroup | null>(null);
+  const [sportSearch, setSportSearch] = useState("");
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<Set<RequiredField>>(new Set());
 
-  /* 각 필수 필드의 ref */
-  const fieldRefs: Record<RequiredField, React.RefObject<HTMLElement | null>> = {
-    title: useRef<HTMLElement>(null),
-    sport: useRef<HTMLElement>(null),
-    center_name: useRef<HTMLElement>(null),
-    contact: useRef<HTMLElement>(null),
-    description: useRef<HTMLElement>(null),
+  /* refs for scroll */
+  const fieldRefs: Record<string, React.RefObject<HTMLDivElement | null>> = {
+    region: useRef(null), sport: useRef(null), centerName: useRef(null),
+    address: useRef(null), authorName: useRef(null), contact: useRef(null),
+    title: useRef(null), description: useRef(null), deadline: useRef(null),
+    employment: useRef(null), salary: useRef(null), headcount: useRef(null),
   };
 
-  const set = (key: string, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-    // 입력 시 해당 필드 에러 해제
-    if (REQUIRED_FIELDS.includes(key as RequiredField)) {
-      setFieldErrors((prev) => {
-        const next = new Set(prev);
-        next.delete(key as RequiredField);
-        return next;
-      });
+  /* 지역 선택 시 주소 프리필 */
+  const handleRegionSelect = (code: string, name: string) => {
+    setRegionCode(code);
+    setRegionName(name);
+    if (!address || REGION_GROUPS.some(g => g.subRegions.some(s => address.startsWith(s.name)))) {
+      setAddress(name + " ");
     }
+    setShowRegion(false);
   };
 
+  /* 급여 표시 텍스트 */
+  const salaryDisplay = (() => {
+    if (!salaryType) return "";
+    if (salaryType === "협의") return "급여 협의";
+    if (!salaryAmount) return salaryType;
+    let s = `${salaryType} ${salaryAmount}원`;
+    const extras: string[] = [];
+    if (salaryIncentive) extras.push("인센티브 있음");
+    if (salaryQuickPay) extras.push("주급/당일지급 가능");
+    if (extras.length) s += ` (${extras.join(", ")})`;
+    return s;
+  })();
+
+  /* 마감일 표시 텍스트 */
+  const deadlineDisplay = deadlineType === "직접 입력" && deadlineDate
+    ? `${deadlineDate}까지`
+    : deadlineType;
+
+  /* 모집인원 표시 텍스트 */
+  const headcountDisplay = headcount === "직접 입력" ? headcountCustom : headcount;
+
+  /* 유효성 검사 */
+  const validate = () => {
+    if (!user) { alert("구인 등록은 로그인 후 가능합니다."); return false; }
+    const checks: [boolean, string, string][] = [
+      [!regionCode, "region", "지역"],
+      [!sport, "sport", "종목"],
+      [!centerName.trim(), "centerName", "업체명"],
+      [!address.trim(), "address", "업체 주소"],
+      [!authorName.trim(), "authorName", "작성자 실명"],
+      [!contact.trim(), "contact", "연락처"],
+      [!title.trim(), "title", "제목"],
+      [!description.trim(), "description", "내용"],
+      [!deadlineType, "deadline", "모집기간"],
+      [!employmentType, "employment", "근무형태"],
+      [!salaryType, "salary", "급여"],
+      [!headcount || (headcount === "직접 입력" && !headcountCustom.trim()), "headcount", "모집 인원"],
+    ];
+    for (const [fail, key, label] of checks) {
+      if (fail) {
+        fieldRefs[key]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        alert(`필수 항목을 모두 입력해주세요.\n\n"${label}"을(를) 입력해주세요.`);
+        return false;
+      }
+    }
+    if (!agreed) { alert("동의 항목을 체크해주세요."); return false; }
+    return true;
+  };
+
+  /* 등록 */
   const handleSubmit = async () => {
-    if (!user) { setError("로그인이 필요합니다."); return; }
-
-    // 필수값 검증
-    const errors = new Set<RequiredField>();
-    for (const field of REQUIRED_FIELDS) {
-      if (!form[field]?.trim()) {
-        errors.add(field);
-      }
-    }
-
-    if (errors.size > 0) {
-      setFieldErrors(errors);
-      // 첫 번째 에러 필드로 스크롤
-      const firstError = REQUIRED_FIELDS.find((f) => errors.has(f));
-      if (firstError && fieldRefs[firstError].current) {
-        fieldRefs[firstError].current.scrollIntoView({ behavior: "smooth", block: "center" });
-        // input에 포커스
-        const input = fieldRefs[firstError].current.querySelector("input, select, textarea");
-        if (input) (input as HTMLElement).focus({ preventScroll: true });
-      }
-      setError(`${REQUIRED_LABELS[firstError!]}을(를) 입력해주세요.`);
-      return;
-    }
-
-    setFieldErrors(new Set());
     setSubmitting(true);
     setError("");
     try {
       const token = await getIdToken();
+      const salaryText = salaryDisplay;
+      const deadlineText = deadlineDisplay;
+      const headcountText = headcountDisplay;
+
       const res = await fetch("/api/jobs", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
-          ...form,
-          author_name: form.author_name || (nickname || user.displayName || ""),
+          title: title.trim(),
+          description: description.trim(),
+          center_name: centerName.trim(),
+          address: address.trim(),
+          author_role: authorRole,
+          author_name: authorName.trim() || (nickname || user?.displayName || ""),
+          contact_type: "전화",
+          contact: contact,
+          sport,
+          region_name: regionName,
+          region_code: regionCode,
+          employment_type: employmentType,
+          salary: salaryText,
+          headcount: headcountText,
+          benefits: benefits.join(", "),
+          preferences: preferences.join(", "),
+          deadline: deadlineText,
         }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "등록에 실패했습니다."); return; }
       router.replace(`/jobs/${data.id}`);
     } catch {
-      setError("오류가 발생했습니다. 다시 시도해주세요.");
+      setError("오류가 발생했습니다.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) {
-    return <div className="flex justify-center items-center min-h-screen"><div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>;
-  }
+  if (loading) return <div className="flex justify-center items-center min-h-screen"><div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>;
 
-  if (!user) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-4">
-        <p className="text-zinc-500 text-sm text-center">구인 글 작성은 Google 로그인 후 이용 가능합니다.</p>
-        <button
-          onClick={signInWithGoogle}
-          className="flex items-center gap-2 px-5 py-2.5 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl font-medium text-sm"
-        >
-          Google로 로그인
-        </button>
-      </div>
-    );
-  }
-
-  const hasError = (field: RequiredField) => fieldErrors.has(field);
-  const errorBorder = "border-red-400 dark:border-red-500 ring-1 ring-red-400";
+  if (!user) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-4">
+      <p className="text-zinc-500 text-sm text-center">구인 글 작성은 Google 로그인 후 이용 가능합니다.</p>
+      <button onClick={signInWithGoogle} className="flex items-center gap-2 px-5 py-2.5 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl font-medium text-sm">Google로 로그인</button>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-white dark:bg-zinc-950">
+    <div className="min-h-screen bg-white dark:bg-zinc-950 pb-24">
       <div className="mx-auto max-w-2xl">
         {/* 헤더 */}
-        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-zinc-100 dark:border-zinc-800 sticky top-14 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md z-20">
           <button onClick={() => router.back()} className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           </button>
           <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex-1">구인 글쓰기</span>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
-          >{submitting ? "등록 중..." : "등록"}</button>
         </div>
 
         <div className="px-4 py-4 space-y-4">
           {error && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-950 px-3 py-2 rounded-lg">{error}</p>}
-
-          {/* 필수 항목 안내 */}
           <p className="text-xs text-zinc-400"><span className="text-red-500">*</span> 표시는 필수 입력 항목입니다</p>
 
-          {/* 기본 정보 */}
-          <Section title="기본 정보">
-            <div ref={fieldRefs.title as React.RefObject<HTMLDivElement>}>
-              <Field label="제목" required error={hasError("title")}>
-                <input type="text" value={form.title} onChange={(e) => set("title", e.target.value)}
-                  placeholder="구인 제목을 입력해주세요" className={`${inputCls} ${hasError("title") ? errorBorder : ""}`} />
-              </Field>
-            </div>
-            <div ref={fieldRefs.sport as React.RefObject<HTMLDivElement>}>
-              <Field label="종목" required error={hasError("sport")}>
-                <select value={form.sport} onChange={(e) => set("sport", e.target.value)}
-                  className={`${inputCls} ${hasError("sport") ? errorBorder : ""}`}>
-                  <option value="">종목 선택</option>
-                  {SPORTS.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </Field>
-            </div>
-            <div ref={fieldRefs.center_name as React.RefObject<HTMLDivElement>}>
-              <Field label="센터명" required error={hasError("center_name")}>
-                <input type="text" value={form.center_name} onChange={(e) => set("center_name", e.target.value)}
-                  placeholder="센터명 또는 기관명" className={`${inputCls} ${hasError("center_name") ? errorBorder : ""}`} />
-              </Field>
-            </div>
-            <Field label="주소">
-              <input type="text" value={form.address} onChange={(e) => set("address", e.target.value)}
-                placeholder="상세 주소 (선택)" className={inputCls} />
+          {/* 1. 지역 */}
+          <div ref={fieldRefs.region}>
+            <Field label="지역" required>
+              <div className="flex items-center gap-2">
+                <span className={`flex-1 text-sm ${regionName ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400"}`}>
+                  {regionName || "지역을 선택해 주세요"}
+                </span>
+                <button onClick={() => { setShowRegion(true); setRegionStep("group"); }} className="px-3 py-1.5 text-xs border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950 shrink-0">
+                  {regionName ? "지역 변경" : "지역 선택"}
+                </button>
+              </div>
             </Field>
-            <Field label="지역">
-              <button onClick={() => { setShowRegionModal(true); setRegionStep("group"); setSelectedGroup(null); }}
-                className={`${inputCls} text-left ${!form.region_name ? "text-zinc-400" : ""}`}>
-                {form.region_name || "지역 선택 (선택)"}
-              </button>
-            </Field>
-          </Section>
-
-          <Section title="채용 조건">
-            <Field label="근무형태">
-              <select value={form.employment_type} onChange={(e) => set("employment_type", e.target.value)} className={inputCls}>
-                {EMPLOYMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </Field>
-            <Field label="급여">
-              <input type="text" value={form.salary} onChange={(e) => set("salary", e.target.value)}
-                placeholder="예: 월급 300만원 / 협의" className={inputCls} />
-            </Field>
-            <Field label="모집인원">
-              <input type="text" value={form.headcount} onChange={(e) => set("headcount", e.target.value)}
-                placeholder="예: 1명" className={inputCls} />
-            </Field>
-            <Field label="마감일">
-              <input type="text" value={form.deadline} onChange={(e) => set("deadline", e.target.value)}
-                placeholder="예: 2025-12-31 또는 채용 시 마감" className={inputCls} />
-            </Field>
-            <Field label="복리후생">
-              <input type="text" value={form.benefits} onChange={(e) => set("benefits", e.target.value)}
-                placeholder="예: 4대보험, 교통비 지원" className={inputCls} />
-            </Field>
-            <Field label="우대사항">
-              <input type="text" value={form.preferences} onChange={(e) => set("preferences", e.target.value)}
-                placeholder="예: 관련 자격증 소지자" className={inputCls} />
-            </Field>
-          </Section>
-
-          <Section title="연락처">
-            <Field label="담당자 역할">
-              <select value={form.author_role} onChange={(e) => set("author_role", e.target.value)} className={inputCls}>
-                {AUTHOR_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </Field>
-            <Field label="담당자명">
-              <input type="text" value={form.author_name} onChange={(e) => set("author_name", e.target.value)}
-                placeholder="담당자 이름" className={inputCls} />
-            </Field>
-            <Field label="연락 방법">
-              <select value={form.contact_type} onChange={(e) => set("contact_type", e.target.value)} className={inputCls}>
-                {CONTACT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </Field>
-            <div ref={fieldRefs.contact as React.RefObject<HTMLDivElement>}>
-              <Field label="연락처" required error={hasError("contact")}>
-                <input type="text" value={form.contact} onChange={(e) => set("contact", e.target.value)}
-                  placeholder="전화번호, 이메일 등" className={`${inputCls} ${hasError("contact") ? errorBorder : ""}`} />
-              </Field>
-            </div>
-          </Section>
-
-          <div ref={fieldRefs.description as React.RefObject<HTMLDivElement>}>
-            <Section title="상세 내용">
-              <Field label="채용 상세" required error={hasError("description")}>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => set("description", e.target.value)}
-                  placeholder="채용 상세 내용을 입력해주세요"
-                  rows={8}
-                  className={`${inputCls} resize-none ${hasError("description") ? errorBorder : ""}`}
-                />
-              </Field>
-            </Section>
           </div>
 
-          <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl disabled:opacity-50 transition-colors mb-4"
-          >{submitting ? "등록 중..." : "구인 글 등록"}</button>
+          {/* 2. 종목 */}
+          <div ref={fieldRefs.sport}>
+            <Field label="종목" required>
+              <SelectButton value={sport} placeholder="종목을 선택해 주세요" onClick={() => { setShowSport(true); setSportSearch(""); }} />
+            </Field>
+          </div>
+
+          {/* 3. 업체명 */}
+          <div ref={fieldRefs.centerName}>
+            <Field label="업체명" required count={centerName.length} max={30}>
+              <input type="text" value={centerName} onChange={e => setCenterName(e.target.value.slice(0, 30))} placeholder="센터명 또는 기관명" className={inputCls} />
+            </Field>
+          </div>
+
+          {/* 4. 업체 주소 */}
+          <div ref={fieldRefs.address}>
+            <Field label="업체 주소" required>
+              <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="예 : 중구 세종대로 110" className={inputCls} />
+            </Field>
+          </div>
+
+          {/* 5. 작성자 */}
+          <div ref={fieldRefs.authorName}>
+            <Field label="작성자 정보" required>
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1 shrink-0">
+                  {AUTHOR_ROLES.map(r => (
+                    <button key={r} onClick={() => setAuthorRole(r)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${authorRole === r ? "bg-blue-600 text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"}`}>
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <input type="text" value={authorName} onChange={e => setAuthorName(e.target.value)} placeholder="실명 입력" className={`${inputCls} flex-1`} />
+              </div>
+            </Field>
+          </div>
+
+          {/* 6. 연락처 */}
+          <div ref={fieldRefs.contact}>
+            <Field label="연락처" required>
+              <input type="tel" value={contact} onChange={e => setContact(formatPhone(e.target.value))} placeholder="전화번호 입력" maxLength={13} className={inputCls} />
+            </Field>
+          </div>
+
+          {/* 7. 제목 */}
+          <div ref={fieldRefs.title}>
+            <Field label="제목" required count={title.length} max={50}>
+              <input type="text" value={title} onChange={e => setTitle(e.target.value.slice(0, 50))} placeholder="예) 강남구 프리랜서 트레이너 정규직 채용" className={inputCls} />
+            </Field>
+          </div>
+
+          {/* 8. 내용 */}
+          <div ref={fieldRefs.description}>
+            <Field label="내용" required count={description.length} max={1000}>
+              <textarea value={description} onChange={e => setDescription(e.target.value.slice(0, 1000))}
+                placeholder="업무 내용, 우대 조건, 근무 분위기 등을 자유롭게 작성하세요."
+                rows={6} style={{ minHeight: 150 }} className={`${inputCls} resize-none`} />
+            </Field>
+          </div>
+
+          {/* 9. 모집기간 */}
+          <div ref={fieldRefs.deadline}>
+            <Field label="모집기간" required>
+              <SelectButton value={deadlineDisplay} placeholder="모집기간을 선택해 주세요" onClick={() => setShowDeadline(true)} />
+            </Field>
+          </div>
+
+          {/* 10. 근무형태 */}
+          <div ref={fieldRefs.employment}>
+            <Field label="근무형태" required>
+              <SelectButton value={employmentType} placeholder="근무형태를 선택해 주세요" onClick={() => setShowEmployment(true)} />
+            </Field>
+          </div>
+
+          {/* 11. 급여 */}
+          <div ref={fieldRefs.salary}>
+            <Field label="급여" required>
+              <SelectButton value={salaryDisplay} placeholder="급여를 선택해 주세요" onClick={() => setShowSalary(true)} />
+            </Field>
+          </div>
+
+          {/* 12. 모집 인원 */}
+          <div ref={fieldRefs.headcount}>
+            <Field label="모집 인원" required>
+              <SelectButton value={headcountDisplay} placeholder="모집 인원을 선택해 주세요" onClick={() => setShowHeadcount(true)} />
+            </Field>
+          </div>
+
+          {/* 13. 우대 조건 (선택) */}
+          <Field label="우대 조건">
+            <SelectButton value={preferences.length ? preferences.join(", ") : ""} placeholder="선택 (선택사항)" onClick={() => setShowPreferences(true)} />
+          </Field>
+
+          {/* 14. 복리후생 (선택) */}
+          <Field label="복리후생">
+            <SelectButton value={benefits.length ? benefits.join(", ") : ""} placeholder="선택 (선택사항)" onClick={() => setShowBenefits(true)} />
+          </Field>
+
+          {/* 15. 동의 */}
+          <div className="pt-2">
+            <button onClick={() => setAgreed(!agreed)} className="flex items-start gap-2.5 text-left">
+              <span className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center shrink-0 ${agreed ? "bg-blue-600" : "border-2 border-zinc-300 dark:border-zinc-600"}`}>
+                {agreed && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+              </span>
+              <span className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                작성한 구인 정보는 사실이며, 허위/불법 내용에 대한 책임은 작성자 본인에게 있습니다. 모두의 지도사는 채용 및 고용 계약에 관여하지 않습니다.
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* 지역 선택 모달 */}
-      {showRegionModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowRegionModal(false)} />
-          <div className="relative w-full sm:max-w-md bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[70vh] flex flex-col">
-            <div className="flex items-center gap-2 px-4 py-3.5 border-b border-zinc-100 dark:border-zinc-800">
-              {regionStep === "sub" && (
-                <button onClick={() => setRegionStep("group")} className="p-1 -ml-1 text-zinc-500">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-              )}
-              <span className="font-semibold text-zinc-900 dark:text-zinc-100 flex-1">
-                {regionStep === "group" ? "광역시/도 선택" : selectedGroup?.name}
-              </span>
-              <button onClick={() => setShowRegionModal(false)} className="text-zinc-400 hover:text-zinc-600">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1 py-1">
-              {regionStep === "group" ? (
-                REGION_GROUPS.map((group) => (
-                  <button key={group.code}
-                    onClick={() => { setSelectedGroup(group); setRegionStep("sub"); }}
-                    className="w-full flex items-center justify-between px-4 py-3 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0">
-                    <span>{group.name}</span>
-                    <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                ))
-              ) : (
-                selectedGroup?.subRegions.map((sub) => (
-                  <button key={sub.code}
-                    onClick={() => { set("region_code", sub.code); set("region_name", sub.name); setShowRegionModal(false); }}
-                    className="w-full text-left px-4 py-3 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0">
-                    {sub.name}
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
+      {/* 하단 고정 버튼 */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-800 px-4 py-3 z-20" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}>
+        <div className="mx-auto max-w-2xl">
+          <button onClick={() => { if (validate()) { setShowConfirm(true); setConfirmChecked(false); } }} disabled={submitting}
+            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl disabled:opacity-50 transition-colors">
+            구인 등록하기
+          </button>
         </div>
-      )}
-    </div>
-  );
-}
+      </div>
 
-const inputCls = "w-full px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500";
+      {/* ══════ 모달들 ══════ */}
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">{title}</h3>
-      <div className="bg-zinc-50 dark:bg-zinc-900 rounded-xl p-3 space-y-2">{children}</div>
-    </div>
-  );
-}
+      {/* 지역 선택 모달 */}
+      <Modal open={showRegion} onClose={() => setShowRegion(false)} title={regionStep === "group" ? "지역 선택" : selectedGroup?.name || ""} subtitle="광역시/도를 선택한 후 세부 지역을 선택하세요">
+        {regionStep === "group" ? (
+          <div>{REGION_GROUPS.map(g => (
+            <button key={g.code} onClick={() => { setSelectedGroup(g); setRegionStep("sub"); }}
+              className="w-full flex items-center justify-between px-5 py-3.5 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
+              <span>{g.name}</span>
+              <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            </button>
+          ))}</div>
+        ) : (
+          <div>
+            <button onClick={() => setRegionStep("group")} className="w-full flex items-center gap-1 px-5 py-2.5 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>뒤로
+            </button>
+            {selectedGroup?.subRegions.map(s => (
+              <button key={s.code} onClick={() => handleRegionSelect(s.code, s.name)}
+                className={`w-full text-left px-5 py-3.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-0 ${regionCode === s.code ? "text-blue-600 font-medium" : "text-zinc-800 dark:text-zinc-200"}`}>
+                {s.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </Modal>
 
-function Field({ label, required, error, children }: { label: string; required?: boolean; error?: boolean; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className={`text-xs mb-1 block ${error ? "text-red-500 font-medium" : "text-zinc-500 dark:text-zinc-400"}`}>
-        {label}
-        {required && <span className="text-red-500 ml-0.5">*</span>}
-        {error && <span className="ml-1 text-[11px] text-red-400">필수 입력</span>}
-      </label>
-      {children}
+      {/* 종목 선택 모달 */}
+      <Modal open={showSport} onClose={() => setShowSport(false)} title="종목 선택" subtitle="카테고리를 검색하거나 선택하세요">
+        <div className="px-4 py-2 sticky top-0 bg-white dark:bg-zinc-900 z-10">
+          <input type="text" value={sportSearch} onChange={e => setSportSearch(e.target.value)} placeholder="종목 검색 (초성 가능)"
+            className="w-full px-3 py-2 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </div>
+        <div>
+          {categories.filter(c => matchSearch(c.name, sportSearch)).map(c => (
+            <RadioItem key={c.id} label={`${c.emoji} ${c.name}`} selected={sport === c.name}
+              onSelect={() => { setSport(c.name); setShowSport(false); }} />
+          ))}
+          {categories.filter(c => matchSearch(c.name, sportSearch)).length === 0 && (
+            <p className="text-center text-sm text-zinc-400 py-8">일치하는 종목이 없습니다</p>
+          )}
+        </div>
+      </Modal>
+
+      {/* 모집기간 모달 */}
+      <Modal open={showDeadline} onClose={() => setShowDeadline(false)} title="모집기간 선택">
+        <div>
+          {DEADLINE_OPTIONS.map(o => (
+            <RadioItem key={o} label={o} selected={deadlineType === o} onSelect={() => {
+              setDeadlineType(o);
+              if (o !== "직접 입력") { setDeadlineDate(""); setShowDeadline(false); }
+            }} />
+          ))}
+          {deadlineType === "직접 입력" && (
+            <div className="px-5 py-3 border-t border-zinc-100 dark:border-zinc-800">
+              <input type="date" value={deadlineDate} onChange={e => setDeadlineDate(e.target.value)}
+                className={inputCls} />
+              <button onClick={() => { if (deadlineDate) setShowDeadline(false); }}
+                className="w-full mt-2 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg disabled:opacity-50" disabled={!deadlineDate}>확인</button>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* 근무형태 모달 */}
+      <Modal open={showEmployment} onClose={() => setShowEmployment(false)} title="근무형태 선택">
+        <div>{EMPLOYMENT_TYPES.map(t => (
+          <RadioItem key={t} label={t} selected={employmentType === t} onSelect={() => { setEmploymentType(t); setShowEmployment(false); }} />
+        ))}</div>
+      </Modal>
+
+      {/* 급여 모달 */}
+      <Modal open={showSalary} onClose={() => setShowSalary(false)} title="급여 선택">
+        <div>
+          {SALARY_TYPES.map(t => (
+            <RadioItem key={t} label={t} selected={salaryType === t} onSelect={() => {
+              setSalaryType(t);
+              if (t === "협의") { setSalaryAmount(""); setSalaryIncentive(false); setSalaryQuickPay(false); setShowSalary(false); }
+            }} />
+          ))}
+          {salaryType && salaryType !== "협의" && (
+            <div className="px-5 py-3 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+              <div className="flex items-center gap-2">
+                <input type="text" value={salaryAmount} onChange={e => setSalaryAmount(formatMoney(e.target.value))}
+                  placeholder="금액 입력" className={`${inputCls} flex-1`} inputMode="numeric" />
+                <span className="text-sm text-zinc-500 shrink-0">원</span>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                <input type="checkbox" checked={salaryIncentive} onChange={e => setSalaryIncentive(e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
+                인센티브 있음
+              </label>
+              <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                <input type="checkbox" checked={salaryQuickPay} onChange={e => setSalaryQuickPay(e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
+                주급/당일지급 가능
+              </label>
+              <button onClick={() => { if (salaryAmount) setShowSalary(false); }} disabled={!salaryAmount}
+                className="w-full py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg disabled:opacity-50">확인</button>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* 모집 인원 모달 */}
+      <Modal open={showHeadcount} onClose={() => setShowHeadcount(false)} title="모집 인원 선택">
+        <div>
+          {HEADCOUNT_OPTIONS.map(o => (
+            <RadioItem key={o} label={o} selected={headcount === o} onSelect={() => {
+              setHeadcount(o);
+              if (o !== "직접 입력") { setHeadcountCustom(""); setShowHeadcount(false); }
+            }} />
+          ))}
+          {headcount === "직접 입력" && (
+            <div className="px-5 py-3 border-t border-zinc-100 dark:border-zinc-800">
+              <input type="text" value={headcountCustom} onChange={e => setHeadcountCustom(e.target.value)} placeholder="예: 5명" className={inputCls} />
+              <button onClick={() => { if (headcountCustom.trim()) setShowHeadcount(false); }} disabled={!headcountCustom.trim()}
+                className="w-full mt-2 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg disabled:opacity-50">확인</button>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* 우대 조건 모달 */}
+      <Modal open={showPreferences} onClose={() => setShowPreferences(false)} title="우대 조건"
+        footer={
+          <div className="flex gap-2">
+            <button onClick={() => setShowPreferences(false)} className="flex-1 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-600 dark:text-zinc-400">취소</button>
+            <button onClick={() => setShowPreferences(false)} className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium">확인</button>
+          </div>
+        }>
+        <div>{PREFERENCES_OPTIONS.map(o => (
+          <CheckItem key={o} label={o} checked={preferences.includes(o)} onToggle={() => setPreferences(prev => prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o])} />
+        ))}</div>
+      </Modal>
+
+      {/* 복리후생 모달 */}
+      <Modal open={showBenefits} onClose={() => setShowBenefits(false)} title="복리후생"
+        footer={
+          <div className="flex gap-2">
+            <button onClick={() => setShowBenefits(false)} className="flex-1 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-600 dark:text-zinc-400">취소</button>
+            <button onClick={() => setShowBenefits(false)} className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium">확인</button>
+          </div>
+        }>
+        <div>{BENEFITS_OPTIONS.map(o => (
+          <CheckItem key={o} label={o} checked={benefits.includes(o)} onToggle={() => setBenefits(prev => prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o])} />
+        ))}</div>
+      </Modal>
+
+      {/* 등록 전 확인 모달 */}
+      <Modal open={showConfirm} onClose={() => setShowConfirm(false)}
+        icon={<svg className="w-9 h-9 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
+        title="등록 전 확인"
+        footer={
+          <div className="flex gap-2">
+            <button onClick={() => setShowConfirm(false)} className="flex-1 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-600 dark:text-zinc-400">취소</button>
+            <button onClick={() => { setShowConfirm(false); handleSubmit(); }} disabled={!confirmChecked || submitting}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors ${confirmChecked ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-zinc-200 text-zinc-400 dark:bg-zinc-700 dark:text-zinc-500 cursor-not-allowed"}`}>
+              {submitting ? "등록 중..." : "최종 등록하기"}
+            </button>
+          </div>
+        }>
+        <div className="px-5 py-3 space-y-3">
+          <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
+            허위 구인 또는 실제 근무조건과 다른 내용 기재 시 게시글 삭제, 계정 정지 등의 조치가 이루어질 수 있습니다.
+          </p>
+          <p className="text-xs text-zinc-500">공고 내용에 대한 책임은 작성자에게 있습니다.</p>
+          <button onClick={() => setConfirmChecked(!confirmChecked)} className="flex items-center gap-2.5 pt-2">
+            <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${confirmChecked ? "bg-blue-600" : "border-2 border-zinc-300 dark:border-zinc-600"}`}>
+              {confirmChecked && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+            </span>
+            <span className="text-sm text-zinc-700 dark:text-zinc-300">위 내용을 확인했으며 동의합니다.</span>
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
