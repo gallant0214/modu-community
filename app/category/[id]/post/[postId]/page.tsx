@@ -413,9 +413,13 @@ export default function PostDetailPage() {
                     <button
                       onClick={() => {
                         setShowPostMenu(false);
-                        setShowEditModal(true);
-                        setEditPassword("");
-                        setEditError("");
+                        if (isAdmin) {
+                          router.push(`/category/${categoryId}/post/${postId}/edit`);
+                        } else {
+                          setShowEditModal(true);
+                          setEditPassword("");
+                          setEditError("");
+                        }
                       }}
                       className="flex w-full items-center px-3.5 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
                     >
@@ -425,25 +429,18 @@ export default function PostDetailPage() {
                     <button
                       onClick={() => {
                         setShowPostMenu(false);
-                        setShowDeleteModal(true);
-                        setDeleteError("");
-                        setDeletePassword("");
+                        if (isAdmin) {
+                          setShowAdminDeleteModal(true);
+                        } else {
+                          setShowDeleteModal(true);
+                          setDeleteError("");
+                          setDeletePassword("");
+                        }
                       }}
                       className="flex w-full items-center px-3.5 py-2 text-xs font-medium text-red-500 hover:bg-zinc-50 dark:hover:bg-zinc-700"
                     >
                       삭제
                     </button>
-                    {isAdmin && (
-                      <>
-                        <hr className="border-zinc-100 dark:border-zinc-700" />
-                        <button
-                          onClick={() => { setShowPostMenu(false); setShowAdminDeleteModal(true); }}
-                          className="flex w-full items-center px-3.5 py-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50"
-                        >
-                          관리자 삭제
-                        </button>
-                      </>
-                    )}
                   </div>
                 )}
               </div>

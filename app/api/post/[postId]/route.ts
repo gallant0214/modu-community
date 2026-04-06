@@ -96,7 +96,13 @@ export async function DELETE(
     return NextResponse.json({ error: "게시글을 찾을 수 없습니다" }, { status: 404 });
   }
 
-  const isAdminUser = isAdminUid(user.uid);
+  let isAdminUser = isAdminUid(user.uid);
+  if (!isAdminUser && user.email) {
+    try {
+      const adminRows = await sql`SELECT id FROM admin_emails WHERE email = ${user.email.toLowerCase()} LIMIT 1`;
+      isAdminUser = adminRows.length > 0;
+    } catch { /* ignore */ }
+  }
   const isAdminPw = password === process.env.ADMIN_PASSWORD;
   if (!isAdminUser && !isAdminPw && rows[0].password !== password) {
     return NextResponse.json({ error: "비밀번호가 일치하지 않습니다" }, { status: 403 });
