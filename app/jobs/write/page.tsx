@@ -54,14 +54,14 @@ function Modal({ open, onClose, icon, title, subtitle, children, footer }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-white dark:bg-zinc-900 rounded-[20px] shadow-2xl max-h-[80vh] flex flex-col overflow-hidden">
+      <div className="relative w-full max-w-sm bg-[#FEFCF7] dark:bg-[#2A2A25] rounded-[20px] shadow-2xl max-h-[80vh] flex flex-col overflow-hidden">
         <div className="px-5 pt-5 pb-3 text-center shrink-0">
           {icon && <div className="flex justify-center mb-2">{icon}</div>}
-          <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">{title}</h3>
-          {subtitle && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{subtitle}</p>}
+          <h3 className="text-base font-bold text-[#333333] dark:text-[#E0DED5]">{title}</h3>
+          {subtitle && <p className="text-xs text-[#999999] dark:text-[#777777] mt-1">{subtitle}</p>}
         </div>
         <div className="flex-1 overflow-y-auto">{children}</div>
-        {footer && <div className="px-5 py-3 border-t border-zinc-100 dark:border-zinc-800 shrink-0">{footer}</div>}
+        {footer && <div className="px-5 py-3 border-t border-[#E8E0D0] dark:border-[#3A3A35] shrink-0">{footer}</div>}
       </div>
     </div>
   );
@@ -70,11 +70,11 @@ function Modal({ open, onClose, icon, title, subtitle, children, footer }: {
 /* 라디오 모달 항목 */
 function RadioItem({ label, selected, onSelect }: { label: string; selected: boolean; onSelect: () => void }) {
   return (
-    <button onClick={onSelect} className="w-full flex items-center gap-3 px-5 py-3.5 text-left border-b border-zinc-100 dark:border-zinc-800 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-800">
-      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? "border-blue-600 bg-blue-600" : "border-zinc-300 dark:border-zinc-600"}`}>
+    <button onClick={onSelect} className="w-full flex items-center gap-3 px-5 py-3.5 text-left border-b border-[#E8E0D0] dark:border-[#3A3A35] last:border-0 hover:bg-[#F5F0E5] dark:hover:bg-[#303028]">
+      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selected ? "border-[#6B7B3A] bg-[#6B7B3A] dark:border-[#8B9B5A] dark:bg-[#8B9B5A]" : "border-[#E0D8C8] dark:border-[#404038]"}`}>
         {selected && <span className="w-2 h-2 bg-white rounded-full" />}
       </span>
-      <span className="text-sm text-zinc-900 dark:text-zinc-100">{label}</span>
+      <span className="text-sm text-[#333333] dark:text-[#E0DED5]">{label}</span>
     </button>
   );
 }
@@ -82,11 +82,11 @@ function RadioItem({ label, selected, onSelect }: { label: string; selected: boo
 /* 체크박스 모달 항목 */
 function CheckItem({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
   return (
-    <button onClick={onToggle} className="w-full flex items-center gap-3 px-5 py-3.5 text-left border-b border-zinc-100 dark:border-zinc-800 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-800">
-      <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${checked ? "bg-blue-600" : "border-2 border-zinc-300 dark:border-zinc-600"}`}>
+    <button onClick={onToggle} className="w-full flex items-center gap-3 px-5 py-3.5 text-left border-b border-[#E8E0D0] dark:border-[#3A3A35] last:border-0 hover:bg-[#F5F0E5] dark:hover:bg-[#303028]">
+      <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${checked ? "bg-[#6B7B3A] dark:bg-[#8B9B5A]" : "border-2 border-[#E0D8C8] dark:border-[#404038]"}`}>
         {checked && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
       </span>
-      <span className="text-sm text-zinc-900 dark:text-zinc-100">{label}</span>
+      <span className="text-sm text-[#333333] dark:text-[#E0DED5]">{label}</span>
     </button>
   );
 }
@@ -95,12 +95,12 @@ function CheckItem({ label, checked, onToggle }: { label: string; checked: boole
 function Field({ label, required, children, count, max }: { label: string; required?: boolean; children: React.ReactNode; count?: number; max?: number }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-zinc-500 dark:text-zinc-400 block">
+      <label className="text-xs text-[#666666] dark:text-[#AAAAAA] block">
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {children}
       {max !== undefined && count !== undefined && (
-        <p className={`text-right text-[11px] ${count > max ? "text-red-500" : "text-zinc-400"}`}>{count}/{max}</p>
+        <p className={`text-right text-[11px] ${count > max ? "text-red-500" : "text-[#999999]"}`}>{count}/{max}</p>
       )}
     </div>
   );
@@ -109,16 +109,16 @@ function Field({ label, required, children, count, max }: { label: string; requi
 /* 선택 버튼 (모달 트리거용) */
 function SelectButton({ value, placeholder, onClick }: { value: string; placeholder: string; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="w-full flex items-center justify-between px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-900 text-left">
-      <span className={value ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400"}>{value || placeholder}</span>
-      <svg className="w-4 h-4 text-zinc-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <button onClick={onClick} className="w-full flex items-center justify-between px-3 py-2.5 border border-[#E0D8C8] dark:border-[#404038] rounded-lg text-sm bg-[#F5F0E5] dark:bg-[#303028] text-left">
+      <span className={value ? "text-[#333333] dark:text-[#E0DED5]" : "text-[#999999]"}>{value || placeholder}</span>
+      <svg className="w-4 h-4 text-[#999999] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
       </svg>
     </button>
   );
 }
 
-const inputCls = "w-full px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500";
+const inputCls = "w-full px-3 py-2.5 border border-[#E0D8C8] dark:border-[#404038] rounded-lg text-sm bg-[#F5F0E5] dark:bg-[#303028] text-[#333333] dark:text-[#E0DED5] placeholder-[#999999] focus:outline-none focus:ring-1 focus:ring-[#6B7B3A]";
 
 const EMPLOYMENT_TYPES = ["정규직", "계약직", "아르바이트", "프리랜서(위촉직)", "파트타임", "교육생/연수생", "인턴"];
 const SALARY_TYPES = ["시급", "월급", "건당", "협의"];
@@ -300,34 +300,34 @@ export default function JobWritePage() {
 
   if (!user) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-4">
-      <p className="text-zinc-500 text-sm text-center">구인 글 작성은 Google 로그인 후 이용 가능합니다.</p>
-      <button onClick={signInWithGoogle} className="flex items-center gap-2 px-5 py-2.5 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl font-medium text-sm">Google로 로그인</button>
+      <p className="text-[#999999] text-sm text-center">구인 글 작성은 Google 로그인 후 이용 가능합니다.</p>
+      <button onClick={signInWithGoogle} className="flex items-center gap-2 px-5 py-2.5 bg-[#333333] dark:bg-[#E0DED5] text-white dark:text-[#1A1A18] rounded-xl font-medium text-sm">Google로 로그인</button>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-white dark:bg-zinc-950 pb-24">
+    <div className="min-h-screen bg-[#F8F4EC] dark:bg-[#1A1A18] pb-24">
       <div className="mx-auto max-w-2xl">
         {/* 헤더 */}
-        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-zinc-100 dark:border-zinc-800 sticky top-14 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md z-20">
-          <button onClick={() => router.back()} className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#E8E0D0] dark:border-[#3A3A35] sticky top-14 bg-[#F8F4EC]/80 dark:bg-[#1A1A18]/80 backdrop-blur-md z-20">
+          <button onClick={() => router.back()} className="p-1.5 text-[#999999] hover:text-[#333333] dark:hover:text-[#E0DED5]">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           </button>
-          <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex-1">구인 글쓰기</span>
+          <span className="text-sm font-semibold text-[#333333] dark:text-[#E0DED5] flex-1">구인 글쓰기</span>
         </div>
 
         <div className="px-4 py-4 space-y-4">
           {error && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-950 px-3 py-2 rounded-lg">{error}</p>}
-          <p className="text-xs text-zinc-400"><span className="text-red-500">*</span> 표시는 필수 입력 항목입니다</p>
+          <p className="text-xs text-[#999999]"><span className="text-red-500">*</span> 표시는 필수 입력 항목입니다</p>
 
           {/* 1. 지역 */}
           <div ref={fieldRefs.region}>
             <Field label="지역" required>
               <div className="flex items-center gap-2">
-                <span className={`flex-1 text-sm ${regionName ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400"}`}>
+                <span className={`flex-1 text-sm ${regionName ? "text-[#333333] dark:text-[#E0DED5]" : "text-[#999999]"}`}>
                   {regionName || "지역을 선택해 주세요"}
                 </span>
-                <button onClick={() => { setShowRegion(true); setRegionStep("group"); }} className="px-3 py-1.5 text-xs border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950 shrink-0">
+                <button onClick={() => { setShowRegion(true); setRegionStep("group"); }} className="px-3 py-1.5 text-xs border border-blue-300 text-[#6B7B3A] rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950 shrink-0">
                   {regionName ? "지역 변경" : "지역 선택"}
                 </button>
               </div>
@@ -362,7 +362,7 @@ export default function JobWritePage() {
                 <div className="flex gap-1 shrink-0">
                   {AUTHOR_ROLES.map(r => (
                     <button key={r} onClick={() => setAuthorRole(r)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${authorRole === r ? "bg-blue-600 text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"}`}>
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${authorRole === r ? "bg-[#6B7B3A] text-white" : "bg-[#F0EBE0] dark:bg-[#303028] text-[#666666] dark:text-[#AAAAAA]"}`}>
                       {r}
                     </button>
                   ))}
@@ -436,10 +436,10 @@ export default function JobWritePage() {
           {/* 15. 동의 */}
           <div className="pt-2">
             <button onClick={() => setAgreed(!agreed)} className="flex items-start gap-2.5 text-left">
-              <span className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center shrink-0 ${agreed ? "bg-blue-600" : "border-2 border-zinc-300 dark:border-zinc-600"}`}>
+              <span className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center shrink-0 ${agreed ? "bg-[#6B7B3A]" : "border-2 border-[#E0D8C8] dark:border-[#404038]"}`}>
                 {agreed && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
               </span>
-              <span className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+              <span className="text-xs text-[#666666] dark:text-[#AAAAAA] leading-relaxed">
                 작성한 구인 정보는 사실이며, 허위/불법 내용에 대한 책임은 작성자 본인에게 있습니다. 모두의 지도사는 채용 및 고용 계약에 관여하지 않습니다.
               </span>
             </button>
@@ -448,10 +448,10 @@ export default function JobWritePage() {
       </div>
 
       {/* 하단 고정 버튼 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-800 px-4 py-3 z-20" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}>
+      <div className="fixed bottom-0 left-0 right-0 bg-[#F8F4EC] dark:bg-[#1A1A18] border-t border-[#E8E0D0] dark:border-[#3A3A35] px-4 py-3 z-20" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}>
         <div className="mx-auto max-w-2xl">
           <button onClick={() => { if (validate()) { setShowConfirm(true); setConfirmChecked(false); } }} disabled={submitting}
-            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl disabled:opacity-50 transition-colors">
+            className="w-full py-3.5 bg-[#6B7B3A] hover:bg-[#5A6A2E] text-white font-semibold rounded-xl disabled:opacity-50 transition-colors">
             구인 등록하기
           </button>
         </div>
@@ -464,19 +464,19 @@ export default function JobWritePage() {
         {regionStep === "group" ? (
           <div>{REGION_GROUPS.map(g => (
             <button key={g.code} onClick={() => { setSelectedGroup(g); setRegionStep("sub"); }}
-              className="w-full flex items-center justify-between px-5 py-3.5 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
+              className="w-full flex items-center justify-between px-5 py-3.5 text-sm text-[#333333] dark:text-[#E0DED5] hover:bg-[#F5F0E5] dark:hover:bg-[#303028] border-b border-[#E8E0D0] dark:border-[#3A3A35] last:border-0">
               <span>{g.name}</span>
-              <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              <svg className="w-4 h-4 text-[#999999]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
             </button>
           ))}</div>
         ) : (
           <div>
-            <button onClick={() => setRegionStep("group")} className="w-full flex items-center gap-1 px-5 py-2.5 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800">
+            <button onClick={() => setRegionStep("group")} className="w-full flex items-center gap-1 px-5 py-2.5 text-sm text-[#999999] hover:bg-[#F5F0E5] dark:hover:bg-[#303028] border-b border-[#E8E0D0] dark:border-[#3A3A35]">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>뒤로
             </button>
             {selectedGroup?.subRegions.map(s => (
               <button key={s.code} onClick={() => handleRegionSelect(s.code, s.name)}
-                className={`w-full text-left px-5 py-3.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-0 ${regionCode === s.code ? "text-blue-600 font-medium" : "text-zinc-800 dark:text-zinc-200"}`}>
+                className={`w-full text-left px-5 py-3.5 text-sm hover:bg-[#F5F0E5] dark:hover:bg-[#303028] border-b border-[#E8E0D0] dark:border-[#3A3A35] last:border-0 ${regionCode === s.code ? "text-[#6B7B3A] font-medium" : "text-[#333333] dark:text-[#E0DED5]"}`}>
                 {s.name}
               </button>
             ))}
@@ -486,9 +486,9 @@ export default function JobWritePage() {
 
       {/* 종목 선택 모달 */}
       <Modal open={showSport} onClose={() => setShowSport(false)} title="종목 선택" subtitle="카테고리를 검색하거나 선택하세요">
-        <div className="px-4 py-2 sticky top-0 bg-white dark:bg-zinc-900 z-10">
+        <div className="px-4 py-2 sticky top-0 bg-[#FEFCF7] dark:bg-[#2A2A25] z-10">
           <input type="text" value={sportSearch} onChange={e => setSportSearch(e.target.value)} placeholder="종목 검색 (초성 가능)"
-            className="w-full px-3 py-2 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            className="w-full px-3 py-2 border border-[#E0D8C8] dark:border-[#404038] rounded-lg text-sm bg-[#F0EBE0] dark:bg-[#303028] text-[#333333] dark:text-[#E0DED5] placeholder-[#999999] focus:outline-none focus:ring-1 focus:ring-[#6B7B3A]" />
         </div>
         <div>
           {categories.filter(c => matchSearch(c.name, sportSearch)).map(c => (
@@ -496,7 +496,7 @@ export default function JobWritePage() {
               onSelect={() => { setSport(c.name); setShowSport(false); }} />
           ))}
           {categories.filter(c => matchSearch(c.name, sportSearch)).length === 0 && (
-            <p className="text-center text-sm text-zinc-400 py-8">일치하는 종목이 없습니다</p>
+            <p className="text-center text-sm text-[#999999] py-8">일치하는 종목이 없습니다</p>
           )}
         </div>
       </Modal>
@@ -511,11 +511,11 @@ export default function JobWritePage() {
             }} />
           ))}
           {deadlineType === "직접 입력" && (
-            <div className="px-5 py-3 border-t border-zinc-100 dark:border-zinc-800">
+            <div className="px-5 py-3 border-t border-[#E8E0D0] dark:border-[#3A3A35]">
               <input type="date" value={deadlineDate} onChange={e => setDeadlineDate(e.target.value)}
                 className={inputCls} />
               <button onClick={() => { if (deadlineDate) setShowDeadline(false); }}
-                className="w-full mt-2 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg disabled:opacity-50" disabled={!deadlineDate}>확인</button>
+                className="w-full mt-2 py-2.5 bg-[#6B7B3A] text-white text-sm font-medium rounded-lg disabled:opacity-50" disabled={!deadlineDate}>확인</button>
             </div>
           )}
         </div>
@@ -538,22 +538,22 @@ export default function JobWritePage() {
             }} />
           ))}
           {salaryType && salaryType !== "협의" && (
-            <div className="px-5 py-3 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+            <div className="px-5 py-3 border-t border-[#E8E0D0] dark:border-[#3A3A35] space-y-2">
               <div className="flex items-center gap-2">
                 <input type="text" value={salaryAmount} onChange={e => setSalaryAmount(formatMoney(e.target.value))}
                   placeholder="금액 입력" className={`${inputCls} flex-1`} inputMode="numeric" />
-                <span className="text-sm text-zinc-500 shrink-0">원</span>
+                <span className="text-sm text-[#999999] shrink-0">원</span>
               </div>
-              <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+              <label className="flex items-center gap-2 text-sm text-[#555555] dark:text-[#AAAAAA]">
                 <input type="checkbox" checked={salaryIncentive} onChange={e => setSalaryIncentive(e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
                 인센티브 있음
               </label>
-              <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+              <label className="flex items-center gap-2 text-sm text-[#555555] dark:text-[#AAAAAA]">
                 <input type="checkbox" checked={salaryQuickPay} onChange={e => setSalaryQuickPay(e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
                 주급/당일지급 가능
               </label>
               <button onClick={() => { if (salaryAmount) setShowSalary(false); }} disabled={!salaryAmount}
-                className="w-full py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg disabled:opacity-50">확인</button>
+                className="w-full py-2.5 bg-[#6B7B3A] text-white text-sm font-medium rounded-lg disabled:opacity-50">확인</button>
             </div>
           )}
         </div>
@@ -569,10 +569,10 @@ export default function JobWritePage() {
             }} />
           ))}
           {headcount === "직접 입력" && (
-            <div className="px-5 py-3 border-t border-zinc-100 dark:border-zinc-800">
+            <div className="px-5 py-3 border-t border-[#E8E0D0] dark:border-[#3A3A35]">
               <input type="text" value={headcountCustom} onChange={e => setHeadcountCustom(e.target.value)} placeholder="예: 5명" className={inputCls} />
               <button onClick={() => { if (headcountCustom.trim()) setShowHeadcount(false); }} disabled={!headcountCustom.trim()}
-                className="w-full mt-2 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg disabled:opacity-50">확인</button>
+                className="w-full mt-2 py-2.5 bg-[#6B7B3A] text-white text-sm font-medium rounded-lg disabled:opacity-50">확인</button>
             </div>
           )}
         </div>
@@ -582,8 +582,8 @@ export default function JobWritePage() {
       <Modal open={showPreferences} onClose={() => setShowPreferences(false)} title="우대 조건"
         footer={
           <div className="flex gap-2">
-            <button onClick={() => setShowPreferences(false)} className="flex-1 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-600 dark:text-zinc-400">취소</button>
-            <button onClick={() => setShowPreferences(false)} className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium">확인</button>
+            <button onClick={() => setShowPreferences(false)} className="flex-1 py-2.5 border border-[#E0D8C8] dark:border-[#404038] rounded-lg text-sm text-[#666666] dark:text-[#AAAAAA]">취소</button>
+            <button onClick={() => setShowPreferences(false)} className="flex-1 py-2.5 bg-[#6B7B3A] text-white rounded-lg text-sm font-medium">확인</button>
           </div>
         }>
         <div>{PREFERENCES_OPTIONS.map(o => (
@@ -595,8 +595,8 @@ export default function JobWritePage() {
       <Modal open={showBenefits} onClose={() => setShowBenefits(false)} title="복리후생"
         footer={
           <div className="flex gap-2">
-            <button onClick={() => setShowBenefits(false)} className="flex-1 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-600 dark:text-zinc-400">취소</button>
-            <button onClick={() => setShowBenefits(false)} className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium">확인</button>
+            <button onClick={() => setShowBenefits(false)} className="flex-1 py-2.5 border border-[#E0D8C8] dark:border-[#404038] rounded-lg text-sm text-[#666666] dark:text-[#AAAAAA]">취소</button>
+            <button onClick={() => setShowBenefits(false)} className="flex-1 py-2.5 bg-[#6B7B3A] text-white rounded-lg text-sm font-medium">확인</button>
           </div>
         }>
         <div>{BENEFITS_OPTIONS.map(o => (
@@ -610,23 +610,23 @@ export default function JobWritePage() {
         title="등록 전 확인"
         footer={
           <div className="flex gap-2">
-            <button onClick={() => setShowConfirm(false)} className="flex-1 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-600 dark:text-zinc-400">취소</button>
+            <button onClick={() => setShowConfirm(false)} className="flex-1 py-2.5 border border-[#E0D8C8] dark:border-[#404038] rounded-lg text-sm text-[#666666] dark:text-[#AAAAAA]">취소</button>
             <button onClick={() => { setShowConfirm(false); handleSubmit(); }} disabled={!confirmChecked || submitting}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors ${confirmChecked ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-zinc-200 text-zinc-400 dark:bg-zinc-700 dark:text-zinc-500 cursor-not-allowed"}`}>
+              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors ${confirmChecked ? "bg-[#6B7B3A] text-white hover:bg-[#5A6A2E]" : "bg-[#E0D8C8] text-[#999999] dark:bg-[#404038] dark:text-[#999999] cursor-not-allowed"}`}>
               {submitting ? "등록 중..." : "최종 등록하기"}
             </button>
           </div>
         }>
         <div className="px-5 py-3 space-y-3">
-          <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
+          <p className="text-sm text-[#555555] dark:text-[#AAAAAA] leading-relaxed">
             허위 구인 또는 실제 근무조건과 다른 내용 기재 시 게시글 삭제, 계정 정지 등의 조치가 이루어질 수 있습니다.
           </p>
-          <p className="text-xs text-zinc-500">공고 내용에 대한 책임은 작성자에게 있습니다.</p>
+          <p className="text-xs text-[#999999]">공고 내용에 대한 책임은 작성자에게 있습니다.</p>
           <button onClick={() => setConfirmChecked(!confirmChecked)} className="flex items-center gap-2.5 pt-2">
-            <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${confirmChecked ? "bg-blue-600" : "border-2 border-zinc-300 dark:border-zinc-600"}`}>
+            <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${confirmChecked ? "bg-[#6B7B3A]" : "border-2 border-[#E0D8C8] dark:border-[#404038]"}`}>
               {confirmChecked && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
             </span>
-            <span className="text-sm text-zinc-700 dark:text-zinc-300">위 내용을 확인했으며 동의합니다.</span>
+            <span className="text-sm text-[#555555] dark:text-[#AAAAAA]">위 내용을 확인했으며 동의합니다.</span>
           </button>
         </div>
       </Modal>
