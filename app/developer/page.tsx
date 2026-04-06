@@ -18,7 +18,7 @@ export default function AdminPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"pending" | "resolved" | "inquiries" | "settings">("pending");
+  const [tab, setTab] = useState<"pending" | "resolved" | "inquiries" | "notice" | "settings">("pending");
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -35,6 +35,14 @@ export default function AdminPage() {
   const [confirmPw, setConfirmPw] = useState("");
   const [pwMsg, setPwMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [changingPw, setChangingPw] = useState(false);
+
+  // 공지 관리 상태
+  const [notice, setNotice] = useState<{ id: number; title: string; content: string; category_id: number; created_at: string; updated_at: string } | null>(null);
+  const [noticeTitle, setNoticeTitle] = useState("");
+  const [noticeContent, setNoticeContent] = useState("");
+  const [noticeLoading, setNoticeLoading] = useState(false);
+  const [noticeMsg, setNoticeMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [noticeMode, setNoticeMode] = useState<"view" | "edit" | "create">("view");
 
   // 관리자 이메일 관리 상태
   const [adminEmails, setAdminEmails] = useState<{ id: number; email: string; created_at: string }[]>([]);
@@ -182,6 +190,75 @@ export default function AdminPage() {
     } catch { setPwMsg({ type: "error", text: "오류가 발생했습니다" }); }
     setChangingPw(false);
   }
+
+  async function fetchNotice() {
+    try {
+      const res = await fetch("/api/posts/notice");
+      const data = await res.json();
+      if (data && data.id) {
+        setNotice(data);
+        setNoticeTitle(data.title);
+        setNoticeContent(data.content);
+        setNoticeMode("view");
+      } else {
+        setNotice(null);
+        setNoticeTitle("");
+        setNoticeContent("");
+        setNoticeMode("create");
+      }
+    } catch { setNotice(null); setNoticeMode("create"); }
+  }
+
+  async function handleSaveNotice() {
+    if (!noticeTitle.trim() || !noticeContent.trim()) { setNoticeMsg({ type: "error", text: "제목과 내용을 입력해주세요" }); return; }
+    setNoticeLoading(true);
+    setNoticeMsg(null);
+    try {
+      if (notice && noticeMode === "edit") {
+        // 수정
+        const token = await firebaseUser?.getIdToken();
+        const res = await fetch(`/api/admin/notices/${notice.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ password: storedPassword, title: noticeTitle.trim(), content: noticeContent.trim() }),
+        });
+        const data = await res.json();
+        if (data.error) { setNoticeMsg({ type: "error", text: data.error }); }
+        else {
+          setNoticeMsg({ type: "success", text: "공지가 수정되었습니다" });
+          setNotice({ ...notice, title: noticeTitle.trim(), content: noticeContent.trim(), updated_at: new Date().toISOString() });
+          setNoticeMode("view");
+        }
+      } else {
+        // 새 공지 생성
+        const token = await firebaseUser?.getIdToken();
+        const res = await fetch("/api/admin/notices", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ password: storedPassword, title: noticeTitle.trim(), content: noticeContent.trim() }),
+        });
+        const data = await res.json();
+        if (data.error) { setNoticeMsg({ type: "error", text: data.error }); }
+        else {
+          setNoticeMsg({ type: "success", text: "공지가 등록되었습니다" });
+          fetchNotice();
+        }
+      }
+    } catch { setNoticeMsg({ type: "error", text: "오류가 발생했습니다" }); }
+    setNoticeLoading(false);
+  }
+
+  // 공지 탭 열릴 때 로드
+  useEffect(() => {
+    if (tab === "notice" && storedPassword) fetchNotice();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, storedPassword]);
 
   async function fetchAdminEmails() {
     try {
@@ -372,6 +449,9 @@ export default function AdminPage() {
           <button onClick={() => setTab("inquiries")} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "inquiries" ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
             문의사항 <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-600 dark:bg-blue-950 dark:text-blue-400">{pendingInquiries.length}</span>
           </button>
+          <button onClick={() => setTab("notice")} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "notice" ? "border-b-2 border-amber-500 text-amber-600 dark:text-amber-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
+            공지
+          </button>
           <button onClick={() => setTab("settings")} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "settings" ? "border-b-2 border-zinc-500 text-zinc-700 dark:text-zinc-200" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
             설정
           </button>
@@ -468,6 +548,74 @@ export default function AdminPage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ===== 공지 관리 탭 ===== */}
+        {tab === "notice" && (
+          <div className="p-4">
+            <div className="rounded-2xl bg-white p-6 dark:bg-zinc-900">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">공지사항 관리</h3>
+                  <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">모든 종목 후기 게시판 최상단에 표시됩니다. 앱에도 동일하게 반영됩니다.</p>
+                </div>
+                {notice && noticeMode === "view" && (
+                  <button onClick={() => setNoticeMode("edit")}
+                    className="shrink-0 rounded-lg bg-violet-500 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-600">수정</button>
+                )}
+              </div>
+
+              {noticeMsg && <p className={`mb-4 rounded-lg px-3 py-2 text-sm ${noticeMsg.type === "error" ? "bg-red-50 text-red-500 dark:bg-red-950" : "bg-green-50 text-green-600 dark:bg-green-950"}`}>{noticeMsg.text}</p>}
+
+              {/* 현재 공지 보기 모드 */}
+              {notice && noticeMode === "view" && (
+                <div className="space-y-3">
+                  <div className="rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800">
+                    <div className="mb-2 flex items-center gap-2">
+                      <span className="rounded-full bg-red-500 px-2.5 py-0.5 text-xs font-bold text-white">공지</span>
+                      <span className="text-xs text-zinc-400">{new Date(notice.updated_at || notice.created_at).toLocaleString("ko-KR")}</span>
+                    </div>
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{notice.title}</p>
+                    <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{notice.content}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* 수정/생성 모드 */}
+              {(noticeMode === "edit" || noticeMode === "create") && (
+                <div className="space-y-3">
+                  {noticeMode === "create" && (
+                    <div className="rounded-xl bg-amber-50 px-4 py-3 dark:bg-amber-950/30">
+                      <p className="text-sm text-amber-600 dark:text-amber-400">현재 등록된 공지가 없습니다. 새 공지를 작성해주세요.</p>
+                    </div>
+                  )}
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">공지 제목</label>
+                    <input type="text" value={noticeTitle} onChange={(e) => { setNoticeTitle(e.target.value); setNoticeMsg(null); }}
+                      placeholder="공지 제목을 입력해주세요"
+                      className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">공지 내용</label>
+                    <textarea value={noticeContent} onChange={(e) => { setNoticeContent(e.target.value); setNoticeMsg(null); }}
+                      placeholder="공지 내용을 입력해주세요"
+                      rows={8}
+                      className="w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
+                  </div>
+                  <div className="flex gap-2">
+                    {noticeMode === "edit" && (
+                      <button onClick={() => { setNoticeMode("view"); setNoticeTitle(notice?.title || ""); setNoticeContent(notice?.content || ""); setNoticeMsg(null); }}
+                        className="flex-1 rounded-xl border border-zinc-200 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">취소</button>
+                    )}
+                    <button onClick={handleSaveNotice} disabled={noticeLoading}
+                      className="flex-1 rounded-xl bg-violet-500 py-3 text-sm font-semibold text-white hover:bg-violet-600 disabled:opacity-50">
+                      {noticeLoading ? "저장 중..." : noticeMode === "edit" ? "공지 수정" : "공지 등록"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
