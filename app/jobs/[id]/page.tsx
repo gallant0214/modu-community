@@ -34,6 +34,33 @@ export default function JobDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdminDelete, setShowAdminDelete] = useState(false);
+  const [adminDeleting, setAdminDeleting] = useState(false);
+
+  // 관리자 여부 체크
+  useEffect(() => {
+    if (!user) { setIsAdmin(false); return; }
+    getIdToken().then(token => {
+      if (!token) return;
+      fetch("/api/auth/is-admin", { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.json()).then(d => setIsAdmin(!!d.isAdmin)).catch(() => {});
+    });
+  }, [user, getIdToken]);
+
+  // 관리자 삭제
+  const handleAdminDelete = async () => {
+    setAdminDeleting(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/jobs/${jobId}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) router.replace("/jobs");
+    } catch {}
+    setAdminDeleting(false);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -130,22 +157,30 @@ export default function JobDetailPage() {
             </svg>
           </button>
           <span className="text-sm font-medium text-zinc-500 flex-1">구인 게시판</span>
-          {isOwner && (
-            <div className="flex items-center gap-1">
-              <Link
-                href={`/jobs/${jobId}/edit`}
-                className="px-3 py-1.5 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-              >수정</Link>
+          <div className="flex items-center gap-1">
+            {isOwner && (
+              <>
+                <Link
+                  href={`/jobs/${jobId}/edit`}
+                  className="px-3 py-1.5 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                >수정</Link>
+                <button
+                  onClick={handleClose}
+                  className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${job.is_closed ? "border-blue-300 text-blue-600 hover:bg-blue-50" : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"}`}
+                >{job.is_closed ? "모집재개" : "모집종료"}</button>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="px-3 py-1.5 text-xs border border-red-200 dark:border-red-900 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
+                >삭제</button>
+              </>
+            )}
+            {isAdmin && !isOwner && (
               <button
-                onClick={handleClose}
-                className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${job.is_closed ? "border-blue-300 text-blue-600 hover:bg-blue-50" : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"}`}
-              >{job.is_closed ? "모집재개" : "모집종료"}</button>
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="px-3 py-1.5 text-xs border border-red-200 dark:border-red-900 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
-              >삭제</button>
-            </div>
-          )}
+                onClick={() => setShowAdminDelete(true)}
+                className="px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600"
+              >관리자 삭제</button>
+            )}
+          </div>
         </div>
 
         <div className="px-4 pt-4">
@@ -274,6 +309,25 @@ export default function JobDetailPage() {
                   disabled={deleting}
                   className="flex-1 py-2.5 text-sm bg-red-500 hover:bg-red-600 text-white rounded-xl font-medium disabled:opacity-50"
                 >{deleting ? "삭제 중..." : "삭제"}</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 관리자 삭제 확인 모달 */}
+        {showAdminDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setShowAdminDelete(false)} />
+            <div className="relative bg-white dark:bg-zinc-900 rounded-2xl p-6 mx-4 w-full max-w-sm shadow-xl">
+              <h3 className="text-base font-semibold text-red-600 mb-2">관리자 삭제</h3>
+              <p className="text-sm text-zinc-500 mb-5">이 구인글을 관리자 권한으로 삭제하시겠습니까?<br />삭제된 글은 복구할 수 없습니다.</p>
+              <div className="flex gap-2">
+                <button onClick={() => setShowAdminDelete(false)} disabled={adminDeleting}
+                  className="flex-1 py-2.5 text-sm border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-600 dark:text-zinc-400">취소</button>
+                <button onClick={handleAdminDelete} disabled={adminDeleting}
+                  className="flex-1 py-2.5 text-sm bg-red-500 hover:bg-red-600 text-white rounded-xl font-medium disabled:opacity-50">
+                  {adminDeleting ? "삭제 중..." : "삭제"}
+                </button>
               </div>
             </div>
           </div>

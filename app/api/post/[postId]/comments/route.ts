@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 import { verifyAuth } from "@/app/lib/firebase-admin";
+import { sendPushToUser } from "@/app/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,35 @@ export async function POST(
   await sql`INSERT INTO comments (post_id, parent_id, author, password, content, ip_address, firebase_uid)
     VALUES (${pid}, ${parent_id ?? null}, ${sanitize(validateLength(author.trim(), 50))}, ${password.trim()}, ${sanitize(validateLength(content.trim(), 5000))}, ${ipAddr}, ${uid})`;
   await sql`UPDATE posts SET comments_count = (SELECT COUNT(*) FROM comments WHERE post_id = ${pid}) WHERE id = ${pid}`;
+
+  // 알림 발송 (비동기, 실패해도 댓글 작성에 영향 없음)
+  try {
+    if (parent_id) {
+      // 대댓글: 원 댓글 작성자에게 알림
+      const parentComment = await sql`SELECT firebase_uid, content FROM comments WHERE id = ${parent_id}`;
+      if (parentComment.length > 0 && parentComment[0].firebase_uid && parentComment[0].firebase_uid !== uid) {
+        sendPushToUser(
+          parentComment[0].firebase_uid,
+          "reply",
+          "내 댓글에 답글이 달렸어요",
+          content.trim().substring(0, 100),
+          { postId: String(pid) }
+        ).catch(() => {});
+      }
+    } else {
+      // 일반 댓글: 게시글 작성자에게 알림
+      const post = await sql`SELECT firebase_uid, title FROM posts WHERE id = ${pid}`;
+      if (post.length > 0 && post[0].firebase_uid && post[0].firebase_uid !== uid) {
+        sendPushToUser(
+          post[0].firebase_uid,
+          "comment",
+          `"${(post[0].title || "").substring(0, 30)}" 글에 댓글이 달렸어요`,
+          content.trim().substring(0, 100),
+          { postId: String(pid) }
+        ).catch(() => {});
+      }
+    }
+  } catch {}
 
   return NextResponse.json({ success: true });
 }

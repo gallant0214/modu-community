@@ -1,7 +1,7 @@
 import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
-import { verifyAuth } from "@/app/lib/firebase-admin";
+import { verifyAuth, isAdminUid } from "@/app/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -96,8 +96,9 @@ export async function DELETE(
     return NextResponse.json({ error: "게시글을 찾을 수 없습니다" }, { status: 404 });
   }
 
-  const isAdmin = password === process.env.ADMIN_PASSWORD;
-  if (!isAdmin && rows[0].password !== password) {
+  const isAdminUser = isAdminUid(user.uid);
+  const isAdminPw = password === process.env.ADMIN_PASSWORD;
+  if (!isAdminUser && !isAdminPw && rows[0].password !== password) {
     return NextResponse.json({ error: "비밀번호가 일치하지 않습니다" }, { status: 403 });
   }
 

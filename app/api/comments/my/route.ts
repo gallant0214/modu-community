@@ -8,7 +8,7 @@ import { verifyAuth } from "@/app/lib/firebase-admin";
 export async function GET(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) {
-    return NextResponse.json({ posts: [], error: "로그인이 필요합니다" }, { status: 401 });
+    return NextResponse.json({ comments: [], error: "로그인이 필요합니다" }, { status: 401 });
   }
 
   await sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
@@ -30,5 +30,5 @@ export async function GET(req: NextRequest) {
     new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
-  return NextResponse.json({ posts: rows });
+  return NextResponse.json({ comments: rows });
 }

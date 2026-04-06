@@ -30,7 +30,7 @@ function timeAgo(dateStr: string) {
 export default function PostDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const { user, signInWithGoogle } = useAuth();
+  const { user, signInWithGoogle, getIdToken } = useAuth();
   const categoryId = params.id as string;
   const postId = params.postId as string;
 
@@ -69,6 +69,11 @@ export default function PostDetailPage() {
 
   // 북마크
   const [bookmarked, setBookmarked] = useState(false);
+
+  // 관리자
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdminDeleteModal, setShowAdminDeleteModal] = useState(false);
+  const [adminDeleting, setAdminDeleting] = useState(false);
 
   // 게시글 더보기 메뉴 (...)
   const [showPostMenu, setShowPostMenu] = useState(false);
@@ -144,6 +149,35 @@ export default function PostDetailPage() {
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
   }, [showPostMenu]);
+
+  // 관리자 여부 체크
+  useEffect(() => {
+    if (!user) { setIsAdmin(false); return; }
+    getIdToken().then(token => {
+      if (!token) return;
+      fetch("/api/auth/is-admin", { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(d => setIsAdmin(!!d.isAdmin))
+        .catch(() => {});
+    });
+  }, [user, getIdToken]);
+
+  // 관리자 삭제
+  async function handleAdminDelete() {
+    setAdminDeleting(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/post/${postId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ password: "__admin_uid_delete__" }),
+      });
+      if (res.ok) {
+        router.replace(`/category/${categoryId}`);
+      }
+    } catch {}
+    setAdminDeleting(false);
+  }
 
   async function handleLike() {
     if (!user) { alert("로그인 후 이용 가능합니다"); return; }
@@ -399,6 +433,17 @@ export default function PostDetailPage() {
                     >
                       삭제
                     </button>
+                    {isAdmin && (
+                      <>
+                        <hr className="border-zinc-100 dark:border-zinc-700" />
+                        <button
+                          onClick={() => { setShowPostMenu(false); setShowAdminDeleteModal(true); }}
+                          className="flex w-full items-center px-3.5 py-2 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50"
+                        >
+                          관리자 삭제
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -945,6 +990,28 @@ export default function PostDetailPage() {
                 className="flex flex-1 items-center justify-center rounded-xl bg-red-500 py-3 text-sm font-semibold text-white hover:bg-red-600"
               >
                 삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 관리자 삭제 확인 모달 */}
+      {showAdminDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
+            <h3 className="mb-2 text-base font-bold text-red-600">관리자 삭제</h3>
+            <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+              이 게시글을 관리자 권한으로 삭제하시겠습니까?<br />삭제된 글은 복구할 수 없습니다.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowAdminDeleteModal(false)} disabled={adminDeleting}
+                className="flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700">
+                취소
+              </button>
+              <button onClick={handleAdminDelete} disabled={adminDeleting}
+                className="flex flex-1 items-center justify-center rounded-xl bg-red-500 py-3 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50">
+                {adminDeleting ? "삭제 중..." : "삭제"}
               </button>
             </div>
           </div>
