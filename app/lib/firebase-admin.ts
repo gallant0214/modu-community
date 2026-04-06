@@ -26,6 +26,16 @@ function getFirebaseAdmin() {
  * Firebase ID Token 검증
  * @returns 검증된 사용자 UID (실패 시 null)
  */
+/**
+ * 관리자 UID 확인
+ * 환경변수 ADMIN_UIDS에 콤마로 구분하여 등록 (예: "uid1,uid2")
+ */
+export function isAdminUid(uid: string): boolean {
+  const adminUids = process.env.ADMIN_UIDS || "";
+  if (!adminUids) return false;
+  return adminUids.split(",").map(u => u.trim()).includes(uid);
+}
+
 export async function verifyAuth(
   request: Request
 ): Promise<{ uid: string; email?: string } | null> {

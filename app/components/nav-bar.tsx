@@ -51,6 +51,9 @@ export function NavBar() {
           <NavLink href="/" active={isActive("/") && !isActive("/community") && !isActive("/category") && !isActive("/jobs") && !isActive("/practical") && !isActive("/my")}>
             소개
           </NavLink>
+          <ExternalNavLink href="https://moducm-practical.vercel.app">
+            실기·구술
+          </ExternalNavLink>
           <NavLink href="/community" active={isActive("/community") || isActive("/category")}>
             종목별 커뮤니티
           </NavLink>
@@ -134,6 +137,9 @@ export function NavBar() {
             <MobileNavLink href="/" active={isActive("/") && !isActive("/community") && !isActive("/category") && !isActive("/jobs") && !isActive("/practical") && !isActive("/my")} onClick={() => setMenuOpen(false)}>
               소개
             </MobileNavLink>
+            <MobileExternalLink href="https://moducm-practical.vercel.app" onClick={() => setMenuOpen(false)}>
+              실기·구술
+            </MobileExternalLink>
             <MobileNavLink href="/community" active={isActive("/community") || isActive("/category")} onClick={() => setMenuOpen(false)}>
               종목별 커뮤니티
             </MobileNavLink>
@@ -187,6 +193,20 @@ export function NavBar() {
   );
 }
 
+/* 데스크톱 외부 링크 */
+function ExternalNavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="relative text-sm px-3 py-1.5 rounded-md transition-colors font-medium whitespace-nowrap text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+    >
+      {children}
+    </a>
+  );
+}
+
 /* 데스크톱 메뉴 링크 */
 function NavLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
   return (
@@ -207,6 +227,21 @@ function NavLink({ href, active, children }: { href: string; active: boolean; ch
 }
 
 /* 모바일 메뉴 링크 */
+/* 모바일 외부 링크 */
+function MobileExternalLink({ href, onClick, children }: { href: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={onClick}
+      className="block px-3 py-3 rounded-lg text-sm font-medium transition-colors text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+    >
+      {children}
+    </a>
+  );
+}
+
 function MobileNavLink({ href, active, onClick, children }: { href: string; active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <Link

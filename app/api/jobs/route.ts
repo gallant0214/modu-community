@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
+import { sendKeywordAlerts } from "@/app/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -220,6 +221,15 @@ export async function POST(request: Request) {
       ${sanitize(validateLength((benefits || "").trim(), 500))}, ${sanitize(validateLength((preferences || "").trim(), 500))}, ${(deadline || "").trim()}, ${ipAddr}, ${user.uid}
     ) RETURNING id
   `;
+
+  // 새 구인글 알림 (비동기)
+  sendKeywordAlerts(
+    title.trim(),
+    (description || "").trim(),
+    "job",
+    rows[0].id,
+    user.uid
+  ).catch(() => {});
 
   return NextResponse.json({ success: true, id: rows[0].id });
 }

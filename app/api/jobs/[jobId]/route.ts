@@ -1,6 +1,6 @@
 import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
-import { verifyAuth } from "@/app/lib/firebase-admin";
+import { verifyAuth, isAdminUid } from "@/app/lib/firebase-admin";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 
 export const dynamic = "force-dynamic";
@@ -112,7 +112,7 @@ export async function DELETE(
   if (existing.length === 0) {
     return NextResponse.json({ error: "게시글을 찾을 수 없습니다" }, { status: 404 });
   }
-  if (existing[0].firebase_uid && existing[0].firebase_uid !== user.uid) {
+  if (existing[0].firebase_uid && existing[0].firebase_uid !== user.uid && !isAdminUid(user.uid)) {
     return NextResponse.json({ error: "삭제 권한이 없습니다" }, { status: 403 });
   }
 
