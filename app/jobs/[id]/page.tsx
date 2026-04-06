@@ -158,7 +158,7 @@ export default function JobDetailPage() {
           </button>
           <span className="text-sm font-medium text-zinc-500 flex-1">구인 게시판</span>
           <div className="flex items-center gap-1">
-            {isOwner && (
+            {(isOwner || isAdmin) && (
               <>
                 <Link
                   href={`/jobs/${jobId}/edit`}
@@ -169,16 +169,10 @@ export default function JobDetailPage() {
                   className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${job.is_closed ? "border-blue-300 text-blue-600 hover:bg-blue-50" : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"}`}
                 >{job.is_closed ? "모집재개" : "모집종료"}</button>
                 <button
-                  onClick={() => setShowDeleteConfirm(true)}
+                  onClick={() => isOwner ? setShowDeleteConfirm(true) : setShowAdminDelete(true)}
                   className="px-3 py-1.5 text-xs border border-red-200 dark:border-red-900 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
                 >삭제</button>
               </>
-            )}
-            {isAdmin && !isOwner && (
-              <button
-                onClick={() => setShowAdminDelete(true)}
-                className="px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600"
-              >관리자 삭제</button>
             )}
           </div>
         </div>

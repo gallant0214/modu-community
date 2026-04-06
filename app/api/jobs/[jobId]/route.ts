@@ -46,13 +46,20 @@ export async function PUT(
   const { jobId } = await params;
   const body = await request.json();
 
-  // 소유자 확인 (firebase_uid 컬럼이 있는 경우)
+  // 소유자 또는 관리자 확인
   const existing = await sql`SELECT firebase_uid FROM job_posts WHERE id = ${Number(jobId)}`;
   if (existing.length === 0) {
     return NextResponse.json({ error: "게시글을 찾을 수 없습니다" }, { status: 404 });
   }
-  // firebase_uid가 있으면 소유자만 수정 가능, 없으면 (기존 데이터) 허용
-  if (existing[0].firebase_uid && existing[0].firebase_uid !== user.uid) {
+  const isOwner = !existing[0].firebase_uid || existing[0].firebase_uid === user.uid;
+  let isAdminUser = false;
+  if (!isOwner && user.email) {
+    try {
+      const adminRows = await sql`SELECT id FROM admin_emails WHERE email = ${user.email.toLowerCase()} LIMIT 1`;
+      isAdminUser = adminRows.length > 0;
+    } catch { /* 테이블 미생성 시 무시 */ }
+  }
+  if (!isOwner && !isAdminUser) {
     return NextResponse.json({ error: "수정 권한이 없습니다" }, { status: 403 });
   }
 
@@ -107,12 +114,20 @@ export async function DELETE(
 
   const { jobId } = await params;
 
-  // 소유자 확인
+  // 소유자 또는 관리자 확인
   const existing = await sql`SELECT firebase_uid FROM job_posts WHERE id = ${Number(jobId)}`;
   if (existing.length === 0) {
     return NextResponse.json({ error: "게시글을 찾을 수 없습니다" }, { status: 404 });
   }
-  if (existing[0].firebase_uid && existing[0].firebase_uid !== user.uid && !isAdminUid(user.uid)) {
+  const isOwnerDel = !existing[0].firebase_uid || existing[0].firebase_uid === user.uid;
+  let isAdminDel = isAdminUid(user.uid);
+  if (!isOwnerDel && !isAdminDel && user.email) {
+    try {
+      const adminRows = await sql`SELECT id FROM admin_emails WHERE email = ${user.email.toLowerCase()} LIMIT 1`;
+      isAdminDel = adminRows.length > 0;
+    } catch { /* ignore */ }
+  }
+  if (!isOwnerDel && !isAdminDel) {
     return NextResponse.json({ error: "삭제 권한이 없습니다" }, { status: 403 });
   }
 
