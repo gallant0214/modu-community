@@ -252,15 +252,15 @@ export function CategorySearch({
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
               나의 경험이 다음 수험생에게 큰 도움이 됩니다
             </p>
-            <Link
-              href="/community"
+            <button
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
               className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
               </svg>
-              후기 작성하기
-            </Link>
+              종목을 선택하고 후기를 남겨보세요
+            </button>
           </div>
         </>
       )}

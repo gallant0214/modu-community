@@ -51,9 +51,9 @@ export function NavBar() {
           <NavLink href="/" active={isActive("/") && !isActive("/community") && !isActive("/category") && !isActive("/jobs") && !isActive("/practical") && !isActive("/my")}>
             소개
           </NavLink>
-          <ExternalNavLink href="https://moducm-practical.vercel.app">
+          <NavLink href="/practical" active={isActive("/practical")}>
             실기·구술
-          </ExternalNavLink>
+          </NavLink>
           <NavLink href="/community" active={isActive("/community") || isActive("/category")}>
             종목별 커뮤니티
           </NavLink>
@@ -137,9 +137,9 @@ export function NavBar() {
             <MobileNavLink href="/" active={isActive("/") && !isActive("/community") && !isActive("/category") && !isActive("/jobs") && !isActive("/practical") && !isActive("/my")} onClick={() => setMenuOpen(false)}>
               소개
             </MobileNavLink>
-            <MobileExternalLink href="https://moducm-practical.vercel.app" onClick={() => setMenuOpen(false)}>
+            <MobileNavLink href="/practical" active={isActive("/practical")} onClick={() => setMenuOpen(false)}>
               실기·구술
-            </MobileExternalLink>
+            </MobileNavLink>
             <MobileNavLink href="/community" active={isActive("/community") || isActive("/category")} onClick={() => setMenuOpen(false)}>
               종목별 커뮤니티
             </MobileNavLink>
