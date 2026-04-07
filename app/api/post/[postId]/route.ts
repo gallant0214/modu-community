@@ -40,7 +40,7 @@ export async function GET(
       isLiked = liked.length > 0;
 
       const bookmarked = await sql`
-        SELECT id FROM bookmarks WHERE target_type = 'posts' AND target_id = ${id} AND firebase_uid = ${user.uid} LIMIT 1
+        SELECT id FROM post_bookmarks WHERE post_id = ${id} AND firebase_uid = ${user.uid} LIMIT 1
       `;
       isBookmarked = bookmarked.length > 0;
     } catch { /* ignore */ }
