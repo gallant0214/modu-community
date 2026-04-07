@@ -1,8 +1,8 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, type User } from "firebase/auth";
-import { auth, googleProvider } from "@/app/lib/firebase-client";
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, type User, OAuthProvider, GoogleAuthProvider as GAuthProvider } from "firebase/auth";
+import { auth, googleProvider, signInWithCredential, GoogleAuthProvider } from "@/app/lib/firebase-client";
 
 interface AuthContextType {
   user: User | null;
@@ -26,31 +26,22 @@ const AuthContext = createContext<AuthContextType>({
 
 /**
  * 인앱 브라우저(WebView) 감지
- * 네이버앱, 카카오톡, 인스타그램, 페이스북, 라인, 밴드 등
  */
 function isInAppBrowser(): boolean {
   if (typeof window === "undefined") return false;
   const ua = navigator.userAgent.toLowerCase();
   return /naver|kakaotalk|instagram|fbav|fban|line\/|band\/|everytimeapp/i.test(ua)
-    || (/wv\)/.test(ua) && /android/i.test(ua)); // Android WebView 일반 감지
+    || (/wv\)/.test(ua) && /android/i.test(ua));
 }
 
-/**
- * 현재 URL을 외부 브라우저(Chrome/Safari)로 여는 시도
- */
 function openInExternalBrowser() {
   const url = window.location.href;
   const ua = navigator.userAgent.toLowerCase();
-
-  // Android: intent scheme으로 Chrome 열기
   if (/android/i.test(ua)) {
     const intentUrl = `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;end`;
     window.location.href = intentUrl;
     return;
   }
-
-  // iOS: Safari로 열기 시도 (일부 인앱 브라우저에서 동작)
-  // window.open으로 시도 후 실패하면 안내 메시지
   window.open(url, "_blank");
 }
 
@@ -126,18 +117,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // 1차: signInWithPopup 시도
     try {
       await signInWithPopup(auth, googleProvider);
+      return;
     } catch (e: any) {
-      if (e?.code === "auth/popup-blocked" || e?.code === "auth/popup-closed-by-user" || e?.code === "auth/cancelled-popup-request") {
-        try {
-          await signInWithRedirect(auth, googleProvider);
-        } catch {
-          console.error("Google 로그인 실패 (redirect fallback)", e);
-        }
-      } else {
-        console.error("Google 로그인 실패", e);
-      }
+      console.warn("signInWithPopup failed:", e?.code, e?.message);
+    }
+
+    // 2차: signInWithRedirect 시도
+    try {
+      await signInWithRedirect(auth, googleProvider);
+      return;
+    } catch (e: any) {
+      console.warn("signInWithRedirect failed:", e?.code, e?.message);
+    }
+
+    // 3차: Google OAuth를 수동으로 처리 (window.open 방식)
+    try {
+      const clientId = "480587636282-verugjcfhj65fv9o98udolpmrpskbm7j.apps.googleusercontent.com";
+      const redirectUri = `https://moducm-f2edf.firebaseapp.com/__/auth/handler`;
+      const scope = "openid email profile";
+      const state = Math.random().toString(36).substring(2);
+      const nonce = Math.random().toString(36).substring(2);
+
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=token` +
+        `&scope=${encodeURIComponent(scope)}` +
+        `&state=${state}` +
+        `&nonce=${nonce}` +
+        `&prompt=select_account`;
+
+      window.location.href = authUrl;
+    } catch (e) {
+      console.error("모든 로그인 방식 실패", e);
+      alert("로그인에 실패했습니다. 다른 브라우저에서 시도해주세요.");
     }
   };
 
