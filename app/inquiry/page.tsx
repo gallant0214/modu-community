@@ -3,6 +3,7 @@ export const revalidate = 30;
 import Link from "next/link";
 import { sql } from "@/app/lib/db";
 import { InquiryRow } from "@/app/components/inquiry-row";
+import { BackButton } from "@/app/components/back-button";
 import type { Inquiry } from "@/app/lib/types";
 
 export default async function InquiryPage() {
@@ -16,14 +17,7 @@ export default async function InquiryPage() {
         {/* Header */}
         <header className="flex items-center justify-between border-b border-zinc-300 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900">
           <div className="flex items-center gap-3">
-            <Link
-              href="/"
-              className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </Link>
+            <BackButton />
             <h1 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
               문의 게시판
             </h1>
