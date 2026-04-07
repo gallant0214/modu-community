@@ -5,21 +5,88 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 
+interface WebNotification {
+  id: number;
+  title: string;
+  body: string;
+  broadcast_type: string;
+  created_at: string;
+  is_read: boolean;
+}
+
 export function NavBar() {
   const pathname = usePathname();
-  const { user, loading, nickname, signInWithGoogle, signOutUser } = useAuth();
+  const { user, loading, nickname, signInWithGoogle, signOutUser, getIdToken } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  /* 알림 */
+  const [notiOpen, setNotiOpen] = useState(false);
+  const [notifications, setNotifications] = useState<WebNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const notiRef = useRef<HTMLDivElement>(null);
 
   const isActive = (path: string) => {
     if (path === "/") return pathname === "/";
     return pathname.startsWith(path);
   };
 
-  // 페이지 이동 시 메뉴 닫기
+  // 페이지 이동 시 메뉴/알림 닫기
   useEffect(() => {
     setMenuOpen(false);
+    setNotiOpen(false);
   }, [pathname]);
+
+  // 알림 데이터 로드
+  const fetchNotifications = async () => {
+    const token = await getIdToken();
+    if (!token) return;
+    try {
+      const res = await fetch("/api/notifications/web", { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (data.notifications) setNotifications(data.notifications);
+      if (data.unreadCount !== undefined) setUnreadCount(data.unreadCount);
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (user && !loading) fetchNotifications();
+  }, [user, loading]);
+
+  // 알림 읽음 처리
+  const markAsRead = async (id: number) => {
+    const token = await getIdToken();
+    if (!token) return;
+    fetch("/api/notifications/web", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ notificationId: id }),
+    }).catch(() => {});
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    setUnreadCount(prev => Math.max(0, prev - 1));
+  };
+
+  const markAllRead = async () => {
+    const token = await getIdToken();
+    if (!token) return;
+    fetch("/api/notifications/web", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ readAll: true }),
+    }).catch(() => {});
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    setUnreadCount(0);
+  };
+
+  // 알림 외부 클릭 닫기
+  useEffect(() => {
+    if (!notiOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (notiRef.current && !notiRef.current.contains(e.target as Node)) setNotiOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [notiOpen]);
 
   // 외부 클릭 시 메뉴 닫기
   useEffect(() => {
@@ -69,11 +136,73 @@ export function NavBar() {
         </div>
 
         {/* 데스크톱 로그인/로그아웃 */}
-        <div className="hidden md:block shrink-0">
+        <div className="hidden md:flex items-center gap-2 shrink-0">
           {loading ? (
             <div className="w-16 h-7 bg-zinc-100 dark:bg-zinc-800 rounded-md animate-pulse" />
           ) : user ? (
             <div className="flex items-center gap-2">
+              {/* 알림 아이콘 */}
+              <div ref={notiRef} className="relative">
+                <button
+                  onClick={() => { setNotiOpen(!notiOpen); if (!notiOpen) fetchNotifications(); }}
+                  className="relative p-1.5 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* 알림 드롭다운 */}
+                {notiOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-lg overflow-hidden z-50">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
+                      <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">알림</span>
+                      {unreadCount > 0 && (
+                        <button onClick={markAllRead} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">모두 읽음</button>
+                      )}
+                    </div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <p className="text-center text-sm text-zinc-400 py-8">알림이 없습니다</p>
+                      ) : (
+                        notifications.map((n) => (
+                          <button
+                            key={n.id}
+                            onClick={() => { if (!n.is_read) markAsRead(n.id); }}
+                            className={`w-full text-left px-4 py-3 border-b border-zinc-50 dark:border-zinc-800 last:border-0 transition-colors ${
+                              n.is_read ? "bg-white dark:bg-zinc-900" : "bg-blue-50/50 dark:bg-blue-950/20"
+                            } hover:bg-zinc-50 dark:hover:bg-zinc-800`}
+                          >
+                            <div className="flex items-start gap-2">
+                              {!n.is_read && <span className="mt-1.5 w-2 h-2 bg-blue-500 rounded-full shrink-0" />}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                    n.broadcast_type === "event" ? "bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400" :
+                                    n.broadcast_type === "ad" ? "bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400" :
+                                    "bg-violet-100 text-violet-600 dark:bg-violet-950 dark:text-violet-400"
+                                  }`}>
+                                    {n.broadcast_type === "event" ? "이벤트" : n.broadcast_type === "ad" ? "광고" : "공지"}
+                                  </span>
+                                  <span className="text-[10px] text-zinc-400">{timeAgo(n.created_at)}</span>
+                                </div>
+                                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{n.title}</p>
+                                <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{n.body}</p>
+                              </div>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <span className="text-xs text-zinc-600 dark:text-zinc-400 max-w-[80px] truncate">
                 {nickname || user.displayName || "사용자"}
               </span>
@@ -96,7 +225,7 @@ export function NavBar() {
         </div>
 
         {/* 모바일: 우측 영역 */}
-        <div className="flex md:hidden items-center gap-2 ml-auto">
+        <div className="flex md:hidden items-center gap-1 ml-auto">
           {/* 모바일 로그인 버튼 (비로그인 시) */}
           {!loading && !user && (
             <button
@@ -106,6 +235,70 @@ export function NavBar() {
               <GoogleIcon />
               로그인
             </button>
+          )}
+
+          {/* 모바일 알림 아이콘 (로그인 시) */}
+          {!loading && user && (
+            <div ref={notiRef} className="relative">
+              <button
+                onClick={() => { setNotiOpen(!notiOpen); if (!notiOpen) fetchNotifications(); }}
+                className="relative p-1.5 text-zinc-500 dark:text-zinc-400"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* 모바일 알림 드롭다운 */}
+              {notiOpen && (
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-lg overflow-hidden z-50">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
+                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">알림</span>
+                    {unreadCount > 0 && (
+                      <button onClick={markAllRead} className="text-xs text-blue-600 dark:text-blue-400">모두 읽음</button>
+                    )}
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <p className="text-center text-sm text-zinc-400 py-8">알림이 없습니다</p>
+                    ) : (
+                      notifications.map((n) => (
+                        <button
+                          key={n.id}
+                          onClick={() => { if (!n.is_read) markAsRead(n.id); }}
+                          className={`w-full text-left px-4 py-3 border-b border-zinc-50 dark:border-zinc-800 last:border-0 ${
+                            n.is_read ? "" : "bg-blue-50/50 dark:bg-blue-950/20"
+                          }`}
+                        >
+                          <div className="flex items-start gap-2">
+                            {!n.is_read && <span className="mt-1.5 w-2 h-2 bg-blue-500 rounded-full shrink-0" />}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                  n.broadcast_type === "event" ? "bg-blue-100 text-blue-600" :
+                                  n.broadcast_type === "ad" ? "bg-amber-100 text-amber-600" :
+                                  "bg-violet-100 text-violet-600"
+                                }`}>
+                                  {n.broadcast_type === "event" ? "이벤트" : n.broadcast_type === "ad" ? "광고" : "공지"}
+                                </span>
+                                <span className="text-[10px] text-zinc-400">{timeAgo(n.created_at)}</span>
+                              </div>
+                              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{n.title}</p>
+                              <p className="text-xs text-zinc-500 truncate">{n.body}</p>
+                            </div>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* 햄버거 버튼 */}
@@ -256,6 +449,20 @@ function MobileNavLink({ href, active, onClick, children }: { href: string; acti
       {children}
     </Link>
   );
+}
+
+function timeAgo(dateStr: string) {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "방금 전";
+  if (mins < 60) return `${mins}분 전`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}시간 전`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}일 전`;
+  return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
 function GoogleIcon() {
