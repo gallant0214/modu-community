@@ -168,7 +168,7 @@ export async function GET(request: Request) {
       totalPages: Math.ceil(total / limit),
     }, {
       headers: {
-        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
       },
     });
   } catch (e) {
