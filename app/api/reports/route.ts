@@ -20,7 +20,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "신고 사유를 선택해주세요" }, { status: 400 });
   }
 
+  const safePostId = post_id ? Number(post_id) : 0;
+  const safeCategoryId = category_id ? Number(category_id) : 0;
   await sql`INSERT INTO reports (target_type, target_id, post_id, category_id, reason, custom_reason)
-    VALUES (${target_type}, ${Number(target_id)}, ${post_id ? Number(post_id) : null}, ${category_id ? Number(category_id) : null}, ${sanitize(validateLength(reason.trim(), 200))}, ${custom_reason ? sanitize(validateLength(custom_reason.trim(), 500)) : null})`;
+    VALUES (${target_type}, ${Number(target_id)}, ${safePostId}, ${safeCategoryId}, ${sanitize(validateLength(reason.trim(), 200))}, ${custom_reason ? sanitize(validateLength(custom_reason.trim(), 500)) : null})`;
   return NextResponse.json({ success: true });
 }
