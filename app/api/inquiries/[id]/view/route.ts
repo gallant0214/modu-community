@@ -29,9 +29,13 @@ export async function POST(
   }
 
   return NextResponse.json({
+    id: rows[0].id,
+    author: rows[0].author,
+    title: rows[0].title,
     content: rows[0].content,
     reply: rows[0].reply,
     replied_at: rows[0].replied_at,
+    created_at: rows[0].created_at,
     isAdmin,
   });
 }
