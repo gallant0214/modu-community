@@ -15,11 +15,10 @@ export default async function Home() {
           <div className="lp-c">
             <div className="lp-hero-chip">Google Play 출시</div>
             <h1 className="lp-hero-title">
-              시험장 후기부터 채용 공고까지,<br /><span className="hl">한 곳에서.</span>
+              종목별 경험과 정보를 나누는 커뮤니티
             </h1>
             <p className="lp-hero-sub">
-              블로그에 흩어진 실기·구술 후기, 알바 사이트에 묻힌 스포츠 채용 정보<br />
-              — 이제 따로 찾지 마세요.
+              후기, 질문, 준비 과정, 현장 이야기를 종목별로 나눠보세요.
             </p>
             <div className="lp-hero-ctas">
               <Link href="/community" className="lp-btn lp-btn-primary">실기·구술 후기 보기</Link>
