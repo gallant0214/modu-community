@@ -55,8 +55,8 @@ export async function GET(request: Request) {
     jobs = await sql`
       SELECT *
       FROM job_posts
-      WHERE (title ~ ${choRegex} OR description ~ ${choRegex} OR center_name ~ ${choRegex} OR sport ~ ${choRegex} OR region_name ~ ${choRegex})
-        AND (deleted_at IS NULL)
+      WHERE (title ~ ${choRegex} OR description ~ ${choRegex} OR center_name ~ ${choRegex} OR sport ~ ${choRegex} OR COALESCE(region_name,'') ~ ${choRegex} OR COALESCE(address,'') ~ ${choRegex})
+        AND (is_closed = false OR is_closed IS NULL)
       ORDER BY created_at DESC
       LIMIT ${limit}
     `;
@@ -76,8 +76,8 @@ export async function GET(request: Request) {
     jobs = await sql`
       SELECT *
       FROM job_posts
-      WHERE (title ILIKE ${pattern} OR description ILIKE ${pattern} OR center_name ILIKE ${pattern} OR sport ILIKE ${pattern} OR region_name ILIKE ${pattern})
-        AND (deleted_at IS NULL)
+      WHERE (title ILIKE ${pattern} OR description ILIKE ${pattern} OR center_name ILIKE ${pattern} OR sport ILIKE ${pattern} OR COALESCE(region_name,'') ILIKE ${pattern} OR COALESCE(address,'') ILIKE ${pattern})
+        AND (is_closed = false OR is_closed IS NULL)
       ORDER BY created_at DESC
       LIMIT ${limit}
     `;
