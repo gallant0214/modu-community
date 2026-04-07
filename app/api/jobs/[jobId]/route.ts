@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 // GET /api/jobs/[jobId] — 구인글 상세 (공개)
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
   const { jobId } = await params;
@@ -26,7 +26,22 @@ export async function GET(
     bookmarkCount = bm[0]?.count || 0;
   } catch { /* 테이블 미생성 시 무시 */ }
 
-  return NextResponse.json({ ...rows[0], bookmark_count: bookmarkCount });
+  // 좋아요/북마크 여부
+  let isLiked = false;
+  let isBookmarked = false;
+  const user = await verifyAuth(request);
+  if (user) {
+    try {
+      const liked = await sql`SELECT id FROM job_post_likes WHERE job_post_id = ${Number(jobId)} AND firebase_uid = ${user.uid} LIMIT 1`;
+      isLiked = liked.length > 0;
+    } catch {}
+    try {
+      const bked = await sql`SELECT id FROM job_post_bookmarks WHERE job_post_id = ${Number(jobId)} AND firebase_uid = ${user.uid} LIMIT 1`;
+      isBookmarked = bked.length > 0;
+    } catch {}
+  }
+
+  return NextResponse.json({ ...rows[0], bookmark_count: bookmarkCount, is_liked: isLiked, is_bookmarked: isBookmarked });
 }
 
 // PUT /api/jobs/[jobId] — 구인글 수정 (인증 + 소유자 확인)

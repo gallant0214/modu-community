@@ -27,8 +27,9 @@ export async function GET(
   }
   const post = rows[0];
 
-  // 현재 사용자의 좋아요 여부 확인
+  // 현재 사용자의 좋아요/북마크 여부 확인
   let isLiked = false;
+  let isBookmarked = false;
   const user = await verifyAuth(request);
   if (user) {
     try {
@@ -37,6 +38,11 @@ export async function GET(
         SELECT id FROM post_likes WHERE post_id = ${id} AND firebase_uid = ${user.uid} LIMIT 1
       `;
       isLiked = liked.length > 0;
+
+      const bookmarked = await sql`
+        SELECT id FROM bookmarks WHERE target_type = 'posts' AND target_id = ${id} AND firebase_uid = ${user.uid} LIMIT 1
+      `;
+      isBookmarked = bookmarked.length > 0;
     } catch { /* ignore */ }
   }
 
@@ -45,6 +51,7 @@ export async function GET(
     ip_display: maskIp(post.ip_address || ""),
     ip_address: undefined,
     is_liked: isLiked,
+    is_bookmarked: isBookmarked,
   });
 }
 
