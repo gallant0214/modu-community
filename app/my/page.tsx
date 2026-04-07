@@ -181,13 +181,29 @@ export default function MyPage() {
     loadCounts();
   }, [user, getIdToken]);
 
-  /* 닉네임 없으면 자동 모달 */
+  /* 닉네임 없으면 자동 모달 (서버에서 확인 후) */
+  const [nicknameChecked, setNicknameChecked] = useState(false);
   useEffect(() => {
-    if (user && !loading && !nickname) {
-      setShowNicknameModal(true);
-      setNicknameInput(generateRandomNickname());
-    }
-  }, [user, loading, nickname]);
+    if (!user || loading || nicknameChecked) return;
+    // 서버에서 닉네임 존재 여부를 직접 확인
+    const checkNickname = async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`/api/nicknames?uid=${user.uid}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!data.nickname) {
+          // 서버에도 닉네임이 없을 때만 모달 표시
+          setShowNicknameModal(true);
+          setNicknameInput(generateRandomNickname());
+        }
+      } catch {}
+      setNicknameChecked(true);
+    };
+    checkNickname();
+  }, [user, loading, nicknameChecked, getIdToken]);
 
   /* 탭 데이터 로드 */
   const loadTabData = useCallback(async (tab: Tab) => {
@@ -238,7 +254,7 @@ export default function MyPage() {
       const res = await fetch("/api/nicknames", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ nickname: trimmed, uid: user?.uid, firstSetup: !nickname }),
+        body: JSON.stringify({ nickname: trimmed, uid: user?.uid, firstSetup: showNicknameModal && !nickname }),
       });
       const data = await res.json();
       if (!res.ok) { setNicknameError(data.error || "저장에 실패했습니다."); return; }
