@@ -20,8 +20,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "현재 비밀번호와 새 비밀번호를 입력해주세요" }, { status: 400 });
   }
 
-  if (newPassword.length < 4) {
-    return NextResponse.json({ error: "새 비밀번호는 4자 이상이어야 합니다" }, { status: 400 });
+  if (newPassword.length < 8) {
+    return NextResponse.json({ error: "새 비밀번호는 8자 이상이어야 합니다" }, { status: 400 });
   }
 
   if (newPassword.length > 100) {

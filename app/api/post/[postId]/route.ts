@@ -50,6 +50,7 @@ export async function GET(
     ...post,
     ip_display: maskIp(post.ip_address || ""),
     ip_address: undefined,
+    password: undefined,
     is_liked: isLiked,
     is_bookmarked: isBookmarked,
   });
