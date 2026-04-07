@@ -63,6 +63,10 @@ export async function POST() {
       )
     `;
 
+    // reports 테이블 post_id, category_id를 nullable로 변경 (구인글 신고 지원)
+    await sql`ALTER TABLE reports ALTER COLUMN post_id DROP NOT NULL`;
+    await sql`ALTER TABLE reports ALTER COLUMN category_id DROP NOT NULL`;
+
     return NextResponse.json({ success: true, message: "All notification tables created/updated" });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
