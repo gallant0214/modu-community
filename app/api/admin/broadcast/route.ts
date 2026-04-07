@@ -27,6 +27,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "제목과 내용을 입력해주세요" }, { status: 400 });
     }
 
+    // fail_count 컬럼 확인 (없으면 추가)
+    try { await sql`ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS fail_count INTEGER DEFAULT 0`; } catch {}
+
     // 브로드캐스트 저장
     const rows = await sql`
       INSERT INTO admin_broadcasts (title, body, image_url, link_url, broadcast_type)
@@ -44,16 +47,17 @@ export async function POST(request: Request) {
     `;
 
     let sentCount = 0;
+    let failCount = 0;
+    const errors: string[] = [];
+
     for (const u of users) {
       try {
-        // 각 사용자에게 알림 로그 저장
         await sql`
           INSERT INTO notification_logs (firebase_uid, type, title, body, data)
           VALUES (${u.firebase_uid}, 'admin_broadcast', ${title.trim()}, ${body.trim()},
             ${JSON.stringify({ broadcastId: String(broadcastId), broadcast_type: broadcast_type || "notice", image_url, link_url })})
         `;
 
-        // 푸시 발송
         await sendPushToUser(
           u.firebase_uid,
           "promo",
@@ -62,13 +66,16 @@ export async function POST(request: Request) {
           { type: "admin_broadcast", broadcastId: String(broadcastId) }
         );
         sentCount++;
-      } catch {}
+      } catch (err: any) {
+        failCount++;
+        if (errors.length < 5) errors.push(err?.message || "알 수 없는 오류");
+      }
     }
 
-    // 발송 수 업데이트
-    await sql`UPDATE admin_broadcasts SET sent_count = ${sentCount} WHERE id = ${broadcastId}`;
+    // 발송 결과 업데이트
+    await sql`UPDATE admin_broadcasts SET sent_count = ${sentCount}, fail_count = ${failCount} WHERE id = ${broadcastId}`;
 
-    return NextResponse.json({ success: true, broadcastId, sentCount });
+    return NextResponse.json({ success: true, broadcastId, sentCount, failCount, totalTargets: users.length, errors: errors.length > 0 ? errors : undefined });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

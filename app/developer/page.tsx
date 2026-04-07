@@ -204,9 +204,12 @@ export default function AdminPage() {
 
   async function fetchPushLogs() {
     try {
-      const res = await fetch(`/api/admin/push?password=${encodeURIComponent(storedPassword)}`);
+      const token = await firebaseUser?.getIdToken();
+      const res = await fetch("/api/admin/broadcast", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const data = await res.json();
-      if (data.logs) setPushLogs(data.logs);
+      if (data.broadcasts) setPushHistory(data.broadcasts);
     } catch { /* ignore */ }
   }
 
@@ -227,7 +230,8 @@ export default function AdminPage() {
       const data = await res.json();
       if (data.error) { setPushMsg({ type: "error", text: data.error }); }
       else {
-        setPushMsg({ type: "success", text: `전송 완료! (${data.sentCount}명에게 발송)` });
+        const failText = data.failCount > 0 ? ` · 실패 ${data.failCount}건` : "";
+        setPushMsg({ type: "success", text: `전송 완료! 대상 ${data.totalTargets || data.sentCount}명 · 성공 ${data.sentCount}건${failText}` });
         setPushTitle("");
         setPushBody("");
         setPushUrl("");
@@ -744,29 +748,53 @@ export default function AdminPage() {
             </div>
 
             {/* 전송 이력 */}
-            {pushLogs.length > 0 && (
-              <div className="rounded-2xl bg-white p-6 dark:bg-zinc-900">
-                <h3 className="mb-4 text-base font-bold text-zinc-900 dark:text-zinc-100">전송 이력</h3>
+            <div className="rounded-2xl bg-white p-6 dark:bg-zinc-900">
+              <h3 className="mb-4 text-base font-bold text-zinc-900 dark:text-zinc-100">전송 이력</h3>
+              {pushHistory.length === 0 ? (
+                <p className="text-center text-sm text-zinc-400 py-8">전송 이력이 없습니다</p>
+              ) : (
                 <div className="space-y-3">
-                  {pushLogs.map((log) => {
-                    let logData: { sent?: number; failed?: number } = {};
-                    try { logData = JSON.parse(log.data); } catch { /* ignore */ }
-                    return (
-                      <div key={log.id} className="rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{log.title}</p>
-                          <span className="text-xs text-zinc-400">{new Date(log.created_at).toLocaleString("ko-KR")}</span>
+                  {pushHistory.map((item: any) => (
+                    <div key={item.id} className="rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                      {/* 헤더: 날짜 + 타입 */}
+                      <div className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-800 px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            item.broadcast_type === "event" ? "bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400" :
+                            item.broadcast_type === "ad" ? "bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400" :
+                            "bg-violet-100 text-violet-600 dark:bg-violet-950 dark:text-violet-400"
+                          }`}>
+                            {item.broadcast_type === "event" ? "이벤트" : item.broadcast_type === "ad" ? "광고" : "공지"}
+                          </span>
+                          <span className="text-xs text-zinc-400">
+                            {new Date(item.created_at).toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                          </span>
                         </div>
-                        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{log.body}</p>
-                        {(logData.sent !== undefined) && (
-                          <p className="mt-1 text-xs text-zinc-400">성공: {logData.sent}건 · 실패: {logData.failed}건</p>
+                      </div>
+                      {/* 본문 */}
+                      <div className="px-4 py-3">
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">{item.title}</p>
+                        <p className="text-sm text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap">{item.body}</p>
+                      </div>
+                      {/* 결과 */}
+                      <div className="flex items-center gap-3 px-4 py-2 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/50">
+                        <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+                          성공 {item.sent_count || 0}건
+                        </span>
+                        {(item.fail_count > 0) && (
+                          <span className="text-xs text-red-500 font-medium">
+                            실패 {item.fail_count}건
+                          </span>
+                        )}
+                        {(!item.sent_count && !item.fail_count) && (
+                          <span className="text-xs text-zinc-400">발송 대기 중</span>
                         )}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 
