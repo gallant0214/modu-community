@@ -47,7 +47,7 @@ export async function GET(request: Request) {
       FROM posts p
       LEFT JOIN categories c ON p.category_id = c.id
       WHERE (p.is_notice = false OR p.is_notice IS NULL)
-        AND (p.title ~ ${choRegex} OR p.content ~ ${choRegex} OR p.author ~ ${choRegex})
+        AND (p.title ~ ${choRegex} OR p.content ~ ${choRegex} OR p.author ~ ${choRegex} OR p.region ~ ${choRegex})
       ORDER BY p.created_at DESC
       LIMIT ${limit}
     `;
@@ -55,7 +55,7 @@ export async function GET(request: Request) {
     jobs = await sql`
       SELECT *
       FROM job_posts
-      WHERE (title ~ ${choRegex} OR description ~ ${choRegex} OR center_name ~ ${choRegex} OR sport ~ ${choRegex})
+      WHERE (title ~ ${choRegex} OR description ~ ${choRegex} OR center_name ~ ${choRegex} OR sport ~ ${choRegex} OR region_name ~ ${choRegex})
         AND (deleted_at IS NULL)
       ORDER BY created_at DESC
       LIMIT ${limit}
@@ -68,7 +68,7 @@ export async function GET(request: Request) {
       FROM posts p
       LEFT JOIN categories c ON p.category_id = c.id
       WHERE (p.is_notice = false OR p.is_notice IS NULL)
-        AND (p.title ILIKE ${pattern} OR p.content ILIKE ${pattern} OR p.author ILIKE ${pattern})
+        AND (p.title ILIKE ${pattern} OR p.content ILIKE ${pattern} OR p.author ILIKE ${pattern} OR p.region ILIKE ${pattern})
       ORDER BY p.created_at DESC
       LIMIT ${limit}
     `;
@@ -76,7 +76,7 @@ export async function GET(request: Request) {
     jobs = await sql`
       SELECT *
       FROM job_posts
-      WHERE (title ILIKE ${pattern} OR description ILIKE ${pattern} OR center_name ILIKE ${pattern} OR sport ILIKE ${pattern})
+      WHERE (title ILIKE ${pattern} OR description ILIKE ${pattern} OR center_name ILIKE ${pattern} OR sport ILIKE ${pattern} OR region_name ILIKE ${pattern})
         AND (deleted_at IS NULL)
       ORDER BY created_at DESC
       LIMIT ${limit}
