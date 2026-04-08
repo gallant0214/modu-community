@@ -33,67 +33,54 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   const isSearching = searchQuery.length > 0;
   const likeQuery = `%${searchQuery}%`;
 
-  // 공지 게시글 (모든 종목에서 항상 최상단, 1개만)
-  const noticePosts = (await sql`SELECT * FROM posts WHERE is_notice = true ORDER BY created_at DESC LIMIT 1`) as Post[];
+  // 모든 쿼리를 병렬 실행하여 속도 최적화
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  let posts: Post[];
-  let totalCount: number;
+  // 공통 쿼리: 공지 + 인기글 (항상 필요)
+  const noticePromise = sql`SELECT * FROM posts WHERE is_notice = true ORDER BY created_at DESC LIMIT 1`;
+  const topPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND created_at >= ${monthStart} AND likes > 0 ORDER BY likes DESC LIMIT 3`;
+
+  let countPromise: Promise<any>;
+  let postsPromise: Promise<any>;
 
   if (isSearching) {
-    // 검색 모드
-    let searchCondition = "";
-    if (searchFilter === "title") searchCondition = "AND title ILIKE $2";
-    else if (searchFilter === "content") searchCondition = "AND content ILIKE $2";
-    else if (searchFilter === "author") searchCondition = "AND author ILIKE $2";
-    else if (searchFilter === "region") searchCondition = "AND region ILIKE $2";
-    else searchCondition = "AND (title ILIKE $2 OR content ILIKE $2 OR author ILIKE $2 OR region ILIKE $2)";
-
     if (searchFilter === "title") {
-      const countResult = await sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND title ILIKE ${likeQuery}`;
-      totalCount = Number(countResult[0].count);
-      posts = (await sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND title ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`) as Post[];
+      countPromise = sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND title ILIKE ${likeQuery}`;
+      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND title ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
     } else if (searchFilter === "content") {
-      const countResult = await sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND content ILIKE ${likeQuery}`;
-      totalCount = Number(countResult[0].count);
-      posts = (await sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND content ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`) as Post[];
+      countPromise = sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND content ILIKE ${likeQuery}`;
+      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND content ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
     } else if (searchFilter === "author") {
-      const countResult = await sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND author ILIKE ${likeQuery}`;
-      totalCount = Number(countResult[0].count);
-      posts = (await sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND author ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`) as Post[];
+      countPromise = sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND author ILIKE ${likeQuery}`;
+      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND author ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
     } else if (searchFilter === "region") {
-      const countResult = await sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND region ILIKE ${likeQuery}`;
-      totalCount = Number(countResult[0].count);
-      posts = (await sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND region ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`) as Post[];
+      countPromise = sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND region ILIKE ${likeQuery}`;
+      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND region ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
     } else {
-      const countResult = await sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND (title ILIKE ${likeQuery} OR content ILIKE ${likeQuery} OR author ILIKE ${likeQuery} OR region ILIKE ${likeQuery})`;
-      totalCount = Number(countResult[0].count);
-      posts = (await sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND (title ILIKE ${likeQuery} OR content ILIKE ${likeQuery} OR author ILIKE ${likeQuery} OR region ILIKE ${likeQuery}) ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`) as Post[];
+      countPromise = sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND (title ILIKE ${likeQuery} OR content ILIKE ${likeQuery} OR author ILIKE ${likeQuery} OR region ILIKE ${likeQuery})`;
+      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND (title ILIKE ${likeQuery} OR content ILIKE ${likeQuery} OR author ILIKE ${likeQuery} OR region ILIKE ${likeQuery}) ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
     }
   } else {
-    // 일반 모드
-    const countResult = await sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL)`;
-    totalCount = Number(countResult[0].count);
-
+    countPromise = sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL)`;
     if (sortMode === "popular") {
-      posts = (await sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) ORDER BY views DESC, created_at DESC LIMIT ${perPage} OFFSET ${offset}`) as Post[];
+      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) ORDER BY views DESC, created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
     } else if (sortMode === "helpful") {
-      posts = (await sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) ORDER BY likes DESC, created_at DESC LIMIT ${perPage} OFFSET ${offset}`) as Post[];
+      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) ORDER BY likes DESC, created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
     } else {
-      posts = (await sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`) as Post[];
+      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
+  // 4개 쿼리 동시 실행
+  const [noticeResult, topResult, countResult, postsResult] = await Promise.all([
+    noticePromise, topPromise, countPromise, postsPromise,
+  ]);
 
-  // Top posts this month (by likes)
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const topPosts = (await sql`
-    SELECT * FROM posts
-    WHERE category_id = ${categoryId} AND created_at >= ${monthStart} AND likes > 0
-    ORDER BY likes DESC
-    LIMIT 3
-  `) as Post[];
+  const noticePosts = noticeResult as Post[];
+  const topPosts = topResult as Post[];
+  const totalCount = Number(countResult[0].count);
+  const posts = postsResult as Post[];
 
 
   return (
