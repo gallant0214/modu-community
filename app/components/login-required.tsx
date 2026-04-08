@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 
 /**
  * 로그인이 필요한 페이지를 감싸는 컴포넌트.
- * 비로그인 시 브랜드형 로그인 유도 화면 표시.
+ * 비로그인 시 My 페이지와 동일한 로그인 유도 화면 표시.
  */
 export function LoginRequired({ children }: { children: React.ReactNode }) {
   const { user, loading, signInWithGoogle } = useAuth();
@@ -22,27 +21,17 @@ export function LoginRequired({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-zinc-50 dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-950">
         <div className="flex flex-col items-center justify-center min-h-[80vh] px-4">
-
-          {/* 카드 */}
           <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-100 dark:border-zinc-800 p-8 sm:p-10 text-center">
-
-            {/* 아이콘 */}
             <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-950 flex items-center justify-center mx-auto mb-5">
               <svg className="w-8 h-8 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </div>
-
-            {/* 타이틀 */}
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
-              로그인하고 이어서 진행하세요
-            </h2>
+            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">로그인하고 시작하세요</h2>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6 leading-relaxed">
-              로그인하면 글 작성, 북마크, 알림 등<br />
-              다양한 기능을 이용할 수 있어요
+              로그인하면 글 작성, 북마크, 닉네임 설정 등<br />
+              나만의 활동을 관리할 수 있어요
             </p>
-
-            {/* Google 로그인 버튼 */}
             <button
               onClick={signInWithGoogle}
               className="w-full flex items-center justify-center gap-3 px-6 py-3.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-600 rounded-xl text-sm font-semibold text-zinc-700 dark:text-zinc-200 shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:shadow-md transition-all"
@@ -55,18 +44,7 @@ export function LoginRequired({ children }: { children: React.ReactNode }) {
               </svg>
               Google 계정으로 로그인
             </button>
-
-            {/* 보조 안내 */}
-            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-4">
-              가입 없이 Google 계정으로 바로 시작할 수 있어요
-            </p>
-          </div>
-
-          {/* 하단 링크 */}
-          <div className="mt-6 flex items-center gap-4 text-xs text-zinc-400 dark:text-zinc-500">
-            <Link href="/" className="hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">홈으로 돌아가기</Link>
-            <span>·</span>
-            <Link href="/jobs" className="hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">공고 둘러보기</Link>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-4">가입 없이 Google 계정으로 바로 시작할 수 있어요</p>
           </div>
         </div>
       </div>
