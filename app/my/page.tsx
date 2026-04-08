@@ -345,7 +345,7 @@ export default function MyPage() {
   if (activeTab) {
     const tabLabels: Record<Tab, string> = {
       posts: "내가 쓴 글", comments: "내가 쓴 댓글", jobs: "내가 등록한 구인글",
-      bookmarks: "후기 북마크", jobBookmarks: "구인 북���크",
+      bookmarks: "후기 북마크", jobBookmarks: "구인 북마크",
     };
 
     return (
