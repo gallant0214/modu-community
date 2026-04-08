@@ -81,6 +81,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   const topPosts = topResult as Post[];
   const totalCount = Number(countResult[0].count);
   const posts = postsResult as Post[];
+  const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
 
 
   return (
