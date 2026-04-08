@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createPost } from "@/app/lib/actions";
 import { LoginRequired } from "@/app/components/login-required";
+import { useAuth } from "@/app/components/auth-provider";
 
 const regions = [
   "서울", "세종", "부산", "인천", "대전", "대구", "광주", "울산",
@@ -26,37 +27,36 @@ function WritePageContent() {
   const router = useRouter();
   const params = useParams();
   const categoryId = params.id as string;
+  const { user, nickname } = useAuth();
 
   const [selectedExamType, setSelectedExamType] = useState("기타");
+  const [showTagModal, setShowTagModal] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingData, setPendingData] = useState<FormData | null>(null);
-  const [authorError, setAuthorError] = useState(false);
-  const [passwordError, setPasswordError] = useState(false);
   const [titleError, setTitleError] = useState(false);
   const [contentError, setContentError] = useState(false);
   const [regionError, setRegionError] = useState(false);
 
   async function handleSubmit(formData: FormData) {
-    const author = (formData.get("author") as string)?.trim() ?? "";
-    const password = (formData.get("password") as string) ?? "";
     const title = (formData.get("title") as string)?.trim() ?? "";
     const content = (formData.get("content") as string)?.trim() ?? "";
     const region = (formData.get("region") as string) ?? "";
 
-    const aErr = !author || author.length < 2 || author.length >= 8 || /\s/.test(author);
-    const pErr = password.length < 4 || password.length > 8;
+    if (!nickname) { alert("닉네임을 먼저 설정해주세요. MY 페이지에서 설정할 수 있습니다."); return; }
+
     const tErr = !title;
     const cErr = !content;
     const rErr = !region;
 
-    setAuthorError(aErr);
-    setPasswordError(pErr);
     setTitleError(tErr);
     setContentError(cErr);
     setRegionError(rErr);
 
-    if (aErr || pErr || tErr || cErr || rErr) return;
+    if (tErr || cErr || rErr) return;
 
+    // 닉네임과 UID 자동 설정
+    formData.set("author", nickname);
+    formData.set("password", user?.uid || "");
     formData.set("tags", selectedExamType);
     setPendingData(formData);
     setShowConfirm(true);
@@ -96,50 +96,22 @@ function WritePageContent() {
           <input type="hidden" name="tags" value={selectedExamType} />
 
           <div className="space-y-6 px-4 py-5 md:px-6 md:py-8">
-            {/* 1. 닉네임 + 비밀번호 */}
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  닉네임
-                </label>
-                <input
-                  name="author"
-                  required
-                  maxLength={7}
-                  placeholder="닉네임을 입력하세요"
-                  onChange={() => authorError && setAuthorError(false)}
-                  className={`w-full rounded-xl border bg-zinc-50 px-4 py-3 text-sm text-zinc-900 focus:outline-none dark:bg-zinc-900 dark:text-zinc-100 ${
-                    authorError
-                      ? "border-red-400 placeholder:text-red-400 focus:border-red-400"
-                      : "border-zinc-200 placeholder:text-zinc-400 focus:border-blue-400 dark:border-zinc-700"
-                  }`}
-                />
-              </div>
-              <div className="flex-1">
-                <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  비밀번호
-                </label>
-                <input
-                  name="password"
-                  type="password"
-                  required
-                  minLength={4}
-                  maxLength={8}
-                  placeholder="비밀번호 (4~8자리)"
-                  onChange={() => passwordError && setPasswordError(false)}
-                  className={`w-full rounded-xl border bg-zinc-50 px-4 py-3 text-sm text-zinc-900 focus:outline-none dark:bg-zinc-900 dark:text-zinc-100 ${
-                    passwordError
-                      ? "border-red-400 placeholder:text-red-400 focus:border-red-400"
-                      : "border-zinc-200 placeholder:text-zinc-400 focus:border-blue-400 dark:border-zinc-700"
-                  }`}
-                />
+            {/* 1. 작성자 (닉네임 자동 표시, 읽기 전용) */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                작성자
+              </label>
+              <div className="w-full rounded-xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+                {nickname || (
+                  <span className="text-zinc-400">닉네임을 설정해주세요</span>
+                )}
               </div>
             </div>
 
             {/* 2. 지역 선택 */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                지역 선택
+                지역 선택 <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <select
@@ -153,7 +125,7 @@ function WritePageContent() {
                       : "border-zinc-200 focus:border-blue-400 dark:border-zinc-700"
                   }`}
                 >
-                  <option value="" disabled className="text-red-400">지역을 선택하세요</option>
+                  <option value="" disabled>지역을 선택하세요</option>
                   {regions.map((r) => (
                     <option key={r} value={r}>{r}</option>
                   ))}
@@ -164,33 +136,27 @@ function WritePageContent() {
               </div>
             </div>
 
-            {/* 3. 시험 유형 */}
+            {/* 3. 태그 (모달 방식) */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                시험 유형
+                태그 <span className="text-red-500">*</span>
               </label>
-              <div className="flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-900">
-                {examTypes.map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setSelectedExamType(type)}
-                    className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-all ${
-                      selectedExamType === type
-                        ? "bg-white text-blue-600 shadow-sm dark:bg-zinc-800 dark:text-blue-400"
-                        : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                    }`}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowTagModal(true)}
+                className="w-full flex items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              >
+                <span>{selectedExamType}</span>
+                <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
             </div>
 
             {/* 4. 제목 */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                제목
+                제목 <span className="text-red-500">*</span>
               </label>
               <input
                 name="title"
@@ -208,13 +174,14 @@ function WritePageContent() {
             {/* 5. 내용 */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                경험 공유
+                내용 <span className="text-red-500">*</span>
               </label>
               <textarea
                 name="content"
                 required
                 placeholder="시험장의 분위기, 실기 동작, 구술 질문 등 구체적인 경험을 공유해주세요. 다른 수험생들에게 큰 도움이 됩니다."
                 rows={8}
+                style={{ minHeight: 200 }}
                 onChange={() => contentError && setContentError(false)}
                 className={`w-full resize-none rounded-xl border bg-zinc-50 px-4 py-3 text-sm leading-relaxed text-zinc-900 focus:outline-none dark:bg-zinc-900 dark:text-zinc-100 ${
                   contentError
@@ -241,6 +208,38 @@ function WritePageContent() {
             </button>
           </div>
         </form>
+
+        {/* 태그 선택 모달 */}
+        {showTagModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
+              <h3 className="mb-4 text-center text-base font-bold text-zinc-900 dark:text-zinc-100">
+                태그 선택
+              </h3>
+              <div className="flex gap-2">
+                {examTypes.map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => { setSelectedExamType(type); setShowTagModal(false); }}
+                    className={`flex-1 rounded-xl py-3 text-sm font-semibold transition-colors ${
+                      selectedExamType === type
+                        ? "bg-blue-500 text-white"
+                        : "border border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setShowTagModal(false)}
+                className="mt-3 w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-sm text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* 등록 확인 모달 */}
         {showConfirm && (
