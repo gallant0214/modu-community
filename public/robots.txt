@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /developer/
+
+Sitemap: https://moducm.com/sitemap.xml
