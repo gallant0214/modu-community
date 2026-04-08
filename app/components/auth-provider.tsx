@@ -117,31 +117,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // 모바일: redirect 방식 (팝업이 느리거나 차단되므로)
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) {
-      try {
-        await signInWithRedirect(auth, googleProvider);
-      } catch {
-        console.error("Google 로그인 실패 (mobile redirect)");
-      }
-      return;
-    }
-
-    // 데스크톱: popup 방식 (빠르고 자연스러움)
+    // 모바일/데스크톱 모두 redirect 방식 (새 창 없이 같은 페이지에서 처리)
     try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (e: any) {
-      // popup 실패 시 redirect로 폴백
-      if (e?.code === "auth/popup-blocked" || e?.code === "auth/popup-closed-by-user" || e?.code === "auth/cancelled-popup-request") {
-        try {
-          await signInWithRedirect(auth, googleProvider);
-        } catch {
-          console.error("Google 로그인 실패 (desktop redirect fallback)");
-        }
-      } else {
-        console.error("Google 로그인 실패", e);
-      }
+      await signInWithRedirect(auth, googleProvider);
+    } catch {
+      console.error("Google 로그인 실패");
     }
   };
 
