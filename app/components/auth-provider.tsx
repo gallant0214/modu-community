@@ -117,43 +117,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // 1차: signInWithPopup 시도
+    // 모바일: redirect 방식 (팝업이 느리거나 차단되므로)
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      try {
+        await signInWithRedirect(auth, googleProvider);
+      } catch {
+        console.error("Google 로그인 실패 (mobile redirect)");
+      }
+      return;
+    }
+
+    // 데스크톱: popup 방식 (빠르고 자연스러움)
     try {
       await signInWithPopup(auth, googleProvider);
-      return;
     } catch (e: any) {
-      console.warn("signInWithPopup failed:", e?.code, e?.message);
-    }
-
-    // 2차: signInWithRedirect 시도
-    try {
-      await signInWithRedirect(auth, googleProvider);
-      return;
-    } catch (e: any) {
-      console.warn("signInWithRedirect failed:", e?.code, e?.message);
-    }
-
-    // 3차: Google OAuth를 수동으로 처리 (window.open 방식)
-    try {
-      const clientId = "480587636282-verugjcfhj65fv9o98udolpmrpskbm7j.apps.googleusercontent.com";
-      const redirectUri = `https://moducm-f2edf.firebaseapp.com/__/auth/handler`;
-      const scope = "openid email profile";
-      const state = Math.random().toString(36).substring(2);
-      const nonce = Math.random().toString(36).substring(2);
-
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${encodeURIComponent(clientId)}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&response_type=token` +
-        `&scope=${encodeURIComponent(scope)}` +
-        `&state=${state}` +
-        `&nonce=${nonce}` +
-        `&prompt=select_account`;
-
-      window.location.href = authUrl;
-    } catch (e) {
-      console.error("모든 로그인 방식 실패", e);
-      alert("로그인에 실패했습니다. 다른 브라우저에서 시도해주세요.");
+      // popup 실패 시 redirect로 폴백
+      if (e?.code === "auth/popup-blocked" || e?.code === "auth/popup-closed-by-user" || e?.code === "auth/cancelled-popup-request") {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+        } catch {
+          console.error("Google 로그인 실패 (desktop redirect fallback)");
+        }
+      } else {
+        console.error("Google 로그인 실패", e);
+      }
     }
   };
 
