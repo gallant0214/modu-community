@@ -16,15 +16,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  async rewrites() {
-    return [
-      {
-        // Firebase Auth handler 프록시 (authDomain을 moducm.com으로 사용하기 위해)
-        source: "/__/auth/:path*",
-        destination: "https://moducm-f2edf.firebaseapp.com/__/auth/:path*",
-      },
-    ];
-  },
   async headers() {
     return [
       {
