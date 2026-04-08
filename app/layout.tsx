@@ -16,7 +16,23 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "모두의 지도사 커뮤니티",
-  description: "모두의 지도사 커뮤니티 - 종목후기, 구인 게시판",
+  description: "종목별 경험과 정보를 나누는 커뮤니티. 실기·구술 후기, 스포츠 구인 공고를 한곳에서 확인하세요.",
+  metadataBase: new URL("https://moducm.com"),
+  openGraph: {
+    title: "모두의 지도사 커뮤니티",
+    description: "종목별 경험과 정보를 나누는 커뮤니티. 실기·구술 후기, 스포츠 구인 공고를 한곳에서 확인하세요.",
+    url: "https://moducm.com",
+    siteName: "모두의 지도사 커뮤니티",
+    images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "모두의 지도사 커뮤니티" }],
+    locale: "ko_KR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "모두의 지도사 커뮤니티",
+    description: "종목별 경험과 정보를 나누는 커뮤니티. 실기·구술 후기, 스포츠 구인 공고를 한곳에서 확인하세요.",
+    images: ["/icon-512.png"],
+  },
   icons: {
     icon: [
       { url: "/favicon.png", sizes: "32x32", type: "image/png" },
