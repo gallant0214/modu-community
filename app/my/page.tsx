@@ -320,22 +320,28 @@ export default function MyPage() {
   /* ── 비로그인 ── */
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#F8F4EC] dark:bg-zinc-950 flex flex-col items-center justify-center px-4">
-        <div className="w-full max-w-sm bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl p-8 text-center">
-          <div className="w-20 h-20 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-10 h-10 text-[#CCC]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-zinc-50 dark:from-zinc-900 dark:via-zinc-950 dark:to-zinc-950">
+        <div className="flex flex-col items-center justify-center min-h-[80vh] px-4">
+          <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-100 dark:border-zinc-800 p-8 sm:p-10 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-950 flex items-center justify-center mx-auto mb-5">
+              <svg className="w-8 h-8 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">로그인하고 시작하세요</h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6 leading-relaxed">
+              로그인하면 글 작성, 북마크, 닉네임 설정 등<br />
+              나만의 활동을 관리할 수 있어요
+            </p>
+            <button
+              onClick={signInWithGoogle}
+              className="w-full flex items-center justify-center gap-3 px-6 py-3.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-600 rounded-xl text-sm font-semibold text-zinc-700 dark:text-zinc-200 shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:shadow-md transition-all"
+            >
+              <GoogleIcon />
+              Google 계정으로 로그인
+            </button>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-4">가입 없이 Google 계정으로 바로 시작할 수 있어요</p>
           </div>
-          <h2 className="text-lg font-bold text-[#333] dark:text-zinc-100 mb-2">로그인이 필요합니다</h2>
-          <p className="text-sm text-[#999] mb-6">로그인하면 더 많은 기능을 이용할 수 있어요</p>
-          <button
-            onClick={signInWithGoogle}
-            className="w-full flex items-center justify-center gap-2.5 px-6 py-3 bg-white dark:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-600 rounded-xl text-sm font-medium text-[#333] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-700 transition-colors"
-          >
-            <GoogleIcon />
-            Google 계정으로 로그인
-          </button>
         </div>
       </div>
     );
