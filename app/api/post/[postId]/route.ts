@@ -53,6 +53,7 @@ export async function GET(
     password: undefined,
     is_liked: isLiked,
     is_bookmarked: isBookmarked,
+    is_mine: user ? post.firebase_uid === user.uid : false,
   });
 }
 

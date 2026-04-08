@@ -25,14 +25,14 @@ export function sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
 }
 
 // ============================================
-// Rate Limiting (메모리 기반, Vercel Serverless)
+// Rate Limiting (메모리 + 슬라이딩 윈도우)
 // ============================================
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const rateLimitMap = new Map<string, number[]>();
 
-// Vercel serverless는 인스턴스가 재활용되므로 일정 수준의 rate limiting 가능
 const RATE_LIMIT_WINDOW = 60_000; // 1분
-const RATE_LIMIT_MAX_WRITE = 30; // 쓰기 요청: 1분에 30회
-const RATE_LIMIT_MAX_READ = 120; // 읽기 요청: 1분에 120회
+const RATE_LIMIT_MAX_WRITE = 20; // 쓰기: 1분에 20회
+const RATE_LIMIT_MAX_READ = 100; // 읽기: 1분에 100회
+const RATE_LIMIT_MAX_AUTH = 5; // 인증 시도: 1분에 5회
 
 export function getClientIp(request: Request): string {
   const h = request.headers;
@@ -45,36 +45,35 @@ export function getClientIp(request: Request): string {
 
 export function checkRateLimit(
   ip: string,
-  type: "read" | "write" = "write"
+  type: "read" | "write" | "auth" = "write"
 ): NextResponse | null {
   const now = Date.now();
   const key = `${ip}:${type}`;
-  const limit = type === "write" ? RATE_LIMIT_MAX_WRITE : RATE_LIMIT_MAX_READ;
+  const limit = type === "auth" ? RATE_LIMIT_MAX_AUTH : type === "write" ? RATE_LIMIT_MAX_WRITE : RATE_LIMIT_MAX_READ;
 
-  const entry = rateLimitMap.get(key);
-  if (!entry || now > entry.resetTime) {
-    rateLimitMap.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
-    return null;
-  }
+  // 슬라이딩 윈도우: 최근 1분 내 요청만 유지
+  const timestamps = rateLimitMap.get(key) || [];
+  const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW);
 
-  entry.count++;
-  if (entry.count > limit) {
+  if (recent.length >= limit) {
     return NextResponse.json(
       { error: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
       { status: 429 }
     );
   }
 
+  recent.push(now);
+  rateLimitMap.set(key, recent);
   return null;
 }
 
-// 오래된 엔트리 주기적 정리 (메모리 누수 방지)
+// 오래된 엔트리 주기적 정리
 setInterval(() => {
   const now = Date.now();
-  for (const [key, entry] of rateLimitMap) {
-    if (now > entry.resetTime) {
-      rateLimitMap.delete(key);
-    }
+  for (const [key, timestamps] of rateLimitMap) {
+    const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW);
+    if (recent.length === 0) rateLimitMap.delete(key);
+    else rateLimitMap.set(key, recent);
   }
 }, 60_000);
 
@@ -105,4 +104,32 @@ export function requireField(
     };
   }
   return { valid: true, value: value.trim().slice(0, maxLength) };
+}
+
+// ============================================
+// Content-Type 검증
+// ============================================
+export function validateContentType(request: Request): NextResponse | null {
+  const contentType = request.headers.get("content-type");
+  if (request.method !== "GET" && !contentType?.includes("application/json")) {
+    return NextResponse.json(
+      { error: "Content-Type must be application/json" },
+      { status: 400 }
+    );
+  }
+  return null;
+}
+
+// ============================================
+// 요청 크기 제한
+// ============================================
+export function checkPayloadSize(request: Request, maxBytes = 1_000_000): NextResponse | null {
+  const contentLength = Number(request.headers.get("content-length") || "0");
+  if (contentLength > maxBytes) {
+    return NextResponse.json(
+      { error: "요청 크기가 너무 큽니다" },
+      { status: 413 }
+    );
+  }
+  return null;
 }

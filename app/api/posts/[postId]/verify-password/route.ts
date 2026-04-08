@@ -1,5 +1,6 @@
 import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
+import { checkRateLimit, getClientIp } from "@/app/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +8,10 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ postId: string }> }
 ) {
+  const ip = getClientIp(request);
+  const rateLimitResponse = checkRateLimit(ip, "auth");
+  if (rateLimitResponse) return rateLimitResponse;
+
   const { postId } = await params;
   const body = await request.json();
   const { password } = body;

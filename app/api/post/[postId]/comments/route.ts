@@ -45,7 +45,9 @@ export async function GET(
     ...c,
     ip_display: maskIp(String(c.ip_address || "")),
     ip_address: undefined,
+    password: undefined,
     is_liked: likedCommentIds.has(c.id as number),
+    is_mine: user ? c.firebase_uid === user.uid : false,
   }));
   return NextResponse.json(result);
 }

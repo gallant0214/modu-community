@@ -41,7 +41,14 @@ export async function GET(
     } catch {}
   }
 
-  return NextResponse.json({ ...rows[0], bookmark_count: bookmarkCount, is_liked: isLiked, is_bookmarked: isBookmarked });
+  const job = rows[0];
+  return NextResponse.json({
+    ...job,
+    bookmark_count: bookmarkCount,
+    is_liked: isLiked,
+    is_bookmarked: isBookmarked,
+    is_mine: user ? job.firebase_uid === user.uid : false,
+  });
 }
 
 // PUT /api/jobs/[jobId] — 구인글 수정 (인증 + 소유자 확인)

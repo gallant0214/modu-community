@@ -2,10 +2,16 @@ import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
 import { verifyAdmin } from "@/app/lib/admin-auth";
 import { verifyAuth } from "@/app/lib/firebase-admin";
+import { checkRateLimit, getClientIp } from "@/app/lib/security";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  // 관리자 로그인 brute force 방지
+  const ip = getClientIp(request);
+  const rateLimitResponse = checkRateLimit(ip, "auth");
+  if (rateLimitResponse) return rateLimitResponse;
+
   const body = await request.json();
   const { password } = body;
 
