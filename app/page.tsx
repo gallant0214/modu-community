@@ -13,7 +13,6 @@ export default async function Home() {
         {/* ===== 1. 히어로 ===== */}
         <section className="lp-hero" id="about">
           <div className="lp-c">
-            <div className="lp-hero-chip">Google Play 출시</div>
             <h1 className="lp-hero-title">
               종목별 경험과 정보를 나누는 커뮤니티
             </h1>
