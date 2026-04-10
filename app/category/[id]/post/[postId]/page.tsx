@@ -6,6 +6,7 @@ import Link from "next/link";
 import { deletePost, likePost, viewPost, createComment, deleteComment, createReport, updateNotice, likeComment, updateComment, verifyPostPassword } from "@/app/lib/actions";
 import type { Post, Comment } from "@/app/lib/types";
 import { useAuth } from "@/app/components/auth-provider";
+import { shareOrCopy } from "@/app/lib/share";
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);
@@ -69,6 +70,22 @@ export default function PostDetailPage() {
 
   // 북마크
   const [bookmarked, setBookmarked] = useState(false);
+
+  // 공유 토스트
+  const [shareToast, setShareToast] = useState<string | null>(null);
+
+  const handleShare = async () => {
+    if (!post) return;
+    const result = await shareOrCopy({
+      title: post.title,
+      text: `"${post.title}"\n\n모두의 지도사 커뮤니티에서 보기`,
+      url: `https://moducm.com/category/${categoryId}/post/${post.id}`,
+    });
+    if (result === "copied") {
+      setShareToast("링크가 복사되었습니다");
+      setTimeout(() => setShareToast(null), 2000);
+    }
+  };
 
   // 관리자
   const [isAdmin, setIsAdmin] = useState(false);
@@ -500,6 +517,16 @@ export default function PostDetailPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
               <span>북마크</span>
+            </button>
+            <button
+              onClick={handleShare}
+              aria-label="공유하기"
+              className="flex items-center gap-1.5 text-sm font-medium transition-all text-[#65676B] hover:text-blue-500 dark:text-zinc-400 dark:hover:text-blue-400"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+              <span className="hidden sm:inline">공유</span>
             </button>
             <button
               onClick={handleLike}
@@ -1277,6 +1304,13 @@ export default function PostDetailPage() {
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {/* 공유 토스트 */}
+      {shareToast && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-5 py-3 rounded-full text-sm font-medium shadow-lg">
+          {shareToast}
         </div>
       )}
     </div>

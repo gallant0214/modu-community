@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import type { JobPost } from "@/app/lib/types";
 import { useAuth } from "@/app/components/auth-provider";
+import { shareOrCopy } from "@/app/lib/share";
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);
@@ -34,6 +35,7 @@ export default function JobDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
+  const [shareToast, setShareToast] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminDelete, setShowAdminDelete] = useState(false);
   const [adminDeleting, setAdminDeleting] = useState(false);
@@ -85,6 +87,19 @@ export default function JobDetailPage() {
     };
     load();
   }, [jobId, router]);
+
+  const handleShare = async () => {
+    if (!job) return;
+    const result = await shareOrCopy({
+      title: job.title,
+      text: `"${job.title}"\n${job.center_name || ""} ${job.region_name || ""}\n\n모두의 지도사 커뮤니티에서 보기`,
+      url: `https://moducm.com/jobs/${job.id}`,
+    });
+    if (result === "copied") {
+      setShareToast("링크가 복사되었습니다");
+      setTimeout(() => setShareToast(null), 2000);
+    }
+  };
 
   const handleLike = async () => {
     if (!user) { alert("로그인 후 이용 가능합니다"); return; }
@@ -283,7 +298,24 @@ export default function JobDetailPage() {
               </svg>
               <span className="text-sm font-medium">북마크</span>
             </button>
+            <button
+              onClick={handleShare}
+              aria-label="공유하기"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-full border-2 border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-blue-300 hover:text-blue-500 transition-all"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+              <span className="text-sm font-medium hidden sm:inline">공유</span>
+            </button>
           </div>
+
+          {/* 공유 토스트 */}
+          {shareToast && (
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-5 py-3 rounded-full text-sm font-medium shadow-lg animate-fade-in">
+              {shareToast}
+            </div>
+          )}
         </div>
 
         {/* 삭제 확인 */}
