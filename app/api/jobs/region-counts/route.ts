@@ -10,7 +10,6 @@ export async function GET() {
     const countRows = await sql`
       SELECT region_code, COUNT(*)::int AS cnt
       FROM job_posts
-      WHERE is_closed = false OR is_closed IS NULL
       GROUP BY region_code
     `;
 
