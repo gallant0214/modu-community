@@ -2,8 +2,6 @@
 
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, GoogleAuthProvider, browserLocalPersistence, setPersistence, signInWithCredential } from "firebase/auth";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
-
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyAzISJaLg6SxDzdv8qZBwQqpC4LMe_xq2k",
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "auth.moducm.com",
@@ -13,16 +11,6 @@ const firebaseConfig = {
 };
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-
-// App Check (reCAPTCHA v3) - 웹 앱 보호
-if (typeof window !== "undefined") {
-  try {
-    initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider("6LcxUqwsAAAAAMLLwgbm4MOj67QUWjGgVdnXRLdy"),
-      isTokenAutoRefreshEnabled: true,
-    });
-  } catch {}
-}
 
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
