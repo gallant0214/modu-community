@@ -69,13 +69,18 @@ export function NavBar() {
   const markAllRead = async () => {
     const token = await getIdToken();
     if (!token) return;
-    fetch("/api/notifications/web", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ readAll: true }),
-    }).catch(() => {});
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-    setUnreadCount(0);
+    try {
+      await fetch("/api/notifications/web", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ readAll: true }),
+      });
+      // 서버에서 최신 상태 다시 가져오기
+      await fetchNotifications();
+    } catch {
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    }
   };
 
   // 알림 외부 클릭 닫기

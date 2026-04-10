@@ -35,19 +35,12 @@ export async function GET(request: Request) {
       LIMIT 50
     `;
 
-    // 읽지 않은 알림 수
-    const unreadResult = await sql`
-      SELECT COUNT(*)::int AS count
-      FROM admin_broadcasts ab
-      WHERE NOT EXISTS (
-        SELECT 1 FROM web_notification_reads wnr
-        WHERE wnr.notification_id = ab.id AND wnr.firebase_uid = ${user.uid}
-      )
-    `;
+    // 읽지 않은 알림 수 (notifications 배열에서 직접 계산)
+    const unreadCount = notifications.filter((n: any) => !n.is_read).length;
 
     return NextResponse.json({
       notifications,
-      unreadCount: unreadResult[0]?.count || 0,
+      unreadCount,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -62,24 +55,33 @@ export async function POST(request: Request) {
   try {
     const { notificationId, readAll } = await request.json();
 
+    // 테이블 확인
+    await sql`CREATE TABLE IF NOT EXISTS web_notification_reads (
+      id SERIAL PRIMARY KEY,
+      firebase_uid TEXT NOT NULL,
+      notification_id INTEGER NOT NULL,
+      read_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(firebase_uid, notification_id)
+    )`;
+
     if (readAll) {
-      // 모두 읽음 처리
-      await sql`
-        INSERT INTO web_notification_reads (firebase_uid, notification_id)
-        SELECT ${user.uid}, ab.id
-        FROM admin_broadcasts ab
-        WHERE NOT EXISTS (
-          SELECT 1 FROM web_notification_reads wnr
-          WHERE wnr.notification_id = ab.id AND wnr.firebase_uid = ${user.uid}
-        )
-        ON CONFLICT DO NOTHING
-      `;
+      // 모두 읽음 처리: 모든 admin_broadcasts를 가져와서 개별 INSERT
+      const allBroadcasts = await sql`SELECT id FROM admin_broadcasts`;
+      for (const row of allBroadcasts) {
+        try {
+          await sql`
+            INSERT INTO web_notification_reads (firebase_uid, notification_id)
+            VALUES (${user.uid}, ${row.id})
+            ON CONFLICT (firebase_uid, notification_id) DO NOTHING
+          `;
+        } catch {}
+      }
     } else if (notificationId) {
       // 개별 읽음 처리
       await sql`
         INSERT INTO web_notification_reads (firebase_uid, notification_id)
         VALUES (${user.uid}, ${notificationId})
-        ON CONFLICT DO NOTHING
+        ON CONFLICT (firebase_uid, notification_id) DO NOTHING
       `;
     }
 
