@@ -54,7 +54,7 @@ async function queryJobs(opts: {
   const countResult = await sql`
     SELECT COUNT(*) as total FROM job_posts
     WHERE
-      (${rCode} = '' OR region_code = ${rCode})
+      (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}))
       AND (${eType} = '' OR employment_type = ${eType})
       AND (${sFilter} = '' OR sport = ${sFilter})
       AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
@@ -74,7 +74,7 @@ async function queryJobs(opts: {
     rows = await sql`
       SELECT * FROM job_posts
       WHERE
-        (${rCode} = '' OR region_code = ${rCode})
+        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}))
         AND (${eType} = '' OR employment_type = ${eType})
         AND (${sFilter} = '' OR sport = ${sFilter})
         AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
@@ -94,7 +94,7 @@ async function queryJobs(opts: {
     rows = await sql`
       SELECT * FROM job_posts
       WHERE
-        (${rCode} = '' OR region_code = ${rCode})
+        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}))
         AND (${eType} = '' OR employment_type = ${eType})
         AND (${sFilter} = '' OR sport = ${sFilter})
         AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
@@ -114,7 +114,7 @@ async function queryJobs(opts: {
     rows = await sql`
       SELECT * FROM job_posts
       WHERE
-        (${rCode} = '' OR region_code = ${rCode})
+        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}))
         AND (${eType} = '' OR employment_type = ${eType})
         AND (${sFilter} = '' OR sport = ${sFilter})
         AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
@@ -216,7 +216,7 @@ export async function POST(request: Request) {
     ) VALUES (
       ${sanitize(validateLength(title.trim(), 200))}, ${sanitize(validateLength(description.trim(), 10000))}, ${sanitize(validateLength(center_name.trim(), 100))}, ${sanitize(validateLength((address || "").trim(), 200))},
       ${sanitize(validateLength((author_role || "").trim(), 50))}, ${sanitize(validateLength((author_name || "").trim(), 50))}, ${contact_type || "연락처"}, ${sanitize(validateLength(contact.trim(), 100))},
-      ${sanitize(validateLength(sport.trim(), 50))}, ${sanitize(validateLength((region_name || "").trim(), 50))}, ${(region_code || "").trim()},
+      ${sanitize(validateLength(sport.trim(), 50))}, ${sanitize(validateLength((region_name || "").trim(), 50))}, ${(region_code || "").trim().toLowerCase()},
       ${sanitize(validateLength((employment_type || "").trim(), 50))}, ${sanitize(validateLength((salary || "").trim(), 100))}, ${sanitize(validateLength((headcount || "").trim(), 50))},
       ${sanitize(validateLength((benefits || "").trim(), 500))}, ${sanitize(validateLength((preferences || "").trim(), 500))}, ${(deadline || "").trim()}, ${ipAddr}, ${user.uid}
     ) RETURNING id
