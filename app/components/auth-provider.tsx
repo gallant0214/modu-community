@@ -9,6 +9,7 @@ interface AuthContextType {
   loading: boolean;
   nickname: string | null;
   signInWithGoogle: () => Promise<void>;
+  signInWithApple: () => Promise<void>;
   signOutUser: () => Promise<void>;
   getIdToken: () => Promise<string | null>;
   refreshNickname: () => Promise<void>;
@@ -19,6 +20,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   nickname: null,
   signInWithGoogle: async () => {},
+  signInWithApple: async () => {},
   signOutUser: async () => {},
   getIdToken: async () => null,
   refreshNickname: async () => {},
@@ -141,6 +143,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signInWithApple = async () => {
+    if (isInAppBrowser()) {
+      const confirmed = confirm(
+        "인앱 브라우저에서는 Apple 로그인이 제한됩니다.\n\n외부 브라우저(Chrome/Safari)에서 열어서 로그인해 주세요.\n\n[확인]을 누르면 외부 브라우저로 이동합니다."
+      );
+      if (confirmed) openInExternalBrowser();
+      return;
+    }
+
+    const provider = new OAuthProvider("apple.com");
+    provider.addScope("email");
+    provider.addScope("name");
+
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      try {
+        await signInWithRedirect(auth, provider);
+      } catch (e) {
+        console.error("Apple 로그인 실패 (mobile)", e);
+      }
+      return;
+    }
+
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (e: any) {
+      console.warn("Apple popup 실패, redirect로 폴백:", e?.code);
+      try {
+        await signInWithRedirect(auth, provider);
+      } catch (e2) {
+        console.error("Apple 로그인 실패", e2);
+      }
+    }
+  };
+
   const signOutUser = async () => {
     await signOut(auth);
     setNickname(null);
@@ -160,7 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, nickname, signInWithGoogle, signOutUser, getIdToken, refreshNickname }}>
+    <AuthContext.Provider value={{ user, loading, nickname, signInWithGoogle, signInWithApple, signOutUser, getIdToken, refreshNickname }}>
       {children}
     </AuthContext.Provider>
   );
