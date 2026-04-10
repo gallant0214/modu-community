@@ -42,6 +42,7 @@ export const metadata: Metadata = {
   },
   other: {
     "color-scheme": "light dark",
+    "msvalidate.01": "0BB0F3FA8383FA4BC8A43B4559FFA2AF",
   },
 };
 
