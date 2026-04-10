@@ -270,12 +270,14 @@ function RegionBottomSheet({
   open,
   onClose,
   value,
+  counts,
   onChange,
   onClear,
 }: {
   open: boolean;
   onClose: () => void;
   value: string;
+  counts: Record<string, number>;
   onChange: (code: string, name: string) => void;
   onClear: () => void;
 }) {
@@ -286,6 +288,10 @@ function RegionBottomSheet({
     if (open) { setStep("group"); setSelectedGroup(null); }
   }, [open]);
 
+  const getCount = (code: string) => counts[code.toLowerCase()] || 0;
+  const getGroupTotal = (group: RegionGroup) =>
+    group.subRegions.reduce((sum, sr) => sum + getCount(sr.code), 0);
+
   return (
     <BottomSheet open={open} onClose={onClose} title={step === "group" ? "지역 선택" : selectedGroup?.name || ""}>
       {step === "group" ? (
@@ -294,18 +300,26 @@ function RegionBottomSheet({
             onClick={() => { onClear(); onClose(); }}
             className="w-full flex items-center px-4 py-3 text-sm text-blue-600 dark:text-blue-400 font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50"
           >전체 지역</button>
-          {REGION_GROUPS.map((group) => (
-            <button
-              key={group.code}
-              onClick={() => { setSelectedGroup(group); setStep("sub"); }}
-              className="w-full flex items-center justify-between px-4 py-3 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0"
-            >
-              <span>{group.name}</span>
-              <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          ))}
+          {REGION_GROUPS.map((group) => {
+            const total = getGroupTotal(group);
+            return (
+              <button
+                key={group.code}
+                onClick={() => { setSelectedGroup(group); setStep("sub"); }}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0"
+              >
+                <span className="flex items-center gap-2">
+                  {group.name}
+                  {total > 0 && (
+                    <span className="text-xs text-zinc-400 dark:text-zinc-500">({total})</span>
+                  )}
+                </span>
+                <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            );
+          })}
         </div>
       ) : (
         <div className="py-1">
@@ -318,15 +332,23 @@ function RegionBottomSheet({
             </svg>
             뒤로
           </button>
-          {selectedGroup?.subRegions.map((sub) => (
-            <button
-              key={sub.code}
-              onClick={() => { onChange(sub.code, sub.name); onClose(); }}
-              className={`w-full text-left px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0 ${
-                value === sub.code ? "text-blue-600 font-medium" : "text-zinc-800 dark:text-zinc-200"
-              }`}
-            >{sub.name}</button>
-          ))}
+          {selectedGroup?.subRegions.map((sub) => {
+            const cnt = getCount(sub.code);
+            return (
+              <button
+                key={sub.code}
+                onClick={() => { onChange(sub.code, sub.name); onClose(); }}
+                className={`w-full flex items-center justify-between px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0 ${
+                  value === sub.code ? "text-blue-600 font-medium" : "text-zinc-800 dark:text-zinc-200"
+                }`}
+              >
+                <span>{sub.name}</span>
+                {cnt > 0 && (
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500">{cnt}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </BottomSheet>
@@ -501,6 +523,22 @@ export default function JobsPage() {
   const [sportOpen, setSportOpen] = useState(false);
   const [employmentOpen, setEmploymentOpen] = useState(false);
 
+  /* 지역별 누적 카운트 (마감 포함) */
+  const [regionCounts, setRegionCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    fetch("/api/jobs/region-counts")
+      .then((res) => res.json())
+      .then((data) => {
+        const counts: Record<string, number> = {};
+        const raw = data?.counts || {};
+        for (const [key, val] of Object.entries(raw)) {
+          counts[key.toLowerCase()] = val as number;
+        }
+        setRegionCounts(counts);
+      })
+      .catch(() => {});
+  }, []);
+
   /* 데이터 로드 */
   const loadJobs = useCallback(async (p = 1) => {
     setLoading(true);
@@ -654,6 +692,7 @@ export default function JobsPage() {
         open={regionOpen}
         onClose={() => setRegionOpen(false)}
         value={regionCode}
+        counts={regionCounts}
         onChange={(code, name) => { setRegionCode(code); setRegionName(name); }}
         onClear={() => { setRegionCode(""); setRegionName(""); }}
       />

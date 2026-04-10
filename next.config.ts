@@ -16,6 +16,12 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      // index.html 요청을 / 로 리다이렉트 (Bing 404 에러 방지)
+      { source: "/index.html", destination: "/", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {
