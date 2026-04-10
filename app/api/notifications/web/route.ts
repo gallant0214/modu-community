@@ -64,29 +64,39 @@ export async function POST(request: Request) {
       UNIQUE(firebase_uid, notification_id)
     )`;
 
+    let inserted = 0;
+
     if (readAll) {
       // 모두 읽음 처리: 모든 admin_broadcasts를 가져와서 개별 INSERT
       const allBroadcasts = await sql`SELECT id FROM admin_broadcasts`;
       for (const row of allBroadcasts) {
         try {
-          await sql`
+          const result = await sql`
             INSERT INTO web_notification_reads (firebase_uid, notification_id)
             VALUES (${user.uid}, ${row.id})
             ON CONFLICT (firebase_uid, notification_id) DO NOTHING
+            RETURNING id
           `;
-        } catch {}
+          if (result.length > 0) inserted++;
+        } catch (e) {
+          console.error("insert error:", e);
+        }
       }
+      console.log(`[markAllRead] uid=${user.uid}, broadcasts=${allBroadcasts.length}, inserted=${inserted}`);
     } else if (notificationId) {
       // 개별 읽음 처리
-      await sql`
+      const result = await sql`
         INSERT INTO web_notification_reads (firebase_uid, notification_id)
         VALUES (${user.uid}, ${notificationId})
         ON CONFLICT (firebase_uid, notification_id) DO NOTHING
+        RETURNING id
       `;
+      inserted = result.length;
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, inserted });
   } catch (error: any) {
+    console.error("notifications POST error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

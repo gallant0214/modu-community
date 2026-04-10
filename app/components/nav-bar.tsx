@@ -43,7 +43,10 @@ export function NavBar() {
     const token = await getIdToken();
     if (!token) return;
     try {
-      const res = await fetch("/api/notifications/web", { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`/api/notifications/web?t=${Date.now()}`, {
+        headers: { Authorization: `Bearer ${token}`, "Cache-Control": "no-cache" },
+        cache: "no-store",
+      });
       const data = await res.json();
       if (data.notifications) setNotifications(data.notifications);
       if (data.unreadCount !== undefined) setUnreadCount(data.unreadCount);
