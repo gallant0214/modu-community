@@ -216,9 +216,8 @@ export function NavBar() {
           ) : (
             <button
               onClick={signInWithGoogle}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors font-medium"
+              className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors font-medium"
             >
-              <GoogleIcon />
               로그인
             </button>
           )}
@@ -230,9 +229,8 @@ export function NavBar() {
           {!loading && !user && (
             <button
               onClick={signInWithGoogle}
-              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 font-medium"
+              className="text-xs px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 font-medium"
             >
-              <GoogleIcon />
               로그인
             </button>
           )}
