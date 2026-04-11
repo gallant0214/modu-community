@@ -21,7 +21,7 @@ export async function GET(
 ) {
   const { postId } = await params;
   const id = Number(postId);
-  const rows = await sql`SELECT p.id, p.category_id, p.title, p.content, p.author, p.region, p.tags, p.likes, p.comments_count, p.is_notice, p.views, p.created_at, p.updated_at, p.ip_address, c.name as category_name FROM posts p LEFT JOIN categories c ON p.category_id = c.id WHERE p.id = ${id}`;
+  const rows = await sql`SELECT p.id, p.category_id, p.title, p.content, p.author, p.region, p.tags, p.likes, p.comments_count, p.is_notice, p.views, p.created_at, p.updated_at, p.ip_address, p.firebase_uid, c.name as category_name FROM posts p LEFT JOIN categories c ON p.category_id = c.id WHERE p.id = ${id}`;
   if (rows.length === 0) {
     return NextResponse.json(null, { status: 404 });
   }
@@ -46,15 +46,29 @@ export async function GET(
     } catch { /* ignore */ }
   }
 
+  const isMine = !!(user && post.firebase_uid && post.firebase_uid === user.uid);
   return NextResponse.json({
     ...post,
+    firebase_uid: undefined,
     ip_display: maskIp(post.ip_address || ""),
     ip_address: undefined,
     password: undefined,
     is_liked: isLiked,
     is_bookmarked: isBookmarked,
-    is_mine: user ? post.firebase_uid === user.uid : false,
+    is_mine: isMine,
   });
+}
+
+// 관리자 여부 확인 (uid 또는 admin_emails 테이블)
+async function checkIsAdmin(uid: string, email: string | null | undefined) {
+  if (isAdminUid(uid)) return true;
+  if (email) {
+    try {
+      const adminRows = await sql`SELECT id FROM admin_emails WHERE email = ${email.toLowerCase()} LIMIT 1`;
+      if (adminRows.length > 0) return true;
+    } catch { /* ignore */ }
+  }
+  return false;
 }
 
 export async function PUT(
@@ -74,6 +88,17 @@ export async function PUT(
 
   if (!title?.trim() || !content?.trim()) {
     return NextResponse.json({ error: "제목과 내용을 입력해주세요" }, { status: 400 });
+  }
+
+  // 소유권 확인: 작성자(firebase_uid) 또는 관리자만 수정 가능
+  const ownerRows = await sql`SELECT firebase_uid FROM posts WHERE id = ${Number(postId)}`;
+  if (ownerRows.length === 0) {
+    return NextResponse.json({ error: "게시글을 찾을 수 없습니다" }, { status: 404 });
+  }
+  const isOwner = ownerRows[0].firebase_uid && ownerRows[0].firebase_uid === user.uid;
+  const isAdminUser = await checkIsAdmin(user.uid, user.email);
+  if (!isOwner && !isAdminUser) {
+    return NextResponse.json({ error: "본인 또는 관리자만 수정할 수 있습니다" }, { status: 403 });
   }
 
   await sql`
@@ -96,25 +121,21 @@ export async function DELETE(
   if (rateLimitResponse) return rateLimitResponse;
 
   const { postId } = await params;
-  const body = await request.json();
+  const body = await request.json().catch(() => ({}));
   const { password } = body;
   const id = Number(postId);
 
-  const rows = await sql`SELECT password FROM posts WHERE id = ${id}`;
+  const rows = await sql`SELECT password, firebase_uid FROM posts WHERE id = ${id}`;
   if (rows.length === 0) {
     return NextResponse.json({ error: "게시글을 찾을 수 없습니다" }, { status: 404 });
   }
 
-  let isAdminUser = isAdminUid(user.uid);
-  if (!isAdminUser && user.email) {
-    try {
-      const adminRows = await sql`SELECT id FROM admin_emails WHERE email = ${user.email.toLowerCase()} LIMIT 1`;
-      isAdminUser = adminRows.length > 0;
-    } catch { /* ignore */ }
-  }
-  const isAdminPw = password === process.env.ADMIN_PASSWORD;
-  if (!isAdminUser && !isAdminPw && rows[0].password !== password) {
-    return NextResponse.json({ error: "비밀번호가 일치하지 않습니다" }, { status: 403 });
+  const isOwner = rows[0].firebase_uid && rows[0].firebase_uid === user.uid;
+  const isAdminUser = await checkIsAdmin(user.uid, user.email);
+  const isAdminPw = password && password === process.env.ADMIN_PASSWORD;
+  const isLegacyPw = password && rows[0].password && rows[0].password === password;
+  if (!isOwner && !isAdminUser && !isAdminPw && !isLegacyPw) {
+    return NextResponse.json({ error: "본인 또는 관리자만 삭제할 수 있습니다" }, { status: 403 });
   }
 
   await sql`DELETE FROM posts WHERE id = ${id}`;

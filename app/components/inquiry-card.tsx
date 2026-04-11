@@ -18,12 +18,12 @@ export function InquiryCard({ inquiry }: { inquiry: Inquiry }) {
   }
 
   return (
-    <div className="border-b border-zinc-200 px-4 py-4 dark:border-zinc-800">
-      <div className="mb-1 flex items-center justify-between">
-        <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+    <div className="border-b border-[#E8E0D0]/60 dark:border-zinc-800 px-5 sm:px-6 py-4">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">
           {inquiry.author}
         </span>
-        <span className="text-xs text-zinc-400">
+        <span className="text-[11px] text-[#A89B80]">
           {new Date(inquiry.created_at).toLocaleString("ko-KR", {
             month: "2-digit",
             day: "2-digit",
@@ -32,14 +32,14 @@ export function InquiryCard({ inquiry }: { inquiry: Inquiry }) {
           })}
         </span>
       </div>
-      <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+      <p className="whitespace-pre-wrap text-[13px] leading-[1.8] text-[#3A342A] dark:text-zinc-300">
         {inquiry.content}
       </p>
-      <div className="mt-2">
+      <div className="mt-2.5">
         {!showDelete ? (
           <button
             onClick={() => setShowDelete(true)}
-            className="text-xs text-zinc-400 hover:text-red-500"
+            className="text-[11px] font-medium text-[#A89B80] hover:text-[#C0392B] transition-colors"
           >
             삭제
           </button>
@@ -51,22 +51,22 @@ export function InquiryCard({ inquiry }: { inquiry: Inquiry }) {
               type="password"
               placeholder="비밀번호 입력"
               required
-              className="w-32 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              className="w-36 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 px-3 py-1.5 text-[12px] text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:border-[#C0392B]/50 focus:bg-[#FEFCF7] focus:outline-none transition-colors"
             />
             <button
               type="submit"
-              className="rounded-lg px-2 py-1.5 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
+              className="rounded-lg bg-[#C0392B] hover:bg-[#A0311F] px-3 py-1.5 text-[11px] font-semibold text-white shadow-[0_2px_6px_-2px_rgba(192,57,43,0.4)]"
             >
               확인
             </button>
             <button
               type="button"
               onClick={() => { setShowDelete(false); setError(""); }}
-              className="rounded-lg px-2 py-1.5 text-xs text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 px-3 py-1.5 text-[11px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5]"
             >
               취소
             </button>
-            {error && <span className="text-xs text-red-500">{error}</span>}
+            {error && <span className="text-[11px] text-[#C0392B] font-medium">{error}</span>}
           </form>
         )}
       </div>

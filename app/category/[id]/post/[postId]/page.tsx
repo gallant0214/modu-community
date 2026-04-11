@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { deletePost, likePost, viewPost, createComment, deleteComment, createReport, updateNotice, likeComment, updateComment, verifyPostPassword } from "@/app/lib/actions";
 import type { Post, Comment } from "@/app/lib/types";
@@ -18,22 +18,21 @@ function formatDate(dateStr: string) {
   return `${y}. ${m}. ${day}. ${h}:${min}`;
 }
 
-function timeAgo(dateStr: string) {
-  const d = new Date(dateStr);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const h = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${y}. ${m}. ${day}. ${h}:${min}`;
-}
-
 export default function PostDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const { user, nickname, signInWithGoogle, getIdToken } = useAuth();
+  const searchParams = useSearchParams();
+  const { user, nickname, getIdToken } = useAuth();
   const categoryId = params.id as string;
   const postId = params.postId as string;
+
+  // 뒤로가기 타겟: from 쿼리가 있으면 그곳으로, 없으면 해당 카테고리 게시판으로
+  const fromParam = searchParams.get("from");
+  const backHref = fromParam && fromParam.startsWith("/") ? fromParam : `/category/${categoryId}`;
+
+  // 특정 댓글 하이라이트: ?hc=<commentId>
+  const hcParam = searchParams.get("hc");
+  const [highlightCommentId, setHighlightCommentId] = useState<number | null>(null);
 
   const [post, setPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -147,6 +146,19 @@ export default function PostDetailPage() {
       setComments(commentsData ?? []);
       setLoading(false);
       viewPost(Number(postId));
+
+      // ?hc=<commentId> 처리: 해당 댓글로 스크롤 + 깜빡 효과
+      if (hcParam) {
+        const id = Number(hcParam);
+        if (!Number.isNaN(id)) {
+          setHighlightCommentId(id);
+          // 렌더 후 스크롤 (렌더 완료 대기)
+          setTimeout(() => {
+            const el = document.getElementById(`comment-${id}`);
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 120);
+        }
+      }
     }).catch(() => setLoading(false));
 
     // 북마크 상태 로드
@@ -155,6 +167,13 @@ export default function PostDetailPage() {
       .then((data) => { if (data.bookmarked) setBookmarked(true); })
       .catch(() => {});
   }, [postId]);
+
+  // 하이라이트 댓글 자동 해제 (애니메이션 종료 시점)
+  useEffect(() => {
+    if (highlightCommentId == null) return;
+    const t = setTimeout(() => setHighlightCommentId(null), 1800);
+    return () => clearTimeout(t);
+  }, [highlightCommentId]);
 
   // ··· 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
@@ -228,11 +247,13 @@ export default function PostDetailPage() {
 
   async function handleCommentSubmit() {
     if (!user) { alert("로그인 후 이용 가능합니다"); return; }
-    if (!commentAuthor.trim() || !commentPassword.trim() || !commentContent.trim()) {
-      setCommentError("모든 항목을 입력해주세요");
+    if (!commentContent.trim()) {
+      setCommentError("댓글 내용을 입력해주세요");
       return;
     }
-    const result = await createComment(Number(postId), Number(categoryId), commentAuthor, commentPassword, commentContent, replyTargetId);
+    // 작성자는 로그인 닉네임/이름/이메일에서 자동으로, 비밀번호는 레거시 플레이스홀더
+    const author = (nickname || user.displayName || user.email || "익명").toString().trim();
+    const result = await createComment(Number(postId), Number(categoryId), author, "__auth__", commentContent, replyTargetId);
     if (result?.error) {
       setCommentError(result.error);
       return;
@@ -302,6 +323,52 @@ export default function PostDetailPage() {
     setEditCommentPasswordVerified(false);
   }
 
+  // 본인/관리자: Firebase 인증 토큰으로 직접 REST PUT
+  async function handleOwnerCommentEditSave(commentId: number) {
+    if (!editCommentContent.trim()) {
+      setEditCommentError("내용을 입력해주세요");
+      return;
+    }
+    try {
+      const token = await getIdToken();
+      if (!token) { setEditCommentError("로그인이 필요합니다"); return; }
+      const res = await fetch(`/api/comments/${commentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: editCommentContent.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setEditCommentError(data.error || "수정에 실패했습니다"); return; }
+      setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, content: editCommentContent.trim() } : c));
+      setEditingCommentId(null);
+      setEditCommentContent("");
+      setEditCommentError("");
+      setEditCommentPasswordVerified(false);
+    } catch {
+      setEditCommentError("오류가 발생했습니다");
+    }
+  }
+
+  // 본인/관리자: Firebase 인증 토큰으로 직접 REST DELETE
+  async function handleOwnerCommentDelete(commentId: number) {
+    try {
+      const token = await getIdToken();
+      if (!token) { setCommentDeleteError("로그인이 필요합니다"); return; }
+      const res = await fetch(`/api/comments/${commentId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ post_id: Number(postId) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setCommentDeleteError(data.error || "삭제에 실패했습니다"); return; }
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      setDeletingCommentId(null);
+      setCommentDeleteError("");
+    } catch {
+      setCommentDeleteError("오류가 발생했습니다");
+    }
+  }
+
   async function handleNoticePasswordSubmit() {
     if (!noticeAdminPassword.trim()) {
       setNoticePasswordError("비밀번호를 입력해주세요");
@@ -336,589 +403,637 @@ export default function PostDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white dark:bg-zinc-950">
-        <p className="text-sm text-zinc-400">불러오는 중...</p>
+      <div className="flex min-h-screen items-center justify-center bg-[#F8F4EC] dark:bg-zinc-950">
+        <div className="w-7 h-7 border-2 border-[#6B7B3A] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!post) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white dark:bg-zinc-950">
-        <p className="text-sm text-zinc-400">게시글을 찾을 수 없습니다.</p>
+      <div className="flex min-h-screen items-center justify-center bg-[#F8F4EC] dark:bg-zinc-950">
+        <p className="text-sm text-[#8C8270]">게시글을 찾을 수 없습니다.</p>
       </div>
     );
   }
 
   const tags = post.tags ? post.tags.split(",").map((t) => t.trim()).filter(Boolean) : [];
+  const regionParts: string[] = (() => {
+    if (!post.region || post.region === "전국") return [];
+    return post.region.split(/\s*-\s*/).map((p) => p.trim()).filter(Boolean);
+  })();
+
+  const inputCls = "w-full rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 px-4 py-3 text-[14px] text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:border-[#6B7B3A]/50 focus:bg-[#FEFCF7] focus:outline-none transition-colors";
+  const smallInputCls = "flex-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 px-3 py-2 text-[13px] text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:border-[#6B7B3A]/50 focus:bg-[#FEFCF7] focus:outline-none transition-colors";
 
   return (
-    <div className="flex min-h-screen flex-col bg-white dark:bg-zinc-950">
-      <div className="mx-auto flex w-full max-w-lg flex-1 flex-col md:max-w-3xl lg:max-w-4xl">
-        {/* Header */}
-        <header className="flex items-center gap-3 border-b border-zinc-200 px-4 py-3 md:px-6 md:py-4 dark:border-zinc-800">
+    <div className="flex min-h-screen flex-col bg-[#F8F4EC] dark:bg-zinc-950 pb-10">
+      <div className="mx-auto flex w-full max-w-lg flex-1 flex-col md:max-w-3xl lg:max-w-4xl px-4 sm:px-6 py-4 sm:py-6 gap-4">
+
+        {/* ═══ 상단 바 ═══ */}
+        <header className="sticky top-14 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-[#F8F4EC]/85 dark:bg-zinc-950/85 backdrop-blur-md border-b border-[#E8E0D0]/70 dark:border-zinc-800">
           <Link
-            href={`/category/${categoryId}`}
-            className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+            href={backHref}
+            className="inline-flex items-center gap-1.5 -ml-1 px-1 py-0.5 rounded-lg text-[#6B7B3A] hover:bg-[#F5F0E5]/60 dark:hover:bg-zinc-800 transition-colors"
           >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
+            <span className="text-[11px] font-bold tracking-[0.15em] uppercase">
+              {fromParam && fromParam.startsWith("/my") ? "MY 페이지" : (post?.category_name ? `${post.category_name} Board` : "Board")}
+            </span>
           </Link>
-          <h1 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-            {post?.category_name ? `${post.category_name}의 게시글` : "게시글"}
-          </h1>
         </header>
 
-        {/* Post Content */}
-        <div className="flex-1 px-4 py-5 md:px-6 md:py-8">
-          {/* Tags */}
-          {(tags.length > 0 || (post.region && post.region !== "전국")) && (
-            <div className="mb-3 flex flex-wrap gap-1.5">
-              {tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-600 dark:bg-violet-950 dark:text-violet-400"
-                >
-                  {tag}
-                </span>
-              ))}
-              {post.region && post.region !== "전국" && (
-                <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                  {post.region}
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Title */}
-          {isNoticeEditing ? (
-            <input
-              value={noticeEditTitle}
-              onChange={(e) => setNoticeEditTitle(e.target.value)}
-              className="w-full rounded-xl border border-blue-300 bg-blue-50 px-4 py-3 text-lg font-bold text-zinc-900 focus:border-blue-500 focus:outline-none dark:border-blue-700 dark:bg-blue-950 dark:text-zinc-100"
-            />
-          ) : (
-            <h2 className="text-lg font-bold leading-snug text-zinc-900 md:text-xl dark:text-zinc-100">
-              {post.title}
-            </h2>
-          )}
-
-          {/* Author Info */}
-          <div className="mt-2 flex items-center gap-2 text-xs text-zinc-400">
-            <span>{post.author}{post.ip_display && <span className="text-zinc-400">({post.ip_display})</span>}</span>
-            {post.region && (
-              <>
-                <span>·</span>
-                <span>{post.region}</span>
-              </>
-            )}
-            <span>·</span>
-            <span>{formatDate(post.created_at)}</span>
-            {/* 조회수 */}
-            <span className="ml-auto text-xs text-zinc-400">조회 {post.views}</span>
-            {/* ··· 더보기 메뉴 (수정/삭제) */}
-            {!post.is_notice && (
-              <div className="relative">
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowPostMenu(!showPostMenu); }}
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                >
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                    <circle cx="4" cy="10" r="1.5" />
-                    <circle cx="10" cy="10" r="1.5" />
-                    <circle cx="16" cy="10" r="1.5" />
-                  </svg>
-                </button>
-                {showPostMenu && (
-                  <div onClick={(e) => e.stopPropagation()} className="absolute right-0 top-8 z-10 min-w-[80px] overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
-                    <button
-                      onClick={() => {
-                        setShowPostMenu(false);
-                        if (isAdmin) {
-                          router.push(`/category/${categoryId}/post/${postId}/edit`);
-                        } else {
-                          setShowEditModal(true);
-                          setEditPassword("");
-                          setEditError("");
-                        }
-                      }}
-                      className="flex w-full items-center px-3.5 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                    >
-                      수정
-                    </button>
-                    <hr className="border-zinc-100 dark:border-zinc-700" />
-                    <button
-                      onClick={() => {
-                        setShowPostMenu(false);
-                        if (isAdmin) {
-                          setShowAdminDeleteModal(true);
-                        } else {
-                          setShowDeleteModal(true);
-                          setDeleteError("");
-                          setDeletePassword("");
-                        }
-                      }}
-                      className="flex w-full items-center px-3.5 py-2 text-xs font-medium text-red-500 hover:bg-zinc-50 dark:hover:bg-zinc-700"
-                    >
-                      삭제
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+        {/* ═══ 히어로 카드: 태그·제목·메타 ═══ */}
+        <section className="relative bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-6 sm:p-8 shadow-[0_1px_0_rgba(0,0,0,0.02),0_12px_32px_-20px_rgba(107,93,71,0.2)]">
+          {/* 장식 요소 전용 클리핑 래퍼 (드롭다운이 카드 밖으로 빠져나갈 수 있도록 overflow-hidden 을 여기에만 적용) */}
+          <div aria-hidden className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
+            <div className="absolute -top-20 -right-16 w-56 h-56 rounded-full bg-[#6B7B3A]/[0.05] blur-3xl" />
+            <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/30 to-transparent" />
           </div>
 
-          {/* Divider */}
-          <hr className="my-4 border-zinc-200 dark:border-zinc-800" />
+          <div className="relative">
+            {/* 태그 + 지역 뱃지 */}
+            {(tags.length > 0 || regionParts.length > 0 || post.is_notice) && (
+              <div className="mb-4 flex flex-wrap items-center gap-1.5">
+                {post.is_notice && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#C0392B]/10 text-[#C0392B] text-[10px] font-bold tracking-wider uppercase">
+                    공지
+                  </span>
+                )}
+                {tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center px-2.5 py-1 rounded-full bg-[#EFE7D5] dark:bg-[#6B7B3A]/20 text-[#6B7B3A] dark:text-[#A8B87A] text-[11px] font-semibold"
+                  >
+                    {tag}
+                  </span>
+                ))}
+                {regionParts.map((part) => (
+                  <span
+                    key={part}
+                    className="inline-flex items-center px-2.5 py-1 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 border border-[#E8E0D0]/60 dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-400 text-[11px] font-medium"
+                  >
+                    {part}
+                  </span>
+                ))}
+              </div>
+            )}
 
-          {/* Content */}
+            {/* 제목 */}
+            {isNoticeEditing ? (
+              <input
+                value={noticeEditTitle}
+                onChange={(e) => setNoticeEditTitle(e.target.value)}
+                className="w-full rounded-xl border border-[#6B7B3A]/40 bg-[#FBF7EB] dark:bg-zinc-800 px-4 py-3 text-[22px] sm:text-[26px] font-bold text-[#2A251D] dark:text-zinc-100 focus:border-[#6B7B3A]/70 focus:outline-none"
+              />
+            ) : (
+              <h1 className="text-[22px] sm:text-[26px] font-bold text-[#2A251D] dark:text-zinc-100 leading-tight tracking-tight">
+                {post.title}
+              </h1>
+            )}
+
+            {/* 메타 */}
+            <div className="mt-4 flex items-center gap-2 flex-wrap text-[12px] text-[#8C8270] dark:text-zinc-500 pt-4 border-t border-[#E8E0D0]/60 dark:border-zinc-800">
+              <span className="inline-flex items-center gap-1">
+                <span className="font-semibold text-[#3A342A] dark:text-zinc-200">{post.author}</span>
+                {post.ip_display && <span className="text-[#A89B80]">({post.ip_display})</span>}
+              </span>
+              <span className="text-[#C7B89B]">·</span>
+              <span>{formatDate(post.created_at)}</span>
+              <span className="text-[#C7B89B]">·</span>
+              <span className="inline-flex items-center gap-1">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                조회 {post.views}
+              </span>
+              {/* ··· 더보기 메뉴 (본인 또는 관리자만 노출) */}
+              {!post.is_notice && (post.is_mine || isAdmin) && (
+                <div className="relative ml-auto">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowPostMenu(!showPostMenu); }}
+                    aria-label="더보기"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-[#8C8270] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                      <circle cx="4" cy="10" r="1.5" />
+                      <circle cx="10" cy="10" r="1.5" />
+                      <circle cx="16" cy="10" r="1.5" />
+                    </svg>
+                  </button>
+                  {showPostMenu && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-0 top-8 z-30 min-w-[112px] overflow-hidden rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 shadow-[0_12px_32px_-16px_rgba(107,93,71,0.3)]"
+                    >
+                      <button
+                        onClick={() => {
+                          setShowPostMenu(false);
+                          // 본인 또는 관리자 → 비밀번호 없이 수정 페이지로 이동
+                          router.push(`/category/${categoryId}/post/${postId}/edit`);
+                        }}
+                        className="flex w-full items-center px-4 py-2.5 text-[12px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-700 transition-colors"
+                      >
+                        수정
+                      </button>
+                      <hr className="border-[#E8E0D0]/70 dark:border-zinc-700" />
+                      <button
+                        onClick={() => {
+                          setShowPostMenu(false);
+                          // 본인 또는 관리자 → 비밀번호 없이 삭제 확인 모달
+                          setShowAdminDeleteModal(true);
+                        }}
+                        className="flex w-full items-center px-4 py-2.5 text-[12px] font-semibold text-[#C0392B] hover:bg-[#F5F0E5] dark:hover:bg-zinc-700 transition-colors"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══ 본문 카드 ═══ */}
+        <section className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-6 sm:p-8">
           {isNoticeEditing ? (
             <textarea
               value={noticeEditContent}
               onChange={(e) => setNoticeEditContent(e.target.value)}
-              rows={10}
-              className="w-full resize-none rounded-xl border border-blue-300 bg-blue-50 px-4 py-3 text-sm leading-relaxed text-zinc-900 focus:border-blue-500 focus:outline-none dark:border-blue-700 dark:bg-blue-950 dark:text-zinc-100"
+              rows={12}
+              className="w-full resize-none rounded-2xl border border-[#6B7B3A]/40 bg-[#FBF7EB] dark:bg-zinc-800 px-4 py-3 text-[15px] leading-[1.85] text-[#2A251D] dark:text-zinc-100 focus:border-[#6B7B3A]/70 focus:outline-none"
             />
           ) : (
-            <div className="whitespace-pre-wrap rounded-2xl bg-zinc-50 p-4 text-sm leading-relaxed text-zinc-700 md:p-6 md:text-base dark:bg-zinc-900 dark:text-zinc-300">
+            <div className="whitespace-pre-wrap text-[15px] leading-[1.85] text-[#3A342A] dark:text-zinc-200">
               {post.content}
             </div>
           )}
+        </section>
 
-          {/* 액션 버튼: 신고(왼쪽) / 좋아요+댓글달기(오른쪽) */}
-          <div className="mt-6 flex items-center border-y border-zinc-200 py-3 dark:border-zinc-800">
+        {/* ═══ 액션 바 ═══ */}
+        <div className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl px-4 sm:px-5 py-3">
+          {/* 모바일 전용 */}
+          <div className="sm:hidden space-y-2">
             <button
               onClick={() => { setShowReportModal(true); setReportReason(""); setReportCustomReason(""); setReportDone(false); }}
-              className="flex items-center gap-1.5 text-sm font-medium text-red-500 hover:text-red-600"
+              className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 px-3 py-2.5 text-[12px] font-semibold text-[#C0392B] hover:bg-[#F8EEE9] dark:hover:bg-zinc-700 transition-colors"
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span>신고</span>
+              <span>신고하기</span>
             </button>
-            <div className="ml-auto flex items-center gap-5">
-            <button
-              onClick={async () => {
-                const token = localStorage.getItem("fb_token");
-                const res = await fetch(`/api/posts/${postId}/bookmark`, {
-                  method: "POST",
-                  headers: token ? { Authorization: `Bearer ${token}` } : {},
-                });
-                if (res.ok) setBookmarked(!bookmarked);
-              }}
-              className={`flex items-center gap-1.5 text-sm font-medium transition-all ${
-                bookmarked
-                  ? "text-yellow-500"
-                  : "text-[#65676B] hover:text-yellow-500 dark:text-zinc-400 dark:hover:text-yellow-500"
-              }`}
-            >
-              <svg className="h-4 w-4" fill={bookmarked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-              </svg>
-              <span>북마크</span>
-            </button>
-            <button
-              onClick={handleShare}
-              aria-label="공유하기"
-              className="flex items-center gap-1.5 text-sm font-medium transition-all text-[#65676B] hover:text-blue-500 dark:text-zinc-400 dark:hover:text-blue-400"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-              </svg>
-              <span className="hidden sm:inline">공유</span>
-            </button>
-            <button
-              onClick={handleLike}
-              className={`flex items-center gap-1.5 text-sm font-medium transition-all ${
-                liked
-                  ? "text-[#1877F2]"
-                  : "text-[#65676B] hover:text-[#1877F2] dark:text-zinc-400 dark:hover:text-[#1877F2]"
-              }`}
-            >
-              <svg className="h-4 w-4" fill={liked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
-              </svg>
-              <span>좋아요 {likes}</span>
-            </button>
-            <button
-              onClick={() => { setReplyTargetId(null); setShowCommentForm(!showCommentForm); }}
-              className="flex items-center gap-1.5 text-sm font-bold text-zinc-900 hover:text-zinc-700 dark:text-zinc-100 dark:hover:text-zinc-300"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-              <span>댓글달기</span>
-            </button>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={async () => {
+                  const token = localStorage.getItem("fb_token");
+                  const res = await fetch(`/api/posts/${postId}/bookmark`, {
+                    method: "POST",
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                  });
+                  if (res.ok) setBookmarked(!bookmarked);
+                }}
+                className={`min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[12px] font-semibold transition-all ${
+                  bookmarked
+                    ? "bg-[#6B7B3A] text-white shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)]"
+                    : "border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5]/70 dark:hover:bg-zinc-700"
+                }`}
+              >
+                <svg className="h-4 w-4 shrink-0" fill={bookmarked ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                </svg>
+                <span className="truncate">북마크</span>
+              </button>
+              <button
+                onClick={handleShare}
+                aria-label="공유하기"
+                className="min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 px-3 py-2.5 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5]/70 dark:hover:bg-zinc-700 transition-colors"
+              >
+                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+                <span className="truncate">공유</span>
+              </button>
+              <button
+                onClick={handleLike}
+                className={`min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[12px] font-semibold transition-all ${
+                  liked
+                    ? "bg-[#6B7B3A] text-white shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)]"
+                    : "border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5]/70 dark:hover:bg-zinc-700"
+                }`}
+              >
+                <svg className="h-4 w-4 shrink-0" fill={liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                </svg>
+                <span className="truncate">좋아요 {likes}</span>
+              </button>
+              <button
+                onClick={() => { setReplyTargetId(null); setShowCommentForm(!showCommentForm); }}
+                className="min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 px-3 py-2.5 text-[12px] font-bold text-[#3A342A] dark:text-zinc-100 hover:bg-[#F5F0E5]/70 dark:hover:bg-zinc-700 transition-colors"
+              >
+                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                <span className="truncate">댓글달기</span>
+              </button>
             </div>
           </div>
 
-          {/* 댓글 섹션 */}
-          <div className="mt-5">
-            {/* 전체 댓글 N개 + 정렬 */}
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                전체 댓글 <span className="text-blue-500">{comments.length}</span>개
-              </span>
-              <div className="flex items-center gap-2 text-xs text-zinc-400">
-                <button
-                  onClick={() => setCommentSort("newest")}
-                  className={`flex items-center gap-0.5 ${commentSort === "newest" ? "font-semibold text-zinc-700 dark:text-zinc-200" : "hover:text-zinc-600 dark:hover:text-zinc-300"}`}
-                >
-                  {commentSort === "newest" && <span className="text-blue-500">✔</span>}
-                  최신순
-                </button>
-                <button
-                  onClick={() => setCommentSort("popular")}
-                  className={`flex items-center gap-0.5 ${commentSort === "popular" ? "font-semibold text-zinc-700 dark:text-zinc-200" : "hover:text-zinc-600 dark:hover:text-zinc-300"}`}
-                >
-                  {commentSort === "popular" && <span className="text-blue-500">✔</span>}
-                  인기순
-                </button>
-                <button
-                  onClick={() => setCommentSort("likes")}
-                  className={`flex items-center gap-0.5 ${commentSort === "likes" ? "font-semibold text-zinc-700 dark:text-zinc-200" : "hover:text-zinc-600 dark:hover:text-zinc-300"}`}
-                >
-                  {commentSort === "likes" && <span className="text-blue-500">✔</span>}
-                  공감순
-                </button>
-              </div>
-            </div>
-
-            {/* 댓글 작성 폼 (새 댓글 전용, 답글은 해당 댓글 아래에 표시) */}
-            {showCommentForm && !replyTargetId && (
-              <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900">
-                <div className="flex gap-2">
-                  <input
-                    value={commentAuthor}
-                    onChange={(e) => setCommentAuthor(e.target.value)}
-                    placeholder="닉네임"
-                    className="flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-400 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
-                  />
-                  <input
-                    type="password"
-                    value={commentPassword}
-                    onChange={(e) => setCommentPassword(e.target.value)}
-                    placeholder="비밀번호"
-                    className="flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-400 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
-                  />
-                </div>
-                <textarea
-                  value={commentContent}
-                  onChange={(e) => setCommentContent(e.target.value)}
-                  placeholder="댓글을 입력하세요"
-                  rows={3}
-                  className="mt-2 w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm leading-relaxed text-zinc-900 placeholder:text-zinc-400 focus:border-blue-400 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
-                />
-                {commentError && (
-                  <p className="mt-2 text-xs text-red-500">{commentError}</p>
-                )}
-                <div className="mt-3 flex justify-end gap-2">
-                  <button
-                    onClick={() => { setShowCommentForm(false); setCommentError(""); }}
-                    className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                  >
-                    취소
-                  </button>
-                  <button
-                    onClick={handleCommentSubmit}
-                    className="rounded-lg bg-blue-500 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-600"
-                  >
-                    등록
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* 댓글 목록 */}
-            <div className="mt-4 space-y-0 divide-y divide-zinc-100 dark:divide-zinc-800">
-              {comments.length === 0 && !showCommentForm && (
-                <p className="py-6 text-center text-sm text-zinc-400">
-                  아직 댓글이 없습니다. 첫 댓글을 남겨보세요!
-                </p>
-              )}
-              {(() => {
-                // 부모 댓글만 정렬
-                const rootComments = comments.filter((c) => !c.parent_id);
-                const replies = comments.filter((c) => c.parent_id);
-                const sorted = [...rootComments].sort((a, b) => {
-                  if (commentSort === "likes") return (b.likes ?? 0) - (a.likes ?? 0) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-                  if (commentSort === "popular") return (b.reply_count ?? 0) - (a.reply_count ?? 0) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-                  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-                });
-
-                function renderComment(comment: Comment, isReply = false) {
-                  const childReplies = replies.filter((r) => r.parent_id === comment.id)
-                    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
-                  return (
-                    <div key={comment.id} className={isReply ? "border-l-2 border-blue-100 pl-4 dark:border-blue-900" : ""}>
-                      <div className="py-3">
-                        <div className="flex items-start gap-3">
-                          {/* 왼쪽: 닉네임 + 내용 + 날짜/답글쓰기/신고 */}
-                          <div className="min-w-0 flex-1">
-                            {/* 닉네임 + IP */}
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[13px] font-bold text-zinc-900 dark:text-zinc-100">
-                                {comment.author}
-                              </span>
-                              {comment.ip_display && (
-                                <span className="text-[11px] text-zinc-400">({comment.ip_display})</span>
-                              )}
-                            </div>
-                            {/* 댓글 내용 */}
-                            <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-zinc-700 dark:text-zinc-300">
-                              {comment.content}
-                            </p>
-                            {/* 날짜 + 답글쓰기 + 신고 */}
-                            <div className="mt-1.5 flex items-center gap-3 text-xs">
-                              <span className="text-zinc-400">
-                                {formatDate(comment.created_at)}
-                              </span>
-                              <button
-                                onClick={() => {
-                                  setReplyTargetId(replyTargetId === comment.id ? null : comment.id);
-                                  setShowCommentForm(false);
-                                  setCommentContent("");
-                                  setCommentError("");
-                                }}
-                                className="font-semibold text-zinc-900 hover:text-zinc-600 dark:text-zinc-100 dark:hover:text-zinc-400"
-                              >
-                                답글쓰기
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setCommentReportTargetId(comment.id);
-                                  setCommentReportReason("");
-                                  setCommentReportCustomReason("");
-                                  setCommentReportDone(false);
-                                  setShowCommentReportModal(true);
-                                }}
-                                className="font-medium text-red-500 hover:text-red-600"
-                              >
-                                신고
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* 오른쪽: ··· 버튼 + 하트 (세로 배치) */}
-                          <div className="relative flex shrink-0 flex-col items-center gap-1 pt-0.5">
-                            {/* ··· 더보기 버튼 */}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setMenuOpenCommentId(menuOpenCommentId === comment.id ? null : comment.id); }}
-                              className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                            >
-                              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                                <circle cx="4" cy="10" r="1.5" />
-                                <circle cx="10" cy="10" r="1.5" />
-                                <circle cx="16" cy="10" r="1.5" />
-                              </svg>
-                            </button>
-                            {/* 드롭다운 메뉴 */}
-                            {menuOpenCommentId === comment.id && (
-                              <div onClick={(e) => e.stopPropagation()} className="absolute right-0 top-8 z-10 min-w-[80px] overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
-                                <button
-                                  onClick={() => {
-                                    setMenuOpenCommentId(null);
-                                    setEditingCommentId(comment.id);
-                                    setEditCommentPassword("");
-                                    setEditCommentContent("");
-                                    setEditCommentError("");
-                                    setEditCommentPasswordVerified(false);
-                                  }}
-                                  className="flex w-full items-center px-3.5 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                                >
-                                  수정
-                                </button>
-                                <hr className="border-zinc-100 dark:border-zinc-700" />
-                                <button
-                                  onClick={() => {
-                                    setMenuOpenCommentId(null);
-                                    setDeletingCommentId(comment.id);
-                                    setCommentDeletePassword("");
-                                    setCommentDeleteError("");
-                                  }}
-                                  className="flex w-full items-center px-3.5 py-2 text-xs font-medium text-red-500 hover:bg-zinc-50 dark:hover:bg-zinc-700"
-                                >
-                                  삭제
-                                </button>
-                              </div>
-                            )}
-                            {/* 하트 (공감) 버튼 */}
-                            <button
-                              onClick={async () => {
-                                const wasLiked = likedCommentIds.has(comment.id);
-                                const result = await likeComment(comment.id, Number(postId), Number(categoryId)) as { unliked?: boolean } | undefined;
-                                if (wasLiked || result?.unliked) {
-                                  setLikedCommentIds((prev) => { const s = new Set(prev); s.delete(comment.id); return s; });
-                                  setComments((prev) => prev.map((c) => c.id === comment.id ? { ...c, likes: Math.max((c.likes ?? 0) - 1, 0) } : c));
-                                } else {
-                                  setLikedCommentIds((prev) => new Set(prev).add(comment.id));
-                                  setComments((prev) => prev.map((c) => c.id === comment.id ? { ...c, likes: (c.likes ?? 0) + 1 } : c));
-                                }
-                              }}
-                              className="flex h-7 w-7 items-center justify-center"
-                            >
-                              <svg className="h-5 w-5" fill={likedCommentIds.has(comment.id) ? "#ef4444" : "none"} stroke="#ef4444" strokeWidth={1.5} viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                              </svg>
-                            </button>
-                            {(comment.likes ?? 0) > 0 && (
-                              <span className="text-[11px] font-bold text-red-500">{comment.likes}</span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* 댓글 수정 */}
-                        {editingCommentId === comment.id && (
-                          <div className="mt-2 space-y-2">
-                            {!editCommentPasswordVerified ? (
-                              <>
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="password"
-                                    value={editCommentPassword}
-                                    onChange={(e) => { setEditCommentPassword(e.target.value); setEditCommentError(""); }}
-                                    placeholder="비밀번호 입력"
-                                    className="flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-blue-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                                    onKeyDown={(e) => { if (e.key === "Enter") handleCommentEditVerify(comment.id); }}
-                                    autoFocus
-                                  />
-                                  <button onClick={() => handleCommentEditVerify(comment.id)} className="rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600">확인</button>
-                                  <button onClick={() => { setEditingCommentId(null); setEditCommentError(""); }} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">취소</button>
-                                </div>
-                                {editCommentError && <p className="text-xs text-red-500">{editCommentError}</p>}
-                              </>
-                            ) : (
-                              <>
-                                <textarea
-                                  value={editCommentContent}
-                                  onChange={(e) => setEditCommentContent(e.target.value)}
-                                  rows={3}
-                                  className="w-full resize-none rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm leading-relaxed text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none dark:border-blue-700 dark:bg-blue-950 dark:text-zinc-100"
-                                  autoFocus
-                                />
-                                {editCommentError && <p className="text-xs text-red-500">{editCommentError}</p>}
-                                <div className="flex justify-end gap-2">
-                                  <button onClick={() => { setEditingCommentId(null); setEditCommentPasswordVerified(false); }} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">취소</button>
-                                  <button onClick={() => handleCommentEditSave(comment.id)} className="rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600">저장</button>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-
-                        {/* 댓글 삭제 비밀번호 */}
-                        {deletingCommentId === comment.id && (
-                          <div className="mt-2 space-y-2">
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="password"
-                                value={commentDeletePassword}
-                                onChange={(e) => { setCommentDeletePassword(e.target.value); setCommentDeleteError(""); }}
-                                placeholder="비밀번호 입력"
-                                className="flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-blue-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                                onKeyDown={(e) => { if (e.key === "Enter") handleCommentDelete(comment.id); }}
-                                autoFocus
-                              />
-                              <button onClick={() => handleCommentDelete(comment.id)} className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600">확인</button>
-                              <button onClick={() => { setDeletingCommentId(null); setShowAdminInput(false); setAdminPassword(""); }} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">취소</button>
-                            </div>
-                            {commentDeleteError && <p className="text-xs text-red-500">{commentDeleteError}</p>}
-                            {!showAdminInput ? (
-                              <button onClick={() => setShowAdminInput(true)} className="text-xs text-zinc-400 underline hover:text-zinc-600 dark:hover:text-zinc-300">관리자 비밀번호로 삭제</button>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <input type="password" value={adminPassword} onChange={(e) => { setAdminPassword(e.target.value); setCommentDeleteError(""); }} placeholder="관리자 비밀번호 입력" className="flex-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-amber-500 focus:outline-none dark:border-amber-700 dark:bg-amber-950 dark:text-zinc-100" onKeyDown={(e) => { if (e.key === "Enter") handleCommentDelete(comment.id, adminPassword); }} autoFocus />
-                                <button onClick={() => handleCommentDelete(comment.id, adminPassword)} className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600">삭제</button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* 답글 작성 폼 (인라인) */}
-                        {replyTargetId === comment.id && (
-                          <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50/50 p-3 dark:border-blue-800 dark:bg-blue-950/30">
-                            <div className="mb-2 flex items-center gap-2">
-                              <span className="text-xs font-semibold text-blue-500">
-                                @{comment.author} 에게 답글
-                              </span>
-                              <button onClick={() => { setReplyTargetId(null); setCommentError(""); }} className="text-xs text-zinc-400 hover:text-zinc-600">✕</button>
-                            </div>
-                            <div className="flex gap-2">
-                              <input
-                                value={commentAuthor}
-                                onChange={(e) => setCommentAuthor(e.target.value)}
-                                placeholder="닉네임"
-                                className="flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-400 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
-                              />
-                              <input
-                                type="password"
-                                value={commentPassword}
-                                onChange={(e) => setCommentPassword(e.target.value)}
-                                placeholder="비밀번호"
-                                className="flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-400 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
-                              />
-                            </div>
-                            <textarea
-                              value={commentContent}
-                              onChange={(e) => setCommentContent(e.target.value)}
-                              placeholder="답글을 입력하세요"
-                              rows={2}
-                              className="mt-2 w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm leading-relaxed text-zinc-900 placeholder:text-zinc-400 focus:border-blue-400 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
-                              autoFocus
-                            />
-                            {commentError && (
-                              <p className="mt-1 text-xs text-red-500">{commentError}</p>
-                            )}
-                            <div className="mt-2 flex justify-end gap-2">
-                              <button
-                                onClick={() => { setReplyTargetId(null); setCommentError(""); }}
-                                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                              >
-                                취소
-                              </button>
-                              <button
-                                onClick={handleCommentSubmit}
-                                className="rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600"
-                              >
-                                등록
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 대댓글 */}
-                      {childReplies.length > 0 && (
-                        <div className="ml-2">
-                          {childReplies.map((reply) => renderComment(reply, true))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-
-                return sorted.map((comment) => renderComment(comment));
-              })()}
+          {/* 데스크톱 유지 */}
+          <div className="hidden sm:flex items-center">
+            <button
+              onClick={() => { setShowReportModal(true); setReportReason(""); setReportCustomReason(""); setReportDone(false); }}
+              className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#C0392B] hover:text-[#A0311F] transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>신고</span>
+            </button>
+            <div className="ml-auto flex items-center gap-1">
+              <button
+                onClick={async () => {
+                  const token = localStorage.getItem("fb_token");
+                  const res = await fetch(`/api/posts/${postId}/bookmark`, {
+                    method: "POST",
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                  });
+                  if (res.ok) setBookmarked(!bookmarked);
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
+                  bookmarked
+                    ? "bg-[#6B7B3A] text-white shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)]"
+                    : "text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5]/70 dark:hover:bg-zinc-800"
+                }`}
+              >
+                <svg className="h-4 w-4" fill={bookmarked ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                </svg>
+                <span>북마크</span>
+              </button>
+              <button
+                onClick={handleShare}
+                aria-label="공유하기"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5]/70 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+                <span>공유</span>
+              </button>
+              <button
+                onClick={handleLike}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
+                  liked
+                    ? "bg-[#6B7B3A] text-white shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)]"
+                    : "text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5]/70 dark:hover:bg-zinc-800"
+                }`}
+              >
+                <svg className="h-4 w-4" fill={liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                </svg>
+                <span>좋아요 {likes}</span>
+              </button>
+              <button
+                onClick={() => { setReplyTargetId(null); setShowCommentForm(!showCommentForm); }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold text-[#3A342A] dark:text-zinc-100 hover:bg-[#F5F0E5]/70 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                <span>댓글달기</span>
+              </button>
             </div>
           </div>
         </div>
 
+        {/* ═══ 댓글 섹션 ═══ */}
+        <section className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-5 sm:p-6">
+          {/* 전체 댓글 N개 + 정렬 */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="inline-flex items-center gap-2">
+              <span className="w-1 h-4 rounded-full bg-[#6B7B3A]" />
+              <span className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
+                전체 댓글 <span className="text-[#6B7B3A]">{comments.length}</span>개
+              </span>
+            </div>
+            <div className="ml-auto flex items-center gap-0.5 text-[11px] bg-[#F5F0E5]/60 dark:bg-zinc-800 p-0.5 rounded-lg">
+              {[
+                { key: "newest", label: "최신순" },
+                { key: "popular", label: "인기순" },
+                { key: "likes", label: "공감순" },
+              ].map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setCommentSort(opt.key as "newest" | "popular" | "likes")}
+                  className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
+                    commentSort === opt.key
+                      ? "bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B7B3A] shadow-[0_1px_4px_-1px_rgba(107,93,71,0.2)]"
+                      : "text-[#8C8270] hover:text-[#3A342A] dark:hover:text-zinc-200"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 댓글 작성 폼 (새 댓글) */}
+          {showCommentForm && !replyTargetId && (
+            <div className="mt-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/60 dark:bg-zinc-800/60 p-4">
+              <textarea
+                value={commentContent}
+                onChange={(e) => setCommentContent(e.target.value)}
+                placeholder="댓글을 입력하세요"
+                rows={3}
+                className="w-full resize-none rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 px-3 py-2 text-[13px] leading-relaxed text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:border-[#6B7B3A]/50 focus:outline-none transition-colors"
+              />
+              {commentError && (
+                <p className="mt-2 text-[11px] text-[#C0392B]">{commentError}</p>
+              )}
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  onClick={() => { setShowCommentForm(false); setCommentError(""); }}
+                  className="rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 px-4 py-2 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-700 transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleCommentSubmit}
+                  className="rounded-lg bg-[#6B7B3A] hover:bg-[#5A6930] px-4 py-2 text-[12px] font-bold text-white shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)] transition-colors"
+                >
+                  등록
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 댓글 목록 */}
+          <div className="mt-4 space-y-0 divide-y divide-[#E8E0D0]/50 dark:divide-zinc-800">
+            {comments.length === 0 && !showCommentForm && (
+              <div className="py-10 text-center">
+                <div className="inline-flex w-12 h-12 mb-3 rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 items-center justify-center">
+                  <svg className="w-6 h-6 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                  </svg>
+                </div>
+                <p className="text-[13px] text-[#8C8270]">아직 댓글이 없습니다</p>
+                <p className="text-[11px] text-[#A89B80] mt-0.5">첫 댓글을 남겨보세요</p>
+              </div>
+            )}
+            {(() => {
+              // 부모 댓글만 정렬
+              const rootComments = comments.filter((c) => !c.parent_id);
+              const replies = comments.filter((c) => c.parent_id);
+              const sorted = [...rootComments].sort((a, b) => {
+                if (commentSort === "likes") return (b.likes ?? 0) - (a.likes ?? 0) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                if (commentSort === "popular") return (b.reply_count ?? 0) - (a.reply_count ?? 0) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+              });
+
+              function renderComment(comment: Comment, isReply = false) {
+                const childReplies = replies.filter((r) => r.parent_id === comment.id)
+                  .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+                const isHighlighted = highlightCommentId === comment.id;
+
+                return (
+                  <div
+                    key={comment.id}
+                    id={`comment-${comment.id}`}
+                    className={`${isReply ? "border-l-2 border-[#6B7B3A]/25 pl-4" : ""} ${isHighlighted ? "comment-blink rounded-xl" : ""}`}
+                  >
+                    <div className="py-3.5">
+                      <div className="flex items-start gap-3">
+                        {/* 왼쪽: 닉네임 + 내용 + 날짜/답글쓰기/신고 */}
+                        <div className="min-w-0 flex-1">
+                          {/* 닉네임 + IP */}
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100">
+                              {comment.author}
+                            </span>
+                            {comment.ip_display && (
+                              <span className="text-[11px] text-[#A89B80]">({comment.ip_display})</span>
+                            )}
+                          </div>
+                          {/* 댓글 내용 */}
+                          <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-relaxed text-[#3A342A] dark:text-zinc-300">
+                            {comment.content}
+                          </p>
+                          {/* 날짜 + 답글쓰기 + 신고 */}
+                          <div className="mt-2 flex items-center gap-3 text-[11px]">
+                            <span className="text-[#A89B80]">
+                              {formatDate(comment.created_at)}
+                            </span>
+                            <button
+                              onClick={() => {
+                                setReplyTargetId(replyTargetId === comment.id ? null : comment.id);
+                                setShowCommentForm(false);
+                                setCommentContent("");
+                                setCommentError("");
+                              }}
+                              className="font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:text-[#5A6930]"
+                            >
+                              답글쓰기
+                            </button>
+                            <button
+                              onClick={() => {
+                                setCommentReportTargetId(comment.id);
+                                setCommentReportReason("");
+                                setCommentReportCustomReason("");
+                                setCommentReportDone(false);
+                                setShowCommentReportModal(true);
+                              }}
+                              className="font-medium text-[#C0392B] hover:text-[#A0311F]"
+                            >
+                              신고
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* 오른쪽: ··· 버튼 + 하트 */}
+                        <div className="relative flex shrink-0 flex-col items-center gap-1 pt-0.5">
+                          {(comment.is_mine || isAdmin) && (
+                            <>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setMenuOpenCommentId(menuOpenCommentId === comment.id ? null : comment.id); }}
+                                aria-label="더보기"
+                                className="flex h-7 w-7 items-center justify-center rounded-lg text-[#A89B80] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
+                              >
+                                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                  <circle cx="4" cy="10" r="1.5" />
+                                  <circle cx="10" cy="10" r="1.5" />
+                                  <circle cx="16" cy="10" r="1.5" />
+                                </svg>
+                              </button>
+                              {menuOpenCommentId === comment.id && (
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="absolute right-0 top-8 z-30 min-w-[112px] overflow-hidden rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 shadow-[0_12px_32px_-16px_rgba(107,93,71,0.3)]"
+                                >
+                                  <button
+                                    onClick={() => {
+                                      setMenuOpenCommentId(null);
+                                      // 본인/관리자: 비밀번호 단계 건너뛰고 바로 편집 모드로
+                                      setEditingCommentId(comment.id);
+                                      setEditCommentContent(comment.content);
+                                      setEditCommentError("");
+                                      setEditCommentPasswordVerified(true);
+                                      setEditCommentPassword("");
+                                    }}
+                                    className="flex w-full items-center px-3.5 py-2 text-[12px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-700"
+                                  >
+                                    수정
+                                  </button>
+                                  <hr className="border-[#E8E0D0]/70 dark:border-zinc-700" />
+                                  <button
+                                    onClick={() => {
+                                      setMenuOpenCommentId(null);
+                                      // 본인/관리자: 비밀번호 없이 삭제 확인 모드로
+                                      setDeletingCommentId(comment.id);
+                                      setCommentDeleteError("");
+                                    }}
+                                    className="flex w-full items-center px-3.5 py-2 text-[12px] font-semibold text-[#C0392B] hover:bg-[#F5F0E5] dark:hover:bg-zinc-700"
+                                  >
+                                    삭제
+                                  </button>
+                                </div>
+                              )}
+                            </>
+                          )}
+                          <button
+                            onClick={async () => {
+                              const wasLiked = likedCommentIds.has(comment.id);
+                              const result = await likeComment(comment.id, Number(postId), Number(categoryId)) as { unliked?: boolean } | undefined;
+                              if (wasLiked || result?.unliked) {
+                                setLikedCommentIds((prev) => { const s = new Set(prev); s.delete(comment.id); return s; });
+                                setComments((prev) => prev.map((c) => c.id === comment.id ? { ...c, likes: Math.max((c.likes ?? 0) - 1, 0) } : c));
+                              } else {
+                                setLikedCommentIds((prev) => new Set(prev).add(comment.id));
+                                setComments((prev) => prev.map((c) => c.id === comment.id ? { ...c, likes: (c.likes ?? 0) + 1 } : c));
+                              }
+                            }}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
+                          >
+                            <svg className="h-[18px] w-[18px]" fill={likedCommentIds.has(comment.id) ? "#C75555" : "none"} stroke="#C75555" strokeWidth={1.8} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                            </svg>
+                          </button>
+                          {(comment.likes ?? 0) > 0 && (
+                            <span className="text-[11px] font-bold text-[#C75555]">{comment.likes}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 댓글 수정 (본인/관리자: 비밀번호 없이 바로 편집) */}
+                      {editingCommentId === comment.id && (
+                        <div className="mt-3 space-y-2">
+                          <textarea
+                            value={editCommentContent}
+                            onChange={(e) => setEditCommentContent(e.target.value)}
+                            rows={3}
+                            className="w-full resize-none rounded-lg border border-[#6B7B3A]/40 bg-[#FBF7EB] dark:bg-zinc-800 px-3 py-2 text-[13px] leading-relaxed text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:border-[#6B7B3A]/70 focus:outline-none"
+                            autoFocus
+                          />
+                          {editCommentError && <p className="text-[11px] text-[#C0392B]">{editCommentError}</p>}
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => { setEditingCommentId(null); setEditCommentPasswordVerified(false); setEditCommentError(""); }} className="rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 px-3 py-2 text-[12px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5]">취소</button>
+                            <button onClick={() => handleOwnerCommentEditSave(comment.id)} className="rounded-lg bg-[#6B7B3A] hover:bg-[#5A6930] px-3 py-2 text-[12px] font-semibold text-white shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)]">저장</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 댓글 삭제 확인 (본인/관리자: 비밀번호 없이 확인만) */}
+                      {deletingCommentId === comment.id && (
+                        <div className="mt-3 rounded-xl border border-[#C0392B]/30 bg-[#FBEFEC] dark:bg-[#2A1A17] px-3 py-2.5">
+                          <div className="flex items-start gap-2 mb-2">
+                            <svg className="w-4 h-4 text-[#C0392B] shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <div>
+                              <p className="text-[12px] font-bold text-[#8A2A1E] dark:text-[#E8A095]">정말 삭제하시겠습니까?</p>
+                              <p className="text-[11px] text-[#8C8270] dark:text-zinc-500 mt-0.5">삭제된 댓글은 복구할 수 없습니다.</p>
+                            </div>
+                          </div>
+                          {commentDeleteError && <p className="text-[11px] text-[#C0392B] mb-2">{commentDeleteError}</p>}
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => { setDeletingCommentId(null); setCommentDeleteError(""); }} className="rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 px-3 py-1.5 text-[12px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5]">취소</button>
+                            <button onClick={() => handleOwnerCommentDelete(comment.id)} className="rounded-lg bg-[#C0392B] hover:bg-[#A0311F] px-3 py-1.5 text-[12px] font-semibold text-white">삭제</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 답글 작성 폼 (인라인) */}
+                      {replyTargetId === comment.id && (
+                        <div className="mt-3 rounded-2xl border border-[#6B7B3A]/30 bg-[#FBF7EB]/60 dark:bg-[#6B7B3A]/10 p-3">
+                          <div className="mb-2 flex items-center gap-2">
+                            <span className="text-[11px] font-bold text-[#6B7B3A] dark:text-[#A8B87A]">
+                              @{comment.author} 에게 답글
+                            </span>
+                            <button onClick={() => { setReplyTargetId(null); setCommentError(""); }} className="text-[11px] text-[#A89B80] hover:text-[#6B5D47]">✕</button>
+                          </div>
+                          <textarea
+                            value={commentContent}
+                            onChange={(e) => setCommentContent(e.target.value)}
+                            placeholder="답글을 입력하세요"
+                            rows={2}
+                            className="w-full resize-none rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 px-3 py-2 text-[13px] leading-relaxed text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:border-[#6B7B3A]/50 focus:outline-none"
+                            autoFocus
+                          />
+                          {commentError && (
+                            <p className="mt-1 text-[11px] text-[#C0392B]">{commentError}</p>
+                          )}
+                          <div className="mt-2 flex justify-end gap-2">
+                            <button
+                              onClick={() => { setReplyTargetId(null); setCommentError(""); }}
+                              className="rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 px-3 py-2 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+                            >
+                              취소
+                            </button>
+                            <button
+                              onClick={handleCommentSubmit}
+                              className="rounded-lg bg-[#6B7B3A] hover:bg-[#5A6930] px-3 py-2 text-[12px] font-bold text-white shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)]"
+                            >
+                              등록
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 대댓글 */}
+                    {childReplies.length > 0 && (
+                      <div className="ml-2">
+                        {childReplies.map((reply) => renderComment(reply, true))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return sorted.map((comment) => renderComment(comment));
+            })()}
+          </div>
+        </section>
+
         {/* Bottom Actions (공지 전용) */}
         {post.is_notice && (
-          <div className="flex items-center justify-between border-t border-zinc-200 px-4 py-4 md:px-6 dark:border-zinc-800">
+          <div className="flex items-center justify-between bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl px-5 py-4">
             {isNoticeEditing ? (
               <>
                 <button
                   onClick={() => { setIsNoticeEditing(false); setNoticeAdminPassword(""); }}
-                  className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                  className="rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 px-5 py-2.5 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-700"
                 >
                   취소
                 </button>
                 <button
                   onClick={handleNoticeSave}
-                  className="rounded-xl bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-600"
+                  className="rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] px-5 py-2.5 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)]"
                 >
                   저장
                 </button>
@@ -926,7 +1041,7 @@ export default function PostDetailPage() {
             ) : (
               <button
                 onClick={() => { setShowNoticePasswordModal(true); setNoticeAdminPassword(""); setNoticePasswordError(""); }}
-                className="ml-auto rounded-xl bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-600"
+                className="ml-auto rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] px-5 py-2.5 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)]"
               >
                 수정하기
               </button>
@@ -935,14 +1050,18 @@ export default function PostDetailPage() {
         )}
       </div>
 
+      {/* ══════ 모달들 ══════ */}
+
       {/* 수정 비밀번호 모달 */}
       {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
-            <h3 className="mb-2 text-base font-bold text-zinc-900 dark:text-zinc-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-[#2A251D]/50 backdrop-blur-sm" onClick={() => setShowEditModal(false)} />
+          <div className="relative w-full max-w-sm bg-[#FEFCF7] dark:bg-zinc-900 rounded-3xl shadow-2xl border border-[#E8E0D0] dark:border-zinc-700 p-6 overflow-hidden">
+            <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/40 to-transparent" />
+            <h3 className="mb-2 text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
               게시글 수정
             </h3>
-            <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mb-4 text-[12px] text-[#8C8270] dark:text-zinc-500">
               수정하려면 비밀번호를 입력해주세요.
             </p>
             <input
@@ -950,7 +1069,7 @@ export default function PostDetailPage() {
               value={editPassword}
               onChange={(e) => { setEditPassword(e.target.value); setEditError(""); }}
               placeholder="비밀번호 입력"
-              className="mb-3 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              className={`mb-3 ${inputCls}`}
               onKeyDown={async (e) => {
                 if (e.key === "Enter") {
                   const result = await verifyPostPassword(Number(postId), editPassword);
@@ -961,12 +1080,12 @@ export default function PostDetailPage() {
               autoFocus
             />
             {editError && (
-              <p className="mb-3 text-sm text-red-500">{editError}</p>
+              <p className="mb-3 text-[12px] text-[#C0392B]">{editError}</p>
             )}
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={() => setShowEditModal(false)}
-                className="flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                className="flex flex-1 items-center justify-center rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 py-3 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-700"
               >
                 취소
               </button>
@@ -976,7 +1095,7 @@ export default function PostDetailPage() {
                   if (result?.error) { setEditError(result.error); return; }
                   router.push(`/category/${categoryId}/post/${postId}/edit`);
                 }}
-                className="flex flex-1 items-center justify-center rounded-xl bg-blue-500 py-3 text-sm font-semibold text-white hover:bg-blue-600"
+                className="flex flex-1 items-center justify-center rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)]"
               >
                 확인
               </button>
@@ -987,12 +1106,14 @@ export default function PostDetailPage() {
 
       {/* 삭제 비밀번호 모달 */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
-            <h3 className="mb-2 text-base font-bold text-zinc-900 dark:text-zinc-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-[#2A251D]/50 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
+          <div className="relative w-full max-w-sm bg-[#FEFCF7] dark:bg-zinc-900 rounded-3xl shadow-2xl border border-[#E8E0D0] dark:border-zinc-700 p-6 overflow-hidden">
+            <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#C0392B]/40 to-transparent" />
+            <h3 className="mb-2 text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
               게시글 삭제
             </h3>
-            <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mb-4 text-[12px] text-[#8C8270] dark:text-zinc-500">
               삭제하려면 비밀번호를 입력해주세요.
             </p>
             <input
@@ -1000,23 +1121,23 @@ export default function PostDetailPage() {
               value={deletePassword}
               onChange={(e) => { setDeletePassword(e.target.value); setDeleteError(""); }}
               placeholder="비밀번호 입력"
-              className="mb-3 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              className={`mb-3 ${inputCls}`}
               onKeyDown={(e) => { if (e.key === "Enter") handleDelete(); }}
               autoFocus
             />
             {deleteError && (
-              <p className="mb-3 text-sm text-red-500">{deleteError}</p>
+              <p className="mb-3 text-[12px] text-[#C0392B]">{deleteError}</p>
             )}
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={() => setShowDeleteModal(false)}
-                className="flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                className="flex flex-1 items-center justify-center rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 py-3 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-700"
               >
                 취소
               </button>
               <button
                 onClick={handleDelete}
-                className="flex flex-1 items-center justify-center rounded-xl bg-red-500 py-3 text-sm font-semibold text-white hover:bg-red-600"
+                className="flex flex-1 items-center justify-center rounded-xl bg-[#C0392B] hover:bg-[#A0311F] py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(192,57,43,0.4)]"
               >
                 삭제
               </button>
@@ -1027,19 +1148,28 @@ export default function PostDetailPage() {
 
       {/* 관리자 삭제 확인 모달 */}
       {showAdminDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
-            <h3 className="mb-2 text-base font-bold text-red-600">관리자 삭제</h3>
-            <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
-              이 게시글을 관리자 권한으로 삭제하시겠습니까?<br />삭제된 글은 복구할 수 없습니다.
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-[#2A251D]/50 backdrop-blur-sm" onClick={() => setShowAdminDeleteModal(false)} />
+          <div className="relative w-full max-w-sm bg-[#FEFCF7] dark:bg-zinc-900 rounded-3xl shadow-2xl border border-[#E8E0D0] dark:border-zinc-700 p-6 overflow-hidden">
+            <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#C0392B]/40 to-transparent" />
+            <div className="mb-3 flex items-center gap-2">
+              <span className="inline-flex w-9 h-9 items-center justify-center rounded-xl bg-[#C0392B]/10">
+                <svg className="w-5 h-5 text-[#C0392B]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </span>
+              <h3 className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">게시글 삭제</h3>
+            </div>
+            <p className="mb-5 text-[13px] text-[#3A342A] dark:text-zinc-300">
+              정말 삭제하시겠습니까?<br /><span className="text-[12px] text-[#8C8270]">삭제된 글은 복구할 수 없습니다.</span>
             </p>
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button onClick={() => setShowAdminDeleteModal(false)} disabled={adminDeleting}
-                className="flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700">
+                className="flex flex-1 items-center justify-center rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 py-3 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-700">
                 취소
               </button>
               <button onClick={handleAdminDelete} disabled={adminDeleting}
-                className="flex flex-1 items-center justify-center rounded-xl bg-red-500 py-3 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50">
+                className="flex flex-1 items-center justify-center rounded-xl bg-[#C0392B] hover:bg-[#A0311F] py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(192,57,43,0.4)] disabled:opacity-50">
                 {adminDeleting ? "삭제 중..." : "삭제"}
               </button>
             </div>
@@ -1049,12 +1179,14 @@ export default function PostDetailPage() {
 
       {/* 공지 수정 비밀번호 모달 */}
       {showNoticePasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
-            <h3 className="mb-2 text-base font-bold text-zinc-900 dark:text-zinc-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-[#2A251D]/50 backdrop-blur-sm" onClick={() => setShowNoticePasswordModal(false)} />
+          <div className="relative w-full max-w-sm bg-[#FEFCF7] dark:bg-zinc-900 rounded-3xl shadow-2xl border border-[#E8E0D0] dark:border-zinc-700 p-6 overflow-hidden">
+            <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/40 to-transparent" />
+            <h3 className="mb-2 text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
               공지 수정
             </h3>
-            <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mb-4 text-[12px] text-[#8C8270] dark:text-zinc-500">
               관리자 비밀번호를 입력해주세요.
             </p>
             <input
@@ -1062,23 +1194,23 @@ export default function PostDetailPage() {
               value={noticeAdminPassword}
               onChange={(e) => { setNoticeAdminPassword(e.target.value); setNoticePasswordError(""); }}
               placeholder="관리자 비밀번호 입력"
-              className="mb-3 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              className={`mb-3 ${inputCls}`}
               onKeyDown={(e) => { if (e.key === "Enter") handleNoticePasswordSubmit(); }}
               autoFocus
             />
             {noticePasswordError && (
-              <p className="mb-3 text-sm text-red-500">{noticePasswordError}</p>
+              <p className="mb-3 text-[12px] text-[#C0392B]">{noticePasswordError}</p>
             )}
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={() => setShowNoticePasswordModal(false)}
-                className="flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                className="flex flex-1 items-center justify-center rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 py-3 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-700"
               >
                 취소
               </button>
               <button
                 onClick={handleNoticePasswordSubmit}
-                className="flex flex-1 items-center justify-center rounded-xl bg-blue-500 py-3 text-sm font-semibold text-white hover:bg-blue-600"
+                className="flex flex-1 items-center justify-center rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)]"
               >
                 확인
               </button>
@@ -1089,26 +1221,28 @@ export default function PostDetailPage() {
 
       {/* 댓글 신고 모달 */}
       {showCommentReportModal && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
-          <div className="w-full max-w-sm rounded-t-2xl bg-white px-6 pb-6 pt-4 shadow-xl sm:rounded-2xl dark:bg-zinc-900">
-            <div className="mb-4 flex justify-center">
-              <div className="h-1 w-10 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4">
+          <div className="absolute inset-0 bg-[#2A251D]/50 backdrop-blur-sm" onClick={() => setShowCommentReportModal(false)} />
+          <div className="relative w-full max-w-sm bg-[#FEFCF7] dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-[#E8E0D0] dark:border-zinc-700 px-6 pb-6 pt-4 overflow-hidden">
+            <div className="mb-4 flex justify-center sm:hidden">
+              <div className="h-1 w-10 rounded-full bg-[#E8E0D0] dark:bg-zinc-600" />
             </div>
+            <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#C0392B]/40 to-transparent" />
 
             {commentReportDone ? (
               <div className="py-8 text-center">
-                <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">신고가 접수되었습니다.</p>
-                <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">검토 후 조치하겠습니다.</p>
+                <p className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">신고가 접수되었습니다</p>
+                <p className="mt-2 text-[13px] text-[#8C8270] dark:text-zinc-400">검토 후 조치하겠습니다</p>
                 <button
                   onClick={() => setShowCommentReportModal(false)}
-                  className="mt-6 w-full rounded-xl bg-violet-500 py-3 text-sm font-semibold text-white hover:bg-violet-600"
+                  className="mt-6 w-full rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)]"
                 >
                   확인
                 </button>
               </div>
             ) : (
               <>
-                <h3 className="mb-5 text-center text-base font-bold text-zinc-900 dark:text-zinc-100">
+                <h3 className="mb-5 text-center text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
                   해당 댓글을 어떤 이유로 신고하시나요?
                 </h3>
 
@@ -1120,17 +1254,17 @@ export default function PostDetailPage() {
                           setCommentReportReason(reason);
                           if (reason !== "기타") setCommentReportCustomReason("");
                         }}
-                        className={`flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-sm transition-all ${
+                        className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3.5 text-[13px] transition-all ${
                           commentReportReason === reason
-                            ? "border-violet-500 bg-violet-50 font-semibold text-zinc-900 dark:border-violet-400 dark:bg-violet-950 dark:text-zinc-100"
-                            : "border-zinc-200 text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:text-zinc-300"
+                            ? "border-[#6B7B3A] bg-[#F5F0E5] font-semibold text-[#2A251D] dark:bg-[#6B7B3A]/20 dark:text-zinc-100"
+                            : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-800/40 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
                         }`}
                       >
                         <span>{reason}</span>
                         <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
                           commentReportReason === reason
-                            ? "border-violet-500 bg-violet-500 dark:border-violet-400 dark:bg-violet-400"
-                            : "border-zinc-300 dark:border-zinc-600"
+                            ? "border-[#6B7B3A] bg-[#6B7B3A]"
+                            : "border-[#E8E0D0] dark:border-zinc-600"
                         }`}>
                           {commentReportReason === reason && (
                             <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -1152,7 +1286,7 @@ export default function PostDetailPage() {
                             onChange={(e) => setCommentReportCustomReason(e.target.value)}
                             placeholder="신고 사유를 입력해주세요"
                             rows={3}
-                            className="mt-2 w-full resize-none rounded-xl border border-violet-300 bg-violet-50 px-4 py-3 text-sm leading-relaxed text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none dark:border-violet-700 dark:bg-violet-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                            className="mt-2 w-full resize-none rounded-xl border border-[#6B7B3A]/40 bg-[#FBF7EB] dark:bg-zinc-800 px-4 py-3 text-[13px] leading-relaxed text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:border-[#6B7B3A]/60 focus:outline-none"
                           />
                         </div>
                       )}
@@ -1160,10 +1294,10 @@ export default function PostDetailPage() {
                   ))}
                 </div>
 
-                <div className="mt-5 flex gap-3">
+                <div className="mt-5 flex gap-2">
                   <button
                     onClick={() => setShowCommentReportModal(false)}
-                    className="flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                    className="flex flex-1 items-center justify-center rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 py-3 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-700"
                   >
                     취소
                   </button>
@@ -1181,10 +1315,10 @@ export default function PostDetailPage() {
                       );
                       setCommentReportDone(true);
                     }}
-                    className={`flex flex-1 items-center justify-center rounded-xl py-3 text-sm font-semibold text-white ${
+                    className={`flex flex-1 items-center justify-center rounded-xl py-3 text-[13px] font-bold text-white transition-colors ${
                       commentReportReason
-                        ? "bg-violet-500 hover:bg-violet-600"
-                        : "cursor-not-allowed bg-zinc-300 dark:bg-zinc-600"
+                        ? "bg-[#C0392B] hover:bg-[#A0311F] shadow-[0_4px_14px_-4px_rgba(192,57,43,0.4)]"
+                        : "cursor-not-allowed bg-[#D4C7AA] dark:bg-zinc-600"
                     }`}
                   >
                     신고하기
@@ -1198,27 +1332,28 @@ export default function PostDetailPage() {
 
       {/* 게시글 신고 모달 */}
       {showReportModal && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
-          <div className="w-full max-w-sm rounded-t-2xl bg-white px-6 pb-6 pt-4 shadow-xl sm:rounded-2xl dark:bg-zinc-900">
-            {/* 핸들 바 */}
-            <div className="mb-4 flex justify-center">
-              <div className="h-1 w-10 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4">
+          <div className="absolute inset-0 bg-[#2A251D]/50 backdrop-blur-sm" onClick={() => setShowReportModal(false)} />
+          <div className="relative w-full max-w-sm bg-[#FEFCF7] dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-[#E8E0D0] dark:border-zinc-700 px-6 pb-6 pt-4 overflow-hidden">
+            <div className="mb-4 flex justify-center sm:hidden">
+              <div className="h-1 w-10 rounded-full bg-[#E8E0D0] dark:bg-zinc-600" />
             </div>
+            <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#C0392B]/40 to-transparent" />
 
             {reportDone ? (
               <div className="py-8 text-center">
-                <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">신고가 접수되었습니다.</p>
-                <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">검토 후 조치하겠습니다.</p>
+                <p className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">신고가 접수되었습니다</p>
+                <p className="mt-2 text-[13px] text-[#8C8270] dark:text-zinc-400">검토 후 조치하겠습니다</p>
                 <button
                   onClick={() => setShowReportModal(false)}
-                  className="mt-6 w-full rounded-xl bg-violet-500 py-3 text-sm font-semibold text-white hover:bg-violet-600"
+                  className="mt-6 w-full rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)]"
                 >
                   확인
                 </button>
               </div>
             ) : (
               <>
-                <h3 className="mb-5 text-center text-base font-bold text-zinc-900 dark:text-zinc-100">
+                <h3 className="mb-5 text-center text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
                   해당 게시글을 어떤 이유로 신고하시나요?
                 </h3>
 
@@ -1230,17 +1365,17 @@ export default function PostDetailPage() {
                           setReportReason(reason);
                           if (reason !== "기타") setReportCustomReason("");
                         }}
-                        className={`flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-sm transition-all ${
+                        className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3.5 text-[13px] transition-all ${
                           reportReason === reason
-                            ? "border-violet-500 bg-violet-50 font-semibold text-zinc-900 dark:border-violet-400 dark:bg-violet-950 dark:text-zinc-100"
-                            : "border-zinc-200 text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:text-zinc-300"
+                            ? "border-[#6B7B3A] bg-[#F5F0E5] font-semibold text-[#2A251D] dark:bg-[#6B7B3A]/20 dark:text-zinc-100"
+                            : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-800/40 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
                         }`}
                       >
                         <span>{reason}</span>
                         <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
                           reportReason === reason
-                            ? "border-violet-500 bg-violet-500 dark:border-violet-400 dark:bg-violet-400"
-                            : "border-zinc-300 dark:border-zinc-600"
+                            ? "border-[#6B7B3A] bg-[#6B7B3A]"
+                            : "border-[#E8E0D0] dark:border-zinc-600"
                         }`}>
                           {reportReason === reason && (
                             <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -1249,7 +1384,6 @@ export default function PostDetailPage() {
                           )}
                         </span>
                       </button>
-                      {/* 기타 선택 시 텍스트 입력창 슬라이드 */}
                       {reason === "기타" && (
                         <div
                           className="overflow-hidden transition-all duration-300 ease-in-out"
@@ -1263,7 +1397,7 @@ export default function PostDetailPage() {
                             onChange={(e) => setReportCustomReason(e.target.value)}
                             placeholder="신고 사유를 입력해주세요"
                             rows={3}
-                            className="mt-2 w-full resize-none rounded-xl border border-violet-300 bg-violet-50 px-4 py-3 text-sm leading-relaxed text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none dark:border-violet-700 dark:bg-violet-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                            className="mt-2 w-full resize-none rounded-xl border border-[#6B7B3A]/40 bg-[#FBF7EB] dark:bg-zinc-800 px-4 py-3 text-[13px] leading-relaxed text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:border-[#6B7B3A]/60 focus:outline-none"
                           />
                         </div>
                       )}
@@ -1271,10 +1405,10 @@ export default function PostDetailPage() {
                   ))}
                 </div>
 
-                <div className="mt-5 flex gap-3">
+                <div className="mt-5 flex gap-2">
                   <button
                     onClick={() => setShowReportModal(false)}
-                    className="flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                    className="flex flex-1 items-center justify-center rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 py-3 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-700"
                   >
                     취소
                   </button>
@@ -1292,10 +1426,10 @@ export default function PostDetailPage() {
                       );
                       setReportDone(true);
                     }}
-                    className={`flex flex-1 items-center justify-center rounded-xl py-3 text-sm font-semibold text-white ${
+                    className={`flex flex-1 items-center justify-center rounded-xl py-3 text-[13px] font-bold text-white transition-colors ${
                       reportReason
-                        ? "bg-violet-500 hover:bg-violet-600"
-                        : "cursor-not-allowed bg-zinc-300 dark:bg-zinc-600"
+                        ? "bg-[#C0392B] hover:bg-[#A0311F] shadow-[0_4px_14px_-4px_rgba(192,57,43,0.4)]"
+                        : "cursor-not-allowed bg-[#D4C7AA] dark:bg-zinc-600"
                     }`}
                   >
                     신고하기
@@ -1309,10 +1443,63 @@ export default function PostDetailPage() {
 
       {/* 공유 토스트 */}
       {shareToast && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-5 py-3 rounded-full text-sm font-medium shadow-lg">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-[#3A342A] text-[#FEFCF7] px-5 py-3 rounded-full text-[13px] font-medium shadow-lg">
           {shareToast}
         </div>
       )}
+
+      {/* 특정 댓글 하이라이트 애니메이션 */}
+      <style jsx global>{`
+        @property --comment-angle {
+          syntax: "<angle>";
+          initial-value: 0deg;
+          inherits: false;
+        }
+        @keyframes comment-chase-spin {
+          to { --comment-angle: 360deg; }
+        }
+        @keyframes comment-chase-fade {
+          0%, 90% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+        @keyframes comment-bg-pulse {
+          0% { background-color: rgba(107, 123, 58, 0); }
+          20% { background-color: rgba(107, 123, 58, 0.14); }
+          100% { background-color: rgba(107, 123, 58, 0); }
+        }
+        .comment-blink {
+          position: relative;
+          isolation: isolate;
+          animation: comment-bg-pulse 1.8s ease-out forwards;
+        }
+        .comment-blink::before {
+          content: "";
+          position: absolute;
+          inset: -4px;
+          border-radius: inherit;
+          padding: 3px;
+          background: conic-gradient(
+            from var(--comment-angle, 0deg),
+            rgba(107, 123, 58, 0) 0deg,
+            rgba(107, 123, 58, 0.9) 60deg,
+            rgba(107, 123, 58, 0) 120deg,
+            rgba(107, 123, 58, 0) 360deg
+          );
+          -webkit-mask:
+            linear-gradient(#000 0 0) content-box,
+            linear-gradient(#000 0 0);
+          -webkit-mask-composite: xor;
+          mask:
+            linear-gradient(#000 0 0) content-box,
+            linear-gradient(#000 0 0);
+          mask-composite: exclude;
+          animation:
+            comment-chase-spin 1.6s linear,
+            comment-chase-fade 1.8s ease-out forwards;
+          pointer-events: none;
+          z-index: 1;
+        }
+      `}</style>
     </div>
   );
 }

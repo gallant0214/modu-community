@@ -37,42 +37,79 @@ function matchesSearch(name: string, query: string): boolean {
   return false;
 }
 
-/* ── 모바일 리스트 행 (기존 유지) ── */
+/* ── 모바일 리스트 행 ── */
 function CategoryRow({ category }: { category: Category }) {
   const count = Number(category.post_count);
   const isEmpty = count === 0;
   return (
-    <li className={isEmpty ? "opacity-50" : ""}>
+    <li>
       <Link
         href={`/category/${category.id}`}
-        className="flex items-center gap-3 rounded-xl px-2 py-3.5 transition-colors hover:bg-white active:bg-zinc-100 dark:hover:bg-zinc-900 dark:active:bg-zinc-800"
+        className={`group flex items-center gap-3.5 rounded-2xl px-3.5 py-3.5 transition-all ${
+          isEmpty
+            ? "hover:bg-[#F5F0E5]/60 dark:hover:bg-zinc-900"
+            : "hover:bg-[#FEFCF7] dark:hover:bg-zinc-900 hover:shadow-[0_4px_14px_-8px_rgba(107,93,71,0.2)]"
+        }`}
       >
-        <span className="text-2xl">{category.emoji}</span>
-        <span className="flex-1 text-[15px] font-medium text-zinc-900 dark:text-zinc-100">
-          {category.name}
+        <span className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center text-2xl ${
+          isEmpty
+            ? "bg-[#F5F0E5]/70 dark:bg-zinc-800/60"
+            : "bg-[#F5F0E5] dark:bg-zinc-800 group-hover:bg-[#EFE7D5] transition-colors"
+        }`}>
+          {category.emoji}
         </span>
-        <span className="text-sm text-zinc-400">
-          {isEmpty ? "아직 후기가 없어요" : `${count.toLocaleString()}개의 후기`}
-        </span>
-        <svg className="h-4 w-4 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        <div className="flex-1 min-w-0">
+          <p className={`text-[15px] font-semibold tracking-tight ${
+            isEmpty ? "text-[#A89B80] dark:text-zinc-500" : "text-[#2A251D] dark:text-zinc-100"
+          }`}>
+            {category.name}
+          </p>
+          <p className={`text-[12px] mt-0.5 ${
+            isEmpty ? "text-[#C7B89B] dark:text-zinc-600" : "text-[#8C8270] dark:text-zinc-500"
+          }`}>
+            {isEmpty ? "첫 후기를 기다리고 있어요" : `후기 ${count.toLocaleString()}개`}
+          </p>
+        </div>
+        <svg className={`h-4 w-4 transition-transform group-hover:translate-x-0.5 ${
+          isEmpty ? "text-[#D4C7AA]" : "text-[#A89B80] dark:text-zinc-500"
+        }`} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
       </Link>
     </li>
   );
 }
 
-/* ── 데스크톱 인기 종목 카드 (세로형) ── */
-function PopularCard({ category }: { category: Category }) {
+/* ── 데스크톱 인기 종목 카드 (세로형 - 프리미엄) ── */
+function PopularCard({ category, rank }: { category: Category; rank: number }) {
   const count = Number(category.post_count);
   return (
     <Link
       href={`/category/${category.id}`}
-      className="flex flex-col items-center gap-2 p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl transition-all hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800 hover:-translate-y-0.5 text-center"
+      className="group relative flex flex-col items-center gap-3 p-6 bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl transition-all hover:-translate-y-1 hover:shadow-[0_12px_32px_-16px_rgba(107,93,71,0.25)] hover:border-[#6B7B3A]/40 text-center overflow-hidden"
     >
-      <span className="text-4xl">{category.emoji}</span>
-      <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{category.name}</span>
-      <span className="text-xs font-medium text-blue-600 dark:text-blue-400">{count.toLocaleString()}개의 후기</span>
+      {/* 랭크 표시 */}
+      <span className="absolute top-3 left-3 text-[10px] font-bold tracking-[0.1em] text-[#A89B80] dark:text-zinc-500">
+        #{rank}
+      </span>
+      {/* 장식용 배경 원 */}
+      <div
+        aria-hidden
+        className="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-[#6B7B3A]/[0.05] pointer-events-none transition-transform duration-500 group-hover:scale-125"
+      />
+
+      <div className="relative w-16 h-16 rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center mt-2 transition-all group-hover:bg-[#EFE7D5] group-hover:-rotate-3">
+        <span className="text-4xl">{category.emoji}</span>
+      </div>
+      <span className="relative text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
+        {category.name}
+      </span>
+      <div className="relative inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#EFE7D5] dark:bg-[#6B7B3A]/20">
+        <span className="w-1 h-1 rounded-full bg-[#6B7B3A] animate-pulse" />
+        <span className="text-[11px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">
+          후기 {count.toLocaleString()}
+        </span>
+      </div>
     </Link>
   );
 }
@@ -84,18 +121,52 @@ function GridCard({ category }: { category: Category }) {
   return (
     <Link
       href={`/category/${category.id}`}
-      className={`flex items-center gap-3 p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl transition-all hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800 ${
-        isEmpty ? "opacity-50 hover:opacity-80" : ""
+      className={`group flex items-center gap-3.5 p-4 border rounded-2xl transition-all ${
+        isEmpty
+          ? "bg-[#FBF7EB]/60 dark:bg-zinc-900/40 border-[#E8E0D0]/60 dark:border-zinc-800"
+          : "bg-[#FEFCF7] dark:bg-zinc-900 border-[#E8E0D0] dark:border-zinc-700 hover:border-[#6B7B3A]/40 hover:shadow-[0_8px_24px_-12px_rgba(107,93,71,0.2)] hover:-translate-y-0.5"
       }`}
     >
-      <span className="text-2xl">{category.emoji}</span>
+      <span className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center text-2xl ${
+        isEmpty
+          ? "bg-[#F5F0E5]/60 dark:bg-zinc-800/60"
+          : "bg-[#F5F0E5] dark:bg-zinc-800 group-hover:bg-[#EFE7D5] transition-colors"
+      }`}>
+        {category.emoji}
+      </span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{category.name}</p>
-        <p className={`text-xs ${isEmpty ? "text-zinc-400" : "text-zinc-500 dark:text-zinc-400"}`}>
-          {isEmpty ? "아직 후기가 없어요" : `${count.toLocaleString()}개의 후기`}
+        <p className={`text-[14px] font-semibold tracking-tight truncate ${
+          isEmpty ? "text-[#A89B80] dark:text-zinc-500" : "text-[#2A251D] dark:text-zinc-100"
+        }`}>
+          {category.name}
+        </p>
+        <p className={`text-[12px] mt-0.5 ${
+          isEmpty ? "text-[#C7B89B] dark:text-zinc-600" : "text-[#8C8270] dark:text-zinc-500"
+        }`}>
+          {isEmpty ? "첫 후기를 기다려요" : `후기 ${count.toLocaleString()}개`}
         </p>
       </div>
     </Link>
+  );
+}
+
+/* ── 섹션 헤더 ── */
+function SectionHeader({ kicker, title, note }: { kicker: string; title: string; note?: string }) {
+  return (
+    <div className="mb-5 flex items-end justify-between gap-3">
+      <div>
+        <div className="inline-flex items-center gap-2 mb-1.5">
+          <span className="w-4 h-px bg-[#6B7B3A]" />
+          <span className="text-[10px] font-bold tracking-[0.15em] text-[#6B7B3A] uppercase">{kicker}</span>
+        </div>
+        <h2 className="text-[20px] sm:text-[22px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
+          {title}
+        </h2>
+      </div>
+      {note && (
+        <span className="text-[11px] font-medium text-[#A89B80] dark:text-zinc-500 pb-1">{note}</span>
+      )}
+    </div>
   );
 }
 
@@ -123,44 +194,51 @@ export function CategorySearch({
   return (
     <>
       {/* 검색창 */}
-      <div className="px-4 py-4 lg:flex lg:justify-center">
-        <div className="flex items-center gap-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 px-4 py-2.5 lg:py-3 lg:w-full lg:max-w-lg">
-          <svg className="h-4 w-4 text-zinc-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="종목명 또는 초성으로 검색"
-            className="flex-1 bg-transparent text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none dark:text-zinc-100"
-          />
-          {query && (
-            <button
-              onClick={() => setQuery("")}
-              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
+      <div className="px-4 sm:px-6 pt-6 pb-4 lg:flex lg:justify-center">
+        <div className="relative lg:w-full lg:max-w-xl">
+          <div className="flex items-center gap-2 rounded-2xl bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 px-4 py-3 lg:py-3.5 shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_24px_-16px_rgba(107,93,71,0.25)] focus-within:border-[#6B7B3A]/50 transition-colors">
+            <svg className="h-[18px] w-[18px] text-[#A89B80] shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="종목명 또는 초성으로 검색 (ㅍㄹㅌ → 필라테스)"
+              className="flex-1 bg-transparent text-[14px] text-[#3A342A] placeholder:text-[#A89B80] focus:outline-none dark:text-zinc-100"
+            />
+            {query && (
+              <button
+                onClick={() => setQuery("")}
+                className="text-[#A89B80] hover:text-[#6B5D47] dark:hover:text-zinc-300"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {isSearching ? (
         /* ── 검색 결과 ── */
-        <section className="px-4 pt-2 pb-8">
-          <h2 className="mb-3 text-base font-bold text-zinc-900 dark:text-zinc-100">
-            검색 결과 <span className="text-blue-600">{filtered.length}</span>건
+        <section className="px-4 sm:px-6 pt-3 pb-10">
+          <h2 className="mb-4 text-[16px] font-bold text-[#3A342A] dark:text-zinc-100">
+            검색 결과 <span className="text-[#6B7B3A]">{filtered.length}</span>건
           </h2>
           {filtered.length === 0 ? (
-            <p className="py-12 text-center text-sm text-zinc-400">
-              검색 결과가 없습니다
-            </p>
+            <div className="py-16 text-center bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl">
+              <div className="inline-flex w-14 h-14 mb-3 rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 items-center justify-center">
+                <svg className="w-7 h-7 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <p className="text-sm text-[#8C8270] dark:text-zinc-500">검색 결과가 없습니다</p>
+            </div>
           ) : (
             <>
               {/* 모바일: 리스트 */}
-              <ul className="lg:hidden">
+              <ul className="lg:hidden space-y-1">
                 {filtered.map((cat) => (
                   <CategoryRow key={cat.id} category={cat} />
                 ))}
@@ -178,37 +256,34 @@ export function CategorySearch({
         <>
           {/* ── 인기 종목 ── */}
           {popular.length > 0 && (
-            <section className="px-4 pt-2 pb-4">
-              <h2 className="mb-3 text-base font-bold text-zinc-900 dark:text-zinc-100">
-                활발한 종목
-              </h2>
+            <section className="px-4 sm:px-6 pt-3 pb-6">
+              <SectionHeader kicker="Popular" title="활발한 종목" note="이번 주 기준" />
               {/* 모바일: 리스트 */}
-              <ul className="lg:hidden">
+              <ul className="lg:hidden space-y-1">
                 {popular.map((cat) => (
                   <CategoryRow key={cat.id} category={cat} />
                 ))}
               </ul>
               {/* 데스크톱: 5열 카드 */}
-              <div className="hidden lg:grid lg:grid-cols-5 gap-3">
-                {popular.map((cat) => (
-                  <PopularCard key={cat.id} category={cat} />
+              <div className="hidden lg:grid lg:grid-cols-5 gap-4">
+                {popular.map((cat, idx) => (
+                  <PopularCard key={cat.id} category={cat} rank={idx + 1} />
                 ))}
               </div>
             </section>
           )}
 
-          <hr className="mx-4 border-zinc-200 dark:border-zinc-800" />
+          {/* 섹션 구분 */}
+          <div className="px-4 sm:px-6">
+            <div className="h-px bg-gradient-to-r from-transparent via-[#E8E0D0] dark:via-zinc-800 to-transparent" />
+          </div>
 
           {/* ── 전체 종목 ── */}
-          <section className="px-4 pt-4 pb-8">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-                전체 종목
-              </h2>
-              <span className="text-xs text-zinc-400">게시글 많은 순</span>
-            </div>
+          <section className="px-4 sm:px-6 pt-6 pb-10">
+            <SectionHeader kicker="All Sports" title="전체 종목" note="게시글 많은 순" />
+
             {/* 모바일: 리스트 */}
-            <ul className="lg:hidden">
+            <ul className="lg:hidden space-y-1">
               {visibleAll.map((cat) => (
                 <CategoryRow key={cat.id} category={cat} />
               ))}
@@ -223,45 +298,58 @@ export function CategorySearch({
             {all.length > 12 && !expanded && (
               <button
                 onClick={() => setExpanded(true)}
-                className="mt-3 flex w-full items-center justify-center gap-1 rounded-xl py-2.5 text-sm font-medium text-zinc-500 hover:bg-white dark:text-zinc-400 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 transition-colors"
+                className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-2xl py-3 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-400 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-700 transition-colors"
               >
                 더 많은 종목 보기 ({all.length - 12}개)
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
             )}
             {expanded && (
               <button
                 onClick={() => setExpanded(false)}
-                className="mt-3 flex w-full items-center justify-center gap-1 rounded-xl py-2.5 text-sm font-medium text-zinc-500 hover:bg-white dark:text-zinc-400 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 transition-colors"
+                className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-2xl py-3 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-400 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-700 transition-colors"
               >
                 접기
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
                 </svg>
               </button>
             )}
           </section>
 
           {/* ── 하단 CTA ── */}
-          <div className="mx-4 mb-8 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 sm:p-8 text-center">
-            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">
-              시험 후기를 공유해 주세요
-            </h2>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-              나의 경험이 다음 수험생에게 큰 도움이 됩니다
-            </p>
-            <button
-              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
-              종목을 선택하고 후기를 남겨보세요
-            </button>
-          </div>
+          <section className="relative px-4 sm:px-6 mb-14">
+            <div className="relative bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-8 sm:p-10 text-center shadow-[0_1px_0_rgba(0,0,0,0.02),0_12px_32px_-20px_rgba(107,93,71,0.2)] overflow-hidden">
+              <div aria-hidden className="absolute -top-16 -left-16 w-48 h-48 rounded-full bg-[#6B7B3A]/[0.07] blur-3xl pointer-events-none" />
+              <div aria-hidden className="absolute -bottom-16 -right-16 w-48 h-48 rounded-full bg-[#6B7B3A]/[0.07] blur-3xl pointer-events-none" />
+              <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/30 to-transparent" />
+
+              <div className="relative">
+                <div className="inline-flex items-center gap-2 mb-4">
+                  <span className="w-6 h-px bg-[#6B7B3A]" />
+                  <span className="text-[11px] font-bold tracking-[0.15em] text-[#6B7B3A] uppercase">Share Your Story</span>
+                  <span className="w-6 h-px bg-[#6B7B3A]" />
+                </div>
+                <h2 className="text-xl sm:text-2xl font-bold text-[#2A251D] dark:text-zinc-100 mb-2 tracking-tight">
+                  시험 후기를 공유해 주세요
+                </h2>
+                <p className="text-[14px] text-[#6B5D47] dark:text-zinc-400 mb-6 max-w-md mx-auto leading-relaxed">
+                  나의 경험이 다음 수험생에게 큰 도움이 됩니다. 위 종목 중 하나를 골라 이야기를 남겨보세요.
+                </p>
+                <button
+                  onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                  className="inline-flex items-center gap-2 px-7 py-3.5 bg-[#6B7B3A] hover:bg-[#5A6930] text-white font-semibold rounded-2xl shadow-[0_8px_24px_-8px_rgba(107,123,58,0.5)] transition-all hover:-translate-y-0.5"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                  종목 선택하러 가기
+                </button>
+              </div>
+            </div>
+          </section>
         </>
       )}
     </>

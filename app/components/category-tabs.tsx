@@ -10,20 +10,23 @@ const tabs = [
 
 export function CategoryTabs({ categoryId, current }: { categoryId: number; current: string }) {
   return (
-    <div className="flex border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-      {tabs.map((tab) => (
-        <Link
-          key={tab.key}
-          href={`/category/${categoryId}${tab.key === "latest" ? "" : `?sort=${tab.key}`}`}
-          className={`flex-1 py-3 text-center text-sm font-medium transition-colors ${
-            current === tab.key
-              ? "border-b-2 border-violet-500 text-violet-600 dark:text-violet-400"
-              : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-          }`}
-        >
-          {tab.label}
-        </Link>
-      ))}
+    <div className="flex gap-1 rounded-2xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 p-1">
+      {tabs.map((tab) => {
+        const isActive = current === tab.key;
+        return (
+          <Link
+            key={tab.key}
+            href={`/category/${categoryId}${tab.key === "latest" ? "" : `?sort=${tab.key}`}`}
+            className={`flex-1 rounded-xl py-2 text-center text-[13px] font-semibold transition-all ${
+              isActive
+                ? "bg-[#6B7B3A] text-white shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)]"
+                : "text-[#8C8270] dark:text-zinc-400 hover:text-[#3A342A] dark:hover:text-zinc-200 hover:bg-[#F5F0E5]/60 dark:hover:bg-zinc-800"
+            }`}
+          >
+            {tab.label}
+          </Link>
+        );
+      })}
     </div>
   );
 }

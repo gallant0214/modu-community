@@ -29,6 +29,7 @@ export interface Comment {
   reply_count: number;
   created_at: string;
   ip_display?: string;
+  is_mine?: boolean;
 }
 
 export interface Report {
@@ -67,6 +68,7 @@ export interface Post {
   updated_at: string;
   category_name?: string;
   ip_display?: string;
+  is_mine?: boolean;
 }
 
 export interface JobPost {

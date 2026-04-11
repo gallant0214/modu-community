@@ -29,7 +29,7 @@ export async function GET(
   const rows = await sql`
     SELECT c.id, c.post_id, c.parent_id, c.author, c.content, COALESCE(c.likes, 0) AS likes,
       (SELECT COUNT(*) FROM comments r WHERE r.parent_id = c.id) AS reply_count,
-      c.ip_address, c.created_at
+      c.ip_address, c.firebase_uid, c.created_at
     FROM comments c WHERE c.post_id = ${Number(postId)} ORDER BY c.created_at ASC`;
 
   // 현재 사용자가 좋아요한 댓글 ID 목록
@@ -45,9 +45,10 @@ export async function GET(
     ...c,
     ip_display: maskIp(String(c.ip_address || "")),
     ip_address: undefined,
+    firebase_uid: undefined,
     password: undefined,
     is_liked: likedCommentIds.has(c.id as number),
-    is_mine: user ? c.firebase_uid === user.uid : false,
+    is_mine: !!(user && c.firebase_uid && c.firebase_uid === user.uid),
   }));
   return NextResponse.json(result);
 }

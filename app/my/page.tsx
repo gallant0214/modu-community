@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { deleteUser } from "firebase/auth";
 import { auth } from "@/app/lib/firebase-client";
@@ -33,7 +33,7 @@ function generateRandomNickname() {
 }
 
 /* ── 타입 ── */
-type Tab = "posts" | "comments" | "jobs" | "bookmarks" | "jobBookmarks";
+type Tab = "posts" | "comments" | "jobs" | "bookmarks" | "jobBookmarks" | "notifications";
 interface MyComment {
   id: number;
   post_id: number;
@@ -41,6 +41,14 @@ interface MyComment {
   created_at: string;
   post_title?: string;
   category_id?: number;
+}
+interface MyNotification {
+  id: number;
+  title: string;
+  body: string;
+  broadcast_type: string;
+  created_at: string;
+  is_read: boolean;
 }
 
 /* ── 공통 모달 ── */
@@ -112,23 +120,38 @@ function SettingRow({ label, onClick, icon, danger }: { label: string; onClick?:
 }
 
 /* ══════════════════════════════════════════════
-   메��� My 페이지
+   메인 My 페이지 (Suspense 래퍼)
    ══════════════════════════════════════════════ */
 export default function MyPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center items-center min-h-screen bg-[#F8F4EC] dark:bg-zinc-950">
+        <div className="w-6 h-6 border-2 border-[#6B7B3A] border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <MyPageContent />
+    </Suspense>
+  );
+}
+
+function MyPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading, nickname, signInWithGoogle, signInWithApple, signOutUser, getIdToken, refreshNickname } = useAuth();
 
   /* 탭 & 데이터 */
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
+  const [highlightId, setHighlightId] = useState<number | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [comments, setComments] = useState<MyComment[]>([]);
   const [jobs, setJobs] = useState<JobPost[]>([]);
   const [bookmarkPosts, setBookmarkPosts] = useState<Post[]>([]);
   const [bookmarkJobs, setBookmarkJobs] = useState<JobPost[]>([]);
+  const [notifications, setNotifications] = useState<MyNotification[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
 
   /* 카운트 */
-  const [counts, setCounts] = useState({ posts: 0, comments: 0, jobs: 0, bookmarks: 0, jobBookmarks: 0 });
+  const [counts, setCounts] = useState({ posts: 0, comments: 0, jobs: 0, bookmarks: 0, jobBookmarks: 0, notifications: 0 });
 
   /* 모달 상태 */
   const [showNicknameModal, setShowNicknameModal] = useState(false);
@@ -150,15 +173,16 @@ export default function MyPage() {
       if (!token) return;
       const headers = { Authorization: `Bearer ${token}` };
       try {
-        const [pRes, cRes, jRes, bpRes, bjRes] = await Promise.all([
+        const [pRes, cRes, jRes, bpRes, bjRes, nRes] = await Promise.all([
           fetch(`/api/posts/my?uid=${user.uid}`, { headers }),
           fetch(`/api/comments/my?uid=${user.uid}`, { headers }),
           fetch(`/api/jobs/my?uid=${user.uid}`, { headers }),
           fetch(`/api/bookmarks?type=posts`, { headers }),
           fetch(`/api/bookmarks?type=jobs`, { headers }),
+          fetch(`/api/notifications/web`, { headers }),
         ]);
-        const [pData, cData, jData, bpData, bjData] = await Promise.all([
-          pRes.json(), cRes.json(), jRes.json(), bpRes.json(), bjRes.json(),
+        const [pData, cData, jData, bpData, bjData, nData] = await Promise.all([
+          pRes.json(), cRes.json(), jRes.json(), bpRes.json(), bjRes.json(), nRes.json(),
         ]);
         setCounts({
           posts: (pData.posts || []).length,
@@ -166,6 +190,7 @@ export default function MyPage() {
           jobs: (jData.posts || []).length,
           bookmarks: (bpData.bookmarks || []).length,
           jobBookmarks: (bjData.bookmarks || []).length,
+          notifications: (nData.notifications || []).length,
         });
       } catch {}
     };
@@ -224,6 +249,10 @@ export default function MyPage() {
         const res = await fetch(`/api/bookmarks?type=jobs`, { headers });
         const data = await res.json();
         setBookmarkJobs(data.bookmarks || []);
+      } else if (tab === "notifications") {
+        const res = await fetch(`/api/notifications/web`, { headers });
+        const data = await res.json();
+        setNotifications(data.notifications || []);
       }
     } catch {}
     setDataLoading(false);
@@ -232,6 +261,30 @@ export default function MyPage() {
   useEffect(() => {
     if (activeTab) loadTabData(activeTab);
   }, [activeTab, loadTabData]);
+
+  /* URL 쿼리에서 tab/highlight 읽어 자동 전환 (없으면 메인 대시보드로 복귀) */
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    const highlightParam = searchParams.get("highlight");
+    const validTabs: Tab[] = ["posts", "comments", "jobs", "bookmarks", "jobBookmarks", "notifications"];
+    if (tabParam && validTabs.includes(tabParam as Tab)) {
+      setActiveTab(tabParam as Tab);
+      if (tabParam === "notifications" && highlightParam) {
+        const id = Number(highlightParam);
+        if (!Number.isNaN(id)) setHighlightId(id);
+      }
+    } else {
+      setActiveTab(null);
+      setHighlightId(null);
+    }
+  }, [searchParams]);
+
+  /* highlightId가 설정되면 1.8초 후 자동 해제 (애니메이션 종료) */
+  useEffect(() => {
+    if (highlightId == null) return;
+    const t = setTimeout(() => setHighlightId(null), 1800);
+    return () => clearTimeout(t);
+  }, [highlightId]);
 
   /* 닉네임 저장 */
   const handleSaveNickname = async () => {
@@ -360,7 +413,7 @@ export default function MyPage() {
   if (activeTab) {
     const tabLabels: Record<Tab, string> = {
       posts: "내가 쓴 글", comments: "내가 쓴 댓글", jobs: "내가 등록한 구인글",
-      bookmarks: "후기 북마크", jobBookmarks: "구인 북마크",
+      bookmarks: "후기 북마크", jobBookmarks: "구인 북마크", notifications: "알림",
     };
 
     return (
@@ -368,7 +421,7 @@ export default function MyPage() {
         <div className="mx-auto max-w-2xl">
           {/* 헤더 */}
           <div className="flex items-center gap-3 px-4 py-3 bg-[#FEFCF7] dark:bg-zinc-900 border-b border-[#E8E0D0] dark:border-zinc-700">
-            <button onClick={() => setActiveTab(null)} className="p-1 text-[#999] hover:text-[#666]">
+            <button onClick={() => router.push("/my")} className="p-1 text-[#999] hover:text-[#666]">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
@@ -382,89 +435,778 @@ export default function MyPage() {
             </div>
           ) : (
             <div>
-              {activeTab === "posts" && (posts.length === 0 ? <EmptyState text="작성한 글이 없습니다" /> :
-                <ul>{posts.map((p) => (
-                  <li key={p.id} className="border-b border-[#E8E0D0]/50 dark:border-zinc-800">
-                    <Link href={`/category/${p.category_id}/post/${p.id}`} className="block px-4 py-3.5 hover:bg-[#F5F0E5] dark:hover:bg-zinc-900">
-                      <p className="text-sm font-medium text-[#333] dark:text-zinc-100 mb-1">{p.title}</p>
-                      <div className="flex items-center gap-2 text-xs text-[#999]">
-                        <span>{p.category_name || "게시판"}</span><span>·</span><span>댓글 {p.comments_count}</span><span>·</span><span>{formatDate(p.created_at)}</span>
+              {activeTab === "posts" && (posts.length === 0 ? (
+                <div className="px-4 py-10">
+                  <div className="relative mx-auto max-w-md bg-[#FEFCF7] dark:bg-zinc-900 border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-3xl px-6 py-10 text-center overflow-hidden">
+                    <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/40 to-transparent" />
+                    <div aria-hidden className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-[#6B7B3A]/[0.05] blur-3xl pointer-events-none" />
+                    <div className="relative">
+                      <div className="w-14 h-14 mx-auto rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center mb-4">
+                        <svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
                       </div>
-                    </Link>
-                  </li>
-                ))}</ul>
-              )}
-
-              {activeTab === "comments" && (comments.length === 0 ? <EmptyState text="작성한 댓글이 없습니다" /> :
-                <ul>{comments.map((c) => (
-                  <li key={c.id} className="border-b border-[#E8E0D0]/50 dark:border-zinc-800">
-                    <Link href={`/category/${c.category_id || 1}/post/${c.post_id}`} className="block px-4 py-3.5 hover:bg-[#F5F0E5] dark:hover:bg-zinc-900">
-                      {c.post_title && <p className="text-xs text-[#999] mb-1 truncate">{c.post_title}</p>}
-                      <p className="text-sm text-[#333] dark:text-zinc-200">{c.content}</p>
-                      <p className="text-xs text-[#999] mt-1">{formatDate(c.created_at)}</p>
-                    </Link>
-                  </li>
-                ))}</ul>
-              )}
-
-              {activeTab === "jobs" && (jobs.length === 0 ? (
-                <EmptyState text="등록한 구인글이 없습니다">
-                  <Link href="/jobs/write" className="mt-3 inline-block text-sm text-[#6B7B3A] hover:underline">구인 글쓰기 →</Link>
-                </EmptyState>
-              ) : (
-                <ul>{jobs.map((job) => (
-                  <li key={job.id} className="border-b border-[#E8E0D0]/50 dark:border-zinc-800">
-                    <div className="px-4 py-3.5">
-                      <Link href={`/jobs/${job.id}`} className="block hover:opacity-80">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className="px-1.5 py-0.5 bg-[#6B7B3A]/10 text-[#6B7B3A] text-xs rounded font-medium">{job.sport}</span>
-                          {job.is_closed && <span className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-[#999] text-xs rounded">모집종료</span>}
-                        </div>
-                        <p className="text-sm font-medium text-[#333] dark:text-zinc-100">{job.title}</p>
-                        <p className="text-xs text-[#999] mt-0.5">{job.region_name} · {formatDate(job.created_at)}</p>
-                      </Link>
-                      <div className="flex gap-2 mt-2">
-                        <button
-                          onClick={() => toggleJobClosed(job.id, job.is_closed)}
-                          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
-                            job.is_closed
-                              ? "border-[#6B7B3A] text-[#6B7B3A] hover:bg-[#6B7B3A]/10"
-                              : "border-[#E8E0D0] dark:border-zinc-600 text-[#666] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-                          }`}
-                        >{job.is_closed ? "재게시" : "구인완료"}</button>
-                      </div>
+                      <p className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight mb-1">작성한 글이 없습니다</p>
+                      <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">게시판에<br />첫 글을 남겨보세요</p>
                     </div>
-                  </li>
-                ))}</ul>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-4 pt-4 pb-6">
+                  {/* 요약 바 */}
+                  <div className="flex items-center justify-between px-1 mb-3">
+                    <div className="inline-flex items-center gap-2">
+                      <span className="w-1 h-3.5 rounded-full bg-[#6B7B3A]" />
+                      <span className="text-[11px] font-bold tracking-[0.15em] text-[#6B7B3A] uppercase">My Writings</span>
+                    </div>
+                    <span className="text-[11px] text-[#8C8270] dark:text-zinc-500">
+                      총 <span className="font-bold text-[#6B7B3A]">{posts.length}</span>개
+                    </span>
+                  </div>
+
+                  <ul className="space-y-2.5">
+                    {posts.map((p) => (
+                      <li
+                        key={p.id}
+                        className="group relative bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_22px_-20px_rgba(107,93,71,0.3)] overflow-hidden"
+                      >
+                        <Link
+                          href={`/category/${p.category_id}/post/${p.id}?from=${encodeURIComponent("/my?tab=posts")}`}
+                          className="block px-4 py-3.5 hover:bg-[#FBF7EB]/50 dark:hover:bg-zinc-800/40 transition-colors"
+                        >
+                          {/* 상단: 카테고리 칩 · 날짜 */}
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 text-[11px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] truncate max-w-[65%]">
+                              <span className="w-1 h-1 rounded-full bg-[#6B7B3A] shrink-0" />
+                              <span className="truncate">{p.category_name || "게시판"}</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[11px] text-[#A89B80] dark:text-zinc-500 shrink-0">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              {formatDate(p.created_at)}
+                            </span>
+                          </div>
+
+                          {/* 제목 */}
+                          <p className="text-[14.5px] font-bold tracking-tight leading-snug text-[#2A251D] dark:text-zinc-100 line-clamp-2">
+                            {p.title}
+                          </p>
+
+                          {/* 하단: 통계 + 화살표 */}
+                          <div className="mt-2.5 flex items-center justify-between gap-2 pt-2 border-t border-[#F0E9D8] dark:border-zinc-800">
+                            <div className="flex items-center gap-3 text-[11px] text-[#A89B80] dark:text-zinc-500">
+                              <span className="inline-flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                </svg>
+                                <span className={p.comments_count > 0 ? "font-semibold text-[#6B7B3A] dark:text-[#A8B87A]" : ""}>{p.comments_count}</span>
+                              </span>
+                              {typeof p.views === "number" && (
+                                <span className="inline-flex items-center gap-1">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  </svg>
+                                  {p.views}
+                                </span>
+                              )}
+                              {typeof p.likes === "number" && p.likes > 0 && (
+                                <span className="inline-flex items-center gap-1">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                                  </svg>
+                                  {p.likes}
+                                </span>
+                              )}
+                            </div>
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#A89B80] group-hover:text-[#6B7B3A] dark:text-zinc-500 transition-colors">
+                              열기
+                              <svg className="w-3 h-3 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                              </svg>
+                            </span>
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
 
-              {activeTab === "bookmarks" && (bookmarkPosts.length === 0 ? <EmptyState text="북마크한 글이 없습니다" /> :
-                <ul>{bookmarkPosts.map((p) => (
-                  <li key={p.id} className="border-b border-[#E8E0D0]/50 dark:border-zinc-800">
-                    <Link href={`/category/${p.category_id}/post/${p.id}`} className="block px-4 py-3.5 hover:bg-[#F5F0E5] dark:hover:bg-zinc-900">
-                      <p className="text-sm font-medium text-[#333] dark:text-zinc-100 mb-1">{p.title}</p>
-                      <div className="flex items-center gap-2 text-xs text-[#999]">
-                        <span>{p.category_name || "게시판"}</span><span>·</span><span>{p.author}</span><span>·</span><span>{formatDate(p.created_at)}</span>
+              {activeTab === "comments" && (comments.length === 0 ? (
+                <div className="px-4 py-10">
+                  <div className="relative mx-auto max-w-md bg-[#FEFCF7] dark:bg-zinc-900 border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-3xl px-6 py-10 text-center overflow-hidden">
+                    <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/40 to-transparent" />
+                    <div aria-hidden className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-[#6B7B3A]/[0.05] blur-3xl pointer-events-none" />
+                    <div className="relative">
+                      <div className="w-14 h-14 mx-auto rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center mb-4">
+                        <svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
                       </div>
-                    </Link>
-                  </li>
-                ))}</ul>
-              )}
+                      <p className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight mb-1">작성한 댓글이 없습니다</p>
+                      <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">공감한 글에<br />첫 댓글을 남겨보세요</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-4 pt-4 pb-6">
+                  {/* 요약 바 */}
+                  <div className="flex items-center justify-between px-1 mb-3">
+                    <div className="inline-flex items-center gap-2">
+                      <span className="w-1 h-3.5 rounded-full bg-[#6B7B3A]" />
+                      <span className="text-[11px] font-bold tracking-[0.15em] text-[#6B7B3A] uppercase">My Replies</span>
+                    </div>
+                    <span className="text-[11px] text-[#8C8270] dark:text-zinc-500">
+                      총 <span className="font-bold text-[#6B7B3A]">{comments.length}</span>개
+                    </span>
+                  </div>
 
-              {activeTab === "jobBookmarks" && (bookmarkJobs.length === 0 ? <EmptyState text="북마크한 구인글이 없습니다" /> :
-                <ul>{bookmarkJobs.map((job) => (
-                  <li key={job.id} className="border-b border-[#E8E0D0]/50 dark:border-zinc-800">
-                    <Link href={`/jobs/${job.id}`} className="block px-4 py-3.5 hover:bg-[#F5F0E5] dark:hover:bg-zinc-900">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className="px-1.5 py-0.5 bg-[#6B7B3A]/10 text-[#6B7B3A] text-xs rounded font-medium">{job.sport}</span>
-                        {job.is_closed && <span className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-[#999] text-xs rounded">모집종료</span>}
+                  <ul className="space-y-2.5">
+                    {comments.map((c) => (
+                      <li
+                        key={c.id}
+                        className="group relative bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_22px_-20px_rgba(107,93,71,0.3)] overflow-hidden"
+                      >
+                        <Link
+                          href={`/category/${c.category_id || 1}/post/${c.post_id}?from=${encodeURIComponent("/my?tab=comments")}&hc=${c.id}`}
+                          className="flex items-stretch hover:bg-[#FBF7EB]/50 dark:hover:bg-zinc-800/40 transition-colors"
+                        >
+                          {/* 좌측 악센트 바 */}
+                          <span aria-hidden className="w-[3px] shrink-0 bg-gradient-to-b from-[#6B7B3A]/60 via-[#6B7B3A]/25 to-transparent" />
+
+                          <div className="flex-1 min-w-0 px-4 py-3.5">
+                            {/* 원글 컨텍스트 */}
+                            {c.post_title && (
+                              <div className="flex items-center gap-1.5 mb-2 min-w-0">
+                                <svg className="w-3 h-3 text-[#A89B80] shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                                <span className="truncate text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500 uppercase tracking-wide">
+                                  {c.post_title}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* 댓글 내용 */}
+                            <p className="text-[13.5px] leading-relaxed text-[#2A251D] dark:text-zinc-100 line-clamp-3 whitespace-pre-line">
+                              {c.content}
+                            </p>
+
+                            {/* 하단: 날짜 + 원글 보기 */}
+                            <div className="mt-2.5 flex items-center justify-between gap-2 pt-2 border-t border-[#F0E9D8] dark:border-zinc-800">
+                              <span className="inline-flex items-center gap-1 text-[11px] text-[#A89B80] dark:text-zinc-500">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                {formatDate(c.created_at)}
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#A89B80] group-hover:text-[#6B7B3A] dark:text-zinc-500 transition-colors">
+                                원글 보기
+                                <svg className="w-3 h-3 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                </svg>
+                              </span>
+                            </div>
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+
+              {activeTab === "jobs" && (jobs.length === 0 ? (
+                <div className="px-4 py-10">
+                  <div className="relative mx-auto max-w-md bg-[#FEFCF7] dark:bg-zinc-900 border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-3xl px-6 py-10 text-center overflow-hidden">
+                    <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/40 to-transparent" />
+                    <div aria-hidden className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-[#6B7B3A]/[0.05] blur-3xl pointer-events-none" />
+                    <div className="relative">
+                      <div className="w-14 h-14 mx-auto rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center mb-4">
+                        <svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
                       </div>
-                      <p className="text-sm font-medium text-[#333] dark:text-zinc-100">{job.title}</p>
-                      <p className="text-xs text-[#999] mt-0.5">{job.region_name} · {job.center_name}</p>
-                    </Link>
-                  </li>
-                ))}</ul>
-              )}
+                      <p className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight mb-1">등록한 구인글이 없습니다</p>
+                      <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 mb-5 leading-relaxed">첫 공고를 올려<br />우리 센터의 인재를 모집해 보세요</p>
+                      <Link
+                        href="/jobs/write"
+                        className="inline-flex items-center gap-1.5 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-[13px] font-semibold px-5 py-2.5 rounded-xl shadow-[0_6px_18px_-8px_rgba(107,123,58,0.5)] transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                        구인 글쓰기
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-4 pt-4 pb-6">
+                  {/* 요약 바 */}
+                  <div className="flex items-center justify-between px-1 mb-3">
+                    <div className="inline-flex items-center gap-2">
+                      <span className="w-1 h-3.5 rounded-full bg-[#6B7B3A]" />
+                      <span className="text-[11px] font-bold tracking-[0.15em] text-[#6B7B3A] uppercase">My Recruiting</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="inline-flex items-center gap-1 text-[#8C8270] dark:text-zinc-500">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#6B7B3A]" />
+                        모집중 <span className="font-bold text-[#6B7B3A]">{jobs.filter((j) => !j.is_closed).length}</span>
+                      </span>
+                      <span className="text-[#E8E0D0] dark:text-zinc-700">·</span>
+                      <span className="inline-flex items-center gap-1 text-[#8C8270] dark:text-zinc-500">
+                        종료 <span className="font-bold text-[#8C8270] dark:text-zinc-500">{jobs.filter((j) => j.is_closed).length}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <ul className="space-y-3">
+                    {jobs.map((job) => {
+                      const isOpen = !job.is_closed;
+                      return (
+                        <li
+                          key={job.id}
+                          className="relative bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl shadow-[0_1px_0_rgba(0,0,0,0.02),0_10px_28px_-22px_rgba(107,93,71,0.3)] overflow-hidden"
+                        >
+                          {/* 상단 그라데이션 악센트 (모집중일 때만) */}
+                          {isOpen && (
+                            <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/40 to-transparent" />
+                          )}
+
+                          <Link
+                            href={`/jobs/${job.id}?from=${encodeURIComponent("/my?tab=jobs")}`}
+                            className="block px-4 pt-4 pb-3 hover:bg-[#FBF7EB]/50 dark:hover:bg-zinc-800/40 transition-colors"
+                          >
+                            {/* 상단 칩 줄 */}
+                            <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide ${
+                                  isOpen
+                                    ? "bg-[#6B7B3A]/10 text-[#6B7B3A]"
+                                    : "bg-[#EFE7D5] dark:bg-zinc-800 text-[#8C8270] dark:text-zinc-500"
+                                }`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${isOpen ? "bg-[#6B7B3A] animate-pulse" : "bg-[#A89B80]"}`} />
+                                {isOpen ? "모집중" : "모집종료"}
+                              </span>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 text-[11px] font-semibold text-[#6B5D47] dark:text-zinc-300">
+                                {job.sport}
+                              </span>
+                              {job.employment_type && (
+                                <span className="hidden sm:inline text-[11px] text-[#A89B80] dark:text-zinc-500">· {job.employment_type}</span>
+                              )}
+                            </div>
+
+                            {/* 제목 */}
+                            <p
+                              className={`text-[15px] font-bold tracking-tight leading-snug ${
+                                isOpen
+                                  ? "text-[#2A251D] dark:text-zinc-100"
+                                  : "text-[#8C8270] dark:text-zinc-500"
+                              }`}
+                            >
+                              {job.title}
+                            </p>
+
+                            {/* 메타: 업체 / 지역 */}
+                            <div className="mt-2 flex items-center gap-1.5 text-[12px] text-[#6B5D47] dark:text-zinc-400 min-w-0">
+                              {job.center_name && (
+                                <>
+                                  <svg className="w-3 h-3 text-[#A89B80] shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                  </svg>
+                                  <span className="truncate font-medium">{job.center_name}</span>
+                                  <span className="text-[#D6CCB6] dark:text-zinc-700">·</span>
+                                </>
+                              )}
+                              <svg className="w-3 h-3 text-[#A89B80] shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                              <span className="truncate">{job.region_name}</span>
+                            </div>
+
+                            {/* 하단 메타: 급여 / 날짜·조회수 */}
+                            <div className="mt-3 flex items-center justify-between gap-2 pt-2.5 border-t border-[#F0E9D8] dark:border-zinc-800">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {job.salary ? (
+                                  <>
+                                    <svg className="w-3 h-3 text-[#6B7B3A] shrink-0" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span className="truncate text-[11px] font-bold text-[#6B7B3A]">{job.salary}</span>
+                                  </>
+                                ) : (
+                                  <span className="text-[11px] text-[#A89B80]">급여 정보 없음</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[11px] text-[#A89B80] dark:text-zinc-500 shrink-0">
+                                <span>{formatDate(job.created_at)}</span>
+                                {typeof job.views === "number" && (
+                                  <>
+                                    <span className="text-[#D6CCB6] dark:text-zinc-700">·</span>
+                                    <span className="inline-flex items-center gap-0.5">
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                      </svg>
+                                      {job.views}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </Link>
+
+                          {/* 액션 바 */}
+                          <div className="flex items-center gap-2 px-4 py-2.5 bg-[#FBF7EB]/60 dark:bg-zinc-800/40 border-t border-[#E8E0D0] dark:border-zinc-800">
+                            <button
+                              onClick={() => toggleJobClosed(job.id, job.is_closed)}
+                              className={`flex-1 inline-flex items-center justify-center gap-1 text-[12px] font-semibold py-2 rounded-xl border transition-colors ${
+                                job.is_closed
+                                  ? "border-[#6B7B3A]/50 bg-transparent text-[#6B7B3A] hover:bg-[#6B7B3A]/10"
+                                  : "border-[#E8E0D0] dark:border-zinc-600 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                              }`}
+                            >
+                              {job.is_closed ? (
+                                <>
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                  </svg>
+                                  다시 열기
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  구인완료
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => router.push(`/jobs/write?clone=${job.id}`)}
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 text-[12px] font-semibold py-2 rounded-xl bg-[#6B7B3A] text-white hover:bg-[#5A6930] shadow-[0_4px_12px_-6px_rgba(107,123,58,0.5)] transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.3} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                              재게시
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+
+              {activeTab === "bookmarks" && (bookmarkPosts.length === 0 ? (
+                <div className="px-4 py-10">
+                  <div className="relative mx-auto max-w-md bg-[#FEFCF7] dark:bg-zinc-900 border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-3xl px-6 py-10 text-center overflow-hidden">
+                    <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/40 to-transparent" />
+                    <div aria-hidden className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-[#6B7B3A]/[0.05] blur-3xl pointer-events-none" />
+                    <div className="relative">
+                      <div className="w-14 h-14 mx-auto rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center mb-4">
+                        <svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                        </svg>
+                      </div>
+                      <p className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight mb-1">북마크한 글이 없습니다</p>
+                      <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">마음에 드는 글을<br />저장해 아카이브로 모아보세요</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-4 pt-4 pb-6">
+                  {/* 요약 바 */}
+                  <div className="flex items-center justify-between px-1 mb-3">
+                    <div className="inline-flex items-center gap-2">
+                      <span className="w-1 h-3.5 rounded-full bg-[#6B7B3A]" />
+                      <span className="text-[11px] font-bold tracking-[0.15em] text-[#6B7B3A] uppercase">Saved Posts</span>
+                    </div>
+                    <span className="text-[11px] text-[#8C8270] dark:text-zinc-500">
+                      총 <span className="font-bold text-[#6B7B3A]">{bookmarkPosts.length}</span>개
+                    </span>
+                  </div>
+
+                  <ul className="space-y-2.5">
+                    {bookmarkPosts.map((p) => {
+                      const initial = (p.author || "?").trim().charAt(0).toUpperCase() || "?";
+                      return (
+                        <li
+                          key={p.id}
+                          className="group relative bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_22px_-20px_rgba(107,93,71,0.3)] overflow-hidden"
+                        >
+                          {/* 우상단 북마크 리본 */}
+                          <span
+                            aria-hidden
+                            className="absolute top-0 right-4 w-5 h-6 flex items-start justify-center bg-[#6B7B3A] text-white rounded-b-sm shadow-[0_4px_10px_-4px_rgba(107,123,58,0.6)]"
+                          >
+                            <svg className="w-2.5 h-2.5 mt-1" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M5 3a2 2 0 00-2 2v16l9-4 9 4V5a2 2 0 00-2-2H5z" />
+                            </svg>
+                          </span>
+
+                          <Link
+                            href={`/category/${p.category_id}/post/${p.id}?from=${encodeURIComponent("/my?tab=bookmarks")}`}
+                            className="block px-4 py-3.5 hover:bg-[#FBF7EB]/50 dark:hover:bg-zinc-800/40 transition-colors"
+                          >
+                            {/* 상단: 카테고리 칩 · 날짜 (북마크 리본 공간 확보) */}
+                            <div className="flex items-center justify-between gap-2 mb-2 pr-10">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 text-[11px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] truncate max-w-[60%]">
+                                <span className="w-1 h-1 rounded-full bg-[#6B7B3A] shrink-0" />
+                                <span className="truncate">{p.category_name || "게시판"}</span>
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[11px] text-[#A89B80] dark:text-zinc-500 shrink-0">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                {formatDate(p.created_at)}
+                              </span>
+                            </div>
+
+                            {/* 제목 */}
+                            <p className="text-[14.5px] font-bold tracking-tight leading-snug text-[#2A251D] dark:text-zinc-100 line-clamp-2">
+                              {p.title}
+                            </p>
+
+                            {/* 하단: 작성자 + 화살표 */}
+                            <div className="mt-2.5 flex items-center justify-between gap-2 pt-2 border-t border-[#F0E9D8] dark:border-zinc-800">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  aria-hidden
+                                  className="w-5 h-5 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] shrink-0 border border-[#E8E0D0] dark:border-zinc-700"
+                                >
+                                  {initial}
+                                </span>
+                                <span className="truncate text-[11px] font-medium text-[#6B5D47] dark:text-zinc-400">
+                                  {p.author || "익명"}
+                                </span>
+                              </div>
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#A89B80] group-hover:text-[#6B7B3A] dark:text-zinc-500 transition-colors shrink-0">
+                                열기
+                                <svg className="w-3 h-3 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                </svg>
+                              </span>
+                            </div>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+
+              {activeTab === "jobBookmarks" && (bookmarkJobs.length === 0 ? (
+                <div className="px-4 py-10">
+                  <div className="relative mx-auto max-w-md bg-[#FEFCF7] dark:bg-zinc-900 border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-3xl px-6 py-10 text-center overflow-hidden">
+                    <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/40 to-transparent" />
+                    <div aria-hidden className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-[#6B7B3A]/[0.05] blur-3xl pointer-events-none" />
+                    <div className="relative">
+                      <div className="w-14 h-14 mx-auto rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center mb-4">
+                        <svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <p className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight mb-1">북마크한 구인글이 없습니다</p>
+                      <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">관심 있는 공고를<br />저장해 기회를 놓치지 마세요</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-4 pt-4 pb-6">
+                  {/* 요약 바 */}
+                  <div className="flex items-center justify-between px-1 mb-3">
+                    <div className="inline-flex items-center gap-2">
+                      <span className="w-1 h-3.5 rounded-full bg-[#6B7B3A]" />
+                      <span className="text-[11px] font-bold tracking-[0.15em] text-[#6B7B3A] uppercase">Saved Jobs</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="inline-flex items-center gap-1 text-[#8C8270] dark:text-zinc-500">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#6B7B3A]" />
+                        모집중 <span className="font-bold text-[#6B7B3A]">{bookmarkJobs.filter((j) => !j.is_closed).length}</span>
+                      </span>
+                      <span className="text-[#E8E0D0] dark:text-zinc-700">·</span>
+                      <span className="inline-flex items-center gap-1 text-[#8C8270] dark:text-zinc-500">
+                        종료 <span className="font-bold text-[#8C8270] dark:text-zinc-500">{bookmarkJobs.filter((j) => j.is_closed).length}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <ul className="space-y-3">
+                    {bookmarkJobs.map((job) => {
+                      const isOpen = !job.is_closed;
+                      return (
+                        <li
+                          key={job.id}
+                          className="group relative bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl shadow-[0_1px_0_rgba(0,0,0,0.02),0_10px_28px_-22px_rgba(107,93,71,0.3)] overflow-hidden"
+                        >
+                          {/* 상단 악센트 (모집중일 때만) */}
+                          {isOpen && (
+                            <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/40 to-transparent" />
+                          )}
+
+                          {/* 우상단 북마크 리본 */}
+                          <span
+                            aria-hidden
+                            className="absolute top-0 right-4 w-5 h-6 flex items-start justify-center bg-[#6B7B3A] text-white rounded-b-sm shadow-[0_4px_10px_-4px_rgba(107,123,58,0.6)] z-10"
+                          >
+                            <svg className="w-2.5 h-2.5 mt-1" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M5 3a2 2 0 00-2 2v16l9-4 9 4V5a2 2 0 00-2-2H5z" />
+                            </svg>
+                          </span>
+
+                          <Link
+                            href={`/jobs/${job.id}?from=${encodeURIComponent("/my?tab=jobBookmarks")}`}
+                            className="block px-4 pt-4 pb-3.5 hover:bg-[#FBF7EB]/50 dark:hover:bg-zinc-800/40 transition-colors"
+                          >
+                            {/* 상단 칩 줄 (리본 공간 확보) */}
+                            <div className="flex items-center gap-1.5 mb-2 flex-wrap pr-10">
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide ${
+                                  isOpen
+                                    ? "bg-[#6B7B3A]/10 text-[#6B7B3A]"
+                                    : "bg-[#EFE7D5] dark:bg-zinc-800 text-[#8C8270] dark:text-zinc-500"
+                                }`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${isOpen ? "bg-[#6B7B3A] animate-pulse" : "bg-[#A89B80]"}`} />
+                                {isOpen ? "모집중" : "모집종료"}
+                              </span>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 text-[11px] font-semibold text-[#6B5D47] dark:text-zinc-300">
+                                {job.sport}
+                              </span>
+                              {job.employment_type && (
+                                <span className="hidden sm:inline text-[11px] text-[#A89B80] dark:text-zinc-500">· {job.employment_type}</span>
+                              )}
+                            </div>
+
+                            {/* 제목 */}
+                            <p
+                              className={`text-[15px] font-bold tracking-tight leading-snug line-clamp-2 ${
+                                isOpen
+                                  ? "text-[#2A251D] dark:text-zinc-100"
+                                  : "text-[#8C8270] dark:text-zinc-500"
+                              }`}
+                            >
+                              {job.title}
+                            </p>
+
+                            {/* 메타: 업체 / 지역 */}
+                            <div className="mt-2 flex items-center gap-1.5 text-[12px] text-[#6B5D47] dark:text-zinc-400 min-w-0">
+                              {job.center_name && (
+                                <>
+                                  <svg className="w-3 h-3 text-[#A89B80] shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                  </svg>
+                                  <span className="truncate font-medium">{job.center_name}</span>
+                                  <span className="text-[#D6CCB6] dark:text-zinc-700">·</span>
+                                </>
+                              )}
+                              <svg className="w-3 h-3 text-[#A89B80] shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                              <span className="truncate">{job.region_name}</span>
+                            </div>
+
+                            {/* 하단: 급여 + 열기 */}
+                            <div className="mt-3 flex items-center justify-between gap-2 pt-2.5 border-t border-[#F0E9D8] dark:border-zinc-800">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {job.salary ? (
+                                  <>
+                                    <svg className="w-3 h-3 text-[#6B7B3A] shrink-0" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span className="truncate text-[11px] font-bold text-[#6B7B3A]">{job.salary}</span>
+                                  </>
+                                ) : job.deadline ? (
+                                  <>
+                                    <svg className="w-3 h-3 text-[#A89B80] shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <span className="truncate text-[11px] text-[#8C8270] dark:text-zinc-500">{job.deadline}</span>
+                                  </>
+                                ) : (
+                                  <span className="text-[11px] text-[#A89B80]">급여 정보 없음</span>
+                                )}
+                              </div>
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#A89B80] group-hover:text-[#6B7B3A] dark:text-zinc-500 transition-colors shrink-0">
+                                열기
+                                <svg className="w-3 h-3 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                </svg>
+                              </span>
+                            </div>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+
+              {activeTab === "notifications" && (notifications.length === 0 ? (
+                <div className="px-4 py-10">
+                  <div className="relative mx-auto max-w-md bg-[#FEFCF7] dark:bg-zinc-900 border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-3xl px-6 py-10 text-center overflow-hidden">
+                    <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/40 to-transparent" />
+                    <div aria-hidden className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-[#6B7B3A]/[0.05] blur-3xl pointer-events-none" />
+                    <div className="relative">
+                      <div className="w-14 h-14 mx-auto rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center mb-4">
+                        <svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                      </div>
+                      <p className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight mb-1">받은 알림이 없습니다</p>
+                      <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">중요한 소식이 도착하면<br />여기에서 바로 확인할 수 있어요</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-4 pt-4 pb-6">
+                  {/* 요약 바 */}
+                  <div className="flex items-center justify-between px-1 mb-3">
+                    <div className="inline-flex items-center gap-2">
+                      <span className="w-1 h-3.5 rounded-full bg-[#6B7B3A]" />
+                      <span className="text-[11px] font-bold tracking-[0.15em] text-[#6B7B3A] uppercase">Updates</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="inline-flex items-center gap-1 text-[#8C8270] dark:text-zinc-500">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#6B7B3A]" />
+                        새 알림 <span className="font-bold text-[#6B7B3A]">{notifications.filter((n) => !n.is_read).length}</span>
+                      </span>
+                      <span className="text-[#E8E0D0] dark:text-zinc-700">·</span>
+                      <span className="inline-flex items-center gap-1 text-[#8C8270] dark:text-zinc-500">
+                        전체 <span className="font-bold text-[#8C8270] dark:text-zinc-500">{notifications.length}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <ul className="space-y-2.5">
+                    {notifications.map((n) => {
+                      const isUnread = !n.is_read;
+                      const typeLabel = n.broadcast_type === "event" ? "이벤트" : n.broadcast_type === "ad" ? "광고" : "공지";
+                      const badgeCls =
+                        n.broadcast_type === "event"
+                          ? "bg-[#6B7B3A] text-white border border-[#6B7B3A]"
+                          : n.broadcast_type === "ad"
+                          ? "bg-[#F5E9C8] text-[#8A6D1E] dark:bg-[#3A2E15] dark:text-[#D4B05A] border border-[#E9C767]/50"
+                          : "bg-[#FBF7EB] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-300 border border-[#E8E0D0] dark:border-zinc-700";
+                      return (
+                        <li
+                          key={n.id}
+                          ref={(el) => {
+                            if (el && highlightId === n.id) {
+                              el.scrollIntoView({ behavior: "smooth", block: "center" });
+                            }
+                          }}
+                          className={`relative rounded-2xl overflow-hidden transition-colors ${
+                            isUnread
+                              ? "bg-[#FBF7EB] dark:bg-zinc-900/70 border border-[#6B7B3A]/35 shadow-[0_1px_0_rgba(0,0,0,0.02),0_10px_26px_-22px_rgba(107,123,58,0.4)]"
+                              : "bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
+                          } ${highlightId === n.id ? "noti-blink" : ""}`}
+                        >
+                          <div className="flex items-stretch">
+                            {/* 읽지 않음 악센트 바 */}
+                            <span
+                              aria-hidden
+                              className={`w-[3px] shrink-0 ${
+                                isUnread
+                                  ? "bg-gradient-to-b from-[#6B7B3A] via-[#6B7B3A]/60 to-[#6B7B3A]/15"
+                                  : "bg-transparent"
+                              }`}
+                            />
+                            <div className="flex-1 min-w-0 px-4 py-3.5">
+                              {/* 상단: 타입 배지 · NEW · 시간 */}
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide ${badgeCls}`}>
+                                  {typeLabel}
+                                </span>
+                                {isUnread && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#6B7B3A]/10 text-[#6B7B3A] text-[10px] font-bold tracking-wider">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#6B7B3A] animate-pulse" />
+                                    NEW
+                                  </span>
+                                )}
+                                <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-[#A89B80] dark:text-zinc-500">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  {formatDate(n.created_at)}
+                                </span>
+                              </div>
+
+                              {/* 제목 */}
+                              <p
+                                className={`text-[14px] leading-snug tracking-tight mb-1 ${
+                                  isUnread
+                                    ? "font-bold text-[#2A251D] dark:text-zinc-100"
+                                    : "font-semibold text-[#6B5D47] dark:text-zinc-300"
+                                }`}
+                              >
+                                {n.title}
+                              </p>
+
+                              {/* 본문 */}
+                              <p className="text-[12.5px] leading-relaxed text-[#6B5D47] dark:text-zinc-400 whitespace-pre-line">
+                                {n.body}
+                              </p>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+              <style jsx global>{`
+                @property --noti-angle {
+                  syntax: "<angle>";
+                  initial-value: 0deg;
+                  inherits: false;
+                }
+                @keyframes noti-chase-spin {
+                  to { --noti-angle: 360deg; }
+                }
+                @keyframes noti-chase-fade {
+                  0%, 90% { opacity: 1; }
+                  100% { opacity: 0; }
+                }
+                .noti-blink {
+                  position: relative;
+                  isolation: isolate;
+                }
+                .noti-blink::before {
+                  content: "";
+                  position: absolute;
+                  inset: 0;
+                  border-radius: inherit;
+                  padding: 3px;
+                  background: conic-gradient(
+                    from var(--noti-angle, 0deg),
+                    rgba(107, 123, 58, 0) 0deg,
+                    rgba(107, 123, 58, 0.9) 60deg,
+                    rgba(107, 123, 58, 0) 120deg,
+                    rgba(107, 123, 58, 0) 360deg
+                  );
+                  -webkit-mask:
+                    linear-gradient(#000 0 0) content-box,
+                    linear-gradient(#000 0 0);
+                  -webkit-mask-composite: xor;
+                  mask:
+                    linear-gradient(#000 0 0) content-box,
+                    linear-gradient(#000 0 0);
+                  mask-composite: exclude;
+                  animation:
+                    noti-chase-spin 1.6s linear,
+                    noti-chase-fade 1.8s ease-out forwards;
+                  pointer-events: none;
+                  z-index: 1;
+                }
+              `}</style>
             </div>
           )}
         </div>
@@ -523,11 +1265,12 @@ export default function MyPage() {
 
         {/* ── 2. 내 활동 카드 ── */}
         <Card title="내 활동">
-          <CardRow label="내가 쓴 글" count={counts.posts} onClick={() => setActiveTab("posts")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} />
-          <CardRow label="내가 쓴 댓글" count={counts.comments} onClick={() => setActiveTab("comments")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>} />
-          <CardRow label="후기 북마크" count={counts.bookmarks} onClick={() => setActiveTab("bookmarks")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>} />
-          <CardRow label="내가 등록한 구인글" count={counts.jobs} onClick={() => setActiveTab("jobs")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} />
-          <CardRow label="구인 북마크" count={counts.jobBookmarks} onClick={() => setActiveTab("jobBookmarks")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>} />
+          <CardRow label="내가 쓴 글" count={counts.posts} onClick={() => router.push("/my?tab=posts")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} />
+          <CardRow label="내가 쓴 댓글" count={counts.comments} onClick={() => router.push("/my?tab=comments")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>} />
+          <CardRow label="후기 북마크" count={counts.bookmarks} onClick={() => router.push("/my?tab=bookmarks")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>} />
+          <CardRow label="내가 등록한 구인글" count={counts.jobs} onClick={() => router.push("/my?tab=jobs")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} />
+          <CardRow label="구인 북마크" count={counts.jobBookmarks} onClick={() => router.push("/my?tab=jobBookmarks")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>} />
+          <CardRow label="알림" count={counts.notifications} onClick={() => router.push("/my?tab=notifications")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>} />
         </Card>
 
         {/* ── 3. 설정 카드 ── */}

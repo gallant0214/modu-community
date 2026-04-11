@@ -181,6 +181,18 @@ summary {
 .lp-badge-sub{display:block;font-size:10px;opacity:.7;letter-spacing:.3px}
 .lp-badge-main{display:block;font-size:16px;font-weight:700;letter-spacing:-.2px}
 
+/* Nav 모바일 메뉴 애니메이션 */
+@keyframes navFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes navSlideDown {
+  from { opacity: 0; transform: translateY(-8px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-fade-in { animation: navFadeIn 180ms ease-out; }
+.animate-slide-down { animation: navSlideDown 220ms cubic-bezier(0.16, 1, 0.3, 1); }
+
 /* Dark footer */
 .lp-footer-dark{background:#2F2A24;padding:24px 0}
 .lp-footer-inner{display:flex;align-items:center;justify-content:space-between}

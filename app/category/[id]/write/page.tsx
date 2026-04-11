@@ -6,11 +6,7 @@ import Link from "next/link";
 import { createPost } from "@/app/lib/actions";
 import { LoginRequired } from "@/app/components/login-required";
 import { useAuth } from "@/app/components/auth-provider";
-
-const regions = [
-  "서울", "세종", "부산", "인천", "대전", "대구", "광주", "울산",
-  "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
-];
+import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 
 const examTypes = ["기타", "실기", "구술"];
 
@@ -22,6 +18,34 @@ export default function WritePage() {
   );
 }
 
+/* ── 섹션 카드 ── */
+function Section({ number, title, subtitle, children }: { number: number; title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <section className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-5 sm:p-6 shadow-[0_1px_0_rgba(0,0,0,0.02)]">
+      <div className="flex items-start gap-3 mb-5">
+        <span className="shrink-0 w-7 h-7 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 text-[#6B7B3A] dark:text-[#A8B87A] text-[12px] font-bold flex items-center justify-center">
+          {number.toString().padStart(2, "0")}
+        </span>
+        <div className="flex-1 min-w-0 pt-0.5">
+          <h2 className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">{title}</h2>
+          {subtitle && <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 mt-0.5">{subtitle}</p>}
+        </div>
+      </div>
+      <div className="space-y-5">{children}</div>
+    </section>
+  );
+}
+
+/* ── 필드 라벨 ── */
+function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <label className="mb-1.5 block text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400 tracking-wide">
+      {children}
+      {required && <span className="text-[#C0392B] ml-0.5">*</span>}
+    </label>
+  );
+}
+
 function WritePageContent() {
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
@@ -30,12 +54,30 @@ function WritePageContent() {
   const { user, nickname } = useAuth();
 
   const [selectedExamType, setSelectedExamType] = useState("기타");
-  const [showTagModal, setShowTagModal] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingData, setPendingData] = useState<FormData | null>(null);
   const [titleError, setTitleError] = useState(false);
   const [contentError, setContentError] = useState(false);
   const [regionError, setRegionError] = useState(false);
+
+  /* 지역 선택 (2단계 바텀시트) */
+  const [regionGroupName, setRegionGroupName] = useState("");
+  const [regionSubName, setRegionSubName] = useState("");
+  const [showRegion, setShowRegion] = useState(false);
+  const [regionStep, setRegionStep] = useState<"group" | "sub">("group");
+  const [selectedGroup, setSelectedGroup] = useState<RegionGroup | null>(null);
+
+  // region 필드에 저장될 값: "경북 - 구미시" 형태
+  const regionDisplay = regionGroupName && regionSubName
+    ? `${regionGroupName} - ${regionSubName}`
+    : "";
+
+  const handleRegionSelect = (groupName: string, subName: string) => {
+    setRegionGroupName(groupName);
+    setRegionSubName(subName);
+    setRegionError(false);
+    setShowRegion(false);
+  };
 
   async function handleSubmit(formData: FormData) {
     const title = (formData.get("title") as string)?.trim() ?? "";
@@ -73,208 +115,280 @@ function WritePageContent() {
     router.push(`/category/${categoryId}`);
   }
 
+  const inputBase = "w-full rounded-xl border bg-[#FBF7EB] dark:bg-zinc-800 px-4 py-3 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none transition-colors";
+
   return (
-    <div className="flex min-h-screen flex-col bg-white dark:bg-zinc-950">
-      <div className="mx-auto flex w-full max-w-lg flex-1 flex-col md:max-w-3xl lg:max-w-4xl">
-        {/* Header */}
-        <header className="flex items-center gap-3 border-b border-zinc-200 px-4 py-3 md:px-6 md:py-4 dark:border-zinc-800">
-          <Link
-            href={`/category/${categoryId}`}
-            className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </Link>
-          <h1 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-            글쓰기
-          </h1>
+    <div className="flex min-h-screen flex-col bg-[#F8F4EC] dark:bg-zinc-950 pb-10">
+      <div className="mx-auto w-full max-w-lg md:max-w-3xl lg:max-w-4xl">
+        {/* 헤더 바 */}
+        <header className="sticky top-14 z-30 bg-[#F8F4EC]/85 dark:bg-zinc-950/85 backdrop-blur-md border-b border-[#E8E0D0]/70 dark:border-zinc-800">
+          <div className="flex items-center gap-2 px-4 sm:px-6 py-3">
+            <Link
+              href={`/category/${categoryId}`}
+              className="inline-flex items-center gap-1.5 -ml-1 px-1 py-0.5 rounded-lg text-[#6B7B3A] hover:bg-[#F5F0E5]/60 dark:hover:bg-zinc-800 transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              <span className="text-[11px] font-bold tracking-[0.15em] uppercase">Back to Board</span>
+            </Link>
+          </div>
         </header>
 
-        <form ref={formRef} onSubmit={(e) => { e.preventDefault(); handleSubmit(new FormData(formRef.current!)); }} className="flex flex-col">
+        <form
+          ref={formRef}
+          onSubmit={(e) => { e.preventDefault(); handleSubmit(new FormData(formRef.current!)); }}
+          className="flex flex-col px-4 sm:px-6 py-6 space-y-5"
+        >
           <input type="hidden" name="category_id" value={categoryId} />
           <input type="hidden" name="tags" value={selectedExamType} />
 
-          <div className="space-y-6 px-4 py-5 md:px-6 md:py-8">
-            {/* 1. 작성자 (닉네임 자동 표시, 읽기 전용) */}
+          {/* 히어로 인트로 */}
+          <section className="relative bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-6 sm:p-8 overflow-hidden shadow-[0_1px_0_rgba(0,0,0,0.02),0_12px_32px_-20px_rgba(107,93,71,0.2)]">
+            <div aria-hidden className="absolute -top-20 -right-16 w-56 h-56 rounded-full bg-[#6B7B3A]/[0.06] blur-3xl pointer-events-none" />
+            <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/30 to-transparent" />
+
+            <div className="relative">
+              <div className="inline-flex items-center gap-2 mb-3">
+                <span className="w-6 h-px bg-[#6B7B3A]" />
+                <span className="text-[11px] font-bold tracking-[0.15em] text-[#6B7B3A] uppercase">Share Your Experience</span>
+              </div>
+              <h1 className="text-[22px] sm:text-[26px] font-bold text-[#2A251D] dark:text-zinc-100 leading-tight tracking-tight mb-2">
+                나의 경험을 후기로 남겨보세요
+              </h1>
+              <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed max-w-md">
+                시험장 분위기, 실기 동작, 구술 질문 등 작은 경험이 다음 수험생에게 큰 도움이 됩니다.
+              </p>
+            </div>
+          </section>
+
+          {/* ─── 섹션 1: 기본 정보 ─── */}
+          <Section number={1} title="기본 정보" subtitle="작성자와 지역을 확인해 주세요">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                작성자
-              </label>
-              <div className="w-full rounded-xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100">
+              <FieldLabel>작성자</FieldLabel>
+              <div className="w-full rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/70 dark:bg-zinc-800 px-4 py-3 text-[14px] text-[#3A342A] dark:text-zinc-100 font-medium">
                 {nickname || (
-                  <span className="text-zinc-400">닉네임을 설정해주세요</span>
+                  <span className="text-[#A89B80]">닉네임을 설정해주세요</span>
                 )}
               </div>
             </div>
 
-            {/* 2. 지역 선택 */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                지역 선택 <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <select
-                  name="region"
-                  defaultValue=""
-                  required
-                  onChange={() => regionError && setRegionError(false)}
-                  className={`w-full appearance-none rounded-xl border bg-zinc-50 px-4 py-3 pr-10 text-sm text-zinc-900 focus:outline-none dark:bg-zinc-900 dark:text-zinc-100 ${
-                    regionError
-                      ? "border-red-400 text-red-400 focus:border-red-400"
-                      : "border-zinc-200 focus:border-blue-400 dark:border-zinc-700"
-                  }`}
-                >
-                  <option value="" disabled>지역을 선택하세요</option>
-                  {regions.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-                <svg className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-
-            {/* 3. 태그 (모달 방식) */}
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                태그 <span className="text-red-500">*</span>
-              </label>
+              <FieldLabel required>지역 선택</FieldLabel>
+              <input type="hidden" name="region" value={regionDisplay} />
               <button
                 type="button"
-                onClick={() => setShowTagModal(true)}
-                className="w-full flex items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                onClick={() => { setShowRegion(true); setRegionStep("group"); }}
+                className={`w-full flex items-center justify-between rounded-xl border bg-[#FBF7EB] dark:bg-zinc-800 px-4 py-3 text-[14px] text-left transition-colors ${
+                  regionError
+                    ? "border-[#C0392B]"
+                    : regionDisplay
+                      ? "border-[#6B7B3A]/40 text-[#2A251D] dark:text-zinc-100 font-medium hover:border-[#6B7B3A]/50"
+                      : "border-[#E8E0D0] dark:border-zinc-700 text-[#A89B80] hover:border-[#6B7B3A]/50"
+                }`}
               >
-                <span>{selectedExamType}</span>
-                <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <span className="inline-flex items-center gap-2 truncate">
+                  <svg className={`w-4 h-4 shrink-0 ${regionDisplay ? "text-[#6B7B3A]" : "text-[#A89B80]"}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  </svg>
+                  {regionDisplay || "지역을 선택하세요 (필수)"}
+                </span>
+                <svg className="w-4 h-4 text-[#A89B80] shrink-0 ml-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
             </div>
+          </Section>
 
-            {/* 4. 제목 */}
+          {/* ─── 섹션 2: 후기 분류 ─── */}
+          <Section number={2} title="후기 분류" subtitle="어떤 유형의 후기인지 선택해 주세요">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                제목 <span className="text-red-500">*</span>
-              </label>
+              <FieldLabel required>태그</FieldLabel>
+              <div className="grid grid-cols-3 gap-2">
+                {examTypes.map((type) => {
+                  const isActive = selectedExamType === type;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setSelectedExamType(type)}
+                      className={`rounded-2xl py-3.5 text-[13px] font-bold transition-all ${
+                        isActive
+                          ? "bg-[#6B7B3A] text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)]"
+                          : "border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-300 hover:border-[#6B7B3A]/40 hover:bg-[#F5F0E5]"
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </Section>
+
+          {/* ─── 섹션 3: 후기 내용 ─── */}
+          <Section number={3} title="후기 내용" subtitle="생생하고 구체적인 경험일수록 더 큰 도움이 됩니다">
+            <div>
+              <FieldLabel required>제목</FieldLabel>
               <input
                 name="title"
                 required
-                placeholder="제목을 입력하세요"
+                placeholder="예) 2026 서울 실기시험 - 종목별 준비 과정 후기"
                 onChange={() => titleError && setTitleError(false)}
-                className={`w-full rounded-xl border bg-zinc-50 px-4 py-3 text-sm text-zinc-900 focus:outline-none dark:bg-zinc-900 dark:text-zinc-100 ${
+                className={`${inputBase} ${
                   titleError
-                    ? "border-red-400 placeholder:text-red-400 focus:border-red-400"
-                    : "border-zinc-200 placeholder:text-zinc-400 focus:border-blue-400 dark:border-zinc-700"
+                    ? "border-[#C0392B] placeholder:text-[#C0392B]/60 focus:border-[#C0392B]"
+                    : "border-[#E8E0D0] dark:border-zinc-700 placeholder:text-[#A89B80] focus:border-[#6B7B3A]/50 focus:bg-[#FEFCF7] dark:focus:bg-zinc-900"
                 }`}
               />
             </div>
 
-            {/* 5. 내용 */}
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                내용 <span className="text-red-500">*</span>
-              </label>
+              <FieldLabel required>내용</FieldLabel>
               <textarea
                 name="content"
                 required
-                placeholder="시험장의 분위기, 실기 동작, 구술 질문 등 구체적인 경험을 공유해주세요. 다른 수험생들에게 큰 도움이 됩니다."
-                rows={8}
-                style={{ minHeight: 200 }}
+                placeholder={"시험장에서 어떤 일이 있었나요?\n\n• 시험장 분위기는 어땠나요?\n• 실기 동작에서 주의할 점은?\n• 구술 시험에서 어떤 질문이 나왔나요?\n• 다음 수험생에게 해주고 싶은 조언"}
+                rows={10}
+                style={{ minHeight: 240 }}
                 onChange={() => contentError && setContentError(false)}
-                className={`w-full resize-none rounded-xl border bg-zinc-50 px-4 py-3 text-sm leading-relaxed text-zinc-900 focus:outline-none dark:bg-zinc-900 dark:text-zinc-100 ${
+                className={`${inputBase} resize-none leading-[1.8] ${
                   contentError
-                    ? "border-red-400 placeholder:text-red-400 focus:border-red-400"
-                    : "border-zinc-200 placeholder:text-zinc-400 focus:border-blue-400 dark:border-zinc-700"
+                    ? "border-[#C0392B] placeholder:text-[#C0392B]/60 focus:border-[#C0392B]"
+                    : "border-[#E8E0D0] dark:border-zinc-700 placeholder:text-[#A89B80] focus:border-[#6B7B3A]/50 focus:bg-[#FEFCF7] dark:focus:bg-zinc-900"
                 }`}
               />
+              <p className="mt-2 text-[11px] text-[#A89B80] px-0.5">
+                ℹ️ 욕설·비방·광고·개인정보가 포함된 글은 삭제될 수 있습니다.
+              </p>
             </div>
-          </div>
+          </Section>
 
-          {/* 6. 취소 / 등록 */}
-          <div className="flex gap-3 px-4 py-4 md:px-6">
+          {/* ─── 취소 / 등록 CTA ─── */}
+          <div className="flex gap-2.5 pt-1">
             <Link
               href={`/category/${categoryId}`}
-              className="flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              className="flex flex-1 items-center justify-center rounded-2xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 py-3.5 text-[14px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
             >
               취소
             </Link>
             <button
               type="submit"
-              className="flex flex-1 items-center justify-center rounded-xl bg-blue-500 py-3 text-sm font-semibold text-white hover:bg-blue-600"
+              className="flex flex-[2] items-center justify-center gap-2 rounded-2xl bg-[#6B7B3A] hover:bg-[#5A6930] py-3.5 text-[14px] font-bold text-white shadow-[0_8px_24px_-8px_rgba(107,123,58,0.5)] hover:-translate-y-0.5 transition-all"
             >
-              등록
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
+              </svg>
+              후기 등록하기
             </button>
           </div>
         </form>
 
-        {/* 태그 선택 모달 */}
-        {showTagModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
-            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
-              <h3 className="mb-4 text-center text-base font-bold text-zinc-900 dark:text-zinc-100">
-                태그 선택
-              </h3>
-              <div className="flex gap-2">
-                {examTypes.map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => { setSelectedExamType(type); setShowTagModal(false); }}
-                    className={`flex-1 rounded-xl py-3 text-sm font-semibold transition-colors ${
-                      selectedExamType === type
-                        ? "bg-blue-500 text-white"
-                        : "border border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-                    }`}
-                  >
-                    {type}
-                  </button>
-                ))}
+        {/* 지역 선택 바텀시트 */}
+        {showRegion && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <div className="absolute inset-0 bg-[#2A251D]/50 backdrop-blur-sm" onClick={() => setShowRegion(false)} />
+            <div className="relative w-full max-w-sm bg-[#FEFCF7] dark:bg-zinc-900 rounded-3xl shadow-2xl border border-[#E8E0D0] dark:border-zinc-700 max-h-[80vh] flex flex-col overflow-hidden">
+              <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/40 to-transparent" />
+              {/* 헤더 */}
+              <div className="px-5 pt-6 pb-4 text-center shrink-0">
+                <h3 className="text-base font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
+                  {regionStep === "group" ? "지역 선택" : selectedGroup?.name || ""}
+                </h3>
+                <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 mt-1.5">
+                  {regionStep === "group" ? "광역시·도를 먼저 선택해 주세요" : "세부 지역을 선택해 주세요"}
+                </p>
               </div>
-              <button
-                onClick={() => setShowTagModal(false)}
-                className="mt-3 w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-sm text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
-              >
-                닫기
-              </button>
+
+              {/* 콘텐츠 */}
+              <div className="flex-1 overflow-y-auto">
+                {regionStep === "group" ? (
+                  <div>
+                    {REGION_GROUPS.map((g) => (
+                      <button
+                        key={g.code}
+                        type="button"
+                        onClick={() => { setSelectedGroup(g); setRegionStep("sub"); }}
+                        className="w-full flex items-center justify-between px-5 py-4 text-[14px] text-[#3A342A] dark:text-zinc-100 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/60 dark:border-zinc-800 last:border-0 transition-colors"
+                      >
+                        <span>{g.name}</span>
+                        <svg className="w-4 h-4 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setRegionStep("group")}
+                      className="w-full flex items-center gap-1 px-5 py-3 text-[13px] text-[#8C8270] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/60 dark:border-zinc-800 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                      </svg>
+                      뒤로
+                    </button>
+                    {selectedGroup?.subRegions.map((s) => {
+                      const isActive = regionGroupName === selectedGroup.name && regionSubName === s.name;
+                      return (
+                        <button
+                          key={s.code}
+                          type="button"
+                          onClick={() => handleRegionSelect(selectedGroup.name, s.name)}
+                          className={`w-full text-left px-5 py-4 text-[14px] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/60 dark:border-zinc-800 last:border-0 transition-colors ${
+                            isActive ? "text-[#6B7B3A] dark:text-[#A8B87A] font-semibold bg-[#F5F0E5]/50" : "text-[#3A342A] dark:text-zinc-100"
+                          }`}
+                        >
+                          {s.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
 
         {/* 등록 확인 모달 */}
         {showConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
-            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
-              <h3 className="mb-4 flex items-center gap-2 text-base font-bold text-zinc-900 dark:text-zinc-100">
-                <span className="text-xl">⚠️</span> 등록 시 주의사항
-              </h3>
-              <div className="mb-6 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                <p className="flex gap-1">
-                  <span>•</span>
-                  <span>
-                    욕설, 비방, 광고, 불법 행위 등
-                    <br />
-                    &apos;모두의지도사 서비스 이용약관에
-                    <br />
-                    위배되는 내용&apos; 작성 시 게시글 작성이
-                    <br />
-                    영구적으로 금지될 수 있습니다.
-                  </span>
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowConfirm(false)}
-                  className="flex flex-1 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 py-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                >
-                  취소
-                </button>
-                <button
-                  onClick={handleConfirm}
-                  className="flex flex-1 items-center justify-center rounded-xl bg-blue-500 py-3 text-sm font-semibold text-white hover:bg-blue-600"
-                >
-                  확인
-                </button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <div className="absolute inset-0 bg-[#2A251D]/50 backdrop-blur-sm" onClick={() => setShowConfirm(false)} />
+            <div className="relative w-full max-w-sm bg-[#FEFCF7] dark:bg-zinc-900 rounded-3xl shadow-2xl border border-[#E8E0D0] dark:border-zinc-700 p-6 overflow-hidden">
+              <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/40 to-transparent" />
+              <div className="relative">
+                <div className="flex justify-center mb-3">
+                  <div className="w-14 h-14 rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
+                    <svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                </div>
+                <h3 className="mb-2 text-center text-base font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
+                  등록 전 한 번만 확인해 주세요
+                </h3>
+                <div className="mb-5 p-4 bg-[#FBF7EB] dark:bg-zinc-800/60 border border-[#E8E0D0]/70 dark:border-zinc-700 rounded-2xl">
+                  <p className="text-[13px] text-[#3A342A] dark:text-zinc-300 leading-relaxed">
+                    욕설, 비방, 광고, 불법 행위 등 <span className="font-semibold">서비스 이용약관에 위배되는 내용</span> 작성 시 게시글 작성이 영구적으로 금지될 수 있습니다.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowConfirm(false)}
+                    className="flex flex-1 items-center justify-center rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 py-3 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleConfirm}
+                    className="flex flex-1 items-center justify-center rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] transition-colors"
+                  >
+                    후기 등록
+                  </button>
+                </div>
               </div>
             </div>
           </div>

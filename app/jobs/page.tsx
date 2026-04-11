@@ -87,12 +87,18 @@ function getRecruitStatus(job: JobPost): RecruitStatus {
   return "open";
 }
 
-const STATUS_CONFIG: Record<RecruitStatus, { label: string; bg: string; text: string }> = {
-  open: { label: "모집중", bg: "bg-emerald-50 dark:bg-emerald-950", text: "text-emerald-600 dark:text-emerald-400" },
-  urgent: { label: "마감임박", bg: "bg-amber-50 dark:bg-amber-950", text: "text-amber-600 dark:text-amber-400" },
-  always: { label: "상시모집", bg: "bg-blue-50 dark:bg-blue-950", text: "text-blue-600 dark:text-blue-400" },
-  closed: { label: "모집종료", bg: "bg-zinc-100 dark:bg-zinc-800", text: "text-zinc-400 dark:text-zinc-500" },
+const STATUS_CONFIG: Record<RecruitStatus, { label: string; bg: string; text: string; dot: string }> = {
+  open: { label: "모집중", bg: "bg-[#EFE7D5] dark:bg-[#6B7B3A]/20", text: "text-[#6B7B3A] dark:text-[#A8B87A]", dot: "bg-[#6B7B3A]" },
+  urgent: { label: "마감임박", bg: "bg-[#F5E4C8] dark:bg-amber-950/40", text: "text-[#B47B2A] dark:text-amber-300", dot: "bg-[#B47B2A]" },
+  always: { label: "상시모집", bg: "bg-[#EFE7D5] dark:bg-[#6B7B3A]/15", text: "text-[#6B7B3A] dark:text-[#A8B87A]", dot: "bg-[#6B7B3A]" },
+  closed: { label: "모집종료", bg: "bg-[#F5F0E5] dark:bg-zinc-800", text: "text-[#A89B80] dark:text-zinc-500", dot: "bg-[#A89B80]" },
 };
+
+/* 급여 문자열 내 숫자 그룹에 천 단위 쉼표 삽입 (4자리 이상만 포맷) */
+function formatSalaryDisplay(salary?: string) {
+  if (!salary) return "";
+  return salary.replace(/\d{4,}/g, (match) => Number(match.replace(/,/g, "")).toLocaleString());
+}
 
 /* ── 공고 카드 컴포넌트 ── */
 function JobCard({ job }: { job: JobPost }) {
@@ -104,58 +110,78 @@ function JobCard({ job }: { job: JobPost }) {
   return (
     <Link
       href={`/jobs/${job.id}`}
-      className={`block border rounded-xl p-4 sm:p-5 transition-all hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800 hover:-translate-y-0.5 ${
+      className={`group relative block border rounded-2xl p-5 sm:p-6 transition-all duration-200 hover:-translate-y-0.5 ${
         isClosed
-          ? "border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 opacity-60"
-          : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
+          ? "border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB]/60 dark:bg-zinc-900/50 opacity-70"
+          : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/40 hover:shadow-[0_8px_24px_-12px_rgba(107,93,71,0.2)]"
       }`}
     >
-      <div className="flex items-center gap-1.5 mb-2.5">
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold ${cfg.bg} ${cfg.text}`}>
+      {/* 상태 + 스포츠 뱃지 */}
+      <div className="flex items-center gap-1.5 mb-3">
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}>
+          <span className={`w-1 h-1 rounded-full ${cfg.dot} ${status === "open" && !isClosed ? "animate-pulse" : ""}`} />
           {cfg.label}
         </span>
-        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400">
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#F5F0E5] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-400 border border-[#E8E0D0]/70 dark:border-zinc-700">
           {job.sport}
         </span>
         {dday && !isClosed && (
-          <span className={`ml-auto text-[11px] font-medium ${dday.urgent ? "text-amber-600 dark:text-amber-400" : "text-zinc-400"}`}>
+          <span className={`ml-auto text-[11px] font-semibold ${dday.urgent ? "text-[#B47B2A] dark:text-amber-300" : "text-[#A89B80] dark:text-zinc-500"}`}>
             {dday.label}
           </span>
         )}
       </div>
-      <h3 className={`text-[15px] font-bold leading-snug mb-2 line-clamp-2 ${
-        isClosed ? "text-zinc-400 dark:text-zinc-500 line-through" : "text-zinc-900 dark:text-zinc-100"
+
+      {/* 제목 */}
+      <h3 className={`text-[16px] font-bold leading-snug mb-3 line-clamp-2 tracking-tight ${
+        isClosed ? "text-[#A89B80] dark:text-zinc-500 line-through" : "text-[#2A251D] dark:text-zinc-100"
       }`}>
         {job.title}
       </h3>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2 text-sm">
-        <span className={`flex items-center gap-1 font-medium ${isClosed ? "text-zinc-400" : "text-zinc-800 dark:text-zinc-200"}`}>
-          <svg className="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          {job.salary || "급여 협의"}
+
+      {/* 급여 하이라이트 */}
+      <div className={`inline-flex items-center gap-1.5 mb-3 ${isClosed ? "opacity-50" : ""}`}>
+        <svg className={`w-3.5 h-3.5 ${isClosed ? "text-[#A89B80]" : "text-[#6B7B3A]"}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span className={`text-[14px] font-semibold tracking-tight ${isClosed ? "text-[#A89B80]" : "text-[#3A342A] dark:text-zinc-100"}`}>
+          {job.salary ? formatSalaryDisplay(job.salary) : "급여 협의"}
         </span>
         {job.employment_type && (
-          <span className={`flex items-center gap-1 ${isClosed ? "text-zinc-400" : "text-zinc-600 dark:text-zinc-400"}`}>
-            <svg className="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            {job.employment_type}
-          </span>
+          <span className="text-[12px] text-[#8C8270] dark:text-zinc-500 ml-1">· {job.employment_type}</span>
         )}
       </div>
-      {job.region_name && (
-        <div className="flex items-center gap-1 mb-2.5 text-sm text-zinc-500 dark:text-zinc-400">
-          <svg className="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+
+      {/* 지역 + 센터 */}
+      <div className="flex flex-col gap-1 mb-4">
+        {job.region_name && (
+          <div className="flex items-center gap-1.5 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+            <svg className="w-3.5 h-3.5 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            <span className="truncate">{job.region_name}</span>
+          </div>
+        )}
+        {job.center_name && (
+          <div className="flex items-center gap-1.5 text-[13px] text-[#8C8270] dark:text-zinc-500">
+            <svg className="w-3.5 h-3.5 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+            </svg>
+            <span className="truncate">{job.center_name}</span>
+          </div>
+        )}
+      </div>
+
+      {/* 메타 */}
+      <div className="flex items-center justify-between pt-3 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+        <span className="text-[11px] text-[#A89B80] dark:text-zinc-500 font-medium">{relativeTime(job.created_at)}</span>
+        <span className="inline-flex items-center gap-1 text-[11px] text-[#A89B80] dark:text-zinc-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+          자세히 보기
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
           </svg>
-          {job.region_name}
-        </div>
-      )}
-      <div className="flex items-center justify-between pt-2.5 border-t border-zinc-100 dark:border-zinc-800">
-        <span className="text-xs text-zinc-400 truncate max-w-[60%]">{job.center_name || "등록자"}</span>
-        <span className="text-xs text-zinc-400">{relativeTime(job.created_at)}</span>
+        </span>
       </div>
     </Link>
   );
@@ -164,20 +190,18 @@ function JobCard({ job }: { job: JobPost }) {
 /* ── 카드 스켈레톤 ── */
 function CardSkeleton() {
   return (
-    <div className="border border-zinc-200 dark:border-zinc-700 rounded-xl p-4 sm:p-5 animate-pulse">
-      <div className="flex gap-1.5 mb-2.5">
-        <div className="h-5 w-14 bg-zinc-100 dark:bg-zinc-800 rounded-md" />
-        <div className="h-5 w-12 bg-zinc-100 dark:bg-zinc-800 rounded" />
+    <div className="border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 rounded-2xl p-5 sm:p-6 animate-pulse">
+      <div className="flex gap-1.5 mb-3">
+        <div className="h-5 w-14 bg-[#F5F0E5] dark:bg-zinc-800 rounded-full" />
+        <div className="h-5 w-12 bg-[#F5F0E5] dark:bg-zinc-800 rounded" />
       </div>
-      <div className="h-5 w-3/4 bg-zinc-100 dark:bg-zinc-800 rounded mb-2" />
-      <div className="flex gap-3 mb-2">
-        <div className="h-4 w-24 bg-zinc-100 dark:bg-zinc-800 rounded" />
-        <div className="h-4 w-16 bg-zinc-100 dark:bg-zinc-800 rounded" />
-      </div>
-      <div className="h-4 w-28 bg-zinc-100 dark:bg-zinc-800 rounded mb-2.5" />
-      <div className="flex justify-between pt-2.5 border-t border-zinc-100 dark:border-zinc-800">
-        <div className="h-3 w-20 bg-zinc-100 dark:bg-zinc-800 rounded" />
-        <div className="h-3 w-12 bg-zinc-100 dark:bg-zinc-800 rounded" />
+      <div className="h-5 w-3/4 bg-[#F5F0E5] dark:bg-zinc-800 rounded mb-3" />
+      <div className="h-4 w-32 bg-[#F5F0E5] dark:bg-zinc-800 rounded mb-3" />
+      <div className="h-3 w-24 bg-[#F5F0E5] dark:bg-zinc-800 rounded mb-2" />
+      <div className="h-3 w-28 bg-[#F5F0E5] dark:bg-zinc-800 rounded mb-4" />
+      <div className="flex justify-between pt-3 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+        <div className="h-3 w-20 bg-[#F5F0E5] dark:bg-zinc-800 rounded" />
+        <div className="h-3 w-12 bg-[#F5F0E5] dark:bg-zinc-800 rounded" />
       </div>
     </div>
   );
@@ -200,16 +224,16 @@ function BottomSheet({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full sm:max-w-md bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[75vh] flex flex-col">
+      <div className="absolute inset-0 bg-[#2A251D]/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full sm:max-w-md bg-[#FEFCF7] dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[75vh] flex flex-col border border-[#E8E0D0] dark:border-zinc-700">
         {/* 모바일 핸들 */}
-        <div className="flex justify-center pt-2 pb-0 sm:hidden">
-          <div className="w-10 h-1 bg-zinc-300 dark:bg-zinc-600 rounded-full" />
+        <div className="flex justify-center pt-2.5 pb-0 sm:hidden">
+          <div className="w-10 h-1 bg-[#E8E0D0] dark:bg-zinc-600 rounded-full" />
         </div>
         {/* 헤더 */}
-        <div className="flex items-center px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
-          <span className="font-semibold text-zinc-900 dark:text-zinc-100 flex-1">{title}</span>
-          <button onClick={onClose} className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+        <div className="flex items-center px-5 py-4 border-b border-[#E8E0D0]/70 dark:border-zinc-800">
+          <span className="font-bold text-[#3A342A] dark:text-zinc-100 flex-1">{title}</span>
+          <button onClick={onClose} className="p-1 text-[#8C8270] hover:text-[#3A342A] dark:text-zinc-400 dark:hover:text-zinc-300">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -242,22 +266,22 @@ function FilterChip({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm border transition-colors whitespace-nowrap ${
+      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-medium border transition-all whitespace-nowrap ${
         isActive
-          ? "border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400"
-          : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+          ? "border-[#6B7B3A] bg-[#6B7B3A] text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)]"
+          : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:border-[#6B7B3A]/40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
       }`}
     >
       {icon}
       {isActive ? (displayValue || value) : label}
-      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
       </svg>
       {isActive && (
         <span
           onClick={(e) => { e.stopPropagation(); onClear(); }}
-          className="ml-0.5 text-blue-400 hover:text-blue-600"
-        >&times;</span>
+          className="ml-0.5 -mr-1 w-4 h-4 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white text-[11px] leading-none"
+        >×</span>
       )}
     </button>
   );
@@ -298,7 +322,7 @@ function RegionBottomSheet({
         <div className="py-1">
           <button
             onClick={() => { onClear(); onClose(); }}
-            className="w-full flex items-center px-4 py-3 text-sm text-blue-600 dark:text-blue-400 font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50"
+            className="w-full flex items-center px-5 py-3.5 text-sm text-[#6B7B3A] dark:text-[#A8B87A] font-semibold hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800/50"
           >전체 지역</button>
           {REGION_GROUPS.map((group) => {
             const total = getGroupTotal(group);
@@ -306,15 +330,15 @@ function RegionBottomSheet({
               <button
                 key={group.code}
                 onClick={() => { setSelectedGroup(group); setStep("sub"); }}
-                className="w-full flex items-center justify-between px-4 py-3 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0"
+                className="w-full flex items-center justify-between px-5 py-3.5 text-sm text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800/50 last:border-0"
               >
                 <span className="flex items-center gap-2">
                   {group.name}
                   {total > 0 && (
-                    <span className="text-xs text-zinc-400 dark:text-zinc-500">({total})</span>
+                    <span className="text-xs text-[#A89B80] dark:text-zinc-500">({total})</span>
                   )}
                 </span>
-                <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-[#A89B80]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
@@ -325,7 +349,7 @@ function RegionBottomSheet({
         <div className="py-1">
           <button
             onClick={() => setStep("group")}
-            className="w-full flex items-center gap-1 px-4 py-2.5 text-sm text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800"
+            className="w-full flex items-center gap-1 px-5 py-3 text-sm text-[#8C8270] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -338,13 +362,13 @@ function RegionBottomSheet({
               <button
                 key={sub.code}
                 onClick={() => { onChange(sub.code, sub.name); onClose(); }}
-                className={`w-full flex items-center justify-between px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0 ${
-                  value === sub.code ? "text-blue-600 font-medium" : "text-zinc-800 dark:text-zinc-200"
+                className={`w-full flex items-center justify-between px-5 py-3.5 text-sm hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800/50 last:border-0 ${
+                  value === sub.code ? "text-[#6B7B3A] dark:text-[#A8B87A] font-semibold" : "text-[#3A342A] dark:text-zinc-200"
                 }`}
               >
                 <span>{sub.name}</span>
                 {cnt > 0 && (
-                  <span className="text-xs text-zinc-400 dark:text-zinc-500">{cnt}</span>
+                  <span className="text-xs text-[#A89B80] dark:text-zinc-500">{cnt}</span>
                 )}
               </button>
             );
@@ -385,9 +409,9 @@ function SportBottomSheet({
   return (
     <BottomSheet open={open} onClose={onClose} title="종목 선택">
       {/* 검색 입력 */}
-      <div className="px-4 pt-3 pb-2">
-        <div className="flex items-center gap-2 px-3 py-2 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50 dark:bg-zinc-800">
-          <svg className="w-4 h-4 text-zinc-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="px-5 pt-4 pb-2">
+        <div className="flex items-center gap-2 px-3.5 py-2.5 border border-[#E8E0D0] dark:border-zinc-700 rounded-xl bg-[#FBF7EB] dark:bg-zinc-800 focus-within:border-[#6B7B3A]/60 focus-within:bg-[#FEFCF7] transition-colors">
+          <svg className="w-4 h-4 text-[#A89B80] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
@@ -396,10 +420,10 @@ function SportBottomSheet({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="종목명 또는 초성 검색 (ㅍㄹㅌ → 필라테스)"
-            className="flex-1 text-sm bg-transparent text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none"
+            className="flex-1 text-sm bg-transparent text-[#3A342A] dark:text-zinc-100 placeholder-[#A89B80] focus:outline-none"
           />
           {query && (
-            <button onClick={() => setQuery("")} className="text-zinc-400 hover:text-zinc-600">
+            <button onClick={() => setQuery("")} className="text-[#A89B80] hover:text-[#6B5D47]">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -409,34 +433,34 @@ function SportBottomSheet({
       </div>
 
       {/* 초성 버튼 */}
-      <div className="px-4 pb-2">
-        <div className="flex flex-wrap gap-1">
+      <div className="px-5 pb-3">
+        <div className="flex flex-wrap gap-1.5">
           {CHOSUNG_BUTTONS.map((ch) => (
             <button
               key={ch}
               onClick={() => setQuery(query === ch ? "" : ch)}
-              className={`w-8 h-8 flex items-center justify-center rounded-md text-xs font-medium transition-colors ${
+              className={`w-9 h-9 flex items-center justify-center rounded-lg text-xs font-semibold transition-colors ${
                 query === ch
-                  ? "bg-blue-600 text-white"
-                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                  ? "bg-[#6B7B3A] text-white shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)]"
+                  : "bg-[#F5F0E5] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#EFE7D5] dark:hover:bg-zinc-700"
               }`}
             >{ch}</button>
           ))}
         </div>
       </div>
 
-      <div className="border-t border-zinc-100 dark:border-zinc-800" />
+      <div className="border-t border-[#E8E0D0]/70 dark:border-zinc-800" />
 
       {/* 종목 리스트 */}
       <div className="py-1">
         <button
           onClick={() => { onClear(); onClose(); }}
-          className={`w-full text-left px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 ${
-            !value ? "text-blue-600 font-medium" : "text-zinc-500"
+          className={`w-full text-left px-5 py-3.5 text-sm hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800/50 ${
+            !value ? "text-[#6B7B3A] dark:text-[#A8B87A] font-semibold" : "text-[#8C8270]"
           }`}
         >전체 종목</button>
         {filtered.length === 0 ? (
-          <div className="px-4 py-8 text-center text-sm text-zinc-400">
+          <div className="px-5 py-10 text-center text-sm text-[#A89B80]">
             일치하는 종목이 없습니다
           </div>
         ) : (
@@ -444,8 +468,8 @@ function SportBottomSheet({
             <button
               key={sport}
               onClick={() => { onChange(sport); onClose(); }}
-              className={`w-full text-left px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0 ${
-                value === sport ? "text-blue-600 font-medium" : "text-zinc-800 dark:text-zinc-200"
+              className={`w-full text-left px-5 py-3.5 text-sm hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800/50 last:border-0 ${
+                value === sport ? "text-[#6B7B3A] dark:text-[#A8B87A] font-semibold" : "text-[#3A342A] dark:text-zinc-200"
               }`}
             >{sport}</button>
           ))
@@ -476,16 +500,16 @@ function EmploymentBottomSheet({
       <div className="py-1">
         <button
           onClick={() => { onClear(); onClose(); }}
-          className={`w-full text-left px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 ${
-            !value ? "text-blue-600 font-medium" : "text-zinc-500"
+          className={`w-full text-left px-5 py-3.5 text-sm hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800/50 ${
+            !value ? "text-[#6B7B3A] dark:text-[#A8B87A] font-semibold" : "text-[#8C8270]"
           }`}
         >전체</button>
         {EMPLOYMENT_TYPES.map((type) => (
           <button
             key={type}
             onClick={() => { onChange(type); onClose(); }}
-            className={`w-full text-left px-4 py-3 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-50 dark:border-zinc-800/50 last:border-0 ${
-              value === type ? "text-blue-600 font-medium" : "text-zinc-800 dark:text-zinc-200"
+            className={`w-full text-left px-5 py-3.5 text-sm hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800/50 last:border-0 ${
+              value === type ? "text-[#6B7B3A] dark:text-[#A8B87A] font-semibold" : "text-[#3A342A] dark:text-zinc-200"
             }`}
           >{type}</button>
         ))}
@@ -588,36 +612,49 @@ export default function JobsPage() {
   const hasAnyFilter = !!regionCode || !!sportFilter || !!employmentFilter || hideClosed || !!searchQuery;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="min-h-screen bg-[#F8F4EC] dark:bg-zinc-950">
 
       {/* ─── 브랜드 헤더 ─── */}
-      <div className="bg-gradient-to-b from-blue-50 to-zinc-50 dark:from-zinc-900 dark:to-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="mx-auto max-w-5xl px-4 pt-8 pb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100 mb-1">
+      <div className="relative bg-gradient-to-b from-[#FBF7EB] via-[#F8F4EC] to-[#F8F4EC] dark:from-zinc-900 dark:to-zinc-950 border-b border-[#E8E0D0]/70 dark:border-zinc-800 overflow-hidden">
+        {/* 장식용 배경 */}
+        <div aria-hidden className="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-[#6B7B3A]/[0.05] blur-3xl pointer-events-none" />
+        <div aria-hidden className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/25 to-transparent" />
+
+        <div className="relative mx-auto max-w-5xl px-4 sm:px-6 pt-10 pb-8">
+          {/* 에디토리얼 라벨 */}
+          <div className="inline-flex items-center gap-2 mb-4">
+            <span className="w-6 h-px bg-[#6B7B3A]" />
+            <span className="text-[11px] font-bold tracking-[0.15em] text-[#6B7B3A] uppercase">Sports Jobs</span>
+          </div>
+
+          <h1 className="text-[28px] sm:text-[34px] font-bold text-[#2A251D] dark:text-zinc-100 leading-tight tracking-tight mb-2">
             지도사를 위한 일자리
           </h1>
-          <p className="text-sm sm:text-base text-zinc-500 dark:text-zinc-400 mb-5">
-            종목별, 지역별로 나에게 맞는 채용 공고를 찾아보세요
+          <p className="text-[14px] sm:text-[15px] text-[#6B5D47] dark:text-zinc-400 mb-7 max-w-xl">
+            종목별·지역별로 나에게 맞는 채용 공고를 찾아보세요. 매일 새로운 기회가 업데이트됩니다.
           </p>
 
           {/* 통합 검색창 */}
-          <div className="flex max-w-lg">
-            <div className="flex-1 flex">
+          <div className="relative max-w-xl">
+            <div className="flex items-center bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_24px_-16px_rgba(107,93,71,0.25)] focus-within:border-[#6B7B3A]/50 transition-colors">
+              <div className="pl-4 pr-2 text-[#A89B80]">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
               <input
                 type="search"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                 placeholder="종목, 센터명, 지역으로 검색"
-                className="flex-1 px-4 py-2.5 border border-zinc-200 dark:border-zinc-700 rounded-l-xl text-sm bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="flex-1 py-3.5 text-[14px] bg-transparent text-[#3A342A] dark:text-zinc-100 placeholder-[#A89B80] focus:outline-none"
               />
               <button
                 onClick={handleSearch}
-                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-r-xl transition-colors"
+                className="mr-1.5 my-1.5 px-5 py-2.5 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-sm font-semibold rounded-xl shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)] transition-colors"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+                검색
               </button>
             </div>
           </div>
@@ -625,8 +662,8 @@ export default function JobsPage() {
       </div>
 
       {/* ─── 필터 바 ─── */}
-      <div className="sticky top-14 z-30 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-b border-zinc-100 dark:border-zinc-800">
-        <div className="mx-auto max-w-5xl px-4 py-2.5">
+      <div className="sticky top-14 z-30 bg-[#F8F4EC]/85 dark:bg-zinc-950/85 backdrop-blur-md border-b border-[#E8E0D0]/70 dark:border-zinc-800">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 py-3">
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
             {/* 지역 */}
             <FilterChip
@@ -662,12 +699,13 @@ export default function JobsPage() {
             {/* 모집중만 토글 */}
             <button
               onClick={() => setHideClosed(!hideClosed)}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm border transition-colors whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-medium border transition-all whitespace-nowrap ${
                 hideClosed
-                  ? "border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400"
-                  : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  ? "border-[#6B7B3A] bg-[#6B7B3A] text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)]"
+                  : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:border-[#6B7B3A]/40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
               }`}
             >
+              {hideClosed && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
               모집중만
             </button>
 
@@ -675,7 +713,7 @@ export default function JobsPage() {
             {hasAnyFilter && (
               <button
                 onClick={clearAllFilters}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 whitespace-nowrap"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs text-[#A89B80] hover:text-[#6B5D47] dark:hover:text-zinc-300 whitespace-nowrap"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -712,33 +750,32 @@ export default function JobsPage() {
       />
 
       {/* ─── 메인 콘텐츠 ─── */}
-      <div className="mx-auto max-w-5xl px-4 py-4">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6">
 
         {/* 정렬 + 결과 요약 */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-sm text-zinc-500 dark:text-zinc-400">
+        <div className="flex items-center justify-between mb-5">
+          <div className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
             {searchQuery ? (
-              <span>&ldquo;{searchQuery}&rdquo; 검색 결과 &middot; <strong className="text-zinc-700 dark:text-zinc-300">{total}건</strong></span>
+              <span>&ldquo;<span className="font-semibold text-[#3A342A]">{searchQuery}</span>&rdquo; 검색 결과 · <strong className="font-bold text-[#6B7B3A]">{total}건</strong></span>
             ) : (
-              <span>총 <strong className="text-zinc-700 dark:text-zinc-300">{total}건</strong>의 공고</span>
+              <span>총 <strong className="font-bold text-[#6B7B3A]">{total}건</strong>의 공고</span>
             )}
           </div>
           <div className="flex items-center gap-2">
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value)}
-              className="text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg px-2 py-1.5 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 focus:outline-none"
+              className="text-[13px] font-medium border border-[#E8E0D0] dark:border-zinc-700 rounded-xl px-3 py-2 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 focus:outline-none focus:border-[#6B7B3A]/50 cursor-pointer"
             >
               <option value="latest">최신 등록순</option>
               <option value="popular">많이 본 순</option>
-              <option value="likes">추천 많은 순</option>
             </select>
             <Link
               href="/jobs/write"
-              className="hidden sm:flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+              className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-[13px] font-semibold rounded-xl shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
               </svg>
               공고 등록
             </Link>
@@ -747,78 +784,78 @@ export default function JobsPage() {
 
         {/* ─── 카드 그리드 ─── */}
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
           </div>
         ) : jobs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 mb-4 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-              <svg className="w-8 h-8 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex flex-col items-center justify-center py-20 text-center bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl">
+            <div className="w-16 h-16 mb-4 rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
+              <svg className="w-8 h-8 text-[#A89B80] dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
             </div>
             {searchQuery ? (
               <>
-                <p className="text-base font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                <p className="text-base font-bold text-[#3A342A] dark:text-zinc-300 mb-1">
                   &ldquo;{searchQuery}&rdquo;에 대한 검색 결과가 없습니다
                 </p>
-                <p className="text-sm text-zinc-400 mb-4">다른 검색어로 다시 시도하거나, 필터 조건을 줄여 보세요</p>
+                <p className="text-sm text-[#8C8270] mb-5">다른 검색어로 다시 시도하거나, 필터 조건을 줄여 보세요</p>
                 <button
                   onClick={clearAllFilters}
-                  className="px-4 py-2 text-sm text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
+                  className="px-5 py-2.5 text-sm font-semibold text-white bg-[#6B7B3A] hover:bg-[#5A6930] rounded-xl shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] transition-colors"
                 >전체 공고 보기</button>
               </>
             ) : hasAnyFilter ? (
               <>
-                <p className="text-base font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                <p className="text-base font-bold text-[#3A342A] dark:text-zinc-300 mb-1">
                   현재 조건에 맞는 공고가 없습니다
                 </p>
-                <p className="text-sm text-zinc-400 mb-4">필터 조건을 변경하거나 전체 공고를 확인해 보세요</p>
+                <p className="text-sm text-[#8C8270] mb-5">필터 조건을 변경하거나 전체 공고를 확인해 보세요</p>
                 <button
                   onClick={clearAllFilters}
-                  className="px-4 py-2 text-sm text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
+                  className="px-5 py-2.5 text-sm font-semibold text-white bg-[#6B7B3A] hover:bg-[#5A6930] rounded-xl shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] transition-colors"
                 >필터 초기화</button>
               </>
             ) : (
               <>
-                <p className="text-base font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                <p className="text-base font-bold text-[#3A342A] dark:text-zinc-300 mb-1">
                   아직 등록된 공고가 없습니다
                 </p>
-                <p className="text-sm text-zinc-400 mb-4">첫 번째 공고를 등록해 보세요</p>
+                <p className="text-sm text-[#8C8270] mb-5">첫 번째 공고를 등록해 보세요</p>
                 <Link
                   href="/jobs/write"
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  className="px-5 py-2.5 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-sm font-semibold rounded-xl shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] transition-colors"
                 >공고 등록하기</Link>
               </>
             )}
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {jobs.map((job) => (
                 <JobCard key={job.id} job={job} />
               ))}
             </div>
 
             {total <= 5 && total > 0 && (
-              <p className="text-center text-sm text-zinc-400 mt-6">새로운 공고가 매일 올라오고 있어요</p>
+              <p className="text-center text-[13px] text-[#A89B80] mt-8">새로운 공고가 매일 올라오고 있어요</p>
             )}
 
             {totalPages > 1 && (
-              <div className="flex justify-center gap-1 py-8">
+              <div className="flex justify-center gap-1.5 py-10">
                 <button
                   onClick={() => loadJobs(page - 1)}
                   disabled={page <= 1}
-                  className="px-3 py-1.5 text-sm rounded-md border border-zinc-200 dark:border-zinc-700 disabled:opacity-40 hover:bg-white dark:hover:bg-zinc-800 transition-colors"
+                  className="px-3.5 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
                 >이전</button>
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   const p = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
                   return (
                     <button key={p} onClick={() => loadJobs(p)}
-                      className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                      className={`min-w-[36px] px-2 py-2 text-[13px] font-semibold rounded-lg border transition-colors ${
                         p === page
-                          ? "bg-blue-600 border-blue-600 text-white"
-                          : "border-zinc-200 dark:border-zinc-700 hover:bg-white dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                          ? "bg-[#6B7B3A] border-[#6B7B3A] text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)]"
+                          : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 text-[#6B5D47] dark:text-zinc-300"
                       }`}
                     >{p}</button>
                   );
@@ -826,7 +863,7 @@ export default function JobsPage() {
                 <button
                   onClick={() => loadJobs(page + 1)}
                   disabled={page >= totalPages}
-                  className="px-3 py-1.5 text-sm rounded-md border border-zinc-200 dark:border-zinc-700 disabled:opacity-40 hover:bg-white dark:hover:bg-zinc-800 transition-colors"
+                  className="px-3.5 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
                 >다음</button>
               </div>
             )}
@@ -834,32 +871,45 @@ export default function JobsPage() {
         )}
 
         {/* ─── 하단 CTA ─── */}
-        <div className="mt-8 mb-12 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 sm:p-8 text-center">
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">
-            우리 센터도 지도사를 찾고 있나요?
-          </h2>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-            모두의 지도사 커뮤니티에서 공고를 등록해 보세요
-          </p>
-          <Link
-            href="/jobs/write"
-            className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            공고 등록하기
-          </Link>
-        </div>
+        <section className="relative mt-10 mb-14 overflow-hidden">
+          <div className="relative bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-8 sm:p-10 text-center shadow-[0_1px_0_rgba(0,0,0,0.02),0_12px_32px_-20px_rgba(107,93,71,0.2)] overflow-hidden">
+            <div aria-hidden className="absolute -top-16 -left-16 w-48 h-48 rounded-full bg-[#6B7B3A]/[0.07] blur-3xl pointer-events-none" />
+            <div aria-hidden className="absolute -bottom-16 -right-16 w-48 h-48 rounded-full bg-[#6B7B3A]/[0.07] blur-3xl pointer-events-none" />
+            <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/30 to-transparent" />
+
+            <div className="relative">
+              <div className="inline-flex items-center gap-2 mb-4">
+                <span className="w-6 h-px bg-[#6B7B3A]" />
+                <span className="text-[11px] font-bold tracking-[0.15em] text-[#6B7B3A] uppercase">For Employers</span>
+                <span className="w-6 h-px bg-[#6B7B3A]" />
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold text-[#2A251D] dark:text-zinc-100 mb-2 tracking-tight">
+                우리 센터도 지도사를 찾고 있나요?
+              </h2>
+              <p className="text-[14px] text-[#6B5D47] dark:text-zinc-400 mb-6 max-w-md mx-auto leading-relaxed">
+                모두의 지도사 커뮤니티에서 무료로 공고를 등록하고, 검증된 지도사와 연결되세요.
+              </p>
+              <Link
+                href="/jobs/write"
+                className="inline-flex items-center gap-2 px-7 py-3.5 bg-[#6B7B3A] hover:bg-[#5A6930] text-white font-semibold rounded-2xl shadow-[0_8px_24px_-8px_rgba(107,123,58,0.5)] transition-all hover:-translate-y-0.5"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                </svg>
+                공고 등록하기
+              </Link>
+            </div>
+          </div>
+        </section>
       </div>
 
       {/* ─── 모바일 FAB ─── */}
       <Link
         href="/jobs/write"
-        className="sm:hidden fixed right-4 bottom-6 z-40 flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-2xl shadow-lg shadow-blue-600/25 transition-all active:scale-95"
+        className="sm:hidden fixed right-4 bottom-6 z-40 flex items-center gap-2 px-5 py-3.5 bg-[#6B7B3A] hover:bg-[#5A6930] text-white font-semibold rounded-2xl shadow-[0_12px_32px_-12px_rgba(107,123,58,0.6)] transition-all active:scale-95"
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
         </svg>
         <span className="text-sm">글쓰기</span>
       </Link>
