@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: '모두의 지도사',
   webDir: 'out',
   server: {
-    url: 'https://diary-app-seven-indol.vercel.app',
+    url: 'https://moducm.com',
   },
 };
 
