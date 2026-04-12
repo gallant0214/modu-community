@@ -51,7 +51,7 @@ function WritePageContent() {
   const router = useRouter();
   const params = useParams();
   const categoryId = params.id as string;
-  const { user, nickname } = useAuth();
+  const { user, nickname, getIdToken } = useAuth();
 
   const [selectedExamType, setSelectedExamType] = useState("기타");
   const [showConfirm, setShowConfirm] = useState(false);
@@ -106,6 +106,10 @@ function WritePageContent() {
 
   async function handleConfirm() {
     if (!pendingData) return;
+    // 본인 인증 토큰을 FormData에 실어 server action이 검증하도록
+    const token = await getIdToken();
+    if (!token) { alert("로그인이 필요합니다"); setShowConfirm(false); return; }
+    pendingData.set("id_token", token);
     const result = await createPost(pendingData);
     if (result?.error) {
       alert(result.error);

@@ -1,5 +1,26 @@
 import type { NextConfig } from "next";
 
+// 프로덕션 CSP는 report-only 로 먼저 배포해 Firebase/Google/Apple SDK 위반을
+// 모니터링한 뒤 점진적으로 enforcing 으로 전환한다.
+const cspReportOnly =
+  "default-src 'self'; " +
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' " +
+    "https://*.gstatic.com https://*.googleapis.com https://apis.google.com " +
+    "https://*.firebaseapp.com https://*.firebase.com; " +
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+  "img-src 'self' data: blob: https:; " +
+  "font-src 'self' data: https://fonts.gstatic.com; " +
+  "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com " +
+    "wss://*.firebaseio.com https://*.firebase.com https://*.firebaseapp.com " +
+    "https://securetoken.googleapis.com https://identitytoolkit.googleapis.com " +
+    "https://*.neon.tech https://firebasestorage.googleapis.com; " +
+  "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://appleid.apple.com; " +
+  "object-src 'none'; " +
+  "base-uri 'self'; " +
+  "form-action 'self'; " +
+  "frame-ancestors 'none'; " +
+  "upgrade-insecure-requests";
+
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
@@ -11,8 +32,12 @@ const securityHeaders = [
   },
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=()",
+    value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
   },
+  // Report-Only: 실제 차단하지 않고 위반만 브라우저 콘솔에 리포트. 안정화 후 enforcing 전환.
+  { key: "Content-Security-Policy-Report-Only", value: cspReportOnly },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+  { key: "X-DNS-Prefetch-Control", value: "off" },
 ];
 
 const nextConfig: NextConfig = {

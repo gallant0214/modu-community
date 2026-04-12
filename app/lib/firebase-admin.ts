@@ -46,7 +46,25 @@ export async function verifyAuth(
     }
     const token = authHeader.substring(7);
     const admin = getFirebaseAdmin();
-    const decoded = await getAuth(admin).verifyIdToken(token);
+    // checkRevoked=true: 로그아웃/계정 비활성화된 토큰을 즉시 거부
+    const decoded = await getAuth(admin).verifyIdToken(token, true);
+    return { uid: decoded.uid, email: decoded.email };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 순수 토큰 문자열로 검증 (server action에서 client가 argument로 전달한 토큰 검증용)
+ * verifyAuth와 달리 Request 객체를 받지 않음
+ */
+export async function verifyIdTokenString(
+  idToken: string | null | undefined,
+): Promise<{ uid: string; email?: string } | null> {
+  try {
+    if (!idToken || typeof idToken !== "string") return null;
+    const admin = getFirebaseAdmin();
+    const decoded = await getAuth(admin).verifyIdToken(idToken, true);
     return { uid: decoded.uid, email: decoded.email };
   } catch {
     return null;

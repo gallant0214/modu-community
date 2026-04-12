@@ -222,8 +222,11 @@ export default function PostDetailPage() {
 
   async function handleLike() {
     if (!user) { alert("로그인 후 이용 가능합니다"); return; }
-    const result = await likePost(Number(postId), Number(categoryId));
-    if (result?.unliked) {
+    const token = await getIdToken();
+    if (!token) { alert("로그인이 필요합니다"); return; }
+    const result = await likePost(Number(postId), Number(categoryId), token);
+    if (result && "error" in result && result.error) { alert(result.error); return; }
+    if (result && "unliked" in result && result.unliked) {
       setLiked(false);
       setLikes((prev) => Math.max(prev - 1, 0));
     } else {
@@ -251,9 +254,11 @@ export default function PostDetailPage() {
       setCommentError("댓글 내용을 입력해주세요");
       return;
     }
+    const token = await getIdToken();
+    if (!token) { setCommentError("로그인이 필요합니다"); return; }
     // 작성자는 로그인 닉네임/이름/이메일에서 자동으로, 비밀번호는 레거시 플레이스홀더
     const author = (nickname || user.displayName || user.email || "익명").toString().trim();
-    const result = await createComment(Number(postId), Number(categoryId), author, "__auth__", commentContent, replyTargetId);
+    const result = await createComment(Number(postId), Number(categoryId), author, "__auth__", commentContent, replyTargetId, token);
     if (result?.error) {
       setCommentError(result.error);
       return;
@@ -907,8 +912,12 @@ export default function PostDetailPage() {
                           )}
                           <button
                             onClick={async () => {
+                              if (!user) { alert("로그인 후 이용 가능합니다"); return; }
+                              const token = await getIdToken();
+                              if (!token) { alert("로그인이 필요합니다"); return; }
                               const wasLiked = likedCommentIds.has(comment.id);
-                              const result = await likeComment(comment.id, Number(postId), Number(categoryId)) as { unliked?: boolean } | undefined;
+                              const result = await likeComment(comment.id, Number(postId), Number(categoryId), token) as { unliked?: boolean; error?: string } | undefined;
+                              if (result?.error) { alert(result.error); return; }
                               if (wasLiked || result?.unliked) {
                                 setLikedCommentIds((prev) => { const s = new Set(prev); s.delete(comment.id); return s; });
                                 setComments((prev) => prev.map((c) => c.id === comment.id ? { ...c, likes: Math.max((c.likes ?? 0) - 1, 0) } : c));
@@ -1305,14 +1314,18 @@ export default function PostDetailPage() {
                     onClick={async () => {
                       if (!user) { alert("로그인 후 이용 가능합니다"); return; }
                       if (!commentReportReason || commentReportTargetId === null) return;
-                      await createReport(
+                      const token = await getIdToken();
+                      if (!token) { alert("로그인이 필요합니다"); return; }
+                      const r = await createReport(
                         "comment",
                         commentReportTargetId,
                         Number(postId),
                         Number(categoryId),
                         commentReportReason,
-                        commentReportReason === "기타" ? commentReportCustomReason : undefined
+                        commentReportReason === "기타" ? commentReportCustomReason : undefined,
+                        token,
                       );
+                      if (r && "error" in r && r.error) { alert(r.error); return; }
                       setCommentReportDone(true);
                     }}
                     className={`flex flex-1 items-center justify-center rounded-xl py-3 text-[13px] font-bold text-white transition-colors ${
@@ -1416,14 +1429,18 @@ export default function PostDetailPage() {
                     onClick={async () => {
                       if (!user) { alert("로그인 후 이용 가능합니다"); return; }
                       if (!reportReason) return;
-                      await createReport(
+                      const token = await getIdToken();
+                      if (!token) { alert("로그인이 필요합니다"); return; }
+                      const r = await createReport(
                         "post",
                         Number(postId),
                         Number(postId),
                         Number(categoryId),
                         reportReason,
-                        reportReason === "기타" ? reportCustomReason : undefined
+                        reportReason === "기타" ? reportCustomReason : undefined,
+                        token,
                       );
+                      if (r && "error" in r && r.error) { alert(r.error); return; }
                       setReportDone(true);
                     }}
                     className={`flex flex-1 items-center justify-center rounded-xl py-3 text-[13px] font-bold text-white transition-colors ${

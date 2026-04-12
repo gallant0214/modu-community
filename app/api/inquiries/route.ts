@@ -1,32 +1,38 @@
 import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
-import { verifyAuth } from "@/app/lib/firebase-admin";
+import { verifyAuth, isAdminUid } from "@/app/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
+// GET /api/inquiries — 관리자 전용 전체 목록 조회
+// 일반 사용자는 /api/inquiries/mine 을 사용
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const author = searchParams.get("author");
-  const password = searchParams.get("password");
+  const user = await verifyAuth(request);
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+  }
+
+  // 관리자 권한 확인 (uid 또는 admin_emails)
+  let isAdmin = isAdminUid(user.uid);
+  if (!isAdmin && user.email) {
+    try {
+      const adminCheck = await sql`SELECT id FROM admin_emails WHERE email = ${user.email.toLowerCase()} LIMIT 1`;
+      isAdmin = adminCheck.length > 0;
+    } catch {}
+  }
+  if (!isAdmin) {
+    return NextResponse.json({ error: "관리자만 조회할 수 있습니다" }, { status: 403 });
+  }
 
   await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
-
-  if (author && password) {
-    const rows = await sql`
-      SELECT id, author, title, reply, replied_at, hidden, created_at, firebase_uid
-      FROM inquiries
-      WHERE author = ${author} AND password = ${password}
-      ORDER BY created_at DESC
-    `;
-    return NextResponse.json(rows);
-  }
 
   const rows = await sql`
     SELECT id, author, title, reply, replied_at, hidden, created_at, firebase_uid
     FROM inquiries
     WHERE hidden = false OR hidden IS NULL
     ORDER BY created_at DESC
+    LIMIT 200
   `;
   return NextResponse.json(rows);
 }

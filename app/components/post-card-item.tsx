@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { likePost } from "@/app/lib/actions";
 import type { Post } from "@/app/lib/types";
+import { useAuth } from "@/app/components/auth-provider";
 
 function formatDateTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -17,6 +18,7 @@ function formatDateTime(dateStr: string) {
 
 export function PostCardItem({ post, isNotice }: { post: Post; isNotice?: boolean }) {
   const [likes, setLikes] = useState(Number(post.likes));
+  const { user, getIdToken } = useAuth();
 
   const tags = post.tags ? post.tags.split(",").map((t) => t.trim()).filter(Boolean) : [];
   const commentsCount = Number(post.comments_count);
@@ -30,8 +32,16 @@ export function PostCardItem({ post, isNotice }: { post: Post; isNotice?: boolea
   async function handleLike(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    setLikes((prev) => prev + 1);
-    await likePost(post.id, post.category_id);
+    if (!user) { alert("로그인 후 이용 가능합니다"); return; }
+    const token = await getIdToken();
+    if (!token) { alert("로그인이 필요합니다"); return; }
+    const prev = likes;
+    setLikes((x) => x + 1);
+    const result = await likePost(post.id, post.category_id, token);
+    if (result && "error" in result && result.error) {
+      setLikes(prev); // 롤백
+      alert(result.error);
+    }
   }
 
   return (

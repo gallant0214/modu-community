@@ -524,14 +524,18 @@ export default function JobDetailPage() {
                       onClick={async () => {
                         if (!user) { alert("로그인 후 이용 가능합니다"); return; }
                         if (!reportReason) return;
-                        await createReport(
+                        const token = await getIdToken();
+                        if (!token) { alert("로그인이 필요합니다"); return; }
+                        const r = await createReport(
                           "post",
                           Number(jobId),
                           Number(jobId),
                           0,
                           reportReason,
-                          reportReason === "기타" ? reportCustomReason : undefined
+                          reportReason === "기타" ? reportCustomReason : undefined,
+                          token,
                         );
+                        if (r && "error" in r && r.error) { alert(r.error); return; }
                         setReportDone(true);
                       }}
                       className={`flex flex-1 items-center justify-center rounded-xl py-3 text-[13px] font-bold text-white transition-colors ${

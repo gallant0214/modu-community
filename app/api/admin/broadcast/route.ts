@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   let isAdmin = adminUids.includes(user.uid);
   if (!isAdmin && user.email) {
     try {
-      const adminCheck = await sql`SELECT id FROM admin_emails WHERE email = ${user.email}`;
+      const adminCheck = await sql`SELECT id FROM admin_emails WHERE email = ${user.email.toLowerCase()} LIMIT 1`;
       isAdmin = adminCheck.length > 0;
     } catch {}
   }
@@ -81,10 +81,23 @@ export async function POST(request: Request) {
   }
 }
 
-// 브로드캐스트 목록 조회 (관리자)
+// 브로드캐스트 목록 조회 (관리자 전용)
 export async function GET(request: Request) {
   const user = await verifyAuth(request);
   if (!user) return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+
+  // 관리자 권한 체크 (POST와 동일 로직)
+  const adminUids = (process.env.ADMIN_UIDS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  let isAdmin = adminUids.includes(user.uid);
+  if (!isAdmin && user.email) {
+    try {
+      const adminCheck = await sql`SELECT id FROM admin_emails WHERE email = ${user.email.toLowerCase()} LIMIT 1`;
+      isAdmin = adminCheck.length > 0;
+    } catch {}
+  }
+  if (!isAdmin) {
+    return NextResponse.json({ error: "관리자 권한이 필요합니다" }, { status: 403 });
+  }
 
   try {
     const rows = await sql`
