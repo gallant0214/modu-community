@@ -23,15 +23,15 @@ export const metadata: Metadata = {
     description: "종목별 경험과 정보를 나누는 커뮤니티. 실기·구술 후기, 스포츠 구인 공고를 한곳에서 확인하세요.",
     url: "https://moducm.com",
     siteName: "모두의 지도사 커뮤니티",
-    images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "모두의 지도사 커뮤니티" }],
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "모두의 지도사 커뮤니티" }],
     locale: "ko_KR",
     type: "website",
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "모두의 지도사 커뮤니티",
     description: "종목별 경험과 정보를 나누는 커뮤니티. 실기·구술 후기, 스포츠 구인 공고를 한곳에서 확인하세요.",
-    images: ["/icon-512.png"],
+    images: ["/og-image.png"],
   },
   icons: {
     icon: [
