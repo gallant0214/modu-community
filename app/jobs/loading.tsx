@@ -1,26 +1,27 @@
 export default function JobsLoading() {
   return (
-    <div className="min-h-screen bg-white dark:bg-zinc-950">
-      <div className="mx-auto max-w-2xl">
-        <div className="px-4 pt-4 pb-3">
-          <div className="h-8 w-32 bg-zinc-100 dark:bg-zinc-800 rounded-lg animate-pulse mb-3" />
-          <div className="h-10 bg-zinc-100 dark:bg-zinc-800 rounded-lg animate-pulse mb-2" />
-          <div className="h-8 w-48 bg-zinc-100 dark:bg-zinc-800 rounded-lg animate-pulse" />
+    <div className="min-h-screen bg-[#F8F4EC] dark:bg-zinc-950">
+      <div className="mx-auto max-w-2xl lg:max-w-5xl px-4 sm:px-6 pt-4 space-y-4">
+        {/* 히어로 */}
+        <div className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-6 space-y-3">
+          <div className="h-5 w-28 bg-[#F5F0E5] dark:bg-zinc-800 rounded-full animate-pulse" />
+          <div className="h-7 w-2/3 bg-[#F5F0E5] dark:bg-zinc-800 rounded-lg animate-pulse" />
+          <div className="h-4 w-full bg-[#F5F0E5] dark:bg-zinc-800 rounded animate-pulse" />
         </div>
-        <div className="border-t border-zinc-100 dark:border-zinc-800" />
-        <div className="flex items-center px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-700">
-          <div className="flex-1 h-4 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse" />
+        {/* 필터 바 */}
+        <div className="flex gap-2">
+          <div className="h-10 w-24 bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-xl animate-pulse" />
+          <div className="h-10 w-24 bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-xl animate-pulse" />
         </div>
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
-            <div className="flex-1 space-y-2">
-              <div className="h-3 w-12 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
-              <div className="h-4 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" style={{ width: `${60 + Math.random() * 30}%` }} />
+        {/* 구인 카드 */}
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl p-4 space-y-2">
+            <div className="flex gap-2">
+              <div className="h-5 w-14 bg-[#F5F0E5] dark:bg-zinc-800 rounded-full animate-pulse" />
+              <div className="h-5 w-16 bg-[#F5F0E5] dark:bg-zinc-800 rounded-full animate-pulse" />
             </div>
-            <div className="h-3 w-12 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
-            <div className="h-3 w-16 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
-            <div className="h-3 w-8 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
-            <div className="h-3 w-8 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
+            <div className="h-5 w-3/4 bg-[#F5F0E5] dark:bg-zinc-800 rounded-lg animate-pulse" />
+            <div className="h-3 w-40 bg-[#F5F0E5] dark:bg-zinc-800 rounded animate-pulse" />
           </div>
         ))}
       </div>
