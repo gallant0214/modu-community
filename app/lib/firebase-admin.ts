@@ -46,8 +46,7 @@ export async function verifyAuth(
     }
     const token = authHeader.substring(7);
     const admin = getFirebaseAdmin();
-    // checkRevoked=true: 로그아웃/계정 비활성화된 토큰을 즉시 거부
-    const decoded = await getAuth(admin).verifyIdToken(token, true);
+    const decoded = await getAuth(admin).verifyIdToken(token);
     return { uid: decoded.uid, email: decoded.email };
   } catch {
     return null;
@@ -64,7 +63,7 @@ export async function verifyIdTokenString(
   try {
     if (!idToken || typeof idToken !== "string") return null;
     const admin = getFirebaseAdmin();
-    const decoded = await getAuth(admin).verifyIdToken(idToken, true);
+    const decoded = await getAuth(admin).verifyIdToken(idToken);
     return { uid: decoded.uid, email: decoded.email };
   } catch {
     return null;
