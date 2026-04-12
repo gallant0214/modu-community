@@ -29,9 +29,6 @@ export async function createPost(formData: FormData) {
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 
-  // firebase_uid 컬럼이 없을 수 있으니 보장
-  await sql`ALTER TABLE posts ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
-
   await sql`INSERT INTO posts (category_id, title, content, author, password, region, tags, ip_address, firebase_uid)
     VALUES (${Number(categoryId)}, ${title.trim()}, ${content.trim()}, ${author.trim()}, ${(password || "__auth__").trim()}, ${(region || "전국").trim()}, ${(tags || "").trim()}, ${ip}, ${user.uid})`;
   revalidatePath(`/category/${categoryId}`);
@@ -44,8 +41,6 @@ export async function likePost(id: number, categoryId: number, idToken?: string)
   if (!user) return { error: "로그인이 필요합니다" };
 
   // uid 기반 좋아요 (IP 대체)
-  await sql`ALTER TABLE post_likes ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
-
   const existing = await sql`SELECT id FROM post_likes WHERE post_id = ${id} AND firebase_uid = ${user.uid} LIMIT 1`;
   if (existing.length > 0) {
     await sql`DELETE FROM post_likes WHERE post_id = ${id} AND firebase_uid = ${user.uid}`;
@@ -141,7 +136,6 @@ export async function createComment(postId: number, categoryId: number, author: 
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 
-  await sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
   await sql`INSERT INTO comments (post_id, parent_id, author, password, content, ip_address, firebase_uid) VALUES (${postId}, ${parentId ?? null}, ${author.trim()}, ${(password || "__auth__").trim()}, ${content.trim()}, ${ip}, ${user.uid})`;
   await sql`UPDATE posts SET comments_count = (SELECT COUNT(*) FROM comments WHERE post_id = ${postId}) WHERE id = ${postId}`;
   revalidatePath(`/category/${categoryId}/post/${postId}`);
@@ -181,8 +175,6 @@ export async function createInquiry(formData: FormData) {
     return { error: "모든 항목을 입력해주세요" };
   }
 
-  await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS email TEXT DEFAULT ''`;
-  await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
   await sql`INSERT INTO inquiries (author, password, email, title, content, firebase_uid)
     VALUES (${author.trim()}, ${(password || "__auth__").trim()}, ${(email || user.email || "").trim()}, ${title.trim()}, ${content.trim()}, ${user.uid})`;
   revalidatePath("/inquiry");
@@ -392,8 +384,6 @@ export async function likeComment(commentId: number, postId: number, categoryId:
   // 인증 필수: 좋아요 조작 방어
   const user = await verifyIdTokenString(idToken);
   if (!user) return { error: "로그인이 필요합니다" };
-
-  await sql`ALTER TABLE comment_likes ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
 
   const existing = await sql`SELECT id FROM comment_likes WHERE comment_id = ${commentId} AND firebase_uid = ${user.uid} LIMIT 1`;
   if (existing.length > 0) {

@@ -18,7 +18,6 @@ export async function POST(request: Request) {
   const authError = await verifyAdmin(request, password);
   if (authError) return authError;
 
-  await sql`ALTER TABLE reports ADD COLUMN IF NOT EXISTS target_hidden BOOLEAN DEFAULT false`;
   const reports = await sql`
     SELECT r.*,
       p.title AS post_title, p.author AS post_author,
@@ -33,8 +32,6 @@ export async function POST(request: Request) {
     ORDER BY r.created_at DESC
   `;
 
-  await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS email TEXT DEFAULT ''`;
-  await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS read_at TIMESTAMP WITH TIME ZONE`;
   const inquiries = await sql`
     SELECT id, author, email, title, content, reply, replied_at, hidden, read_at, created_at
     FROM inquiries ORDER BY created_at DESC

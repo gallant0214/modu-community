@@ -11,8 +11,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ posts: [], error: "로그인이 필요합니다" }, { status: 401 });
   }
 
-  await sql`ALTER TABLE posts ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
-
   const rows = await sql`
     SELECT p.id, p.category_id, p.title, p.content, p.author, p.region, p.tags,
            p.likes, p.comments_count, p.is_notice, p.views, p.created_at, p.updated_at,

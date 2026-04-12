@@ -12,10 +12,6 @@ export async function GET(request: Request) {
   }
 
   try {
-    // email·firebase_uid 컬럼이 없으면 추가 (기존 스키마 호환)
-    await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS email TEXT DEFAULT ''`;
-    await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
-
     const email = user.email ?? "";
     const rows = await sql`
       SELECT id, author, title, content, reply, replied_at, hidden, created_at, email

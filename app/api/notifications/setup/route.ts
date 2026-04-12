@@ -31,8 +31,6 @@ export async function POST() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `;
-    await sql`ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS notify_like BOOLEAN DEFAULT true`;
-
     // 알림 히스토리 테이블 (확장)
     await sql`
       CREATE TABLE IF NOT EXISTS notification_logs (
@@ -47,8 +45,6 @@ export async function POST() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `;
-    await sql`ALTER TABLE notification_logs ADD COLUMN IF NOT EXISTS like_count INT DEFAULT 0`;
-
     // 관리자 브로드캐스트 테이블
     await sql`
       CREATE TABLE IF NOT EXISTS admin_broadcasts (
@@ -62,10 +58,6 @@ export async function POST() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `;
-
-    // reports 테이블 post_id, category_id를 nullable로 변경 (구인글 신고 지원)
-    await sql`ALTER TABLE reports ALTER COLUMN post_id DROP NOT NULL`;
-    await sql`ALTER TABLE reports ALTER COLUMN category_id DROP NOT NULL`;
 
     return NextResponse.json({ success: true, message: "All notification tables created/updated" });
   } catch (error: any) {

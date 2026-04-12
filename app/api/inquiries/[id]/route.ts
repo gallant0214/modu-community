@@ -42,11 +42,6 @@ export async function GET(
   const user = await verifyAuth(request);
   const { id } = await params;
 
-  try {
-    await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS email TEXT DEFAULT ''`;
-    await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
-  } catch {}
-
   const check = await verifyOwnerOrAdmin(Number(id), user, undefined);
   if (!check.ok) return NextResponse.json({ error: check.error }, { status: check.status });
 

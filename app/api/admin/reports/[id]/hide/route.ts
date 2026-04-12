@@ -23,18 +23,14 @@ export async function POST(
   const { target_type, target_id } = rows[0];
 
   if (target_type === "job_post") {
-    await sql`ALTER TABLE job_posts ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT false`;
     await sql`UPDATE job_posts SET hidden = true WHERE id = ${target_id}`;
   } else if (target_type === "post") {
-    await sql`ALTER TABLE posts ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT false`;
     await sql`UPDATE posts SET hidden = true WHERE id = ${target_id}`;
   } else {
-    await sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT false`;
     await sql`UPDATE comments SET hidden = true WHERE id = ${target_id}`;
   }
 
   // 숨김 처리 시 자동으로 신고 처리 완료 + 숨김 플래그
-  await sql`ALTER TABLE reports ADD COLUMN IF NOT EXISTS target_hidden BOOLEAN DEFAULT false`;
   await sql`UPDATE reports SET resolved = true, resolved_at = NOW(), target_hidden = true WHERE id = ${Number(id)}`;
 
   return NextResponse.json({ success: true });

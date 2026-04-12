@@ -24,8 +24,6 @@ export async function GET(
   const { postId } = await params;
   const user = await verifyAuth(request);
 
-  await sql`ALTER TABLE comment_likes ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
-
   const rows = await sql`
     SELECT c.id, c.post_id, c.parent_id, c.author, c.content, COALESCE(c.likes, 0) AS likes,
       (SELECT COUNT(*) FROM comments r WHERE r.parent_id = c.id) AS reply_count,
@@ -76,7 +74,6 @@ export async function POST(
   const h = await headers();
   const ipAddr = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 
-  await sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
   const uid = user.uid;
 
   await sql`INSERT INTO comments (post_id, parent_id, author, password, content, ip_address, firebase_uid)

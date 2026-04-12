@@ -28,7 +28,6 @@ export async function POST(request: Request) {
     }
 
     // fail_count 컬럼 확인 (없으면 추가)
-    try { await sql`ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS fail_count INTEGER DEFAULT 0`; } catch {}
 
     // 브로드캐스트 저장
     const rows = await sql`

@@ -16,7 +16,6 @@ async function ensureTable() {
       UNIQUE(job_post_id, ip_address)
     )
   `;
-  await sql`ALTER TABLE job_post_bookmarks ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
   try { await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_job_bm_uid ON job_post_bookmarks (job_post_id, firebase_uid) WHERE firebase_uid IS NOT NULL`; } catch {}
 }
 

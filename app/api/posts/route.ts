@@ -24,7 +24,6 @@ export async function POST(request: Request) {
   const h = await headers();
   const ipAddr = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 
-  await sql`ALTER TABLE posts ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
   const uid = user.uid;
 
   await sql`INSERT INTO posts (category_id, title, content, author, password, region, tags, ip_address, firebase_uid)

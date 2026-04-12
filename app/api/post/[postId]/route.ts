@@ -33,7 +33,6 @@ export async function GET(
   const user = await verifyAuth(request);
   if (user) {
     try {
-      await sql`ALTER TABLE post_likes ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
       const liked = await sql`
         SELECT id FROM post_likes WHERE post_id = ${id} AND firebase_uid = ${user.uid} LIMIT 1
       `;

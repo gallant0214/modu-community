@@ -17,8 +17,6 @@ async function ensureTable() {
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )
   `;
-  await sql`ALTER TABLE nicknames ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
-  await sql`ALTER TABLE nicknames ADD COLUMN IF NOT EXISTS changed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()`;
   try {
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_nicknames_uid ON nicknames (firebase_uid) WHERE firebase_uid IS NOT NULL`;
   } catch {}

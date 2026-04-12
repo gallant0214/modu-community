@@ -27,8 +27,6 @@ export async function POST(
       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )
   `;
-  await sql`ALTER TABLE post_likes ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
-
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 

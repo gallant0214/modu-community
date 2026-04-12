@@ -16,8 +16,6 @@ export async function POST(
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 
-  await sql`ALTER TABLE job_post_likes ADD COLUMN IF NOT EXISTS firebase_uid TEXT`;
-
   let unliked = false;
 
   if (user) {
