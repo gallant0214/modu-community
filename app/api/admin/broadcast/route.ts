@@ -39,15 +39,22 @@ export async function POST(request: Request) {
 
     // broadcast_type에 따라 올바른 알림 설정 기준으로 사용자 필터
     const bType = broadcast_type || "notice";
-    const prefColumn = bType === "promo" ? "notify_promo" : "notify_notice";
+    const isPromo = bType === "promo";
 
     // 해당 알림을 켜둔 사용자 조회 (설정 없는 사용자도 포함 — 기본 ON)
-    const users = await sql`
-      SELECT DISTINCT dp.firebase_uid
-      FROM device_tokens dp
-      LEFT JOIN notification_preferences np ON dp.firebase_uid = np.firebase_uid
-      WHERE COALESCE(np.${sql.unsafe(prefColumn)}, true) = true
-    `;
+    const users = isPromo
+      ? await sql`
+          SELECT DISTINCT dp.firebase_uid
+          FROM device_tokens dp
+          LEFT JOIN notification_preferences np ON dp.firebase_uid = np.firebase_uid
+          WHERE COALESCE(np.notify_promo, false) = true
+        `
+      : await sql`
+          SELECT DISTINCT dp.firebase_uid
+          FROM device_tokens dp
+          LEFT JOIN notification_preferences np ON dp.firebase_uid = np.firebase_uid
+          WHERE COALESCE(np.notify_notice, true) = true
+        `;
 
     let sentCount = 0;
     let failCount = 0;
