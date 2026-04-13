@@ -85,7 +85,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 }
 
 /* ── 카드 행 ── */
-function CardRow({ label, count, onClick, icon }: { label: string; count?: number; onClick?: () => void; icon: React.ReactNode }) {
+function CardRow({ label, count, badge, onClick, icon }: { label: string; count?: number; badge?: number; onClick?: () => void; icon: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
@@ -93,6 +93,9 @@ function CardRow({ label, count, onClick, icon }: { label: string; count?: numbe
     >
       <span className="text-[#6B7B3A]">{icon}</span>
       <span className="flex-1 text-sm text-[#333] dark:text-zinc-200">{label}</span>
+      {badge !== undefined && badge > 0 && (
+        <span className="text-[11px] font-bold text-white bg-[#C0392B] min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center">{badge}</span>
+      )}
       {count !== undefined && (
         <span className="text-xs font-medium text-[#6B7B3A] bg-[#6B7B3A]/10 px-2 py-0.5 rounded-full">{count}</span>
       )}
@@ -152,6 +155,7 @@ function MyPageContent() {
 
   /* 카운트 */
   const [counts, setCounts] = useState({ posts: 0, comments: 0, jobs: 0, bookmarks: 0, jobBookmarks: 0, notifications: 0 });
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   /* 모달 상태 */
   const [showNicknameModal, setShowNicknameModal] = useState(false);
@@ -192,6 +196,10 @@ function MyPageContent() {
           jobBookmarks: (bjData.bookmarks || []).length,
           notifications: (nData.notifications || []).length,
         });
+        // 미확인 알림 수
+        setUnreadNotifications(
+          (nData.notifications || []).filter((n: { is_read: boolean }) => !n.is_read).length
+        );
       } catch {}
     };
     loadCounts();
@@ -253,6 +261,13 @@ function MyPageContent() {
         const res = await fetch(`/api/notifications/web`, { headers });
         const data = await res.json();
         setNotifications(data.notifications || []);
+        // 알림 탭 진입 시 모두 읽음 처리 + 빨간 뱃지 제거
+        setUnreadNotifications(0);
+        fetch(`/api/notifications/web`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...headers },
+          body: JSON.stringify({ readAll: true }),
+        }).catch(() => {});
       }
     } catch {}
     setDataLoading(false);
@@ -413,7 +428,7 @@ function MyPageContent() {
   if (activeTab) {
     const tabLabels: Record<Tab, string> = {
       posts: "내가 쓴 글", comments: "내가 쓴 댓글", jobs: "내가 등록한 구인글",
-      bookmarks: "후기 북마크", jobBookmarks: "구인 북마크", notifications: "알림",
+      bookmarks: "후기 북마크", jobBookmarks: "구인 북마크", notifications: "알림 리스트",
     };
 
     return (
@@ -1270,7 +1285,7 @@ function MyPageContent() {
           <CardRow label="후기 북마크" count={counts.bookmarks} onClick={() => router.push("/my?tab=bookmarks")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>} />
           <CardRow label="내가 등록한 구인글" count={counts.jobs} onClick={() => router.push("/my?tab=jobs")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} />
           <CardRow label="구인 북마크" count={counts.jobBookmarks} onClick={() => router.push("/my?tab=jobBookmarks")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>} />
-          <CardRow label="알림" count={counts.notifications} onClick={() => router.push("/my?tab=notifications")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>} />
+          <CardRow label="알림 리스트" badge={unreadNotifications} onClick={() => router.push("/my?tab=notifications")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>} />
         </Card>
 
         {/* ── 3. 설정 카드 ── */}
