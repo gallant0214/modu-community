@@ -9,8 +9,9 @@ let redis: import("@upstash/redis").Redis | null = null;
 
 function getRedis() {
   if (redis) return redis;
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  // Vercel Marketplace는 KV_REST_API_*, 수동 설치는 UPSTASH_REDIS_REST_* 사용
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
 
   // 동적 import 회피: 빌드 타임에 env 없어도 깨지지 않도록
