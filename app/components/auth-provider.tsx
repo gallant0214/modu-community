@@ -111,20 +111,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // redirect 로그인 결과 처리
+    // redirect 로그인 결과 처리 (비동기, 블로킹 안 함)
     getRedirectResult(auth).catch(() => {});
 
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       if (u) {
-        const token = await u.getIdToken();
-        localStorage.setItem("fb_token", token);
-        await fetchNickname(u.uid, token);
+        // 1단계: 캐시된 닉네임으로 즉시 로그인 완료 표시 (빠름)
+        const cachedUid = localStorage.getItem(NICKNAME_UID_KEY);
+        const cachedNickname = localStorage.getItem(NICKNAME_CACHE_KEY);
+        if (cachedUid === u.uid && cachedNickname) {
+          setNickname(cachedNickname);
+        }
+        setLoading(false); // 즉시 로딩 해제 — 화면 먼저 보여줌
+
+        // 2단계: 토큰 + 닉네임을 백그라운드에서 갱신 (블로킹 안 함)
+        u.getIdToken().then((token) => {
+          localStorage.setItem("fb_token", token);
+          fetchNickname(u.uid, token); // await 안 함 — 백그라운드
+        }).catch(() => {});
       } else {
         localStorage.removeItem("fb_token");
         setNickname(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
