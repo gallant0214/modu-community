@@ -15,20 +15,30 @@ export async function GET(request: Request) {
   const offset = (page - 1) * limit;
 
   try {
+    // 사용자 최초 접속 시점 기록 (가입 이전 알림 필터링용)
+    await sql`CREATE TABLE IF NOT EXISTS user_first_seen (
+      firebase_uid TEXT PRIMARY KEY,
+      seen_at TIMESTAMPTZ DEFAULT NOW()
+    )`;
+    await sql`INSERT INTO user_first_seen (firebase_uid) VALUES (${user.uid}) ON CONFLICT (firebase_uid) DO NOTHING`;
+    const fsRows = await sql`SELECT seen_at FROM user_first_seen WHERE firebase_uid = ${user.uid}`;
+    const firstSeen = fsRows[0]?.seen_at || new Date().toISOString();
+
     const rows = await sql`
       SELECT * FROM notification_logs
-      WHERE firebase_uid = ${user.uid}
+      WHERE firebase_uid = ${user.uid} AND created_at >= ${firstSeen}
       ORDER BY created_at DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
 
     const countResult = await sql`
-      SELECT COUNT(*) as count FROM notification_logs WHERE firebase_uid = ${user.uid}
+      SELECT COUNT(*) as count FROM notification_logs
+      WHERE firebase_uid = ${user.uid} AND created_at >= ${firstSeen}
     `;
 
     const unreadResult = await sql`
       SELECT COUNT(*) as count FROM notification_logs
-      WHERE firebase_uid = ${user.uid} AND read = false
+      WHERE firebase_uid = ${user.uid} AND read = false AND created_at >= ${firstSeen}
     `;
 
     return NextResponse.json({
