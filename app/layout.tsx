@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     apple: "/apple-touch-icon.png",
   },
   other: {
-    "color-scheme": "light dark",
+    "color-scheme": "light",
     "msvalidate.01": "0BB0F3FA8383FA4BC8A43B4559FFA2AF",
   },
 };
@@ -52,7 +52,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" suppressHydrationWarning>
+    <html lang="ko" suppressHydrationWarning className="light" style={{ colorScheme: "light" }}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <link rel="manifest" href="/manifest.json" />
