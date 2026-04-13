@@ -16,11 +16,13 @@ function formatDateTime(dateStr: string) {
   return `${y}. ${m}. ${day}. ${h}:${min}`;
 }
 
-export function PostCardItem({ post, isNotice }: { post: Post; isNotice?: boolean }) {
+export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; isNotice?: boolean; hideCategoryTag?: string }) {
   const [likes, setLikes] = useState(Number(post.likes));
   const { user, getIdToken } = useAuth();
 
-  const tags = post.tags ? post.tags.split(",").map((t) => t.trim()).filter(Boolean) : [];
+  // hideCategoryTag가 지정되면 해당 태그를 숨김 (종목 내부에서 중복 표시 방지)
+  const allTags = post.tags ? post.tags.split(",").map((t) => t.trim()).filter(Boolean) : [];
+  const tags = hideCategoryTag ? allTags.filter((t) => t !== hideCategoryTag) : allTags;
   const commentsCount = Number(post.comments_count);
 
   // 지역 배지: "대구 - 수성구" 형태면 2개 배지로 분리

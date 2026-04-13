@@ -247,7 +247,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
           ) : (
             <div className="divide-y divide-[#E8E0D0]/50 dark:divide-zinc-800">
               {posts.map((post) => (
-                <PostCardItem key={post.id} post={post} />
+                <PostCardItem key={post.id} post={post} hideCategoryTag={category.name} />
               ))}
             </div>
           )}
