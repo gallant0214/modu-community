@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { exercises, categories } from "@/app/lib/data/practical";
+import { exercises, categories, referenceCategoriesSet } from "@/app/lib/data/practical";
 import { practicalSports, type PracticalSport } from "@/app/lib/data/practical_sports";
 import { oralSports, type OralSport } from "@/app/lib/data/oral";
 
@@ -239,6 +239,12 @@ function BodybuildingView({ category, setCategory, onBack }: { category: string;
             })}
           </div>
         </div>
+        {/* 참고용 카테고리 경고 배너 (핏모델 등) */}
+        {referenceCategoriesSet.has(category) && (
+          <div className="sticky top-[calc(3.5rem+52px)] z-[5] mx-3 mt-3 mb-0 rounded-xl bg-[#FFF0F0] dark:bg-[#2A1515] border border-[#C0392B]/30 px-4 py-2.5 text-center">
+            <p className="text-[12px] font-bold text-[#C0392B]">시험에 출제되는 종목은 아닙니다. 신설 종목으로 참고용입니다.</p>
+          </div>
+        )}
         {/* 그리드 */}
         <div className="p-3 grid grid-cols-2 gap-3">
           {filtered.map((ex) => {
