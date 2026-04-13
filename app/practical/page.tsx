@@ -241,13 +241,16 @@ function BodybuildingView({ category, setCategory, onBack }: { category: string;
         </div>
         {/* 그리드 */}
         <div className="p-3 grid grid-cols-2 gap-3">
-          {filtered.map((ex) => (
+          {filtered.map((ex) => {
+            // 포즈 카테고리는 세로 이미지 → portrait 비율
+            const isPose = !["가슴","이두","삼두","전완","등","어깨","하체","전체"].includes(ex.category);
+            return (
             <Link key={ex.id} href={`/practical/exercise/${ex.id}`}
               className={`rounded-2xl overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_24px_-20px_rgba(107,93,71,0.45)] ${surfaceCard}`}>
-              <div className="aspect-[3/2] bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
+              <div className={`${isPose ? "aspect-[2/3]" : "aspect-[3/2]"} bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center`}>
                 {ex.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={ex.image} alt={ex.name} className="w-full h-full object-cover" loading="lazy" />
+                  <img src={ex.image} alt={ex.name} className={`w-full h-full ${isPose ? "object-contain" : "object-cover"}`} loading="lazy" />
                 ) : (
                   <span className="text-xs text-zinc-400">이미지 준비중</span>
                 )}
@@ -259,7 +262,8 @@ function BodybuildingView({ category, setCategory, onBack }: { category: string;
                 </span>
               </div>
             </Link>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
