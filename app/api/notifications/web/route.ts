@@ -19,7 +19,16 @@ export async function GET(request: Request) {
       UNIQUE(firebase_uid, notification_id)
     )`;
 
-    // 관리자 브로드캐스트 알림 목록 (최근 50개)
+    // 사용자 최초 접속 시점 기록 (가입 이전 알림 필터링용)
+    await sql`CREATE TABLE IF NOT EXISTS user_first_seen (
+      firebase_uid TEXT PRIMARY KEY,
+      seen_at TIMESTAMPTZ DEFAULT NOW()
+    )`;
+    await sql`INSERT INTO user_first_seen (firebase_uid) VALUES (${user.uid}) ON CONFLICT (firebase_uid) DO NOTHING`;
+    const fsRows = await sql`SELECT seen_at FROM user_first_seen WHERE firebase_uid = ${user.uid}`;
+    const firstSeen = fsRows[0]?.seen_at || new Date().toISOString();
+
+    // 관리자 브로드캐스트 알림 목록 — 가입 시점 이후만 (최근 50개)
     const notifications = await sql`
       SELECT
         ab.id,
@@ -31,6 +40,7 @@ export async function GET(request: Request) {
       FROM admin_broadcasts ab
       LEFT JOIN web_notification_reads wnr
         ON wnr.notification_id = ab.id AND wnr.firebase_uid = ${user.uid}
+      WHERE ab.created_at >= ${firstSeen}
       ORDER BY ab.created_at DESC
       LIMIT 50
     `;

@@ -223,8 +223,8 @@ function BodybuildingView({ category, setCategory, onBack }: { category: string;
             onMouseMove={onMouseMove}
             onMouseUp={onMouseUp}
             onMouseLeave={onMouseUp}
-            className="flex gap-2 overflow-x-auto pb-1 cursor-grab select-none"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" }}
+            className="flex gap-2 overflow-x-auto pb-1 cursor-grab select-none category-scroll"
+            style={{ WebkitOverflowScrolling: "touch" }}
           >
             {allCategories.map((cat) => {
               const count = cat === "전체" ? exercises.length : exercises.filter(e => e.category === cat).length;
