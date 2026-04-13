@@ -191,8 +191,8 @@ function BodybuildingView({ category, setCategory, onBack }: { category: string;
     <div className={pageShell}>
       <div className="mx-auto max-w-2xl">
         <BackHeader title="보디빌딩" onBack={onBack} />
-        {/* 부위 필터 */}
-        <div className="px-4 py-3 border-b border-[#E8E0D0] dark:border-zinc-800">
+        {/* 부위 필터 (sticky) */}
+        <div className="sticky top-14 z-10 px-4 py-3 border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#F8F4EC] dark:bg-zinc-950">
           <div className="flex gap-2 overflow-x-auto pb-1">
             {allCategories.map((cat) => {
               const count = cat === "전체" ? exercises.length : exercises.filter(e => e.category === cat).length;
