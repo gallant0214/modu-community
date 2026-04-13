@@ -14,7 +14,9 @@ export default function AdminPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"pending" | "resolved" | "inquiries">("pending");
+  const [tab, setTab] = useState<"pending" | "resolved" | "inquiries" | "kpi">("pending");
+  const [kpiData, setKpiData] = useState<any>(null);
+  const [kpiLoading, setKpiLoading] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -180,9 +182,156 @@ export default function AdminPage() {
           >
             문의사항 <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-600 dark:bg-blue-950 dark:text-blue-400">{pendingInquiries.length}</span>
           </button>
+          <button
+            onClick={async () => {
+              setTab("kpi");
+              if (!kpiData) {
+                setKpiLoading(true);
+                try {
+                  const res = await fetch("/api/admin/kpi", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ password: storedPassword }),
+                  });
+                  const data = await res.json();
+                  if (!data.error) setKpiData(data);
+                } catch {}
+                setKpiLoading(false);
+              }
+            }}
+            className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${
+              tab === "kpi"
+                ? "border-b-2 border-violet-500 text-violet-600 dark:text-violet-400"
+                : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+            }`}
+          >
+            KPI
+          </button>
         </div>
 
         {/* Content */}
+
+        {/* KPI 대시보드 */}
+        {tab === "kpi" && (
+          <div className="p-4">
+            {kpiLoading ? (
+              <div className="flex justify-center py-16">
+                <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : kpiData ? (
+              <div className="space-y-4">
+                {/* 사용자 */}
+                <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+                  <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">사용자</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <KpiCard label="전체 가입자" value={kpiData.users.total} />
+                    <KpiCard label="이번 달 신규" value={kpiData.users.thisMonth} accent />
+                    <KpiCard label="이번 주 신규" value={kpiData.users.thisWeek} />
+                    <KpiCard label="오늘 신규" value={kpiData.users.today} />
+                  </div>
+                </div>
+
+                {/* 활성도 */}
+                <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+                  <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">활성도 (7일)</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <KpiCard label="글 작성자" value={kpiData.engagement.activePostersWeek} />
+                    <KpiCard label="댓글 작성자" value={kpiData.engagement.activeCommentersWeek} />
+                    <KpiCard label="게시글 좋아요" value={kpiData.engagement.postLikes} />
+                    <KpiCard label="댓글 좋아요" value={kpiData.engagement.commentLikes} />
+                  </div>
+                </div>
+
+                {/* 콘텐츠 */}
+                <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+                  <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">콘텐츠</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <KpiCard label="전체 게시글" value={kpiData.posts.total} />
+                    <KpiCard label="이번 달 게시글" value={kpiData.posts.thisMonth} accent />
+                    <KpiCard label="이번 주 게시글" value={kpiData.posts.thisWeek} />
+                    <KpiCard label="전체 댓글" value={kpiData.comments.total} />
+                  </div>
+                </div>
+
+                {/* 구인 */}
+                <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+                  <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">구인</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <KpiCard label="전체 구인글" value={kpiData.jobs.total} />
+                    <KpiCard label="모집중" value={kpiData.jobs.open} accent />
+                    <KpiCard label="모집종료" value={kpiData.jobs.closed} />
+                    <KpiCard label="이번 달 등록" value={kpiData.jobs.thisMonth} />
+                  </div>
+                </div>
+
+                {/* 북마크 */}
+                <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+                  <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">참여</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <KpiCard label="게시글 북마크" value={kpiData.engagement.postBookmarks} />
+                    <KpiCard label="구인 북마크" value={kpiData.engagement.jobBookmarks} />
+                    <KpiCard label="미처리 신고" value={kpiData.reports.pending} warn />
+                    <KpiCard label="미답변 문의" value={kpiData.inquiries.pending} warn />
+                  </div>
+                </div>
+
+                {/* 인기 카테고리 */}
+                {kpiData.topCategories.length > 0 && (
+                  <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+                    <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">이번 달 인기 종목</h3>
+                    <div className="space-y-2">
+                      {kpiData.topCategories.map((c: { name: string; count: number }, i: number) => (
+                        <div key={c.name} className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-violet-100 dark:bg-violet-950 text-violet-600 dark:text-violet-400 text-[10px] font-bold flex items-center justify-center">{i + 1}</span>
+                          <span className="flex-1 text-sm text-zinc-800 dark:text-zinc-200">{c.name}</span>
+                          <span className="text-sm font-bold text-violet-600 dark:text-violet-400">{c.count}건</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 인기 게시글 */}
+                {kpiData.topPosts.length > 0 && (
+                  <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+                    <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">이번 달 인기 게시글 (조회수)</h3>
+                    <div className="space-y-2">
+                      {kpiData.topPosts.map((p: { id: number; title: string; views: number; likes: number; comments: number }, i: number) => (
+                        <div key={p.id} className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 text-[10px] font-bold flex items-center justify-center">{i + 1}</span>
+                          <span className="flex-1 text-sm text-zinc-800 dark:text-zinc-200 truncate">{p.title}</span>
+                          <span className="shrink-0 text-[11px] text-zinc-400">조회 {p.views} · ♥ {p.likes} · 댓글 {p.comments}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 새로고침 */}
+                <button
+                  onClick={async () => {
+                    setKpiLoading(true);
+                    try {
+                      const res = await fetch("/api/admin/kpi", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ password: storedPassword }),
+                      });
+                      const data = await res.json();
+                      if (!data.error) setKpiData(data);
+                    } catch {}
+                    setKpiLoading(false);
+                  }}
+                  className="w-full py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  새로고침
+                </button>
+              </div>
+            ) : (
+              <p className="text-center py-16 text-sm text-zinc-400">KPI 데이터를 불러올 수 없습니다.</p>
+            )}
+          </div>
+        )}
 
         {/* 신고 목록 (미처리 / 처리완료) */}
         {(tab === "pending" || tab === "resolved") && (
@@ -500,6 +649,18 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* KPI 카드 */
+function KpiCard({ label, value, accent, warn }: { label: string; value: number; accent?: boolean; warn?: boolean }) {
+  return (
+    <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800 p-3 text-center">
+      <p className={`text-xl font-bold ${warn && value > 0 ? "text-red-500" : accent ? "text-violet-600 dark:text-violet-400" : "text-zinc-800 dark:text-zinc-100"}`}>
+        {value.toLocaleString()}
+      </p>
+      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{label}</p>
     </div>
   );
 }
