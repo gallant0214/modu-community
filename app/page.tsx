@@ -13,17 +13,73 @@ export default async function Home() {
         {/* ===== 1. 히어로 ===== */}
         <section className="lp-hero" id="about">
           <div className="lp-c">
+            <div className="lp-hero-chip">커뮤니티 · 스포츠 구인 · 시험 준비</div>
             <h1 className="lp-hero-title">
-              종목별 경험과 정보를 나누는 커뮤니티
+              체육지도사를 준비하고
+              <br />
+              현장에서 일하는 사람들의 브랜드 허브
             </h1>
             <p className="lp-hero-sub">
-              후기, 질문, 준비 과정, 현장 이야기를 종목별로 나눠보세요.
+              종목별 후기와 정보 공유, 스포츠 업계 채용, 그리고 기출문제 풀이까지.
+              <br />
+              흩어진 준비 과정을 모두의 지도사 브랜드 안에서 더 차분하게 이어가세요.
             </p>
             <div className="lp-hero-ctas">
-              <Link href="/community" className="lp-btn lp-btn-primary">실기·구술 후기 보기</Link>
+              <Link href="/community" className="lp-btn lp-btn-primary">종목별 커뮤니티 보기</Link>
               <Link href="/jobs" className="lp-btn lp-btn-outline">구인 공고 탐색</Link>
+              <a
+                href="https://modujidosa.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="lp-btn lp-btn-soft"
+              >
+                모두의지도사 앱 보기
+              </a>
             </div>
-            <p className="lp-hero-note">무료 이용 · 가입 후 바로 시작</p>
+            <p className="lp-hero-note">무료 커뮤니티 · 스포츠 업계 전용 구인 · 기출문제 풀이앱 연결</p>
+          </div>
+        </section>
+
+        {/* ===== 2. 브랜드 연결 ===== */}
+        <section className="lp-section">
+          <div className="lp-c">
+            <div className="lp-brand-bridge">
+              <div>
+                <div className="lp-label">브랜드 안내</div>
+                <h2 className="lp-title">커뮤니티와 학습을 함께 이어가는 모두의 지도사</h2>
+                <p className="lp-desc">
+                  이 홈페이지에서는 종목별 경험, 질문, 현장 이야기, 스포츠 구인 정보를 모아보고,
+                  {' '}
+                  <a
+                    href="https://modujidosa.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="lp-inline-link"
+                  >
+                    모두의지도사
+                  </a>
+                  에서는 기출문제, 오답노트, 모의고사 중심의 학습을 이어갈 수 있습니다.
+                </p>
+              </div>
+              <div className="lp-brand-grid">
+                <div className="lp-brand-card">
+                  <div className="lp-brand-kicker">moducm.com</div>
+                  <h3>정보를 찾고 연결되는 커뮤니티</h3>
+                  <p>종목별 후기, 질문, 준비 팁, 스포츠 구인 공고를 한곳에서 살펴보세요.</p>
+                </div>
+                <a
+                  href="https://modujidosa.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="lp-brand-card lp-brand-card-link"
+                >
+                  <div className="lp-brand-kicker">modujidosa.com</div>
+                  <h3>기출문제 풀이와 학습에 집중하는 앱</h3>
+                  <p>스포츠지도사 자격시험 준비를 위한 기출문제, 오답노트, 모의고사를 이어서 확인하세요.</p>
+                  <span className="lp-brand-link">모두의지도사 바로가기 ↗</span>
+                </a>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -32,7 +88,7 @@ export default async function Home() {
         <section className="lp-section">
           <div className="lp-c"><div className="lp-card">
             <div className="lp-label">왜 필요한가요?</div>
-            <h2 className="lp-title">기존 방식 vs 모두의 지도사</h2>
+            <h2 className="lp-title">흩어진 준비 과정을 한 브랜드 안에서 정리합니다</h2>
             <div className="lp-compare">
               <div className="lp-compare-col lp-compare-before">
                 <div className="lp-compare-header">😩 지금까지</div>
@@ -46,10 +102,10 @@ export default async function Home() {
               <div className="lp-compare-col lp-compare-after">
                 <div className="lp-compare-header">✅ 모두의 지도사에서</div>
                 <ul>
-                  <li>종목·시험장별로 정리된 후기 아카이브</li>
-                  <li>종목 선택 한 번이면 바로 확인</li>
-                  <li>스포츠 업계 전용 구인 게시판</li>
-                  <li>종목·지역·형태별 필터로 바로 비교</li>
+                  <li>종목별 후기와 질문을 한 흐름으로 탐색</li>
+                  <li>실기·구술 정보와 현장 경험을 함께 확인</li>
+                  <li>스포츠 업계 전용 구인 공고를 바로 비교</li>
+                  <li>기출문제 풀이 앱까지 브랜드 안에서 자연스럽게 연결</li>
                 </ul>
               </div>
             </div>

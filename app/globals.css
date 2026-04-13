@@ -66,6 +66,8 @@ summary {
 .lp-btn-primary:hover{background:#3d5c4f}
 .lp-btn-outline{background:#fff;color:#4A6D5E;border:1.5px solid rgba(74,109,94,.3)}
 .lp-btn-outline:hover{border-color:#4A6D5E;background:rgba(74,109,94,.04)}
+.lp-btn-soft{background:#F2EBDD;color:#4A6D5E;border:1px solid rgba(74,109,94,.12)}
+.lp-btn-soft:hover{background:#EAE1CF}
 .lp-hero-note{font-size:12px;color:#9B9590}
 
 /* Stats */
@@ -83,6 +85,18 @@ summary {
 .lp-title{font-size:22px;font-weight:800;line-height:1.45;margin-bottom:12px;letter-spacing:-.3px}
 .lp-desc{font-size:15px;color:#6B6560;margin-bottom:24px;line-height:1.8}
 .lp-section-cta{text-align:center;margin-top:24px}
+.lp-inline-link{color:#4A6D5E;font-weight:700;text-decoration:underline;text-underline-offset:3px}
+
+/* Brand bridge */
+.lp-brand-bridge{background:linear-gradient(180deg,rgba(255,252,247,.92),rgba(248,243,234,.88));border:1px solid rgba(74,109,94,.1);border-radius:24px;padding:34px 32px;box-shadow:0 12px 32px rgba(47,42,36,.05)}
+.lp-brand-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:24px}
+.lp-brand-card{background:rgba(255,255,255,.72);border:1px solid rgba(74,109,94,.1);border-radius:18px;padding:24px;min-height:100%}
+.lp-brand-card h3{font-size:18px;font-weight:800;line-height:1.45;margin-bottom:10px;letter-spacing:-.2px}
+.lp-brand-card p{font-size:14px;color:#6B6560;line-height:1.8}
+.lp-brand-kicker{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#4A6D5E;margin-bottom:12px}
+.lp-brand-card-link{display:block;position:relative;overflow:hidden;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.lp-brand-card-link:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(47,42,36,.08);border-color:rgba(74,109,94,.24)}
+.lp-brand-link{display:inline-flex;align-items:center;margin-top:16px;font-size:13px;font-weight:700;color:#4A6D5E}
 
 /* Compare */
 .lp-compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -160,8 +174,9 @@ summary {
 @media(max-width:768px){
   .lp-hero-title{font-size:26px}
   .lp-title{font-size:19px}
-  .lp-grid-2,.lp-grid-3,.lp-compare,.lp-persona-grid{grid-template-columns:1fr}
+  .lp-grid-2,.lp-grid-3,.lp-compare,.lp-persona-grid,.lp-brand-grid{grid-template-columns:1fr}
   .lp-card{padding:24px 18px}
+  .lp-brand-bridge{padding:24px 18px;border-radius:20px}
   .lp-hero{padding:calc(env(safe-area-inset-top, 0px) + 96px) 0 32px}
   .lp-nav{display:none}
   .lp-hero-sub br,.lp-desc br{display:none}
@@ -200,4 +215,3 @@ summary {
 .lp-footer-nav-right{display:flex;gap:20px}
 .lp-footer-nav-right a{font-size:12px;color:rgba(255,255,255,.5);transition:color .2s}
 .lp-footer-nav-right a:hover{color:rgba(255,255,255,.8)}
-
