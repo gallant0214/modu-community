@@ -143,6 +143,9 @@ export default function PostDetailPage() {
     ]).then(([postData, commentsData]) => {
       setPost(postData);
       setLikes(Number(postData?.likes ?? 0));
+      if (postData?.is_liked) setLiked(true);
+      const likedIds = (commentsData ?? []).filter((c: { is_liked?: boolean }) => c.is_liked).map((c: { id: number }) => c.id);
+      if (likedIds.length > 0) setLikedCommentIds(new Set(likedIds));
       setComments(commentsData ?? []);
       setLoading(false);
       viewPost(Number(postId));
@@ -224,14 +227,17 @@ export default function PostDetailPage() {
     if (!user) { alert("로그인 후 이용 가능합니다"); return; }
     const token = await getIdToken();
     if (!token) { alert("로그인이 필요합니다"); return; }
+    // 낙관적 업데이트: 즉시 UI 반영
+    const wasLiked = liked;
+    const prevLikes = likes;
+    setLiked(!wasLiked);
+    setLikes(wasLiked ? Math.max(prevLikes - 1, 0) : prevLikes + 1);
+    // 서버 호출 (백그라운드)
     const result = await likePost(Number(postId), Number(categoryId), token);
-    if (result && "error" in result && result.error) { alert(result.error); return; }
-    if (result && "unliked" in result && result.unliked) {
-      setLiked(false);
-      setLikes((prev) => Math.max(prev - 1, 0));
-    } else {
-      setLiked(true);
-      setLikes((prev) => prev + 1);
+    if (result && "error" in result && result.error) {
+      // 롤백
+      setLiked(wasLiked);
+      setLikes(prevLikes);
     }
   }
 
@@ -916,14 +922,26 @@ export default function PostDetailPage() {
                               const token = await getIdToken();
                               if (!token) { alert("로그인이 필요합니다"); return; }
                               const wasLiked = likedCommentIds.has(comment.id);
-                              const result = await likeComment(comment.id, Number(postId), Number(categoryId), token) as { unliked?: boolean; error?: string } | undefined;
-                              if (result?.error) { alert(result.error); return; }
-                              if (wasLiked || result?.unliked) {
+                              const prevLikes = comment.likes ?? 0;
+                              // 낙관적 업데이트: 즉시 UI 반영
+                              if (wasLiked) {
                                 setLikedCommentIds((prev) => { const s = new Set(prev); s.delete(comment.id); return s; });
-                                setComments((prev) => prev.map((c) => c.id === comment.id ? { ...c, likes: Math.max((c.likes ?? 0) - 1, 0) } : c));
+                                setComments((prev) => prev.map((c) => c.id === comment.id ? { ...c, likes: Math.max(prevLikes - 1, 0) } : c));
                               } else {
                                 setLikedCommentIds((prev) => new Set(prev).add(comment.id));
-                                setComments((prev) => prev.map((c) => c.id === comment.id ? { ...c, likes: (c.likes ?? 0) + 1 } : c));
+                                setComments((prev) => prev.map((c) => c.id === comment.id ? { ...c, likes: prevLikes + 1 } : c));
+                              }
+                              // 서버 호출 (백그라운드) — 실패 시 롤백
+                              const result = await likeComment(comment.id, Number(postId), Number(categoryId), token) as { unliked?: boolean; error?: string } | undefined;
+                              if (result?.error) {
+                                // 롤백
+                                if (wasLiked) {
+                                  setLikedCommentIds((prev) => new Set(prev).add(comment.id));
+                                  setComments((prev) => prev.map((c) => c.id === comment.id ? { ...c, likes: prevLikes } : c));
+                                } else {
+                                  setLikedCommentIds((prev) => { const s = new Set(prev); s.delete(comment.id); return s; });
+                                  setComments((prev) => prev.map((c) => c.id === comment.id ? { ...c, likes: prevLikes } : c));
+                                }
                               }
                             }}
                             className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
