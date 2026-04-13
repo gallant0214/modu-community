@@ -39,11 +39,33 @@ function isInAppBrowser(): boolean {
 function openInExternalBrowser() {
   const url = window.location.href;
   const ua = navigator.userAgent.toLowerCase();
+
+  // Android: Chrome intent → 실패 시 기본 브라우저 fallback
   if (/android/i.test(ua)) {
-    const intentUrl = `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;end`;
-    window.location.href = intentUrl;
+    window.location.href = `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
     return;
   }
+
+  // iOS 카카오톡: kakaotalk 스킴으로 외부 브라우저 열기
+  if (/kakaotalk/i.test(ua)) {
+    window.location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(url)}`;
+    return;
+  }
+
+  // iOS 네이버앱: naversearchapp 스킴
+  if (/naver/i.test(ua) && /iphone|ipad|ipod/i.test(ua)) {
+    window.location.href = `naversearchapp://inappbrowser?url=${encodeURIComponent(url)}&target=browser`;
+    return;
+  }
+
+  // 기타 iOS 인앱 브라우저: Safari로 열기 시도
+  if (/iphone|ipad|ipod/i.test(ua)) {
+    // x-web-search로 Safari 강제 실행
+    window.location.href = url;
+    setTimeout(() => { window.open(url, "_system"); }, 300);
+    return;
+  }
+
   window.open(url, "_blank");
 }
 
@@ -108,14 +130,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = async () => {
-    // 인앱 브라우저에서는 외부 브라우저로 유도
+    // 인앱 브라우저(카카오톡·네이버·인스타 등)에서는 자동으로 외부 브라우저로 이동
     if (isInAppBrowser()) {
-      const confirmed = confirm(
-        "인앱 브라우저에서는 Google 로그인이 제한됩니다.\n\n외부 브라우저(Chrome/Safari)에서 열어서 로그인해 주세요.\n\n[확인]을 누르면 외부 브라우저로 이동합니다."
-      );
-      if (confirmed) {
-        openInExternalBrowser();
-      }
+      openInExternalBrowser();
       return;
     }
 
@@ -144,11 +161,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signInWithApple = async () => {
+    // 인앱 브라우저에서는 자동으로 외부 브라우저로 이동
     if (isInAppBrowser()) {
-      const confirmed = confirm(
-        "인앱 브라우저에서는 Apple 로그인이 제한됩니다.\n\n외부 브라우저(Chrome/Safari)에서 열어서 로그인해 주세요.\n\n[확인]을 누르면 외부 브라우저로 이동합니다."
-      );
-      if (confirmed) openInExternalBrowser();
+      openInExternalBrowser();
       return;
     }
 
