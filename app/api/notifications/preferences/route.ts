@@ -17,6 +17,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         notify_comment: true,
         notify_reply: true,
+        notify_like: true,
         notify_job: true,
         notify_notice: true,
         notify_promo: false,
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       notify_comment: pref.notify_comment,
       notify_reply: pref.notify_reply,
+      notify_like: pref.notify_like ?? true,
       notify_job: pref.notify_job,
       notify_notice: pref.notify_notice,
       notify_promo: pref.notify_promo,
@@ -48,21 +50,26 @@ export async function POST(request: Request) {
     const {
       notify_comment = true,
       notify_reply = true,
+      notify_like = true,
       notify_job = true,
       notify_notice = true,
       notify_promo = false,
       notify_keyword = true,
     } = body;
 
+    // notify_like 컬럼 없을 수 있으므로 안전하게 추가
+    await sql`ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS notify_like BOOLEAN DEFAULT true`;
+
     await sql`
       INSERT INTO notification_preferences
-        (firebase_uid, notify_comment, notify_reply, notify_job, notify_notice, notify_promo, notify_keyword, updated_at)
+        (firebase_uid, notify_comment, notify_reply, notify_like, notify_job, notify_notice, notify_promo, notify_keyword, updated_at)
       VALUES
-        (${user.uid}, ${notify_comment}, ${notify_reply}, ${notify_job}, ${notify_notice}, ${notify_promo}, ${notify_keyword}, NOW())
+        (${user.uid}, ${notify_comment}, ${notify_reply}, ${notify_like}, ${notify_job}, ${notify_notice}, ${notify_promo}, ${notify_keyword}, NOW())
       ON CONFLICT (firebase_uid)
       DO UPDATE SET
         notify_comment = ${notify_comment},
         notify_reply = ${notify_reply},
+        notify_like = ${notify_like},
         notify_job = ${notify_job},
         notify_notice = ${notify_notice},
         notify_promo = ${notify_promo},

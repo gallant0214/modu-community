@@ -37,32 +37,31 @@ export async function POST(request: Request) {
     `;
     const broadcastId = rows[0].id;
 
-    // 광고 수신 동의한 사용자 목록 조회
+    // broadcast_type에 따라 올바른 알림 설정 기준으로 사용자 필터
+    const bType = broadcast_type || "notice";
+    const prefColumn = bType === "promo" ? "notify_promo" : "notify_notice";
+
+    // 해당 알림을 켜둔 사용자 조회 (설정 없는 사용자도 포함 — 기본 ON)
     const users = await sql`
       SELECT DISTINCT dp.firebase_uid
       FROM device_tokens dp
       LEFT JOIN notification_preferences np ON dp.firebase_uid = np.firebase_uid
-      WHERE np.notify_promo = true OR np.notify_promo IS NULL
+      WHERE COALESCE(np.${sql.unsafe(prefColumn)}, true) = true
     `;
 
     let sentCount = 0;
     let failCount = 0;
     const errors: string[] = [];
 
+    // sendPushToUser가 알림 로그 + FCM 발송을 모두 처리
     for (const u of users) {
       try {
-        await sql`
-          INSERT INTO notification_logs (firebase_uid, type, title, body, data)
-          VALUES (${u.firebase_uid}, 'admin_broadcast', ${title.trim()}, ${body.trim()},
-            ${JSON.stringify({ broadcastId: String(broadcastId), broadcast_type: broadcast_type || "notice", image_url, link_url })})
-        `;
-
         await sendPushToUser(
           u.firebase_uid,
-          "promo",
+          bType,
           title.trim(),
           body.trim(),
-          { type: "admin_broadcast", broadcastId: String(broadcastId) }
+          { type: "admin_broadcast", broadcastId: String(broadcastId), broadcast_type: bType, image_url: image_url || "", link_url: link_url || "" }
         );
         sentCount++;
       } catch (err: any) {
