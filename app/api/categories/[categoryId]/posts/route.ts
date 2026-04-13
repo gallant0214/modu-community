@@ -1,5 +1,6 @@
 import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
+import { cached } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +21,10 @@ export async function GET(
   const isSearching = searchQuery.length > 0;
   const likeQuery = `%${searchQuery}%`;
 
-  // 공지 게시글
-  const noticePosts = await sql`SELECT * FROM posts WHERE is_notice = true ORDER BY created_at DESC LIMIT 1`;
+  // 공지 게시글 (5분 캐시)
+  const noticePosts = await cached(`notices`, 300, () =>
+    sql`SELECT * FROM posts WHERE is_notice = true ORDER BY created_at DESC LIMIT 1`
+  );
 
   let posts;
   let totalCount: number;
@@ -49,29 +52,38 @@ export async function GET(
       posts = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) AND (title ILIKE ${likeQuery} OR content ILIKE ${likeQuery} OR author ILIKE ${likeQuery} OR region ILIKE ${likeQuery}) ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
     }
   } else {
-    const countResult = await sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL)`;
-    totalCount = Number(countResult[0].count);
-
-    if (sortMode === "popular") {
-      posts = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) ORDER BY views DESC, created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    } else if (sortMode === "helpful") {
-      posts = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) ORDER BY likes DESC, created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    } else {
-      posts = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    }
+    // 일반 목록 조회 (60초 캐시)
+    const cacheKey = `posts:cat:${catId}:sort:${sortMode}:p:${currentPage}`;
+    const result = await cached(cacheKey, 60, async () => {
+      const countResult = await sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL)`;
+      const tc = Number(countResult[0].count);
+      let p;
+      if (sortMode === "popular") {
+        p = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) ORDER BY views DESC, created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
+      } else if (sortMode === "helpful") {
+        p = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) ORDER BY likes DESC, created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
+      } else {
+        p = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
+      }
+      return { posts: p, totalCount: tc };
+    });
+    posts = result.posts;
+    totalCount = result.totalCount;
   }
 
   const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
 
-  // Top posts this month
+  // Top posts this month (2분 캐시)
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const topPosts = await sql`
-    SELECT * FROM posts
-    WHERE category_id = ${catId} AND created_at >= ${monthStart} AND likes > 0
-    ORDER BY likes DESC
-    LIMIT 3
-  `;
+  const topPosts = await cached(`top:cat:${catId}:${now.getFullYear()}-${now.getMonth()}`, 120, () =>
+    sql`
+      SELECT * FROM posts
+      WHERE category_id = ${catId} AND created_at >= ${monthStart} AND likes > 0
+      ORDER BY likes DESC
+      LIMIT 3
+    `
+  );
 
   return NextResponse.json({
     posts,

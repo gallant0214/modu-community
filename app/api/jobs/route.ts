@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 import { sendKeywordAlerts } from "@/app/lib/notifications";
+import { cached, invalidateCache } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -152,24 +153,24 @@ export async function GET(request: Request) {
 
     const searchPattern = q ? `%${q}%` : "";
     const orderCol = getSortCol(sort);
+    const isSearching = !!q;
 
-    const { countResult, rows } = await queryJobs({
-      regionCode, searchPattern, searchType,
-      employmentType, sportFilter, hideClosed,
-      limit, offset, orderCol,
-    });
+    // 검색이 아닌 일반 목록은 60초 캐시
+    const cacheKey = !isSearching
+      ? `jobs:r:${regionCode}:s:${sort}:p:${page}:e:${employmentType}:sp:${sportFilter}:hc:${hideClosed}`
+      : null;
 
-    const total = Number(countResult[0].total);
+    const result = cacheKey
+      ? await cached(cacheKey, 60, () => queryJobs({ regionCode, searchPattern, searchType, employmentType, sportFilter, hideClosed, limit, offset, orderCol }))
+      : await queryJobs({ regionCode, searchPattern, searchType, employmentType, sportFilter, hideClosed, limit, offset, orderCol });
+
+    const total = Number(result.countResult[0].total);
 
     return NextResponse.json({
-      posts: rows,
+      posts: result.rows,
       total,
       page,
       totalPages: Math.ceil(total / limit),
-    }, {
-      headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate",
-      },
     });
   } catch (e) {
     console.error("GET /api/jobs error:", e);
