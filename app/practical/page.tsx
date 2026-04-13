@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { exercises, categories } from "@/app/lib/data/practical";
 import { practicalSports, type PracticalSport } from "@/app/lib/data/practical_sports";
@@ -184,16 +184,48 @@ export default function PracticalPage() {
 // 보디빌딩 상세 뷰
 // ==========================================
 function BodybuildingView({ category, setCategory, onBack }: { category: string; setCategory: (c: string) => void; onBack: () => void }) {
-  const allCategories = ["전체", ...categories];
+  // categories 에 이미 "전체"가 포함돼 있으면 중복 방지
+  const allCategories = categories[0] === "전체" ? [...categories] : ["전체", ...categories];
   const filtered = category === "전체" ? exercises : exercises.filter((e) => e.category === category);
+
+  // 데스크톱 드래그 스크롤
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const scrollLeft = useRef(0);
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    isDragging.current = true;
+    startX.current = e.pageX - (scrollRef.current?.offsetLeft || 0);
+    scrollLeft.current = scrollRef.current?.scrollLeft || 0;
+    if (scrollRef.current) scrollRef.current.style.cursor = "grabbing";
+  };
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging.current || !scrollRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - (scrollRef.current.offsetLeft || 0);
+    scrollRef.current.scrollLeft = scrollLeft.current - (x - startX.current);
+  };
+  const onMouseUp = () => {
+    isDragging.current = false;
+    if (scrollRef.current) scrollRef.current.style.cursor = "grab";
+  };
 
   return (
     <div className={pageShell}>
       <div className="mx-auto max-w-2xl">
         <BackHeader title="보디빌딩" onBack={onBack} />
-        {/* 부위 필터 (sticky) */}
+        {/* 부위 필터 (sticky + 드래그 스크롤) */}
         <div className="sticky top-14 z-10 px-4 py-3 border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#F8F4EC] dark:bg-zinc-950">
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          <div
+            ref={scrollRef}
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseUp={onMouseUp}
+            onMouseLeave={onMouseUp}
+            className="flex gap-2 overflow-x-auto pb-1 cursor-grab select-none"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" }}
+          >
             {allCategories.map((cat) => {
               const count = cat === "전체" ? exercises.length : exercises.filter(e => e.category === cat).length;
               return (

@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* 드래그 스크롤 영역 스크롤바 숨기기 */
+.cursor-grab::-webkit-scrollbar {
+  display: none;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
