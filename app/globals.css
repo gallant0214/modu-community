@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* 다크 모드를 클래스 기반으로 전환 — .dark 클래스가 없으면 dark: 유틸리티 전부 비활성 */
+@variant dark (&:where(.dark, .dark *));
+
 /* 카테고리 필터 스크롤바: 데스크톱만 얇게, 모바일 숨김 */
 .category-scroll::-webkit-scrollbar {
   height: 4px;
@@ -35,12 +38,7 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* 다크 모드 비활성화 — 항상 라이트 테마 강제 */
 
 body {
   background: var(--background);
