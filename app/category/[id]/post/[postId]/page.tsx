@@ -340,42 +340,59 @@ export default function PostDetailPage() {
       setEditCommentError("내용을 입력해주세요");
       return;
     }
+    // 낙관적 수정: 즉시 UI 반영
+    const backup = comments;
+    const newContent = editCommentContent.trim();
+    setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, content: newContent } : c));
+    setEditingCommentId(null);
+    setEditCommentContent("");
+    setEditCommentError("");
+    setEditCommentPasswordVerified(false);
+
+    // 서버 호출 (백그라운드) — 실패 시 롤백
     try {
       const token = await getIdToken();
-      if (!token) { setEditCommentError("로그인이 필요합니다"); return; }
+      if (!token) { setComments(backup); setEditCommentError("로그인이 필요합니다"); return; }
       const res = await fetch(`/api/comments/${commentId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ content: editCommentContent.trim() }),
+        body: JSON.stringify({ content: newContent }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setEditCommentError(data.error || "수정에 실패했습니다"); return; }
-      setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, content: editCommentContent.trim() } : c));
-      setEditingCommentId(null);
-      setEditCommentContent("");
-      setEditCommentError("");
-      setEditCommentPasswordVerified(false);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setComments(backup); // 롤백
+        setEditCommentError(data.error || "수정에 실패했습니다");
+      }
     } catch {
+      setComments(backup); // 롤백
       setEditCommentError("오류가 발생했습니다");
     }
   }
 
   // 본인/관리자: Firebase 인증 토큰으로 직접 REST DELETE
   async function handleOwnerCommentDelete(commentId: number) {
+    // 낙관적 삭제: 즉시 UI에서 제거
+    const backup = comments;
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+    setDeletingCommentId(null);
+    setCommentDeleteError("");
+
+    // 서버 호출 (백그라운드) — 실패 시 롤백
     try {
       const token = await getIdToken();
-      if (!token) { setCommentDeleteError("로그인이 필요합니다"); return; }
+      if (!token) { setComments(backup); setCommentDeleteError("로그인이 필요합니다"); return; }
       const res = await fetch(`/api/comments/${commentId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ post_id: Number(postId) }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setCommentDeleteError(data.error || "삭제에 실패했습니다"); return; }
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
-      setDeletingCommentId(null);
-      setCommentDeleteError("");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setComments(backup); // 롤백
+        setCommentDeleteError(data.error || "삭제에 실패했습니다");
+      }
     } catch {
+      setComments(backup); // 롤백
       setCommentDeleteError("오류가 발생했습니다");
     }
   }
