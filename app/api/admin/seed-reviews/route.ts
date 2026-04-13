@@ -1,6 +1,6 @@
 import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
-import { verifyAdmin } from "@/app/lib/admin-auth";
+import { verifyAdminPassword } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -75,8 +75,9 @@ const reviews: { categoryId: number; posts: { title: string; content: string; ta
 
 export async function POST(request: Request) {
   const { password } = await request.json().catch(() => ({ password: "" }));
-  const authError = await verifyAdmin(request, password);
-  if (authError) return authError;
+  if (!(await verifyAdminPassword(password))) {
+    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
+  }
 
   let insertedCount = 0;
 
