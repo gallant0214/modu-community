@@ -57,6 +57,7 @@ export default function PostDetailPage() {
   const [commentPassword, setCommentPassword] = useState("");
   const [commentContent, setCommentContent] = useState("");
   const [commentError, setCommentError] = useState("");
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
 
   // 댓글 정렬
   const [commentSort, setCommentSort] = useState<"newest" | "popular" | "likes">("newest");
@@ -255,28 +256,63 @@ export default function PostDetailPage() {
   }
 
   async function handleCommentSubmit() {
+    // 이미 제출 중이면 중복 요청 차단 (여러 번 클릭 방지)
+    if (commentSubmitting) return;
     if (!user) { alert("로그인 후 이용 가능합니다"); return; }
-    if (!commentContent.trim()) {
+    const content = commentContent.trim();
+    if (!content) {
       setCommentError("댓글 내용을 입력해주세요");
       return;
     }
     const token = await getIdToken();
     if (!token) { setCommentError("로그인이 필요합니다"); return; }
-    // 작성자는 로그인 닉네임/이름/이메일에서 자동으로, 비밀번호는 레거시 플레이스홀더
+
     const author = (nickname || user.displayName || user.email || "익명").toString().trim();
-    const result = await createComment(Number(postId), Number(categoryId), author, "__auth__", commentContent, replyTargetId, token);
-    if (result?.error) {
-      setCommentError(result.error);
-      return;
-    }
-    // 댓글 목록 새로고침
-    const updated = await fetch(`/api/post/${postId}/comments`).then((r) => r.json());
-    setComments(updated);
+    const currentReplyTargetId = replyTargetId;
+
+    // 낙관적 업데이트: 임시 댓글을 즉시 목록에 반영
+    const tempId = -Date.now(); // 음수로 임시 ID (서버 ID와 충돌 방지)
+    const tempComment: Comment = {
+      id: tempId,
+      post_id: Number(postId),
+      parent_id: currentReplyTargetId,
+      author,
+      content,
+      likes: 0,
+      reply_count: 0,
+      created_at: new Date().toISOString(),
+      is_mine: true,
+    };
+    setComments((prev) => [...prev, tempComment]);
+    // 입력창·폼 즉시 초기화 (사용자는 반영된 것처럼 느낌)
     setCommentContent("");
     setCommentError("");
     setReplyTargetId(null);
     setShowCommentForm(false);
-    // 닉네임/비밀번호는 유지 (연속 답글 작성 편의)
+    setCommentSubmitting(true);
+
+    // 서버 호출 (백그라운드)
+    try {
+      const result = await createComment(Number(postId), Number(categoryId), author, "__auth__", content, currentReplyTargetId, token);
+      if (result?.error) {
+        // 롤백: 임시 댓글 제거 + 입력 복원
+        setComments((prev) => prev.filter((c) => c.id !== tempId));
+        setCommentContent(content);
+        setCommentError(result.error);
+        setReplyTargetId(currentReplyTargetId);
+        return;
+      }
+      // 서버 최신 목록으로 동기화 (임시 댓글 → 실제 댓글로 교체)
+      const updated = await fetch(`/api/post/${postId}/comments`).then((r) => r.json());
+      setComments(updated);
+    } catch {
+      setComments((prev) => prev.filter((c) => c.id !== tempId));
+      setCommentContent(content);
+      setCommentError("댓글 등록에 실패했습니다");
+      setReplyTargetId(currentReplyTargetId);
+    } finally {
+      setCommentSubmitting(false);
+    }
   }
 
   async function handleCommentDelete(commentId: number, pw?: string) {
@@ -806,9 +842,10 @@ export default function PostDetailPage() {
                 </button>
                 <button
                   onClick={handleCommentSubmit}
-                  className="rounded-lg bg-[#6B7B3A] hover:bg-[#5A6930] px-4 py-2 text-[12px] font-bold text-white shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)] transition-colors"
+                  disabled={commentSubmitting}
+                  className="rounded-lg bg-[#6B7B3A] hover:bg-[#5A6930] px-4 py-2 text-[12px] font-bold text-white shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  등록
+                  {commentSubmitting ? "등록 중..." : "등록"}
                 </button>
               </div>
             </div>
@@ -1053,9 +1090,10 @@ export default function PostDetailPage() {
                             </button>
                             <button
                               onClick={handleCommentSubmit}
-                              className="rounded-lg bg-[#6B7B3A] hover:bg-[#5A6930] px-3 py-2 text-[12px] font-bold text-white shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)]"
+                              disabled={commentSubmitting}
+                              className="rounded-lg bg-[#6B7B3A] hover:bg-[#5A6930] px-3 py-2 text-[12px] font-bold text-white shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)] disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                              등록
+                              {commentSubmitting ? "등록 중..." : "등록"}
                             </button>
                           </div>
                         </div>
