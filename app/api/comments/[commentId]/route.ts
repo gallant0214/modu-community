@@ -49,7 +49,7 @@ export async function PUT(
     return NextResponse.json({ error: "본인 또는 관리자만 수정할 수 있습니다" }, { status: 403 });
   }
 
-  await sql`UPDATE comments SET content = ${sanitize(validateLength(content.trim(), 5000))} WHERE id = ${Number(commentId)}`;
+  await sql`UPDATE comments SET content = ${sanitize(validateLength(content.trim(), 5000))}, updated_at = NOW() WHERE id = ${Number(commentId)}`;
   return NextResponse.json({ success: true });
 }
 
