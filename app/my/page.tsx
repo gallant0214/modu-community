@@ -169,9 +169,21 @@ function MyPageContent() {
   const [remainingDays, setRemainingDays] = useState(0);
 
 
-  /* 카운트 로드 */
+  /* 카운트 로드 — 캐시된 값 즉시 표시 + 백그라운드 갱신 */
   useEffect(() => {
     if (!user) return;
+    // 1단계: localStorage 캐시된 값 즉시 표시 (재방문 시 빈 0 대신 숫자)
+    try {
+      const cacheKey = `my_counts_${user.uid}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.counts) setCounts(parsed.counts);
+        if (typeof parsed?.unread === "number") setUnreadNotifications(parsed.unread);
+      }
+    } catch {}
+
+    // 2단계: 서버 최신 데이터 백그라운드 갱신
     const loadCounts = async () => {
       const token = await getIdToken();
       if (!token) return;
@@ -188,18 +200,21 @@ function MyPageContent() {
         const [pData, cData, jData, bpData, bjData, nData] = await Promise.all([
           pRes.json(), cRes.json(), jRes.json(), bpRes.json(), bjRes.json(), nRes.json(),
         ]);
-        setCounts({
+        const nextCounts = {
           posts: (pData.posts || []).length,
           comments: (cData.comments || []).length,
           jobs: (jData.posts || []).length,
           bookmarks: (bpData.bookmarks || []).length,
           jobBookmarks: (bjData.bookmarks || []).length,
           notifications: (nData.notifications || []).length,
-        });
-        // 미확인 알림 수
-        setUnreadNotifications(
-          (nData.notifications || []).filter((n: { is_read: boolean }) => !n.is_read).length
-        );
+        };
+        const unread = (nData.notifications || []).filter((n: { is_read: boolean }) => !n.is_read).length;
+        setCounts(nextCounts);
+        setUnreadNotifications(unread);
+        // localStorage 캐시 업데이트
+        try {
+          localStorage.setItem(`my_counts_${user.uid}`, JSON.stringify({ counts: nextCounts, unread, ts: Date.now() }));
+        } catch {}
       } catch {}
     };
     loadCounts();
@@ -229,38 +244,75 @@ function MyPageContent() {
     checkNickname();
   }, [user, loading, nicknameChecked, getIdToken]);
 
-  /* 탭 데이터 로드 */
+  /* 탭 데이터 로드 — 캐시 즉시 표시 + 백그라운드 갱신 */
   const loadTabData = useCallback(async (tab: Tab) => {
     if (!user) return;
-    setDataLoading(true);
+    // 1단계: localStorage 캐시 즉시 표시 (탭 전환 체감 속도 향상)
+    const cacheKey = `my_tab_${tab}_${user.uid}`;
+    let hadCache = false;
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.data) {
+          if (tab === "posts") setPosts(parsed.data);
+          else if (tab === "comments") setComments(parsed.data);
+          else if (tab === "jobs") setJobs(parsed.data);
+          else if (tab === "bookmarks") setBookmarkPosts(parsed.data);
+          else if (tab === "jobBookmarks") setBookmarkJobs(parsed.data);
+          else if (tab === "notifications") setNotifications(parsed.data);
+          hadCache = true;
+        }
+      }
+    } catch {}
+
+    // 캐시 있으면 로딩 스피너 생략 (백그라운드 갱신)
+    if (!hadCache) setDataLoading(true);
     const token = await getIdToken();
     if (!token) { setDataLoading(false); return; }
     const headers = { Authorization: `Bearer ${token}` };
+
+    const saveCache = (data: unknown) => {
+      try { localStorage.setItem(cacheKey, JSON.stringify({ data, ts: Date.now() })); } catch {}
+    };
+
     try {
       if (tab === "posts") {
         const res = await fetch(`/api/posts/my?uid=${user.uid}`, { headers });
         const data = await res.json();
-        setPosts(data.posts || []);
+        const list = data.posts || [];
+        setPosts(list);
+        saveCache(list);
       } else if (tab === "comments") {
         const res = await fetch(`/api/comments/my?uid=${user.uid}`, { headers });
         const data = await res.json();
-        setComments(data.comments || data.posts || []);
+        const list = data.comments || data.posts || [];
+        setComments(list);
+        saveCache(list);
       } else if (tab === "jobs") {
         const res = await fetch(`/api/jobs/my?uid=${user.uid}`, { headers });
         const data = await res.json();
-        setJobs(data.posts || []);
+        const list = data.posts || [];
+        setJobs(list);
+        saveCache(list);
       } else if (tab === "bookmarks") {
         const res = await fetch(`/api/bookmarks?type=posts`, { headers });
         const data = await res.json();
-        setBookmarkPosts(data.bookmarks || []);
+        const list = data.bookmarks || [];
+        setBookmarkPosts(list);
+        saveCache(list);
       } else if (tab === "jobBookmarks") {
         const res = await fetch(`/api/bookmarks?type=jobs`, { headers });
         const data = await res.json();
-        setBookmarkJobs(data.bookmarks || []);
+        const list = data.bookmarks || [];
+        setBookmarkJobs(list);
+        saveCache(list);
       } else if (tab === "notifications") {
         const res = await fetch(`/api/notifications/web`, { headers });
         const data = await res.json();
-        setNotifications(data.notifications || []);
+        const list = data.notifications || [];
+        setNotifications(list);
+        saveCache(list);
         // 알림 탭 진입 시 모두 읽음 처리 + 빨간 뱃지 제거
         setUnreadNotifications(0);
         fetch(`/api/notifications/web`, {
