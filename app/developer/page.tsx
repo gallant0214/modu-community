@@ -544,8 +544,8 @@ export default function AdminPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <KpiCard label="전체 가입자" value={kpiData.users.total} />
                     <KpiCard label="이번 달 신규" value={kpiData.users.thisMonth} accent />
-                    <KpiCard label="이번 주 신규" value={kpiData.users.thisWeek} />
-                    <KpiCard label="오늘 신규" value={kpiData.users.today} />
+                    <KpiCard label="Google 가입" value={kpiData.providers?.google || 0} />
+                    <KpiCard label="Apple 가입" value={kpiData.providers?.apple || 0} />
                   </div>
                 </div>
                 <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
@@ -582,6 +582,15 @@ export default function AdminPage() {
                     <KpiCard label="구인 북마크" value={kpiData.engagement.jobBookmarks} />
                     <KpiCard label="미처리 신고" value={kpiData.reports.pending} warn />
                     <KpiCard label="미답변 문의" value={kpiData.inquiries.pending} warn />
+                  </div>
+                </div>
+                <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">스토어 클릭</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <KpiCard label="Google Play (전체)" value={kpiData.storeClicks?.googlePlay || 0} />
+                    <KpiCard label="App Store (전체)" value={kpiData.storeClicks?.appStore || 0} />
+                    <KpiCard label="Google Play (이번 달)" value={kpiData.storeClicks?.googlePlayMonth || 0} accent />
+                    <KpiCard label="App Store (이번 달)" value={kpiData.storeClicks?.appStoreMonth || 0} accent />
                   </div>
                 </div>
                 {kpiData.topCategories?.length > 0 && (

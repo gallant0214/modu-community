@@ -2,6 +2,7 @@ export const revalidate = 60;
 
 import Link from "next/link";
 import { AppStoreButton } from "@/app/components/app-store-button";
+import { GooglePlayButton } from "@/app/components/google-play-button";
 
 export default async function Home() {
 
@@ -225,7 +226,7 @@ export default async function Home() {
             <FAQ q="Q. 무료인가요?" a="네, 완전 무료입니다. 앱 다운로드, 후기 열람, 구인 공고 확인 모두 무료이며 별도 결제 없이 이용 가능합니다." />
             <FAQ q="Q. 어떤 종목 후기를 볼 수 있나요?" a="생활스포츠지도사, 전문스포츠지도사, 유소년·노인스포츠지도사 등 체육지도자 자격시험 전 종목의 실기·구술 후기를 다루고 있습니다." />
             <FAQ q="Q. 구인 공고에는 어떤 분야가 있나요?" a="헬스장, PT 스튜디오, 필라테스, 요가, GX, 복싱, 수영 등 스포츠·운동 업계 전용 구인 공고만 모여 있습니다." />
-            <FAQ q="Q. iOS에서도 이용할 수 있나요?" a="현재는 Android(Google Play)에서만 다운로드 가능합니다. iOS 버전은 준비 중이며, 출시되면 안내해 드리겠습니다." />
+            <FAQ q="Q. iOS에서도 이용할 수 있나요?" a="네, App Store와 Google Play 모두에서 다운로드 가능합니다." />
             <FAQ q="Q. 공식 시험 기관에서 운영하나요?" a="아니요. 공식 시험 주관 기관과 무관한 민간 정보 공유 서비스입니다. 반드시 공식 공지를 최종 기준으로 삼아 주세요." />
             <FAQ q="Q. 허위 공고를 발견하면?" a="앱 내 신고 기능을 통해 알려주세요. 내부 기준에 따라 게시글 삭제 및 계정 제한 조치를 진행합니다." />
           </div></div>
@@ -240,13 +241,7 @@ export default async function Home() {
               <p className="lp-final-sub">시험 후기 알림, 관심 종목 즐겨찾기, 구인 공고 필터링까지<br />앱에서 더 빠르고 편리하게 사용할 수 있습니다.</p>
               <div className="lp-final-buttons">
                 <AppStoreButton />
-                <a href="https://play.google.com/store/apps/details?id=com.moduji.app" target="_blank" rel="noopener" className="lp-badge-btn">
-                  <svg className="lp-badge-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M3.18 23.76c.34.17.72.24 1.1.17.27-.05.53-.15.77-.3l7.94-4.56-3.22-3.2-6.8 6.76c-.12.12-.18.28-.16.44.03.24.16.47.37.6v.09zM.47 21.27c.02.11.05.22.09.33l.02.02c.03-.05.06-.1.1-.14l7.3-7.26L.9 7.18c-.28.39-.44.86-.44 1.35l.01 12.74zM20.89 11.32L17.3 9.26l-3.65 3.63 3.65 3.63 3.59-2.06c.68-.4 1.09-1.12 1.09-1.91v-.32c-.1-.48-.41-.89-.84-1.12l-.25.21zM4.55.26C4.3.1 4.02.02 3.73 0c-.37-.03-.73.09-1.01.32l-.05.05 9.89 9.83 3.23-3.2L5.33.56c-.25-.14-.51-.24-.78-.3z"/></svg>
-                  <span>
-                    <span className="lp-badge-sub">GET IT ON</span>
-                    <span className="lp-badge-main">Google Play</span>
-                  </span>
-                </a>
+                <GooglePlayButton />
               </div>
             </div>
           </div>

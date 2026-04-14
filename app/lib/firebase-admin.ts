@@ -38,7 +38,7 @@ export function isAdminUid(uid: string): boolean {
 
 export async function verifyAuth(
   request: Request
-): Promise<{ uid: string; email?: string } | null> {
+): Promise<{ uid: string; email?: string; provider?: string } | null> {
   try {
     const authHeader = request.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
@@ -47,7 +47,8 @@ export async function verifyAuth(
     const token = authHeader.substring(7);
     const admin = getFirebaseAdmin();
     const decoded = await getAuth(admin).verifyIdToken(token);
-    return { uid: decoded.uid, email: decoded.email };
+    const provider = decoded.firebase?.sign_in_provider || "unknown";
+    return { uid: decoded.uid, email: decoded.email, provider };
   } catch {
     return null;
   }

@@ -19,12 +19,14 @@ export async function GET(request: Request) {
       UNIQUE(firebase_uid, notification_id)
     )`;
 
-    // 사용자 최초 접속 시점 기록 (가입 이전 알림 필터링용)
+    // 사용자 최초 접속 시점 + 로그인 provider 기록
     await sql`CREATE TABLE IF NOT EXISTS user_first_seen (
       firebase_uid TEXT PRIMARY KEY,
-      seen_at TIMESTAMPTZ DEFAULT NOW()
+      seen_at TIMESTAMPTZ DEFAULT NOW(),
+      provider TEXT DEFAULT 'unknown'
     )`;
-    await sql`INSERT INTO user_first_seen (firebase_uid) VALUES (${user.uid}) ON CONFLICT (firebase_uid) DO NOTHING`;
+    const provider = user.provider || "unknown";
+    await sql`INSERT INTO user_first_seen (firebase_uid, provider) VALUES (${user.uid}, ${provider}) ON CONFLICT (firebase_uid) DO NOTHING`;
     const fsRows = await sql`SELECT seen_at FROM user_first_seen WHERE firebase_uid = ${user.uid}`;
     const firstSeen = fsRows[0]?.seen_at || new Date().toISOString();
 

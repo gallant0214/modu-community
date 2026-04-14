@@ -38,6 +38,14 @@ export async function POST(request: Request) {
       activeCommentersWeek,
       topCategories,
       topPosts,
+      // 가입 provider별 집계
+      googleUsers,
+      appleUsers,
+      // 스토어 클릭
+      googlePlayClicks,
+      appStoreClicks,
+      googlePlayClicksMonth,
+      appStoreClicksMonth,
     ] = await Promise.all([
       // ── 사용자 ──
       sql`SELECT COUNT(*) as count FROM user_first_seen`.catch(() => [{ count: 0 }]),
@@ -75,6 +83,14 @@ export async function POST(request: Request) {
       sql`SELECT c.name, COUNT(p.id) as post_count FROM posts p JOIN categories c ON p.category_id = c.id WHERE p.created_at >= date_trunc('month', CURRENT_DATE) AND (p.is_notice = false OR p.is_notice IS NULL) GROUP BY c.name ORDER BY post_count DESC LIMIT 5`.catch(() => []),
       // ── 인기 게시글 (이번 달, 조회수) ──
       sql`SELECT id, title, views, likes, comments_count FROM posts WHERE created_at >= date_trunc('month', CURRENT_DATE) AND (is_notice = false OR is_notice IS NULL) ORDER BY views DESC LIMIT 5`.catch(() => []),
+      // ── 가입 provider별 ──
+      sql`SELECT COUNT(*) as count FROM user_first_seen WHERE provider = 'google.com'`.catch(() => [{ count: 0 }]),
+      sql`SELECT COUNT(*) as count FROM user_first_seen WHERE provider = 'apple.com'`.catch(() => [{ count: 0 }]),
+      // ── 스토어 클릭 ──
+      sql`SELECT COUNT(*) as count FROM store_clicks WHERE store = 'google_play'`.catch(() => [{ count: 0 }]),
+      sql`SELECT COUNT(*) as count FROM store_clicks WHERE store = 'app_store'`.catch(() => [{ count: 0 }]),
+      sql`SELECT COUNT(*) as count FROM store_clicks WHERE store = 'google_play' AND clicked_at >= date_trunc('month', CURRENT_DATE)`.catch(() => [{ count: 0 }]),
+      sql`SELECT COUNT(*) as count FROM store_clicks WHERE store = 'app_store' AND clicked_at >= date_trunc('month', CURRENT_DATE)`.catch(() => [{ count: 0 }]),
     ]);
 
     return NextResponse.json({
@@ -114,6 +130,16 @@ export async function POST(request: Request) {
         commentLikes: Number(totalCommentLikes[0]?.count || 0),
         activePostersWeek: Number(activePostersWeek[0]?.count || 0),
         activeCommentersWeek: Number(activeCommentersWeek[0]?.count || 0),
+      },
+      providers: {
+        google: Number(googleUsers[0]?.count || 0),
+        apple: Number(appleUsers[0]?.count || 0),
+      },
+      storeClicks: {
+        googlePlay: Number(googlePlayClicks[0]?.count || 0),
+        appStore: Number(appStoreClicks[0]?.count || 0),
+        googlePlayMonth: Number(googlePlayClicksMonth[0]?.count || 0),
+        appStoreMonth: Number(appStoreClicksMonth[0]?.count || 0),
       },
       topCategories: topCategories.map((r: any) => ({ name: r.name, count: Number(r.post_count) })),
       topPosts: topPosts.map((r: any) => ({ id: r.id, title: r.title, views: Number(r.views), likes: Number(r.likes), comments: Number(r.comments_count) })),
