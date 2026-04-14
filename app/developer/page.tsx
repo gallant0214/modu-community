@@ -802,12 +802,42 @@ export default function AdminPage() {
           <div className="p-4 space-y-4">
             {/* 전송 폼 */}
             <div className="rounded-2xl bg-white p-6 dark:bg-zinc-900">
-              <h3 className="mb-1 text-base font-bold text-zinc-900 dark:text-zinc-100">광고/알림 전송</h3>
-              <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">앱을 사용하는 모든 사용자에게 푸시 알림을 보냅니다. (프로모션 알림을 끈 사용자 제외)</p>
+              <h3 className="mb-1 text-base font-bold text-zinc-900 dark:text-zinc-100">알림 전송</h3>
+              <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">앱을 사용하는 모든 사용자에게 푸시 알림을 보냅니다.</p>
 
               {pushMsg && <p className={`mb-4 rounded-lg px-3 py-2 text-sm ${pushMsg.type === "error" ? "bg-red-50 text-red-500 dark:bg-red-950" : "bg-green-50 text-green-600 dark:bg-green-950"}`}>{pushMsg.text}</p>}
 
               <div className="space-y-3">
+                {/* 알림 타입 선택 */}
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-zinc-500 dark:text-zinc-400">알림 타입 *</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPushType("notice")}
+                      className={`flex-1 rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
+                        pushType === "notice"
+                          ? "border-violet-500 bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-300"
+                          : "border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                      }`}
+                    >
+                      📢 공지
+                      <p className="text-[11px] font-normal mt-0.5 opacity-70">전체 사용자</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPushType("ad")}
+                      className={`flex-1 rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
+                        pushType === "ad"
+                          ? "border-amber-500 bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300"
+                          : "border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                      }`}
+                    >
+                      🎯 광고/프로모션
+                      <p className="text-[11px] font-normal mt-0.5 opacity-70">수신 동의자만</p>
+                    </button>
+                  </div>
+                </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">알림 제목 *</label>
                   <input type="text" value={pushTitle} onChange={(e) => { setPushTitle(e.target.value); setPushMsg(null); }}
