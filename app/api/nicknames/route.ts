@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
   // 중복 확인 (다른 유저가 사용 중인지)
   const existing = await sql`SELECT firebase_uid FROM nicknames WHERE name = ${name} LIMIT 1`;
   if (existing.length > 0 && existing[0].firebase_uid && existing[0].firebase_uid !== user.uid) {
-    return NextResponse.json({ success: false, error: "이미 사용 중인 닉네임입니다" }, { status: 409 });
+    return NextResponse.json({ success: false, error: "중복된 닉네임입니다. 다른 닉네임을 사용해주세요." }, { status: 409 });
   }
 
   // 기존 닉네임 삭제

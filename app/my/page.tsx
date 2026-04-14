@@ -368,7 +368,15 @@ function MyPageContent() {
         body: JSON.stringify({ nickname: trimmed, uid: user?.uid, firstSetup: showNicknameModal && !nickname }),
       });
       const data = await res.json();
-      if (!res.ok) { setNicknameError(data.error || "저장에 실패했습니다."); return; }
+      if (!res.ok) {
+        setNicknameError(data.error || "저장에 실패했습니다.");
+        // 에러 발생 시 입력창 포커스 + 텍스트 선택 → 바로 재입력 가능
+        setTimeout(() => {
+          const el = document.getElementById("nickname-input") as HTMLInputElement | null;
+          if (el) { el.focus(); el.select(); }
+        }, 50);
+        return;
+      }
       await refreshNickname();
       setShowNicknameModal(false);
     } catch {
@@ -1366,21 +1374,34 @@ function MyPageContent() {
           <>
             <div className="flex gap-2 mb-2">
               <input
+                id="nickname-input"
                 type="text"
                 value={nicknameInput}
-                onChange={(e) => setNicknameInput(e.target.value)}
+                onChange={(e) => { setNicknameInput(e.target.value); if (nicknameError) setNicknameError(""); }}
                 onKeyDown={(e) => e.key === "Enter" && handleSaveNickname()}
                 placeholder="2~8글자"
                 maxLength={8}
-                className="flex-1 px-3 py-2.5 bg-[#F5F0E5] dark:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-600 rounded-xl text-sm text-[#333] dark:text-zinc-100 placeholder-[#CCC] focus:outline-none focus:ring-2 focus:ring-[#6B7B3A]"
+                autoFocus
+                className={`flex-1 px-3 py-2.5 bg-[#F5F0E5] dark:bg-zinc-800 border rounded-xl text-sm text-[#333] dark:text-zinc-100 placeholder-[#CCC] focus:outline-none focus:ring-2 transition-colors ${
+                  nicknameError
+                    ? "border-red-400 focus:ring-red-400"
+                    : "border-[#E8E0D0] dark:border-zinc-600 focus:ring-[#6B7B3A]"
+                }`}
               />
               <button
-                onClick={() => setNicknameInput(generateRandomNickname())}
+                onClick={() => { setNicknameInput(generateRandomNickname()); setNicknameError(""); }}
                 className="px-3 py-2.5 bg-[#F5F0E5] dark:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-600 rounded-xl text-sm hover:bg-[#E8E0D0] dark:hover:bg-zinc-700 shrink-0"
                 title="랜덤 추천"
               ><svg className="w-4 h-4 text-[#999]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
             </div>
-            {nicknameError && <p className="text-xs text-red-500 mb-2">{nicknameError}</p>}
+            {nicknameError && (
+              <p className="text-xs text-red-500 font-semibold mb-2 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {nicknameError}
+              </p>
+            )}
             <button
               onClick={handleSaveNickname}
               disabled={nicknameLoading}
