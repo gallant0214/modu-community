@@ -21,9 +21,19 @@ export async function GET(
   const isSearching = searchQuery.length > 0;
   const likeQuery = `%${searchQuery}%`;
 
-  // 공지 게시글 (5분 캐시)
-  const noticePosts = await cached(`notices`, 300, () =>
+  // 공지 + 이번달 인기글은 메인 쿼리와 병렬 실행을 위해 Promise로 준비
+  const noticePostsPromise = cached(`notices`, 300, () =>
     sql`SELECT * FROM posts WHERE is_notice = true ORDER BY created_at DESC LIMIT 1`
+  );
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const topPostsPromise = cached(`top:cat:${catId}:${now.getFullYear()}-${now.getMonth()}`, 120, () =>
+    sql`
+      SELECT * FROM posts
+      WHERE category_id = ${catId} AND created_at >= ${monthStart} AND likes > 0
+      ORDER BY likes DESC
+      LIMIT 3
+    `
   );
 
   let posts;
@@ -73,17 +83,8 @@ export async function GET(
 
   const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
 
-  // Top posts this month (2분 캐시)
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const topPosts = await cached(`top:cat:${catId}:${now.getFullYear()}-${now.getMonth()}`, 120, () =>
-    sql`
-      SELECT * FROM posts
-      WHERE category_id = ${catId} AND created_at >= ${monthStart} AND likes > 0
-      ORDER BY likes DESC
-      LIMIT 3
-    `
-  );
+  // 공지 + 이번달 인기글 병렬 대기
+  const [noticePosts, topPosts] = await Promise.all([noticePostsPromise, topPostsPromise]);
 
   return NextResponse.json({
     posts,
