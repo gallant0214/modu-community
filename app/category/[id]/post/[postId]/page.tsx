@@ -529,7 +529,20 @@ export default function PostDetailPage() {
                 {post.ip_display && <span className="text-[#A89B80]">({post.ip_display})</span>}
               </span>
               <span className="text-[#C7B89B]">·</span>
-              <span>{formatDate(post.created_at)}</span>
+              {(() => {
+                // updated_at이 created_at보다 1분 이상 늦으면 수정된 글로 판단
+                const created = new Date(post.created_at).getTime();
+                const updated = post.updated_at ? new Date(post.updated_at).getTime() : created;
+                const isEdited = updated - created > 60_000;
+                return (
+                  <span className="inline-flex items-center gap-1">
+                    <span>{formatDate(isEdited ? post.updated_at : post.created_at)}</span>
+                    {isEdited && (
+                      <span className="text-[11px] text-[#A89B80] italic">[수정됨]</span>
+                    )}
+                  </span>
+                );
+              })()}
               <span className="text-[#C7B89B]">·</span>
               <span className="inline-flex items-center gap-1">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
