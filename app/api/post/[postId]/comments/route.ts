@@ -24,6 +24,9 @@ export async function GET(
   const { postId } = await params;
   const user = await verifyAuth(request);
 
+  // updated_at 컬럼 없을 수 있으니 안전하게 추가
+  try { await sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ`; } catch {}
+
   const rows = await sql`
     SELECT c.id, c.post_id, c.parent_id, c.author, c.content, COALESCE(c.likes, 0) AS likes,
       (SELECT COUNT(*) FROM comments r WHERE r.parent_id = c.id) AS reply_count,
