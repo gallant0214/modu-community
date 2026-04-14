@@ -21,19 +21,21 @@ export async function POST(request: Request) {
     ORDER BY created_at DESC LIMIT 20
   `;
 
-  // 특정 uid의 댓글
-  let userComments = [] as any[];
+  // 특정 uid에 대해 /api/comments/my 쿼리를 그대로 재현
+  let commentsMyQuery = [] as any[];
   if (uid) {
-    userComments = await sql`
-      SELECT id, post_id, author,
-             LENGTH(content) as content_len,
-             LEFT(content, 200) as content_preview,
-             created_at
-      FROM comments
-      WHERE firebase_uid = ${uid}
-      ORDER BY created_at DESC LIMIT 20
+    commentsMyQuery = await sql`
+      SELECT cm.id, cm.post_id, cm.content, cm.created_at,
+             p.category_id, p.title as post_title,
+             c.name as category_name
+      FROM comments cm
+      INNER JOIN posts p ON cm.post_id = p.id
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE cm.firebase_uid = ${uid}
+      ORDER BY cm.created_at DESC
+      LIMIT 50
     `;
   }
 
-  return NextResponse.json({ allComments, userComments });
+  return NextResponse.json({ allComments, commentsMyQuery });
 }
