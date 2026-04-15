@@ -52,19 +52,21 @@ interface MyNotification {
 }
 
 /* ── 공통 모달 ── */
-function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
+function Modal({ open, onClose, title, children, dismissible = true }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; dismissible?: boolean }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40" onClick={dismissible ? onClose : undefined} />
       <div className="relative w-full max-w-sm bg-[#FEFCF7] dark:bg-zinc-900 rounded-2xl shadow-xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#E8E0D0] dark:border-zinc-700">
           <h3 className="font-semibold text-[#333] dark:text-zinc-100">{title}</h3>
-          <button onClick={onClose} className="text-[#999] hover:text-[#666]">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          {dismissible && (
+            <button onClick={onClose} className="text-[#999] hover:text-[#666]">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
         <div className="px-5 py-4">{children}</div>
       </div>
@@ -1364,35 +1366,47 @@ function MyPageContent() {
 
       {/* ══════ 모달들 ══════ */}
 
-      {/* 닉네임 모달 */}
-      <Modal open={showNicknameModal} onClose={() => setShowNicknameModal(false)} title="닉네임 설정">
+      {/* 닉네임 모달 — 최초 설정 시엔 닫을 수 없음 (nickname 없으면 강제 */}
+      <Modal
+        open={showNicknameModal}
+        onClose={() => setShowNicknameModal(false)}
+        title="닉네임 설정"
+        dismissible={!!nickname}
+      >
         {!canChange ? (
           <div className="text-center py-4">
             <p className="text-sm text-[#666] dark:text-zinc-400">닉네임 변경은 <strong className="text-[#6B7B3A]">{remainingDays}일 후</strong>에 가능합니다</p>
           </div>
         ) : (
           <>
-            <div className="flex gap-2 mb-2">
-              <input
-                id="nickname-input"
-                type="text"
-                value={nicknameInput}
-                onChange={(e) => { setNicknameInput(e.target.value); if (nicknameError) setNicknameError(""); }}
-                onKeyDown={(e) => e.key === "Enter" && handleSaveNickname()}
-                placeholder="2~8글자"
-                maxLength={8}
-                autoFocus
-                className={`flex-1 px-3 py-2.5 bg-[#F5F0E5] dark:bg-zinc-800 border rounded-xl text-sm text-[#333] dark:text-zinc-100 placeholder-[#CCC] focus:outline-none focus:ring-2 transition-colors ${
-                  nicknameError
-                    ? "border-red-400 focus:ring-red-400"
-                    : "border-[#E8E0D0] dark:border-zinc-600 focus:ring-[#6B7B3A]"
-                }`}
-              />
+            <input
+              id="nickname-input"
+              type="text"
+              value={nicknameInput}
+              onChange={(e) => { setNicknameInput(e.target.value); if (nicknameError) setNicknameError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && handleSaveNickname()}
+              placeholder="2~8글자"
+              maxLength={8}
+              autoFocus
+              className={`w-full px-3 py-2.5 bg-[#F5F0E5] dark:bg-zinc-800 border rounded-xl text-sm text-[#333] dark:text-zinc-100 placeholder-[#CCC] focus:outline-none focus:ring-2 transition-colors mb-2 ${
+                nicknameError
+                  ? "border-red-400 focus:ring-red-400"
+                  : "border-[#E8E0D0] dark:border-zinc-600 focus:ring-[#6B7B3A]"
+              }`}
+            />
+            {/* 안내 문구 + 랜덤 추천 */}
+            <div className="flex items-center justify-between gap-2 mb-3 px-0.5">
+              <p className="text-[11px] text-[#8C8270] dark:text-zinc-500">
+                설정된 닉네임은 3주간 변경이 불가합니다.
+              </p>
               <button
+                type="button"
                 onClick={() => { setNicknameInput(generateRandomNickname()); setNicknameError(""); }}
-                className="px-3 py-2.5 bg-[#F5F0E5] dark:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-600 rounded-xl text-sm hover:bg-[#E8E0D0] dark:hover:bg-zinc-700 shrink-0"
-                title="랜덤 추천"
-              ><svg className="w-4 h-4 text-[#999]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+                className="text-[11px] font-semibold text-[#6B7B3A] hover:text-[#5A6930] hover:underline shrink-0 inline-flex items-center gap-1"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                랜덤 추천
+              </button>
             </div>
             {nicknameError && (
               <p className="text-xs text-red-500 font-semibold mb-2 flex items-center gap-1">
