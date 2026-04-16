@@ -3,9 +3,11 @@ export const dynamic = "force-dynamic";
 import { sql } from "@/app/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
+import { ensureSchema } from "@/app/lib/ensure-schema";
 
 // GET /api/jobs/my — 내가 등록한 구인글 (firebase_uid 기반, IP 연결 없음)
 export async function GET(req: NextRequest) {
+  await ensureSchema();
   const user = await verifyAuth(req);
   if (!user) {
     return NextResponse.json({ posts: [], error: "로그인이 필요합니다" }, { status: 401 });
