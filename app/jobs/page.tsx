@@ -171,6 +171,14 @@ function JobCard({ job }: { job: JobPost }) {
             <span className="truncate">{job.center_name}</span>
           </div>
         )}
+        {job.deadline && (
+          <div className={`flex items-center gap-1.5 text-[13px] ${isClosed ? "text-[#A89B80]" : dday?.urgent ? "text-[#B47B2A] dark:text-amber-300 font-semibold" : "text-[#6B5D47] dark:text-zinc-400"}`}>
+            <svg className="w-3.5 h-3.5 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span className="truncate">모집기간: {job.deadline}</span>
+          </div>
+        )}
       </div>
 
       {/* 메타 */}
