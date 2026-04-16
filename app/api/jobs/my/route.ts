@@ -12,15 +12,16 @@ export async function GET(req: NextRequest) {
   }
 
   const rows = await sql`
-    SELECT id, title, description, center_name, address,
-           author_role, author_name, contact_type, contact,
-           sport, region_name, region_code,
-           employment_type, salary, headcount,
-           benefits, preferences, deadline,
-           likes, views, is_closed, created_at, updated_at
-    FROM job_posts
-    WHERE firebase_uid = ${user.uid}
-    ORDER BY created_at DESC
+    SELECT jp.id, jp.title, jp.description, jp.center_name, jp.address,
+           jp.author_role, jp.author_name, jp.contact_type, jp.contact,
+           jp.sport, jp.region_name, jp.region_code,
+           jp.employment_type, jp.salary, jp.headcount,
+           jp.benefits, jp.preferences, jp.deadline,
+           jp.likes, jp.views, jp.is_closed, jp.share_count, jp.created_at, jp.updated_at,
+           COALESCE((SELECT COUNT(*) FROM job_post_bookmarks jb WHERE jb.job_post_id = jp.id), 0)::int AS bookmark_count
+    FROM job_posts jp
+    WHERE jp.firebase_uid = ${user.uid}
+    ORDER BY jp.created_at DESC
     LIMIT 50
   `;
 

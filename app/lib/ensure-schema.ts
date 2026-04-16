@@ -31,6 +31,9 @@ const _init = (async () => {
       // job_posts
       sql`ALTER TABLE job_posts ADD COLUMN IF NOT EXISTS firebase_uid TEXT`,
       sql`ALTER TABLE job_posts ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT false`,
+      sql`ALTER TABLE job_posts ADD COLUMN IF NOT EXISTS share_count INT DEFAULT 0`,
+      // posts
+      sql`ALTER TABLE posts ADD COLUMN IF NOT EXISTS share_count INT DEFAULT 0`,
       // job_post_likes
       sql`ALTER TABLE job_post_likes ADD COLUMN IF NOT EXISTS firebase_uid TEXT`,
       // job_post_bookmarks
