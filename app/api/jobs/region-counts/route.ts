@@ -8,15 +8,17 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const countRows = await sql`
-      SELECT region_code, COUNT(*)::int AS cnt
+      SELECT LOWER(region_code) AS region_code, COUNT(*)::int AS cnt
       FROM job_posts
-      GROUP BY region_code
+      WHERE region_code IS NOT NULL AND region_code <> ''
+      GROUP BY LOWER(region_code)
     `;
 
     const todayRows = await sql`
-      SELECT DISTINCT region_code
+      SELECT DISTINCT LOWER(region_code) AS region_code
       FROM job_posts
       WHERE created_at >= CURRENT_DATE
+        AND region_code IS NOT NULL AND region_code <> ''
     `;
 
     const counts: Record<string, number> = {};
