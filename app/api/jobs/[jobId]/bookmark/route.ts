@@ -16,7 +16,12 @@ async function ensureTable() {
       UNIQUE(job_post_id, ip_address)
     )
   `;
+  // 기존의 (job_post_id, ip_address) UNIQUE 제약은 같은 기기/IP의 여러 계정을 차단하므로 제거
+  try { await sql`ALTER TABLE job_post_bookmarks DROP CONSTRAINT IF EXISTS job_post_bookmarks_job_post_id_ip_address_key`; } catch {}
+  // 인증 사용자는 (job_post_id, firebase_uid)로 유니크 보장
   try { await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_job_bm_uid ON job_post_bookmarks (job_post_id, firebase_uid) WHERE firebase_uid IS NOT NULL`; } catch {}
+  // 익명 사용자는 (job_post_id, ip_address)로 유니크 보장 (firebase_uid가 null일 때만)
+  try { await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_job_bm_ip ON job_post_bookmarks (job_post_id, ip_address) WHERE firebase_uid IS NULL`; } catch {}
 }
 
 // POST /api/jobs/[jobId]/bookmark — 북마크 토글
@@ -41,16 +46,16 @@ export async function POST(
       await sql`DELETE FROM job_post_bookmarks WHERE job_post_id = ${id} AND firebase_uid = ${user.uid}`;
       unbookmarked = true;
     } else {
-      await sql`INSERT INTO job_post_bookmarks (job_post_id, ip_address, firebase_uid) VALUES (${id}, ${ip}, ${user.uid}) ON CONFLICT DO NOTHING`;
+      await sql`INSERT INTO job_post_bookmarks (job_post_id, ip_address, firebase_uid) VALUES (${id}, ${ip}, ${user.uid})`;
     }
   } else {
-    // IP 기반 폴백
+    // IP 기반 폴백 (익명)
     const existing = await sql`SELECT id FROM job_post_bookmarks WHERE job_post_id = ${id} AND ip_address = ${ip} AND firebase_uid IS NULL`;
     if (existing.length > 0) {
       await sql`DELETE FROM job_post_bookmarks WHERE job_post_id = ${id} AND ip_address = ${ip} AND firebase_uid IS NULL`;
       unbookmarked = true;
     } else {
-      await sql`INSERT INTO job_post_bookmarks (job_post_id, ip_address) VALUES (${id}, ${ip}) ON CONFLICT DO NOTHING`;
+      await sql`INSERT INTO job_post_bookmarks (job_post_id, ip_address) VALUES (${id}, ${ip})`;
     }
   }
 
