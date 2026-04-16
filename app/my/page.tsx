@@ -423,6 +423,24 @@ function MyPageContent() {
     } catch {}
   };
 
+  /* 구인글 삭제 */
+  const [deletingJobId, setDeletingJobId] = useState<number | null>(null);
+  const handleDeleteJob = async (jobId: number) => {
+    const token = await getIdToken();
+    if (!token) return;
+    // 낙관적 삭제
+    const backup = jobs;
+    setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    setDeletingJobId(null);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { setJobs(backup); alert("삭제에 실패했습니다"); }
+    } catch { setJobs(backup); alert("오류가 발생했습니다"); }
+  };
+
   /* 탈퇴 */
   const handleDeleteAccount = async () => {
     try {
@@ -839,39 +857,62 @@ function MyPageContent() {
 
                           {/* 액션 바 */}
                           <div className="flex items-center gap-2 px-4 py-2.5 bg-[#FBF7EB]/60 dark:bg-zinc-800/40 border-t border-[#E8E0D0] dark:border-zinc-800">
-                            <button
-                              onClick={() => toggleJobClosed(job.id, job.is_closed)}
-                              className={`flex-1 inline-flex items-center justify-center gap-1 text-[12px] font-semibold py-2 rounded-xl border transition-colors ${
-                                job.is_closed
-                                  ? "border-[#6B7B3A]/50 bg-transparent text-[#6B7B3A] hover:bg-[#6B7B3A]/10"
-                                  : "border-[#E8E0D0] dark:border-zinc-600 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-                              }`}
-                            >
-                              {job.is_closed ? (
-                                <>
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            {/* 삭제 확인 모드 */}
+                            {deletingJobId === job.id ? (
+                              <div className="flex-1 flex items-center gap-2">
+                                <span className="text-[11px] text-[#C0392B] font-semibold">정말 삭제하시겠습니까?</span>
+                                <button
+                                  onClick={() => handleDeleteJob(job.id)}
+                                  className="px-3 py-1.5 rounded-lg bg-[#C0392B] text-white text-[11px] font-bold hover:bg-[#A0311F]"
+                                >삭제</button>
+                                <button
+                                  onClick={() => setDeletingJobId(null)}
+                                  className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-600 text-[11px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5]"
+                                >취소</button>
+                              </div>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => setDeletingJobId(job.id)}
+                                  className="inline-flex items-center justify-center gap-1 text-[12px] font-semibold py-2 px-3 rounded-xl border border-[#C0392B]/40 text-[#C0392B] hover:bg-[#C0392B]/10 transition-colors"
+                                >
+                                  삭제
+                                </button>
+                                <button
+                                  onClick={() => toggleJobClosed(job.id, job.is_closed)}
+                                  className={`flex-1 inline-flex items-center justify-center gap-1 text-[12px] font-semibold py-2 rounded-xl border transition-colors ${
+                                    job.is_closed
+                                      ? "border-[#6B7B3A]/50 bg-transparent text-[#6B7B3A] hover:bg-[#6B7B3A]/10"
+                                      : "border-[#E8E0D0] dark:border-zinc-600 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                                  }`}
+                                >
+                                  {job.is_closed ? (
+                                    <>
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                      </svg>
+                                      다시 열기
+                                    </>
+                                  ) : (
+                                    <>
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                      구인완료
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => router.push(`/jobs/write?clone=${job.id}`)}
+                                  className="flex-1 inline-flex items-center justify-center gap-1.5 text-[12px] font-semibold py-2 rounded-xl bg-[#6B7B3A] text-white hover:bg-[#5A6930] shadow-[0_4px_12px_-6px_rgba(107,123,58,0.5)] transition-colors"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.3} viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                   </svg>
-                                  다시 열기
-                                </>
-                              ) : (
-                                <>
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                  </svg>
-                                  구인완료
-                                </>
-                              )}
-                            </button>
-                            <button
-                              onClick={() => router.push(`/jobs/write?clone=${job.id}`)}
-                              className="flex-1 inline-flex items-center justify-center gap-1.5 text-[12px] font-semibold py-2 rounded-xl bg-[#6B7B3A] text-white hover:bg-[#5A6930] shadow-[0_4px_12px_-6px_rgba(107,123,58,0.5)] transition-colors"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.3} viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                              </svg>
-                              재게시
-                            </button>
+                                  재게시
+                                </button>
+                              </>
+                            )}
                           </div>
                         </li>
                       );
