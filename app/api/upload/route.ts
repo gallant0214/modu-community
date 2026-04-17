@@ -3,15 +3,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
-  const user = await verifyAuth(req);
-  if (!user) {
-    return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
-  }
+  try {
+    const user = await verifyAuth(req);
+    if (!user) {
+      return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+    }
 
-  const formData = await req.formData();
-  const files = formData.getAll("images") as File[];
+    const formData = await req.formData();
+    const files = formData.getAll("images") as File[];
 
   if (!files.length) {
     return NextResponse.json({ error: "이미지가 없습니다" }, { status: 400 });
@@ -47,5 +49,9 @@ export async function POST(req: NextRequest) {
     urls.push(result.secure_url);
   }
 
-  return NextResponse.json({ urls });
+    return NextResponse.json({ urls });
+  } catch (e: any) {
+    console.error("Upload error:", e);
+    return NextResponse.json({ error: e?.message || "이미지 업로드 실패" }, { status: 500 });
+  }
 }
