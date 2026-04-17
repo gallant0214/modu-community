@@ -30,7 +30,7 @@ export async function GET(
   const rows = await sql`
     SELECT c.id, c.post_id, c.parent_id, c.author, c.content, COALESCE(c.likes, 0) AS likes,
       (SELECT COUNT(*) FROM comments r WHERE r.parent_id = c.id) AS reply_count,
-      c.ip_address, c.firebase_uid, c.created_at, c.updated_at
+      c.ip_address, c.firebase_uid, c.created_at, c.updated_at, COALESCE(c.hidden, false) AS hidden
     FROM comments c WHERE c.post_id = ${Number(postId)} ORDER BY c.created_at ASC`;
 
   // 현재 사용자가 좋아요한 댓글 ID 목록

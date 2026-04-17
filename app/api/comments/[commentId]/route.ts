@@ -56,6 +56,25 @@ export async function PUT(
   return NextResponse.json({ success: true });
 }
 
+// PATCH: 관리자 숨김 처리
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ commentId: string }> }
+) {
+  const user = await verifyAuth(request);
+  if (!user) return NextResponse.json({ error: "로그인을 해주세요" }, { status: 401 });
+
+  const isAdminUser = await checkIsAdmin(user.uid, user.email);
+  if (!isAdminUser) return NextResponse.json({ error: "관리자만 숨김 처리할 수 있습니다" }, { status: 403 });
+
+  const { commentId } = await params;
+  const body = await request.json().catch(() => ({}));
+  const hidden = body.hidden !== false;
+
+  await sql`UPDATE comments SET hidden = ${hidden} WHERE id = ${Number(commentId)}`;
+  return NextResponse.json({ success: true, hidden });
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ commentId: string }> }

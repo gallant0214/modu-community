@@ -956,9 +956,15 @@ export default function PostDetailPage() {
                             )}
                           </div>
                           {/* 댓글 내용 */}
-                          <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-relaxed text-[#3A342A] dark:text-zinc-300">
-                            {comment.content}
-                          </p>
+                          {comment.hidden ? (
+                            <p className="mt-1.5 text-[13px] leading-relaxed text-[#A89B80] italic">
+                              관리자에 의해 숨김 처리된 댓글입니다
+                            </p>
+                          ) : (
+                            <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-relaxed text-[#3A342A] dark:text-zinc-300">
+                              {comment.content}
+                            </p>
+                          )}
                           {/* 날짜 → 수정됨 → 답글쓰기 → 신고 */}
                           <div className="mt-2 flex items-center gap-2 text-[11px]">
                             <span className="text-[#A89B80]">
@@ -1027,11 +1033,32 @@ export default function PostDetailPage() {
                                   >
                                     수정
                                   </button>
+                                  {isAdmin && (
+                                    <>
+                                      <hr className="border-[#E8E0D0]/70 dark:border-zinc-700" />
+                                      <button
+                                        onClick={async () => {
+                                          setMenuOpenCommentId(null);
+                                          const token = localStorage.getItem("fb_token");
+                                          const res = await fetch(`/api/comments/${comment.id}`, {
+                                            method: "PATCH",
+                                            headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                            body: JSON.stringify({ hidden: !comment.hidden }),
+                                          });
+                                          if (res.ok) {
+                                            setComments((prev) => prev.map((c) => c.id === comment.id ? { ...c, hidden: !comment.hidden } : c));
+                                          }
+                                        }}
+                                        className="flex w-full items-center px-3.5 py-2 text-[12px] font-semibold text-[#E67E22] hover:bg-[#F5F0E5] dark:hover:bg-zinc-700"
+                                      >
+                                        {comment.hidden ? "숨김 해제" : "숨김"}
+                                      </button>
+                                    </>
+                                  )}
                                   <hr className="border-[#E8E0D0]/70 dark:border-zinc-700" />
                                   <button
                                     onClick={() => {
                                       setMenuOpenCommentId(null);
-                                      // 본인/관리자: 비밀번호 없이 삭제 확인 모드로
                                       setDeletingCommentId(comment.id);
                                       setCommentDeleteError("");
                                     }}

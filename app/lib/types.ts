@@ -31,6 +31,7 @@ export interface Comment {
   updated_at?: string;
   ip_display?: string;
   is_mine?: boolean;
+  hidden?: boolean;
 }
 
 export interface Report {
