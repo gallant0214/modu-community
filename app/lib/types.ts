@@ -28,6 +28,7 @@ export interface Comment {
   likes: number;
   reply_count: number;
   created_at: string;
+  updated_at?: string;
   ip_display?: string;
   is_mine?: boolean;
 }
@@ -69,6 +70,7 @@ export interface Post {
   category_name?: string;
   ip_display?: string;
   is_mine?: boolean;
+  images?: string;
 }
 
 export interface JobPost {

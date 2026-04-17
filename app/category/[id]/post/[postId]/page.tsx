@@ -139,7 +139,7 @@ export default function PostDetailPage() {
 
   useEffect(() => {
     const token = localStorage.getItem("fb_token");
-    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     Promise.all([
       fetch(`/api/post/${postId}`, { headers: authHeaders }).then((r) => r.json()),
       fetch(`/api/post/${postId}/comments`, { headers: authHeaders }).then((r) => r.json()),
@@ -861,7 +861,7 @@ export default function PostDetailPage() {
               ].map((opt) => (
                 <button
                   key={opt.key}
-                  onClick={() => setCommentSort(opt.key as "newest" | "popular" | "likes")}
+                  onClick={() => setCommentSort(opt.key as "oldest" | "newest" | "likes")}
                   className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
                     commentSort === opt.key
                       ? "bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B7B3A] shadow-[0_1px_4px_-1px_rgba(107,93,71,0.2)]"
