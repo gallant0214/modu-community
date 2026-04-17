@@ -995,7 +995,7 @@ export default function PostDetailPage() {
 
                         {/* 오른쪽: ··· 버튼 + 하트 */}
                         <div className="relative flex shrink-0 flex-col items-center gap-1 pt-0.5">
-                          {comment.is_mine && (
+                          {(comment.is_mine || isAdmin) && (
                             <>
                               <button
                                 onClick={(e) => { e.stopPropagation(); setMenuOpenCommentId(menuOpenCommentId === comment.id ? null : comment.id); }}
