@@ -1,4 +1,4 @@
-import cloudinary from "@/app/lib/cloudinary";
+import { getCloudinary } from "@/app/lib/cloudinary";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 
@@ -29,8 +29,9 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    const cld = getCloudinary();
     const result = await new Promise<any>((resolve, reject) => {
-      cloudinary.uploader
+      cld.uploader
         .upload_stream(
           {
             folder: "moducm/posts",
