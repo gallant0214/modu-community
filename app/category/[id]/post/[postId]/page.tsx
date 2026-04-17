@@ -245,16 +245,23 @@ export default function PostDetailPage() {
   }
 
   async function handleDelete() {
-    if (!deletePassword.trim()) {
-      setDeleteError("비밀번호를 입력해주세요");
-      return;
+    const token = localStorage.getItem("fb_token");
+    if (!token) { alert("로그인이 필요합니다"); return; }
+    try {
+      const res = await fetch(`/api/post/${postId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ password: "__auth_uid_delete__" }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "삭제에 실패했습니다");
+        return;
+      }
+      router.push(`/category/${categoryId}`);
+    } catch {
+      alert("오류가 발생했습니다");
     }
-    const result = await deletePost(Number(postId), Number(categoryId), deletePassword);
-    if (result?.error) {
-      setDeleteError(result.error);
-      return;
-    }
-    router.push(`/category/${categoryId}`);
   }
 
   async function handleCommentSubmit() {
@@ -1286,30 +1293,23 @@ export default function PostDetailPage() {
         </div>
       )}
 
-      {/* 삭제 비밀번호 모달 */}
+      {/* 삭제 확인 모달 */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-[#2A251D]/50 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
           <div className="relative w-full max-w-sm bg-[#FEFCF7] dark:bg-zinc-900 rounded-3xl shadow-2xl border border-[#E8E0D0] dark:border-zinc-700 p-6 overflow-hidden">
             <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#C0392B]/40 to-transparent" />
-            <h3 className="mb-2 text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
-              게시글 삭제
-            </h3>
-            <p className="mb-4 text-[12px] text-[#8C8270] dark:text-zinc-500">
-              삭제하려면 비밀번호를 입력해주세요.
+            <div className="mb-3 flex items-center gap-2">
+              <span className="inline-flex w-9 h-9 items-center justify-center rounded-xl bg-[#C0392B]/10">
+                <svg className="w-5 h-5 text-[#C0392B]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </span>
+              <h3 className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">게시글 삭제</h3>
+            </div>
+            <p className="mb-5 text-[13px] text-[#3A342A] dark:text-zinc-300">
+              정말 삭제하시겠습니까?<br /><span className="text-[12px] text-[#8C8270]">삭제된 글은 복구할 수 없습니다.</span>
             </p>
-            <input
-              type="password"
-              value={deletePassword}
-              onChange={(e) => { setDeletePassword(e.target.value); setDeleteError(""); }}
-              placeholder="비밀번호 입력"
-              className={`mb-3 ${inputCls}`}
-              onKeyDown={(e) => { if (e.key === "Enter") handleDelete(); }}
-              autoFocus
-            />
-            {deleteError && (
-              <p className="mb-3 text-[12px] text-[#C0392B]">{deleteError}</p>
-            )}
             <div className="flex gap-2">
               <button
                 onClick={() => setShowDeleteModal(false)}
@@ -1318,7 +1318,7 @@ export default function PostDetailPage() {
                 취소
               </button>
               <button
-                onClick={handleDelete}
+                onClick={() => { setShowDeleteModal(false); handleDelete(); }}
                 className="flex flex-1 items-center justify-center rounded-xl bg-[#C0392B] hover:bg-[#A0311F] py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(192,57,43,0.4)]"
               >
                 삭제
