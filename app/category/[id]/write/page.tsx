@@ -124,13 +124,13 @@ function WritePageContent() {
 
   async function handleConfirm() {
     if (!pendingData) return;
-    const token = await getIdToken();
-    if (!token) { alert("로그인이 필요합니다"); setShowConfirm(false); return; }
+    setUploading(true);
+    try {
+      const token = await getIdToken();
+      if (!token) { alert("로그인이 필요합니다"); setUploading(false); return; }
 
-    let imageUrls = "";
-    if (selectedImages.length > 0) {
-      setUploading(true);
-      try {
+      let imageUrls = "";
+      if (selectedImages.length > 0) {
         const uploadData = new FormData();
         selectedImages.forEach((f) => uploadData.append("images", f));
         const res = await fetch("/api/upload", {
@@ -139,26 +139,19 @@ function WritePageContent() {
           body: uploadData,
         });
         const json = await res.json();
-        if (!res.ok) { alert(json.error || "이미지 업로드 실패"); setUploading(false); setShowConfirm(false); return; }
+        if (!res.ok) { alert(json.error || "이미지 업로드 실패"); setUploading(false); return; }
         imageUrls = json.urls.join(",");
-      } catch {
-        alert("이미지 업로드 중 오류가 발생했습니다");
-        setUploading(false);
-        setShowConfirm(false);
-        return;
       }
+
+      pendingData.set("id_token", token);
+      pendingData.set("images", imageUrls);
+      await createPost(pendingData);
+      setShowConfirm(false);
+      router.push(`/category/${categoryId}`);
+    } catch {
+      alert("등록 중 오류가 발생했습니다");
       setUploading(false);
     }
-
-    pendingData.set("id_token", token);
-    pendingData.set("images", imageUrls);
-    const result = await createPost(pendingData);
-    if (result?.error) {
-      alert(result.error);
-      setShowConfirm(false);
-      return;
-    }
-    router.push(`/category/${categoryId}`);
   }
 
   const inputBase = "w-full rounded-xl border bg-[#FBF7EB] dark:bg-zinc-800 px-4 py-3 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none transition-colors";
@@ -336,13 +329,13 @@ function WritePageContent() {
           <div className="flex gap-2.5 pt-1">
             <Link
               href={`/category/${categoryId}`}
-              className="flex flex-1 items-center justify-center rounded-2xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 py-3.5 text-[14px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
+              className="flex flex-1 items-center justify-center rounded-2xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 py-3.5 text-[14px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 active:scale-95 transition-all"
             >
               취소
             </Link>
             <button
               type="submit"
-              className="flex flex-[2] items-center justify-center gap-2 rounded-2xl bg-[#6B7B3A] hover:bg-[#5A6930] py-3.5 text-[14px] font-bold text-white shadow-[0_8px_24px_-8px_rgba(107,123,58,0.5)] hover:-translate-y-0.5 transition-all"
+              className="flex flex-[2] items-center justify-center gap-2 rounded-2xl bg-[#6B7B3A] hover:bg-[#5A6930] py-3.5 text-[14px] font-bold text-white shadow-[0_8px_24px_-8px_rgba(107,123,58,0.5)] hover:-translate-y-0.5 active:scale-95 transition-all"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
@@ -445,16 +438,16 @@ function WritePageContent() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setShowConfirm(false)}
-                    className="flex flex-1 items-center justify-center rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 py-3 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] transition-colors"
+                    className="flex flex-1 items-center justify-center rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 py-3 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] active:scale-95 transition-all"
                   >
                     취소
                   </button>
                   <button
                     onClick={handleConfirm}
                     disabled={uploading}
-                    className="flex flex-1 items-center justify-center rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] disabled:opacity-50 py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] transition-colors"
+                    className="flex flex-1 items-center justify-center rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] disabled:opacity-50 py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] active:scale-95 transition-all"
                   >
-                    {uploading ? "업로드 중..." : "후기 등록"}
+                    {uploading ? "등록 중..." : "후기 등록"}
                   </button>
                 </div>
               </div>
