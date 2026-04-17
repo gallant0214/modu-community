@@ -13,6 +13,7 @@ const _init = (async () => {
       // posts
       sql`ALTER TABLE posts ADD COLUMN IF NOT EXISTS firebase_uid TEXT`,
       sql`ALTER TABLE posts ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT false`,
+      sql`ALTER TABLE posts ADD COLUMN IF NOT EXISTS images TEXT DEFAULT ''`,
       // post_likes
       sql`ALTER TABLE post_likes ADD COLUMN IF NOT EXISTS firebase_uid TEXT`,
       // comments

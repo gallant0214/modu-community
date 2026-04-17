@@ -5,8 +5,10 @@ import { headers } from "next/headers";
 import { sql } from "./db";
 import { verifyAdminPassword } from "./admin-auth";
 import { verifyIdTokenString } from "./firebase-admin";
+import { ensureSchema } from "./ensure-schema";
 
 export async function createPost(formData: FormData) {
+  await ensureSchema();
   // 인증: formData에 id_token이 있으면 검증, 없으면 거부
   const idToken = (formData.get("id_token") as string) || "";
   const user = await verifyIdTokenString(idToken);
@@ -21,6 +23,7 @@ export async function createPost(formData: FormData) {
   const password = formData.get("password") as string;
   const region = formData.get("region") as string;
   const tags = formData.get("tags") as string;
+  const images = formData.get("images") as string;
 
   if (!title?.trim() || !content?.trim() || !author?.trim()) {
     return { error: "필수 항목을 입력해주세요" };
@@ -29,8 +32,8 @@ export async function createPost(formData: FormData) {
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 
-  await sql`INSERT INTO posts (category_id, title, content, author, password, region, tags, ip_address, firebase_uid)
-    VALUES (${Number(categoryId)}, ${title.trim()}, ${content.trim()}, ${author.trim()}, ${(password || "__auth__").trim()}, ${(region || "전국").trim()}, ${(tags || "").trim()}, ${ip}, ${user.uid})`;
+  await sql`INSERT INTO posts (category_id, title, content, author, password, region, tags, ip_address, firebase_uid, images)
+    VALUES (${Number(categoryId)}, ${title.trim()}, ${content.trim()}, ${author.trim()}, ${(password || "__auth__").trim()}, ${(region || "전국").trim()}, ${(tags || "").trim()}, ${ip}, ${user.uid}, ${(images || "").trim()})`;
   revalidatePath(`/category/${categoryId}`);
   revalidatePath("/");
 }
@@ -376,7 +379,7 @@ export async function updateComment(commentId: number, postId: number, categoryI
     return { error: "본인 또는 관리자만 수정할 수 있습니다" };
   }
 
-  await sql`UPDATE comments SET content = ${content.trim()} WHERE id = ${commentId}`;
+  await sql`UPDATE comments SET content = ${content.trim()}, updated_at = NOW() WHERE id = ${commentId}`;
   revalidatePath(`/category/${categoryId}/post/${postId}`);
 }
 

@@ -21,7 +21,7 @@ export async function GET(
 ) {
   const { postId } = await params;
   const id = Number(postId);
-  const rows = await sql`SELECT p.id, p.category_id, p.title, p.content, p.author, p.region, p.tags, p.likes, p.comments_count, p.is_notice, p.views, p.created_at, p.updated_at, p.ip_address, p.firebase_uid, c.name as category_name FROM posts p LEFT JOIN categories c ON p.category_id = c.id WHERE p.id = ${id}`;
+  const rows = await sql`SELECT p.id, p.category_id, p.title, p.content, p.author, p.region, p.tags, p.likes, p.comments_count, p.is_notice, p.views, p.created_at, p.updated_at, p.ip_address, p.firebase_uid, p.images, c.name as category_name FROM posts p LEFT JOIN categories c ON p.category_id = c.id WHERE p.id = ${id}`;
   if (rows.length === 0) {
     return NextResponse.json(null, { status: 404 });
   }
@@ -83,7 +83,7 @@ export async function PUT(
 
   const { postId } = await params;
   const body = await request.json();
-  const { title, content, region, tags } = body;
+  const { title, content, region, tags, images } = body;
 
   if (!title?.trim() || !content?.trim()) {
     return NextResponse.json({ error: "제목과 내용을 입력해주세요" }, { status: 400 });
@@ -102,7 +102,7 @@ export async function PUT(
 
   await sql`
     UPDATE posts
-    SET title = ${sanitize(validateLength(title.trim(), 200))}, content = ${sanitize(validateLength(content.trim(), 50000))}, region = ${sanitize(validateLength(region || "", 50))}, tags = ${sanitize(validateLength(tags || "", 200))}, updated_at = NOW()
+    SET title = ${sanitize(validateLength(title.trim(), 200))}, content = ${validateLength(content.trim(), 50000)}, region = ${sanitize(validateLength(region || "", 50))}, tags = ${sanitize(validateLength(tags || "", 200))}, images = ${(images || "").trim()}, updated_at = NOW()
     WHERE id = ${Number(postId)}
   `;
   return NextResponse.json({ success: true });

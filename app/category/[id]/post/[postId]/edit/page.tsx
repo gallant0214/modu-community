@@ -6,11 +6,9 @@ import Link from "next/link";
 import type { Post } from "@/app/lib/types";
 import { LoginRequired } from "@/app/components/login-required";
 import { useAuth } from "@/app/components/auth-provider";
-
-const regions = [
-  "서울", "세종", "부산", "인천", "대전", "대구", "광주", "울산",
-  "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주",
-];
+import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
+import dynamic from "next/dynamic";
+const RichEditor = dynamic(() => import("@/app/components/rich-editor"), { ssr: false });
 
 const examTypes = ["기타", "실기", "구술"];
 
@@ -39,6 +37,14 @@ function EditPostContent() {
   const [titleError, setTitleError] = useState(false);
   const [contentError, setContentError] = useState(false);
   const [regionError, setRegionError] = useState(false);
+  const [existingImages, setExistingImages] = useState<string[]>([]);
+  const [newImages, setNewImages] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [regionDisplay, setRegionDisplay] = useState("");
+  const [showRegion, setShowRegion] = useState(false);
+  const [richContent, setRichContent] = useState("");
+  const [regionStep, setRegionStep] = useState<"group" | "sub">("group");
+  const [selectedGroup, setSelectedGroup] = useState<RegionGroup | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -63,6 +69,11 @@ function EditPostContent() {
           return;
         }
         setPost(data);
+        if (data?.region) setRegionDisplay(data.region);
+        if (data?.content) setRichContent(data.content);
+        if (data?.images) {
+          setExistingImages(data.images.split(",").filter(Boolean).map((u: string) => u.trim()));
+        }
         if (data?.tags) {
           const tag = data.tags.split(",")[0]?.trim();
           if (examTypes.includes(tag)) setSelectedExamType(tag);
@@ -76,11 +87,11 @@ function EditPostContent() {
 
   async function handleSubmit(formData: FormData) {
     const title = (formData.get("title") as string)?.trim() ?? "";
-    const content = (formData.get("content") as string)?.trim() ?? "";
-    const region = (formData.get("region") as string) ?? "";
+    const plainText = richContent.replace(/<[^>]*>/g, "").trim();
+    const region = regionDisplay;
 
     const tErr = !title;
-    const cErr = !content;
+    const cErr = !plainText;
     const rErr = !region;
 
     setTitleError(tErr);
@@ -96,19 +107,56 @@ function EditPostContent() {
     setShowConfirm(true);
   }
 
+  const totalImages = existingImages.length + newImages.length;
+
+  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    const remaining = 3 - totalImages;
+    if (remaining <= 0) { alert("최대 3장까지 가능합니다"); return; }
+    setNewImages((prev) => [...prev, ...files.slice(0, remaining)]);
+    e.target.value = "";
+  }
+
   async function handleConfirm() {
     if (!pendingData) return;
     try {
       const token = await getIdToken();
       if (!token) { alert("로그인이 필요합니다"); setShowConfirm(false); return; }
+
+      let uploadedUrls: string[] = [];
+      if (newImages.length > 0) {
+        setUploading(true);
+        try {
+          const uploadData = new FormData();
+          newImages.forEach((f) => uploadData.append("images", f));
+          const uploadRes = await fetch("/api/upload", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body: uploadData,
+          });
+          const uploadJson = await uploadRes.json();
+          if (!uploadRes.ok) { alert(uploadJson.error || "이미지 업로드 실패"); setUploading(false); setShowConfirm(false); return; }
+          uploadedUrls = uploadJson.urls;
+        } catch {
+          alert("이미지 업로드 중 오류가 발생했습니다");
+          setUploading(false);
+          setShowConfirm(false);
+          return;
+        }
+        setUploading(false);
+      }
+
+      const allImages = [...existingImages, ...uploadedUrls].join(",");
+
       const res = await fetch(`/api/post/${postId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           title: pendingData.get("title") as string,
-          content: pendingData.get("content") as string,
-          region: pendingData.get("region") as string,
+          content: richContent,
+          region: regionDisplay,
           tags: pendingData.get("tags") as string,
+          images: allImages,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -215,32 +263,38 @@ function EditPostContent() {
               </Field>
             </Section>
 
-            {/* 02. 지역 선택 */}
-            <Section number={2} title="지역" subtitle="시험을 치른 지역을 선택해주세요">
+            {/* 02. 지역 */}
+            <Section number={2} title="지역">
               <Field label="지역 선택" required>
-                <div className="relative">
-                  <select
-                    name="region"
-                    defaultValue={post.region || ""}
-                    required
-                    onChange={() => regionError && setRegionError(false)}
-                    className={`appearance-none pr-10 ${regionError ? inputErrorCls : inputCls}`}
-                  >
-                    <option value="" disabled>지역을 선택하세요</option>
-                    {regions.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-                  <svg className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <input type="hidden" name="region" value={regionDisplay} />
+                <button
+                  type="button"
+                  onClick={() => { setShowRegion(true); setRegionStep("group"); }}
+                  className={`w-full flex items-center justify-between rounded-xl border bg-[#FBF7EB] dark:bg-zinc-800 px-4 py-3 text-[14px] text-left transition-colors ${
+                    regionError
+                      ? "border-[#C0392B]"
+                      : regionDisplay
+                        ? "border-[#6B7B3A]/40 text-[#2A251D] dark:text-zinc-100 font-medium hover:border-[#6B7B3A]/50"
+                        : "border-[#E8E0D0] dark:border-zinc-700 text-[#A89B80] hover:border-[#6B7B3A]/50"
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-2 truncate">
+                    <svg className={`w-4 h-4 shrink-0 ${regionDisplay ? "text-[#6B7B3A]" : "text-[#A89B80]"}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    {regionDisplay || "지역을 선택하세요"}
+                  </span>
+                  <svg className="w-4 h-4 text-[#A89B80] shrink-0 ml-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                   </svg>
-                </div>
+                </button>
                 {regionError && <p className="mt-1.5 text-[11px] text-[#C0392B]">지역을 선택해주세요</p>}
               </Field>
             </Section>
 
-            {/* 03. 시험 유형 */}
-            <Section number={3} title="시험 유형" subtitle="글의 성격을 구분해 다른 수험생이 찾기 쉽게">
+            {/* 03. 게시글 유형 */}
+            <Section number={3} title="게시글 유형" subtitle="글의 성격을 구분해 다른 지도사가 찾기 쉽게">
               <Field label="시험 유형">
                 <div className="flex items-center gap-1 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 p-1">
                   {examTypes.map((type) => (
@@ -277,18 +331,49 @@ function EditPostContent() {
             </Section>
 
             {/* 05. 경험 공유 */}
-            <Section number={5} title="경험 공유" subtitle="구체적일수록 다른 수험생에게 더 큰 도움이 돼요">
+            <Section number={5} title="경험 공유" subtitle="실기·구술 경험이나 업종 관련 정보를 자유롭게 공유해 주세요">
               <Field label="내용" required>
-                <textarea
-                  name="content"
-                  required
-                  defaultValue={post.content}
-                  placeholder="시험장의 분위기, 실기 동작, 구술 질문 등 구체적인 경험을 공유해주세요. 다른 수험생들에게 큰 도움이 됩니다."
-                  rows={10}
-                  onChange={() => contentError && setContentError(false)}
-                  className={`resize-none leading-relaxed ${contentError ? inputErrorCls : inputCls}`}
+                <RichEditor
+                  content={richContent}
+                  onChange={(html) => { setRichContent(html); if (contentError) setContentError(false); }}
+                  placeholder="시험장의 분위기, 실기 동작, 구술 질문 등 구체적인 경험을 공유해주세요."
                 />
                 {contentError && <p className="mt-1.5 text-[11px] text-[#C0392B]">내용을 입력해주세요</p>}
+              </Field>
+              <Field label="사진 (최대 3장)">
+                <div className="flex flex-wrap gap-3">
+                  {existingImages.map((url, i) => (
+                    <div key={`ex-${i}`} className="relative w-24 h-24 rounded-xl overflow-hidden border border-[#E8E0D0] dark:border-zinc-700">
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setExistingImages((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-[11px] flex items-center justify-center"
+                      >✕</button>
+                    </div>
+                  ))}
+                  {newImages.map((file, i) => (
+                    <div key={`new-${i}`} className="relative w-24 h-24 rounded-xl overflow-hidden border border-[#E8E0D0] dark:border-zinc-700">
+                      <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setNewImages((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-[11px] flex items-center justify-center"
+                      >✕</button>
+                    </div>
+                  ))}
+                  {totalImages < 3 && (
+                    <label className="flex items-center justify-center w-24 h-24 rounded-xl border-2 border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 cursor-pointer hover:border-[#6B7B3A]/50 transition-colors">
+                      <div className="text-center">
+                        <svg className="w-6 h-6 mx-auto text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                        <span className="text-[10px] text-[#A89B80] mt-1 block">{totalImages}/3</span>
+                      </div>
+                      <input type="file" accept="image/*" multiple onChange={handleImageSelect} className="hidden" />
+                    </label>
+                  )}
+                </div>
               </Field>
             </Section>
           </div>
@@ -314,6 +399,57 @@ function EditPostContent() {
         </form>
 
         {/* ═══ 수정 확인 모달 ═══ */}
+        {/* 지역 선택 모달 */}
+        {showRegion && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <div className="absolute inset-0 bg-[#2A251D]/50 backdrop-blur-sm" onClick={() => setShowRegion(false)} />
+            <div className="relative w-full max-w-sm bg-[#FEFCF7] dark:bg-zinc-900 rounded-3xl shadow-2xl border border-[#E8E0D0] dark:border-zinc-700 max-h-[80vh] flex flex-col overflow-hidden">
+              <div className="px-5 pt-6 pb-4 text-center shrink-0">
+                <h3 className="text-base font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
+                  {regionStep === "group" ? "지역 선택" : selectedGroup?.name || ""}
+                </h3>
+                <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 mt-1.5">
+                  {regionStep === "group" ? "광역시·도를 먼저 선��해 주세요" : "세부 지역을 선택해 주세요"}
+                </p>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {regionStep === "group" ? (
+                  <div>
+                    {REGION_GROUPS.map((g) => (
+                      <button key={g.code} type="button"
+                        onClick={() => { setSelectedGroup(g); setRegionStep("sub"); }}
+                        className="w-full flex items-center justify-between px-5 py-4 text-[14px] text-[#3A342A] dark:text-zinc-100 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/60 dark:border-zinc-800 last:border-0 transition-colors"
+                      >
+                        <span>{g.name}</span>
+                        <svg className="w-4 h-4 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div>
+                    <button type="button" onClick={() => setRegionStep("group")}
+                      className="w-full flex items-center gap-1 px-5 py-3 text-[13px] text-[#8C8270] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/60 dark:border-zinc-800 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                      뒤로
+                    </button>
+                    {selectedGroup?.subRegions.map((s) => (
+                      <button key={s.code} type="button"
+                        onClick={() => { setRegionDisplay(`${selectedGroup.name} - ${s.name}`); setRegionError(false); setShowRegion(false); }}
+                        className={`w-full text-left px-5 py-4 text-[14px] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/60 dark:border-zinc-800 last:border-0 transition-colors ${
+                          regionDisplay === `${selectedGroup.name} - ${s.name}` ? "text-[#6B7B3A] font-semibold bg-[#F5F0E5]/50" : "text-[#3A342A] dark:text-zinc-100"
+                        }`}
+                      >
+                        {s.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {showConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
             <div className="absolute inset-0 bg-[#2A251D]/50 backdrop-blur-sm" onClick={() => setShowConfirm(false)} />

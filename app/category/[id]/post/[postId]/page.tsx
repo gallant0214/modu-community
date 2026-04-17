@@ -60,7 +60,7 @@ export default function PostDetailPage() {
   const [commentSubmitting, setCommentSubmitting] = useState(false);
 
   // 댓글 정렬
-  const [commentSort, setCommentSort] = useState<"newest" | "popular" | "likes">("newest");
+  const [commentSort, setCommentSort] = useState<"oldest" | "newest" | "likes">("oldest");
 
   // 댓글 공감 처리된 ID
   const [likedCommentIds, setLikedCommentIds] = useState<Set<number>>(new Set());
@@ -138,9 +138,11 @@ export default function PostDetailPage() {
   }, [nickname]);
 
   useEffect(() => {
+    const token = localStorage.getItem("fb_token");
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
     Promise.all([
-      fetch(`/api/post/${postId}`).then((r) => r.json()),
-      fetch(`/api/post/${postId}/comments`).then((r) => r.json()),
+      fetch(`/api/post/${postId}`, { headers: authHeaders }).then((r) => r.json()),
+      fetch(`/api/post/${postId}/comments`, { headers: authHeaders }).then((r) => r.json()),
     ]).then(([postData, commentsData]) => {
       setPost(postData);
       setLikes(Number(postData?.likes ?? 0));
@@ -542,6 +544,50 @@ export default function PostDetailPage() {
                     {part}
                   </span>
                 ))}
+                {/* ··· 더보기 메뉴 (본인 또는 관리자만 노출) */}
+                {!post.is_notice && (post.is_mine || isAdmin) && (
+                  <div className="relative ml-auto">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowPostMenu(!showPostMenu); }}
+                      aria-label="더보기"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-[#8C8270] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
+                    >
+                      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                        <circle cx="4" cy="10" r="1.5" />
+                        <circle cx="10" cy="10" r="1.5" />
+                        <circle cx="16" cy="10" r="1.5" />
+                      </svg>
+                    </button>
+                    {showPostMenu && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute right-0 top-8 z-30 min-w-[112px] overflow-hidden rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 shadow-[0_12px_32px_-16px_rgba(107,93,71,0.3)]"
+                      >
+                        <button
+                          onClick={() => {
+                            setShowPostMenu(false);
+                            router.push(`/category/${categoryId}/post/${postId}/edit`);
+                          }}
+                          className="flex w-full items-center px-3.5 py-2 text-[12px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-700"
+                        >
+                          수정
+                        </button>
+                        <hr className="border-[#E8E0D0]/70 dark:border-zinc-700" />
+                        <button
+                          onClick={() => {
+                            setShowPostMenu(false);
+                            setShowDeleteModal(true);
+                            setDeletePassword("");
+                            setDeleteError("");
+                          }}
+                          className="flex w-full items-center px-3.5 py-2 text-[12px] font-semibold text-[#C0392B] hover:bg-[#F5F0E5] dark:hover:bg-zinc-700"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -587,8 +633,8 @@ export default function PostDetailPage() {
                 </svg>
                 조회 {post.views}
               </span>
-              {/* ··· 더보기 메뉴 (본인 또는 관리자만 노출) */}
-              {!post.is_notice && (post.is_mine || isAdmin) && (
+              {/* 더보기 메뉴는 태그 영역으로 이동됨 */}
+              {false && (
                 <div className="relative ml-auto">
                   <button
                     onClick={(e) => { e.stopPropagation(); setShowPostMenu(!showPostMenu); }}
@@ -645,8 +691,16 @@ export default function PostDetailPage() {
               className="w-full resize-none rounded-2xl border border-[#6B7B3A]/40 bg-[#FBF7EB] dark:bg-zinc-800 px-4 py-3 text-[15px] leading-[1.85] text-[#2A251D] dark:text-zinc-100 focus:border-[#6B7B3A]/70 focus:outline-none"
             />
           ) : (
-            <div className="whitespace-pre-wrap text-[15px] leading-[1.85] text-[#3A342A] dark:text-zinc-200">
-              {post.content}
+            <div
+              className="prose prose-sm max-w-none text-[15px] leading-[1.85] text-[#3A342A] dark:text-zinc-200 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:my-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_blockquote]:border-l-3 [&_blockquote]:border-[#6B7B3A] [&_blockquote]:pl-4 [&_blockquote]:text-[#6B5D47] [&_p]:my-1"
+              dangerouslySetInnerHTML={{ __html: post.content }}
+            />
+          )}
+          {post.images && (
+            <div className="mt-5 flex flex-col gap-3">
+              {post.images.split(",").filter(Boolean).map((url: string, i: number) => (
+                <img key={i} src={url.trim()} alt={`첨부 이미지 ${i + 1}`} className="w-full rounded-2xl border border-[#E8E0D0] dark:border-zinc-700" loading="lazy" />
+              ))}
             </div>
           )}
         </section>
@@ -801,8 +855,8 @@ export default function PostDetailPage() {
             </div>
             <div className="ml-auto flex items-center gap-0.5 text-[11px] bg-[#F5F0E5]/60 dark:bg-zinc-800 p-0.5 rounded-lg">
               {[
+                { key: "oldest", label: "등록순" },
                 { key: "newest", label: "최신순" },
-                { key: "popular", label: "인기순" },
                 { key: "likes", label: "공감순" },
               ].map((opt) => (
                 <button
@@ -870,7 +924,7 @@ export default function PostDetailPage() {
               const replies = comments.filter((c) => c.parent_id);
               const sorted = [...rootComments].sort((a, b) => {
                 if (commentSort === "likes") return (b.likes ?? 0) - (a.likes ?? 0) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-                if (commentSort === "popular") return (b.reply_count ?? 0) - (a.reply_count ?? 0) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                if (commentSort === "oldest") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
                 return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
               });
 
@@ -889,11 +943,14 @@ export default function PostDetailPage() {
                       <div className="flex items-start gap-3">
                         {/* 왼쪽: 닉네임 + 내용 + 날짜/답글쓰기/신고 */}
                         <div className="min-w-0 flex-1">
-                          {/* 닉네임 + IP */}
+                          {/* 닉네임 + 작성자 배지 + IP */}
                           <div className="flex items-center gap-1.5">
                             <span className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100">
                               {comment.author}
                             </span>
+                            {post && comment.author === post.author && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#6B7B3A]/15 text-[#6B7B3A] dark:bg-[#6B7B3A]/30 dark:text-[#A8B87A]">작성자</span>
+                            )}
                             {comment.ip_display && (
                               <span className="text-[11px] text-[#A89B80]">({comment.ip_display})</span>
                             )}
@@ -902,11 +959,14 @@ export default function PostDetailPage() {
                           <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-relaxed text-[#3A342A] dark:text-zinc-300">
                             {comment.content}
                           </p>
-                          {/* 날짜 + 답글쓰기 + 신고 */}
-                          <div className="mt-2 flex items-center gap-3 text-[11px]">
+                          {/* 날짜 → 수정됨 → 답글쓰기 → 신고 */}
+                          <div className="mt-2 flex items-center gap-2 text-[11px]">
                             <span className="text-[#A89B80]">
                               {formatDate(comment.created_at)}
                             </span>
+                            {comment.updated_at && new Date(comment.updated_at).getTime() - new Date(comment.created_at).getTime() > 60000 && (
+                              <span className="text-[#A89B80] italic">· 수정됨</span>
+                            )}
                             <button
                               onClick={() => {
                                 setReplyTargetId(replyTargetId === comment.id ? null : comment.id);
@@ -935,7 +995,7 @@ export default function PostDetailPage() {
 
                         {/* 오른쪽: ··· 버튼 + 하트 */}
                         <div className="relative flex shrink-0 flex-col items-center gap-1 pt-0.5">
-                          {(comment.is_mine || isAdmin) && (
+                          {comment.is_mine && (
                             <>
                               <button
                                 onClick={(e) => { e.stopPropagation(); setMenuOpenCommentId(menuOpenCommentId === comment.id ? null : comment.id); }}

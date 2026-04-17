@@ -7,6 +7,8 @@ import { createPost } from "@/app/lib/actions";
 import { LoginRequired } from "@/app/components/login-required";
 import { useAuth } from "@/app/components/auth-provider";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
+import dynamic from "next/dynamic";
+const RichEditor = dynamic(() => import("@/app/components/rich-editor"), { ssr: false });
 
 const examTypes = ["기타", "실기", "구술"];
 
@@ -59,6 +61,9 @@ function WritePageContent() {
   const [titleError, setTitleError] = useState(false);
   const [contentError, setContentError] = useState(false);
   const [regionError, setRegionError] = useState(false);
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [richContent, setRichContent] = useState("");
 
   /* 지역 선택 (2단계 바텀시트) */
   const [regionGroupName, setRegionGroupName] = useState("");
@@ -81,7 +86,7 @@ function WritePageContent() {
 
   async function handleSubmit(formData: FormData) {
     const title = (formData.get("title") as string)?.trim() ?? "";
-    const content = (formData.get("content") as string)?.trim() ?? "";
+    const content = richContent.replace(/<[^>]*>/g, "").trim();
     const region = (formData.get("region") as string) ?? "";
 
     if (!nickname) { alert("닉네임을 먼저 설정해주세요. MY 페이지에서 설정할 수 있습니다."); return; }
@@ -100,16 +105,53 @@ function WritePageContent() {
     formData.set("author", nickname);
     formData.set("password", user?.uid || "");
     formData.set("tags", selectedExamType);
+    formData.set("content", richContent);
     setPendingData(formData);
     setShowConfirm(true);
   }
 
+  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    const remaining = 3 - selectedImages.length;
+    if (remaining <= 0) { alert("최대 3장까지 가능합니다"); return; }
+    setSelectedImages((prev) => [...prev, ...files.slice(0, remaining)]);
+    e.target.value = "";
+  }
+
+  function removeImage(index: number) {
+    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function handleConfirm() {
     if (!pendingData) return;
-    // 본인 인증 토큰을 FormData에 실어 server action이 검증하도록
     const token = await getIdToken();
     if (!token) { alert("로그인이 필요합니다"); setShowConfirm(false); return; }
+
+    let imageUrls = "";
+    if (selectedImages.length > 0) {
+      setUploading(true);
+      try {
+        const uploadData = new FormData();
+        selectedImages.forEach((f) => uploadData.append("images", f));
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: uploadData,
+        });
+        const json = await res.json();
+        if (!res.ok) { alert(json.error || "이미지 업로드 실패"); setUploading(false); setShowConfirm(false); return; }
+        imageUrls = json.urls.join(",");
+      } catch {
+        alert("이미지 업로드 중 오류가 발생했습니다");
+        setUploading(false);
+        setShowConfirm(false);
+        return;
+      }
+      setUploading(false);
+    }
+
     pendingData.set("id_token", token);
+    pendingData.set("images", imageUrls);
     const result = await createPost(pendingData);
     if (result?.error) {
       alert(result.error);
@@ -250,22 +292,43 @@ function WritePageContent() {
 
             <div>
               <FieldLabel required>내용</FieldLabel>
-              <textarea
-                name="content"
-                required
-                placeholder={"시험장에서 어떤 일이 있었나요?\n\n• 시험장 분위기는 어땠나요?\n• 실기 동작에서 주의할 점은?\n• 구술 시험에서 어떤 질문이 나왔나요?\n• 다음 수험생에게 해주고 싶은 조언"}
-                rows={10}
-                style={{ minHeight: 240 }}
-                onChange={() => contentError && setContentError(false)}
-                className={`${inputBase} resize-none leading-[1.8] ${
-                  contentError
-                    ? "border-[#C0392B] placeholder:text-[#C0392B]/60 focus:border-[#C0392B]"
-                    : "border-[#E8E0D0] dark:border-zinc-700 placeholder:text-[#A89B80] focus:border-[#6B7B3A]/50 focus:bg-[#FEFCF7] dark:focus:bg-zinc-900"
-                }`}
+              <RichEditor
+                onChange={(html) => { setRichContent(html); if (contentError) setContentError(false); }}
+                placeholder="시험장에서 어떤 일이 있었나요? 시험장 분위기, 실기 동작 주의점, 구술 질문 등을 공유해 주세요."
               />
+              {contentError && <p className="mt-1.5 text-[11px] text-[#C0392B]">내용을 입력해주세요</p>}
               <p className="mt-2 text-[11px] text-[#A89B80] px-0.5">
                 ℹ️ 욕설·비방·광고·개인정보가 포함된 글은 삭제될 수 있습니다.
               </p>
+            </div>
+
+            <div>
+              <FieldLabel>사진 첨부 (최대 3장)</FieldLabel>
+              <div className="flex flex-wrap gap-3">
+                {selectedImages.map((file, i) => (
+                  <div key={i} className="relative w-24 h-24 rounded-xl overflow-hidden border border-[#E8E0D0] dark:border-zinc-700">
+                    <img src={URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(i)}
+                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-[11px] flex items-center justify-center"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                {selectedImages.length < 3 && (
+                  <label className="flex items-center justify-center w-24 h-24 rounded-xl border-2 border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 cursor-pointer hover:border-[#6B7B3A]/50 transition-colors">
+                    <div className="text-center">
+                      <svg className="w-6 h-6 mx-auto text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                      </svg>
+                      <span className="text-[10px] text-[#A89B80] mt-1 block">{selectedImages.length}/3</span>
+                    </div>
+                    <input type="file" accept="image/*" multiple onChange={handleImageSelect} className="hidden" />
+                  </label>
+                )}
+              </div>
             </div>
           </Section>
 
@@ -388,9 +451,10 @@ function WritePageContent() {
                   </button>
                   <button
                     onClick={handleConfirm}
-                    className="flex flex-1 items-center justify-center rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] transition-colors"
+                    disabled={uploading}
+                    className="flex flex-1 items-center justify-center rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] disabled:opacity-50 py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] transition-colors"
                   >
-                    후기 등록
+                    {uploading ? "업로드 중..." : "후기 등록"}
                   </button>
                 </div>
               </div>

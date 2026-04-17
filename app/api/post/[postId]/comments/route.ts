@@ -79,8 +79,9 @@ export async function POST(
 
   const uid = user.uid;
 
-  await sql`INSERT INTO comments (post_id, parent_id, author, password, content, ip_address, firebase_uid)
-    VALUES (${pid}, ${parent_id ?? null}, ${sanitize(validateLength(author.trim(), 50))}, ${password.trim()}, ${sanitize(validateLength(content.trim(), 5000))}, ${ipAddr}, ${uid})`;
+  const inserted = await sql`INSERT INTO comments (post_id, parent_id, author, password, content, ip_address, firebase_uid)
+    VALUES (${pid}, ${parent_id ?? null}, ${sanitize(validateLength(author.trim(), 50))}, ${password.trim()}, ${sanitize(validateLength(content.trim(), 5000))}, ${ipAddr}, ${uid}) RETURNING id`;
+  const newCommentId = inserted[0]?.id;
   await sql`UPDATE posts SET comments_count = (SELECT COUNT(*) FROM comments WHERE post_id = ${pid}) WHERE id = ${pid}`;
 
   // 알림 발송 (비동기, 실패해도 댓글 작성에 영향 없음)
@@ -94,7 +95,7 @@ export async function POST(
           "reply",
           "내 댓글에 답글이 달렸어요",
           content.trim().substring(0, 100),
-          { postId: String(pid) }
+          { postId: String(pid), commentId: String(newCommentId) }
         ).catch(() => {});
       }
     } else {
@@ -106,7 +107,7 @@ export async function POST(
           "comment",
           `"${(post[0].title || "").substring(0, 30)}" 글에 댓글이 달렸어요`,
           content.trim().substring(0, 100),
-          { postId: String(pid) }
+          { postId: String(pid), commentId: String(newCommentId) }
         ).catch(() => {});
       }
     }
