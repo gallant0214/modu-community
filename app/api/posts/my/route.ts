@@ -13,8 +13,10 @@ export async function GET(req: NextRequest) {
 
   const rows = await sql`
     SELECT p.id, p.category_id, p.title, p.content, p.author, p.region, p.tags,
-           p.likes, p.comments_count, p.is_notice, p.views, p.created_at, p.updated_at,
-           c.name as category_name
+           p.likes, p.comments_count, p.is_notice, p.views, COALESCE(p.share_count, 0) as share_count,
+           p.created_at, p.updated_at,
+           c.name as category_name,
+           COALESCE((SELECT COUNT(*) FROM post_bookmarks pb WHERE pb.post_id = p.id), 0)::int AS bookmark_count
     FROM posts p
     LEFT JOIN categories c ON p.category_id = c.id
     WHERE p.firebase_uid = ${user.uid}
