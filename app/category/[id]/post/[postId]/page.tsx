@@ -700,7 +700,7 @@ export default function PostDetailPage() {
           ) : (
             <div
               className="prose prose-sm max-w-none text-[15px] leading-[1.85] text-[#3A342A] dark:text-zinc-200 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:my-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_blockquote]:border-l-3 [&_blockquote]:border-[#6B7B3A] [&_blockquote]:pl-4 [&_blockquote]:text-[#6B5D47] [&_p]:my-1"
-              dangerouslySetInnerHTML={{ __html: post.content }}
+              dangerouslySetInnerHTML={{ __html: (post.content as string).replace(/\n/g, "<br>") }}
             />
           )}
           {post.images && (
