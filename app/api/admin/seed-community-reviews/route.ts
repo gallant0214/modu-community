@@ -4,30 +4,41 @@ import { verifyAdminPassword } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
+import { REGION_GROUPS } from "@/app/lib/region-data";
+
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// 인구수 비례 지역 가중치 배열
-const weightedRegions = [
-  "서울", "서울", "서울", "서울", "서울",
-  "경기", "경기", "경기", "경기", "경기", "경기",
-  "부산", "부산", "부산",
-  "인천", "인천", "인천",
-  "대구", "대구",
-  "대전", "대전",
-  "광주", "광주",
-  "경남", "경남",
-  "경북", "경북",
-  "충남", "충남",
-  "전남",
-  "전북",
-  "충북",
-  "강원",
-  "울산",
-  "세종",
-  "제주",
+// 인구수 비례 지역 가중치 (광역시도 코드 기준)
+const weightedRegionCodes = [
+  "SEOUL", "SEOUL", "SEOUL", "SEOUL", "SEOUL",
+  "GYEONGGI", "GYEONGGI", "GYEONGGI", "GYEONGGI", "GYEONGGI", "GYEONGGI",
+  "BUSAN", "BUSAN", "BUSAN",
+  "INCHEON", "INCHEON", "INCHEON",
+  "DAEGU", "DAEGU",
+  "DAEJEON", "DAEJEON",
+  "GWANGJU", "GWANGJU",
+  "GYEONGNAM", "GYEONGNAM",
+  "GYEONGBUK", "GYEONGBUK",
+  "CHUNGNAM", "CHUNGNAM",
+  "JEONNAM",
+  "JEONBUK",
+  "CHUNGBUK",
+  "GANGWON",
+  "ULSAN",
+  "SEJONG",
+  "JEJU",
 ];
+
+// "서울특별시 - 강남구" 형식의 지역 문자열 생성
+function pickRegion(): string {
+  const code = pick(weightedRegionCodes);
+  const group = REGION_GROUPS.find((g) => g.code === code);
+  if (!group) return "서울특별시 - 강남구";
+  const sub = pick(group.subRegions);
+  return `${group.name} - ${sub.name}`;
+}
 
 // 게시글 + 댓글 데이터
 interface PostData {
@@ -715,7 +726,7 @@ export async function POST(request: Request) {
   let commentsInserted = 0;
 
   for (const post of posts) {
-    const region = pick(weightedRegions);
+    const region = pickRegion();
     try {
       // 게시글 삽입
       const result = await sql`
