@@ -13,9 +13,9 @@ export async function POST(request: Request) {
     );
   }
 
-  // 시드 데이터 게시글 중 조회수가 0인 것만 20~50 랜덤 설정
+  // 시드 데이터 게시글 중 조회수가 5 미만인 것 20~50 랜덤 설정
   const posts = await sql`
-    SELECT id FROM posts WHERE password = '__seed_community__' AND views = 0
+    SELECT id FROM posts WHERE password IN ('__seed_community__', '__seed__') AND views < 5
   `;
 
   let updated = 0;
