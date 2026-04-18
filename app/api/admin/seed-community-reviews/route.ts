@@ -728,10 +728,13 @@ export async function POST(request: Request) {
   for (const post of posts) {
     const region = pickRegion();
     try {
+      // 조회수 20~50 랜덤
+      const randomViews = Math.floor(Math.random() * 31) + 20;
+
       // 게시글 삽입
       const result = await sql`
-        INSERT INTO posts (category_id, title, content, author, password, region, tags, ip_address, created_at, updated_at)
-        VALUES (${post.categoryId}, ${post.title}, ${post.content}, ${post.author}, ${"__seed_community__"}, ${region}, ${"기타"}, ${"seed_community"}, ${post.date}::timestamp, ${post.date}::timestamp)
+        INSERT INTO posts (category_id, title, content, author, password, region, tags, ip_address, created_at, updated_at, views)
+        VALUES (${post.categoryId}, ${post.title}, ${post.content}, ${post.author}, ${"__seed_community__"}, ${region}, ${"기타"}, ${"seed_community"}, ${post.date}::timestamp, ${post.date}::timestamp, ${randomViews})
         RETURNING id
       `;
       postsInserted++;
