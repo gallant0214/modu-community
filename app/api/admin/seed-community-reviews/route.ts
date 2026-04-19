@@ -2655,10 +2655,6 @@ const existingPosts: PostData[] = [
     ],
   },
 
-  // ===== 이전 차수 시드 데이터 (1~12차) =====
-];
-
-const newPosts: PostData[] = [
   // ===== 13차 시드: 생활체육지도사2급 Part9 D-1 낮~자정 (2026-04-17~18) =====
 
   {
@@ -3004,7 +3000,11 @@ const newPosts: PostData[] = [
       { author: "잠자리준비완료", content: "푹 자고 내일 최선을 다합시다" },
     ],
   },
+
+  // ===== 이전 차수 시드 데이터 (1~13차) =====
 ];
+
+const newPosts: PostData[] = [];
 
 const posts: PostData[] = [...existingPosts, ...newPosts];
 
