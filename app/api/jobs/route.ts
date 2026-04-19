@@ -143,7 +143,7 @@ export async function GET(request: Request) {
     const regionCode = url.searchParams.get("region_code") || "";
     const sort = url.searchParams.get("sort") || "latest";
     const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
-    const limit = 15;
+    const limit = Number(url.searchParams.get("limit")) || 20;
     const offset = (page - 1) * limit;
     const q = url.searchParams.get("q")?.trim() || "";
     const searchType = url.searchParams.get("searchType") || "all";
