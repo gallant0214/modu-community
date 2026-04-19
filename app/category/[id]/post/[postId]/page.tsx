@@ -220,7 +220,7 @@ export default function PostDetailPage() {
         body: JSON.stringify({ password: "__admin_uid_delete__" }),
       });
       if (res.ok) {
-        router.replace(`/category/${categoryId}`);
+        router.replace(backHref);
       }
     } catch {}
     setAdminDeleting(false);
@@ -258,7 +258,7 @@ export default function PostDetailPage() {
         alert(data.error || "삭제에 실패했습니다");
         return;
       }
-      router.push(`/category/${categoryId}`);
+      router.push(backHref);
     } catch {
       alert("오류가 발생했습니다");
     }

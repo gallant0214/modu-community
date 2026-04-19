@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { likePost } from "@/app/lib/actions";
 import type { Post } from "@/app/lib/types";
 import { useAuth } from "@/app/components/auth-provider";
@@ -19,6 +20,9 @@ function formatDateTime(dateStr: string) {
 export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; isNotice?: boolean; hideCategoryTag?: string }) {
   const [likes, setLikes] = useState(Number(post.likes));
   const { user, getIdToken } = useAuth();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentUrl = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
 
   // hideCategoryTag가 지정되면 해당 태그를 숨김 (종목 내부에서 중복 표시 방지)
   const allTags = post.tags ? post.tags.split(",").map((t) => t.trim()).filter(Boolean) : [];
@@ -48,7 +52,7 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
 
   return (
     <Link
-      href={`/category/${post.category_id}/post/${post.id}`}
+      href={`/category/${post.category_id}/post/${post.id}?from=${encodeURIComponent(currentUrl)}`}
       className={`group flex items-center gap-2 px-4 py-3.5 md:px-6 md:py-3.5 transition-colors ${
         isNotice
           ? "bg-[#FBF7EB]/60 dark:bg-zinc-800/30 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
