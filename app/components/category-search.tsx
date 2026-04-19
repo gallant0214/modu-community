@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import type { Category } from "@/app/lib/types";
+import type { Post } from "@/app/lib/types";
+
+type SearchMode = "category" | "post";
 
 /* ── 초성 검색 ── */
 const CHOSUNG = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
@@ -182,13 +185,34 @@ export function CategorySearch({
 }) {
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [searchMode, setSearchMode] = useState<SearchMode>("category");
+  const [postResults, setPostResults] = useState<(Post & { category_emoji?: string })[]>([]);
+  const [postSearching, setPostSearching] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const searchTerm = query.trim().toLowerCase();
   const isSearching = searchTerm.length > 0;
 
   const allCategories = [...popular, ...all];
-  const filtered = isSearching
+  const filtered = isSearching && searchMode === "category"
     ? allCategories.filter((c) => matchesSearch(c.name, searchTerm))
     : [];
+
+  const handlePostSearch = async (q: string) => {
+    const trimmed = q.trim();
+    if (!trimmed) { setPostResults([]); return; }
+    setPostSearching(true);
+    try {
+      const res = await fetch(`/api/posts/search?q=${encodeURIComponent(trimmed)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPostResults(data.posts || []);
+      }
+    } catch {} finally {
+      setPostSearching(false);
+    }
+  };
   const visibleAll = expanded ? all : all.slice(0, 12);
 
   return (
@@ -197,18 +221,60 @@ export function CategorySearch({
       <div className="px-4 sm:px-6 pt-6 pb-4 lg:flex lg:justify-center">
         <div className="relative lg:w-full lg:max-w-xl">
           <div className="flex items-center gap-2 rounded-2xl bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 px-4 py-3 lg:py-3.5 shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_24px_-16px_rgba(107,93,71,0.25)] focus-within:border-[#6B7B3A]/50 transition-colors">
+            {/* 드롭다운 */}
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setDropdownOpen((v) => !v)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#F5F0E5] dark:bg-zinc-800 text-[12px] font-semibold text-[#3A342A] dark:text-zinc-200 hover:bg-[#EFE7D5] dark:hover:bg-zinc-700 transition-colors"
+              >
+                {searchMode === "category" ? "종목" : "게시글"}
+                <svg className={`w-3 h-3 text-[#8C8270] transition-transform ${dropdownOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {dropdownOpen && (
+                <div className="absolute top-full left-0 mt-1.5 z-10 bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-xl shadow-lg overflow-hidden min-w-[100px]">
+                  <button
+                    onClick={() => { setSearchMode("category"); setDropdownOpen(false); setQuery(""); setPostResults([]); }}
+                    className={`w-full text-left px-3.5 py-2.5 text-[13px] font-medium transition-colors ${
+                      searchMode === "category" ? "bg-[#6B7B3A]/10 text-[#6B7B3A] font-semibold" : "text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                    }`}
+                  >종목</button>
+                  <button
+                    onClick={() => { setSearchMode("post"); setDropdownOpen(false); setQuery(""); setPostResults([]); }}
+                    className={`w-full text-left px-3.5 py-2.5 text-[13px] font-medium transition-colors ${
+                      searchMode === "post" ? "bg-[#6B7B3A]/10 text-[#6B7B3A] font-semibold" : "text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                    }`}
+                  >게시글</button>
+                </div>
+              )}
+            </div>
+
             <svg className="h-[18px] w-[18px] text-[#A89B80] shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="종목명 또는 초성으로 검색 (ㅍㄹㅌ → 필라테스)"
+              onChange={(e) => {
+                setQuery(e.target.value);
+                if (searchMode === "post") {
+                  if (debounceRef.current) clearTimeout(debounceRef.current);
+                  debounceRef.current = setTimeout(() => {
+                    handlePostSearch(e.target.value);
+                  }, 400);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && searchMode === "post") {
+                  handlePostSearch(query);
+                }
+              }}
+              placeholder={searchMode === "category" ? "종목명 또는 초성으로 검색 (ㅍㄹㅌ → 필라테스)" : "게시글을 검색하세요 (예: 지역, 제목, 내용 등)"}
               className="flex-1 bg-transparent text-[14px] text-[#3A342A] placeholder:text-[#A89B80] focus:outline-none dark:text-zinc-100"
             />
             {query && (
               <button
-                onClick={() => setQuery("")}
+                onClick={() => { setQuery(""); setPostResults([]); }}
                 className="text-[#A89B80] hover:text-[#6B5D47] dark:hover:text-zinc-300"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -220,8 +286,63 @@ export function CategorySearch({
         </div>
       </div>
 
-      {isSearching ? (
-        /* ── 검색 결과 ── */
+      {isSearching && searchMode === "post" ? (
+        /* ── 게시글 검색 결과 ── */
+        <section className="px-4 sm:px-6 pt-3 pb-10">
+          <h2 className="mb-4 text-[16px] font-bold text-[#3A342A] dark:text-zinc-100">
+            게시글 검색 결과 {!postSearching && <span className="text-[#6B7B3A]">{postResults.length}</span>}{!postSearching && "건"}
+          </h2>
+          {postSearching ? (
+            <div className="py-16 flex justify-center">
+              <div className="w-6 h-6 border-2 border-[#6B7B3A] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : postResults.length === 0 ? (
+            <div className="py-16 text-center bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl">
+              <div className="inline-flex w-14 h-14 mb-3 rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 items-center justify-center">
+                <svg className="w-7 h-7 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <p className="text-sm text-[#8C8270] dark:text-zinc-500">검색 결과가 없습니다</p>
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {postResults.map((post) => (
+                <li key={post.id}>
+                  <Link
+                    href={`/category/${post.category_id}/post/${post.id}`}
+                    className="group block rounded-2xl bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 px-4 py-3.5 hover:bg-[#FBF7EB] dark:hover:bg-zinc-800/60 hover:shadow-[0_4px_14px_-8px_rgba(107,93,71,0.2)] transition-all"
+                  >
+                    <div className="flex items-start gap-3">
+                      {post.category_emoji && (
+                        <span className="shrink-0 w-9 h-9 rounded-xl bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center text-lg">
+                          {post.category_emoji}
+                        </span>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate group-hover:text-[#6B7B3A] transition-colors">
+                          {post.title}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-1 text-[12px] text-[#8C8270] dark:text-zinc-500">
+                          {post.category_name && <span className="font-medium text-[#6B7B3A]">{post.category_name}</span>}
+                          {post.category_name && <span>·</span>}
+                          <span>{post.author}</span>
+                          <span>·</span>
+                          <span>{post.region}</span>
+                        </div>
+                      </div>
+                      <svg className="shrink-0 w-4 h-4 mt-1 text-[#A89B80] group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+                      </svg>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : isSearching && searchMode === "category" ? (
+        /* ── 종목 검색 결과 ── */
         <section className="px-4 sm:px-6 pt-3 pb-10">
           <h2 className="mb-4 text-[16px] font-bold text-[#3A342A] dark:text-zinc-100">
             검색 결과 <span className="text-[#6B7B3A]">{filtered.length}</span>건
