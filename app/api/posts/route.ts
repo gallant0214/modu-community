@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const body = await request.json();
-  const { category_id, title, content, author, password, region, tags } = body;
+  const { category_id, title, content, author, password, region, tags, images } = body;
 
   if (!title?.trim() || !content?.trim() || !author?.trim()) {
     return NextResponse.json({ error: "필수 항목을 입력해주세요" }, { status: 400 });
@@ -26,8 +26,8 @@ export async function POST(request: Request) {
 
   const uid = user.uid;
 
-  await sql`INSERT INTO posts (category_id, title, content, author, password, region, tags, ip_address, firebase_uid)
-    VALUES (${Number(category_id)}, ${sanitize(validateLength(title.trim(), 200))}, ${sanitize(validateLength(content.trim(), 50000))}, ${sanitize(validateLength(author.trim(), 50))}, ${(password || "").trim()}, ${sanitize(validateLength((region || "전국").trim(), 50))}, ${sanitize(validateLength((tags || "").trim(), 200))}, ${ipAddr}, ${uid})`;
+  await sql`INSERT INTO posts (category_id, title, content, author, password, region, tags, ip_address, firebase_uid, images)
+    VALUES (${Number(category_id)}, ${sanitize(validateLength(title.trim(), 200))}, ${sanitize(validateLength(content.trim(), 50000))}, ${sanitize(validateLength(author.trim(), 50))}, ${(password || "").trim()}, ${sanitize(validateLength((region || "전국").trim(), 50))}, ${sanitize(validateLength((tags || "").trim(), 200))}, ${ipAddr}, ${uid}, ${(images || "").trim()})`;
 
   return NextResponse.json({ success: true });
 }
