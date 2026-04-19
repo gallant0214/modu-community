@@ -254,48 +254,93 @@ export default async function CategoryPage({ params, searchParams }: Props) {
         </section>
 
         {/* ─── Pagination ─── */}
-        {totalPages > 1 && (
-          <nav className="flex items-center justify-center gap-1.5 pt-2 pb-6">
-            {currentPage > 1 && (
-              <Link
-                href={buildPageHref(currentPage - 1)}
-                aria-label="이전 페이지"
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-              </Link>
-            )}
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
-              const isActive = p === currentPage;
-              return (
-                <Link
-                  key={p}
-                  href={buildPageHref(p)}
-                  className={`flex h-9 min-w-[36px] items-center justify-center rounded-lg px-2 text-[13px] font-semibold transition-colors border ${
-                    isActive
-                      ? "bg-[#6B7B3A] border-[#6B7B3A] text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)]"
-                      : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-                  }`}
-                >
-                  {p}
+        {totalPages > 1 && (() => {
+          const pageGroupSize = 10;
+          const currentGroup = Math.floor((currentPage - 1) / pageGroupSize);
+          const groupStart = currentGroup * pageGroupSize + 1;
+          const groupEnd = Math.min(groupStart + pageGroupSize - 1, totalPages);
+          const pageNumbers = Array.from({ length: groupEnd - groupStart + 1 }, (_, i) => groupStart + i);
+          const btnClass = "flex h-9 w-9 items-center justify-center rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors";
+          const btnDisabled = "flex h-9 w-9 items-center justify-center rounded-lg border border-[#E8E0D0]/50 dark:border-zinc-800 bg-[#F5F0E5]/50 dark:bg-zinc-900/50 text-[#C7B89B] dark:text-zinc-600 cursor-default";
+
+          return (
+            <nav className="flex items-center justify-center gap-1.5 pt-2 pb-6">
+              {/* 맨 처음 */}
+              {currentPage > 1 ? (
+                <Link href={buildPageHref(1)} aria-label="맨 처음 페이지" className={btnClass}>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M18 19l-7-7 7-7" />
+                  </svg>
                 </Link>
-              );
-            })}
-            {currentPage < totalPages && (
-              <Link
-                href={buildPageHref(currentPage + 1)}
-                aria-label="다음 페이지"
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
-            )}
-          </nav>
-        )}
+              ) : (
+                <span className={btnDisabled}>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M18 19l-7-7 7-7" />
+                  </svg>
+                </span>
+              )}
+              {/* 이전 */}
+              {currentPage > 1 ? (
+                <Link href={buildPageHref(currentPage - 1)} aria-label="이전 페이지" className={btnClass}>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </Link>
+              ) : (
+                <span className={btnDisabled}>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </span>
+              )}
+              {/* 페이지 번호 (10개 단위) */}
+              {pageNumbers.map((p) => {
+                const isActive = p === currentPage;
+                return (
+                  <Link
+                    key={p}
+                    href={buildPageHref(p)}
+                    className={`flex h-9 min-w-[36px] items-center justify-center rounded-lg px-2 text-[13px] font-semibold transition-colors border ${
+                      isActive
+                        ? "bg-[#6B7B3A] border-[#6B7B3A] text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)]"
+                        : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                    }`}
+                  >
+                    {p}
+                  </Link>
+                );
+              })}
+              {/* 다음 */}
+              {currentPage < totalPages ? (
+                <Link href={buildPageHref(currentPage + 1)} aria-label="다음 페이지" className={btnClass}>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              ) : (
+                <span className={btnDisabled}>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </span>
+              )}
+              {/* 맨 끝 */}
+              {currentPage < totalPages ? (
+                <Link href={buildPageHref(totalPages)} aria-label="맨 끝 페이지" className={btnClass}>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M6 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              ) : (
+                <span className={btnDisabled}>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M6 5l7 7-7 7" />
+                  </svg>
+                </span>
+              )}
+            </nav>
+          );
+        })()}
       </div>
     </div>
   );
