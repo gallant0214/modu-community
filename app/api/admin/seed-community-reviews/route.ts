@@ -3706,7 +3706,7 @@ const existingPosts: PostData[] = [
     ],
   },
 
-  // ===== 이전 차수 시드 데이터 (1~16차) =====
+  // ===== 이전 차수 시드 데이터 (1~17차) =====
 
   {
     categoryId: 1,
@@ -3909,7 +3909,10 @@ const existingPosts: PostData[] = [
   },
 ];
 
-const newPosts: PostData[] = [
+const newPosts: PostData[] = [];
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _17thSeedCompleted: PostData[] = [
   // ===== 17차 시드: Part12 채점 후 합격/불합격 반응 및 내년 준비 (2026-04-18) =====
 
   {
