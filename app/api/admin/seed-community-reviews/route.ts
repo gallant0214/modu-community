@@ -3001,10 +3001,6 @@ const existingPosts: PostData[] = [
     ],
   },
 
-  // ===== 이전 차수 시드 데이터 (1~13차) =====
-];
-
-const newPosts: PostData[] = [
   // ===== 14차 시드: 생활체육지도사2급 Part1 D-14~D-9 과목선택/공부법/기출 (2026-04-04~09) =====
 
   {
@@ -3320,7 +3316,11 @@ const newPosts: PostData[] = [
       { author: "실내화빨기귀찮음", content: "덕윤리는 아리스토텔레스 이름만 기억하면 돼요" },
     ],
   },
+
+  // ===== 이전 차수 시드 데이터 (1~14차) =====
 ];
+
+const newPosts: PostData[] = [];
 
 const posts: PostData[] = [...existingPosts, ...newPosts];
 
