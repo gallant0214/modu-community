@@ -342,41 +342,41 @@ export const exercises: Exercise[] = [
   ]},
 
   // ===== 남자 보디빌딩 · 클래식 보디빌딩 규정포즈 (7) =====
-  { id: 49, name: "프론트 더블 바이셉스 (Front Double Biceps)", image: "/exercises/프론트 더블 바이셉스.png", category: "남자 보디빌딩", checklist: [
+  { id: 49, name: "Front Double Biceps", image: "/exercises/프론트 더블 바이셉스.png", category: "남자 보디빌딩", checklist: [
     "심판을 향해 정면으로 서서 한 발을 약간 바깥쪽 앞에 놓았는가?",
     "두 팔을 들어 어깨와 수평한 위치에서 팔꿈치를 구부렸는가?",
     "이두근과 전완근이 수축되도록 주먹을 꽉 쥐고 아래를 향하게 했는가?",
     "머리부터 발끝까지 가능한 한 많은 전면 근육을 수축시켰는가?",
   ]},
-  { id: 50, name: "프론트 랫 스프레드 (Front Lat Spread)", image: "/exercises/프론트 랫 스프래드.png", category: "남자 보디빌딩", checklist: [
+  { id: 50, name: "Front Lat Spread", image: "/exercises/프론트 랫 스프래드.png", category: "남자 보디빌딩", checklist: [
     "심판을 향해 정면으로 서서 다리와 발의 안쪽 라인을 15cm까지 벌렸는가?",
     "펼치거나 주먹을 쥔 손을 허리 하부 또는 복사근에 위치시켜 광배근을 펼쳐 보였는가?",
     "머리부터 발끝까지 가능한 한 많은 전면 근육을 수축했는가?",
   ]},
-  { id: 51, name: "사이드 체스트 (Side Chest)", image: "/exercises/사이드 체스트.png", category: "남자 보디빌딩", checklist: [
+  { id: 51, name: "Side Chest", image: "/exercises/사이드 체스트.png", category: "남자 보디빌딩", checklist: [
     "우측이나 좌측을 바라보고 선 후, 심판을 향해 고개와 상체를 틀었는가?",
     "심판과 가까운 쪽 다리의 무릎을 구부리고 발가락으로 지탱했는가?",
     "심판과 가까운 쪽 팔을 직각으로 구부린 후 주먹을 쥐고 다른 손은 손목을 잡았는가?",
     "배를 넣고 가슴을 살짝 들고 직각으로 구부린 팔의 상승 압력을 이용해 상완이두근을 최대한 수축했는가?",
   ]},
-  { id: 52, name: "백 더블 바이셉스 (Back Double Biceps)", image: "/exercises/백더블바이셉스.png", category: "남자 보디빌딩", checklist: [
+  { id: 52, name: "Back Double Biceps", image: "/exercises/백더블바이셉스.png", category: "남자 보디빌딩", checklist: [
     "뒤 모습이 심판을 향해 서서 한 발을 뒤로 빼서 발가락으로 지탱했는가?",
     "두 팔을 들어 어깨와 수평한 위치에서 팔꿈치를 구부렸는가?",
     "어깨, 상완이두근, 상완삼두근, 등 상하부, 둔근, 허벅지, 비복근 전체를 수축시켰는가?",
   ]},
-  { id: 53, name: "백 랫 스프레드 (Back Lat Spread)", image: "/exercises/백 렛 스프레드.png", category: "남자 보디빌딩", checklist: [
+  { id: 53, name: "Back Lat Spread", image: "/exercises/백 렛 스프레드.png", category: "남자 보디빌딩", checklist: [
     "뒷 모습이 심판에게 보이게 서서 다리와 발의 안쪽 라인을 최대 15cm까지 벌렸는가?",
     "양손을 허리 위에 올리고 광배근을 최대한 펼쳐 보였는가?",
     "머리부터 발끝까지 가능한 한 많은 후면 전체 근육을 수축했는가?",
   ]},
-  { id: 54, name: "사이드 트라이셉스 (Side Triceps)", image: "/exercises/사이드 트라이셉스.png", category: "남자 보디빌딩", checklist: [
+  { id: 54, name: "Side Triceps", image: "/exercises/사이드 트라이셉스.png", category: "남자 보디빌딩", checklist: [
     "우측이나 좌측을 바라보고 선 후, 심판을 향해 고개와 상체를 틀었는가?",
     "심판과 가까운 쪽 다리의 무릎을 굽히고 발바닥을 바닥에 붙였는가?",
     "심판과 먼 쪽 다리의 무릎을 굽히고 발가락으로 지탱했는가?",
     "두 팔을 등 뒤에 놓고 깍지를 끼거나 앞쪽에 있는 팔의 손목을 잡았는가?",
     "앞쪽 팔에 압력을 가하여 상완삼두근을 수축시켰는가?",
   ]},
-  { id: 55, name: "앱도미널 앤 타이 (Abdominal & Thighs)", image: "/exercises/업도미널 앤 타이.png", category: "남자 보디빌딩", checklist: [
+  { id: 55, name: "Abdominal & Thighs", image: "/exercises/업도미널 앤 타이.png", category: "남자 보디빌딩", checklist: [
     "심판을 향해 정면으로 서서 한쪽 다리를 앞에 놓고 발가락으로 지탱했는가?",
     "두 팔을 머리 뒤에 놓고 호흡을 들이마셨는가?",
     "몸통을 약간 앞쪽으로 보내며 '크런칭' 자세로 복부근육을 수축시켰는가?",
@@ -384,163 +384,163 @@ export const exercises: Exercise[] = [
   ]},
 
   // ===== 남자 피지크 쿼터턴 (4) =====
-  { id: 56, name: "프론트 스탠드 (Front Stand)", image: "/exercises/남자피지크-프론트-포지션.png", category: "남자 피지크", checklist: [
+  { id: 56, name: "Front Stand", image: "/exercises/남자피지크-프론트-포지션.png", category: "남자 피지크", checklist: [
     "몸에 긴장을 유지한 채 바르게 서서 머리와 눈이 몸과 같은 방향을 향하게 했는가?",
     "네 손가락을 몸 앞쪽으로 둔 채 한 손을 복직근(허리)에 얹고, 한 다리는 약간 측면으로 뻗었는가?",
     "다른 손은 아래로 늘어뜨린 상태에서 팔꿈치를 살짝 구부리고 손바닥을 곧게 펴며 손가락을 정렬했는가?",
     "무릎은 펴고, 복근과 광배근을 살짝 수축시킨 상태에서 고개를 들었는가?",
   ]},
-  { id: 57, name: "쿼터턴 라이트 - 좌측면 (Quarter Turn Right)", image: "/exercises/남자피지크-쿼터턴-라이트-좌측.png", category: "남자 피지크", checklist: [
+  { id: 57, name: "Quarter Turn Right (좌측면)", image: "/exercises/남자피지크-쿼터턴-라이트-좌측.png", category: "남자 피지크", checklist: [
     "몸의 왼편이 심판을 향하게 선 상태에서, 상체를 약간 심판 쪽으로 돌렸는가?",
     "왼손은 왼쪽 복직근(허리)에 얹었는가?",
     "오른팔은 몸의 중심선보다 약간 앞에 두고, 손바닥을 편 채로 손가락을 정렬했는가?",
     "왼쪽 다리의 무릎을 약간 구부리고 발을 바닥에 붙이고, 오른쪽 다리는 뒤쪽으로 빼서 발가락으로 지탱했는가?",
   ]},
-  { id: 58, name: "쿼터턴 라이트 - 우측면 (Turn Right)", image: "/exercises/남자피지크-쿼터턴-라이트-우측.png", category: "남자 피지크", checklist: [
+  { id: 58, name: "Turn Right (우측면)", image: "/exercises/남자피지크-쿼터턴-라이트-우측.png", category: "남자 피지크", checklist: [
     "몸의 오른편이 심판을 향하게 선 상태에서, 상체를 약간 심판 쪽으로 돌렸는가?",
     "오른손은 오른쪽 복직근(허리)에 얹었는가?",
     "왼팔은 몸의 중심선보다 약간 앞에 두고, 손바닥을 편 채로 손가락을 정렬했는가?",
     "오른쪽 다리의 무릎을 약간 구부리고 발을 바닥에 붙이고, 왼쪽 다리는 뒤쪽으로 빼서 발가락으로 지탱했는가?",
   ]},
-  { id: 59, name: "쿼터턴 프론트 - 정면 복귀 (Quarter Turn Front)", image: "/exercises/남자피지크-쿼터턴-백.png", category: "남자 피지크", checklist: [
+  { id: 59, name: "Quarter Turn Front (정면 복귀)", image: "/exercises/남자피지크-쿼터턴-백.png", category: "남자 피지크", checklist: [
     "Front Stand와 동일한 자세로 정면에 복귀했는가?",
     "몸에 긴장을 유지한 채 머리와 눈이 몸과 같은 방향을 향하게 했는가?",
     "복근과 광배근을 살짝 수축시킨 상태를 유지했는가?",
   ]},
 
   // ===== 클래식 보디빌딩 쿼터턴 (4) + 규정포즈 (9) =====
-  { id: 60, name: "프론트 포지션 (Front Position)", image: "/exercises/클래식피지크-프론트-포지션.png", category: "클래식 보디빌딩", checklist: [
+  { id: 60, name: "프론트 포지션", image: "/exercises/클래식피지크-프론트-포지션.png", category: "클래식 보디빌딩", checklist: [
     "머리와 눈이 몸과 같은 방향을 향하게 했는가?",
     "발뒤꿈치는 같은 선상에서 최대 15cm의 간격을 유지하며, 양 발은 바깥쪽 30도 각도로 벌렸는가?",
     "무릎은 펴고 배는 안으로 집어넣고, 가슴은 내민채 어깨를 뒤로 젖히고 고개를 들었는가?",
     "두 팔을 측면으로 내리고 팔꿈치를 약간 구부린 채 주먹을 꽉 쥐었는가?",
   ]},
-  { id: 61, name: "쿼터턴 라이트 - 좌측면 (Quarter Turn Right)", image: "/exercises/클래식피지크-쿼터턴-라이트-좌측.png", category: "클래식 보디빌딩", checklist: [
+  { id: 61, name: "쿼터턴 라이트 (좌측면)", image: "/exercises/클래식피지크-쿼터턴-라이트-좌측.png", category: "클래식 보디빌딩", checklist: [
     "왼쪽 측면이 심판을 향하게 서서, 머리와 눈이 몸과 같은 방향을 향하는가?",
     "왼팔을 신체 중심선보다 약간 뒤로 두고 주먹을 꽉 쥐었는가?",
     "오른팔의 팔꿈치를 약간 구부린 채 신체 전방에 위치시키고 주먹을 꽉 쥐었는가?",
     "팔의 위치에 의해 상체가 약간 좌측으로 틀어지고 좌측 어깨가 내려가고 우측 어깨가 올라갔는가?",
   ]},
-  { id: 62, name: "쿼터턴 백 (Quarter Turn Back)", image: "/exercises/클래식피지크-쿼터턴-백.png", category: "클래식 보디빌딩", checklist: [
+  { id: 62, name: "쿼터턴 백", image: "/exercises/클래식피지크-쿼터턴-백.png", category: "클래식 보디빌딩", checklist: [
     "뒤를 돌아 프론트 포지션과 동일한 자세를 취했는가?",
     "발뒤꿈치 간격과 양 발 각도를 유지했는가?",
     "주먹을 꽉 쥐고 팔꿈치를 약간 구부린 상태를 유지했는가?",
   ]},
-  { id: 63, name: "쿼터턴 라이트 - 우측면 (Quarter Turn Right)", image: "/exercises/클래식피지크-쿼터턴-라이트-우측.png", category: "클래식 보디빌딩", checklist: [
+  { id: 63, name: "쿼터턴 라이트 (우측면)", image: "/exercises/클래식피지크-쿼터턴-라이트-우측.png", category: "클래식 보디빌딩", checklist: [
     "오른쪽 측면이 심판을 향하게 서서, 두번째 쿼터턴과 방향만 반대로 취했는가?",
     "오른팔을 신체 중심선보다 약간 뒤로 두고 주먹을 꽉 쥐었는가?",
     "왼팔의 팔꿈치를 약간 구부린 채 신체 전방에 위치시켰는가?",
   ]},
-  { id: 64, name: "프론트 더블 바이셉스 (Front Double Biceps)", image: "/exercises/프론트 더블 바이셉스.png", category: "클래식 보디빌딩", checklist: [
+  { id: 64, name: "Front Double Biceps", image: "/exercises/프론트 더블 바이셉스.png", category: "클래식 보디빌딩", checklist: [
     "심판을 향해 정면으로 서서 한 발을 40~50cm 바깥쪽 앞에 놓았는가?",
     "두 팔을 들어 어깨와 수평한 위치에서 팔꿈치를 구부렸는가?",
     "이두근과 전완근이 수축되도록 주먹을 꽉 쥐고 아래를 향하게 했는가?",
     "머리부터 발끝까지 가능한 한 많은 전면 근육을 수축시켰는가?",
   ]},
-  { id: 65, name: "사이드 체스트 (Side Chest)", image: "/exercises/사이드 체스트.png", category: "클래식 보디빌딩", checklist: [
+  { id: 65, name: "Side Chest", image: "/exercises/사이드 체스트.png", category: "클래식 보디빌딩", checklist: [
     "심판과 가까운 쪽 다리의 무릎을 구부리고 발가락으로 지탱하고 하강 압력을 가해 허벅지·대퇴이두근·비복근을 수축했는가?",
     "심판과 가까운 쪽 팔을 직각으로 구부린 후 주먹을 쥐고 다른 손은 손목을 잡았는가?",
     "배를 넣고 가슴을 살짝 들고 직각으로 구부린 팔의 상승 압력을 이용해 상완이두근을 최대한 수축했는가?",
   ]},
-  { id: 66, name: "백 더블 바이셉스 (Back Double Biceps)", image: "/exercises/백더블바이셉스.png", category: "클래식 보디빌딩", checklist: [
+  { id: 66, name: "Back Double Biceps", image: "/exercises/백더블바이셉스.png", category: "클래식 보디빌딩", checklist: [
     "뒤 모습이 심판을 향해 서서 한 발을 뒤로 빼서 발가락으로 지탱했는가?",
     "두 팔을 들어 어깨와 수평한 위치에서 팔꿈치를 구부리고 주먹을 꽉 쥐었는가?",
     "어깨, 상완이두근, 상완삼두근, 등 상하부, 둔근, 허벅지, 비복근 후면 전체를 수축시켰는가?",
   ]},
-  { id: 67, name: "사이드 트라이셉스 (Side Triceps)", image: "/exercises/사이드 트라이셉스.png", category: "클래식 보디빌딩", checklist: [
+  { id: 67, name: "Side Triceps", image: "/exercises/사이드 트라이셉스.png", category: "클래식 보디빌딩", checklist: [
     "심판과 가까운 쪽 다리의 무릎을 굽히고 발바닥을 바닥에 붙였는가?",
     "심판과 먼 쪽 다리의 무릎을 굽히고 발가락으로 지탱했는가?",
     "두 팔을 등 뒤에 놓고 깍지를 끼거나 앞쪽 팔의 손목을 잡았는가?",
     "가슴을 올리고 앞쪽 팔에 압력을 가하여 상완삼두근을 수축시켰는가?",
   ]},
-  { id: 68, name: "배큠 포즈 (Vacuum Pose)", image: "/exercises/클래식피지크-배큠-포즈.png", category: "클래식 보디빌딩", checklist: [
+  { id: 68, name: "Vacuum Pose", image: "/exercises/클래식피지크-배큠-포즈.png", category: "클래식 보디빌딩", checklist: [
     "심판을 향해 정면으로 서서 두 팔을 머리 뒤에 대고 두 발을 모았는가?",
     "숨을 깊게 내쉬고 배꼽을 척추 쪽으로 당긴다는 느낌으로 복부를 안으로 당겼는가?",
     "팔, 복횡근, 다리 전면근육을 수축했는가? (단 복직근은 수축하지 않음)",
   ]},
-  { id: 69, name: "앱도미널 앤 타이 (Abdominal & Thighs)", image: "/exercises/업도미널 앤 타이.png", category: "클래식 보디빌딩", checklist: [
+  { id: 69, name: "Abdominal & Thighs", image: "/exercises/업도미널 앤 타이.png", category: "클래식 보디빌딩", checklist: [
     "심판을 향해 정면으로 서서 한쪽 다리를 앞에 놓고 발가락으로 지탱했는가?",
     "두 팔을 머리 뒤에 놓고 호흡을 들이마셨는가?",
     "몸통을 약간 앞쪽으로 보내며 '크런칭' 자세로 복부근육을 수축시켰는가?",
     "동시에 하체 전면 근육도 수축시켰는가?",
   ]},
-  { id: 70, name: "프론트 랫 스프레드 (Front Lat Spread)", image: "/exercises/프론트 랫 스프래드.png", category: "클래식 보디빌딩", checklist: [
+  { id: 70, name: "Front Lat Spread", image: "/exercises/프론트 랫 스프래드.png", category: "클래식 보디빌딩", checklist: [
     "심판을 향해 정면으로 서서 다리와 발의 안쪽 라인을 15cm까지 벌렸는가?",
     "펼치거나 주먹을 쥔 손을 허리 하부 또는 복사근에 위치시켜 광배근을 펼쳐 보였는가?",
     "머리부터 발끝까지 가능한 한 많은 전면 근육을 수축했는가?",
   ]},
-  { id: 71, name: "백 랫 스프레드 (Back Lat Spread)", image: "/exercises/백 렛 스프레드.png", category: "클래식 보디빌딩", checklist: [
+  { id: 71, name: "Back Lat Spread", image: "/exercises/백 렛 스프레드.png", category: "클래식 보디빌딩", checklist: [
     "뒷 모습이 심판에게 보이게 서서 다리와 발의 안쪽 라인을 최대 15cm까지 벌렸는가?",
     "양손을 허리 위에 올리고 광배근을 최대한 펼쳐 보였는가?",
     "머리부터 발끝까지 가능한 한 많은 후면 전체 근육을 수축했는가?",
   ]},
-  { id: 72, name: "클래식 포즈 - 선수 선택 (Classic Pose)", image: "/exercises/클래식피지크-클래식-포즈.png", category: "클래식 보디빌딩", checklist: [
+  { id: 72, name: "Classic Pose (선수 선택)", image: "/exercises/클래식피지크-클래식-포즈.png", category: "클래식 보디빌딩", checklist: [
     "심판을 향해 자신이 원하는 전체 근육을 수축시키는 한 가지 포즈를 실시했는가?",
     "모스트 머스큘러 포즈를 취하지 않았는가? (금지)",
     "주요 근육군을 포함한 기타 근육군을 수축했는가?",
   ]},
 
   // ===== 남자 핏모델 쿼터턴 (4, NO BACK POSE) =====
-  { id: 73, name: "프론트 스탠드 (Front Stand)", image: "/exercises/남자핏모델-프론트-스탠드.png", category: "남자 핏모델", checklist: [
+  { id: 73, name: "Front Stand", image: "/exercises/남자핏모델-프론트-스탠드.png", category: "남자 핏모델", checklist: [
     "심판을 향해 정면으로 바르게 서 있는가?",
     "전체적인 체형의 균형과 대칭이 잘 드러나는가?",
     "자신감 있고 우아한 자세를 유지하고 있는가?",
   ]},
-  { id: 74, name: "쿼터턴 라이트 - 좌측면 (Quarter Turn Right)", image: "/exercises/남자핏모델-쿼터턴-라이트-좌측.png", category: "남자 핏모델", checklist: [
+  { id: 74, name: "Quarter Turn Right (좌측면)", image: "/exercises/남자핏모델-쿼터턴-라이트-좌측.png", category: "남자 핏모델", checklist: [
     "왼쪽 측면이 심판을 향하게 서 있는가?",
     "전체적인 체형의 균형과 프로포션이 잘 드러나는가?",
     "자신감 있는 자세를 유지하고 있는가?",
   ]},
-  { id: 75, name: "쿼터턴 라이트 - 우측면 (Turn Right)", image: "/exercises/남자핏모델-턴-라이트-우측.png", category: "남자 핏모델", checklist: [
+  { id: 75, name: "Turn Right (우측면)", image: "/exercises/남자핏모델-턴-라이트-우측.png", category: "남자 핏모델", checklist: [
     "오른쪽 측면이 심판을 향하게 서 있는가?",
     "전체적인 체형의 균형과 프로포션이 잘 드러나는가?",
     "자신감 있는 자세를 유지하고 있는가?",
   ]},
-  { id: 76, name: "쿼터턴 프론트 - 정면 복귀 (Quarter Turn Front)", image: "/exercises/남자핏모델-쿼터턴-프론트.png", category: "남자 핏모델", checklist: [
+  { id: 76, name: "Quarter Turn Front (정면 복귀)", image: "/exercises/남자핏모델-쿼터턴-프론트.png", category: "남자 핏모델", checklist: [
     "Front Stand와 동일한 자세로 정면에 복귀했는가?",
     "자연스럽고 자신감 있는 자세를 유지하고 있는가?",
   ]},
 
   // ===== 여자 피지크 쿼터턴 (4) + 규정포즈 (4) =====
-  { id: 77, name: "프론트 포지션 (Front Position)", image: "/exercises/여자피지크-프론트-포지션.png", category: "여자 피지크", checklist: [
+  { id: 77, name: "프론트 포지션", image: "/exercises/여자피지크-프론트-포지션.png", category: "여자 피지크", checklist: [
     "바르게 서서 머리와 눈이 몸과 같은 방향을 향하게 했는가?",
     "발뒤꿈치를 모은 상태에서 양발을 바깥쪽 30° 각도로 벌렸는가?",
     "무릎은 펴고 배는 안으로 집어넣고 가슴을 내밀고 어깨를 뒤로 젖혔는가?",
     "두 팔을 측면으로 내리고 팔꿈치를 약간 구부린 채 손을 살짝 오므렸는가?",
   ]},
-  { id: 78, name: "쿼터턴 라이트 - 좌측면 (Quarter Turn Right)", image: "/exercises/여자피지크-쿼터턴-라이트-좌측.png", category: "여자 피지크", checklist: [
+  { id: 78, name: "쿼터턴 라이트 (좌측면)", image: "/exercises/여자피지크-쿼터턴-라이트-좌측.png", category: "여자 피지크", checklist: [
     "왼쪽 측면이 심판을 향하게 서서 양발을 30° 각도로 벌렸는가?",
     "왼팔을 신체 중심선보다 약간 뒤로 두고 손을 살짝 오므렸는가?",
     "오른팔의 팔꿈치를 살짝 구부린 채 신체 전방에 위치시켰는가?",
   ]},
-  { id: 79, name: "쿼터턴 백 (Quarter Turn Back)", image: "/exercises/여자피지크-쿼터턴-백.png", category: "여자 피지크", checklist: [
+  { id: 79, name: "쿼터턴 백", image: "/exercises/여자피지크-쿼터턴-백.png", category: "여자 피지크", checklist: [
     "바르게 서서 프론트 포지션과 동일한 자세를 뒤에서 취했는가?",
     "발뒤꿈치를 모은 상태에서 양발을 바깥쪽 30° 각도로 벌렸는가?",
     "두 팔을 측면으로 내리고 팔꿈치를 약간 구부린 채 손을 살짝 오므렸는가?",
   ]},
-  { id: 80, name: "쿼터턴 라이트 - 우측면 (Quarter Turn Right)", image: "/exercises/여자피지크-쿼터턴-라이트-우측.png", category: "여자 피지크", checklist: [
+  { id: 80, name: "쿼터턴 라이트 (우측면)", image: "/exercises/여자피지크-쿼터턴-라이트-우측.png", category: "여자 피지크", checklist: [
     "오른쪽 측면이 심판을 향하게 서서, 좌측면 쿼터턴과 방향만 반대로 취했는가?",
     "오른팔을 신체 중심선보다 약간 뒤로 두고 손을 살짝 오므렸는가?",
     "왼팔의 팔꿈치를 살짝 구부린 채 신체 전방에 위치시켰는가?",
   ]},
-  { id: 81, name: "프론트 더블 바이셉스 (Front Double Biceps)", image: "/exercises/여자피지크-프론트-더블-바이셉스.png", category: "여자 피지크", checklist: [
+  { id: 81, name: "Front Double Biceps", image: "/exercises/여자피지크-프론트-더블-바이셉스.png", category: "여자 피지크", checklist: [
     "오른쪽 또는 왼쪽 다리를 바깥쪽으로 빼고 다리와 발을 일직선상에 둔 채 정면을 바라보고 섰는가?",
     "두 팔을 들어 어깨높이까지 올린 다음 팔꿈치를 구부렸는가?",
     "손을 편 상태에서 손가락이 하늘을 향하게 했는가?",
     "머리부터 발끝까지 가능한 많은 근육을 수축시켰는가?",
   ]},
-  { id: 82, name: "사이드 체스트 (Side Chest)", image: "/exercises/여자피지크-사이드-체스트.png", category: "여자 피지크", checklist: [
+  { id: 82, name: "Side Chest", image: "/exercises/여자피지크-사이드-체스트.png", category: "여자 피지크", checklist: [
     "심판과 먼 쪽 다리는 발바닥을 땅에 붙이고 무릎을 약간 구부렸는가?",
     "심판과 가까운 쪽 다리는 곧게 펴고 앞으로 뻗어 발가락으로 지탱했는가?",
     "양 팔을 몸 앞쪽에 위치시키고 양 손은 깍지를 끼거나 포개어 손바닥이 아래쪽을 향하게 했는가?",
     "가슴근육, 삼두근, 대퇴사두근, 대퇴이두근, 비복근을 수축했는가?",
   ]},
-  { id: 83, name: "백 더블 바이셉스 (Back Double Biceps)", image: "/exercises/여자피지크-백-더블-바이셉스.png", category: "여자 피지크", checklist: [
+  { id: 83, name: "Back Double Biceps", image: "/exercises/여자피지크-백-더블-바이셉스.png", category: "여자 피지크", checklist: [
     "뒷 모습이 심판을 향하게 서서 한 쪽 발을 뒤로 빼서 발가락으로 지탱했는가?",
     "두 팔을 어깨 높이까지 올리고 팔꿈치를 구부리며 두 손은 펴서 손가락이 하늘을 향하게 했는가?",
     "어깨, 등 상하부, 대퇴이두근, 둔근, 비복근 후면 전체를 수축시켰는가?",
   ]},
-  { id: 84, name: "사이드 트라이셉스 (Side Triceps)", image: "/exercises/여자피지크-사이드-트라이셉스.png", category: "여자 피지크", checklist: [
+  { id: 84, name: "Side Triceps", image: "/exercises/여자피지크-사이드-트라이셉스.png", category: "여자 피지크", checklist: [
     "심판과 먼 쪽 다리는 발바닥을 지면에 붙이고 무릎을 약간 구부렸는가?",
     "심판과 가까운 쪽 다리는 곧게 앞으로 뻗어 발가락으로 체중을 지탱했는가?",
     "복부를 집어넣고 가슴을 내밀고 두 팔을 등 뒤에 위치했는가?",
@@ -549,47 +549,47 @@ export const exercises: Exercise[] = [
   ]},
 
   // ===== 여자 보디피트니스 쿼터턴 (4) =====
-  { id: 85, name: "프론트 포지션 (Front Position)", image: "/exercises/여자보디피트니스-프론트-포지션.png", category: "여자 보디피트니스", checklist: [
+  { id: 85, name: "프론트 포지션", image: "/exercises/여자보디피트니스-프론트-포지션.png", category: "여자 보디피트니스", checklist: [
     "바르게 서서 머리와 눈이 몸과 같은 방향을 향하게 했는가?",
     "발뒤꿈치를 모은 상태에서 양발을 바깥쪽 30° 각도로 벌렸는가?",
     "무릎은 펴고 배는 안으로 집어넣고 가슴을 내밀고 어깨를 뒤로 젖혔는가?",
     "두 팔을 측면으로 내리고 팔꿈치를 약간 구부린 채 손을 살짝 오므렸는가?",
   ]},
-  { id: 86, name: "쿼터턴 라이트 - 좌측면 (Quarter Turn Right)", image: "/exercises/여자보디피트니스-쿼터턴-라이트-좌측.png", category: "여자 보디피트니스", checklist: [
+  { id: 86, name: "쿼터턴 라이트 (좌측면)", image: "/exercises/여자보디피트니스-쿼터턴-라이트-좌측.png", category: "여자 보디피트니스", checklist: [
     "왼쪽 측면이 심판을 향하게 서서 양발을 30° 각도로 벌렸는가?",
     "왼팔을 신체 중심선보다 약간 뒤로 두고 손을 살짝 오므렸는가?",
     "오른팔의 팔꿈치를 살짝 구부린 채 신체 전방에 위치시켰는가?",
   ]},
-  { id: 87, name: "쿼터턴 백 (Quarter Turn Back)", image: "/exercises/여자보디피트니스-쿼터턴-백.png", category: "여자 보디피트니스", checklist: [
+  { id: 87, name: "쿼터턴 백", image: "/exercises/여자보디피트니스-쿼터턴-백.png", category: "여자 보디피트니스", checklist: [
     "바르게 서서 프론트 포지션과 동일한 자세를 뒤에서 취했는가?",
     "발뒤꿈치를 모은 상태에서 양발을 바깥쪽 30° 각도로 벌렸는가?",
     "두 팔을 측면으로 내리고 팔꿈치를 약간 구부린 채 손을 살짝 오므렸는가?",
   ]},
-  { id: 88, name: "쿼터턴 라이트 - 우측면 (Quarter Turn Right)", image: "/exercises/여자보디피트니스-쿼터턴-라이트-우측.png", category: "여자 보디피트니스", checklist: [
+  { id: 88, name: "쿼터턴 라이트 (우측면)", image: "/exercises/여자보디피트니스-쿼터턴-라이트-우측.png", category: "여자 보디피트니스", checklist: [
     "오른쪽 측면이 심판을 향하게 서서, 좌측면 쿼터턴과 방향만 반대로 취했는가?",
     "오른팔을 신체 중심선보다 약간 뒤로 두고 손을 살짝 오므렸는가?",
     "왼팔의 팔꿈치를 살짝 구부린 채 신체 전방에 위치시켰는가?",
   ]},
 
   // ===== 여자 비키니 쿼터턴 (4) =====
-  { id: 89, name: "프론트 포지션 (Front Position)", image: "/exercises/여자비키니-프론트-포지션.png", category: "여자 비키니", checklist: [
+  { id: 89, name: "프론트 포지션", image: "/exercises/여자비키니-프론트-포지션.png", category: "여자 비키니", checklist: [
     "바르게 서서 머리와 눈이 몸과 같은 방향을 향하게 했는가?",
     "한 손을 복직근(허리)에 얹고 한 발은 약간 옆으로 뻗었는가?",
     "다른 손은 아래로 늘어뜨린 상태에서 손바닥을 곧게 펴며 손가락을 정렬시켰는가?",
     "무릎은 펴고, 배는 집어넣고, 가슴은 내밀고, 어깨는 뒤로 폈는가?",
   ]},
-  { id: 90, name: "쿼터턴 라이트 - 좌측면 (Quarter Turn Right)", image: "/exercises/여자비키니-쿼터턴-라이트-좌측.png", category: "여자 비키니", checklist: [
+  { id: 90, name: "쿼터턴 라이트 (좌측면)", image: "/exercises/여자비키니-쿼터턴-라이트-좌측.png", category: "여자 비키니", checklist: [
     "몸의 왼편이 심판을 향하게 서서 상체를 약간 심판 쪽으로 돌렸는가?",
     "오른손은 오른쪽 복직근(허리)에 얹고, 왼팔은 신체 중심선보다 약간 뒤로 내렸는가?",
     "왼쪽 엉덩이를 약간 올리고, 왼쪽 다리 무릎을 약간 구부리고, 왼발을 몸 중심선 가까이에서 발가락으로 지탱했는가?",
     "오른쪽 다리는 곧게 폈는가?",
   ]},
-  { id: 91, name: "쿼터턴 백 (Quarter Turn Back)", image: "/exercises/여자비키니-쿼터턴-백.png", category: "여자 비키니", checklist: [
+  { id: 91, name: "쿼터턴 백", image: "/exercises/여자비키니-쿼터턴-백.png", category: "여자 비키니", checklist: [
     "한 손은 복직근(허리)에 얹고 한 다리는 옆으로 살짝 뻗은 채 상체를 똑바로 세웠는가?",
     "무릎은 펴고, 배는 집어넣고, 가슴은 내밀고, 어깨는 뒤로 폈는가?",
     "허리 아랫부분은 자연스럽게 굽히거나 약간의 척추전만 형태를 띠게 하며, 등 위쪽은 곧게 펴고, 고개는 들었는가?",
   ]},
-  { id: 92, name: "쿼터턴 라이트 - 우측면 (Quarter Turn Right)", image: "/exercises/여자비키니-쿼터턴-라이트-우측.png", category: "여자 비키니", checklist: [
+  { id: 92, name: "쿼터턴 라이트 (우측면)", image: "/exercises/여자비키니-쿼터턴-라이트-우측.png", category: "여자 비키니", checklist: [
     "몸의 오른편이 심판을 향하게 서서 상체를 약간 심판 쪽으로 돌렸는가?",
     "왼손은 왼쪽 복직근(허리)에 얹고, 오른팔은 신체 중심선보다 약간 뒤로 내렸는가?",
     "오른쪽 엉덩이를 약간 올리고, 오른쪽 다리 무릎을 약간 구부리고, 오른발을 몸 중심선 가까이에서 발가락으로 지탱했는가?",
@@ -597,125 +597,124 @@ export const exercises: Exercise[] = [
   ]},
 
   // ===== 여자 핏모델 수영복 라운드 (4) =====
-  { id: 93, name: "프론트 스탠드 - 수영복 (Front Stand)", image: "/exercises/여자핏모델-수영복-프론트-스탠드.png", category: "여자 핏모델", checklist: [
+  { id: 93, name: "프론트 스탠드 (수영복)", image: "/exercises/여자핏모델-수영복-프론트-스탠드.png", category: "여자 핏모델", checklist: [
     "바르게 서서 전체적인 체형의 균형, 대칭, 프로포션이 잘 드러나는가?",
     "피부 상태와 톤, 헤어와 얼굴의 아름다움이 적절한가?",
     "자신감과 우아함을 가지고 프레젠테이션 하고 있는가?",
     "원피스 수영복이 규정에 맞는가? (불투명 원단, 둔근 1/2 이상 커버, 전면 전체 커버)",
   ]},
-  { id: 94, name: "쿼터턴 라이트 좌측면 - 수영복 (Quarter Turn Right)", image: "/exercises/여자핏모델-수영복-쿼터턴-라이트-좌측.png", category: "여자 핏모델", checklist: [
+  { id: 94, name: "쿼터턴 라이트 좌측면 (수영복)", image: "/exercises/여자핏모델-수영복-쿼터턴-라이트-좌측.png", category: "여자 핏모델", checklist: [
     "왼쪽 측면이 심판을 향하게 서서 전체적인 프로포션이 잘 드러나는가?",
     "수영복 옆면이 힙과 엉덩이를 노출하지 않는가?",
     "자신감 있고 우아한 자세를 유지하고 있는가?",
   ]},
-  { id: 95, name: "쿼터턴 백 - 수영복 (Quarter Turn Back)", image: "/exercises/여자핏모델-수영복-쿼터턴-백.png", category: "여자 핏모델", checklist: [
+  { id: 95, name: "쿼터턴 백 (수영복)", image: "/exercises/여자핏모델-수영복-쿼터턴-백.png", category: "여자 핏모델", checklist: [
     "뒷모습에서 전체적인 체형의 균형과 대칭이 잘 드러나는가?",
     "수영복이 등 하부를 커버하고 둔근 최소 1/2 이상을 커버하는가?",
     "자신감 있고 우아한 자세를 유지하고 있는가?",
   ]},
-  { id: 96, name: "쿼터턴 라이트 우측면 - 수영복 (Quarter Turn Right)", image: "/exercises/여자핏모델-수영복-쿼터턴-라이트-우측.png", category: "여자 핏모델", checklist: [
+  { id: 96, name: "쿼터턴 라이트 우측면 (수영복)", image: "/exercises/여자핏모델-수영복-쿼터턴-라이트-우측.png", category: "여자 핏모델", checklist: [
     "오른쪽 측면이 심판을 향하게 서서 전체적인 프로포션이 잘 드러나는가?",
     "수영복 옆면이 힙과 엉덩이를 노출하지 않는가?",
     "자신감 있고 우아한 자세를 유지하고 있는가?",
   ]},
 
   // ===== 여자 핏모델 이브닝가운 라운드 (4) =====
-  { id: 97, name: "프론트 스탠드 - 이브닝가운 (Front Stand)", image: "/exercises/여자핏모델-이브닝가운-프론트-스탠드.png", category: "여자 핏모델", checklist: [
+  { id: 97, name: "프론트 스탠드 (이브닝가운)", image: "/exercises/여자핏모델-이브닝가운-프론트-스탠드.png", category: "여자 핏모델", checklist: [
     "바르게 서서 전체적인 체형의 균형과 이브닝가운의 우아함이 잘 드러나는가?",
     "이브닝가운이 바닥까지 닿는 길이인가?",
     "투명 원단이 아닌 불투명 원단의 드레스인가?",
     "자신감과 우아함을 가지고 프레젠테이션 하고 있는가?",
   ]},
-  { id: 98, name: "쿼터턴 라이트 좌측면 - 이브닝가운 (Quarter Turn Right)", image: "/exercises/여자핏모델-이브닝가운-쿼터턴-라이트-좌측.png", category: "여자 핏모델", checklist: [
+  { id: 98, name: "쿼터턴 라이트 좌측면 (이브닝가운)", image: "/exercises/여자핏모델-이브닝가운-쿼터턴-라이트-좌측.png", category: "여자 핏모델", checklist: [
     "왼쪽 측면이 심판을 향하게 서서 전체적인 프로포션과 드레스 핏이 잘 드러나는가?",
     "드레스의 슬릿이 힙과 엉덩이를 노출하지 않는가?",
     "자신감 있고 우아한 자세를 유지하고 있는가?",
   ]},
-  { id: 99, name: "쿼터턴 백 - 이브닝가운 (Quarter Turn Back)", image: "/exercises/여자핏모델-이브닝가운-쿼터턴-백.png", category: "여자 핏모델", checklist: [
+  { id: 99, name: "쿼터턴 백 (이브닝가운)", image: "/exercises/여자핏모델-이브닝가운-쿼터턴-백.png", category: "여자 핏모델", checklist: [
     "뒷모습에서 전체적인 체형의 균형과 드레스의 우아함이 잘 드러나는가?",
     "이브닝가운이 등 하부를 커버하는가? (맨등 금지)",
     "자신감 있고 우아한 자세를 유지하고 있는가?",
   ]},
-  { id: 100, name: "쿼터턴 라이트 우측면 - 이브닝가운 (Quarter Turn Right)", image: "/exercises/여자핏모델-이브닝가운-쿼터턴-라이트-우측.png", category: "여자 핏모델", checklist: [
+  { id: 100, name: "쿼터턴 라이트 우측면 (이브닝가운)", image: "/exercises/여자핏모델-이브닝가운-쿼터턴-라이트-우측.png", category: "여자 핏모델", checklist: [
     "오른쪽 측면이 심판을 향하게 서서 전체적인 프로포션과 드레스 핏이 잘 드러나는가?",
     "드레스의 슬릿이 힙과 엉덩이를 노출하지 않는가?",
     "자신감 있고 우아한 자세를 유지하고 있는가?",
   ]},
 
   // ===== 남자 클래식 피지크 (2급 전문·1급 생활 전용) =====
-  { id: 101, name: "프론트 포지션 (Front Position)", image: "/exercises/클래식피지크-프론트-포지션.png", category: "남자 클래식 피지크", checklist: [
+  { id: 101, name: "프론트 포지션", image: "/exercises/클래식피지크-프론트-포지션.png", category: "남자 클래식 피지크", checklist: [
     "머리와 눈이 몸과 같은 방향을 향하게 했는가?",
     "발뒤꿈치는 같은 선상에서 최대 15cm의 간격을 유지하며, 양 발은 바깥쪽 30도 각도로 벌렸는가?",
     "무릎은 펴고 배는 안으로 집어넣고, 가슴은 내민채 어깨를 뒤로 젖히고 고개를 들었는가?",
     "두 팔을 측면으로 내리고 팔꿈치를 약간 구부린 채 주먹을 꽉 쥐었는가?",
   ]},
-  { id: 102, name: "쿼터턴 라이트 - 좌측면 (Quarter Turn Right)", image: "/exercises/클래식피지크-쿼터턴-라이트-좌측.png", category: "남자 클래식 피지크", checklist: [
+  { id: 102, name: "쿼터턴 라이트 (좌측면)", image: "/exercises/클래식피지크-쿼터턴-라이트-좌측.png", category: "남자 클래식 피지크", checklist: [
     "왼쪽 측면이 심판을 향하게 서서, 머리와 눈이 몸과 같은 방향을 향하는가?",
     "왼팔을 신체 중심선보다 약간 뒤로 두고 주먹을 꽉 쥐었는가?",
     "오른팔의 팔꿈치를 약간 구부린 채 신체 전방에 위치시키고 주먹을 꽉 쥐었는가?",
     "팔의 위치에 의해 상체가 약간 좌측으로 틀어지고 좌측 어깨가 내려가고 우측 어깨가 올라갔는가?",
   ]},
-  { id: 103, name: "쿼터턴 백 (Quarter Turn Back)", image: "/exercises/클래식피지크-쿼터턴-백.png", category: "남자 클래식 피지크", checklist: [
+  { id: 103, name: "쿼터턴 백", image: "/exercises/클래식피지크-쿼터턴-백.png", category: "남자 클래식 피지크", checklist: [
     "뒤를 돌아 프론트 포지션과 동일한 자세를 취했는가?",
     "발뒤꿈치 간격과 양 발 각도를 유지했는가?",
     "주먹을 꽉 쥐고 팔꿈치를 약간 구부린 상태를 유지했는가?",
   ]},
-  { id: 104, name: "쿼터턴 라이트 - 우측면 (Quarter Turn Right)", image: "/exercises/클래식피지크-쿼터턴-라이트-우측.png", category: "남자 클래식 피지크", checklist: [
+  { id: 104, name: "쿼터턴 라이트 (우측면)", image: "/exercises/클래식피지크-쿼터턴-라이트-우측.png", category: "남자 클래식 피지크", checklist: [
     "오른쪽 측면이 심판을 향하게 서서, 두번째 쿼터턴과 방향만 반대로 취했는가?",
     "오른팔을 신체 중심선보다 약간 뒤로 두고 주먹을 꽉 쥐었는가?",
     "왼팔의 팔꿈치를 약간 구부린 채 신체 전방에 위치시켰는가?",
   ]},
-  { id: 105, name: "프론트 더블 바이셉스 (Front Double Biceps)", image: "/exercises/클래식피지크-프론트-더블-바이셉스.png", category: "남자 클래식 피지크", checklist: [
+  { id: 105, name: "Front Double Biceps", image: "/exercises/클래식피지크-프론트-더블-바이셉스.png", category: "남자 클래식 피지크", checklist: [
     "심판을 향해 정면으로 서서 한 발을 40~50cm 바깥쪽 앞에 놓았는가?",
     "두 팔을 들어 어깨와 수평한 위치에서 팔꿈치를 구부렸는가?",
     "이두근과 전완근이 수축되도록 주먹을 꽉 쥐고 아래를 향하게 했는가?",
     "머리부터 발끝까지 가능한 한 많은 전면 근육을 수축시켰는가?",
   ]},
-  { id: 106, name: "사이드 체스트 (Side Chest)", image: "/exercises/클래식피지크-사이드-체스트.png", category: "남자 클래식 피지크", checklist: [
+  { id: 106, name: "Side Chest", image: "/exercises/클래식피지크-사이드-체스트.png", category: "남자 클래식 피지크", checklist: [
     "심판과 가까운 쪽 다리의 무릎을 구부리고 발가락으로 지탱하고 하강 압력을 가해 허벅지·대퇴이두근·비복근을 수축했는가?",
     "심판과 가까운 쪽 팔을 직각으로 구부린 후 주먹을 쥐고 다른 손은 손목을 잡았는가?",
     "배를 넣고 가슴을 살짝 들고 직각으로 구부린 팔의 상승 압력을 이용해 상완이두근을 최대한 수축했는가?",
   ]},
-  { id: 107, name: "백 더블 바이셉스 (Back Double Biceps)", image: "/exercises/클래식피지크-백-더블-바이셉스.png", category: "남자 클래식 피지크", checklist: [
+  { id: 107, name: "Back Double Biceps", image: "/exercises/클래식피지크-백-더블-바이셉스.png", category: "남자 클래식 피지크", checklist: [
     "뒤 모습이 심판을 향해 서서 한 발을 뒤로 빼서 발가락으로 지탱했는가?",
     "두 팔을 들어 어깨와 수평한 위치에서 팔꿈치를 구부리고 주먹을 꽉 쥐었는가?",
     "어깨, 상완이두근, 상완삼두근, 등 상하부, 둔근, 허벅지, 비복근 후면 전체를 수축시켰는가?",
   ]},
-  { id: 108, name: "사이드 트라이셉스 (Side Triceps)", image: "/exercises/클래식피지크-사이드-트라이셉스.png", category: "남자 클래식 피지크", checklist: [
+  { id: 108, name: "Side Triceps", image: "/exercises/클래식피지크-사이드-트라이셉스.png", category: "남자 클래식 피지크", checklist: [
     "심판과 가까운 쪽 다리의 무릎을 굽히고 발바닥을 바닥에 붙였는가?",
     "심판과 먼 쪽 다리의 무릎을 굽히고 발가락으로 지탱했는가?",
     "두 팔을 등 뒤에 놓고 깍지를 끼거나 앞쪽 팔의 손목을 잡았는가?",
     "가슴을 올리고 앞쪽 팔에 압력을 가하여 상완삼두근을 수축시켰는가?",
   ]},
-  { id: 109, name: "배큠 포즈 (Vacuum Pose)", image: "/exercises/클래식피지크-배큠-포즈.png", category: "남자 클래식 피지크", checklist: [
+  { id: 109, name: "Vacuum Pose", image: "/exercises/클래식피지크-배큠-포즈.png", category: "남자 클래식 피지크", checklist: [
     "심판을 향해 정면으로 서서 두 팔을 머리 뒤에 대고 두 발을 모았는가?",
     "숨을 깊게 내쉬고 배꼽을 척추 쪽으로 당긴다는 느낌으로 복부를 안으로 당겼는가?",
     "팔, 복횡근, 다리 전면근육을 수축했는가? (단 복직근은 수축하지 않음)",
   ]},
-  { id: 110, name: "앱도미널 앤 타이 (Abdominal & Thighs)", image: "/exercises/클래식피지크-앱도미널-앤-싸이.png", category: "남자 클래식 피지크", checklist: [
+  { id: 110, name: "Abdominal & Thighs", image: "/exercises/클래식피지크-앱도미널-앤-싸이.png", category: "남자 클래식 피지크", checklist: [
     "심판을 향해 정면으로 서서 한쪽 다리를 앞에 놓고 발가락으로 지탱했는가?",
     "두 팔을 머리 뒤에 놓고 호흡을 들이마셨는가?",
     "몸통을 약간 앞쪽으로 보내며 '크런칭' 자세로 복부근육을 수축시켰는가?",
     "동시에 하체 전면 근육도 수축시켰는가?",
   ]},
-  { id: 111, name: "프론트 랫 스프레드 (Front Lat Spread)", image: "/exercises/클래식피지크-프론트-랫-스프레드.png", category: "남자 클래식 피지크", checklist: [
+  { id: 111, name: "Front Lat Spread", image: "/exercises/클래식피지크-프론트-랫-스프레드.png", category: "남자 클래식 피지크", checklist: [
     "심판을 향해 정면으로 서서 다리와 발의 안쪽 라인을 15cm까지 벌렸는가?",
     "펼치거나 주먹을 쥔 손을 허리 하부 또는 복사근에 위치시켜 광배근을 펼쳐 보였는가?",
     "머리부터 발끝까지 가능한 한 많은 전면 근육을 수축했는가?",
   ]},
-  { id: 112, name: "백 랫 스프레드 (Back Lat Spread)", image: "/exercises/클래식피지크-백-랫-스프레드.png", category: "남자 클래식 피지크", checklist: [
+  { id: 112, name: "Back Lat Spread", image: "/exercises/클래식피지크-백-랫-스프레드.png", category: "남자 클래식 피지크", checklist: [
     "뒷 모습이 심판에게 보이게 서서 다리와 발의 안쪽 라인을 최대 15cm까지 벌렸는가?",
     "양손을 허리 위에 올리고 광배근을 최대한 펼쳐 보였는가?",
     "머리부터 발끝까지 가능한 한 많은 후면 전체 근육을 수축했는가?",
   ]},
-  { id: 113, name: "클래식 포즈 - 선수 선택 (Classic Pose)", image: "/exercises/클래식피지크-클래식-포즈.png", category: "남자 클래식 피지크", checklist: [
+  { id: 113, name: "Classic Pose (선수 선택)", image: "/exercises/클래식피지크-클래식-포즈.png", category: "남자 클래식 피지크", checklist: [
     "심판을 향해 자신이 원하는 전체 근육을 수축시키는 한 가지 포즈를 실시했는가?",
     "모스트 머스큘러 포즈를 취하지 않았는가? (금지)",
     "주요 근육군을 포함한 기타 근육군을 수축했는가?",
   ]},
 ];
 
-export const categories = ["전체", "가슴", "이두", "삼두", "전완", "등", "어깨", "하체", "남자 보디빌딩", "남자 피지크", "클래식 보디빌딩", "남자 클래식 피지크", "여자 피지크", "여자 보디피트니스", "여자 비키니", "남자 핏모델", "여자 핏모델"] as const;
+export const categories = ["전체", "가슴", "이두", "삼두", "전완", "등", "어깨", "하체", "남자 보디빌딩", "남자 피지크", "클래식 보디빌딩", "남자 클래식 피지크", "남자 핏모델", "여자 피지크", "여자 보디피트니스", "여자 비키니", "여자 핏모델"] as const;
 
-// 참고용(비시험) 카테고리
 export const referenceCategoriesSet = new Set(["남자 핏모델", "여자 핏모델"]);
