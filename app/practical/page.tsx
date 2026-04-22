@@ -280,8 +280,7 @@ export default function PracticalPage() {
           <div className="px-4 py-4">
             {/* 북마크된 종목 */}
             {oralBookmarks.size > 0 && (() => {
-              const allOralItems = [...commonSections, ...oralSports];
-              const bookmarkedOral = allOralItems.filter((s) => oralBookmarks.has(s.id));
+              const bookmarkedOral = oralSports.filter((s) => oralBookmarks.has(s.id));
               if (bookmarkedOral.length === 0) return null;
               return (
                 <>
@@ -317,13 +316,7 @@ export default function PracticalPage() {
                       <p className="text-xs text-[#8E8375] dark:text-zinc-500 mt-0.5">{section.questions.length}개 문항</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={(e) => { e.stopPropagation(); toggleBookmark(section.id, "oral"); }}
-                      className="p-1.5 text-[#A89B80] hover:text-[#6B7B3A] transition-colors" aria-label="즐겨찾기">
-                      <BookmarkIcon filled={oralBookmarks.has(section.id)} />
-                    </button>
-                    <ChevronRight />
-                  </div>
+                  <ChevronRight />
                 </button>
               ))}
             </div>
