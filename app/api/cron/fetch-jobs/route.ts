@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
     const batch = toInsert.slice(i, i + 10);
     const results = await Promise.allSettled(
       batch.map(({ it, sport, rName, rCode, salary, addr, deadline, desc, empType }) =>
-        sql`INSERT INTO job_posts (title,description,center_name,address,author_role,author_name,contact_type,contact,sport,region_name,region_code,employment_type,salary,headcount,benefits,preferences,deadline,ip_address,firebase_uid,source,source_id) VALUES (${it.title},${desc},${it.company},${addr},${"채용담당자"},${it.company},${"고용24"},${it.wantedInfoUrl},${sport},${rName},${rCode},${empType},${salary},${""},${""},${""},${deadline},${"work24-api"},${"system_work24"},${"work24"},${it.wantedAuthNo})`
+        sql`INSERT INTO job_posts (title,description,center_name,address,author_role,author_name,contact_type,contact,sport,region_name,region_code,employment_type,salary,headcount,benefits,preferences,deadline,ip_address,firebase_uid,source,source_id) VALUES (${it.title.slice(0,200)},${desc},${it.company.slice(0,100)},${addr.slice(0,200)},${"채용담당자"},${it.company.slice(0,50)},${"고용24"},${it.wantedInfoUrl},${sport.slice(0,50)},${rName.slice(0,50)},${rCode},${empType},${salary.slice(0,100)},${""},${""},${""},${deadline},${"work24-api"},${"system_work24"},${"work24"},${it.wantedAuthNo})`
       )
     );
     const fulfilled = results.filter((r) => r.status === "fulfilled").length;
