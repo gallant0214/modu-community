@@ -368,6 +368,21 @@ function RegionBottomSheet({
             </svg>
             뒤로
           </button>
+          {/* 광역시/특별시는 "전체" 선택 가능 */}
+          {selectedGroup && /특별시|광역시|특별자치시/.test(selectedGroup.name) && (() => {
+            const total = getGroupTotal(selectedGroup);
+            return (
+              <button
+                onClick={() => { onChange(selectedGroup.code, `${selectedGroup.name} 전체`); onClose(); }}
+                className={`w-full flex items-center justify-between px-5 py-3.5 text-sm font-semibold hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800/50 ${
+                  value === selectedGroup.code ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#6B7B3A] dark:text-[#A8B87A]"
+                }`}
+              >
+                <span>{selectedGroup.name} 전체</span>
+                {total > 0 && <span className="text-xs text-[#A89B80] dark:text-zinc-500">({total})</span>}
+              </button>
+            );
+          })()}
           {selectedGroup?.subRegions.map((sub) => {
             const cnt = getCount(sub.code);
             return (

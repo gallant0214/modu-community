@@ -55,7 +55,7 @@ async function queryJobs(opts: {
   const countResult = await sql`
     SELECT COUNT(*) as total FROM job_posts
     WHERE
-      (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}))
+      (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}))
       AND (${eType} = '' OR employment_type = ${eType})
       AND (${sFilter} = '' OR sport = ${sFilter})
       AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
@@ -75,7 +75,7 @@ async function queryJobs(opts: {
     rows = await sql`
       SELECT * FROM job_posts
       WHERE
-        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}))
+        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}))
         AND (${eType} = '' OR employment_type = ${eType})
         AND (${sFilter} = '' OR sport = ${sFilter})
         AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
@@ -95,7 +95,7 @@ async function queryJobs(opts: {
     rows = await sql`
       SELECT * FROM job_posts
       WHERE
-        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}))
+        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}))
         AND (${eType} = '' OR employment_type = ${eType})
         AND (${sFilter} = '' OR sport = ${sFilter})
         AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
@@ -115,7 +115,7 @@ async function queryJobs(opts: {
     rows = await sql`
       SELECT * FROM job_posts
       WHERE
-        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}))
+        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}))
         AND (${eType} = '' OR employment_type = ${eType})
         AND (${sFilter} = '' OR sport = ${sFilter})
         AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
