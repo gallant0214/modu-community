@@ -35,7 +35,7 @@ interface W24 { wantedAuthNo:string; company:string; title:string; salTpNm:strin
 
 async function fetchKw(kw: string): Promise<W24[]> {
   try {
-    const res = await fetch(`${BASE_URL}?authKey=${API_KEY}&callTp=L&returnType=XML&startPage=1&display=50&keyword=${encodeURIComponent(kw)}&regDate=D-3`, { signal: AbortSignal.timeout(6000) });
+    const res = await fetch(`${BASE_URL}?authKey=${API_KEY}&callTp=L&returnType=XML&startPage=1&display=50&keyword=${encodeURIComponent(kw)}&regDate=W-1`, { signal: AbortSignal.timeout(6000) });
     const xml = await res.text();
     const items: W24[] = [];
     for (const b of xml.match(/<wanted>([\s\S]*?)<\/wanted>/g) || []) {
