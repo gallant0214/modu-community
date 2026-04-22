@@ -51,6 +51,11 @@ export async function GET(req: NextRequest) {
 
   try { await sql`ALTER TABLE job_posts ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'user'`; } catch {}
   try { await sql`ALTER TABLE job_posts ADD COLUMN IF NOT EXISTS source_id TEXT`; } catch {}
+  // VARCHAR 컬럼 크기 확장
+  try { await sql`ALTER TABLE job_posts ALTER COLUMN center_name TYPE VARCHAR(200)`; } catch {}
+  try { await sql`ALTER TABLE job_posts ALTER COLUMN salary TYPE VARCHAR(200)`; } catch {}
+  try { await sql`ALTER TABLE job_posts ALTER COLUMN contact TYPE TEXT`; } catch {}
+  try { await sql`ALTER TABLE job_posts ALTER COLUMN address TYPE TEXT`; } catch {}
 
   const existingRows = await sql`SELECT source_id FROM job_posts WHERE source = 'work24' AND source_id IS NOT NULL`;
   const existingIds = new Set(existingRows.map((r: { source_id: string }) => r.source_id));
