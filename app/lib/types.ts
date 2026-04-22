@@ -74,6 +74,18 @@ export interface Post {
   images?: string;
 }
 
+export interface Message {
+  id: number;
+  sender_uid: string;
+  receiver_uid: string;
+  sender_nickname: string;
+  receiver_nickname: string;
+  content: string;
+  parent_id: number | null;
+  is_read: boolean;
+  created_at: string;
+}
+
 export interface JobPost {
   id: number;
   title: string;

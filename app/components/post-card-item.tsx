@@ -6,6 +6,7 @@ import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { likePost } from "@/app/lib/actions";
 import type { Post } from "@/app/lib/types";
 import { useAuth } from "@/app/components/auth-provider";
+import { SendMessageModal } from "@/app/components/send-message-modal";
 
 function formatDateTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -20,6 +21,7 @@ function formatDateTime(dateStr: string) {
 export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; isNotice?: boolean; hideCategoryTag?: string }) {
   const [likes, setLikes] = useState(Number(post.likes));
   const [authorMenu, setAuthorMenu] = useState(false);
+  const [showSendMessage, setShowSendMessage] = useState(false);
   const authorMenuRef = useRef<HTMLDivElement>(null);
   const { user, getIdToken } = useAuth();
   const pathname = usePathname();
@@ -120,7 +122,7 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
                   author={post.author}
                   categoryId={post.category_id}
                   onViewPosts={() => { setAuthorMenu(false); router.push(`/category/${post.category_id}?searchType=author&q=${encodeURIComponent(post.author)}`); }}
-                  onSendMessage={() => { setAuthorMenu(false); alert("쪽지 기능은 준비 중입니다."); }}
+                  onSendMessage={() => { setAuthorMenu(false); setShowSendMessage(true); }}
                 />
               )}
             </span>
@@ -153,7 +155,7 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
             author={post.author}
             categoryId={post.category_id}
             onViewPosts={() => { setAuthorMenu(false); router.push(`/category/${post.category_id}?searchType=author&q=${encodeURIComponent(post.author)}`); }}
-            onSendMessage={() => { setAuthorMenu(false); alert("쪽지 기능은 준비 중입니다."); }}
+            onSendMessage={() => { setAuthorMenu(false); setShowSendMessage(true); }}
           />
         )}
       </span>
@@ -180,6 +182,11 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
           <span>{commentsCount}</span>
         </span>
       </div>
+      <SendMessageModal
+        open={showSendMessage}
+        onClose={() => setShowSendMessage(false)}
+        receiverNickname={post.author}
+      />
     </Link>
   );
 }

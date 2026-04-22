@@ -6,7 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { deleteUser } from "firebase/auth";
 import { auth } from "@/app/lib/firebase-client";
-import type { Post, JobPost } from "@/app/lib/types";
+import type { Post, JobPost, Message } from "@/app/lib/types";
+import { SendMessageModal } from "@/app/components/send-message-modal";
 
 /* ── 유틸 ── */
 function formatDate(dateStr: string) {
@@ -33,7 +34,7 @@ function generateRandomNickname() {
 }
 
 /* ── 타입 ── */
-type Tab = "posts" | "comments" | "jobs" | "bookmarks" | "jobBookmarks" | "notifications";
+type Tab = "posts" | "comments" | "jobs" | "bookmarks" | "jobBookmarks" | "notifications" | "receivedMessages" | "sentMessages";
 interface MyComment {
   id: number;
   post_id: number;
@@ -153,11 +154,19 @@ function MyPageContent() {
   const [bookmarkPosts, setBookmarkPosts] = useState<Post[]>([]);
   const [bookmarkJobs, setBookmarkJobs] = useState<JobPost[]>([]);
   const [notifications, setNotifications] = useState<MyNotification[]>([]);
+  const [receivedMessages, setReceivedMessages] = useState<Message[]>([]);
+  const [sentMessages, setSentMessages] = useState<Message[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
 
+  /* 쪽지 상세 */
+  const [messageThread, setMessageThread] = useState<{ original: Message; replies: Message[] } | null>(null);
+  const [showReplyModal, setShowReplyModal] = useState(false);
+  const [replyTo, setReplyTo] = useState<{ nickname: string; parentId: number } | null>(null);
+
   /* 카운트 */
-  const [counts, setCounts] = useState({ posts: 0, comments: 0, jobs: 0, bookmarks: 0, jobBookmarks: 0, notifications: 0 });
+  const [counts, setCounts] = useState({ posts: 0, comments: 0, jobs: 0, bookmarks: 0, jobBookmarks: 0, notifications: 0, receivedMessages: 0, sentMessages: 0 });
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   /* 모달 상태 */
   const [showNicknameModal, setShowNicknameModal] = useState(false);
@@ -191,16 +200,18 @@ function MyPageContent() {
       if (!token) return;
       const headers = { Authorization: `Bearer ${token}` };
       try {
-        const [pRes, cRes, jRes, bpRes, bjRes, nRes] = await Promise.all([
+        const [pRes, cRes, jRes, bpRes, bjRes, nRes, rmRes, smRes] = await Promise.all([
           fetch(`/api/posts/my?uid=${user.uid}`, { headers }),
           fetch(`/api/comments/my?uid=${user.uid}`, { headers }),
           fetch(`/api/jobs/my?uid=${user.uid}`, { headers }),
           fetch(`/api/bookmarks?type=posts`, { headers }),
           fetch(`/api/bookmarks?type=jobs`, { headers }),
           fetch(`/api/notifications/web`, { headers }),
+          fetch(`/api/messages?type=received`, { headers }),
+          fetch(`/api/messages?type=sent`, { headers }),
         ]);
-        const [pData, cData, jData, bpData, bjData, nData] = await Promise.all([
-          pRes.json(), cRes.json(), jRes.json(), bpRes.json(), bjRes.json(), nRes.json(),
+        const [pData, cData, jData, bpData, bjData, nData, rmData, smData] = await Promise.all([
+          pRes.json(), cRes.json(), jRes.json(), bpRes.json(), bjRes.json(), nRes.json(), rmRes.json(), smRes.json(),
         ]);
         const nextCounts = {
           posts: (pData.posts || []).length,
@@ -209,8 +220,11 @@ function MyPageContent() {
           bookmarks: (bpData.bookmarks || []).length,
           jobBookmarks: (bjData.bookmarks || []).length,
           notifications: (nData.notifications || []).length,
+          receivedMessages: (rmData.messages || []).length,
+          sentMessages: (smData.messages || []).length,
         };
         const unread = (nData.notifications || []).filter((n: { is_read: boolean }) => !n.is_read).length;
+        setUnreadMessages(rmData.unreadCount || 0);
         setCounts(nextCounts);
         setUnreadNotifications(unread);
         // localStorage 캐시 업데이트
@@ -263,6 +277,8 @@ function MyPageContent() {
           else if (tab === "bookmarks") setBookmarkPosts(parsed.data);
           else if (tab === "jobBookmarks") setBookmarkJobs(parsed.data);
           else if (tab === "notifications") setNotifications(parsed.data);
+          else if (tab === "receivedMessages") setReceivedMessages(parsed.data);
+          else if (tab === "sentMessages") setSentMessages(parsed.data);
           hadCache = true;
         }
       }
@@ -322,6 +338,19 @@ function MyPageContent() {
           headers: { "Content-Type": "application/json", ...headers },
           body: JSON.stringify({ readAll: true }),
         }).catch(() => {});
+      } else if (tab === "receivedMessages") {
+        const res = await fetch(`/api/messages?type=received`, { headers });
+        const data = await res.json();
+        const list = data.messages || [];
+        setReceivedMessages(list);
+        saveCache(list);
+        setUnreadMessages(data.unreadCount || 0);
+      } else if (tab === "sentMessages") {
+        const res = await fetch(`/api/messages?type=sent`, { headers });
+        const data = await res.json();
+        const list = data.messages || [];
+        setSentMessages(list);
+        saveCache(list);
       }
     } catch {}
     setDataLoading(false);
@@ -335,7 +364,7 @@ function MyPageContent() {
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     const highlightParam = searchParams.get("highlight");
-    const validTabs: Tab[] = ["posts", "comments", "jobs", "bookmarks", "jobBookmarks", "notifications"];
+    const validTabs: Tab[] = ["posts", "comments", "jobs", "bookmarks", "jobBookmarks", "notifications", "receivedMessages", "sentMessages"];
     if (tabParam && validTabs.includes(tabParam as Tab)) {
       setActiveTab(tabParam as Tab);
       if (tabParam === "notifications" && highlightParam) {
@@ -1325,6 +1354,99 @@ function MyPageContent() {
                   z-index: 1;
                 }
               `}</style>
+
+              {/* ── 받은 쪽지함 ── */}
+              {activeTab === "receivedMessages" && (receivedMessages.length === 0 ? (
+                <EmptyTabState icon={<svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} title="받은 쪽지가 없습니다" />
+              ) : (
+                <div className="px-4 pt-4 pb-6 space-y-2">
+                  {receivedMessages.map((m) => (
+                    <MessageCard key={m.id} message={m} type="received" onClick={async () => {
+                      const token = await getIdToken();
+                      if (!token) return;
+                      const headers = { Authorization: `Bearer ${token}` };
+                      if (!m.is_read) fetch(`/api/messages/${m.id}/read`, { method: "POST", headers }).catch(() => {});
+                      const res = await fetch(`/api/messages/${m.id}`, { headers });
+                      const data = await res.json();
+                      setMessageThread({ original: data.original, replies: data.replies || [] });
+                    }} />
+                  ))}
+                </div>
+              ))}
+
+              {/* ── 보낸 쪽지함 ── */}
+              {activeTab === "sentMessages" && (sentMessages.length === 0 ? (
+                <EmptyTabState icon={<svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>} title="보낸 쪽지가 없습니다" />
+              ) : (
+                <div className="px-4 pt-4 pb-6 space-y-2">
+                  {sentMessages.map((m) => (
+                    <MessageCard key={m.id} message={m} type="sent" onClick={async () => {
+                      const token = await getIdToken();
+                      if (!token) return;
+                      const res = await fetch(`/api/messages/${m.id}`, { headers: { Authorization: `Bearer ${token}` } });
+                      const data = await res.json();
+                      setMessageThread({ original: data.original, replies: data.replies || [] });
+                    }} />
+                  ))}
+                </div>
+              ))}
+
+              {/* ── 쪽지 상세 모달 ── */}
+              {messageThread && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setMessageThread(null)}>
+                  <div className="absolute inset-0 bg-black/40" />
+                  <div className="relative w-full max-w-md max-h-[80vh] bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl shadow-xl overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-[#E8E0D0] dark:border-zinc-700 shrink-0">
+                      <h3 className="font-semibold text-[15px] text-[#2A251D] dark:text-zinc-100">쪽지 상세</h3>
+                      <button onClick={() => setMessageThread(null)} className="text-[#999] hover:text-[#666]">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                      {/* 원본 메시지 */}
+                      <MessageBubble msg={messageThread.original} isOriginal />
+                      {/* 답장들 */}
+                      {messageThread.replies.map((r) => (
+                        <MessageBubble key={r.id} msg={r} />
+                      ))}
+                    </div>
+                    <div className="shrink-0 px-5 py-3 border-t border-[#E8E0D0] dark:border-zinc-700">
+                      <button
+                        onClick={() => {
+                          const orig = messageThread.original;
+                          const replyNickname = orig.sender_uid === user?.uid ? orig.receiver_nickname : orig.sender_nickname;
+                          setReplyTo({ nickname: replyNickname, parentId: orig.id });
+                          setShowReplyModal(true);
+                        }}
+                        className="w-full py-2.5 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-sm font-semibold rounded-xl transition-colors"
+                      >
+                        답장하기
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 답장 모달 */}
+              {replyTo && (
+                <SendMessageModal
+                  open={showReplyModal}
+                  onClose={() => { setShowReplyModal(false); setReplyTo(null); }}
+                  receiverNickname={replyTo.nickname}
+                  parentId={replyTo.parentId}
+                  onSent={() => {
+                    // 답장 보낸 후 스레드 새로고침
+                    if (messageThread) {
+                      getIdToken().then((token) => {
+                        if (!token) return;
+                        fetch(`/api/messages/${messageThread.original.id}`, { headers: { Authorization: `Bearer ${token}` } })
+                          .then((r) => r.json())
+                          .then((data) => setMessageThread({ original: data.original, replies: data.replies || [] }));
+                      });
+                    }
+                  }}
+                />
+              )}
             </div>
           )}
         </div>
@@ -1389,6 +1511,8 @@ function MyPageContent() {
           <CardRow label="내가 등록한 구인글" count={counts.jobs} onClick={() => router.push("/my?tab=jobs")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} />
           <CardRow label="구인 북마크" count={counts.jobBookmarks} onClick={() => router.push("/my?tab=jobBookmarks")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>} />
           <CardRow label="알림 리스트" badge={unreadNotifications} onClick={() => router.push("/my?tab=notifications")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>} />
+          <CardRow label="받은 쪽지함" count={counts.receivedMessages} badge={unreadMessages} onClick={() => router.push("/my?tab=receivedMessages")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} />
+          <CardRow label="보낸 쪽지함" count={counts.sentMessages} onClick={() => router.push("/my?tab=sentMessages")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>} />
         </Card>
 
         {/* ── 3. 설정 카드 ── */}
@@ -1496,6 +1620,57 @@ function EmptyState({ text, children }: { text: string; children?: React.ReactNo
       </svg>
       <p className="text-sm">{text}</p>
       {children}
+    </div>
+  );
+}
+
+function EmptyTabState({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <div className="px-4 py-10">
+      <div className="relative mx-auto max-w-md bg-[#FEFCF7] dark:bg-zinc-900 border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-3xl px-6 py-10 text-center overflow-hidden">
+        <div className="w-14 h-14 mx-auto rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center mb-4">{icon}</div>
+        <p className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">{title}</p>
+      </div>
+    </div>
+  );
+}
+
+function MessageCard({ message, type, onClick }: { message: Message; type: "received" | "sent"; onClick: () => void }) {
+  const isUnread = type === "received" && !message.is_read;
+  const otherName = type === "received" ? message.sender_nickname : message.receiver_nickname;
+  return (
+    <button onClick={onClick}
+      className={`w-full text-left rounded-2xl overflow-hidden transition-colors ${
+        isUnread
+          ? "bg-[#FBF7EB] dark:bg-zinc-900/70 border border-[#6B7B3A]/35 shadow-[0_1px_0_rgba(0,0,0,0.02),0_10px_26px_-22px_rgba(107,123,58,0.4)]"
+          : "bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700"
+      }`}
+    >
+      <div className="px-4 py-3.5">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="text-[12px] font-bold text-[#3A342A] dark:text-zinc-200">
+            {type === "received" ? "보낸 사람" : "받는 사람"}: {otherName}
+          </span>
+          {isUnread && (
+            <span className="w-2 h-2 rounded-full bg-[#6B7B3A] animate-pulse" />
+          )}
+          <span className="ml-auto text-[11px] text-[#A89B80] dark:text-zinc-500">{formatDate(message.created_at)}</span>
+        </div>
+        <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400 line-clamp-2 leading-relaxed">{message.content}</p>
+      </div>
+    </button>
+  );
+}
+
+function MessageBubble({ msg, isOriginal }: { msg: Message; isOriginal?: boolean }) {
+  return (
+    <div className={`rounded-2xl p-4 ${isOriginal ? "bg-[#F5F0E5] dark:bg-zinc-800" : "bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700"}`}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[12px] font-bold text-[#3A342A] dark:text-zinc-200">{msg.sender_nickname}</span>
+        <span className="text-[11px] text-[#A89B80] dark:text-zinc-500">{formatDate(msg.created_at)}</span>
+        {isOriginal && <span className="text-[10px] font-bold text-[#6B7B3A] bg-[#6B7B3A]/10 px-1.5 py-0.5 rounded-full">원본</span>}
+      </div>
+      <p className="text-[13px] text-[#6B5D47] dark:text-zinc-300 leading-relaxed whitespace-pre-line">{msg.content}</p>
     </div>
   );
 }
