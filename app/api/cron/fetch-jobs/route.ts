@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
 
   // DB INSERT 병렬 (10개씩)
   let inserted = 0;
+  const errors: string[] = [];
   for (let i = 0; i < toInsert.length; i += 10) {
     const batch = toInsert.slice(i, i + 10);
     const results = await Promise.allSettled(
@@ -99,8 +100,13 @@ export async function GET(req: NextRequest) {
         sql`INSERT INTO job_posts (title,description,center_name,address,author_role,author_name,contact_type,contact,sport,region_name,region_code,employment_type,salary,headcount,benefits,preferences,deadline,ip_address,firebase_uid,source,source_id) VALUES (${it.title},${desc},${it.company},${addr},${"채용담당자"},${it.company},${"고용24"},${it.wantedInfoUrl},${sport},${rName},${rCode},${empType},${salary},${""},${""},${""},${deadline},${"work24-api"},${"system_work24"},${"work24"},${it.wantedAuthNo})`
       )
     );
-    inserted += results.filter((r) => r.status === "fulfilled").length;
+    const fulfilled = results.filter((r) => r.status === "fulfilled").length;
+    const rejected = results.filter((r) => r.status === "rejected");
+    inserted += fulfilled;
+    if (rejected.length > 0) {
+      errors.push(...rejected.map((r) => r.status === "rejected" ? (r.reason?.message || String(r.reason)) : ""));
+    }
   }
 
-  return NextResponse.json({ success: true, inserted, found: toInsert.length, timestamp: new Date().toISOString() });
+  return NextResponse.json({ success: true, inserted, found: toInsert.length, errors: errors.slice(0, 5), timestamp: new Date().toISOString() });
 }
