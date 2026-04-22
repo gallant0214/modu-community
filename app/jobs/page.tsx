@@ -325,8 +325,12 @@ function RegionBottomSheet({
   }, [open]);
 
   const getCount = (code: string) => counts[code.toLowerCase()] || 0;
-  const getGroupTotal = (group: RegionGroup) =>
-    group.subRegions.reduce((sum, sr) => sum + getCount(sr.code), 0);
+  // 그룹 전체 카운트: 상위 코드 카운트 + 하위 코드 카운트 합산
+  const getGroupTotal = (group: RegionGroup) => {
+    const parentCount = getCount(group.code);
+    const subTotal = group.subRegions.reduce((sum, sr) => sum + getCount(sr.code), 0);
+    return parentCount + subTotal;
+  };
 
   return (
     <BottomSheet open={open} onClose={onClose} title={step === "group" ? "지역 선택" : selectedGroup?.name || ""}>
