@@ -54,13 +54,48 @@ function detectSport(title: string, company: string, keyword: string): string {
   return keyword;
 }
 
-interface W24 { wantedAuthNo:string; company:string; title:string; salTpNm:string; sal:string; region:string; holidayTpNm:string; closeDt:string; wantedInfoUrl:string; basicAddr:string; detailAddr:string; empTpCd:string; }
+// 스포츠 관련 업종 (이 업종이면 무조건 통과)
+const SPORTS_INDUSTRIES = [
+  "태권도", "무술", "체력단련", "수영장", "골프장", "골프연습장", "스포츠", "체육",
+  "스포츠 교육", "스포츠 서비스", "운동", "경기용", "레크리에이션", "댄스",
+  "복지관", "복지서비스", "복지 서비스", "보육", "사회복지", "교습학원",
+];
+
+// 스포츠와 무관한 것으로 확실한 업종 (이 업종이면 제목에 스포츠 키워드가 있어야만 통과)
+const UNRELATED_INDUSTRIES = [
+  "제조업", "인쇄업", "건설", "토공사", "창호", "플라스틱", "반도체", "변압기",
+  "전자부품", "전자상거래", "소매업", "도매업", "음식점", "인력 공급", "식품",
+  "부동산", "의료용", "진단", "보험", "금융", "섬유", "오프셋",
+  "요양 병원", "일반 병원", "공중 보건",
+];
+
+// 제목/회사명에 스포츠 관련 단어가 있는지 확인
+const SPORTS_TITLE_WORDS = /태권도|유도|검도|복싱|권투|합기도|주짓수|킥복싱|무에타이|헬스|피트니스|PT|트레이너|크로스핏|필라테스|요가|발레|무용|에어로빅|줄넘기|수영|골프|테니스|배드민턴|탁구|축구|풋살|농구|배구|야구|클라이밍|승마|체조|양궁|펜싱|댄스|스키|스노보드|스케이트|볼링|스쿼시|체육|스포츠|운동|레저|생활체육|지도사|코치|강사|인스트럭터/i;
+
+function isSportsRelated(title: string, company: string, indTpNm: string): boolean {
+  // 1) 업종이 스포츠 관련이면 통과
+  for (const kw of SPORTS_INDUSTRIES) {
+    if (indTpNm.includes(kw)) return true;
+  }
+  // 2) 제목이나 회사명에 스포츠 키워드가 있으면 통과
+  if (SPORTS_TITLE_WORDS.test(title) || SPORTS_TITLE_WORDS.test(company)) return true;
+  // 3) 업종이 명확히 무관하면 탈락
+  for (const kw of UNRELATED_INDUSTRIES) {
+    if (indTpNm.includes(kw)) return false;
+  }
+  // 4) 그 외는 통과 (애매한 경우 포함)
+  return true;
+}
+
+interface W24 { wantedAuthNo:string; company:string; title:string; salTpNm:string; sal:string; region:string; holidayTpNm:string; closeDt:string; wantedInfoUrl:string; basicAddr:string; detailAddr:string; empTpCd:string; indTpNm:string; }
 
 function parseXml(xml: string): W24[] {
   const items: W24[] = [];
   for (const b of xml.match(/<wanted>([\s\S]*?)<\/wanted>/g) || []) {
     const g = (t: string) => b.match(new RegExp(`<${t}>([\\s\\S]*?)<\\/${t}>`))?.[1]?.replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").trim() || "";
-    items.push({ wantedAuthNo:g("wantedAuthNo"), company:g("company"), title:g("title"), salTpNm:g("salTpNm"), sal:g("sal"), region:g("region"), holidayTpNm:g("holidayTpNm"), closeDt:g("closeDt"), wantedInfoUrl:g("wantedInfoUrl"), basicAddr:g("basicAddr"), detailAddr:g("detailAddr"), empTpCd:g("empTpCd") });
+    const item = { wantedAuthNo:g("wantedAuthNo"), company:g("company"), title:g("title"), salTpNm:g("salTpNm"), sal:g("sal"), region:g("region"), holidayTpNm:g("holidayTpNm"), closeDt:g("closeDt"), wantedInfoUrl:g("wantedInfoUrl"), basicAddr:g("basicAddr"), detailAddr:g("detailAddr"), empTpCd:g("empTpCd"), indTpNm:g("indTpNm") };
+    // 스포츠 관련 여부 필터링
+    if (isSportsRelated(item.title, item.company, item.indTpNm)) items.push(item);
   }
   return items;
 }
