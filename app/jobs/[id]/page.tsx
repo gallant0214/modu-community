@@ -94,7 +94,7 @@ export default function JobDetailPage() {
         method: "DELETE",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (res.ok) router.replace("/jobs");
+      if (res.ok) router.replace(backHref);
     } catch {}
     setAdminDeleting(false);
   };
@@ -146,7 +146,7 @@ export default function JobDetailPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) {
-        router.replace("/jobs");
+        router.replace(backHref);
       }
     } catch {
       setDeleting(false);

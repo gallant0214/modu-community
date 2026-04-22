@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 import type { JobPost } from "@/app/lib/types";
 
@@ -106,10 +107,13 @@ function JobCard({ job }: { job: JobPost }) {
   const cfg = STATUS_CONFIG[status];
   const isClosed = status === "closed";
   const dday = getDday(job.deadline);
+  const pathname = usePathname();
+  const sp = useSearchParams();
+  const currentUrl = sp.toString() ? `${pathname}?${sp.toString()}` : pathname;
 
   return (
     <Link
-      href={`/jobs/${job.id}`}
+      href={`/jobs/${job.id}?from=${encodeURIComponent(currentUrl)}`}
       className={`group relative block border rounded-2xl p-5 sm:p-6 transition-all duration-200 hover:-translate-y-0.5 ${
         isClosed
           ? "border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB]/60 dark:bg-zinc-900/50 opacity-70"
