@@ -57,6 +57,10 @@ export async function POST(request: Request) {
       notify_keyword = true,
     } = body;
 
+    // 컬럼이 없을 수 있으므로 안전하게 추가
+    await sql`ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS notify_keyword BOOLEAN DEFAULT true`;
+    await sql`ALTER TABLE notification_preferences ADD COLUMN IF NOT EXISTS notify_like BOOLEAN DEFAULT true`;
+
     await sql`
       INSERT INTO notification_preferences
         (firebase_uid, notify_comment, notify_reply, notify_like, notify_job, notify_notice, notify_promo, notify_keyword, updated_at)
@@ -76,6 +80,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error("Notification prefs POST error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
