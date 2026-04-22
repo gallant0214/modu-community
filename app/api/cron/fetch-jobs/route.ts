@@ -25,10 +25,33 @@ const REGION_MAP: Record<string, string> = {
 
 const EMP_MAP: Record<string, string> = { "10":"정규직","11":"정규직","20":"계약직","21":"계약직","4":"파트타임" };
 
-function toSport(kw: string): string {
-  if (["헬스","피트니스","트레이너","크로스핏"].includes(kw)) return "헬스/PT";
-  if (["스포츠지도사","체육","생활체육","스포츠센터"].includes(kw)) return "기타";
-  return kw;
+// 제목+회사명에서 종목을 지능적으로 추론
+const SPORT_PATTERNS: [RegExp, string][] = [
+  [/태권도/i, "태권도"], [/유도/i, "유도"], [/검도/i, "검도"],
+  [/복싱|권투/i, "복싱"], [/킥복싱/i, "킥복싱"], [/무에타이/i, "무에타이"],
+  [/주짓수|BJJ/i, "주짓수"], [/합기도/i, "합기도"], [/가라테/i, "기타"],
+  [/헬스|피트니스|PT|퍼스널|트레이너|웨이트|짐|GYM/i, "헬스/PT"],
+  [/크로스핏/i, "헬스/PT"], [/필라테스/i, "필라테스"], [/요가/i, "요가"],
+  [/발레/i, "기타"], [/무용|댄스/i, "댄스스포츠"], [/에어로빅/i, "기타"],
+  [/줄넘기/i, "기타"], [/수영/i, "수영"], [/골프/i, "골프"],
+  [/테니스/i, "테니스"], [/배드민턴/i, "배드민턴"], [/탁구/i, "탁구"],
+  [/축구|풋살/i, "축구"], [/농구/i, "농구"], [/배구/i, "배구"], [/야구/i, "야구"],
+  [/클라이밍|암벽|볼더링/i, "클라이밍"], [/승마/i, "승마"], [/체조/i, "체조"],
+  [/양궁/i, "기타"], [/펜싱/i, "기타"], [/사격/i, "기타"],
+  [/스키|스노보드/i, "스키/스노보드"], [/스케이트|빙상/i, "기타"],
+  [/볼링/i, "기타"], [/스쿼시/i, "기타"],
+  [/핸드볼/i, "기타"], [/럭비/i, "기타"],
+];
+
+function detectSport(title: string, company: string, keyword: string): string {
+  const text = `${title} ${company}`;
+  for (const [pattern, sport] of SPORT_PATTERNS) {
+    if (pattern.test(text)) return sport;
+  }
+  // 패턴 매칭 실패 시 키워드 기반 폴백
+  if (["헬스","피트니스","트레이너","크로스핏"].includes(keyword)) return "헬스/PT";
+  if (["스포츠지도사","체육","생활체육","스포츠센터"].includes(keyword)) return "기타";
+  return keyword;
 }
 
 interface W24 { wantedAuthNo:string; company:string; title:string; salTpNm:string; sal:string; region:string; holidayTpNm:string; closeDt:string; wantedInfoUrl:string; basicAddr:string; detailAddr:string; empTpCd:string; }
@@ -89,9 +112,13 @@ export async function GET(req: NextRequest) {
       const addr = [it.basicAddr, it.detailAddr].filter(Boolean).join(" ");
       let deadline = "";
       if (it.closeDt) { const p = it.closeDt.split("-"); if (p.length === 3) deadline = `20${p[0]}-${p[1]}-${p[2]}`; }
-      const desc = `[고용24 채용정보]\n\n${it.title}\n\n${it.holidayTpNm ? `근무형태: ${it.holidayTpNm}\n` : ""}${salary ? `급여: ${salary}\n` : ""}${addr ? `근무지: ${addr}\n` : ""}\n상세보기: ${it.wantedInfoUrl}`;
+      const desc = [
+        it.holidayTpNm ? `근무형태: ${it.holidayTpNm}` : "",
+        salary ? `급여: ${salary}` : "",
+        addr ? `근무지: ${addr}` : "",
+      ].filter(Boolean).join("\n");
 
-      toInsert.push({ it, sport: toSport(kw), rName, rCode, salary, addr, deadline, desc, empType: EMP_MAP[it.empTpCd] || "기타" });
+      toInsert.push({ it, sport: detectSport(it.title, it.company, kw), rName, rCode, salary, addr, deadline, desc, empType: EMP_MAP[it.empTpCd] || "기타" });
     }
   }
 
