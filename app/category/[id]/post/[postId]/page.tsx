@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { deletePost, likePost, viewPost, createComment, deleteComment, createReport, updateNotice, likeComment, updateComment, verifyPostPassword } from "@/app/lib/actions";
 import type { Post, Comment } from "@/app/lib/types";
 import { useAuth } from "@/app/components/auth-provider";
 import { shareOrCopy } from "@/app/lib/share";
+import { SendMessageModal } from "@/app/components/send-message-modal";
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);
@@ -39,6 +40,12 @@ export default function PostDetailPage() {
   const [loading, setLoading] = useState(true);
   const [likes, setLikes] = useState(0);
   const [liked, setLiked] = useState(false);
+
+  // 닉네임 드롭다운 + 쪽지
+  const [authorMenu, setAuthorMenu] = useState<string | null>(null);
+  const [sendMessageTo, setSendMessageTo] = useState("");
+  const [showSendMessage, setShowSendMessage] = useState(false);
+  const authorMenuRef = useRef<HTMLDivElement>(null);
 
   // 삭제 모달
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -91,6 +98,16 @@ export default function PostDetailPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminDeleteModal, setShowAdminDeleteModal] = useState(false);
   const [adminDeleting, setAdminDeleting] = useState(false);
+
+  // 닉네임 드롭다운 외부 클릭 닫기
+  useEffect(() => {
+    if (!authorMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (authorMenuRef.current && !authorMenuRef.current.contains(e.target as Node)) setAuthorMenu(null);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [authorMenu]);
 
   // 게시글 더보기 메뉴 (...)
   const [showPostMenu, setShowPostMenu] = useState(false);
@@ -613,9 +630,30 @@ export default function PostDetailPage() {
 
             {/* 메타 */}
             <div className="mt-4 flex items-center gap-2 flex-wrap text-[12px] text-[#8C8270] dark:text-zinc-500 pt-4 border-t border-[#E8E0D0]/60 dark:border-zinc-800">
-              <span className="inline-flex items-center gap-1">
-                <span className="font-semibold text-[#3A342A] dark:text-zinc-200">{post.author}</span>
+              <span className="inline-flex items-center gap-1 relative">
+                <span
+                  role="button"
+                  onClick={() => setAuthorMenu(authorMenu === "post" ? null : "post")}
+                  className="font-semibold text-[#3A342A] dark:text-zinc-200 hover:text-[#6B7B3A] hover:underline cursor-pointer transition-colors"
+                >{post.author}</span>
                 {post.ip_display && <span className="text-[#A89B80]">({post.ip_display})</span>}
+                {authorMenu === "post" && (
+                  <div ref={authorMenuRef} className="absolute left-0 top-full mt-1.5 z-50 min-w-[140px] bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-xl shadow-[0_8px_24px_-8px_rgba(107,93,71,0.35)] overflow-hidden">
+                    <div className="px-3 py-2 border-b border-[#E8E0D0]/60 dark:border-zinc-800">
+                      <p className="text-[11px] font-bold text-[#6B5D47] dark:text-zinc-400 truncate">{post.author}</p>
+                    </div>
+                    <button onClick={() => { setAuthorMenu(null); router.push(`/category/${categoryId}?searchType=author&q=${encodeURIComponent(post.author)}`); }}
+                      className="w-full text-left px-3 py-2.5 text-[12px] font-medium text-[#2A251D] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors flex items-center gap-2">
+                      <svg className="w-3.5 h-3.5 text-[#8C8270]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                      게시글 보기
+                    </button>
+                    <button onClick={() => { setAuthorMenu(null); setSendMessageTo(post.author); setShowSendMessage(true); }}
+                      className="w-full text-left px-3 py-2.5 text-[12px] font-medium text-[#2A251D] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors flex items-center gap-2">
+                      <svg className="w-3.5 h-3.5 text-[#8C8270]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                      쪽지 보내기
+                    </button>
+                  </div>
+                )}
               </span>
               <span className="text-[#C7B89B]">·</span>
               {(() => {
