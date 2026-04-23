@@ -197,12 +197,12 @@ function SelectButton({ value, placeholder, onClick }: { value: string; placehol
 
 const inputCls = "w-full px-4 py-3 border border-[#E8E0D0] dark:border-zinc-700 rounded-xl text-[14px] bg-[#FBF7EB] dark:bg-zinc-800 text-[#2A251D] dark:text-zinc-100 placeholder-[#A89B80] focus:outline-none focus:border-[#6B7B3A]/50 focus:bg-[#FEFCF7] dark:focus:bg-zinc-900 transition-colors";
 
-const EMPLOYMENT_TYPES = ["정규직", "계약직", "아르바이트", "프리랜서(위촉직)", "파트타임", "교육생/연수생", "인턴"];
+const EMPLOYMENT_TYPES = ["정규직", "계약직", "아르바이트", "프리랜서(위촉직)", "파트타임", "교육생/연수생", "인턴", "기타"];
 const SALARY_TYPES = ["시급", "월급", "건당", "협의", "직접 입력"];
 const HEADCOUNT_OPTIONS = ["1명", "2~3명", "4명 이상", "직접 입력"];
 const PREFERENCES_OPTIONS = ["동종업계 경력자", "관련 자격증 소지자", "장기근무 가능자", "초보 가능", "인근 거주자", "대학생 가능", "운전 가능자"];
 const BENEFITS_OPTIONS = ["4대보험", "인센티브", "식대지원", "회원권 제공", "교육 지원", "퇴직금"];
-const DEADLINE_OPTIONS = ["상시모집", "정원마감시", "직접 입력"];
+const DEADLINE_OPTIONS = ["상시모집", "정원마감시", "채용시까지", "직접 입력"];
 const AUTHOR_ROLES = ["관리자", "대표", "기타"];
 
 /* ══════════════════════════════════
@@ -236,6 +236,7 @@ export default function JobWritePage() {
   const [deadlineType, setDeadlineType] = useState("");
   const [deadlineDate, setDeadlineDate] = useState("");
   const [employmentType, setEmploymentType] = useState("");
+  const [employmentCustom, setEmploymentCustom] = useState("");
   const [salaryType, setSalaryType] = useState("");
   const [salaryAmount, setSalaryAmount] = useState("");
   const [salaryIncentive, setSalaryIncentive] = useState(false);
@@ -364,7 +365,7 @@ export default function JobWritePage() {
       [!title.trim(), "title", "제목"],
       [!description.trim(), "description", "내용"],
       [!deadlineType, "deadline", "모집기간"],
-      [!employmentType, "employment", "근무형태"],
+      [!employmentType || (employmentType === "기타" && !employmentCustom.trim()), "employment", "근무형태"],
       [!salaryType || (salaryType === "직접 입력" && !salaryMin && !salaryMax), "salary", "급여"],
       [!headcount || (headcount === "직접 입력" && !headcountCustom.trim()), "headcount", "모집 인원"],
     ];
@@ -404,7 +405,7 @@ export default function JobWritePage() {
           sport,
           region_name: regionName,
           region_code: regionCode,
-          employment_type: employmentType,
+          employment_type: employmentType === "기타" ? (employmentCustom.trim() || "기타") : employmentType,
           salary: salaryText,
           headcount: headcountText,
           benefits: benefits.join(", "),
@@ -641,7 +642,7 @@ export default function JobWritePage() {
 
           <div ref={fieldRefs.employment}>
             <Field label="근무형태" required>
-              <SelectButton value={employmentType} placeholder="근무형태를 선택해 주세요" onClick={() => setShowEmployment(true)} />
+              <SelectButton value={employmentType === "기타" ? (employmentCustom || "기타") : employmentType} placeholder="근무형태를 선택해 주세요" onClick={() => setShowEmployment(true)} />
             </Field>
           </div>
 
@@ -771,9 +772,22 @@ export default function JobWritePage() {
 
       {/* 근무형태 모달 */}
       <Modal open={showEmployment} onClose={() => setShowEmployment(false)} title="근무형태 선택">
-        <div>{EMPLOYMENT_TYPES.map(t => (
-          <RadioItem key={t} label={t} selected={employmentType === t} onSelect={() => { setEmploymentType(t); setShowEmployment(false); }} />
-        ))}</div>
+        <div>
+          {EMPLOYMENT_TYPES.map(t => (
+            <RadioItem key={t} label={t} selected={employmentType === t} onSelect={() => {
+              setEmploymentType(t);
+              if (t !== "기타") { setEmploymentCustom(""); setShowEmployment(false); }
+            }} />
+          ))}
+          {employmentType === "기타" && (
+            <div className="px-5 py-4 border-t border-[#E8E0D0]/70 dark:border-zinc-800 space-y-2.5">
+              <input type="text" value={employmentCustom} onChange={e => setEmploymentCustom(e.target.value)}
+                placeholder="근무형태를 입력해 주세요" className={inputCls} maxLength={50} />
+              <button onClick={() => { if (employmentCustom.trim()) setShowEmployment(false); }} disabled={!employmentCustom.trim()}
+                className="w-full py-3 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-[13px] font-semibold rounded-xl disabled:opacity-50 shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] transition-colors">확인</button>
+            </div>
+          )}
+        </div>
       </Modal>
 
       {/* 급여 모달 */}
