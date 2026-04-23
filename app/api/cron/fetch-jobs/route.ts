@@ -196,7 +196,10 @@ export async function GET(req: NextRequest) {
     const pts = it.region?.trim().split(/\s+/) || [];
     const rName = pts.length > 1 ? `${pts[0]} - ${pts.slice(1).join(" ")}` : (pts[0] || "");
     const rCode = REGION_MAP[pts[0] || ""] || "";
-    const salary = it.sal ? `${it.salTpNm} ${it.sal}` : "";
+    let salText = it.sal || "";
+    // "333만원 ~ 333만원" → "333만원" (최소=최대 동일할 때)
+    salText = salText.replace(/(.+?)\s*~\s*\1/g, "$1");
+    const salary = salText ? `${it.salTpNm} ${salText}` : "";
     const addr = [it.basicAddr, it.detailAddr].filter(Boolean).join(" ");
     let deadline = "";
     if (it.closeDt) {
