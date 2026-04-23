@@ -390,8 +390,20 @@ export default function JobDetailPage() {
           {showContact && (
             <div className="mt-5 pt-5 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
               <div className="bg-[#F5F0E5]/60 dark:bg-zinc-800/60 border border-[#E8E0D0]/80 dark:border-zinc-700 rounded-2xl px-5 py-4">
-                <p className="text-[11px] uppercase tracking-wider text-[#A89B80] dark:text-zinc-500 font-semibold mb-1">연락처</p>
-                <p className="text-lg font-bold text-[#3A342A] dark:text-zinc-100 select-all break-all">{job.contact}</p>
+                <p className="text-[11px] uppercase tracking-wider text-[#A89B80] dark:text-zinc-500 font-semibold mb-1">
+                  {job.contact_type === "고용24" ? "채용 상세정보" : "연락처"}
+                </p>
+                {job.contact_type === "고용24" ? (
+                  <a href={job.contact} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-[14px] font-semibold rounded-xl transition-colors">
+                    고용24에서 상세보기
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                ) : (
+                  <p className="text-lg font-bold text-[#3A342A] dark:text-zinc-100 select-all break-all">{job.contact}</p>
+                )}
               </div>
             </div>
           )}
