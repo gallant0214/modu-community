@@ -990,8 +990,29 @@ export default function PostDetailPage() {
                         <div className="min-w-0 flex-1">
                           {/* 닉네임 + 작성자 배지 + IP */}
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100">
-                              {comment.author}
+                            <span className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100 relative">
+                              <span
+                                role="button"
+                                onClick={() => setAuthorMenu(authorMenu === `c-${comment.id}` ? null : `c-${comment.id}`)}
+                                className="hover:text-[#6B7B3A] hover:underline cursor-pointer transition-colors"
+                              >{comment.author}</span>
+                              {authorMenu === `c-${comment.id}` && (
+                                <div ref={authorMenuRef} className="absolute left-0 top-full mt-1.5 z-50 min-w-[140px] bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-xl shadow-[0_8px_24px_-8px_rgba(107,93,71,0.35)] overflow-hidden">
+                                  <div className="px-3 py-2 border-b border-[#E8E0D0]/60 dark:border-zinc-800">
+                                    <p className="text-[11px] font-bold text-[#6B5D47] dark:text-zinc-400 truncate">{comment.author}</p>
+                                  </div>
+                                  <button onClick={() => { setAuthorMenu(null); router.push(`/category/${categoryId}?searchType=author&q=${encodeURIComponent(comment.author)}`); }}
+                                    className="w-full text-left px-3 py-2.5 text-[12px] font-medium text-[#2A251D] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors flex items-center gap-2">
+                                    <svg className="w-3.5 h-3.5 text-[#8C8270]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                    게시글 보기
+                                  </button>
+                                  <button onClick={() => { setAuthorMenu(null); setSendMessageTo(comment.author); setShowSendMessage(true); }}
+                                    className="w-full text-left px-3 py-2.5 text-[12px] font-medium text-[#2A251D] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors flex items-center gap-2">
+                                    <svg className="w-3.5 h-3.5 text-[#8C8270]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                    쪽지 보내기
+                                  </button>
+                                </div>
+                              )}
                             </span>
                             {post && comment.author === post.author && (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#6B7B3A]/15 text-[#6B7B3A] dark:bg-[#6B7B3A]/30 dark:text-[#A8B87A]">작성자</span>
@@ -1728,6 +1749,7 @@ export default function PostDetailPage() {
           z-index: 1;
         }
       `}</style>
+      <SendMessageModal open={showSendMessage} onClose={() => setShowSendMessage(false)} receiverNickname={sendMessageTo} />
     </div>
   );
 }
