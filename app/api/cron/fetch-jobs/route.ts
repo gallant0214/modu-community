@@ -45,12 +45,17 @@ function detectSport(title: string, company: string, indTpNm: string): string {
 
 // 스포츠 무관 업종 필터 (키워드 검색 결과에만 적용)
 const UNRELATED = /제조업|인쇄업|건설|토공사|창호|플라스틱|반도체|변압기|전자부품|전자상거래|소매업|도매업|음식점|식품|부동산|보험|금융|섬유|오프셋|요양 병원|일반 병원|공중 보건|의료용|진단/;
-const SPORTS_WORDS = /태권도|유도|검도|복싱|합기도|주짓수|헬스|피트니스|트레이너|크로스핏|필라테스|요가|수영|골프|테니스|배드민턴|탁구|축구|농구|배구|야구|클라이밍|승마|체조|댄스|스포츠|체육|운동|지도사|코치|강사|레저|스키|스노보드/i;
+// 제목/회사명/업종 중 하나라도 스포츠 관련이어야 통과
+const SPORTS_WORDS = /태권도|유도|검도|복싱|권투|합기도|주짓수|킥복싱|무에타이|무술|헬스|피트니스|트레이너|크로스핏|필라테스|요가|발레|에어로빅|무용|줄넘기|수영|골프|테니스|배드민턴|탁구|축구|풋살|농구|배구|야구|클라이밍|암벽|볼더링|승마|체조|댄스|양궁|펜싱|사격|스키|스노보드|스케이트|볼링|스쿼시|스포츠|체육|운동|지도사|코치|강사|인스트럭터|레저|생활체육|체력단련|PT|GYM|짐|웰니스|피지컬/i;
+const SPORTS_IND = /태권도|무술|체력단련|수영장|골프장|골프연습장|스포츠|체육|운동|경기용|레크리에이션|댄스|교습학원|스포츠 교육|스포츠 서비스/;
 
 function isSportsRelated(title: string, company: string, indTpNm: string): boolean {
+  // 제목이나 회사명에 스포츠 키워드가 있으면 통과
   if (SPORTS_WORDS.test(title) || SPORTS_WORDS.test(company)) return true;
-  if (UNRELATED.test(indTpNm)) return false;
-  return true;
+  // 업종이 스포츠 관련이면 통과
+  if (SPORTS_IND.test(indTpNm)) return true;
+  // 그 외는 탈락
+  return false;
 }
 
 interface W24 {
