@@ -370,7 +370,7 @@ export default function JobDetailPage() {
                   {job.author_role && <span className="text-xs text-[#8C8270] font-normal mr-1.5">{job.author_role}</span>}
                   {job.author_name || job.center_name || "담당자"}
                 </p>
-                {job.contact_type && <p className="text-xs text-[#8C8270] dark:text-zinc-500 mt-0.5">{job.contact_type}</p>}
+                {job.contact_type && job.contact_type !== "고용24" && <p className="text-xs text-[#8C8270] dark:text-zinc-500 mt-0.5">{job.contact_type}</p>}
               </div>
             </div>
             <button

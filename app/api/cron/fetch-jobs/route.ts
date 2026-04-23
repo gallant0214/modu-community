@@ -149,7 +149,14 @@ export async function GET(req: NextRequest) {
     const salary = it.sal ? `${it.salTpNm} ${it.sal}` : "";
     const addr = [it.basicAddr, it.detailAddr].filter(Boolean).join(" ");
     let deadline = "";
-    if (it.closeDt) { const p = it.closeDt.split("-"); if (p.length === 3) deadline = `20${p[0]}-${p[1]}-${p[2]}`; }
+    if (it.closeDt) {
+      const dateMatch = it.closeDt.match(/(\d{2})-(\d{2})-(\d{2})/);
+      if (it.closeDt.includes("채용시까지")) {
+        deadline = dateMatch ? `채용시까지 (20${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]})` : "채용시까지";
+      } else if (dateMatch) {
+        deadline = `20${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+      }
+    }
 
     // 풍부한 설명
     const descLines = [
