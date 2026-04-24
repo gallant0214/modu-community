@@ -7,6 +7,7 @@ import { createPost } from "@/app/lib/actions";
 import { LoginRequired } from "@/app/components/login-required";
 import { useAuth } from "@/app/components/auth-provider";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
+import { resizeImageFile, uploadWithProgress } from "@/app/lib/client-image";
 import dynamic from "next/dynamic";
 const RichEditor = dynamic(() => import("@/app/components/rich-editor"), { ssr: false });
 
@@ -63,6 +64,8 @@ function WritePageContent() {
   const [regionError, setRegionError] = useState(false);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState<"idle" | "resizing" | "uploading" | "saving">("idle");
+  const [uploadPercent, setUploadPercent] = useState(0);
   const [richContent, setRichContent] = useState("");
 
   /* 지역 선택 (2단계 바텀시트) */
@@ -125,24 +128,38 @@ function WritePageContent() {
   async function handleConfirm() {
     if (!pendingData) return;
     setUploading(true);
+    setUploadPercent(0);
     try {
       const token = await getIdToken();
-      if (!token) { alert("로그인이 필요합니다"); setUploading(false); return; }
+      if (!token) { alert("로그인이 필요합니다"); setUploading(false); setUploadPhase("idle"); return; }
 
       let imageUrls = "";
       if (selectedImages.length > 0) {
+        // 1단계: 브라우저에서 리사이즈 (고화질 폰 사진을 1600px / JPEG 0.85 로 축소)
+        setUploadPhase("resizing");
+        const resized = await Promise.all(selectedImages.map((f) => resizeImageFile(f)));
+
+        // 2단계: XHR 업로드 (진행률 피드백)
+        setUploadPhase("uploading");
         const uploadData = new FormData();
-        selectedImages.forEach((f) => uploadData.append("images", f));
-        const res = await fetch("/api/upload", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: uploadData,
-        });
-        const json = await res.json();
-        if (!res.ok) { alert(json.error || "이미지 업로드 실패"); setUploading(false); return; }
-        imageUrls = json.urls.join(",");
+        resized.forEach((f) => uploadData.append("images", f));
+        try {
+          const json = await uploadWithProgress<{ urls: string[] }>(
+            "/api/upload",
+            uploadData,
+            { token, onProgress: (p) => setUploadPercent(p) }
+          );
+          imageUrls = json.urls.join(",");
+        } catch (err: any) {
+          alert(err?.message || "이미지 업로드 실패");
+          setUploading(false);
+          setUploadPhase("idle");
+          return;
+        }
       }
 
+      // 3단계: 게시글 저장
+      setUploadPhase("saving");
       pendingData.set("id_token", token);
       pendingData.set("images", imageUrls);
       await createPost(pendingData);
@@ -151,6 +168,7 @@ function WritePageContent() {
     } catch {
       alert("등록 중 오류가 발생했습니다");
       setUploading(false);
+      setUploadPhase("idle");
     }
   }
 
@@ -447,7 +465,15 @@ function WritePageContent() {
                     disabled={uploading}
                     className="flex flex-1 items-center justify-center rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] disabled:opacity-50 py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] active:scale-95 transition-all"
                   >
-                    {uploading ? "등록 중..." : "후기 등록"}
+                    {uploadPhase === "resizing"
+                      ? "이미지 준비 중..."
+                      : uploadPhase === "uploading"
+                        ? `업로드 ${uploadPercent}%...`
+                        : uploadPhase === "saving"
+                          ? "등록 중..."
+                          : uploading
+                            ? "등록 중..."
+                            : "후기 등록"}
                   </button>
                 </div>
               </div>

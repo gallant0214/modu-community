@@ -8,6 +8,7 @@ import { LoginRequired } from "@/app/components/login-required";
 import { useAuth } from "@/app/components/auth-provider";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 import dynamic from "next/dynamic";
+import { resizeImageFile, uploadWithProgress } from "@/app/lib/client-image";
 const RichEditor = dynamic(() => import("@/app/components/rich-editor"), { ssr: false });
 
 const examTypes = ["기타", "실기", "구술"];
@@ -40,6 +41,8 @@ function EditPostContent() {
   const [existingImages, setExistingImages] = useState<string[]>([]);
   const [newImages, setNewImages] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState<"idle" | "resizing" | "uploading" | "saving">("idle");
+  const [uploadPercent, setUploadPercent] = useState(0);
   const [regionDisplay, setRegionDisplay] = useState("");
   const [showRegion, setShowRegion] = useState(false);
   const [richContent, setRichContent] = useState("");
@@ -126,24 +129,30 @@ function EditPostContent() {
       let uploadedUrls: string[] = [];
       if (newImages.length > 0) {
         setUploading(true);
+        setUploadPercent(0);
         try {
+          // 1단계: 브라우저에서 리사이즈
+          setUploadPhase("resizing");
+          const resized = await Promise.all(newImages.map((f) => resizeImageFile(f)));
+
+          // 2단계: XHR 업로드 (진행률 피드백)
+          setUploadPhase("uploading");
           const uploadData = new FormData();
-          newImages.forEach((f) => uploadData.append("images", f));
-          const uploadRes = await fetch("/api/upload", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-            body: uploadData,
-          });
-          const uploadJson = await uploadRes.json();
-          if (!uploadRes.ok) { alert(uploadJson.error || "이미지 업로드 실패"); setUploading(false); setShowConfirm(false); return; }
+          resized.forEach((f) => uploadData.append("images", f));
+          const uploadJson = await uploadWithProgress<{ urls: string[] }>(
+            "/api/upload",
+            uploadData,
+            { token, onProgress: (p) => setUploadPercent(p) }
+          );
           uploadedUrls = uploadJson.urls;
-        } catch {
-          alert("이미지 업로드 중 오류가 발생했습니다");
+        } catch (err: any) {
+          alert(err?.message || "이미지 업로드 중 오류가 발생했습니다");
           setUploading(false);
+          setUploadPhase("idle");
           setShowConfirm(false);
           return;
         }
-        setUploading(false);
+        setUploadPhase("saving");
       }
 
       const allImages = [...existingImages, ...uploadedUrls].join(",");
@@ -475,9 +484,18 @@ function EditPostContent() {
                 </button>
                 <button
                   onClick={handleConfirm}
-                  className="flex flex-1 items-center justify-center rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] active:scale-95 transition-all"
+                  disabled={uploading}
+                  className="flex flex-1 items-center justify-center rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] disabled:opacity-50 py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] active:scale-95 transition-all"
                 >
-                  수정하기
+                  {uploadPhase === "resizing"
+                    ? "이미지 준비 중..."
+                    : uploadPhase === "uploading"
+                      ? `업로드 ${uploadPercent}%...`
+                      : uploadPhase === "saving"
+                        ? "저장 중..."
+                        : uploading
+                          ? "저장 중..."
+                          : "수정하기"}
                 </button>
               </div>
             </div>
