@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 
 export type UploadPhase = "idle" | "resizing" | "uploading" | "saving";
 
@@ -11,65 +11,71 @@ interface Props {
   savingLabel?: string;
 }
 
+// 리사이즈(~50ms) + 업로드(~500ms) + 저장(~1200ms) ≈ 1800ms + 여유
+const ESTIMATED_TOTAL_MS = 2200;
+
 /**
- * 업로드 진행률 바. 각 단계가 실제 체감 시간 비례하도록 가중치 배분:
- *  - resizing: 0 → 10% (즉시, 체감 "시작됨")
- *  - uploading: 10% → 60% (XHR 실제 진행률 기반)
- *  - saving: 60% → 95% (1.2초 동안 서서히 채우기 — DB INSERT 예상 시간)
- *  - done: 100%
+ * 시간 기반 부드러운 진행 바 — 실제 물이 차오르듯 연속적으로 채워짐.
  *
- * 이전 구현은 업로드가 리사이즈 덕에 빨라져 바가 순식간에 100%로 차버리고
- * 저장 단계에서 멈춰있는 문제가 있었음. 단계별 가중치로 해결.
+ * 단계별로 width 를 점프시키지 않고, 시작 시점부터 ease-out 곡선으로
+ * 95%까지 부드럽게 차오름. requestAnimationFrame 으로 60fps 애니메이션.
+ *
+ * 2.2초 예상 시간을 기준으로 하되, 실제 완료(phase → idle) 시점에
+ * 컴포넌트가 언마운트되면서 자연스럽게 사라짐.
  */
-export function UploadProgress({ phase, uploadPercent, savingLabel = "저장 중..." }: Props) {
-  const [savingAnim, setSavingAnim] = useState(0);
+export function UploadProgress({ phase, savingLabel = "저장 중..." }: Props) {
+  const barRef = useRef<HTMLDivElement>(null);
+  const isActive = phase !== "idle";
 
   useEffect(() => {
-    if (phase !== "saving") {
-      setSavingAnim(0);
+    const bar = barRef.current;
+    if (!bar) return;
+
+    if (!isActive) {
+      bar.style.width = "0%";
       return;
     }
+
     const start = Date.now();
-    const interval = setInterval(() => {
+    let raf = 0;
+
+    const tick = () => {
       const elapsed = Date.now() - start;
-      // 1.2초 동안 0 → 35 로 서서히 채움 (즉 전체 바에서 60 → 95 까지 채워짐)
-      setSavingAnim(Math.min(35, (elapsed / 1200) * 35));
-    }, 50);
-    return () => clearInterval(interval);
-  }, [phase]);
+      const t = Math.min(1, elapsed / ESTIMATED_TOTAL_MS);
+      // ease-out: 초기엔 빠르게 올라가다 점점 느려짐
+      // (컵에 물이 차오르는 것과 같이 바닥에서 많이 오르고 위로 갈수록 느려짐)
+      const eased = 1 - Math.pow(1 - t, 2);
+      const pct = Math.min(95, eased * 95);
+      bar.style.width = `${pct}%`;
+      // 계속 업데이트 (실제 완료 시 컴포넌트 언마운트로 멈춤)
+      raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [isActive]);
 
   if (phase === "idle") return null;
-
-  const width =
-    phase === "resizing"
-      ? 10
-      : phase === "uploading"
-        ? Math.min(60, 10 + uploadPercent * 0.5)
-        : phase === "saving"
-          ? 60 + savingAnim
-          : 100;
 
   const label =
     phase === "resizing"
       ? "이미지 준비 중..."
       : phase === "uploading"
-        ? `업로드 중 ${uploadPercent}%`
+        ? "업로드 중..."
         : phase === "saving"
           ? savingLabel
           : "처리 중...";
 
-  const step = phase === "resizing" ? "1/3" : phase === "uploading" ? "2/3" : "3/3";
-
   return (
     <div className="mb-3">
-      <div className="flex items-center justify-between mb-1.5 text-[12px] text-[#6B5D47] dark:text-zinc-400">
-        <span className="font-semibold">{label}</span>
-        <span className="font-mono text-[11px]">{step}</span>
+      <div className="mb-1.5 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400">
+        {label}
       </div>
       <div className="h-2 w-full rounded-full bg-[#F5F0E5] dark:bg-zinc-800 overflow-hidden">
         <div
-          className="h-full bg-[#6B7B3A] transition-[width] duration-100 ease-out"
-          style={{ width: `${width}%` }}
+          ref={barRef}
+          className="h-full bg-[#6B7B3A]"
+          style={{ width: "0%", willChange: "width" }}
         />
       </div>
     </div>
