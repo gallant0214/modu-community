@@ -108,6 +108,8 @@ interface W24 {
   region: string; holidayTpNm: string; closeDt: string; wantedInfoUrl: string;
   basicAddr: string; detailAddr: string; empTpCd: string; indTpNm: string;
   minEdubg: string; career: string;
+  // 일부 응답에만 담기는 연락처 관련 필드 (없으면 빈 문자열)
+  phnNo: string; mblePhnNo: string; emlAddr: string;
 }
 
 function parseXml(xml: string): W24[] {
@@ -121,9 +123,62 @@ function parseXml(xml: string): W24[] {
       wantedInfoUrl: g("wantedInfoUrl"), basicAddr: g("basicAddr"),
       detailAddr: g("detailAddr"), empTpCd: g("empTpCd"), indTpNm: g("indTpNm"),
       minEdubg: g("minEdubg"), career: g("career"),
+      phnNo: g("phnNo"), mblePhnNo: g("mblePhnNo"), emlAddr: g("emlAddr"),
     });
   }
   return items;
+}
+
+/**
+ * 한국 전화번호 추출 (유선/휴대 모두):
+ *   010-1234-5678, 02-123-4567, 031-123-4567, 01012345678 등
+ * 잘못된 매치 줄이기 위해 국번 범위 제한.
+ */
+function extractPhone(text: string): string | null {
+  if (!text) return null;
+  // 앞자리: 010/011/016/017/018/019 (휴대) 또는 02/031/032/033/041/042/043/044/051/052/053/054/055/061/062/063/064/070 (유선/인터넷)
+  const re = /(?<!\d)(01[016-9]|02|0[3-6][1-5]|070)[-.\s)]?(\d{3,4})[-.\s]?(\d{4})(?!\d)/;
+  const m = text.match(re);
+  if (!m) return null;
+  return `${m[1]}-${m[2]}-${m[3]}`;
+}
+
+/**
+ * 이메일 추출 — 가장 먼저 나타나는 유효한 이메일 하나.
+ */
+function extractEmail(text: string): string | null {
+  if (!text) return null;
+  const m = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  return m ? m[0] : null;
+}
+
+/**
+ * 연락처 결정 우선순위:
+ *   1) API 응답의 전화 필드(phnNo/mblePhnNo)
+ *   2) 모든 텍스트에서 전화번호 정규식 추출
+ *   3) API 응답의 이메일 필드(emlAddr)
+ *   4) 모든 텍스트에서 이메일 정규식 추출
+ *   5) 폴백: 고용24 상세 URL
+ */
+function resolveContact(it: W24, searchText: string): { type: string; value: string } {
+  // 1) 전화 필드 (있으면 정규화해서 사용)
+  const apiPhone = extractPhone(it.mblePhnNo) || extractPhone(it.phnNo);
+  if (apiPhone) return { type: "연락처", value: apiPhone };
+
+  // 2) 텍스트에서 전화 추출
+  const textPhone = extractPhone(searchText);
+  if (textPhone) return { type: "연락처", value: textPhone };
+
+  // 3) 이메일 필드
+  const apiEmail = extractEmail(it.emlAddr);
+  if (apiEmail) return { type: "이메일", value: apiEmail };
+
+  // 4) 텍스트에서 이메일 추출
+  const textEmail = extractEmail(searchText);
+  if (textEmail) return { type: "이메일", value: textEmail };
+
+  // 5) 폴백
+  return { type: "고용24", value: it.wantedInfoUrl };
 }
 
 // 직종코드로 전체 페이지 수집
@@ -188,7 +243,12 @@ export async function GET(req: NextRequest) {
   const filtered = allItems.filter((it) => isSportsRelated(it.title, it.company, it.indTpNm));
 
   // 신규 건만 INSERT
-  const toInsert: { it: W24; sport: string; rName: string; rCode: string; salary: string; addr: string; deadline: string; desc: string; empType: string }[] = [];
+  const toInsert: { it: W24; sport: string; rName: string; rCode: string; salary: string; addr: string; deadline: string; desc: string; empType: string; contactType: string; contactValue: string }[] = [];
+
+  // 통계 수집용
+  let stat_phone = 0;
+  let stat_email = 0;
+  let stat_fallback = 0;
 
   for (const it of filtered) {
     if (existingIds.has(it.wantedAuthNo)) continue;
@@ -222,10 +282,19 @@ export async function GET(req: NextRequest) {
     ];
     const desc = descLines.filter(Boolean).join("\n");
 
+    // 연락처 결정: 전화 > 이메일 > 고용24 URL 폴백
+    const searchText = [it.title, it.company, it.indTpNm, it.basicAddr, it.detailAddr, desc].filter(Boolean).join(" ");
+    const contactResolved = resolveContact(it, searchText);
+    if (contactResolved.type === "연락처") stat_phone++;
+    else if (contactResolved.type === "이메일") stat_email++;
+    else stat_fallback++;
+
     toInsert.push({
       it, sport: detectSport(it.title, it.company, it.indTpNm),
       rName, rCode, salary, addr, deadline, desc,
       empType: EMP_MAP[it.empTpCd] || "기타",
+      contactType: contactResolved.type,
+      contactValue: contactResolved.value,
     });
   }
 
@@ -235,8 +304,8 @@ export async function GET(req: NextRequest) {
   for (let i = 0; i < toInsert.length; i += 10) {
     const batch = toInsert.slice(i, i + 10);
     const results = await Promise.allSettled(
-      batch.map(({ it, sport, rName, rCode, salary, addr, deadline, desc, empType }) =>
-        sql`INSERT INTO job_posts (title,description,center_name,address,author_role,author_name,contact_type,contact,sport,region_name,region_code,employment_type,salary,headcount,benefits,preferences,deadline,ip_address,firebase_uid,source,source_id) VALUES (${it.title.slice(0, 200)},${desc},${it.company.slice(0, 200)},${addr},${"채용담당자"},${it.company.slice(0, 50)},${"고용24"},${it.wantedInfoUrl},${sport.slice(0, 50)},${rName.slice(0, 50)},${rCode},${empType},${salary.slice(0, 200)},${""},${""},${""},${deadline},${"work24-api"},${"system_work24"},${"work24"},${it.wantedAuthNo})`
+      batch.map(({ it, sport, rName, rCode, salary, addr, deadline, desc, empType, contactType, contactValue }) =>
+        sql`INSERT INTO job_posts (title,description,center_name,address,author_role,author_name,contact_type,contact,sport,region_name,region_code,employment_type,salary,headcount,benefits,preferences,deadline,ip_address,firebase_uid,source,source_id) VALUES (${it.title.slice(0, 200)},${desc},${it.company.slice(0, 200)},${addr},${"채용담당자"},${it.company.slice(0, 50)},${contactType},${contactValue.slice(0, 200)},${sport.slice(0, 50)},${rName.slice(0, 50)},${rCode},${empType},${salary.slice(0, 200)},${""},${""},${""},${deadline},${"work24-api"},${"system_work24"},${"work24"},${it.wantedAuthNo})`
       )
     );
     inserted += results.filter((r) => r.status === "fulfilled").length;
@@ -248,6 +317,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     success: true, inserted, totalFound: allItems.length, filtered: filtered.length,
     skippedDuplicate: filtered.length - toInsert.length,
+    // 연락처 결정 통계 (새로 임포트된 건 기준)
+    contact: { phone: stat_phone, email: stat_email, fallbackUrl: stat_fallback },
     errors: errors.slice(0, 5), timestamp: new Date().toISOString(),
   });
 }
