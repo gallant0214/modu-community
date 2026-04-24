@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 
@@ -143,7 +144,7 @@ export function NavBar() {
         {/* 로고 */}
         <Link href="/" className="flex items-center gap-2 mr-4 shrink-0 group">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="로고" className="w-7 h-7 rounded-lg" />
+          <Image src="/logo.png" alt="로고" width={28} height={28} className="rounded-lg" priority />
           <span className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 whitespace-nowrap tracking-tight">모두의 지도사</span>
         </Link>
 

@@ -41,6 +41,17 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  images: {
+    // Next.js <Image> 가 허용할 외부 이미지 호스트 화이트리스트.
+    // Cloudinary 직접 URL은 대체로 optimizeCloudinaryUrl() 로 변환 후 그대로 쓰지만,
+    // <Image> 로 감싸 사용할 경우를 대비해 등록.
+    remotePatterns: [
+      { protocol: "https", hostname: "res.cloudinary.com" },
+      { protocol: "https", hostname: "firebasestorage.googleapis.com" },
+      { protocol: "https", hostname: "lh3.googleusercontent.com" }, // Google 프로필
+      { protocol: "https", hostname: "appleid.cdn-apple.com" }, // Apple 프로필
+    ],
+  },
   async redirects() {
     return [
       // index.html 요청을 / 로 리다이렉트 (Bing 404 에러 방지)

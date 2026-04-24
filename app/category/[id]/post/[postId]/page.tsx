@@ -8,6 +8,7 @@ import type { Post, Comment } from "@/app/lib/types";
 import { useAuth } from "@/app/components/auth-provider";
 import { shareOrCopy } from "@/app/lib/share";
 import { SendMessageModal } from "@/app/components/send-message-modal";
+import { optimizeCloudinaryUrl } from "@/app/lib/cloudinary-url";
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);
@@ -743,9 +744,19 @@ export default function PostDetailPage() {
           )}
           {post.images && (
             <div className="mt-5 flex flex-col gap-3">
-              {post.images.split(",").filter(Boolean).map((url: string, i: number) => (
-                <img key={i} src={url.trim()} alt={`첨부 이미지 ${i + 1}`} className="w-full rounded-2xl border border-[#E8E0D0] dark:border-zinc-700" loading="lazy" />
-              ))}
+              {post.images.split(",").filter(Boolean).map((url: string, i: number) => {
+                const optimized = optimizeCloudinaryUrl(url.trim(), { width: 1200 });
+                return (
+                  <img
+                    key={i}
+                    src={optimized}
+                    alt={`첨부 이미지 ${i + 1}`}
+                    className="w-full rounded-2xl border border-[#E8E0D0] dark:border-zinc-700"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                );
+              })}
             </div>
           )}
         </section>
