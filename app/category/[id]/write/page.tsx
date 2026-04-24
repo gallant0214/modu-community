@@ -8,6 +8,7 @@ import { LoginRequired } from "@/app/components/login-required";
 import { useAuth } from "@/app/components/auth-provider";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 import { resizeImageFile, uploadWithProgress } from "@/app/lib/client-image";
+import { UploadProgress } from "@/app/components/upload-progress";
 import dynamic from "next/dynamic";
 const RichEditor = dynamic(() => import("@/app/components/rich-editor"), { ssr: false });
 
@@ -454,33 +455,8 @@ function WritePageContent() {
                   </p>
                 </div>
                 {uploading && (
-                  <div className="mt-2 mb-3">
-                    <div className="flex items-center justify-between mb-1.5 text-[12px] text-[#6B5D47] dark:text-zinc-400">
-                      <span className="font-semibold">
-                        {uploadPhase === "resizing"
-                          ? "이미지 준비 중..."
-                          : uploadPhase === "uploading"
-                            ? `업로드 중 ${uploadPercent}%`
-                            : uploadPhase === "saving"
-                              ? "게시글 저장 중..."
-                              : "처리 중..."}
-                      </span>
-                      <span className="font-mono text-[11px]">
-                        {uploadPhase === "resizing" ? "1/3" : uploadPhase === "uploading" ? "2/3" : "3/3"}
-                      </span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-[#F5F0E5] dark:bg-zinc-800 overflow-hidden">
-                      <div
-                        className="h-full bg-[#6B7B3A] transition-all duration-200 ease-out"
-                        style={{
-                          width:
-                            uploadPhase === "resizing" ? "15%"
-                            : uploadPhase === "uploading" ? `${15 + uploadPercent * 0.75}%`
-                            : uploadPhase === "saving" ? "95%"
-                            : "0%",
-                        }}
-                      />
-                    </div>
+                  <div className="mt-2">
+                    <UploadProgress phase={uploadPhase} uploadPercent={uploadPercent} savingLabel="게시글 저장 중..." />
                   </div>
                 )}
                 <div className="flex gap-2">
