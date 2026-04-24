@@ -1,5 +1,6 @@
 import { sql } from "@/app/lib/db";
 import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 import { verifyAuth } from "@/app/lib/firebase-admin";
@@ -28,6 +29,9 @@ export async function POST(request: Request) {
 
   await sql`INSERT INTO posts (category_id, title, content, author, password, region, tags, ip_address, firebase_uid, images)
     VALUES (${Number(category_id)}, ${sanitize(validateLength(title.trim(), 200))}, ${sanitize(validateLength(content.trim(), 50000))}, ${sanitize(validateLength(author.trim(), 50))}, ${(password || "").trim()}, ${sanitize(validateLength((region || "전국").trim(), 50))}, ${sanitize(validateLength((tags || "").trim(), 200))}, ${ipAddr}, ${uid}, ${(images || "").trim()})`;
+
+  revalidatePath("/community");
+  revalidatePath(`/category/${Number(category_id)}`);
 
   return NextResponse.json({ success: true });
 }

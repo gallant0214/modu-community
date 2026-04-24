@@ -221,6 +221,9 @@ export async function POST(request: Request) {
     ) RETURNING id
   `;
 
+  // 구인글 목록 캐시 즉시 무효화 (다음 방문자가 바로 새 글 확인)
+  invalidateCache("jobs:*").catch(() => {});
+
   // 새 구인글 알림 (비동기)
   sendKeywordAlerts(
     title.trim(),

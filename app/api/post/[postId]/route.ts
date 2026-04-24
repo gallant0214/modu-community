@@ -1,4 +1,5 @@
 import { sql } from "@/app/lib/db";
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 import { verifyAuth, isAdminUid } from "@/app/lib/firebase-admin";
@@ -90,7 +91,7 @@ export async function PUT(
   }
 
   // 소유권 확인: 작성자(firebase_uid) 또는 관리자만 수정 가능
-  const ownerRows = await sql`SELECT firebase_uid FROM posts WHERE id = ${Number(postId)}`;
+  const ownerRows = await sql`SELECT firebase_uid, category_id FROM posts WHERE id = ${Number(postId)}`;
   if (ownerRows.length === 0) {
     return NextResponse.json({ error: "게시글을 찾을 수 없습니다" }, { status: 404 });
   }
@@ -105,6 +106,11 @@ export async function PUT(
     SET title = ${sanitize(validateLength(title.trim(), 200))}, content = ${validateLength(content.trim(), 50000)}, region = ${sanitize(validateLength(region || "", 50))}, tags = ${sanitize(validateLength(tags || "", 200))}, images = ${(images || "").trim()}, updated_at = NOW()
     WHERE id = ${Number(postId)}
   `;
+
+  revalidatePath("/community");
+  revalidatePath(`/category/${ownerRows[0].category_id}`);
+  revalidatePath(`/category/${ownerRows[0].category_id}/post/${postId}`);
+
   return NextResponse.json({ success: true });
 }
 
@@ -124,7 +130,7 @@ export async function DELETE(
   const { password } = body;
   const id = Number(postId);
 
-  const rows = await sql`SELECT password, firebase_uid FROM posts WHERE id = ${id}`;
+  const rows = await sql`SELECT password, firebase_uid, category_id FROM posts WHERE id = ${id}`;
   if (rows.length === 0) {
     return NextResponse.json({ error: "게시글을 찾을 수 없습니다" }, { status: 404 });
   }
@@ -138,5 +144,10 @@ export async function DELETE(
   }
 
   await sql`DELETE FROM posts WHERE id = ${id}`;
+
+  revalidatePath("/community");
+  revalidatePath(`/category/${rows[0].category_id}`);
+  revalidatePath(`/category/${rows[0].category_id}/post/${id}`);
+
   return NextResponse.json({ success: true });
 }

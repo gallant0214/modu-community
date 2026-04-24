@@ -1,4 +1,4 @@
-export const revalidate = 60;
+export const revalidate = false;
 
 import Link from "next/link";
 import { AppStoreButton } from "@/app/components/app-store-button";

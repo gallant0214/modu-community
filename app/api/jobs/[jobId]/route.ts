@@ -2,6 +2,7 @@ import { sql } from "@/app/lib/db";
 import { NextResponse } from "next/server";
 import { verifyAuth, isAdminUid } from "@/app/lib/firebase-admin";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
+import { invalidateCache } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -94,6 +95,7 @@ export async function PUT(
         updated_at = NOW()
       WHERE id = ${Number(jobId)}
     `;
+    invalidateCache("jobs:*").catch(() => {});
     return NextResponse.json({ success: true });
   }
 
@@ -120,6 +122,8 @@ export async function PUT(
       updated_at = NOW()
     WHERE id = ${Number(jobId)}
   `;
+
+  invalidateCache("jobs:*").catch(() => {});
 
   return NextResponse.json({ success: true });
 }
@@ -156,5 +160,8 @@ export async function DELETE(
   await sql`DELETE FROM job_post_likes WHERE job_post_id = ${Number(jobId)}`;
   await sql`DELETE FROM job_post_bookmarks WHERE job_post_id = ${Number(jobId)}`;
   await sql`DELETE FROM job_posts WHERE id = ${Number(jobId)}`;
+
+  invalidateCache("jobs:*").catch(() => {});
+
   return NextResponse.json({ success: true });
 }
