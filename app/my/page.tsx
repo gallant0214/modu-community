@@ -1527,7 +1527,7 @@ function MyPageContent() {
         </Card>
 
         {/* 앱 버전 */}
-        <p className="text-center text-xs text-[#CCC] py-4">앱 버전 1.0.0</p>
+        <p className="text-center text-xs text-[#CCC] py-4">앱 버전 1.9.9</p>
       </div>
 
       {/* ══════ 모달들 ══════ */}
