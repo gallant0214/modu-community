@@ -230,6 +230,7 @@ export default function JobWritePage() {
   const [address, setAddress] = useState("");
   const [authorRole, setAuthorRole] = useState("관리자");
   const [authorName, setAuthorName] = useState("");
+  const [contactType, setContactType] = useState<"연락처" | "이메일">("연락처");
   const [contact, setContact] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -265,6 +266,7 @@ export default function JobWritePage() {
         setAddress(data.address || "");
         if (data.author_role && AUTHOR_ROLES.includes(data.author_role)) setAuthorRole(data.author_role);
         setAuthorName(data.author_name || "");
+        setContactType(data.contact_type === "이메일" ? "이메일" : "연락처");
         setContact(data.contact || "");
         setSport(data.sport || "");
         setRegionName(data.region_name || "");
@@ -376,6 +378,11 @@ export default function JobWritePage() {
         return false;
       }
     }
+    if (contactType === "이메일" && !/.+@.+\..+/.test(contact.trim())) {
+      fieldRefs.contact?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      alert("올바른 이메일 주소가 아닙니다.");
+      return false;
+    }
     if (!agreed) { alert("동의 항목을 체크해주세요."); return false; }
     return true;
   };
@@ -400,8 +407,8 @@ export default function JobWritePage() {
           address: address.trim(),
           author_role: authorRole,
           author_name: authorName.trim() || (nickname || user?.displayName || ""),
-          contact_type: "전화",
-          contact: contact,
+          contact_type: contactType,
+          contact: contact.trim(),
           sport,
           region_name: regionName,
           region_code: regionCode,
@@ -609,8 +616,28 @@ export default function JobWritePage() {
           </div>
 
           <div ref={fieldRefs.contact}>
-            <Field label="연락처" required hint="전화번호">
-              <input type="tel" value={contact} onChange={e => setContact(formatPhone(e.target.value))} placeholder="010-0000-0000" maxLength={13} className={inputCls} />
+            <Field label="연락처" required hint={contactType === "이메일" ? "이메일" : "전화번호"}>
+              <div className="space-y-2">
+                <div className="flex gap-1.5">
+                  {(["연락처", "이메일"] as const).map(t => (
+                    <button key={t} onClick={() => { setContactType(t); setContact(""); }}
+                      className={`flex-1 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all ${
+                        contactType === t
+                          ? "bg-[#6B7B3A] text-white shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)]"
+                          : "bg-[#FBF7EB] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-400 border border-[#E8E0D0] dark:border-zinc-700 hover:border-[#6B7B3A]/40"
+                      }`}>
+                      {t === "연락처" ? "전화번호" : "이메일"}
+                    </button>
+                  ))}
+                </div>
+                {contactType === "이메일" ? (
+                  <input type="email" inputMode="email" autoComplete="email" value={contact}
+                    onChange={e => setContact(e.target.value)}
+                    placeholder="example@email.com" maxLength={100} className={inputCls} />
+                ) : (
+                  <input type="tel" value={contact} onChange={e => setContact(formatPhone(e.target.value))} placeholder="010-0000-0000" maxLength={13} className={inputCls} />
+                )}
+              </div>
             </Field>
           </div>
         </Section>
