@@ -35,8 +35,11 @@ export async function POST(req: NextRequest) {
         .upload_stream(
           {
             folder: "moducm/posts",
+            // format 을 최상위 레벨로 이동 (transformation 배열 내부의 format 은
+            // 파생본만 만들고 원본은 업로드된 포맷 그대로 저장되는 현상이 관찰됨)
+            format: "webp",
             transformation: [
-              { width: 1600, height: 1600, crop: "limit", quality: "auto:best", format: "webp" },
+              { width: 1600, height: 1600, crop: "limit", quality: "auto:best" },
             ],
           },
           (error, result) => {
