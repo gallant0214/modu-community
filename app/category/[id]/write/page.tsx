@@ -453,10 +453,41 @@ function WritePageContent() {
                     욕설, 비방, 광고, 불법 행위 등 <span className="font-semibold">서비스 이용약관에 위배되는 내용</span> 작성 시 게시글 작성이 영구적으로 금지될 수 있습니다.
                   </p>
                 </div>
+                {uploading && (
+                  <div className="mt-2 mb-3">
+                    <div className="flex items-center justify-between mb-1.5 text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                      <span className="font-semibold">
+                        {uploadPhase === "resizing"
+                          ? "이미지 준비 중..."
+                          : uploadPhase === "uploading"
+                            ? `업로드 중 ${uploadPercent}%`
+                            : uploadPhase === "saving"
+                              ? "게시글 저장 중..."
+                              : "처리 중..."}
+                      </span>
+                      <span className="font-mono text-[11px]">
+                        {uploadPhase === "resizing" ? "1/3" : uploadPhase === "uploading" ? "2/3" : "3/3"}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-[#F5F0E5] dark:bg-zinc-800 overflow-hidden">
+                      <div
+                        className="h-full bg-[#6B7B3A] transition-all duration-200 ease-out"
+                        style={{
+                          width:
+                            uploadPhase === "resizing" ? "15%"
+                            : uploadPhase === "uploading" ? `${15 + uploadPercent * 0.75}%`
+                            : uploadPhase === "saving" ? "95%"
+                            : "0%",
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <button
                     onClick={() => setShowConfirm(false)}
-                    className="flex flex-1 items-center justify-center rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 py-3 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] active:scale-95 transition-all"
+                    disabled={uploading}
+                    className="flex flex-1 items-center justify-center rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 py-3 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] disabled:opacity-50 active:scale-95 transition-all"
                   >
                     취소
                   </button>
@@ -465,15 +496,7 @@ function WritePageContent() {
                     disabled={uploading}
                     className="flex flex-1 items-center justify-center rounded-xl bg-[#6B7B3A] hover:bg-[#5A6930] disabled:opacity-50 py-3 text-[13px] font-bold text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] active:scale-95 transition-all"
                   >
-                    {uploadPhase === "resizing"
-                      ? "이미지 준비 중..."
-                      : uploadPhase === "uploading"
-                        ? `업로드 ${uploadPercent}%...`
-                        : uploadPhase === "saving"
-                          ? "등록 중..."
-                          : uploading
-                            ? "등록 중..."
-                            : "후기 등록"}
+                    {uploading ? "처리 중..." : "후기 등록"}
                   </button>
                 </div>
               </div>
