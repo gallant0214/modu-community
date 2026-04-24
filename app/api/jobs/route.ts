@@ -4,174 +4,27 @@ import { NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 import { sendKeywordAlerts } from "@/app/lib/notifications";
-import { cached, invalidateCache } from "@/app/lib/cache";
+import { invalidateCache } from "@/app/lib/cache";
+import { fetchJobsPage } from "@/app/lib/jobs-query";
 
 export const dynamic = "force-dynamic";
 
-/* ── helpers ── */
-
-type SortCol = "created_at" | "views" | "likes";
-
-function getSortCol(sort: string): SortCol {
-  if (sort === "popular") return "views";
-  if (sort === "likes") return "likes";
-  return "created_at";
-}
-
-/**
- * 통합 검색(all): title OR sport OR center_name OR description
- * 기존 타입별 검색도 하위 호환 유지
- */
-async function queryJobs(opts: {
-  regionCode: string;
-  searchPattern: string;
-  searchType: string;
-  employmentType: string;
-  sportFilter: string;
-  hideClosed: boolean;
-  limit: number;
-  offset: number;
-  orderCol: SortCol;
-}) {
-  const { regionCode, searchPattern, searchType, employmentType, sportFilter, hideClosed, limit, offset, orderCol } = opts;
-
-  // neon()은 tagged template literal만 지원하므로
-  // 모든 조건 조합을 WHERE 절 하나로 처리.
-  // 조건이 비어있으면 TRUE로 처리하여 무시
-  const rCode = regionCode || "";
-  const sPat = searchPattern || "";
-  const eType = employmentType || "";
-  const sFilter = sportFilter || "";
-
-  // 통합 검색 조건 빌드
-  // searchType === "all" → title OR sport OR center_name OR description
-  const isAll = searchType === "all";
-  const isTitleContent = searchType === "title_content";
-  const isSport = searchType === "sport";
-  const isAuthor = searchType === "author";
-  const isContent = searchType === "content";
-  const isTitle = !isAll && !isTitleContent && !isSport && !isAuthor && !isContent;
-
-  const countResult = await sql`
-    SELECT COUNT(*) as total FROM job_posts
-    WHERE
-      (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}))
-      AND (${eType} = '' OR employment_type = ${eType})
-      AND (${sFilter} = '' OR sport = ${sFilter})
-      AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
-      AND (
-        ${sPat} = ''
-        OR (${isAll} AND (title ILIKE ${sPat} OR sport ILIKE ${sPat} OR center_name ILIKE ${sPat} OR description ILIKE ${sPat}))
-        OR (${isTitleContent} AND (title ILIKE ${sPat} OR description ILIKE ${sPat}))
-        OR (${isSport} AND sport ILIKE ${sPat})
-        OR (${isAuthor} AND center_name ILIKE ${sPat})
-        OR (${isContent} AND description ILIKE ${sPat})
-        OR (${isTitle} AND title ILIKE ${sPat})
-      )
-  `;
-
-  let rows;
-  if (orderCol === "views") {
-    rows = await sql`
-      SELECT * FROM job_posts
-      WHERE
-        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}))
-        AND (${eType} = '' OR employment_type = ${eType})
-        AND (${sFilter} = '' OR sport = ${sFilter})
-        AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
-        AND (
-          ${sPat} = ''
-          OR (${isAll} AND (title ILIKE ${sPat} OR sport ILIKE ${sPat} OR center_name ILIKE ${sPat} OR description ILIKE ${sPat}))
-          OR (${isTitleContent} AND (title ILIKE ${sPat} OR description ILIKE ${sPat}))
-          OR (${isSport} AND sport ILIKE ${sPat})
-          OR (${isAuthor} AND center_name ILIKE ${sPat})
-          OR (${isContent} AND description ILIKE ${sPat})
-          OR (${isTitle} AND title ILIKE ${sPat})
-        )
-      ORDER BY views DESC, created_at DESC
-      LIMIT ${limit} OFFSET ${offset}
-    `;
-  } else if (orderCol === "likes") {
-    rows = await sql`
-      SELECT * FROM job_posts
-      WHERE
-        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}))
-        AND (${eType} = '' OR employment_type = ${eType})
-        AND (${sFilter} = '' OR sport = ${sFilter})
-        AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
-        AND (
-          ${sPat} = ''
-          OR (${isAll} AND (title ILIKE ${sPat} OR sport ILIKE ${sPat} OR center_name ILIKE ${sPat} OR description ILIKE ${sPat}))
-          OR (${isTitleContent} AND (title ILIKE ${sPat} OR description ILIKE ${sPat}))
-          OR (${isSport} AND sport ILIKE ${sPat})
-          OR (${isAuthor} AND center_name ILIKE ${sPat})
-          OR (${isContent} AND description ILIKE ${sPat})
-          OR (${isTitle} AND title ILIKE ${sPat})
-        )
-      ORDER BY likes DESC, created_at DESC
-      LIMIT ${limit} OFFSET ${offset}
-    `;
-  } else {
-    rows = await sql`
-      SELECT * FROM job_posts
-      WHERE
-        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}))
-        AND (${eType} = '' OR employment_type = ${eType})
-        AND (${sFilter} = '' OR sport = ${sFilter})
-        AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
-        AND (
-          ${sPat} = ''
-          OR (${isAll} AND (title ILIKE ${sPat} OR sport ILIKE ${sPat} OR center_name ILIKE ${sPat} OR description ILIKE ${sPat}))
-          OR (${isTitleContent} AND (title ILIKE ${sPat} OR description ILIKE ${sPat}))
-          OR (${isSport} AND sport ILIKE ${sPat})
-          OR (${isAuthor} AND center_name ILIKE ${sPat})
-          OR (${isContent} AND description ILIKE ${sPat})
-          OR (${isTitle} AND title ILIKE ${sPat})
-        )
-      ORDER BY created_at DESC
-      LIMIT ${limit} OFFSET ${offset}
-    `;
-  }
-
-  return { countResult, rows };
-}
-
-// GET /api/jobs
+// GET /api/jobs — 구인글 목록 (공유 모듈 fetchJobsPage 에서 Neon SQL + Upstash 캐시 처리)
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const regionCode = url.searchParams.get("region_code") || "";
-    const sort = url.searchParams.get("sort") || "latest";
-    const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
-    const limit = Number(url.searchParams.get("limit")) || 20;
-    const offset = (page - 1) * limit;
-    const q = url.searchParams.get("q")?.trim() || "";
-    const searchType = url.searchParams.get("searchType") || "all";
-    const employmentType = url.searchParams.get("employment_type") || "";
-    const hideClosed = url.searchParams.get("hide_closed") === "true";
-    const sportFilter = url.searchParams.get("sport") || "";
-
-    const searchPattern = q ? `%${q}%` : "";
-    const orderCol = getSortCol(sort);
-    const isSearching = !!q;
-
-    // 검색이 아닌 일반 목록은 60초 캐시
-    const cacheKey = !isSearching
-      ? `jobs:r:${regionCode}:s:${sort}:p:${page}:e:${employmentType}:sp:${sportFilter}:hc:${hideClosed}`
-      : null;
-
-    const result = cacheKey
-      ? await cached(cacheKey, 60, () => queryJobs({ regionCode, searchPattern, searchType, employmentType, sportFilter, hideClosed, limit, offset, orderCol }))
-      : await queryJobs({ regionCode, searchPattern, searchType, employmentType, sportFilter, hideClosed, limit, offset, orderCol });
-
-    const total = Number(result.countResult[0].total);
-
-    return NextResponse.json({
-      posts: result.rows,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit),
+    const result = await fetchJobsPage({
+      regionCode: url.searchParams.get("region_code") || "",
+      sort: url.searchParams.get("sort") || "latest",
+      page: Number(url.searchParams.get("page")) || 1,
+      limit: Number(url.searchParams.get("limit")) || 20,
+      q: url.searchParams.get("q")?.trim() || "",
+      searchType: url.searchParams.get("searchType") || "all",
+      employmentType: url.searchParams.get("employment_type") || "",
+      hideClosed: url.searchParams.get("hide_closed") === "true",
+      sportFilter: url.searchParams.get("sport") || "",
     });
+    return NextResponse.json(result);
   } catch (e) {
     console.error("GET /api/jobs error:", e);
     return NextResponse.json({ error: "서버 오류" }, { status: 500 });
