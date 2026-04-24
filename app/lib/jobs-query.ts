@@ -1,7 +1,21 @@
 import { sql } from "@/app/lib/db";
 import { cached } from "@/app/lib/cache";
+import { REGION_GROUPS } from "@/app/lib/region-data";
 
 export type SortCol = "created_at" | "views" | "likes";
+
+// 하위 지역 코드 → { parent, subName } 역매핑.
+// region-counts 라우트는 region_name 에서 하위 이름을 뽑아 하위 코드 앞으로
+// 집계하는데, 저장된 레코드의 region_code 는 상위 코드만 들어있는 경우가 있어
+// 카운트는 잡히지만 목록 필터는 0건이 되는 불일치가 발생한다.
+// 목록 필터 시 같은 기준(region_name 이름 매칭)을 OR 로 추가해 해결한다.
+const SUB_CODE_INFO: Record<string, { parent: string; subName: string }> = {};
+for (const g of REGION_GROUPS) {
+  const parent = g.code.toLowerCase();
+  for (const s of g.subRegions) {
+    SUB_CODE_INFO[s.code.toLowerCase()] = { parent, subName: s.name };
+  }
+}
 
 export function getSortCol(sort: string): SortCol {
   if (sort === "popular") return "views";
@@ -34,6 +48,13 @@ export async function queryJobs(opts: {
   const eType = employmentType || "";
   const sFilter = sportFilter || "";
 
+  // 하위 지역 코드인 경우(예: daegu_suseong) 상위 코드 + 이름 추출.
+  // DB에 region_code 가 상위(daegu)로만 저장되고 region_name 에 "수성구" 가 있는
+  // 레거시 레코드도 걸러내기 위해 region_name ILIKE 매칭을 OR 조건으로 추가한다.
+  const subInfo = rCode ? SUB_CODE_INFO[rCode.toLowerCase()] : undefined;
+  const parentCode = subInfo?.parent || "";
+  const subNamePattern = subInfo ? `% - ${subInfo.subName}%` : "";
+
   const isAll = searchType === "all";
   const isTitleContent = searchType === "title_content";
   const isSport = searchType === "sport";
@@ -44,7 +65,7 @@ export async function queryJobs(opts: {
   const countResult = await sql`
     SELECT COUNT(*) as total FROM job_posts
     WHERE
-      (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}))
+      (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}) OR (${parentCode} <> '' AND LOWER(region_code) = ${parentCode} AND region_name ILIKE ${subNamePattern}))
       AND (${eType} = '' OR employment_type = ${eType})
       AND (${sFilter} = '' OR sport = ${sFilter})
       AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
@@ -64,7 +85,7 @@ export async function queryJobs(opts: {
     rows = await sql`
       SELECT * FROM job_posts
       WHERE
-        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}))
+        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}) OR (${parentCode} <> '' AND LOWER(region_code) = ${parentCode} AND region_name ILIKE ${subNamePattern}))
         AND (${eType} = '' OR employment_type = ${eType})
         AND (${sFilter} = '' OR sport = ${sFilter})
         AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
@@ -84,7 +105,7 @@ export async function queryJobs(opts: {
     rows = await sql`
       SELECT * FROM job_posts
       WHERE
-        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}))
+        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}) OR (${parentCode} <> '' AND LOWER(region_code) = ${parentCode} AND region_name ILIKE ${subNamePattern}))
         AND (${eType} = '' OR employment_type = ${eType})
         AND (${sFilter} = '' OR sport = ${sFilter})
         AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
@@ -104,7 +125,7 @@ export async function queryJobs(opts: {
     rows = await sql`
       SELECT * FROM job_posts
       WHERE
-        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}))
+        (${rCode} = '' OR LOWER(region_code) = LOWER(${rCode}) OR LOWER(region_code) LIKE LOWER(${rCode + '_%'}) OR (${parentCode} <> '' AND LOWER(region_code) = ${parentCode} AND region_name ILIKE ${subNamePattern}))
         AND (${eType} = '' OR employment_type = ${eType})
         AND (${sFilter} = '' OR sport = ${sFilter})
         AND (${!hideClosed} OR is_closed = false OR is_closed IS NULL)
