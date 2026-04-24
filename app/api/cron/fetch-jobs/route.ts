@@ -246,6 +246,30 @@ export async function GET(req: NextRequest) {
   try { await sql`ALTER TABLE job_posts ALTER COLUMN contact TYPE TEXT`; } catch {}
   try { await sql`ALTER TABLE job_posts ALTER COLUMN address TYPE TEXT`; } catch {}
 
+  // 마감일 지난 글 자동 is_closed=true 처리
+  // - deadline 이 "YYYY-MM-DD" 형식으로 시작하는 경우만 처리 (보수적)
+  // - "채용시까지 (...)" 프리픽스 글은 유효 (계속 모집중)
+  // - 사용자가 자유 입력한 포맷(예: "2026년 5월 1일") 은 매칭 안 돼서 건드리지 않음
+  let autoClosed = 0;
+  try {
+    const closed = await sql`
+      UPDATE job_posts SET is_closed = true
+      WHERE (is_closed IS NULL OR is_closed = false)
+        AND deadline NOT LIKE '채용시까지%'
+        AND deadline ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+        AND substring(deadline from '^([0-9]{4}-[0-9]{2}-[0-9]{2})')::date < CURRENT_DATE
+      RETURNING id
+    ` as { id: number }[];
+    autoClosed = closed.length;
+    if (autoClosed > 0) {
+      // Upstash /jobs 캐시 무효화 (곧바로 목록에서 마감 상태로 반영)
+      const { invalidateCache } = await import("@/app/lib/cache");
+      invalidateCache("jobs:*").catch(() => {});
+    }
+  } catch (e) {
+    console.error("auto-close failed:", e);
+  }
+
   const existingRows = await sql`SELECT source_id FROM job_posts WHERE source = 'work24' AND source_id IS NOT NULL`;
   const existingIds = new Set(existingRows.map((r: { source_id: string }) => r.source_id));
 
@@ -365,6 +389,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     success: true, inserted, totalFound: allItems.length, filtered: filtered.length,
     skippedDuplicate: filtered.length - toInsert.length,
+    // 마감일 지난 글 자동 마감 처리 건수
+    autoClosed,
     // 상세 HTML prefetch 통계
     detail: { attempted: DETAIL_LIMIT, extracted: detailFetched, noContact: detailFailed, skipped: newCandidates.length - DETAIL_LIMIT },
     // 연락처 결정 통계 (새로 임포트된 건 기준)
