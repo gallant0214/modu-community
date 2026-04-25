@@ -22,31 +22,35 @@ export async function GET(req: NextRequest) {
       ORDER BY id DESC
     ` as { id: number; salary: string }[];
 
-    // new RegExp 로 동적 생성 (build minification 회피)
     const pattern = "(\\d[\\d,]*\\s*(?:만원|원))[^\\d\\uAC00-\\uD7A3]+(\\d[\\d,]*\\s*(?:만원|원))";
-    const reTransform = new RegExp(pattern, "g");
-    const reFind = new RegExp(pattern);
-    const reCollapseSame = /(.+?)\s*~\s*\1/g;
 
+    function transformSalary(salary: string): string {
+      // callback 형태로 replace — 치환 문자열 파싱 회피
+      const re = new RegExp(pattern, "g");
+      let result = salary.replace(re, (_m, a, b) => `${a} ~ ${b}`);
+      // 동일 금액 collapse
+      const reCollapse = new RegExp("(.+?)\\s*~\\s*\\1", "g");
+      result = result.replace(reCollapse, "$1");
+      return result;
+    }
+
+    const reFind = new RegExp(pattern);
     const targets = allWork24.filter(r => reFind.test(r.salary));
 
     if (dry) {
       return NextResponse.json({
         dry: true,
-        regexSource: reTransform.source,
         totalWork24: allWork24.length,
         targetCount: targets.length,
-        sample: targets.slice(0, 8).map(r => {
-          const after = r.salary.replace(reTransform, "$1 ~ $2").replace(reCollapseSame, "$1");
-          // 정규식이 매칭하는지 직접 확인
-          const matchResult = r.salary.match(new RegExp(pattern));
+        sample: targets.slice(0, 10).map(r => {
+          const after = transformSalary(r.salary);
           return {
             id: r.id,
             before: r.salary,
             after,
             changed: r.salary !== after,
-            matched: !!matchResult,
-            matchedGroups: matchResult ? matchResult.slice(0, 3) : null,
+            beforeLen: r.salary.length,
+            afterLen: after.length,
           };
         }),
       });
@@ -54,7 +58,7 @@ export async function GET(req: NextRequest) {
 
     let updated = 0;
     for (const r of targets) {
-      const newSal = r.salary.replace(reTransform, "$1 ~ $2").replace(reCollapseSame, "$1");
+      const newSal = transformSalary(r.salary);
       if (newSal !== r.salary) {
         await sql`UPDATE job_posts SET salary = ${newSal} WHERE id = ${r.id}`;
         updated++;
