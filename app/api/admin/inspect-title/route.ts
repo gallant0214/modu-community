@@ -1,13 +1,50 @@
-// ⚠️ 임시 — 잘려보이는 title 의 실제 DB 저장 형태 + W24 원본 응답 확인.
+// ⚠️ 임시 — 비스포츠 정리 + title 백필 통합 엔드포인트.
+// 1회 사용 후 삭제.
+//
+// 1) 조경원/하우스키퍼 등 비스포츠 글 삭제:
+//    GET /api/admin/inspect-title?password=<>&mode=delete-junk[&dry=1]
+//
+// 2) title 백필 (잘린 title 을 detail HTML 의 풀 title 로 교체):
+//    GET /api/admin/inspect-title?password=<>&mode=title-backfill&offset=0&limit=50
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/app/lib/db";
+import { invalidateCache } from "@/app/lib/cache";
 
-const API_KEY = process.env.WORK24_API_KEY || "";
-const BASE_URL = "https://www.work24.go.kr/cm/openApi/call/wk/callOpenApiSvcInfo210L01.do";
+function decodeEntities(s: string): string {
+  let out = s;
+  for (let i = 0; i < 2; i++) {
+    out = out
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&nbsp;/g, " ");
+  }
+  return out;
+}
+
+function extractFullTitle(html: string): string | null {
+  const titleTag = html.match(/<title>([\s\S]*?)<\/title>/i);
+  if (titleTag) {
+    let t = decodeEntities(titleTag[1]).trim();
+    t = t.replace(/\s*[-|]\s*(워크넷|고용24|work24).*$/i, "").trim();
+    if (t.length >= 5 && !t.includes("...")) return t.slice(0, 300);
+  }
+  const h2 = html.match(/<h2[^>]*class="[^"]*recruit[^"]*"[^>]*>([\s\S]*?)<\/h2>/i)
+    || html.match(/<strong[^>]*class="[^"]*tit[^"]*"[^>]*>([\s\S]*?)<\/strong>/i);
+  if (h2) {
+    const t = decodeEntities(h2[1].replace(/<[^>]+>/g, "")).trim();
+    if (t.length >= 5 && !t.startsWith("...")) return t.slice(0, 300);
+  }
+  return null;
+}
+
+const JUNK_TITLE_REGEX = "(조경원|조경관리|하우스키퍼|하우스키핑|룸어텐던트|객실관리|객실정비|객실청소)";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -15,55 +52,84 @@ export async function GET(req: NextRequest) {
   if (pw !== process.env.ADMIN_PASSWORD) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const mode = url.searchParams.get("mode");
+  const dry = url.searchParams.get("dry") === "1";
 
-  // 무열대 체력단련장 글 찾기
-  const rows = await sql`
-    SELECT id, title, center_name, source_id, deadline, is_closed, created_at
-    FROM job_posts
-    WHERE source = 'work24' AND (title LIKE '%력단련장%' OR center_name LIKE '%무열대%')
-    ORDER BY id DESC
-    LIMIT 5
-  ` as any[];
+  // === 모드 1: 비스포츠 정리 ===
+  if (mode === "delete-junk") {
+    const targets = await sql`
+      SELECT id, title, center_name FROM job_posts
+      WHERE source = 'work24' AND title ~ ${JUNK_TITLE_REGEX}
+      ORDER BY id DESC
+    ` as { id: number; title: string; center_name: string }[];
 
-  // 각 row 의 title 첫 10자 char code 확인
-  const stored = rows.map(r => ({
-    id: r.id,
-    title: r.title,
-    center_name: r.center_name,
-    source_id: r.source_id,
-    deadline: r.deadline,
-    is_closed: r.is_closed,
-    created_at: r.created_at,
-    titleFirstChars: Array.from((r.title || "").slice(0, 10)).map((c: any) => `${c}(U+${c.charCodeAt(0).toString(16).toUpperCase()})`).join(" "),
-  }));
-
-  // W24 API 에서 무열대 키워드로 검색
-  let w24Sample: any[] = [];
-  if (API_KEY) {
-    try {
-      const apiUrl = `${BASE_URL}?authKey=${API_KEY}&callTp=L&returnType=XML&startPage=1&display=20&keyword=${encodeURIComponent("체력단련장")}`;
-      const res = await fetch(apiUrl, { signal: AbortSignal.timeout(10000) });
-      const xml = await res.text();
-      const blocks = xml.match(/<wanted>([\s\S]*?)<\/wanted>/g) || [];
-      w24Sample = blocks.slice(0, 10).map(b => {
-        const titleMatch = b.match(/<title>([\s\S]*?)<\/title>/);
-        const wantedAuthNoMatch = b.match(/<wantedAuthNo>([\s\S]*?)<\/wantedAuthNo>/);
-        const companyMatch = b.match(/<company>([\s\S]*?)<\/company>/);
-        const t = titleMatch?.[1] || "";
-        return {
-          wantedAuthNo: wantedAuthNoMatch?.[1] || "",
-          company: companyMatch?.[1] || "",
-          title: t,
-          titleFirstChars: Array.from(t.slice(0, 10)).map((c: any) => `${c}(U+${c.charCodeAt(0).toString(16).toUpperCase()})`).join(" "),
-        };
+    if (dry) {
+      return NextResponse.json({
+        mode, dry: true, count: targets.length,
+        sample: targets.slice(0, 30).map(r => ({ id: r.id, title: r.title.slice(0, 50), center_name: r.center_name })),
       });
-    } catch (e: any) {
-      w24Sample = [{ error: e?.message }];
     }
+    const ids = targets.map(t => t.id);
+    if (ids.length === 0) return NextResponse.json({ mode, deleted: 0, message: "no targets" });
+
+    try { await sql`DELETE FROM job_post_likes WHERE job_post_id = ANY(${ids})`; } catch {}
+    try { await sql`DELETE FROM job_post_bookmarks WHERE job_post_id = ANY(${ids})`; } catch {}
+    const del = await sql`DELETE FROM job_posts WHERE id = ANY(${ids}) RETURNING id` as { id: number }[];
+    invalidateCache("jobs:*").catch(() => {});
+    return NextResponse.json({ mode, deleted: del.length });
   }
 
-  return NextResponse.json({
-    stored,
-    w24Sample,
-  });
+  // === 모드 2: title 백필 ===
+  if (mode === "title-backfill") {
+    const offset = Math.max(0, Number(url.searchParams.get("offset")) || 0);
+    const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit")) || 50));
+
+    const rows = await sql`
+      SELECT id, source_id, title FROM job_posts
+      WHERE source = 'work24' AND source_id IS NOT NULL
+      ORDER BY id DESC LIMIT ${limit} OFFSET ${offset}
+    ` as { id: number; source_id: string; title: string }[];
+
+    if (rows.length === 0) {
+      return NextResponse.json({ mode, processed: 0, hasMore: false });
+    }
+
+    const results: { id: number; oldTitle: string; newTitle: string | null }[] = [];
+    for (let i = 0; i < rows.length; i += 10) {
+      const batch = rows.slice(i, i + 10);
+      const fetched = await Promise.all(
+        batch.map(async r => {
+          const detailUrl = `https://www.work24.go.kr/wk/a/b/1500/empDetailAuthView.do?wantedAuthNo=${r.source_id}&infoTypeCd=VALIDATION&infoTypeGroup=tb_workinfoworknet`;
+          try {
+            const res = await fetch(detailUrl, {
+              signal: AbortSignal.timeout(8000),
+              headers: { "User-Agent": "Mozilla/5.0 (compatible; moducm-bot/1.0)" },
+            });
+            if (!res.ok) return null;
+            const html = await res.text();
+            return extractFullTitle(html);
+          } catch { return null; }
+        })
+      );
+      batch.forEach((r, idx) => results.push({ id: r.id, oldTitle: r.title, newTitle: fetched[idx] }));
+    }
+
+    let updated = 0;
+    for (const r of results) {
+      if (!r.newTitle) continue;
+      // 새 title 이 더 길거나 (잘림 보강) 또는 다른 경우만 업데이트
+      if (r.newTitle.length > r.oldTitle.length || r.newTitle !== r.oldTitle) {
+        await sql`UPDATE job_posts SET title = ${r.newTitle} WHERE id = ${r.id}`;
+        updated++;
+      }
+    }
+    if (updated > 0) invalidateCache("jobs:*").catch(() => {});
+
+    return NextResponse.json({
+      mode, processed: rows.length, updated,
+      hasMore: rows.length === limit,
+    });
+  }
+
+  return NextResponse.json({ error: "unknown mode. use ?mode=delete-junk or ?mode=title-backfill" });
 }
