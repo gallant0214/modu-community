@@ -95,7 +95,7 @@ export async function PUT(
         updated_at = NOW()
       WHERE id = ${Number(jobId)}
     `;
-    invalidateCache("jobs:*").catch(() => {});
+    await invalidateCache("jobs:*").catch(() => {});
     return NextResponse.json({ success: true });
   }
 
@@ -123,7 +123,7 @@ export async function PUT(
     WHERE id = ${Number(jobId)}
   `;
 
-  invalidateCache("jobs:*").catch(() => {});
+  await invalidateCache("jobs:*").catch(() => {});
 
   return NextResponse.json({ success: true });
 }
@@ -161,7 +161,7 @@ export async function DELETE(
   await sql`DELETE FROM job_post_bookmarks WHERE job_post_id = ${Number(jobId)}`;
   await sql`DELETE FROM job_posts WHERE id = ${Number(jobId)}`;
 
-  invalidateCache("jobs:*").catch(() => {});
+  await invalidateCache("jobs:*").catch(() => {});
 
   return NextResponse.json({ success: true });
 }

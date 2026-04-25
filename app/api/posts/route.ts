@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   revalidatePath(`/category/${Number(category_id)}`);
 
   // 게시글 목록 Upstash 캐시 즉시 무효화 (앱/모바일 클라이언트가 새 글을 즉시 볼 수 있도록)
-  invalidateCache("posts:*").catch(() => {});
+  await invalidateCache("posts:*").catch(() => {});
 
   return NextResponse.json({ success: true });
 }
