@@ -1,4 +1,4 @@
-// ⚠️ 임시 — 급여 포맷 정규화 백필. 1회 사용 후 삭제.
+// ⚠️ 임시 — 급여 포맷 정규화. 1회 사용 후 삭제.
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -22,10 +22,10 @@ export async function GET(req: NextRequest) {
       ORDER BY id DESC
     ` as { id: number; salary: string }[];
 
-    // 두 금액(만원/원) 사이의 분리자가 한글/숫자/만원/원이 아닌 어떤 문자라도 매칭
-    // (NBSP, U+3000 등 모든 공백 + 특수 문자 포괄)
-    const reTransform = /(\d[\d,]*\s*(?:만원|원))[^\d가-힣]+(\d[\d,]*\s*(?:만원|원))/g;
-    const reFind = /(\d[\d,]*\s*(?:만원|원))[^\d가-힣]+(\d[\d,]*\s*(?:만원|원))/;
+    // new RegExp 로 동적 생성 (build minification 회피)
+    const pattern = "(\\d[\\d,]*\\s*(?:만원|원))[^\\d\\uAC00-\\uD7A3]+(\\d[\\d,]*\\s*(?:만원|원))";
+    const reTransform = new RegExp(pattern, "g");
+    const reFind = new RegExp(pattern);
     const reCollapseSame = /(.+?)\s*~\s*\1/g;
 
     const targets = allWork24.filter(r => reFind.test(r.salary));
@@ -33,21 +33,20 @@ export async function GET(req: NextRequest) {
     if (dry) {
       return NextResponse.json({
         dry: true,
+        regexSource: reTransform.source,
         totalWork24: allWork24.length,
         targetCount: targets.length,
-        sample: targets.slice(0, 15).map(r => {
+        sample: targets.slice(0, 8).map(r => {
           const after = r.salary.replace(reTransform, "$1 ~ $2").replace(reCollapseSame, "$1");
-          // 디버그: salary 의 분리자 추정 부분 char code 확인
-          const middleMatch = r.salary.match(/만원([^\d가-힣]+)\d/);
-          const middleCharCodes = middleMatch
-            ? Array.from(middleMatch[1]).map(c => c.charCodeAt(0).toString(16)).join(",")
-            : "(none)";
+          // 정규식이 매칭하는지 직접 확인
+          const matchResult = r.salary.match(new RegExp(pattern));
           return {
             id: r.id,
             before: r.salary,
             after,
-            changed: before_after_diff(r.salary, after),
-            middleCharCodes,
+            changed: r.salary !== after,
+            matched: !!matchResult,
+            matchedGroups: matchResult ? matchResult.slice(0, 3) : null,
           };
         }),
       });
@@ -71,8 +70,4 @@ export async function GET(req: NextRequest) {
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || String(e) }, { status: 500 });
   }
-}
-
-function before_after_diff(before: string, after: string): boolean {
-  return before !== after;
 }
