@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
              substring(description from '업종:\s*([^\n]+)') as industry
       FROM job_posts
       WHERE source = 'work24'
-        AND title ~ '(청소|사무용품|영업사원|영업직|납품 ?및 ?영업|납품영업)'
+        AND title ~ '(청소|사무용품|영업사원|영업직|납품 ?및 ?영업|납품영업|사회복지사|복지사|간호조무사|요양원|간병인)'
       ORDER BY id DESC
     ` as { id: number; title: string; center_name: string; industry: string }[];
 
