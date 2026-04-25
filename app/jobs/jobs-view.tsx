@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams, useRouter } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 import type { JobPost } from "@/app/lib/types";
 import type { JobsPageResult } from "@/app/lib/jobs-query";
@@ -599,8 +599,6 @@ export function JobsView({ initialData }: JobsViewProps) {
       .catch(() => {});
   }, []);
 
-  const router = useRouter();
-
   /* 데이터 로드 */
   const loadJobs = useCallback(async (p = 1) => {
     setLoading(true);
@@ -615,10 +613,12 @@ export function JobsView({ initialData }: JobsViewProps) {
       ...(searchQuery && { q: searchQuery }),
     });
 
-    // URL 을 현재 페이지/필터에 동기화 (브라우저 history 에 반영)
-    // → 상세 페이지에서 뒤로가기 시 정확히 같은 페이지/필터 상태로 복원됨.
-    // replace 사용해서 history stack 늘리지 않음.
-    router.replace(`/jobs?${params.toString()}`, { scroll: false });
+    // URL 만 동기화 (브라우저 주소창/history 에 반영) — RSC 재페치는 일으키지 않음.
+    // router.replace 를 쓰면 Server Component 가 재호출되어 initialData 가 새 ref 로
+    // 갱신되고 useEffect 가 무한 재실행됨. window.history 직접 갱신으로 회피.
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `/jobs?${params.toString()}`);
+    }
 
     try {
       const res = await fetch(`/api/jobs?${params}`);
@@ -632,9 +632,11 @@ export function JobsView({ initialData }: JobsViewProps) {
     } finally {
       setLoading(false);
     }
-  }, [sort, regionCode, sportFilter, employmentFilter, hideClosed, searchQuery, router]);
+  }, [sort, regionCode, sportFilter, employmentFilter, hideClosed, searchQuery]);
 
   // 첫 마운트 시 initialData 가 있으면 fetch 스킵 (SSR 서버에서 이미 받아온 상태)
+  // initialData 는 deps 에 두지 않음 — RSC 재페치 시 새 ref 가 와도 effect 재실행 X.
+  // (재실행되면 loadJobs(1) 호출되어 무한 루프 발생)
   const isInitialMount = useRef(true);
   useEffect(() => {
     if (isInitialMount.current) {
@@ -642,7 +644,8 @@ export function JobsView({ initialData }: JobsViewProps) {
       if (initialData) return;
     }
     loadJobs(1);
-  }, [loadJobs, initialData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadJobs]);
 
   const handleSearch = () => {
     setSearchQuery(searchInput);
