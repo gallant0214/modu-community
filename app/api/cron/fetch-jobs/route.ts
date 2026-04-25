@@ -366,6 +366,10 @@ export async function GET(req: NextRequest) {
     const rName = pts.length > 1 ? `${pts[0]} - ${pts.slice(1).join(" ")}` : (pts[0] || "");
     const rCode = REGION_MAP[pts[0] || ""] || "";
     let salText = it.sal || "";
+    // 두 금액이 공백만으로 연결돼 있으면 사이에 " ~ " 삽입
+    // "3600만원 6000만원" → "3600만원 ~ 6000만원"
+    // "20000원 30000원" → "20000원 ~ 30000원"
+    salText = salText.replace(/(\d[\d,]*\s*(?:만원|원))\s+(\d[\d,]*\s*(?:만원|원))/g, "$1 ~ $2");
     // "333만원 ~ 333만원" → "333만원" (최소=최대 동일할 때)
     salText = salText.replace(/(.+?)\s*~\s*\1/g, "$1");
     const salary = salText ? `${it.salTpNm} ${salText}` : "";
