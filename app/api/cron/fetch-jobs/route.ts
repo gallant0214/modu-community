@@ -101,18 +101,23 @@ const EXCLUDE_TITLE = /도장\s*공|도장\s*사원|도장\s*기사|도장\s*작
 // 진짜 무술 도장 글은 반드시 종목 단어와 함께 나옴. "도장" 단독은 페인트.
 const MARTIAL_ARTS = /태권도|유도|검도|합기도|주짓수|킥복싱|무에타이|복싱|권투|무술/i;
 
+// "도장" 을 단어 경계로 매칭 — "경상북도장애인부모회" 같이 다른 단어 안의 "도장" 은 제외
+// 한글에는 \b 가 작동 안 해서 lookbehind/lookahead 로 한글 인접성 체크
+const DOJANG_WORD = /(?<![가-힣])도장(?![가-힣])/;
+
 function isSportsRelated(title: string, company: string, indTpNm: string): boolean {
   // 1) 명백히 비스포츠 제목은 먼저 제외
   if (EXCLUDE_TITLE.test(title)) return false;
 
-  // 2) 이중의미 "도장" — 무술 종목 키워드가 title/company 둘 다에 없으면 페인트로 판단해 제외
+  // 2) 이중의미 "도장" 단어가 title 에 있으면 무술 종목 키워드가 함께 등장해야 통과
   //    (진짜 무술 도장은 "태권도장 관장 모집" 같이 종목명이 함께 등장)
-  if (/도장/.test(title) && !MARTIAL_ARTS.test(title) && !MARTIAL_ARTS.test(company)) {
+  //    DOJANG_WORD 로 단어 경계 체크 — "북도장애" 등 부분 문자열 false positive 방지
+  if (DOJANG_WORD.test(title) && !MARTIAL_ARTS.test(title) && !MARTIAL_ARTS.test(company)) {
     return false;
   }
 
   // 3) 백업 방어: 도장 + 산업 업종 (위 2번에서 대부분 잡힘)
-  if (/도장/.test(title) && INDUSTRIAL_IND.test(indTpNm)) return false;
+  if (DOJANG_WORD.test(title) && INDUSTRIAL_IND.test(indTpNm)) return false;
 
   // 4) 제목/회사명에 스포츠 키워드가 있으면 통과
   if (SPORTS_WORDS.test(title) || SPORTS_WORDS.test(company)) return true;
