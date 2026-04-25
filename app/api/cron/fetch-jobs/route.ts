@@ -278,6 +278,7 @@ export async function GET(req: NextRequest) {
 
   try { await sql`ALTER TABLE job_posts ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'user'`; } catch {}
   try { await sql`ALTER TABLE job_posts ADD COLUMN IF NOT EXISTS source_id TEXT`; } catch {}
+  try { await sql`ALTER TABLE job_posts ALTER COLUMN title TYPE TEXT`; } catch {}
   try { await sql`ALTER TABLE job_posts ALTER COLUMN center_name TYPE VARCHAR(200)`; } catch {}
   try { await sql`ALTER TABLE job_posts ALTER COLUMN salary TYPE VARCHAR(200)`; } catch {}
   try { await sql`ALTER TABLE job_posts ALTER COLUMN contact TYPE TEXT`; } catch {}
@@ -414,7 +415,7 @@ export async function GET(req: NextRequest) {
     const batch = toInsert.slice(i, i + 10);
     const results = await Promise.allSettled(
       batch.map(({ it, sport, rName, rCode, salary, addr, deadline, desc, empType, contactType, contactValue }) =>
-        sql`INSERT INTO job_posts (title,description,center_name,address,author_role,author_name,contact_type,contact,sport,region_name,region_code,employment_type,salary,headcount,benefits,preferences,deadline,ip_address,firebase_uid,source,source_id) VALUES (${it.title.slice(0, 200)},${desc},${it.company.slice(0, 200)},${addr},${"채용담당자"},${it.company.slice(0, 50)},${contactType},${contactValue.slice(0, 200)},${sport.slice(0, 50)},${rName.slice(0, 50)},${rCode},${empType},${salary.slice(0, 200)},${""},${""},${""},${deadline},${"work24-api"},${"system_work24"},${"work24"},${it.wantedAuthNo})`
+        sql`INSERT INTO job_posts (title,description,center_name,address,author_role,author_name,contact_type,contact,sport,region_name,region_code,employment_type,salary,headcount,benefits,preferences,deadline,ip_address,firebase_uid,source,source_id) VALUES (${it.title},${desc},${it.company.slice(0, 200)},${addr},${"채용담당자"},${it.company.slice(0, 50)},${contactType},${contactValue.slice(0, 200)},${sport.slice(0, 50)},${rName.slice(0, 50)},${rCode},${empType},${salary.slice(0, 200)},${""},${""},${""},${deadline},${"work24-api"},${"system_work24"},${"work24"},${it.wantedAuthNo})`
       )
     );
     inserted += results.filter((r) => r.status === "fulfilled").length;

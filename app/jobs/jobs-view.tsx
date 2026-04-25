@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 import type { JobPost } from "@/app/lib/types";
 import type { JobsPageResult } from "@/app/lib/jobs-query";
@@ -599,6 +599,8 @@ export function JobsView({ initialData }: JobsViewProps) {
       .catch(() => {});
   }, []);
 
+  const router = useRouter();
+
   /* 데이터 로드 */
   const loadJobs = useCallback(async (p = 1) => {
     setLoading(true);
@@ -612,6 +614,12 @@ export function JobsView({ initialData }: JobsViewProps) {
       ...(hideClosed && { hide_closed: "true" }),
       ...(searchQuery && { q: searchQuery }),
     });
+
+    // URL 을 현재 페이지/필터에 동기화 (브라우저 history 에 반영)
+    // → 상세 페이지에서 뒤로가기 시 정확히 같은 페이지/필터 상태로 복원됨.
+    // replace 사용해서 history stack 늘리지 않음.
+    router.replace(`/jobs?${params.toString()}`, { scroll: false });
+
     try {
       const res = await fetch(`/api/jobs?${params}`);
       const data = await res.json();
@@ -624,7 +632,7 @@ export function JobsView({ initialData }: JobsViewProps) {
     } finally {
       setLoading(false);
     }
-  }, [sort, regionCode, sportFilter, employmentFilter, hideClosed, searchQuery]);
+  }, [sort, regionCode, sportFilter, employmentFilter, hideClosed, searchQuery, router]);
 
   // 첫 마운트 시 initialData 가 있으면 fetch 스킵 (SSR 서버에서 이미 받아온 상태)
   const isInitialMount = useRef(true);
