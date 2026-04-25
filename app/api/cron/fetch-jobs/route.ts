@@ -366,10 +366,16 @@ export async function GET(req: NextRequest) {
     const rName = pts.length > 1 ? `${pts[0]} - ${pts.slice(1).join(" ")}` : (pts[0] || "");
     const rCode = REGION_MAP[pts[0] || ""] || "";
     let salText = it.sal || "";
-    // 두 금액이 (어떤 공백/특수문자로든) 연결돼 있으면 사이에 " ~ " 삽입
-    // "3600만원 6000만원" → "3600만원 ~ 6000만원"
-    // 분리자는 한글/숫자/만원이 아닌 어떤 문자라도 허용 (NBSP, ideographic space 포함)
-    salText = salText.replace(/(\d[\d,]*\s*(?:만원|원))[^\d가-힣]+(\d[\d,]*\s*(?:만원|원))/g, "$1 ~ $2");
+    // 두 금액이 공백/특수문자로 연결돼 있으면 사이에 " ~ " 삽입.
+    // 운영 환경에서 .replace() + 캡쳐 그룹이 알 수 없는 이유로 치환을 안 적용하는
+    // 사례가 있어 match() + substring 으로 명시적으로 처리.
+    {
+      const re = /(\d[\d,]*\s*(?:만원|원))[^\d가-힣]+(\d[\d,]*\s*(?:만원|원))/;
+      const m = salText.match(re);
+      if (m && m.index !== undefined && m[1] !== m[2]) {
+        salText = salText.slice(0, m.index) + `${m[1]} ~ ${m[2]}` + salText.slice(m.index + m[0].length);
+      }
+    }
     // "333만원 ~ 333만원" → "333만원" (최소=최대 동일할 때)
     salText = salText.replace(/(.+?)\s*~\s*\1/g, "$1");
     const salary = salText ? `${it.salTpNm} ${salText}` : "";
