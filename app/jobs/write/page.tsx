@@ -799,7 +799,16 @@ export default function JobWritePage() {
           ))}
           {deadlineType === "직접 입력" && (
             <div className="px-5 py-4 border-t border-[#E8E0D0]/70 dark:border-zinc-800 space-y-2.5">
-              <input type="date" value={deadlineDate} onChange={e => setDeadlineDate(e.target.value)} className={inputCls} />
+              <input
+                type="date"
+                value={deadlineDate}
+                onChange={e => setDeadlineDate(e.target.value)}
+                onKeyDown={e => e.preventDefault()}
+                onBeforeInput={e => e.preventDefault()}
+                min={new Date().toISOString().split("T")[0]}
+                className={inputCls}
+              />
+              <p className="text-[11px] text-[#A89B80] dark:text-zinc-500">달력에서 선택해주세요 (직접 타이핑 불가)</p>
               <button onClick={() => { if (deadlineDate) setShowDeadline(false); }}
                 className="w-full py-3 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-[13px] font-semibold rounded-xl disabled:opacity-50 shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] transition-colors" disabled={!deadlineDate}>확인</button>
             </div>
