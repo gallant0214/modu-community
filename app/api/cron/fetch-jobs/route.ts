@@ -194,8 +194,46 @@ function extractEmail(text: string): string | null {
  * 실측 검증: 5/5 건에서 담당자 전화번호 100% 추출 (2026-04-24 샘플).
  * 타임아웃/에러 시 { phone: null, email: null } 반환 — 그 경우 폴백 로직으로 넘어감.
  */
-async function fetchDetailContact(url: string): Promise<{ phone: string | null; email: string | null }> {
-  if (!url || !url.startsWith("http")) return { phone: null, email: null };
+/**
+ * W24 상세 페이지 HTML 에서 "직무내용" 섹션 텍스트 추출.
+ * "직무내용" 마커 뒤 텍스트 → 다음 섹션 마커("모집 인원"/"더보기"/"접기") 까지.
+ */
+function extractJobDuty(html: string): string | null {
+  const cleaned = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "");
+
+  const dutyIdx = cleaned.indexOf("직무내용");
+  if (dutyIdx < 0) return null;
+
+  const after = cleaned.slice(dutyIdx + "직무내용".length);
+
+  // 다음 섹션 시작 마커 (이 마커들 중 가장 먼저 나오는 것까지가 직무내용)
+  const endMarkers = ["모집 인원", "더보기", "접기"];
+  let endIdx = after.length;
+  for (const m of endMarkers) {
+    const i = after.indexOf(m);
+    if (i >= 0 && i < endIdx) endIdx = i;
+  }
+
+  const section = after.slice(0, endIdx);
+  const text = section
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
+    .trim();
+
+  if (text.length < 5) return null;
+  // description 컬럼 너무 길면 부담 → 2000 자 cap
+  return text.slice(0, 2000);
+}
+
+async function fetchDetailContact(url: string): Promise<{ phone: string | null; email: string | null; jobDuty: string | null }> {
+  if (!url || !url.startsWith("http")) return { phone: null, email: null, jobDuty: null };
   try {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(8000),
@@ -204,11 +242,15 @@ async function fetchDetailContact(url: string): Promise<{ phone: string | null; 
         "Accept": "text/html,application/xhtml+xml,*/*",
       },
     });
-    if (!res.ok) return { phone: null, email: null };
+    if (!res.ok) return { phone: null, email: null, jobDuty: null };
     const html = await res.text();
-    return { phone: extractPhone(html), email: extractEmail(html) };
+    return {
+      phone: extractPhone(html),
+      email: extractEmail(html),
+      jobDuty: extractJobDuty(html),
+    };
   } catch {
-    return { phone: null, email: null };
+    return { phone: null, email: null, jobDuty: null };
   }
 }
 
@@ -334,7 +376,7 @@ export async function GET(req: NextRequest) {
 
   // 신규 후보 추출 (중복 제외) → 상세 페이지 HTML 병렬 prefetch
   const newCandidates = filtered.filter(it => !existingIds.has(it.wantedAuthNo));
-  const detailMap = new Map<string, { phone: string | null; email: string | null }>();
+  const detailMap = new Map<string, { phone: string | null; email: string | null; jobDuty: string | null }>();
 
   // maxDuration=60s 내 처리 보장: 최대 100건까지만 상세 fetch 시도
   // (100건 초과분은 텍스트 regex / URL 폴백으로 처리됨)
@@ -390,8 +432,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 풍부한 설명
+    // 상세 HTML 에서 추출된 직무내용(모집요강) 가져오기
+    const detail = detailMap.get(it.wantedAuthNo) || { phone: null, email: null, jobDuty: null };
+
+    // 풍부한 설명 — 모집요강(직무내용) 이 있으면 맨 앞에 추가
     const descLines = [
+      detail.jobDuty ? `[직무내용]\n${detail.jobDuty}` : "",
       it.holidayTpNm ? `근무형태: ${it.holidayTpNm}` : "",
       salary ? `급여: ${salary}` : "",
       it.minEdubg ? `학력: ${it.minEdubg}` : "",
@@ -403,7 +449,6 @@ export async function GET(req: NextRequest) {
 
     // 연락처 결정: 상세 HTML 전화 > 전화 > 상세 HTML 이메일 > 이메일 > URL 폴백
     const searchText = [it.title, it.company, it.indTpNm, it.basicAddr, it.detailAddr, desc].filter(Boolean).join(" ");
-    const detail = detailMap.get(it.wantedAuthNo) || { phone: null, email: null };
     const contactResolved = resolveContact(it, searchText, detail);
     if (contactResolved.type === "연락처") stat_phone++;
     else if (contactResolved.type === "이메일") stat_email++;
