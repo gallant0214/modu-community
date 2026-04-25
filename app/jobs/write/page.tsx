@@ -383,6 +383,16 @@ export default function JobWritePage() {
       alert("올바른 이메일 주소가 아닙니다.");
       return false;
     }
+    // 급여 직접 입력: 최소금액 > 최대금액 이면 거부
+    if (salaryType === "직접 입력" && salaryMin.trim() && salaryMax.trim()) {
+      const minNum = Number(salaryMin.trim().replace(/[^0-9]/g, ""));
+      const maxNum = Number(salaryMax.trim().replace(/[^0-9]/g, ""));
+      if (Number.isFinite(minNum) && Number.isFinite(maxNum) && maxNum < minNum) {
+        fieldRefs.salary?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        alert(`최대 급여는 시작 금액보다 작게 입력할 수 없습니다.\n\n시작: ${minNum}만원\n끝: ${maxNum}만원`);
+        return false;
+      }
+    }
     if (!agreed) { alert("동의 항목을 체크해주세요."); return false; }
     return true;
   };
