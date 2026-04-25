@@ -197,6 +197,9 @@ function extractEmail(text: string): string | null {
 /**
  * W24 상세 페이지 HTML 에서 "직무내용" 섹션 텍스트 추출.
  * "직무내용" 마커 뒤 텍스트 → 다음 섹션 마커("모집 인원"/"더보기"/"접기") 까지.
+ *
+ * 블록 태그(<br>/<li>/<p>/<div>/<tr>) 는 줄바꿈으로 보존해
+ * frontend 의 whitespace-pre-wrap 스타일에서 가독성 좋게 표시되도록 함.
  */
 function extractJobDuty(html: string): string | null {
   const cleaned = html
@@ -218,13 +221,21 @@ function extractJobDuty(html: string): string | null {
 
   const section = after.slice(0, endIdx);
   const text = section
+    // 1) 블록 태그를 줄바꿈으로 변환 (가독성 보존)
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:li|p|div|tr|h[1-6]|ol|ul)\s*>/gi, "\n")
+    // 2) 나머지 태그는 제거 (공백으로)
     .replace(/<[^>]+>/g, " ")
+    // 3) HTML 엔티티 디코딩
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\s*\n\s*/g, "\n")
+    .replace(/&quot;/g, '"')
+    // 4) 공백/줄바꿈 정리
+    .replace(/[ \t]+/g, " ")              // 다중 공백 → 단일
+    .replace(/[ \t]*\n[ \t]*/g, "\n")     // 줄바꿈 주변 공백 제거
+    .replace(/\n{3,}/g, "\n\n")           // 3+ 연속 줄바꿈 → 빈 줄 1개
     .trim();
 
   if (text.length < 5) return null;
