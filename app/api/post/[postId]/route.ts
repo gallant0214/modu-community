@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 import { verifyAuth, isAdminUid } from "@/app/lib/firebase-admin";
+import { invalidateCache } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -111,6 +112,10 @@ export async function PUT(
   revalidatePath(`/category/${ownerRows[0].category_id}`);
   revalidatePath(`/category/${ownerRows[0].category_id}/post/${postId}`);
 
+  // 게시글 목록/상세 Upstash 캐시 즉시 무효화
+  invalidateCache("posts:*").catch(() => {});
+  invalidateCache(`post:${postId}:*`).catch(() => {});
+
   return NextResponse.json({ success: true });
 }
 
@@ -148,6 +153,10 @@ export async function DELETE(
   revalidatePath("/community");
   revalidatePath(`/category/${rows[0].category_id}`);
   revalidatePath(`/category/${rows[0].category_id}/post/${id}`);
+
+  // 게시글 목록/상세 Upstash 캐시 즉시 무효화
+  invalidateCache("posts:*").catch(() => {});
+  invalidateCache(`post:${id}:*`).catch(() => {});
 
   return NextResponse.json({ success: true });
 }

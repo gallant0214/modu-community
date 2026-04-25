@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 import { verifyAuth } from "@/app/lib/firebase-admin";
+import { invalidateCache } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,9 @@ export async function POST(request: Request) {
 
   revalidatePath("/community");
   revalidatePath(`/category/${Number(category_id)}`);
+
+  // 게시글 목록 Upstash 캐시 즉시 무효화 (앱/모바일 클라이언트가 새 글을 즉시 볼 수 있도록)
+  invalidateCache("posts:*").catch(() => {});
 
   return NextResponse.json({ success: true });
 }
