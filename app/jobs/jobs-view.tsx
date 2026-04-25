@@ -894,6 +894,13 @@ export function JobsView({ initialData }: JobsViewProps) {
             {totalPages > 1 && (
               <div className="flex justify-center gap-1.5 py-10">
                 <button
+                  onClick={() => loadJobs(1)}
+                  disabled={page <= 1}
+                  aria-label="처음 페이지"
+                  title="처음 페이지"
+                  className="px-3 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
+                >«</button>
+                <button
                   onClick={() => loadJobs(page - 1)}
                   disabled={page <= 1}
                   className="px-3.5 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
@@ -915,6 +922,13 @@ export function JobsView({ initialData }: JobsViewProps) {
                   disabled={page >= totalPages}
                   className="px-3.5 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
                 >다음</button>
+                <button
+                  onClick={() => loadJobs(totalPages)}
+                  disabled={page >= totalPages}
+                  aria-label="끝 페이지"
+                  title="끝 페이지"
+                  className="px-3 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
+                >»</button>
               </div>
             )}
           </>
