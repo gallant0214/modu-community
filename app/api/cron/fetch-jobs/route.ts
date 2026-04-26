@@ -259,24 +259,28 @@ function extractJobDuty(html: string): string | null {
 }
 
 /**
- * W24 상세 페이지 HTML 의 <title> 태그 또는 채용제목 영역에서 풀 title 추출.
- * 목록 API 가 잘라서 보낸 title("...어쩌고") 보강용.
+ * W24 상세 페이지 HTML 의 채용제목 영역에서 풀 title 추출.
+ * <title> 태그는 SEO 메타("채용정보 상세 | ...")이므로 사용 금지.
+ * 본문의 채용 제목 영역만 시도. 못 찾으면 null 반환 (목록 title 그대로 사용).
  */
 function extractFullTitle(html: string): string | null {
-  // 1) 페이지 <title> 태그 (보통 "[회사명] 직무 - 워크넷" 형식)
-  const titleTag = html.match(/<title>([\s\S]*?)<\/title>/i);
-  if (titleTag) {
-    let t = decodeEntities(titleTag[1]).trim();
-    // 워크넷 페이지 suffix 제거
-    t = t.replace(/\s*[-|]\s*(워크넷|고용24|work24).*$/i, "").trim();
-    if (t.length >= 5 && !t.includes("...")) return t.slice(0, 300);
-  }
-  // 2) 본문 <h2> 또는 .title 클래스 영역에서 추출 (work24 페이지 특정 마크업)
-  const h2 = html.match(/<h2[^>]*class="[^"]*recruit[^"]*"[^>]*>([\s\S]*?)<\/h2>/i)
-    || html.match(/<strong[^>]*class="[^"]*tit[^"]*"[^>]*>([\s\S]*?)<\/strong>/i);
-  if (h2) {
-    const t = decodeEntities(h2[1].replace(/<[^>]+>/g, "")).trim();
-    if (t.length >= 5 && !t.startsWith("...")) return t.slice(0, 300);
+  const patterns = [
+    /<strong[^>]*class="[^"]*\bt1_b\b[^"]*"[^>]*>([\s\S]*?)<\/strong>/i,
+    /<h3[^>]*class="[^"]*\bt1_b\b[^"]*"[^>]*>([\s\S]*?)<\/h3>/i,
+    /<h3[^>]*class="[^"]*tit[^"]*"[^>]*>([\s\S]*?)<\/h3>/i,
+    /<h2[^>]*class="[^"]*recruit[^"]*"[^>]*>([\s\S]*?)<\/h2>/i,
+    /<strong[^>]*class="[^"]*tit[^"]*"[^>]*>([\s\S]*?)<\/strong>/i,
+    /<div[^>]*class="[^"]*recruit_tit[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    if (m) {
+      const t = decodeEntities(m[1].replace(/<[^>]+>/g, "")).trim().replace(/\s+/g, " ");
+      // SEO 메타나 잘림 표시는 거부
+      if (t.length >= 5 && !t.startsWith("채용정보") && !t.startsWith("...")) {
+        return t.slice(0, 300);
+      }
+    }
   }
   return null;
 }
