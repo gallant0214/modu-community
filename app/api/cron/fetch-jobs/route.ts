@@ -259,33 +259,31 @@ function extractJobDuty(html: string): string | null {
 }
 
 /**
- * W24 상세 페이지 HTML 의 채용제목 영역에서 풀 title 추출.
- * <title> 태그는 SEO 메타("채용정보 상세 | ...")이므로 사용 금지.
- * 본문의 채용 제목 영역만 시도. 못 찾으면 null 반환 (목록 title 그대로 사용).
+ * W24 상세 페이지 HTML 의 emp_sumup_wrp 블록에서 풀 title 추출.
+ * 형식: "<회사명> <실제 채용 제목>" — 회사명 prefix 가 알려져 있으면 제거.
+ * <title> 태그는 SEO 메타이므로 사용 금지.
  */
-function extractFullTitle(html: string): string | null {
-  const patterns = [
-    /<strong[^>]*class="[^"]*\bt1_b\b[^"]*"[^>]*>([\s\S]*?)<\/strong>/i,
-    /<h3[^>]*class="[^"]*\bt1_b\b[^"]*"[^>]*>([\s\S]*?)<\/h3>/i,
-    /<h3[^>]*class="[^"]*tit[^"]*"[^>]*>([\s\S]*?)<\/h3>/i,
-    /<h2[^>]*class="[^"]*recruit[^"]*"[^>]*>([\s\S]*?)<\/h2>/i,
-    /<strong[^>]*class="[^"]*tit[^"]*"[^>]*>([\s\S]*?)<\/strong>/i,
-    /<div[^>]*class="[^"]*recruit_tit[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
-  ];
-  for (const re of patterns) {
-    const m = html.match(re);
-    if (m) {
-      const t = decodeEntities(m[1].replace(/<[^>]+>/g, "")).trim().replace(/\s+/g, " ");
-      // SEO 메타나 잘림 표시는 거부
-      if (t.length >= 5 && !t.startsWith("채용정보") && !t.startsWith("...")) {
-        return t.slice(0, 300);
-      }
+function extractFullTitle(html: string, companyName?: string): string | null {
+  // emp_sumup_wrp div 안에 회사명 + 본문 제목이 함께 들어있음
+  const m = html.match(/<div[^>]*class="[^"]*\bemp_sumup_wrp\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+  if (!m) return null;
+  let t = decodeEntities(m[1].replace(/<[^>]+>/g, "")).trim().replace(/\s+/g, " ");
+  if (t.length < 5) return null;
+
+  // 회사명 prefix 제거
+  if (companyName) {
+    const cn = companyName.trim();
+    if (cn && t.startsWith(cn)) {
+      t = t.slice(cn.length).trim();
     }
   }
-  return null;
+
+  // 거부 조건: SEO 메타, '...' 잘림 표시, 너무 짧음
+  if (t.length < 5 || t.startsWith("채용정보") || t.startsWith("...")) return null;
+  return t.slice(0, 300);
 }
 
-async function fetchDetailContact(url: string): Promise<{ phone: string | null; email: string | null; jobDuty: string | null; fullTitle: string | null }> {
+async function fetchDetailContact(url: string, companyHint?: string): Promise<{ phone: string | null; email: string | null; jobDuty: string | null; fullTitle: string | null }> {
   if (!url || !url.startsWith("http")) return { phone: null, email: null, jobDuty: null, fullTitle: null };
   try {
     const res = await fetch(url, {
@@ -301,7 +299,7 @@ async function fetchDetailContact(url: string): Promise<{ phone: string | null; 
       phone: extractPhone(html),
       email: extractEmail(html),
       jobDuty: extractJobDuty(html),
-      fullTitle: extractFullTitle(html),
+      fullTitle: extractFullTitle(html, companyHint),
     };
   } catch {
     return { phone: null, email: null, jobDuty: null, fullTitle: null };
@@ -439,7 +437,7 @@ export async function GET(req: NextRequest) {
   let detailFailed = 0;
   for (let i = 0; i < DETAIL_LIMIT; i += 10) {
     const batch = newCandidates.slice(i, i + 10);
-    const results = await Promise.all(batch.map(it => fetchDetailContact(it.wantedInfoUrl)));
+    const results = await Promise.all(batch.map(it => fetchDetailContact(it.wantedInfoUrl, it.company)));
     batch.forEach((it, idx) => {
       detailMap.set(it.wantedAuthNo, results[idx]);
       if (results[idx].phone || results[idx].email) detailFetched++;

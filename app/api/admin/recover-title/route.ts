@@ -97,24 +97,15 @@ export async function GET(req: NextRequest) {
             });
             if (!res.ok) return null;
             const html = await res.text();
-            // work24 detail 페이지의 진짜 채용제목은 <strong class="t1_b ..."> 또는
-            // <h3 class="t1_b"> / 비슷한 본문 제목 영역에 있음. 실제 위치는 inspect 로
-            // 확인 필요. 일단 여러 패턴 시도:
-            const patterns = [
-              /<strong[^>]*class="[^"]*\bt1_b\b[^"]*"[^>]*>([\s\S]*?)<\/strong>/i,
-              /<h3[^>]*class="[^"]*\bt1_b\b[^"]*"[^>]*>([\s\S]*?)<\/h3>/i,
-              /<h3[^>]*class="[^"]*tit[^"]*"[^>]*>([\s\S]*?)<\/h3>/i,
-              /<strong[^>]*class="[^"]*tit[^"]*"[^>]*>([\s\S]*?)<\/strong>/i,
-              /<div[^>]*class="[^"]*recruit_tit[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
-            ];
-            for (const re of patterns) {
-              const m = html.match(re);
-              if (m) {
-                const t = decodeEntities(m[1].replace(/<[^>]+>/g, "")).trim().replace(/\s+/g, " ");
-                if (t.length >= 5 && !t.startsWith("채용정보") && !t.startsWith("...")) return t.slice(0, 300);
-              }
-            }
-            return null;
+            // emp_sumup_wrp div 안에 "회사명 채용제목" 형태로 들어있음
+            const m = html.match(/<div[^>]*class="[^"]*\bemp_sumup_wrp\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+            if (!m) return null;
+            let t = decodeEntities(m[1].replace(/<[^>]+>/g, "")).trim().replace(/\s+/g, " ");
+            // 회사명 prefix 제거
+            const cn = (r.center_name || "").trim();
+            if (cn && t.startsWith(cn)) t = t.slice(cn.length).trim();
+            if (t.length < 5 || t.startsWith("채용정보") || t.startsWith("...")) return null;
+            return t.slice(0, 300);
           } catch { return null; }
         })
       );
