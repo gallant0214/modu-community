@@ -807,6 +807,24 @@ export type Database = {
         }
         Relationships: []
       }
+      store_clicks: {
+        Row: {
+          clicked_at: string | null
+          id: number
+          store: string
+        }
+        Insert: {
+          clicked_at?: string | null
+          id?: number
+          store: string
+        }
+        Update: {
+          clicked_at?: string | null
+          id?: number
+          store?: string
+        }
+        Relationships: []
+      }
       user_first_seen: {
         Row: {
           firebase_uid: string
@@ -883,6 +901,71 @@ export type Database = {
       }
       increment_post_share: { Args: { p_id: number }; Returns: undefined }
       increment_post_views: { Args: { p_id: number }; Returns: undefined }
+      search_jobs_by_regex: {
+        Args: { p_limit?: number; p_pattern: string }
+        Returns: {
+          address: string | null
+          author_name: string | null
+          author_role: string | null
+          benefits: string | null
+          center_name: string
+          contact: string
+          contact_type: string | null
+          created_at: string | null
+          deadline: string | null
+          description: string
+          employment_type: string
+          firebase_uid: string | null
+          headcount: string | null
+          hidden: boolean | null
+          id: number
+          ip_address: string | null
+          is_closed: boolean | null
+          likes: number | null
+          preferences: string | null
+          region_code: string
+          region_name: string
+          salary: string
+          share_count: number | null
+          source: string | null
+          source_id: string | null
+          sport: string
+          title: string
+          updated_at: string | null
+          views: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "job_posts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      search_posts_by_regex: {
+        Args: { p_limit?: number; p_pattern: string }
+        Returns: {
+          author: string
+          category_id: number
+          category_name: string
+          comments_count: number
+          content: string
+          created_at: string
+          firebase_uid: string
+          hidden: boolean
+          id: number
+          images: string
+          ip_address: string
+          is_notice: boolean
+          likes: number
+          password: string
+          region: string
+          share_count: number
+          tags: string
+          title: string
+          updated_at: string
+          views: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

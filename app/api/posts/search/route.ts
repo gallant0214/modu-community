@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -9,18 +9,26 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ posts: [] });
   }
 
-  const like = `%${q}%`;
+  const wild = `*${q}*`;
   const perPage = 20;
 
-  const posts = await sql`
-    SELECT p.*, c.name AS category_name, c.emoji AS category_emoji
-    FROM posts p
-    LEFT JOIN categories c ON c.id = p.category_id
-    WHERE (p.is_notice = false OR p.is_notice IS NULL)
-      AND (p.title ILIKE ${like} OR p.content ILIKE ${like} OR p.region ILIKE ${like})
-    ORDER BY p.created_at DESC
-    LIMIT ${perPage}
-  `;
+  const { data, error } = await supabase
+    .from("posts")
+    .select("*, categories(name, emoji)")
+    .or("is_notice.eq.false,is_notice.is.null")
+    .or(`title.ilike.${wild},content.ilike.${wild},region.ilike.${wild}`)
+    .order("created_at", { ascending: false })
+    .limit(perPage);
+
+  if (error) {
+    return NextResponse.json({ posts: [], error: error.message }, { status: 500 });
+  }
+
+  const posts = data.map(({ categories: cat, ...p }) => ({
+    ...p,
+    category_name: cat?.name ?? null,
+    category_emoji: cat?.emoji ?? null,
+  }));
 
   return NextResponse.json({ posts });
 }

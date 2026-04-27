@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -11,13 +11,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "invalid store" }, { status: 400 });
     }
 
-    await sql`CREATE TABLE IF NOT EXISTS store_clicks (
-      id SERIAL PRIMARY KEY,
-      store TEXT NOT NULL,
-      clicked_at TIMESTAMPTZ DEFAULT NOW()
-    )`;
-
-    await sql`INSERT INTO store_clicks (store) VALUES (${store})`;
+    const { error } = await supabase.from("store_clicks").insert({ store });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "서버 오류" }, { status: 500 });

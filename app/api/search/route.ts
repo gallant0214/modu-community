@@ -1,11 +1,10 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 /**
  * 초성 문자를 해당 한글 음절 범위 정규식으로 변환
- * ㄱ → [가-깋], ㄴ → [나-닣], ...
  */
 function choToRegex(query: string): string | null {
   const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
@@ -37,51 +36,51 @@ export async function GET(request: Request) {
 
   const choRegex = choToRegex(q);
 
-  let posts;
-  let jobs;
-
   if (choRegex) {
-    // 초성 검색: PostgreSQL ~ 연산자 사용
-    posts = await sql`
-      SELECT p.*, c.name AS category_name
-      FROM posts p
-      LEFT JOIN categories c ON p.category_id = c.id
-      WHERE (p.is_notice = false OR p.is_notice IS NULL)
-        AND (p.title ~ ${choRegex} OR p.content ~ ${choRegex} OR p.author ~ ${choRegex} OR p.region ~ ${choRegex})
-      ORDER BY p.created_at DESC
-      LIMIT ${limit}
-    `;
-
-    jobs = await sql`
-      SELECT *
-      FROM job_posts
-      WHERE (title ~ ${choRegex} OR description ~ ${choRegex} OR center_name ~ ${choRegex} OR sport ~ ${choRegex} OR COALESCE(region_name,'') ~ ${choRegex} OR COALESCE(address,'') ~ ${choRegex})
-        AND (is_closed = false OR is_closed IS NULL)
-      ORDER BY created_at DESC
-      LIMIT ${limit}
-    `;
-  } else {
-    // 일반 검색: ILIKE
-    const pattern = `%${q}%`;
-    posts = await sql`
-      SELECT p.*, c.name AS category_name
-      FROM posts p
-      LEFT JOIN categories c ON p.category_id = c.id
-      WHERE (p.is_notice = false OR p.is_notice IS NULL)
-        AND (p.title ILIKE ${pattern} OR p.content ILIKE ${pattern} OR p.author ILIKE ${pattern} OR p.region ILIKE ${pattern})
-      ORDER BY p.created_at DESC
-      LIMIT ${limit}
-    `;
-
-    jobs = await sql`
-      SELECT *
-      FROM job_posts
-      WHERE (title ILIKE ${pattern} OR description ILIKE ${pattern} OR center_name ILIKE ${pattern} OR sport ILIKE ${pattern} OR COALESCE(region_name,'') ILIKE ${pattern} OR COALESCE(address,'') ILIKE ${pattern})
-        AND (is_closed = false OR is_closed IS NULL)
-      ORDER BY created_at DESC
-      LIMIT ${limit}
-    `;
+    // 초성 검색: PostgreSQL ~ regex 통한 rpc
+    const [postsRes, jobsRes] = await Promise.all([
+      supabase.rpc("search_posts_by_regex", { p_pattern: choRegex, p_limit: limit }),
+      supabase.rpc("search_jobs_by_regex", { p_pattern: choRegex, p_limit: limit }),
+    ]);
+    if (postsRes.error || jobsRes.error) {
+      return NextResponse.json(
+        { posts: [], jobs: [], error: postsRes.error?.message || jobsRes.error?.message },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({ posts: postsRes.data, jobs: jobsRes.data });
   }
 
-  return NextResponse.json({ posts, jobs });
+  // 일반 검색: ILIKE (PostgREST에선 wildcard가 * 임)
+  const wild = `*${q}*`;
+  const [postsRes, jobsRes] = await Promise.all([
+    supabase
+      .from("posts")
+      .select("*, categories(name)")
+      .or("is_notice.eq.false,is_notice.is.null")
+      .or(`title.ilike.${wild},content.ilike.${wild},author.ilike.${wild},region.ilike.${wild}`)
+      .order("created_at", { ascending: false })
+      .limit(limit),
+    supabase
+      .from("job_posts")
+      .select("*")
+      .or("is_closed.eq.false,is_closed.is.null")
+      .or(`title.ilike.${wild},description.ilike.${wild},center_name.ilike.${wild},sport.ilike.${wild},region_name.ilike.${wild},address.ilike.${wild}`)
+      .order("created_at", { ascending: false })
+      .limit(limit),
+  ]);
+
+  if (postsRes.error || jobsRes.error) {
+    return NextResponse.json(
+      { posts: [], jobs: [], error: postsRes.error?.message || jobsRes.error?.message },
+      { status: 500 },
+    );
+  }
+
+  const posts = postsRes.data.map(({ categories: cat, ...p }) => ({
+    ...p,
+    category_name: cat?.name ?? null,
+  }));
+
+  return NextResponse.json({ posts, jobs: jobsRes.data });
 }

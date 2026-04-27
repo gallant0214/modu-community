@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 import { verifyAuth } from "@/app/lib/firebase-admin";
@@ -22,7 +22,20 @@ export async function POST(request: Request) {
 
   const safePostId = post_id ? Number(post_id) : 0;
   const safeCategoryId = category_id ? Number(category_id) : 0;
-  await sql`INSERT INTO reports (target_type, target_id, post_id, category_id, reason, custom_reason)
-    VALUES (${target_type}, ${Number(target_id)}, ${safePostId}, ${safeCategoryId}, ${sanitize(validateLength(reason.trim(), 200))}, ${custom_reason ? sanitize(validateLength(custom_reason.trim(), 500)) : null})`;
+
+  const { error } = await supabase.from("reports").insert({
+    target_type,
+    target_id: Number(target_id),
+    post_id: safePostId,
+    category_id: safeCategoryId,
+    reason: sanitize(validateLength(reason.trim(), 200)),
+    custom_reason: custom_reason
+      ? sanitize(validateLength(custom_reason.trim(), 500))
+      : null,
+  });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json({ success: true });
 }
