@@ -1,18 +1,16 @@
-import { neon } from "@neondatabase/serverless";
+import postgres from "postgres";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _sql: any = null;
+let _sql: ReturnType<typeof postgres> | null = null;
 
 function get_sql() {
   if (!_sql) {
     let raw = process.env.DATABASE_URL || "";
-    // Vercel 환경변수 오류 대비: "Value:" 접두사 제거
-    raw = raw.replace(/^Value:\s*/i, "");
-    // channel_binding 파라미터 제거 (neon serverless 미지원)
-    raw = raw.replace(/&channel_binding=[^&]*/g, "").trim();
-    // postgresql:// → postgres:// 변환 (neon 호환성)
-    raw = raw.replace(/^postgresql:\/\//, "postgres://");
-    _sql = neon(raw);
+    raw = raw.replace(/^Value:\s*/i, "").trim();
+    _sql = postgres(raw, {
+      max: 5,
+      idle_timeout: 20,
+      prepare: false,
+    });
   }
   return _sql;
 }
@@ -20,6 +18,7 @@ function get_sql() {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const sql: any = new Proxy(function () {}, {
   apply(_target, _thisArg, args) {
-    return get_sql()(...args);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (get_sql() as any)(...args);
   },
 });
