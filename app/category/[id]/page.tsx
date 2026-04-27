@@ -2,7 +2,7 @@ export const revalidate = 30;
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { PostCardItem } from "@/app/components/post-card-item";
 import { CategoryTabs } from "@/app/components/category-tabs";
 import { SearchBar } from "@/app/components/search-bar";
@@ -20,9 +20,12 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   const { sort, page, searchType, q } = await searchParams;
   const categoryId = Number(id);
 
-  const categories = await sql`SELECT * FROM categories WHERE id = ${categoryId}`;
-  if (categories.length === 0) notFound();
-  const category = categories[0];
+  const { data: category } = await supabase
+    .from("categories")
+    .select("*")
+    .eq("id", categoryId)
+    .maybeSingle();
+  if (!category) notFound();
 
   const sortMode = sort || "latest";
   const currentPage = Math.max(1, Number(page) || 1);
@@ -31,56 +34,83 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   const searchQuery = q?.trim() || "";
   const searchFilter = searchType || "all";
   const isSearching = searchQuery.length > 0;
-  const likeQuery = `%${searchQuery}%`;
+  const wild = `*${searchQuery}*`;
 
-  // 모든 쿼리를 병렬 실행하여 속도 최적화
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  // 공통 쿼리: 공지 + 인기글 (항상 필요)
-  const noticePromise = sql`SELECT * FROM posts WHERE is_notice = true ORDER BY created_at DESC LIMIT 1`;
-  const topPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND created_at >= ${monthStart} AND likes > 0 ORDER BY likes DESC LIMIT 3`;
+  // 공통 쿼리: 공지 + 인기글
+  const noticePromise = supabase
+    .from("posts")
+    .select("*")
+    .eq("is_notice", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .then((r) => (r.data || []) as Post[]);
 
-  let countPromise: Promise<any>;
-  let postsPromise: Promise<any>;
+  const topPromise = supabase
+    .from("posts")
+    .select("*")
+    .eq("category_id", categoryId)
+    .gte("created_at", monthStart)
+    .gt("likes", 0)
+    .order("likes", { ascending: false })
+    .limit(3)
+    .then((r) => (r.data || []) as Post[]);
 
+  // count 쿼리
+  let countQ = supabase
+    .from("posts")
+    .select("*", { count: "exact", head: true })
+    .eq("category_id", categoryId)
+    .or("is_notice.eq.false,is_notice.is.null");
   if (isSearching) {
-    if (searchFilter === "title") {
-      countPromise = sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND title ILIKE ${likeQuery}`;
-      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND title ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    } else if (searchFilter === "content") {
-      countPromise = sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND content ILIKE ${likeQuery}`;
-      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND content ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    } else if (searchFilter === "author") {
-      countPromise = sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND author ILIKE ${likeQuery}`;
-      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND author ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    } else if (searchFilter === "region") {
-      countPromise = sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND region ILIKE ${likeQuery}`;
-      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND region ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    } else {
-      countPromise = sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND (title ILIKE ${likeQuery} OR content ILIKE ${likeQuery} OR author ILIKE ${likeQuery} OR region ILIKE ${likeQuery})`;
-      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) AND (title ILIKE ${likeQuery} OR content ILIKE ${likeQuery} OR author ILIKE ${likeQuery} OR region ILIKE ${likeQuery}) ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    }
-  } else {
-    countPromise = sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL)`;
-    if (sortMode === "popular") {
-      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) ORDER BY views DESC, created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    } else if (sortMode === "helpful") {
-      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) ORDER BY likes DESC, created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    } else {
-      postsPromise = sql`SELECT * FROM posts WHERE category_id = ${categoryId} AND (is_notice = false OR is_notice IS NULL) ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    }
+    if (searchFilter === "title") countQ = countQ.ilike("title", wild);
+    else if (searchFilter === "content") countQ = countQ.ilike("content", wild);
+    else if (searchFilter === "author") countQ = countQ.ilike("author", wild);
+    else if (searchFilter === "region") countQ = countQ.ilike("region", wild);
+    else
+      countQ = countQ.or(
+        `title.ilike.${wild},content.ilike.${wild},author.ilike.${wild},region.ilike.${wild}`,
+      );
   }
 
-  // 4개 쿼리 동시 실행
-  const [noticeResult, topResult, countResult, postsResult] = await Promise.all([
-    noticePromise, topPromise, countPromise, postsPromise,
+  // posts 쿼리
+  let postsQ = supabase
+    .from("posts")
+    .select("*")
+    .eq("category_id", categoryId)
+    .or("is_notice.eq.false,is_notice.is.null");
+  if (isSearching) {
+    if (searchFilter === "title") postsQ = postsQ.ilike("title", wild);
+    else if (searchFilter === "content") postsQ = postsQ.ilike("content", wild);
+    else if (searchFilter === "author") postsQ = postsQ.ilike("author", wild);
+    else if (searchFilter === "region") postsQ = postsQ.ilike("region", wild);
+    else
+      postsQ = postsQ.or(
+        `title.ilike.${wild},content.ilike.${wild},author.ilike.${wild},region.ilike.${wild}`,
+      );
+  }
+
+  const orderedPostsQ =
+    !isSearching && sortMode === "popular"
+      ? postsQ.order("views", { ascending: false }).order("created_at", { ascending: false })
+      : !isSearching && sortMode === "helpful"
+        ? postsQ.order("likes", { ascending: false }).order("created_at", { ascending: false })
+        : postsQ.order("created_at", { ascending: false });
+
+  const countPromise = countQ.then((r) => r.count ?? 0);
+  const postsPromise = orderedPostsQ
+    .range(offset, offset + perPage - 1)
+    .then((r) => (r.data || []) as Post[]);
+
+  const [noticePosts, topPosts, totalCount, posts] = await Promise.all([
+    noticePromise,
+    topPromise,
+    countPromise,
+    postsPromise,
   ]);
 
-  const noticePosts = noticeResult as Post[];
-  const topPosts = topResult as Post[];
-  const totalCount = Number(countResult[0].count);
-  const posts = postsResult as Post[];
   const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
 
   const buildPageHref = (p: number) =>

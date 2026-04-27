@@ -920,6 +920,7 @@ export type Database = {
         Args: { p_col: string; p_delta: number; p_id: number }
         Returns: undefined
       }
+      admin_kpi_metrics: { Args: never; Returns: Json }
       admin_reports_with_targets: {
         Args: never
         Returns: {

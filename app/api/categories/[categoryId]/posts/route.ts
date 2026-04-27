@@ -1,8 +1,42 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { cached } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
+
+type Sort = "latest" | "popular" | "helpful";
+type SearchFilter = "title" | "content" | "author" | "region" | "all";
+
+function applySort(
+  q: ReturnType<typeof supabase.from>,
+  sort: Sort,
+) {
+  if (sort === "popular") {
+    return q
+      .order("views", { ascending: false })
+      .order("created_at", { ascending: false });
+  }
+  if (sort === "helpful") {
+    return q
+      .order("likes", { ascending: false })
+      .order("created_at", { ascending: false });
+  }
+  return q.order("created_at", { ascending: false });
+}
+
+function applySearch(
+  q: ReturnType<typeof supabase.from>,
+  filter: SearchFilter,
+  wild: string,
+) {
+  if (filter === "title") return q.ilike("title", wild);
+  if (filter === "content") return q.ilike("content", wild);
+  if (filter === "author") return q.ilike("author", wild);
+  if (filter === "region") return q.ilike("region", wild);
+  return q.or(
+    `title.ilike.${wild},content.ilike.${wild},author.ilike.${wild},region.ilike.${wild}`,
+  );
+}
 
 export async function GET(
   request: Request,
@@ -12,70 +46,81 @@ export async function GET(
   const catId = Number(categoryId);
   const url = new URL(request.url);
 
-  const sortMode = url.searchParams.get("sort") || "latest";
+  const sortMode = (url.searchParams.get("sort") || "latest") as Sort;
   const currentPage = Math.max(1, Number(url.searchParams.get("page")) || 1);
   const perPage = 10;
   const offset = (currentPage - 1) * perPage;
   const searchQuery = url.searchParams.get("q")?.trim() || "";
-  const searchFilter = url.searchParams.get("searchType") || "all";
+  const searchFilter = (url.searchParams.get("searchType") || "all") as SearchFilter;
   const isSearching = searchQuery.length > 0;
-  const likeQuery = `%${searchQuery}%`;
+  const wild = `*${searchQuery}*`;
 
-  // 공지 + 이번달 인기글은 메인 쿼리와 병렬 실행을 위해 Promise로 준비
-  const noticePostsPromise = cached(`notices`, 300, () =>
-    sql`SELECT * FROM posts WHERE is_notice = true ORDER BY created_at DESC LIMIT 1`
-  );
+  const noticePostsPromise = cached("notices", 300, async () => {
+    const { data } = await supabase
+      .from("posts")
+      .select("*")
+      .eq("is_notice", true)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    return data || [];
+  });
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const topPostsPromise = cached(`top:cat:${catId}:${now.getFullYear()}-${now.getMonth()}`, 120, () =>
-    sql`
-      SELECT * FROM posts
-      WHERE category_id = ${catId} AND created_at >= ${monthStart} AND likes > 0
-      ORDER BY likes DESC
-      LIMIT 3
-    `
+  const topPostsPromise = cached(
+    `top:cat:${catId}:${now.getFullYear()}-${now.getMonth()}`,
+    120,
+    async () => {
+      const { data } = await supabase
+        .from("posts")
+        .select("*")
+        .eq("category_id", catId)
+        .gte("created_at", monthStart)
+        .gt("likes", 0)
+        .order("likes", { ascending: false })
+        .limit(3);
+      return data || [];
+    },
   );
 
-  let posts;
-  let totalCount: number;
+  let posts: unknown[] = [];
+  let totalCount = 0;
 
   if (isSearching) {
-    if (searchFilter === "title") {
-      const countResult = await sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) AND title ILIKE ${likeQuery}`;
-      totalCount = Number(countResult[0].count);
-      posts = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) AND title ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    } else if (searchFilter === "content") {
-      const countResult = await sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) AND content ILIKE ${likeQuery}`;
-      totalCount = Number(countResult[0].count);
-      posts = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) AND content ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    } else if (searchFilter === "author") {
-      const countResult = await sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) AND author ILIKE ${likeQuery}`;
-      totalCount = Number(countResult[0].count);
-      posts = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) AND author ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    } else if (searchFilter === "region") {
-      const countResult = await sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) AND region ILIKE ${likeQuery}`;
-      totalCount = Number(countResult[0].count);
-      posts = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) AND region ILIKE ${likeQuery} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    } else {
-      const countResult = await sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) AND (title ILIKE ${likeQuery} OR content ILIKE ${likeQuery} OR author ILIKE ${likeQuery} OR region ILIKE ${likeQuery})`;
-      totalCount = Number(countResult[0].count);
-      posts = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) AND (title ILIKE ${likeQuery} OR content ILIKE ${likeQuery} OR author ILIKE ${likeQuery} OR region ILIKE ${likeQuery}) ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-    }
+    const baseFilter = (q: ReturnType<typeof supabase.from>) => {
+      const withCategory = q.eq("category_id", catId);
+      const withNotice = withCategory.or("is_notice.eq.false,is_notice.is.null");
+      return applySearch(withNotice, searchFilter, wild);
+    };
+    const { count } = await baseFilter(
+      supabase.from("posts").select("*", { count: "exact", head: true }),
+    );
+    totalCount = count ?? 0;
+
+    const { data } = await applySort(
+      baseFilter(supabase.from("posts").select("*")),
+      "latest",
+    ).range(offset, offset + perPage - 1);
+    posts = data || [];
   } else {
-    // 일반 목록 조회 (60초 캐시)
     const cacheKey = `posts:cat:${catId}:sort:${sortMode}:p:${currentPage}`;
     const result = await cached(cacheKey, 60, async () => {
-      const countResult = await sql`SELECT COUNT(*) as count FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL)`;
-      const tc = Number(countResult[0].count);
-      let p;
-      if (sortMode === "popular") {
-        p = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) ORDER BY views DESC, created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-      } else if (sortMode === "helpful") {
-        p = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) ORDER BY likes DESC, created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-      } else {
-        p = await sql`SELECT * FROM posts WHERE category_id = ${catId} AND (is_notice = false OR is_notice IS NULL) ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`;
-      }
-      return { posts: p, totalCount: tc };
+      const { count } = await supabase
+        .from("posts")
+        .select("*", { count: "exact", head: true })
+        .eq("category_id", catId)
+        .or("is_notice.eq.false,is_notice.is.null");
+      const tc = count ?? 0;
+
+      const { data } = await applySort(
+        supabase
+          .from("posts")
+          .select("*")
+          .eq("category_id", catId)
+          .or("is_notice.eq.false,is_notice.is.null"),
+        sortMode,
+      ).range(offset, offset + perPage - 1);
+
+      return { posts: data || [], totalCount: tc };
     });
     posts = result.posts;
     totalCount = result.totalCount;
@@ -83,7 +128,6 @@ export async function GET(
 
   const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
 
-  // 공지 + 이번달 인기글 병렬 대기
   const [noticePosts, topPosts] = await Promise.all([noticePostsPromise, topPostsPromise]);
 
   return NextResponse.json({
