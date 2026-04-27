@@ -944,6 +944,19 @@ export type Database = {
           target_type: string
         }[]
       }
+      count_job_posts: {
+        Args: {
+          p_employment_type?: string
+          p_hide_closed?: boolean
+          p_parent_code?: string
+          p_region_code?: string
+          p_search_pattern?: string
+          p_search_type?: string
+          p_sport_filter?: string
+          p_sub_name_pattern?: string
+        }
+        Returns: number
+      }
       increment_post_share: { Args: { p_id: number }; Returns: undefined }
       increment_post_views: { Args: { p_id: number }; Returns: undefined }
       job_posts_region_counts: {
@@ -966,6 +979,30 @@ export type Database = {
         Returns: {
           region_code: string
         }[]
+      }
+      search_job_posts: {
+        Args: {
+          p_employment_type?: string
+          p_hide_closed?: boolean
+          p_limit?: number
+          p_offset?: number
+          p_order_col?: string
+          p_parent_code?: string
+          p_region_code?: string
+          p_search_pattern?: string
+          p_search_type?: string
+          p_sport_filter?: string
+          p_sub_name_pattern?: string
+        }
+        Returns: {
+          like: Database["public"]["Tables"]["job_posts"]["Row"]
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "job_posts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       search_jobs_by_regex: {
         Args: { p_limit?: number; p_pattern: string }
