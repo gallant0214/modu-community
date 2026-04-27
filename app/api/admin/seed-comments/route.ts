@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAdminPassword } from "@/app/lib/admin-auth";
 
@@ -115,13 +115,14 @@ export async function POST(request: Request) {
   }
 
   // seed로 생성된 게시글 ID 조회
-  const seedPosts = await sql`
-    SELECT id, category_id, created_at FROM posts
-    WHERE ip_address = 'seed' OR password = '__seed__'
-    ORDER BY id ASC
-  `;
+  const { data: seedPosts, error: fetchErr } = await supabase
+    .from("posts")
+    .select("id, category_id, created_at")
+    .or("ip_address.eq.seed,password.eq.__seed__")
+    .order("id", { ascending: true });
 
-  if (seedPosts.length === 0) {
+  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+  if (!seedPosts || seedPosts.length === 0) {
     return NextResponse.json({ error: "시드 게시글이 없습니다" }, { status: 404 });
   }
 
@@ -140,21 +141,32 @@ export async function POST(request: Request) {
       } while (usedNicks.has(`${post.id}-${author}`) && usedNicks.size < nicks.length * seedPosts.length);
       usedNicks.add(`${post.id}-${author}`);
 
-      const date = randomDate(post.created_at);
+      const date = randomDate(post.created_at!);
 
-      try {
-        await sql`
-          INSERT INTO comments (post_id, author, password, content, ip_address, created_at)
-          VALUES (${post.id}, ${author}, ${"__seed__"}, ${content}, ${"seed"}, ${date}::timestamp)
-        `;
+      const { error } = await supabase.from("comments").insert({
+        post_id: post.id,
+        author,
+        password: "__seed__",
+        content,
+        ip_address: "seed",
+        created_at: date,
+      });
+      if (error) {
+        console.error(`Comment insert failed for post ${post.id}:`, error.message);
+      } else {
         totalInserted++;
-      } catch (e: any) {
-        console.error(`Comment insert failed for post ${post.id}:`, e.message);
       }
     }
 
-    // comments_count 업데이트
-    await sql`UPDATE posts SET comments_count = (SELECT COUNT(*) FROM comments WHERE post_id = ${post.id}) WHERE id = ${post.id}`;
+    // comments_count 재계산
+    const { count } = await supabase
+      .from("comments")
+      .select("*", { count: "exact", head: true })
+      .eq("post_id", post.id);
+    await supabase
+      .from("posts")
+      .update({ comments_count: count ?? 0 })
+      .eq("id", post.id);
   }
 
   return NextResponse.json({ success: true, posts: seedPosts.length, commentsInserted: totalInserted });

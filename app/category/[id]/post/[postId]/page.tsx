@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import type { Post } from "@/app/lib/types";
 import { PostView } from "./post-view";
 
@@ -22,18 +22,18 @@ export default async function PostDetailPage({ params }: PageProps) {
 
   if (Number.isFinite(id) && id > 0) {
     try {
-      const rows = await sql`
-        SELECT p.id, p.category_id, p.title, p.content, p.author, p.region, p.tags,
-               p.likes, p.comments_count, p.is_notice, p.views, p.created_at, p.updated_at,
-               p.images, c.name as category_name
-        FROM posts p
-        LEFT JOIN categories c ON p.category_id = c.id
-        WHERE p.id = ${id}
-      `;
-      if (rows.length > 0) {
+      const { data, error } = await supabase
+        .from("posts")
+        .select(
+          "id, category_id, title, content, author, region, tags, likes, comments_count, is_notice, views, created_at, updated_at, images, categories(name)",
+        )
+        .eq("id", id)
+        .maybeSingle();
+      if (!error && data) {
+        const { categories: cat, ...rest } = data;
         initialPost = {
-          ...rows[0],
-          // 서버 컨텍스트에서는 사용자별 필드 알 수 없음. 클라이언트가 로그인 토큰으로 재조회.
+          ...rest,
+          category_name: cat?.name ?? null,
           is_liked: false,
           is_bookmarked: false,
           is_mine: false,
@@ -41,7 +41,6 @@ export default async function PostDetailPage({ params }: PageProps) {
         } as unknown as Post;
       }
     } catch {
-      // DB 장애 시 SSR 데이터 없이 렌더 → 클라이언트가 자체 fetch 로 폴백
       initialPost = null;
     }
   }

@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAdminPassword } from "@/app/lib/admin-auth";
 
@@ -13,15 +13,17 @@ export async function POST(request: Request) {
     );
   }
 
-  // 시드 데이터 게시글 중 조회수가 5 미만인 것 20~50 랜덤 설정
-  const posts = await sql`
-    SELECT id FROM posts WHERE password IN ('__seed_community__', '__seed__') AND views < 5
-  `;
+  const { data: posts, error: fetchErr } = await supabase
+    .from("posts")
+    .select("id")
+    .in("password", ["__seed_community__", "__seed__"])
+    .lt("views", 5);
+  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 });
 
   let updated = 0;
-  for (const post of posts) {
+  for (const post of posts || []) {
     const randomViews = Math.floor(Math.random() * 31) + 20;
-    await sql`UPDATE posts SET views = ${randomViews} WHERE id = ${post.id}`;
+    await supabase.from("posts").update({ views: randomViews }).eq("id", post.id);
     updated++;
   }
 

@@ -68,6 +68,24 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_settings: {
+        Row: {
+          key: string
+          updated_at: string | null
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string | null
+          value: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           created_at: string | null
@@ -901,6 +919,30 @@ export type Database = {
       adjust_post_counter: {
         Args: { p_col: string; p_delta: number; p_id: number }
         Returns: undefined
+      }
+      admin_reports_with_targets: {
+        Args: never
+        Returns: {
+          category_id: number
+          category_name: string
+          comment_author: string
+          comment_content: string
+          created_at: string
+          custom_reason: string
+          deleted_at: string
+          id: number
+          job_post_author: string
+          job_post_title: string
+          post_author: string
+          post_id: number
+          post_title: string
+          reason: string
+          resolved: boolean
+          resolved_at: string
+          target_hidden: boolean
+          target_id: number
+          target_type: string
+        }[]
       }
       increment_post_share: { Args: { p_id: number }; Returns: undefined }
       increment_post_views: { Args: { p_id: number }; Returns: undefined }

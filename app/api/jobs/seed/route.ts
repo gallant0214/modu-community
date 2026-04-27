@@ -1,11 +1,13 @@
-import { sql } from "@/app/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * 옛 부트스트랩 엔드포인트 — 모든 테이블이 마이그레이션 완료된 후 no-op.
+ * 새 테이블/스키마 변경은 SQL Editor 또는 마이그레이션 파일로 처리.
+ */
 export async function POST(request: NextRequest) {
-  // 관리자 인증 필수
   const body = await request.json();
   const { password } = body;
 
@@ -16,46 +18,5 @@ export async function POST(request: NextRequest) {
   const authError = await verifyAdmin(request, password);
   if (authError) return authError;
 
-  // job_posts 테이블 생성
-  await sql`
-    CREATE TABLE IF NOT EXISTS job_posts (
-      id SERIAL PRIMARY KEY,
-      title VARCHAR(255) NOT NULL,
-      description TEXT NOT NULL,
-      center_name VARCHAR(100) NOT NULL,
-      address VARCHAR(255) DEFAULT '',
-      author_role VARCHAR(20) DEFAULT '',
-      author_name VARCHAR(100) DEFAULT '',
-      contact_type VARCHAR(20) DEFAULT '연락처',
-      contact VARCHAR(100) NOT NULL,
-      sport VARCHAR(50) NOT NULL,
-      region_name VARCHAR(50) NOT NULL,
-      region_code VARCHAR(50) NOT NULL,
-      employment_type VARCHAR(20) NOT NULL,
-      salary VARCHAR(100) NOT NULL,
-      headcount VARCHAR(20) DEFAULT '',
-      benefits TEXT DEFAULT '',
-      preferences TEXT DEFAULT '',
-      deadline VARCHAR(50) DEFAULT '',
-      likes INT DEFAULT 0,
-      views INT DEFAULT 0,
-      is_closed BOOLEAN DEFAULT false,
-      ip_address VARCHAR(50) DEFAULT '',
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-  `;
-
-  // job_post_likes 테이블 (IP 기반 좋아요)
-  await sql`
-    CREATE TABLE IF NOT EXISTS job_post_likes (
-      id SERIAL PRIMARY KEY,
-      job_post_id INT NOT NULL REFERENCES job_posts(id) ON DELETE CASCADE,
-      ip_address TEXT NOT NULL,
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-      UNIQUE(job_post_id, ip_address)
-    )
-  `;
-
-  return NextResponse.json({ success: true, message: "job_posts table created" });
+  return NextResponse.json({ success: true, message: "schema already exists" });
 }

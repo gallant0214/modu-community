@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAdminPassword } from "@/app/lib/admin-auth";
 
@@ -13,14 +13,13 @@ export async function POST(request: Request) {
     );
   }
 
-  // 시드 데이터 게시글 중 줄바꿈이 부족한 게시글 찾기
-  const posts = await sql`
-    SELECT id, content FROM posts
-    WHERE password IN ('__seed_community__', '__seed__')
-  `;
+  const { data: posts } = await supabase
+    .from("posts")
+    .select("id, content")
+    .in("password", ["__seed_community__", "__seed__"]);
 
   let updated = 0;
-  for (const post of posts) {
+  for (const post of posts || []) {
     const content = post.content as string;
 
     // 이미 적절한 줄바꿈이 있는지 확인 (연속 줄바꿈 \n\n이 2개 이상이면 이미 OK)
@@ -38,7 +37,7 @@ export async function POST(request: Request) {
     newContent = newContent.replace(/([.!?])(\s)(?=[가-힣A-Za-z0-9])/g, "$1\n\n");
 
     if (newContent !== content) {
-      await sql`UPDATE posts SET content = ${newContent} WHERE id = ${post.id}`;
+      await supabase.from("posts").update({ content: newContent }).eq("id", post.id);
       updated++;
     }
   }

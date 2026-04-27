@@ -1,13 +1,11 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAdmin } from "@/app/lib/admin-auth";
-import { verifyAuth } from "@/app/lib/firebase-admin";
 import { checkRateLimit, getClientIp } from "@/app/lib/security";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  // 관리자 로그인 brute force 방지
   const ip = getClientIp(request);
   const rateLimitResponse = checkRateLimit(ip, "auth");
   if (rateLimitResponse) return rateLimitResponse;
@@ -18,24 +16,23 @@ export async function POST(request: Request) {
   const authError = await verifyAdmin(request, password);
   if (authError) return authError;
 
-  const reports = await sql`
-    SELECT r.*,
-      p.title AS post_title, p.author AS post_author,
-      c.content AS comment_content, c.author AS comment_author,
-      cat.name AS category_name,
-      jp.title AS job_post_title, jp.center_name AS job_post_author
-    FROM reports r
-    LEFT JOIN posts p ON r.target_type = 'post' AND r.target_id = p.id
-    LEFT JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.id
-    LEFT JOIN categories cat ON r.target_type != 'job_post' AND r.category_id = cat.id
-    LEFT JOIN job_posts jp ON r.target_type = 'job_post' AND r.target_id = jp.id
-    ORDER BY r.created_at DESC
-  `;
+  const [reportsRes, inquiriesRes] = await Promise.all([
+    supabase.rpc("admin_reports_with_targets"),
+    supabase
+      .from("inquiries")
+      .select("id, author, email, title, content, reply, replied_at, hidden, read_at, created_at")
+      .order("created_at", { ascending: false }),
+  ]);
 
-  const inquiries = await sql`
-    SELECT id, author, email, title, content, reply, replied_at, hidden, read_at, created_at
-    FROM inquiries ORDER BY created_at DESC
-  `;
+  if (reportsRes.error) {
+    return NextResponse.json({ error: reportsRes.error.message }, { status: 500 });
+  }
+  if (inquiriesRes.error) {
+    return NextResponse.json({ error: inquiriesRes.error.message }, { status: 500 });
+  }
 
-  return NextResponse.json({ reports, inquiries });
+  return NextResponse.json({
+    reports: reportsRes.data,
+    inquiries: inquiriesRes.data,
+  });
 }

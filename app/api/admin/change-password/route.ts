@@ -1,7 +1,6 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAdmin } from "@/app/lib/admin-auth";
-import { timingSafeEqual } from "crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -32,21 +31,17 @@ export async function POST(request: Request) {
   const authError = await verifyAdmin(request, password);
   if (authError) return authError;
 
-  // admin_settings 테이블 생성 (없으면)
-  await sql`
-    CREATE TABLE IF NOT EXISTS admin_settings (
-      key VARCHAR(100) PRIMARY KEY,
-      value TEXT NOT NULL,
-      updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    )
-  `;
-
-  // 비밀번호 업데이트
-  await sql`
-    INSERT INTO admin_settings (key, value, updated_at)
-    VALUES ('admin_password', ${newPassword}, NOW())
-    ON CONFLICT (key) DO UPDATE SET value = ${newPassword}, updated_at = NOW()
-  `;
+  const { error } = await supabase
+    .from("admin_settings")
+    .upsert(
+      {
+        key: "admin_password",
+        value: newPassword,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" },
+    );
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ success: true, message: "비밀번호가 변경되었습니다" });
 }

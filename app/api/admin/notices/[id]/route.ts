@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAdmin } from "@/app/lib/admin-auth";
 import { sanitize, validateLength } from "@/app/lib/security";
@@ -20,11 +20,23 @@ export async function PUT(
     return NextResponse.json({ error: "제목과 내용을 입력해주세요" }, { status: 400 });
   }
 
-  const rows = await sql`SELECT id FROM posts WHERE id = ${Number(id)} AND is_notice = true`;
-  if (rows.length === 0) {
-    return NextResponse.json({ error: "공지를 찾을 수 없습니다" }, { status: 404 });
-  }
+  const { data, error: fetchErr } = await supabase
+    .from("posts")
+    .select("id")
+    .eq("id", Number(id))
+    .eq("is_notice", true)
+    .maybeSingle();
+  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: "공지를 찾을 수 없습니다" }, { status: 404 });
 
-  await sql`UPDATE posts SET title = ${sanitize(validateLength(title.trim(), 200))}, content = ${sanitize(validateLength(content.trim(), 50000))}, updated_at = NOW() WHERE id = ${Number(id)}`;
+  const { error } = await supabase
+    .from("posts")
+    .update({
+      title: sanitize(validateLength(title.trim(), 200)),
+      content: sanitize(validateLength(content.trim(), 50000)),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", Number(id));
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }

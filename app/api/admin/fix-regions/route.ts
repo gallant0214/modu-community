@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAdminPassword } from "@/app/lib/admin-auth";
 import { REGION_GROUPS } from "@/app/lib/region-data";
@@ -44,11 +44,12 @@ export async function POST(request: Request) {
   let updated = 0;
 
   for (const shortName of shortNames) {
-    const posts = await sql`
-      SELECT id FROM posts WHERE region = ${shortName}
-    `;
+    const { data: posts } = await supabase
+      .from("posts")
+      .select("id")
+      .eq("region", shortName);
 
-    for (const post of posts) {
+    for (const post of posts || []) {
       const code = shortNameToCode[shortName];
       const group = REGION_GROUPS.find((g) => g.code === code);
       if (!group) continue;
@@ -56,9 +57,7 @@ export async function POST(request: Request) {
       const sub = pick(group.subRegions);
       const fullRegion = `${group.name} - ${sub.name}`;
 
-      await sql`
-        UPDATE posts SET region = ${fullRegion} WHERE id = ${post.id}
-      `;
+      await supabase.from("posts").update({ region: fullRegion }).eq("id", post.id);
       updated++;
     }
   }

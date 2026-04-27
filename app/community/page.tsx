@@ -1,17 +1,28 @@
 export const revalidate = 60;
 
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import type { Category } from "@/app/lib/types";
 import { CategorySearch } from "@/app/components/category-search";
 
 export default async function CommunityPage() {
-  const categories = (await sql`
-    SELECT c.*, COALESCE(p.cnt, 0) AS post_count
-    FROM categories c
-    LEFT JOIN (SELECT category_id, COUNT(*) AS cnt FROM posts WHERE is_notice = false OR is_notice IS NULL GROUP BY category_id) p
-    ON c.id = p.category_id
-    ORDER BY post_count DESC, c.name ASC
-  `) as Category[];
+  const { data: catRows } = await supabase.from("categories").select("*");
+  const counts = await Promise.all(
+    (catRows || []).map(async (c) => {
+      const { count } = await supabase
+        .from("posts")
+        .select("*", { count: "exact", head: true })
+        .eq("category_id", c.id)
+        .or("is_notice.eq.false,is_notice.is.null");
+      return { id: c.id, count: count ?? 0 };
+    }),
+  );
+  const countMap = new Map(counts.map((x) => [x.id, x.count]));
+  const categories = (catRows || [])
+    .map((c) => ({ ...c, post_count: countMap.get(c.id) || 0 }))
+    .sort(
+      (a, b) =>
+        b.post_count - a.post_count || a.name.localeCompare(b.name, "ko"),
+    ) as unknown as Category[];
 
   const popular = categories
     .filter((c) => Number(c.post_count) > 0)
