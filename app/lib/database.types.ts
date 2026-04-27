@@ -869,7 +869,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      adjust_job_post_counter: {
+        Args: { p_col: string; p_delta: number; p_id: number }
+        Returns: undefined
+      }
+      adjust_post_counter: {
+        Args: { p_col: string; p_delta: number; p_id: number }
+        Returns: undefined
+      }
+      increment_post_share: { Args: { p_id: number }; Returns: undefined }
+      increment_post_views: { Args: { p_id: number }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { checkRateLimit, getClientIp } from "@/app/lib/security";
 
@@ -13,16 +13,23 @@ export async function POST(
   if (rateLimitResponse) return rateLimitResponse;
 
   const { postId } = await params;
-  const body = await request.json();
-  const { password } = body;
+  const { password } = await request.json();
 
-  const rows = await sql`SELECT password FROM posts WHERE id = ${Number(postId)}`;
-  if (rows.length === 0) {
+  const { data, error } = await supabase
+    .from("posts")
+    .select("password")
+    .eq("id", Number(postId))
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!data) {
     return NextResponse.json({ error: "게시글을 찾을 수 없습니다" }, { status: 404 });
   }
 
   const isAdmin = password === process.env.ADMIN_PASSWORD;
-  if (!isAdmin && rows[0].password !== password) {
+  if (!isAdmin && data.password !== password) {
     return NextResponse.json({ error: "비밀번호가 일치하지 않습니다" }, { status: 403 });
   }
   return NextResponse.json({ success: true });
