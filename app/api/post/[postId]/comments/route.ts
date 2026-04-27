@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
@@ -23,32 +23,49 @@ export async function GET(
 ) {
   const { postId } = await params;
   const user = await verifyAuth(request);
+  const pid = Number(postId);
 
-  // updated_at 컬럼 없을 수 있으니 안전하게 추가
-  try { await sql`ALTER TABLE comments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ`; } catch {}
+  const { data: rows, error } = await supabase
+    .from("comments")
+    .select("id, post_id, parent_id, author, content, likes, ip_address, firebase_uid, created_at, updated_at, hidden")
+    .eq("post_id", pid)
+    .order("created_at", { ascending: true });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const rows = await sql`
-    SELECT c.id, c.post_id, c.parent_id, c.author, c.content, COALESCE(c.likes, 0) AS likes,
-      (SELECT COUNT(*) FROM comments r WHERE r.parent_id = c.id) AS reply_count,
-      c.ip_address, c.firebase_uid, c.created_at, c.updated_at, COALESCE(c.hidden, false) AS hidden
-    FROM comments c WHERE c.post_id = ${Number(postId)} ORDER BY c.created_at ASC`;
+  // reply_count는 별도 쿼리로 (parent_id 기준 그룹)
+  const { data: replyParents } = await supabase
+    .from("comments")
+    .select("parent_id")
+    .eq("post_id", pid)
+    .not("parent_id", "is", null)
+    .limit(100000);
+  const replyCounts = new Map<number, number>();
+  for (const r of replyParents || []) {
+    if (r.parent_id != null) {
+      replyCounts.set(r.parent_id, (replyCounts.get(r.parent_id) || 0) + 1);
+    }
+  }
 
   // 현재 사용자가 좋아요한 댓글 ID 목록
   let likedCommentIds: Set<number> = new Set();
   if (user) {
-    const liked = await sql`
-      SELECT comment_id FROM comment_likes WHERE firebase_uid = ${user.uid}
-    `;
-    likedCommentIds = new Set(liked.map((r: { comment_id: number }) => r.comment_id));
+    const { data: liked } = await supabase
+      .from("comment_likes")
+      .select("comment_id")
+      .eq("firebase_uid", user.uid)
+      .limit(100000);
+    likedCommentIds = new Set((liked || []).map((r) => r.comment_id));
   }
 
-  const result = rows.map((c: Record<string, unknown>) => ({
+  const result = rows.map((c) => ({
     ...c,
-    ip_display: maskIp(String(c.ip_address || "")),
+    likes: c.likes ?? 0,
+    hidden: c.hidden ?? false,
+    reply_count: replyCounts.get(c.id) || 0,
+    ip_display: maskIp(c.ip_address || ""),
     ip_address: undefined,
     firebase_uid: undefined,
-    password: undefined,
-    is_liked: likedCommentIds.has(c.id as number),
+    is_liked: likedCommentIds.has(c.id),
     is_mine: !!(user && c.firebase_uid && c.firebase_uid === user.uid),
   }));
   return NextResponse.json(result);
@@ -77,37 +94,63 @@ export async function POST(
   const h = await headers();
   const ipAddr = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 
-  const uid = user.uid;
+  const { data: inserted, error: insertErr } = await supabase
+    .from("comments")
+    .insert({
+      post_id: pid,
+      parent_id: parent_id ?? null,
+      author: sanitize(validateLength(author.trim(), 50)),
+      password: password.trim(),
+      content: sanitize(validateLength(content.trim(), 5000)),
+      ip_address: ipAddr,
+      firebase_uid: user.uid,
+    })
+    .select("id")
+    .single();
+  if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 });
 
-  const inserted = await sql`INSERT INTO comments (post_id, parent_id, author, password, content, ip_address, firebase_uid)
-    VALUES (${pid}, ${parent_id ?? null}, ${sanitize(validateLength(author.trim(), 50))}, ${password.trim()}, ${sanitize(validateLength(content.trim(), 5000))}, ${ipAddr}, ${uid}) RETURNING id`;
-  const newCommentId = inserted[0]?.id;
-  await sql`UPDATE posts SET comments_count = (SELECT COUNT(*) FROM comments WHERE post_id = ${pid}) WHERE id = ${pid}`;
+  const newCommentId = inserted.id;
 
-  // 알림 발송 (비동기, 실패해도 댓글 작성에 영향 없음)
+  // posts.comments_count 재계산
+  const { count } = await supabase
+    .from("comments")
+    .select("*", { count: "exact", head: true })
+    .eq("post_id", pid);
+  await supabase
+    .from("posts")
+    .update({ comments_count: count ?? 0 })
+    .eq("id", pid);
+
+  // 알림 발송 (비동기)
   try {
     if (parent_id) {
-      // 대댓글: 원 댓글 작성자에게 알림
-      const parentComment = await sql`SELECT firebase_uid, content FROM comments WHERE id = ${parent_id}`;
-      if (parentComment.length > 0 && parentComment[0].firebase_uid && parentComment[0].firebase_uid !== uid) {
+      const { data: parentComment } = await supabase
+        .from("comments")
+        .select("firebase_uid, content")
+        .eq("id", parent_id)
+        .maybeSingle();
+      if (parentComment?.firebase_uid && parentComment.firebase_uid !== user.uid) {
         sendPushToUser(
-          parentComment[0].firebase_uid,
+          parentComment.firebase_uid,
           "reply",
           "내 댓글에 답글이 달렸어요",
           content.trim().substring(0, 100),
-          { postId: String(pid), commentId: String(newCommentId) }
+          { postId: String(pid), commentId: String(newCommentId) },
         ).catch(() => {});
       }
     } else {
-      // 일반 댓글: 게시글 작성자에게 알림
-      const post = await sql`SELECT firebase_uid, title FROM posts WHERE id = ${pid}`;
-      if (post.length > 0 && post[0].firebase_uid && post[0].firebase_uid !== uid) {
+      const { data: post } = await supabase
+        .from("posts")
+        .select("firebase_uid, title")
+        .eq("id", pid)
+        .maybeSingle();
+      if (post?.firebase_uid && post.firebase_uid !== user.uid) {
         sendPushToUser(
-          post[0].firebase_uid,
+          post.firebase_uid,
           "comment",
-          `"${(post[0].title || "").substring(0, 30)}" 글에 댓글이 달렸어요`,
+          `"${(post.title || "").substring(0, 30)}" 글에 댓글이 달렸어요`,
           content.trim().substring(0, 100),
-          { postId: String(pid), commentId: String(newCommentId) }
+          { postId: String(pid), commentId: String(newCommentId) },
         ).catch(() => {});
       }
     }

@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAdmin } from "@/app/lib/admin-auth";
 
@@ -15,24 +15,44 @@ export async function POST(
   const authError = await verifyAdmin(request, password);
   if (authError) return authError;
 
-  const rows = await sql`SELECT target_type, target_id, post_id, category_id FROM reports WHERE id = ${Number(id)}`;
-  if (rows.length === 0) {
-    return NextResponse.json({ error: "신고를 찾을 수 없습니다" }, { status: 404 });
-  }
+  const { data: report, error: fetchErr } = await supabase
+    .from("reports")
+    .select("target_type, target_id, post_id")
+    .eq("id", Number(id))
+    .maybeSingle();
+  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+  if (!report) return NextResponse.json({ error: "신고를 찾을 수 없습니다" }, { status: 404 });
 
-  const { target_type, target_id, post_id } = rows[0];
+  const { target_type, target_id, post_id } = report;
 
   if (target_type === "job_post") {
-    await sql`DELETE FROM job_post_likes WHERE job_post_id = ${target_id}`;
-    await sql`DELETE FROM job_posts WHERE id = ${target_id}`;
+    await supabase.from("job_post_likes").delete().eq("job_post_id", target_id);
+    await supabase.from("job_posts").delete().eq("id", target_id);
   } else if (target_type === "post") {
-    await sql`DELETE FROM comments WHERE post_id = ${target_id}`;
-    await sql`DELETE FROM posts WHERE id = ${target_id}`;
+    await supabase.from("comments").delete().eq("post_id", target_id);
+    await supabase.from("posts").delete().eq("id", target_id);
   } else {
-    await sql`DELETE FROM comments WHERE id = ${target_id}`;
-    await sql`UPDATE posts SET comments_count = (SELECT COUNT(*) FROM comments WHERE post_id = ${post_id}) WHERE id = ${post_id}`;
+    await supabase.from("comments").delete().eq("id", target_id);
+    if (post_id) {
+      const { count } = await supabase
+        .from("comments")
+        .select("*", { count: "exact", head: true })
+        .eq("post_id", post_id);
+      await supabase
+        .from("posts")
+        .update({ comments_count: count ?? 0 })
+        .eq("id", post_id);
+    }
   }
 
-  await sql`UPDATE reports SET resolved = true, resolved_at = NOW(), deleted_at = NOW() WHERE id = ${Number(id)}`;
+  await supabase
+    .from("reports")
+    .update({
+      resolved: true,
+      resolved_at: new Date().toISOString(),
+      deleted_at: new Date().toISOString(),
+    })
+    .eq("id", Number(id));
+
   return NextResponse.json({ success: true });
 }
