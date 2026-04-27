@@ -944,6 +944,7 @@ export type Database = {
           target_type: string
         }[]
       }
+      auto_close_expired_jobs: { Args: never; Returns: number }
       count_job_posts: {
         Args: {
           p_employment_type?: string

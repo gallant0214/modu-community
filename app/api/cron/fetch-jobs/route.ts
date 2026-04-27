@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 
 const API_KEY = process.env.WORK24_API_KEY || "";
@@ -370,40 +370,29 @@ export async function GET(req: NextRequest) {
   }
   if (!API_KEY) return NextResponse.json({ error: "WORK24_API_KEY not set" }, { status: 500 });
 
-  try { await sql`ALTER TABLE job_posts ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'user'`; } catch {}
-  try { await sql`ALTER TABLE job_posts ADD COLUMN IF NOT EXISTS source_id TEXT`; } catch {}
-  try { await sql`ALTER TABLE job_posts ALTER COLUMN title TYPE TEXT`; } catch {}
-  try { await sql`ALTER TABLE job_posts ALTER COLUMN center_name TYPE VARCHAR(200)`; } catch {}
-  try { await sql`ALTER TABLE job_posts ALTER COLUMN salary TYPE VARCHAR(200)`; } catch {}
-  try { await sql`ALTER TABLE job_posts ALTER COLUMN contact TYPE TEXT`; } catch {}
-  try { await sql`ALTER TABLE job_posts ALTER COLUMN address TYPE TEXT`; } catch {}
-
-  // 마감일 지난 글 자동 is_closed=true 처리
-  // - deadline 이 "YYYY-MM-DD" 형식으로 시작하는 경우만 처리 (보수적)
-  // - "채용시까지 (...)" 프리픽스 글은 유효 (계속 모집중)
-  // - 사용자가 자유 입력한 포맷(예: "2026년 5월 1일") 은 매칭 안 돼서 건드리지 않음
+  // 스키마는 마이그레이션 완료, ALTER TABLE 제거
+  // 마감일 지난 글 자동 is_closed=true 처리 (RPC)
   let autoClosed = 0;
-  try {
-    const closed = await sql`
-      UPDATE job_posts SET is_closed = true
-      WHERE (is_closed IS NULL OR is_closed = false)
-        AND deadline NOT LIKE '채용시까지%'
-        AND deadline ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
-        AND substring(deadline from '^([0-9]{4}-[0-9]{2}-[0-9]{2})')::date < CURRENT_DATE
-      RETURNING id
-    ` as { id: number }[];
-    autoClosed = closed.length;
+  const { data: closedCount, error: closeErr } = await supabase.rpc("auto_close_expired_jobs");
+  if (closeErr) {
+    console.error("auto-close failed:", closeErr.message);
+  } else {
+    autoClosed = closedCount ?? 0;
     if (autoClosed > 0) {
-      // Upstash /jobs 캐시 무효화 (곧바로 목록에서 마감 상태로 반영)
       const { invalidateCache } = await import("@/app/lib/cache");
       invalidateCache("jobs:*").catch(() => {});
     }
-  } catch (e) {
-    console.error("auto-close failed:", e);
   }
 
-  const existingRows = await sql`SELECT source_id FROM job_posts WHERE source = 'work24' AND source_id IS NOT NULL`;
-  const existingIds = new Set(existingRows.map((r: { source_id: string }) => r.source_id));
+  const { data: existingRows } = await supabase
+    .from("job_posts")
+    .select("source_id")
+    .eq("source", "work24")
+    .not("source_id", "is", null)
+    .limit(100000);
+  const existingIds = new Set(
+    (existingRows || []).map((r) => r.source_id).filter((x): x is string => !!x),
+  );
 
   // 1단계: 직종코드로 수집 (병렬)
   const occResults = await Promise.all(OCCUPATION_CODES.map((code) => fetchByOccupation(code)));
@@ -527,14 +516,36 @@ export async function GET(req: NextRequest) {
   const errors: string[] = [];
   for (let i = 0; i < toInsert.length; i += 10) {
     const batch = toInsert.slice(i, i + 10);
-    const results = await Promise.allSettled(
-      batch.map(({ it, finalTitle, sport, rName, rCode, salary, addr, deadline, desc, empType, contactType, contactValue }) =>
-        sql`INSERT INTO job_posts (title,description,center_name,address,author_role,author_name,contact_type,contact,sport,region_name,region_code,employment_type,salary,headcount,benefits,preferences,deadline,ip_address,firebase_uid,source,source_id) VALUES (${finalTitle},${desc},${it.company.slice(0, 200)},${addr},${"채용담당자"},${it.company.slice(0, 50)},${contactType},${contactValue.slice(0, 200)},${sport.slice(0, 50)},${rName.slice(0, 50)},${rCode},${empType},${salary.slice(0, 200)},${""},${""},${""},${deadline},${"work24-api"},${"system_work24"},${"work24"},${it.wantedAuthNo})`
-      )
-    );
-    inserted += results.filter((r) => r.status === "fulfilled").length;
-    for (const r of results) {
-      if (r.status === "rejected") errors.push(r.reason?.message || String(r.reason));
+    const rows = batch.map(({ it, finalTitle, sport, rName, rCode, salary, addr, deadline, desc, empType, contactType, contactValue }) => ({
+      title: finalTitle,
+      description: desc,
+      center_name: it.company.slice(0, 200),
+      address: addr,
+      author_role: "채용담당자",
+      author_name: it.company.slice(0, 50),
+      contact_type: contactType,
+      contact: contactValue.slice(0, 200),
+      sport: sport.slice(0, 50),
+      region_name: rName.slice(0, 50),
+      region_code: rCode,
+      employment_type: empType,
+      salary: salary.slice(0, 200),
+      headcount: "",
+      benefits: "",
+      preferences: "",
+      deadline,
+      ip_address: "work24-api",
+      firebase_uid: "system_work24",
+      source: "work24",
+      source_id: it.wantedAuthNo,
+    }));
+    const { count, error } = await supabase
+      .from("job_posts")
+      .insert(rows, { count: "exact" });
+    if (error) {
+      errors.push(error.message);
+    } else {
+      inserted += count ?? rows.length;
     }
   }
 
