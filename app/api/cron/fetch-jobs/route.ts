@@ -483,6 +483,11 @@ export async function GET(req: NextRequest) {
       finalTitle = detail.fullTitle;
     }
 
+    // 목록 API 의 title 이 잘려서 EXCLUDE_TITLE 키워드(바리스타/베이커리 등)를
+    // 못 잡는 사례 보강 — 상세 HTML 의 fullTitle 로 보강된 시점에 필터 재실행.
+    // 이 단계에서 비스포츠 직무로 판정되면 INSERT 스킵.
+    if (!isSportsRelated(finalTitle, it.company, it.indTpNm)) continue;
+
     // 풍부한 설명 — 모집요강(직무내용) 이 있으면 맨 앞에 추가
     const descLines = [
       detail.jobDuty ? `[직무내용]\n${detail.jobDuty}` : "",
