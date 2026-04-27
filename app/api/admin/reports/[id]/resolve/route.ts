@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAdmin } from "@/app/lib/admin-auth";
 
@@ -15,6 +15,13 @@ export async function POST(
   const authError = await verifyAdmin(request, password);
   if (authError) return authError;
 
-  await sql`UPDATE reports SET resolved = true, resolved_at = NOW() WHERE id = ${Number(id)}`;
+  const { error } = await supabase
+    .from("reports")
+    .update({
+      resolved: true,
+      resolved_at: new Date().toISOString(),
+    })
+    .eq("id", Number(id));
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }

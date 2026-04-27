@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 
@@ -11,17 +11,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ comments: [], error: "로그인이 필요합니다" }, { status: 401 });
   }
 
-  const rows = await sql`
-    SELECT cm.id, cm.post_id, cm.content, cm.created_at,
-           p.category_id, p.title as post_title,
-           c.name as category_name
-    FROM comments cm
-    INNER JOIN posts p ON cm.post_id = p.id
-    LEFT JOIN categories c ON p.category_id = c.id
-    WHERE cm.firebase_uid = ${user.uid}
-    ORDER BY cm.created_at DESC
-    LIMIT 50
-  `;
+  const { data, error } = await supabase
+    .from("comments")
+    .select(
+      "id, post_id, content, created_at, posts!inner(category_id, title, categories(name))",
+    )
+    .eq("firebase_uid", user.uid)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) {
+    return NextResponse.json({ comments: [], error: error.message }, { status: 500 });
+  }
 
-  return NextResponse.json({ comments: rows });
+  const comments = data.map((c) => ({
+    id: c.id,
+    post_id: c.post_id,
+    content: c.content,
+    created_at: c.created_at,
+    category_id: c.posts?.category_id ?? null,
+    post_title: c.posts?.title ?? null,
+    category_name: c.posts?.categories?.name ?? null,
+  }));
+
+  return NextResponse.json({ comments });
 }

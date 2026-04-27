@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAdminPassword } from "@/app/lib/admin-auth";
 
@@ -86,14 +86,23 @@ export async function POST(request: Request) {
       const author = pick(nicknames);
       const region = pick(regions);
       const date = randomDate(2025);
-      try {
-        await sql`
-          INSERT INTO posts (category_id, title, content, author, password, region, tags, ip_address, created_at, updated_at)
-          VALUES (${categoryId}, ${post.title}, ${post.content}, ${author}, ${"__seed__"}, ${region}, ${post.tag}, ${"seed"}, ${date}::timestamp, ${date}::timestamp)
-        `;
+      const iso = new Date(date.replace(" ", "T")).toISOString();
+      const { error } = await supabase.from("posts").insert({
+        category_id: categoryId,
+        title: post.title,
+        content: post.content,
+        author,
+        password: "__seed__",
+        region,
+        tags: post.tag,
+        ip_address: "seed",
+        created_at: iso,
+        updated_at: iso,
+      });
+      if (error) {
+        console.error(`Failed to insert: ${post.title}`, error.message);
+      } else {
         insertedCount++;
-      } catch (e: any) {
-        console.error(`Failed to insert: ${post.title}`, e.message);
       }
     }
   }

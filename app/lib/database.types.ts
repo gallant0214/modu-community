@@ -525,6 +525,7 @@ export type Database = {
           firebase_uid: string | null
           id: number
           like_count: number | null
+          read: boolean | null
           title: string | null
           type: string | null
         }
@@ -535,6 +536,7 @@ export type Database = {
           firebase_uid?: string | null
           id?: number
           like_count?: number | null
+          read?: boolean | null
           title?: string | null
           type?: string | null
         }
@@ -545,6 +547,7 @@ export type Database = {
           firebase_uid?: string | null
           id?: number
           like_count?: number | null
+          read?: boolean | null
           title?: string | null
           type?: string | null
         }

@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +8,13 @@ export async function POST(
   { params }: { params: Promise<{ jobId: string }> }
 ) {
   const { jobId } = await params;
-  await sql`UPDATE job_posts SET views = views + 1 WHERE id = ${Number(jobId)}`;
+  const { error } = await supabase.rpc("adjust_job_post_counter", {
+    p_id: Number(jobId),
+    p_col: "views",
+    p_delta: 1,
+  });
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json({ success: true });
 }

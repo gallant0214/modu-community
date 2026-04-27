@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
@@ -9,7 +9,7 @@ import { fetchJobsPage } from "@/app/lib/jobs-query";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/jobs — 구인글 목록 (공유 모듈 fetchJobsPage 에서 Neon SQL + Upstash 캐시 처리)
+// GET /api/jobs — 구인글 목록 (공유 모듈 fetchJobsPage)
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -58,33 +58,45 @@ export async function POST(request: Request) {
   const h = await headers();
   const ipAddr = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 
-  const rows = await sql`
-    INSERT INTO job_posts (
-      title, description, center_name, address,
-      author_role, author_name, contact_type, contact,
-      sport, region_name, region_code,
-      employment_type, salary, headcount,
-      benefits, preferences, deadline, ip_address, firebase_uid
-    ) VALUES (
-      ${sanitize(validateLength(title.trim(), 200))}, ${sanitize(validateLength(description.trim(), 10000))}, ${sanitize(validateLength(center_name.trim(), 100))}, ${sanitize(validateLength((address || "").trim(), 200))},
-      ${sanitize(validateLength((author_role || "").trim(), 50))}, ${sanitize(validateLength((author_name || "").trim(), 50))}, ${contact_type || "연락처"}, ${sanitize(validateLength(contact.trim(), 100))},
-      ${sanitize(validateLength(sport.trim(), 50))}, ${sanitize(validateLength((region_name || "").trim(), 50))}, ${(region_code || "").trim().toLowerCase()},
-      ${sanitize(validateLength((employment_type || "").trim(), 50))}, ${sanitize(validateLength((salary || "").trim(), 100))}, ${sanitize(validateLength((headcount || "").trim(), 50))},
-      ${sanitize(validateLength((benefits || "").trim(), 500))}, ${sanitize(validateLength((preferences || "").trim(), 500))}, ${(deadline || "").trim()}, ${ipAddr}, ${user.uid}
-    ) RETURNING id
-  `;
+  const { data, error } = await supabase
+    .from("job_posts")
+    .insert({
+      title: sanitize(validateLength(title.trim(), 200)),
+      description: sanitize(validateLength(description.trim(), 10000)),
+      center_name: sanitize(validateLength(center_name.trim(), 100)),
+      address: sanitize(validateLength((address || "").trim(), 200)),
+      author_role: sanitize(validateLength((author_role || "").trim(), 50)),
+      author_name: sanitize(validateLength((author_name || "").trim(), 50)),
+      contact_type: contact_type || "연락처",
+      contact: sanitize(validateLength(contact.trim(), 100)),
+      sport: sanitize(validateLength(sport.trim(), 50)),
+      region_name: sanitize(validateLength((region_name || "").trim(), 50)),
+      region_code: (region_code || "").trim().toLowerCase(),
+      employment_type: sanitize(validateLength((employment_type || "").trim(), 50)),
+      salary: sanitize(validateLength((salary || "").trim(), 100)),
+      headcount: sanitize(validateLength((headcount || "").trim(), 50)),
+      benefits: sanitize(validateLength((benefits || "").trim(), 500)),
+      preferences: sanitize(validateLength((preferences || "").trim(), 500)),
+      deadline: (deadline || "").trim(),
+      ip_address: ipAddr,
+      firebase_uid: user.uid,
+    })
+    .select("id")
+    .single();
 
-  // 구인글 목록 캐시 즉시 무효화 (다음 방문자가 바로 새 글 확인)
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
   await invalidateCache("jobs:*").catch(() => {});
 
-  // 새 구인글 알림 (비동기)
   sendKeywordAlerts(
     title.trim(),
     (description || "").trim(),
     "job",
-    rows[0].id,
-    user.uid
+    data.id,
+    user.uid,
   ).catch(() => {});
 
-  return NextResponse.json({ success: true, id: rows[0].id });
+  return NextResponse.json({ success: true, id: data.id });
 }

@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
@@ -26,15 +26,26 @@ export async function POST(request: Request) {
   const h = await headers();
   const ipAddr = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
 
-  const uid = user.uid;
+  const { error } = await supabase.from("posts").insert({
+    category_id: Number(category_id),
+    title: sanitize(validateLength(title.trim(), 200)),
+    content: sanitize(validateLength(content.trim(), 50000)),
+    author: sanitize(validateLength(author.trim(), 50)),
+    password: (password || "").trim(),
+    region: sanitize(validateLength((region || "전국").trim(), 50)),
+    tags: sanitize(validateLength((tags || "").trim(), 200)),
+    ip_address: ipAddr,
+    firebase_uid: user.uid,
+    images: (images || "").trim(),
+  });
 
-  await sql`INSERT INTO posts (category_id, title, content, author, password, region, tags, ip_address, firebase_uid, images)
-    VALUES (${Number(category_id)}, ${sanitize(validateLength(title.trim(), 200))}, ${sanitize(validateLength(content.trim(), 50000))}, ${sanitize(validateLength(author.trim(), 50))}, ${(password || "").trim()}, ${sanitize(validateLength((region || "전국").trim(), 50))}, ${sanitize(validateLength((tags || "").trim(), 200))}, ${ipAddr}, ${uid}, ${(images || "").trim()})`;
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   revalidatePath("/community");
   revalidatePath(`/category/${Number(category_id)}`);
 
-  // 게시글 목록 Upstash 캐시 즉시 무효화 (앱/모바일 클라이언트가 새 글을 즉시 볼 수 있도록)
   await invalidateCache("posts:*").catch(() => {});
 
   return NextResponse.json({ success: true });

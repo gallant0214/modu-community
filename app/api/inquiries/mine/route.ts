@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 
@@ -13,16 +13,23 @@ export async function GET(request: Request) {
 
   try {
     const email = user.email ?? "";
-    const rows = await sql`
-      SELECT id, author, title, content, reply, replied_at, hidden, created_at, email
-      FROM inquiries
-      WHERE firebase_uid = ${user.uid}
-         OR (${email} <> '' AND email = ${email})
-      ORDER BY created_at DESC
-    `;
+    let query = supabase
+      .from("inquiries")
+      .select("id, author, title, content, reply, replied_at, hidden, created_at, email")
+      .order("created_at", { ascending: false });
 
-    return NextResponse.json(rows);
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "조회 실패" }, { status: 500 });
+    if (email) {
+      query = query.or(`firebase_uid.eq.${user.uid},email.eq.${email}`);
+    } else {
+      query = query.eq("firebase_uid", user.uid);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return NextResponse.json(data);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "조회 실패";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
