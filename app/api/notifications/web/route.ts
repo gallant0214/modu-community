@@ -9,10 +9,9 @@ export async function GET(request: Request) {
   const user = await verifyAuth(request);
   if (!user) return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
 
-  const provider = user.provider || "unknown";
   await supabase
     .from("user_first_seen")
-    .upsert({ firebase_uid: user.uid, provider }, { onConflict: "firebase_uid", ignoreDuplicates: true });
+    .upsert({ firebase_uid: user.uid }, { onConflict: "firebase_uid", ignoreDuplicates: true });
 
   const { data: fs } = await supabase
     .from("user_first_seen")
