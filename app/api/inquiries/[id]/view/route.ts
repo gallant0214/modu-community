@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -11,31 +11,36 @@ export async function POST(
   const body = await request.json();
   const { password } = body;
 
-  const rows = await sql`SELECT id, author, title, content, reply, replied_at, password, created_at FROM inquiries WHERE id = ${Number(id)}`;
-  if (rows.length === 0) {
-    return NextResponse.json({ error: "문의를 찾을 수 없습니다" }, { status: 404 });
-  }
+  const { data: row, error } = await supabase
+    .from("inquiries")
+    .select("id, author, title, content, reply, replied_at, password, created_at")
+    .eq("id", Number(id))
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!row) return NextResponse.json({ error: "문의를 찾을 수 없습니다" }, { status: 404 });
 
   const isAdmin = password === process.env.ADMIN_PASSWORD;
-  if (!isAdmin && rows[0].password !== password) {
+  if (!isAdmin && row.password !== password) {
     return NextResponse.json({ error: "비밀번호가 일치하지 않습니다" }, { status: 403 });
   }
 
-  // 관리자가 조회 시 읽음 처리
+  // 관리자가 조회 시 읽음 처리 (아직 읽지 않은 것만)
   if (isAdmin) {
-    try {
-      await sql`UPDATE inquiries SET read_at = NOW() WHERE id = ${Number(id)} AND read_at IS NULL`;
-    } catch { /* read_at 컬럼 미존재 시 무시 */ }
+    await supabase
+      .from("inquiries")
+      .update({ read_at: new Date().toISOString() })
+      .eq("id", Number(id))
+      .is("read_at", null);
   }
 
   return NextResponse.json({
-    id: rows[0].id,
-    author: rows[0].author,
-    title: rows[0].title,
-    content: rows[0].content,
-    reply: rows[0].reply,
-    replied_at: rows[0].replied_at,
-    created_at: rows[0].created_at,
+    id: row.id,
+    author: row.author,
+    title: row.title,
+    content: row.content,
+    reply: row.reply,
+    replied_at: row.replied_at,
+    created_at: row.created_at,
     isAdmin,
   });
 }

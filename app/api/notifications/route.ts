@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { NextResponse } from "next/server";
 
@@ -14,39 +14,46 @@ export async function GET(request: Request) {
   const limit = 30;
   const offset = (page - 1) * limit;
 
-  try {
-    // firstSeen 조회 (테이블이 없으면 현재 시각 사용)
-    let firstSeen = new Date().toISOString();
-    try {
-      await sql`INSERT INTO user_first_seen (firebase_uid) VALUES (${user.uid}) ON CONFLICT (firebase_uid) DO NOTHING`;
-      const fsRows = await sql`SELECT seen_at FROM user_first_seen WHERE firebase_uid = ${user.uid}`;
-      if (fsRows[0]?.seen_at) firstSeen = fsRows[0].seen_at;
-    } catch {}
+  // user_first_seen 보장 (첫 조회 시각 기록)
+  let firstSeen = new Date().toISOString();
+  await supabase
+    .from("user_first_seen")
+    .upsert({ firebase_uid: user.uid }, { onConflict: "firebase_uid", ignoreDuplicates: true });
+  const { data: fs } = await supabase
+    .from("user_first_seen")
+    .select("seen_at")
+    .eq("firebase_uid", user.uid)
+    .maybeSingle();
+  if (fs?.seen_at) firstSeen = fs.seen_at;
 
-    // 3개 쿼리 병렬 실행
-    const [rows, countResult, unreadResult] = await Promise.all([
-      sql`
-        SELECT * FROM notification_logs
-        WHERE firebase_uid = ${user.uid} AND created_at >= ${firstSeen}
-        ORDER BY created_at DESC
-        LIMIT ${limit} OFFSET ${offset}
-      `,
-      sql`
-        SELECT COUNT(*) as count FROM notification_logs
-        WHERE firebase_uid = ${user.uid} AND created_at >= ${firstSeen}
-      `,
-      sql`
-        SELECT COUNT(*) as count FROM notification_logs
-        WHERE firebase_uid = ${user.uid} AND read = false AND created_at >= ${firstSeen}
-      `,
-    ]);
+  const [listRes, countRes, unreadRes] = await Promise.all([
+    supabase
+      .from("notification_logs")
+      .select("*")
+      .eq("firebase_uid", user.uid)
+      .gte("created_at", firstSeen)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1),
+    supabase
+      .from("notification_logs")
+      .select("*", { count: "exact", head: true })
+      .eq("firebase_uid", user.uid)
+      .gte("created_at", firstSeen),
+    supabase
+      .from("notification_logs")
+      .select("*", { count: "exact", head: true })
+      .eq("firebase_uid", user.uid)
+      .eq("read", false)
+      .gte("created_at", firstSeen),
+  ]);
 
-    return NextResponse.json({
-      notifications: rows,
-      total: Number(countResult[0]?.count || 0),
-      unreadCount: Number(unreadResult[0]?.count || 0),
-    });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (listRes.error) {
+    return NextResponse.json({ error: listRes.error.message }, { status: 500 });
   }
+
+  return NextResponse.json({
+    notifications: listRes.data,
+    total: countRes.count ?? 0,
+    unreadCount: unreadRes.count ?? 0,
+  });
 }

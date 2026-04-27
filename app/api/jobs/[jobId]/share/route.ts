@@ -1,23 +1,20 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-
-let schemaEnsured = false;
-async function ensureShareColumn() {
-  if (schemaEnsured) return;
-  try {
-    await sql`ALTER TABLE job_posts ADD COLUMN IF NOT EXISTS share_count INT DEFAULT 0`;
-    schemaEnsured = true;
-  } catch {}
-}
 
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
-  await ensureShareColumn();
   const { jobId } = await params;
-  await sql`UPDATE job_posts SET share_count = COALESCE(share_count, 0) + 1 WHERE id = ${Number(jobId)}`;
+  const { error } = await supabase.rpc("adjust_job_post_counter", {
+    p_id: Number(jobId),
+    p_col: "share_count",
+    p_delta: 1,
+  });
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json({ success: true });
 }

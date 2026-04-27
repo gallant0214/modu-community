@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 
@@ -12,38 +12,36 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const type = url.searchParams.get("type") || "posts";
 
-  try {
-    if (type === "jobs") {
-      // 구인 북마크
-      try {
-        const rows = await sql`
-          SELECT j.*, pb.created_at AS bookmarked_at
-          FROM job_post_bookmarks pb
-          JOIN job_posts j ON j.id = pb.job_post_id
-          WHERE pb.firebase_uid = ${user.uid}
-          ORDER BY pb.created_at DESC
-        `;
-        return NextResponse.json({ bookmarks: rows });
-      } catch {
-        return NextResponse.json({ bookmarks: [] });
-      }
-    } else {
-      // 게시글 북마크
-      try {
-        const rows = await sql`
-          SELECT p.*, c.name AS category_name, pb.created_at AS bookmarked_at
-          FROM post_bookmarks pb
-          JOIN posts p ON p.id = pb.post_id
-          LEFT JOIN categories c ON c.id = p.category_id
-          WHERE pb.firebase_uid = ${user.uid}
-          ORDER BY pb.created_at DESC
-        `;
-        return NextResponse.json({ bookmarks: rows });
-      } catch {
-        return NextResponse.json({ bookmarks: [] });
-      }
-    }
-  } catch {
-    return NextResponse.json({ bookmarks: [] });
+  if (type === "jobs") {
+    const { data, error } = await supabase
+      .from("job_post_bookmarks")
+      .select("created_at, job_posts(*)")
+      .eq("firebase_uid", user.uid)
+      .order("created_at", { ascending: false });
+    if (error) return NextResponse.json({ bookmarks: [] });
+    const bookmarks = (data || [])
+      .filter((b) => b.job_posts)
+      .map((b) => ({ ...b.job_posts, bookmarked_at: b.created_at }));
+    return NextResponse.json({ bookmarks });
   }
+
+  // 게시글 북마크
+  const { data, error } = await supabase
+    .from("post_bookmarks")
+    .select("created_at, posts(*, categories(name))")
+    .eq("firebase_uid", user.uid)
+    .order("created_at", { ascending: false });
+  if (error) return NextResponse.json({ bookmarks: [] });
+  const bookmarks = (data || [])
+    .filter((b) => b.posts)
+    .map((b) => {
+      const post = b.posts!;
+      const { categories: cat, ...rest } = post;
+      return {
+        ...rest,
+        category_name: cat?.name ?? null,
+        bookmarked_at: b.created_at,
+      };
+    });
+  return NextResponse.json({ bookmarks });
 }
