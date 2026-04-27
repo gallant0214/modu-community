@@ -1,6 +1,6 @@
-import { neon } from "@neondatabase/serverless";
+import postgres from "postgres";
 
-const sql = neon(process.env.DATABASE_URL!);
+const sql = postgres(process.env.DATABASE_URL!, { prepare: false });
 
 async function seed() {
   await sql`
