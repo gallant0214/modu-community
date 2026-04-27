@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyAuth } from "./firebase-admin";
 import { checkRateLimit, getClientIp } from "./security";
 import { timingSafeEqual } from "crypto";
-import { sql } from "./db";
+import { supabase } from "./supabase";
 
 /** 상수 시간 문자열 비교 (timing attack 방지) */
 function safeCompare(a: string, b: string): boolean {
@@ -17,16 +17,12 @@ function safeCompare(a: string, b: string): boolean {
 
 /** DB에 저장된 관리자 비밀번호 조회, 없으면 환경변수 사용 */
 async function getAdminPassword(): Promise<string> {
-  try {
-    const rows = await sql`
-      SELECT value FROM admin_settings WHERE key = 'admin_password' LIMIT 1
-    `;
-    if (rows.length > 0 && rows[0].value) {
-      return rows[0].value as string;
-    }
-  } catch {
-    // 테이블이 없는 경우 → 환경변수 fallback
-  }
+  const { data } = await supabase
+    .from("admin_settings")
+    .select("value")
+    .eq("key", "admin_password")
+    .maybeSingle();
+  if (data?.value) return data.value;
   return process.env.ADMIN_PASSWORD || "";
 }
 

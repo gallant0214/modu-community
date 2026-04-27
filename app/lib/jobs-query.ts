@@ -1,10 +1,9 @@
 import { supabase } from "@/app/lib/supabase";
 import { cached } from "@/app/lib/cache";
 import { REGION_GROUPS } from "@/app/lib/region-data";
-import type { Database } from "@/app/lib/database.types";
+import type { JobPost } from "@/app/lib/types";
 
 export type SortCol = "created_at" | "views" | "likes";
-type JobPost = Database["public"]["Tables"]["job_posts"]["Row"];
 
 const SUB_CODE_INFO: Record<string, { parent: string; subName: string }> = {};
 for (const g of REGION_GROUPS) {
@@ -66,7 +65,7 @@ export async function queryJobs(opts: {
   if (countRes.error) throw countRes.error;
 
   return {
-    rows: (rowsRes.data || []) as JobPost[],
+    rows: (rowsRes.data || []) as unknown as JobPost[],
     countResult: [{ total: countRes.data ?? 0 }],
   };
 }

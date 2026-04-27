@@ -28,7 +28,6 @@
     "firebase": "^12.11.0",
     "firebase-admin": "^13.7.0",
     "next": "16.1.6",
-    "postgres": "^3.4.9",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
