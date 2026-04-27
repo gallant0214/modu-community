@@ -869,6 +869,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      adjust_comments_counter: {
+        Args: { p_col: string; p_delta: number; p_id: number }
+        Returns: undefined
+      }
       adjust_job_post_counter: {
         Args: { p_col: string; p_delta: number; p_id: number }
         Returns: undefined

@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
@@ -19,29 +19,72 @@ export async function POST(
   let unliked = false;
 
   if (user) {
-    // firebase_uid 기반
-    const existing = await sql`SELECT id FROM job_post_likes WHERE job_post_id = ${id} AND firebase_uid = ${user.uid}`;
-    if (existing.length > 0) {
-      await sql`DELETE FROM job_post_likes WHERE job_post_id = ${id} AND firebase_uid = ${user.uid}`;
-      await sql`UPDATE job_posts SET likes = GREATEST(likes - 1, 0) WHERE id = ${id}`;
+    const { data: existing } = await supabase
+      .from("job_post_likes")
+      .select("id")
+      .eq("job_post_id", id)
+      .eq("firebase_uid", user.uid)
+      .maybeSingle();
+    if (existing) {
+      await supabase
+        .from("job_post_likes")
+        .delete()
+        .eq("job_post_id", id)
+        .eq("firebase_uid", user.uid);
+      await supabase.rpc("adjust_job_post_counter", {
+        p_id: id,
+        p_col: "likes",
+        p_delta: -1,
+      });
       unliked = true;
     } else {
-      await sql`INSERT INTO job_post_likes (job_post_id, ip_address, firebase_uid) VALUES (${id}, ${ip}, ${user.uid})`;
-      await sql`UPDATE job_posts SET likes = likes + 1 WHERE id = ${id}`;
+      await supabase
+        .from("job_post_likes")
+        .insert({ job_post_id: id, ip_address: ip, firebase_uid: user.uid });
+      await supabase.rpc("adjust_job_post_counter", {
+        p_id: id,
+        p_col: "likes",
+        p_delta: 1,
+      });
     }
   } else {
-    // IP 기반 (비로그인)
-    const existing = await sql`SELECT id FROM job_post_likes WHERE job_post_id = ${id} AND ip_address = ${ip} AND firebase_uid IS NULL`;
-    if (existing.length > 0) {
-      await sql`DELETE FROM job_post_likes WHERE job_post_id = ${id} AND ip_address = ${ip} AND firebase_uid IS NULL`;
-      await sql`UPDATE job_posts SET likes = GREATEST(likes - 1, 0) WHERE id = ${id}`;
+    const { data: existing } = await supabase
+      .from("job_post_likes")
+      .select("id")
+      .eq("job_post_id", id)
+      .eq("ip_address", ip)
+      .is("firebase_uid", null)
+      .maybeSingle();
+    if (existing) {
+      await supabase
+        .from("job_post_likes")
+        .delete()
+        .eq("job_post_id", id)
+        .eq("ip_address", ip)
+        .is("firebase_uid", null);
+      await supabase.rpc("adjust_job_post_counter", {
+        p_id: id,
+        p_col: "likes",
+        p_delta: -1,
+      });
       unliked = true;
     } else {
-      await sql`INSERT INTO job_post_likes (job_post_id, ip_address) VALUES (${id}, ${ip})`;
-      await sql`UPDATE job_posts SET likes = likes + 1 WHERE id = ${id}`;
+      await supabase
+        .from("job_post_likes")
+        .insert({ job_post_id: id, ip_address: ip });
+      await supabase.rpc("adjust_job_post_counter", {
+        p_id: id,
+        p_col: "likes",
+        p_delta: 1,
+      });
     }
   }
 
-  const rows = await sql`SELECT likes FROM job_posts WHERE id = ${id}`;
-  return NextResponse.json({ unliked, likes: rows[0]?.likes || 0 });
+  const { data: job } = await supabase
+    .from("job_posts")
+    .select("likes")
+    .eq("id", id)
+    .maybeSingle();
+
+  return NextResponse.json({ unliked, likes: job?.likes ?? 0 });
 }
