@@ -1,8 +1,20 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { cached } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
+
+type PostWithCategory = {
+  categories?: { name: string } | null;
+  [k: string]: unknown;
+};
+
+function flattenCategoryName<T extends PostWithCategory>(rows: T[]) {
+  return rows.map(({ categories: cat, ...rest }) => ({
+    ...rest,
+    category_name: cat?.name ?? null,
+  }));
+}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -10,34 +22,37 @@ export async function GET(request: Request) {
   const page = Math.max(Number(url.searchParams.get("page")) || 1, 1);
   const offset = (page - 1) * limit;
 
-  // 페이지네이션 지원 (60초 캐시)
   if (url.searchParams.has("page")) {
     const result = await cached(`posts:latest:p:${page}:l:${limit}`, 60, async () => {
-      const countResult = await sql`
-        SELECT COUNT(*)::int AS total FROM posts p
-        WHERE (p.is_notice = false OR p.is_notice IS NULL)
-      `;
-      const total = countResult[0]?.total || 0;
+      const { count, error: countErr } = await supabase
+        .from("posts")
+        .select("*", { count: "exact", head: true })
+        .or("is_notice.eq.false,is_notice.is.null");
+      if (countErr) throw countErr;
+      const total = count ?? 0;
       const totalPages = Math.ceil(total / limit) || 1;
-      const posts = await sql`
-        SELECT p.*, c.name AS category_name FROM posts p
-        LEFT JOIN categories c ON p.category_id = c.id
-        WHERE (p.is_notice = false OR p.is_notice IS NULL)
-        ORDER BY p.created_at DESC LIMIT ${limit} OFFSET ${offset}
-      `;
-      return { posts, page, totalPages, total };
+
+      const { data, error } = await supabase
+        .from("posts")
+        .select("*, categories(name)")
+        .or("is_notice.eq.false,is_notice.is.null")
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+      if (error) throw error;
+      return { posts: flattenCategoryName(data), page, totalPages, total };
     });
     return NextResponse.json(result);
   }
 
-  // 홈 화면용 (60초 캐시)
-  const posts = await cached(`posts:latest:home:${limit}`, 60, () =>
-    sql`
-      SELECT p.*, c.name AS category_name FROM posts p
-      LEFT JOIN categories c ON p.category_id = c.id
-      WHERE (p.is_notice = false OR p.is_notice IS NULL)
-      ORDER BY p.created_at DESC LIMIT ${limit}
-    `
-  );
+  const posts = await cached(`posts:latest:home:${limit}`, 60, async () => {
+    const { data, error } = await supabase
+      .from("posts")
+      .select("*, categories(name)")
+      .or("is_notice.eq.false,is_notice.is.null")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return flattenCategoryName(data);
+  });
   return NextResponse.json(posts);
 }

@@ -1,7 +1,19 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+
+type PostWithCategory = {
+  categories?: { name: string } | null;
+  [k: string]: unknown;
+};
+
+function flatten<T extends PostWithCategory>(rows: T[]) {
+  return rows.map(({ categories: cat, ...rest }) => ({
+    ...rest,
+    category_name: cat?.name ?? null,
+  }));
+}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -12,51 +24,54 @@ export async function GET(request: Request) {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  // 페이지네이션 지원 (page 파라미터가 있을 때)
   if (url.searchParams.has("page")) {
-    const countResult = await sql`
-      SELECT COUNT(*)::int AS total
-      FROM posts p
-      WHERE (p.is_notice = false OR p.is_notice IS NULL)
-    `;
-    const total = countResult[0]?.total || 0;
+    const { count, error: countErr } = await supabase
+      .from("posts")
+      .select("*", { count: "exact", head: true })
+      .or("is_notice.eq.false,is_notice.is.null");
+    if (countErr) throw countErr;
+    const total = count ?? 0;
     const totalPages = Math.ceil(total / limit) || 1;
 
-    const posts = await sql`
-      SELECT p.*, c.name AS category_name
-      FROM posts p
-      LEFT JOIN categories c ON p.category_id = c.id
-      WHERE (p.is_notice = false OR p.is_notice IS NULL)
-      ORDER BY p.views DESC, p.likes DESC, p.created_at DESC
-      LIMIT ${limit} OFFSET ${offset}
-    `;
+    const { data, error } = await supabase
+      .from("posts")
+      .select("*, categories(name)")
+      .or("is_notice.eq.false,is_notice.is.null")
+      .order("views", { ascending: false })
+      .order("likes", { ascending: false })
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (error) throw error;
 
-    return NextResponse.json({ posts, page, totalPages, total });
+    return NextResponse.json({ posts: flatten(data), page, totalPages, total });
   }
 
-  // 기존: 단순 리스트 (홈 화면용) — 조회수+좋아요 기준, 조건 완화
-  let posts = await sql`
-    SELECT p.*, c.name AS category_name
-    FROM posts p
-    LEFT JOIN categories c ON p.category_id = c.id
-    WHERE (p.is_notice = false OR p.is_notice IS NULL)
-      AND p.created_at >= ${monthStart}
-      AND p.likes > 0
-    ORDER BY p.likes DESC, p.created_at DESC
-    LIMIT ${limit}
-  `;
+  // 홈 화면용: 이번 달 좋아요 있는 글 우선
+  const monthly = await supabase
+    .from("posts")
+    .select("*, categories(name)")
+    .or("is_notice.eq.false,is_notice.is.null")
+    .gte("created_at", monthStart)
+    .gt("likes", 0)
+    .order("likes", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (monthly.error) throw monthly.error;
 
-  // 이번 달 좋아요 글이 부족하면 조회수 기준으로 보충
-  if (posts.length < limit) {
-    posts = await sql`
-      SELECT p.*, c.name AS category_name
-      FROM posts p
-      LEFT JOIN categories c ON p.category_id = c.id
-      WHERE (p.is_notice = false OR p.is_notice IS NULL)
-      ORDER BY p.views DESC, p.likes DESC, p.created_at DESC
-      LIMIT ${limit}
-    `;
+  if (monthly.data.length >= limit) {
+    return NextResponse.json(flatten(monthly.data));
   }
 
-  return NextResponse.json(posts);
+  // 부족하면 조회수 기준 fallback
+  const fallback = await supabase
+    .from("posts")
+    .select("*, categories(name)")
+    .or("is_notice.eq.false,is_notice.is.null")
+    .order("views", { ascending: false })
+    .order("likes", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (fallback.error) throw fallback.error;
+
+  return NextResponse.json(flatten(fallback.data));
 }
