@@ -43,3 +43,6 @@ next-env.d.ts
 # sensitive files
 .claude/settings.local.json
 .env*.local
+
+# Supabase CLI temp files
+supabase/.temp/
