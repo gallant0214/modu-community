@@ -904,6 +904,27 @@ export type Database = {
       }
       increment_post_share: { Args: { p_id: number }; Returns: undefined }
       increment_post_views: { Args: { p_id: number }; Returns: undefined }
+      job_posts_region_counts: {
+        Args: never
+        Returns: {
+          cnt: number
+          region_code: string
+        }[]
+      }
+      job_posts_subregion_counts: {
+        Args: never
+        Returns: {
+          cnt: number
+          parent: string
+          sub_name: string
+        }[]
+      }
+      job_posts_today_regions: {
+        Args: never
+        Returns: {
+          region_code: string
+        }[]
+      }
       search_jobs_by_regex: {
         Args: { p_limit?: number; p_pattern: string }
         Returns: {

@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 
@@ -12,24 +12,37 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const msgId = Number(id);
 
-  const rows = await sql`SELECT * FROM messages WHERE id = ${msgId} LIMIT 1`;
-  if (rows.length === 0) return NextResponse.json({ error: "쪽지를 찾을 수 없습니다" }, { status: 404 });
+  const { data: msg, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("id", msgId)
+    .maybeSingle();
 
-  const msg = rows[0];
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!msg) return NextResponse.json({ error: "쪽지를 찾을 수 없습니다" }, { status: 404 });
+
   if (msg.sender_uid !== user.uid && msg.receiver_uid !== user.uid) {
     return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
   }
 
   // 원본 메시지 찾기
   const originalId = msg.parent_id || msg.id;
-  const original = msg.parent_id
-    ? (await sql`SELECT * FROM messages WHERE id = ${originalId} LIMIT 1`)[0] || msg
-    : msg;
+  let original = msg;
+  if (msg.parent_id) {
+    const { data: parent } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("id", originalId)
+      .maybeSingle();
+    if (parent) original = parent;
+  }
 
   // 답장 목록
-  const replies = await sql`
-    SELECT * FROM messages WHERE parent_id = ${originalId} ORDER BY created_at ASC
-  `;
+  const { data: replies } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("parent_id", originalId)
+    .order("created_at", { ascending: true });
 
-  return NextResponse.json({ original, replies });
+  return NextResponse.json({ original, replies: replies || [] });
 }

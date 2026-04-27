@@ -1,27 +1,29 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 
 // FCM 토큰 등록/업데이트
 export async function POST(request: Request) {
   const user = await verifyAuth(request);
   if (!user) return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
 
-  try {
-    const { token, platform } = await request.json();
-    if (!token) return NextResponse.json({ error: "token is required" }, { status: 400 });
+  const { token, platform } = await request.json();
+  if (!token) return NextResponse.json({ error: "token is required" }, { status: 400 });
 
-    await sql`
-      INSERT INTO device_tokens (firebase_uid, token, platform, updated_at)
-      VALUES (${user.uid}, ${token}, ${platform || "ios"}, NOW())
-      ON CONFLICT (firebase_uid, token)
-      DO UPDATE SET updated_at = NOW(), platform = ${platform || "ios"}
-    `;
+  const { error } = await supabase.from("device_tokens").upsert(
+    {
+      firebase_uid: user.uid,
+      token,
+      platform: platform || "ios",
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "firebase_uid,token" },
+  );
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true });
 }
 
 // FCM 토큰 삭제 (로그아웃 시)
@@ -29,16 +31,11 @@ export async function DELETE(request: Request) {
   const user = await verifyAuth(request);
   if (!user) return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
 
-  try {
-    const { token } = await request.json();
-    if (token) {
-      await sql`DELETE FROM device_tokens WHERE firebase_uid = ${user.uid} AND token = ${token}`;
-    } else {
-      await sql`DELETE FROM device_tokens WHERE firebase_uid = ${user.uid}`;
-    }
+  const { token } = await request.json();
+  let query = supabase.from("device_tokens").delete().eq("firebase_uid", user.uid);
+  if (token) query = query.eq("token", token);
+  const { error } = await query;
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true });
 }

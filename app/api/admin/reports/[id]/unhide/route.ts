@@ -1,4 +1,4 @@
-import { sql } from "@/app/lib/db";
+import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAdmin } from "@/app/lib/admin-auth";
 
@@ -15,23 +15,29 @@ export async function POST(
   const authError = await verifyAdmin(request, password);
   if (authError) return authError;
 
-  const rows = await sql`SELECT target_type, target_id FROM reports WHERE id = ${Number(id)}`;
-  if (rows.length === 0) {
-    return NextResponse.json({ error: "신고를 찾을 수 없습니다" }, { status: 404 });
-  }
+  const { data: report, error: fetchErr } = await supabase
+    .from("reports")
+    .select("target_type, target_id")
+    .eq("id", Number(id))
+    .maybeSingle();
 
-  const { target_type, target_id } = rows[0];
+  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+  if (!report) return NextResponse.json({ error: "신고를 찾을 수 없습니다" }, { status: 404 });
 
-  if (target_type === "job_post") {
-    await sql`UPDATE job_posts SET hidden = false WHERE id = ${target_id}`;
-  } else if (target_type === "post") {
-    await sql`UPDATE posts SET hidden = false WHERE id = ${target_id}`;
-  } else {
-    await sql`UPDATE comments SET hidden = false WHERE id = ${target_id}`;
-  }
+  const { target_type, target_id } = report;
+  const tableName =
+    target_type === "job_post" ? "job_posts" : target_type === "post" ? "posts" : "comments";
 
-  // 숨김 해제 시 처리 완료 취소 + 숨김 플래그 해제
-  await sql`UPDATE reports SET resolved = false, resolved_at = NULL, target_hidden = false WHERE id = ${Number(id)}`;
+  await supabase.from(tableName).update({ hidden: false }).eq("id", target_id);
+
+  await supabase
+    .from("reports")
+    .update({
+      resolved: false,
+      resolved_at: null,
+      target_hidden: false,
+    })
+    .eq("id", Number(id));
 
   return NextResponse.json({ success: true });
 }
