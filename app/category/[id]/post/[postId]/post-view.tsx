@@ -823,20 +823,6 @@ export function PostView({ initialPost }: PostViewProps) {
                 </svg>
                 <span className="truncate">좋아요 {likes}</span>
               </button>
-              <button
-                onClick={() => {
-                  setReplyTargetId(null);
-                  const el = document.getElementById("comment-textarea");
-                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                  (el as HTMLTextAreaElement | null)?.focus();
-                }}
-                className="min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 px-3 py-2.5 text-[12px] font-bold text-[#3A342A] dark:text-zinc-100 hover:bg-[#F5F0E5]/70 dark:hover:bg-zinc-700 transition-colors"
-              >
-                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                <span className="truncate">댓글달기</span>
-              </button>
             </div>
           </div>
 
@@ -894,20 +880,6 @@ export function PostView({ initialPost }: PostViewProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
                 </svg>
                 <span>좋아요 {likes}</span>
-              </button>
-              <button
-                onClick={() => {
-                  setReplyTargetId(null);
-                  const el = document.getElementById("comment-textarea");
-                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                  (el as HTMLTextAreaElement | null)?.focus();
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold text-[#3A342A] dark:text-zinc-100 hover:bg-[#F5F0E5]/70 dark:hover:bg-zinc-800 transition-colors"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                <span>댓글달기</span>
               </button>
             </div>
           </div>
