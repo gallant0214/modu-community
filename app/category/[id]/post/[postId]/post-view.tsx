@@ -66,15 +66,14 @@ export function PostView({ initialPost }: PostViewProps) {
   const [reportDone, setReportDone] = useState(false);
 
   // 답글 작성
-  const [showCommentForm, setShowCommentForm] = useState(false);
   const [commentAuthor, setCommentAuthor] = useState(nickname || "");
   const [commentPassword, setCommentPassword] = useState("");
   const [commentContent, setCommentContent] = useState("");
   const [commentError, setCommentError] = useState("");
   const [commentSubmitting, setCommentSubmitting] = useState(false);
 
-  // 댓글 정렬
-  const [commentSort, setCommentSort] = useState<"oldest" | "newest" | "likes">("oldest");
+  // 댓글 정렬 (기본 최신순)
+  const [commentSort, setCommentSort] = useState<"oldest" | "newest" | "likes">("newest");
 
   // 댓글 공감 처리된 ID
   const [likedCommentIds, setLikedCommentIds] = useState<Set<number>>(new Set());
@@ -321,7 +320,6 @@ export function PostView({ initialPost }: PostViewProps) {
     setCommentContent("");
     setCommentError("");
     setReplyTargetId(null);
-    setShowCommentForm(false);
     setCommentSubmitting(true);
 
     // 서버 호출 (백그라운드)
@@ -826,7 +824,12 @@ export function PostView({ initialPost }: PostViewProps) {
                 <span className="truncate">좋아요 {likes}</span>
               </button>
               <button
-                onClick={() => { setReplyTargetId(null); setShowCommentForm(!showCommentForm); }}
+                onClick={() => {
+                  setReplyTargetId(null);
+                  const el = document.getElementById("comment-textarea");
+                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  (el as HTMLTextAreaElement | null)?.focus();
+                }}
                 className="min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 px-3 py-2.5 text-[12px] font-bold text-[#3A342A] dark:text-zinc-100 hover:bg-[#F5F0E5]/70 dark:hover:bg-zinc-700 transition-colors"
               >
                 <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -893,7 +896,12 @@ export function PostView({ initialPost }: PostViewProps) {
                 <span>좋아요 {likes}</span>
               </button>
               <button
-                onClick={() => { setReplyTargetId(null); setShowCommentForm(!showCommentForm); }}
+                onClick={() => {
+                  setReplyTargetId(null);
+                  const el = document.getElementById("comment-textarea");
+                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  (el as HTMLTextAreaElement | null)?.focus();
+                }}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold text-[#3A342A] dark:text-zinc-100 hover:bg-[#F5F0E5]/70 dark:hover:bg-zinc-800 transition-colors"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -907,55 +915,31 @@ export function PostView({ initialPost }: PostViewProps) {
 
         {/* ═══ 댓글 섹션 ═══ */}
         <section className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-5 sm:p-6">
-          {/* 전체 댓글 N개 + 정렬 */}
-          <div className="flex items-center gap-3 flex-wrap">
+          {/* 전체 댓글 N개 */}
+          <div className="flex items-center">
             <div className="inline-flex items-center gap-2">
               <span className="w-1 h-4 rounded-full bg-[#6B7B3A]" />
               <span className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
                 전체 댓글 <span className="text-[#6B7B3A]">{comments.length}</span>개
               </span>
             </div>
-            <div className="ml-auto flex items-center gap-0.5 text-[11px] bg-[#F5F0E5]/60 dark:bg-zinc-800 p-0.5 rounded-lg">
-              {[
-                { key: "oldest", label: "등록순" },
-                { key: "newest", label: "최신순" },
-                { key: "likes", label: "공감순" },
-              ].map((opt) => (
-                <button
-                  key={opt.key}
-                  onClick={() => setCommentSort(opt.key as "oldest" | "newest" | "likes")}
-                  className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
-                    commentSort === opt.key
-                      ? "bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B7B3A] shadow-[0_1px_4px_-1px_rgba(107,93,71,0.2)]"
-                      : "text-[#8C8270] hover:text-[#3A342A] dark:hover:text-zinc-200"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
           </div>
 
-          {/* 댓글 작성 폼 (새 댓글) */}
-          {showCommentForm && !replyTargetId && (
-            <div className="mt-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/60 dark:bg-zinc-800/60 p-4">
+          {/* 댓글 작성 폼 — 항상 표시 (답글 모드일 때만 숨김) */}
+          {!replyTargetId && (
+            <div className="mt-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/60 dark:bg-zinc-800/60 p-3">
               <textarea
+                id="comment-textarea"
                 value={commentContent}
                 onChange={(e) => setCommentContent(e.target.value)}
                 placeholder="댓글을 입력하세요"
-                rows={3}
-                className="w-full resize-none rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 px-3 py-2 text-[13px] leading-relaxed text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:border-[#6B7B3A]/50 focus:outline-none transition-colors"
+                rows={2}
+                className="w-full resize-none rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 px-3 py-1.5 text-[13px] leading-relaxed text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:border-[#6B7B3A]/50 focus:outline-none transition-colors"
               />
               {commentError && (
-                <p className="mt-2 text-[11px] text-[#C0392B]">{commentError}</p>
+                <p className="mt-1.5 text-[11px] text-[#C0392B]">{commentError}</p>
               )}
-              <div className="mt-3 flex justify-end gap-2">
-                <button
-                  onClick={() => { setShowCommentForm(false); setCommentError(""); }}
-                  className="rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 px-4 py-2 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-700 transition-colors"
-                >
-                  취소
-                </button>
+              <div className="mt-2 flex justify-end">
                 <button
                   onClick={handleCommentSubmit}
                   disabled={commentSubmitting}
@@ -967,9 +951,30 @@ export function PostView({ initialPost }: PostViewProps) {
             </div>
           )}
 
+          {/* 정렬 버튼 (댓글 입력창 아래) */}
+          <div className="mt-4 flex items-center gap-0.5 text-[11px] bg-[#F5F0E5]/60 dark:bg-zinc-800 p-0.5 rounded-lg w-fit">
+            {[
+              { key: "oldest", label: "등록순" },
+              { key: "newest", label: "최신순" },
+              { key: "likes", label: "공감순" },
+            ].map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setCommentSort(opt.key as "oldest" | "newest" | "likes")}
+                className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
+                  commentSort === opt.key
+                    ? "bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B7B3A] shadow-[0_1px_4px_-1px_rgba(107,93,71,0.2)]"
+                    : "text-[#8C8270] hover:text-[#3A342A] dark:hover:text-zinc-200"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
           {/* 댓글 목록 */}
           <div className="mt-4 space-y-0 divide-y divide-[#E8E0D0]/50 dark:divide-zinc-800">
-            {comments.length === 0 && !showCommentForm && (
+            {comments.length === 0 && (
               <div className="py-10 text-center">
                 <div className="inline-flex w-12 h-12 mb-3 rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 items-center justify-center">
                   <svg className="w-6 h-6 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -1059,7 +1064,6 @@ export function PostView({ initialPost }: PostViewProps) {
                             <button
                               onClick={() => {
                                 setReplyTargetId(replyTargetId === comment.id ? null : comment.id);
-                                setShowCommentForm(false);
                                 setCommentContent("");
                                 setCommentError("");
                               }}
