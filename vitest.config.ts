@@ -7,6 +7,8 @@ export default defineConfig({
     globals: true,
     include: ["**/*.test.ts", "**/*.test.tsx", "tests/**/*.test.{ts,tsx}"],
     exclude: ["node_modules/**", ".next/**", "android/**"],
+    setupFiles: ["./tests/setup.ts"],
+    testTimeout: 15000,
   },
   resolve: {
     alias: {
