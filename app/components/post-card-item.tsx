@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
-import { likePost } from "@/app/lib/actions";
 import type { Post } from "@/app/lib/types";
 import { useAuth } from "@/app/components/auth-provider";
 import { SendMessageModal } from "@/app/components/send-message-modal";
@@ -19,11 +18,11 @@ function formatDateTime(dateStr: string) {
 }
 
 export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; isNotice?: boolean; hideCategoryTag?: string }) {
-  const [likes, setLikes] = useState(Number(post.likes));
+  const likes = Number(post.likes);
   const [authorMenu, setAuthorMenu] = useState(false);
   const [showSendMessage, setShowSendMessage] = useState(false);
   const authorMenuRef = useRef<HTMLDivElement>(null);
-  const { user, getIdToken } = useAuth();
+  useAuth();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -49,21 +48,6 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
     if (!post.region || post.region === "전국") return [];
     return post.region.split(/\s*-\s*/).map((p) => p.trim()).filter(Boolean);
   })();
-
-  async function handleLike(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!user) { alert("로그인 후 이용 가능합니다"); return; }
-    const token = await getIdToken();
-    if (!token) { alert("로그인이 필요합니다"); return; }
-    const prev = likes;
-    setLikes((x) => x + 1);
-    const result = await likePost(post.id, post.category_id, token);
-    if (result && "error" in result && result.error) {
-      setLikes(prev); // 롤백
-      alert(result.error);
-    }
-  }
 
   return (
     <Link
@@ -166,15 +150,12 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
         {Number(post.views)}
       </span>
 
-      {/* Like + Comment (desktop only) */}
+      {/* Like + Comment (desktop only) — 목록에선 표시만, 카운트는 상세 페이지에서 */}
       <div className="hidden shrink-0 items-center gap-3 md:flex">
-        <button
-          onClick={handleLike}
-          className="flex items-center gap-0.5 text-[11px] text-[#A89B80] hover:text-[#C75555] transition-colors"
-        >
+        <span className="flex items-center gap-0.5 text-[11px] text-[#A89B80]">
           <span className={`text-[13px] ${likes > 0 ? "text-[#C75555]" : "text-[#D4B8B8]"}`}>{likes > 0 ? "♥" : "♡"}</span>
           <span>{likes}</span>
-        </button>
+        </span>
         <span className="flex items-center gap-0.5 text-[11px] text-[#A89B80]">
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
