@@ -66,17 +66,25 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!msg) return NextResponse.json({ error: "쪽지를 찾을 수 없습니다" }, { status: 404 });
 
   const now = new Date().toISOString();
-  const update: Record<string, unknown> = {};
-  if (msg.sender_uid === user.uid) {
+  const isSender = msg.sender_uid === user.uid;
+  const isReceiver = msg.receiver_uid === user.uid;
+  if (!isSender && !isReceiver) {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  }
+
+  const update: {
+    deleted_by_sender?: boolean;
+    deleted_by_sender_at?: string;
+    deleted_by_receiver?: boolean;
+    deleted_by_receiver_at?: string;
+  } = {};
+  if (isSender) {
     update.deleted_by_sender = true;
     update.deleted_by_sender_at = now;
   }
-  if (msg.receiver_uid === user.uid) {
+  if (isReceiver) {
     update.deleted_by_receiver = true;
     update.deleted_by_receiver_at = now;
-  }
-  if (Object.keys(update).length === 0) {
-    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
   }
 
   const { error } = await supabase.from("messages").update(update).eq("id", msgId);
