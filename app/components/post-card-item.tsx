@@ -105,16 +105,6 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
               >
                 {post.author}
               </span>
-              {authorMenu && (
-                <AuthorDropdown
-                  ref={authorMenuRef}
-                  author={post.author}
-                  categoryId={post.category_id}
-                  triggerRef={mobileTriggerRef}
-                  onViewPosts={() => { setAuthorMenu(false); router.push(`/category/${post.category_id}?searchType=author&q=${encodeURIComponent(post.author)}`); }}
-                  onSendMessage={() => { setAuthorMenu(false); setShowSendMessage(true); }}
-                />
-              )}
             </span>
             {" · "}
             {formatDateTime(post.created_at)}
@@ -140,16 +130,6 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
         >
           {post.author}
         </span>
-        {authorMenu && (
-          <AuthorDropdown
-            ref={authorMenuRef}
-            author={post.author}
-            categoryId={post.category_id}
-            triggerRef={desktopTriggerRef}
-            onViewPosts={() => { setAuthorMenu(false); router.push(`/category/${post.category_id}?searchType=author&q=${encodeURIComponent(post.author)}`); }}
-            onSendMessage={() => { setAuthorMenu(false); setShowSendMessage(true); }}
-          />
-        )}
       </span>
       <span className="hidden w-20 shrink-0 text-center text-[11px] text-[#A89B80] md:block">
         {formatDateTime(post.created_at)}
@@ -171,6 +151,16 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
           <span>{commentsCount}</span>
         </span>
       </div>
+      {authorMenu && (
+        <AuthorDropdown
+          ref={authorMenuRef}
+          author={post.author}
+          categoryId={post.category_id}
+          triggerRefs={[mobileTriggerRef, desktopTriggerRef]}
+          onViewPosts={() => { setAuthorMenu(false); router.push(`/category/${post.category_id}?searchType=author&q=${encodeURIComponent(post.author)}`); }}
+          onSendMessage={() => { setAuthorMenu(false); setShowSendMessage(true); }}
+        />
+      )}
       <SendMessageModal
         open={showSendMessage}
         onClose={() => setShowSendMessage(false)}
@@ -187,17 +177,23 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
  */
 const AuthorDropdown = forwardRef<HTMLDivElement, {
   author: string; categoryId: number;
-  triggerRef: React.RefObject<HTMLElement | null>;
+  triggerRefs: React.RefObject<HTMLElement | null>[];
   onViewPosts: () => void; onSendMessage: () => void;
-}>(function AuthorDropdown({ author, triggerRef, onViewPosts, onSendMessage }, ref) {
+}>(function AuthorDropdown({ author, triggerRefs, onViewPosts, onSendMessage }, ref) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     function update() {
-      const el = triggerRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      // 트리거 바로 아래, 가운데 정렬 (드롭다운 너비 ~140px)
+      // 모바일/데스크톱 트리거 둘 다 DOM에 있지만 한 쪽은 display:none
+      // → getBoundingClientRect의 width가 0 인 쪽은 무시하고 visible 한 쪽 사용
+      const visible = triggerRefs.find(r => {
+        const el = r.current;
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      if (!visible || !visible.current) return;
+      const r = visible.current.getBoundingClientRect();
       setPos({
         top: r.bottom + 6,
         left: r.left + r.width / 2,
@@ -210,7 +206,7 @@ const AuthorDropdown = forwardRef<HTMLDivElement, {
       window.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
     };
-  }, [triggerRef]);
+  }, [triggerRefs]);
 
   if (typeof document === "undefined" || !pos) return null;
 
