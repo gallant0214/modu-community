@@ -112,9 +112,13 @@ export async function POST(req: NextRequest) {
   sendPushToUser(
     receiverUid,
     "message",
-    `${senderNickname} 님이 쪽지를 보냈어요`,
-    preview,
-    { messageId: String(inserted?.id || ""), senderNickname },
+    "새 쪽지",
+    `${senderNickname} 께서 쪽지를 발송하셨습니다`,
+    {
+      messageId: String(inserted?.id || ""),
+      senderNickname,
+      preview,
+    },
   ).catch(() => {});
 
   return NextResponse.json({ success: true });
