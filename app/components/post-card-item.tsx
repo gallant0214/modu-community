@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, forwardRef } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import type { Post } from "@/app/lib/types";
@@ -23,17 +24,23 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
   const [authorMenu, setAuthorMenu] = useState(false);
   const [showSendMessage, setShowSendMessage] = useState(false);
   const authorMenuRef = useRef<HTMLDivElement>(null);
+  const mobileTriggerRef = useRef<HTMLSpanElement>(null);
+  const desktopTriggerRef = useRef<HTMLSpanElement>(null);
   useAuth();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
   const currentUrl = searchParams.toString() ? `${pathname}?${searchParams.toString()}` : pathname;
 
-  // 외부 클릭 시 메뉴 닫기
+  // 외부 클릭 시 메뉴 닫기 (트리거 클릭은 무시 — 트리거 자체가 토글하므로)
   useEffect(() => {
     if (!authorMenu) return;
     const handleClick = (e: MouseEvent) => {
-      if (authorMenuRef.current && !authorMenuRef.current.contains(e.target as Node)) setAuthorMenu(false);
+      const target = e.target as Node;
+      if (authorMenuRef.current?.contains(target)) return;
+      if (mobileTriggerRef.current?.contains(target)) return;
+      if (desktopTriggerRef.current?.contains(target)) return;
+      setAuthorMenu(false);
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
@@ -89,8 +96,9 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
         {/* Mobile: author left, likes+views right */}
         <div className="mt-1.5 flex items-center justify-between text-[11px] text-[#A89B80] dark:text-zinc-500 md:hidden">
           <span className="truncate">
-            <span className="relative inline-block">
+            <span className="inline-block">
               <span
+                ref={mobileTriggerRef}
                 role="button"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAuthorMenu((v) => !v); }}
                 className="font-medium hover:text-[#6B7B3A] hover:underline cursor-pointer transition-colors"
@@ -102,6 +110,7 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
                   ref={authorMenuRef}
                   author={post.author}
                   categoryId={post.category_id}
+                  triggerRef={mobileTriggerRef}
                   onViewPosts={() => { setAuthorMenu(false); router.push(`/category/${post.category_id}?searchType=author&q=${encodeURIComponent(post.author)}`); }}
                   onSendMessage={() => { setAuthorMenu(false); setShowSendMessage(true); }}
                 />
@@ -122,8 +131,9 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
       </div>
 
       {/* Desktop columns */}
-      <span className="hidden w-28 shrink-0 text-center text-[12px] text-[#6B5D47] dark:text-zinc-400 md:block font-medium relative">
+      <span className="hidden w-28 shrink-0 text-center text-[12px] text-[#6B5D47] dark:text-zinc-400 md:block font-medium">
         <span
+          ref={desktopTriggerRef}
           role="button"
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAuthorMenu((v) => !v); }}
           className="hover:text-[#6B7B3A] hover:underline cursor-pointer transition-colors"
@@ -135,6 +145,7 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
             ref={authorMenuRef}
             author={post.author}
             categoryId={post.category_id}
+            triggerRef={desktopTriggerRef}
             onViewPosts={() => { setAuthorMenu(false); router.push(`/category/${post.category_id}?searchType=author&q=${encodeURIComponent(post.author)}`); }}
             onSendMessage={() => { setAuthorMenu(false); setShowSendMessage(true); }}
           />
@@ -169,15 +180,45 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
   );
 }
 
-import { forwardRef } from "react";
-
+/**
+ * 게시글 리스트의 리스트 컨테이너가 overflow-hidden(둥근 모서리 등)이라
+ * 드롭다운을 absolute로 띄우면 카드 밖이 잘림.
+ * → createPortal로 document.body 에 렌더링 + getBoundingClientRect로 위치 계산.
+ */
 const AuthorDropdown = forwardRef<HTMLDivElement, {
   author: string; categoryId: number;
+  triggerRef: React.RefObject<HTMLElement | null>;
   onViewPosts: () => void; onSendMessage: () => void;
-}>(function AuthorDropdown({ author, onViewPosts, onSendMessage }, ref) {
-  return (
-    <div ref={ref}
-      className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-50 min-w-[140px] bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-xl shadow-[0_8px_24px_-8px_rgba(107,93,71,0.35)] overflow-hidden"
+}>(function AuthorDropdown({ author, triggerRef, onViewPosts, onSendMessage }, ref) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    function update() {
+      const el = triggerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      // 트리거 바로 아래, 가운데 정렬 (드롭다운 너비 ~140px)
+      setPos({
+        top: r.bottom + 6,
+        left: r.left + r.width / 2,
+      });
+    }
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [triggerRef]);
+
+  if (typeof document === "undefined" || !pos) return null;
+
+  return createPortal(
+    <div
+      ref={ref}
+      style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)" }}
+      className="z-[9999] min-w-[140px] bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-xl shadow-[0_8px_24px_-8px_rgba(107,93,71,0.35)] overflow-hidden"
     >
       <div className="px-3 py-2 border-b border-[#E8E0D0]/60 dark:border-zinc-800">
         <p className="text-[11px] font-bold text-[#6B5D47] dark:text-zinc-400 truncate">{author}</p>
@@ -200,6 +241,7 @@ const AuthorDropdown = forwardRef<HTMLDivElement, {
         </svg>
         쪽지 보내기
       </button>
-    </div>
+    </div>,
+    document.body,
   );
 });
