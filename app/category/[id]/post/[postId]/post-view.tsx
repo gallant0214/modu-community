@@ -238,10 +238,11 @@ export function PostView({ initialPost }: PostViewProps) {
     setAdminDeleting(true);
     try {
       const token = await getIdToken();
+      // Firebase auth(관리자 UID)만으로 삭제 — body는 비어있어도 됨
       const res = await fetch(`/api/post/${postId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ password: "__admin_uid_delete__" }),
+        body: JSON.stringify({}),
       });
       if (res.ok) {
         router.replace(backHref);
@@ -272,10 +273,11 @@ export function PostView({ initialPost }: PostViewProps) {
     const token = localStorage.getItem("fb_token");
     if (!token) { alert("로그인이 필요합니다"); return; }
     try {
+      // Firebase auth(작성자 본인)만으로 삭제 — body는 비어있어도 됨
       const res = await fetch(`/api/post/${postId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ password: "__auth_uid_delete__" }),
+        body: JSON.stringify({}),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
