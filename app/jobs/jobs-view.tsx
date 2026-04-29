@@ -613,11 +613,19 @@ export function JobsView({ initialData }: JobsViewProps) {
       ...(searchQuery && { q: searchQuery }),
     });
 
-    // URL 만 동기화 (브라우저 주소창/history 에 반영) — RSC 재페치는 일으키지 않음.
+    // URL 동기화 (브라우저 주소창/history 에 반영) — RSC 재페치는 일으키지 않음.
     // router.replace 를 쓰면 Server Component 가 재호출되어 initialData 가 새 ref 로
     // 갱신되고 useEffect 가 무한 재실행됨. window.history 직접 갱신으로 회피.
+    //
+    // pushState 사용 이유: replaceState 로 하면 페이지 이동(1→2)이 history 에 쌓이지
+    // 않아, 글 상세에서 뒤로가기 시 마지막 entry(보통 page=1 진입 시점)로 복원되는
+    // 버그 발생. pushState 로 바꿔 history 에 기록하고 popstate 핸들러에서 복원.
     if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", `/jobs?${params.toString()}`);
+      const newUrl = `/jobs?${params.toString()}`;
+      const currentUrl = window.location.pathname + window.location.search;
+      if (currentUrl !== newUrl) {
+        window.history.pushState({ jobsPage: p }, "", newUrl);
+      }
     }
 
     try {
@@ -645,6 +653,19 @@ export function JobsView({ initialData }: JobsViewProps) {
     }
     loadJobs(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadJobs]);
+
+  // 뒤로/앞으로가기(popstate) 시 URL 의 page param 으로 복원.
+  // pushState 로 쌓아둔 history entry 들 사이를 사용자가 이동할 때 데이터도 같이 동기화.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onPop = () => {
+      const sp = new URLSearchParams(window.location.search);
+      const p = Math.max(1, Number(sp.get("page")) || 1);
+      loadJobs(p);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, [loadJobs]);
 
   const handleSearch = () => {
