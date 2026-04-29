@@ -1825,7 +1825,6 @@ function MessageBubble({ msg, isOriginal }: { msg: Message; isOriginal?: boolean
       <div className="flex items-center gap-2 mb-2">
         <span className="text-[12px] font-bold text-[#3A342A] dark:text-zinc-200">{msg.sender_nickname}</span>
         <span className="text-[11px] text-[#A89B80] dark:text-zinc-500">{formatDate(msg.created_at)}</span>
-        {isOriginal && <span className="text-[10px] font-bold text-[#6B7B3A] bg-[#6B7B3A]/10 px-1.5 py-0.5 rounded-full">원본</span>}
       </div>
       <p className="text-[13px] text-[#6B5D47] dark:text-zinc-300 leading-relaxed whitespace-pre-line">{msg.content}</p>
     </div>
