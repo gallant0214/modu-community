@@ -20,6 +20,16 @@ function formatDate(dateStr: string) {
   return `${d.getMonth() + 1}.${d.getDate()}`;
 }
 
+function formatDateTime(dateStr: string) {
+  const d = new Date(dateStr);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const h = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${y}. ${m}. ${day}. ${h}:${min}`;
+}
+
 const adjectives = ["행��한","졸린","용감한","배고픈","신나는","깜찍한","수줍은","엉뚱한","느긋한","씩씩한","귀여���","당당한","활발한","조용한","멋진","반짝이는","소심한","든든한","장난친","심심한"];
 const nouns = ["수달","판다","고양이","강아지","토끼","펭귄","다람쥐","해달","코알라","여우","오리","곰돌이","부엉이","햄스터","거북이","미어캣","알파카","치타","수박","감자"];
 
@@ -1824,7 +1834,7 @@ function MessageBubble({ msg, isOriginal }: { msg: Message; isOriginal?: boolean
     <div className={`rounded-2xl p-4 ${isOriginal ? "bg-[#F5F0E5] dark:bg-zinc-800" : "bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700"}`}>
       <div className="flex items-center gap-2 mb-2">
         <span className="text-[12px] font-bold text-[#3A342A] dark:text-zinc-200">{msg.sender_nickname}</span>
-        <span className="text-[11px] text-[#A89B80] dark:text-zinc-500">{formatDate(msg.created_at)}</span>
+        <span className="text-[11px] text-[#A89B80] dark:text-zinc-500">{formatDateTime(msg.created_at)}</span>
       </div>
       <p className="text-[13px] text-[#6B5D47] dark:text-zinc-300 leading-relaxed whitespace-pre-line">{msg.content}</p>
     </div>
