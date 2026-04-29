@@ -163,6 +163,10 @@ function MyPageContent() {
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [replyTo, setReplyTo] = useState<{ nickname: string; parentId: number } | null>(null);
 
+  /* 쪽지 삭제 확인 */
+  const [deleteMessageDialog, setDeleteMessageDialog] = useState<{ id: number; type: "received" | "sent" } | null>(null);
+  const [deleteAllMessagesDialog, setDeleteAllMessagesDialog] = useState<"received" | "sent" | null>(null);
+
   /* 카운트 */
   const [counts, setCounts] = useState({ posts: 0, comments: 0, jobs: 0, bookmarks: 0, jobBookmarks: 0, notifications: 0, receivedMessages: 0, sentMessages: 0 });
   const [unreadNotifications, setUnreadNotifications] = useState(0);
@@ -359,6 +363,61 @@ function MyPageContent() {
   useEffect(() => {
     if (activeTab) loadTabData(activeTab);
   }, [activeTab, loadTabData]);
+
+  /* 쪽지 삭제 (개별) */
+  const confirmDeleteMessage = async () => {
+    if (!deleteMessageDialog) return;
+    const { id, type } = deleteMessageDialog;
+    setDeleteMessageDialog(null);
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/messages/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("삭제 실패");
+      if (type === "received") {
+        setReceivedMessages((prev) => prev.filter((m) => m.id !== id));
+        setCounts((c) => ({ ...c, receivedMessages: Math.max(0, c.receivedMessages - 1) }));
+      } else {
+        setSentMessages((prev) => prev.filter((m) => m.id !== id));
+        setCounts((c) => ({ ...c, sentMessages: Math.max(0, c.sentMessages - 1) }));
+      }
+    } catch {
+      alert("쪽지를 삭제하지 못했습니다.");
+    }
+  };
+
+  /* 쪽지 모두 삭제 */
+  const confirmDeleteAllMessages = async () => {
+    if (!deleteAllMessagesDialog) return;
+    const type = deleteAllMessagesDialog;
+    setDeleteAllMessagesDialog(null);
+    const list = type === "received" ? receivedMessages : sentMessages;
+    if (list.length === 0) return;
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      await Promise.all(
+        list.map((m) =>
+          fetch(`/api/messages/${m.id}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => null),
+        ),
+      );
+      if (type === "received") {
+        setReceivedMessages([]);
+        setCounts((c) => ({ ...c, receivedMessages: 0 }));
+      } else {
+        setSentMessages([]);
+        setCounts((c) => ({ ...c, sentMessages: 0 }));
+      }
+    } catch {
+      alert("쪽지를 삭제하지 못했습니다.");
+    }
+  };
 
   /* URL 쿼리에서 tab/highlight 읽어 자동 전환 (없으면 메인 대시보드로 복귀) */
   useEffect(() => {
@@ -1361,16 +1420,30 @@ function MyPageContent() {
                 <EmptyTabState icon={<svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} title="받은 쪽지가 없습니다" />
               ) : (
                 <div className="px-4 pt-4 pb-6 space-y-2">
+                  <div className="flex justify-end mb-1">
+                    <button
+                      onClick={() => setDeleteAllMessagesDialog("received")}
+                      className="text-[12px] font-bold text-[#C0392B] hover:text-[#A33121] px-2 py-1"
+                    >
+                      모두 삭제
+                    </button>
+                  </div>
                   {receivedMessages.map((m) => (
-                    <MessageCard key={m.id} message={m} type="received" onClick={async () => {
-                      const token = await getIdToken();
-                      if (!token) return;
-                      const headers = { Authorization: `Bearer ${token}` };
-                      if (!m.is_read) fetch(`/api/messages/${m.id}/read`, { method: "POST", headers }).catch(() => {});
-                      const res = await fetch(`/api/messages/${m.id}`, { headers });
-                      const data = await res.json();
-                      setMessageThread({ original: data.original, replies: data.replies || [] });
-                    }} />
+                    <MessageCard
+                      key={m.id}
+                      message={m}
+                      type="received"
+                      onClick={async () => {
+                        const token = await getIdToken();
+                        if (!token) return;
+                        const headers = { Authorization: `Bearer ${token}` };
+                        if (!m.is_read) fetch(`/api/messages/${m.id}/read`, { method: "POST", headers }).catch(() => {});
+                        const res = await fetch(`/api/messages/${m.id}`, { headers });
+                        const data = await res.json();
+                        setMessageThread({ original: data.original, replies: data.replies || [] });
+                      }}
+                      onDelete={() => setDeleteMessageDialog({ id: m.id, type: "received" })}
+                    />
                   ))}
                 </div>
               ))}
@@ -1380,17 +1453,87 @@ function MyPageContent() {
                 <EmptyTabState icon={<svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>} title="보낸 쪽지가 없습니다" />
               ) : (
                 <div className="px-4 pt-4 pb-6 space-y-2">
+                  <div className="flex justify-end mb-1">
+                    <button
+                      onClick={() => setDeleteAllMessagesDialog("sent")}
+                      className="text-[12px] font-bold text-[#C0392B] hover:text-[#A33121] px-2 py-1"
+                    >
+                      모두 삭제
+                    </button>
+                  </div>
                   {sentMessages.map((m) => (
-                    <MessageCard key={m.id} message={m} type="sent" onClick={async () => {
-                      const token = await getIdToken();
-                      if (!token) return;
-                      const res = await fetch(`/api/messages/${m.id}`, { headers: { Authorization: `Bearer ${token}` } });
-                      const data = await res.json();
-                      setMessageThread({ original: data.original, replies: data.replies || [] });
-                    }} />
+                    <MessageCard
+                      key={m.id}
+                      message={m}
+                      type="sent"
+                      onClick={async () => {
+                        const token = await getIdToken();
+                        if (!token) return;
+                        const res = await fetch(`/api/messages/${m.id}`, { headers: { Authorization: `Bearer ${token}` } });
+                        const data = await res.json();
+                        setMessageThread({ original: data.original, replies: data.replies || [] });
+                      }}
+                      onDelete={() => setDeleteMessageDialog({ id: m.id, type: "sent" })}
+                    />
                   ))}
                 </div>
               ))}
+
+              {/* ── 쪽지 삭제 확인 (개별) ── */}
+              {deleteMessageDialog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setDeleteMessageDialog(null)}>
+                  <div className="absolute inset-0 bg-black/40" />
+                  <div className="relative w-full max-w-xs bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                    <div className="px-5 pt-6 pb-4 text-center">
+                      <h3 className="font-bold text-[15px] text-[#2A251D] dark:text-zinc-100 mb-2">쪽지 삭제</h3>
+                      <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">이 쪽지를 삭제하시겠습니까?</p>
+                    </div>
+                    <div className="flex border-t border-[#E8E0D0] dark:border-zinc-700">
+                      <button
+                        onClick={() => setDeleteMessageDialog(null)}
+                        className="flex-1 py-3 text-[14px] font-medium text-[#3A342A] dark:text-zinc-200 border-r border-[#E8E0D0] dark:border-zinc-700 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                      >
+                        취소
+                      </button>
+                      <button
+                        onClick={confirmDeleteMessage}
+                        className="flex-1 py-3 text-[14px] font-bold text-[#C0392B] hover:bg-[#FBEFEC] dark:hover:bg-red-900/20"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── 쪽지 모두 삭제 확인 ── */}
+              {deleteAllMessagesDialog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setDeleteAllMessagesDialog(null)}>
+                  <div className="absolute inset-0 bg-black/40" />
+                  <div className="relative w-full max-w-xs bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                    <div className="px-5 pt-6 pb-4 text-center">
+                      <h3 className="font-bold text-[15px] text-[#2A251D] dark:text-zinc-100 mb-2">모두 삭제</h3>
+                      <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
+                        {(deleteAllMessagesDialog === "received" ? receivedMessages : sentMessages).length}개의 쪽지를 모두 삭제하시겠습니까?
+                      </p>
+                    </div>
+                    <div className="flex border-t border-[#E8E0D0] dark:border-zinc-700">
+                      <button
+                        onClick={() => setDeleteAllMessagesDialog(null)}
+                        className="flex-1 py-3 text-[14px] font-medium text-[#3A342A] dark:text-zinc-200 border-r border-[#E8E0D0] dark:border-zinc-700 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                      >
+                        취소
+                      </button>
+                      <button
+                        onClick={confirmDeleteAllMessages}
+                        className="flex-1 py-3 text-[14px] font-bold text-[#C0392B] hover:bg-[#FBEFEC] dark:hover:bg-red-900/20"
+                      >
+                        모두 삭제
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* ── 쪽지 상세 모달 ── */}
               {messageThread && (
@@ -1636,30 +1779,43 @@ function EmptyTabState({ icon, title }: { icon: React.ReactNode; title: string }
   );
 }
 
-function MessageCard({ message, type, onClick }: { message: Message; type: "received" | "sent"; onClick: () => void }) {
+function MessageCard({ message, type, onClick, onDelete }: { message: Message; type: "received" | "sent"; onClick: () => void; onDelete?: () => void }) {
   const isUnread = type === "received" && !message.is_read;
   const otherName = type === "received" ? message.sender_nickname : message.receiver_nickname;
   return (
-    <button onClick={onClick}
-      className={`w-full text-left rounded-2xl overflow-hidden transition-colors ${
+    <div
+      className={`relative rounded-2xl overflow-hidden transition-colors ${
         isUnread
           ? "bg-[#FBF7EB] dark:bg-zinc-900/70 border border-[#6B7B3A]/35 shadow-[0_1px_0_rgba(0,0,0,0.02),0_10px_26px_-22px_rgba(107,123,58,0.4)]"
           : "bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700"
       }`}
     >
-      <div className="px-4 py-3.5">
-        <div className="flex items-center gap-2 mb-1.5">
-          <span className="text-[12px] font-bold text-[#3A342A] dark:text-zinc-200">
-            {type === "received" ? "보낸 사람" : "받는 사람"}: {otherName}
-          </span>
-          {isUnread && (
-            <span className="w-2 h-2 rounded-full bg-[#6B7B3A] animate-pulse" />
-          )}
-          <span className="ml-auto text-[11px] text-[#A89B80] dark:text-zinc-500">{formatDate(message.created_at)}</span>
+      <button onClick={onClick} className="w-full text-left">
+        <div className="px-4 py-3.5 pr-12">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-[12px] font-bold text-[#3A342A] dark:text-zinc-200">
+              {type === "received" ? "보낸 사람" : "받는 사람"}: {otherName}
+            </span>
+            {isUnread && (
+              <span className="w-2 h-2 rounded-full bg-[#6B7B3A] animate-pulse" />
+            )}
+            <span className="ml-auto text-[11px] text-[#A89B80] dark:text-zinc-500">{formatDate(message.created_at)}</span>
+          </div>
+          <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400 line-clamp-2 leading-relaxed">{message.content}</p>
         </div>
-        <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400 line-clamp-2 leading-relaxed">{message.content}</p>
-      </div>
-    </button>
+      </button>
+      {onDelete && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          aria-label="삭제"
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-[#A89B80] hover:text-[#C0392B] dark:text-zinc-500 dark:hover:text-[#E74C3C] transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
+          </svg>
+        </button>
+      )}
+    </div>
   );
 }
 
