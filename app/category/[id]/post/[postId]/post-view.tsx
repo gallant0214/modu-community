@@ -9,6 +9,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { shareOrCopy } from "@/app/lib/share";
 import { SendMessageModal } from "@/app/components/send-message-modal";
 import { optimizeCloudinaryUrl } from "@/app/lib/cloudinary-url";
+import { formatRegionShort } from "@/app/lib/region-format";
 
 interface PostViewProps {
   /** SSR 에서 서버가 미리 조회한 공개 필드 — is_liked/is_bookmarked/is_mine/ip_display 는 없음 */
@@ -513,10 +514,7 @@ export function PostView({ initialPost }: PostViewProps) {
   }
 
   const tags = post.tags ? post.tags.split(",").map((t) => t.trim()).filter(Boolean) : [];
-  const regionParts: string[] = (() => {
-    if (!post.region || post.region === "전국") return [];
-    return post.region.split(/\s*-\s*/).map((p) => p.trim()).filter(Boolean);
-  })();
+  const regionDisplay = formatRegionShort(post.region);
 
   const inputCls = "w-full rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 px-4 py-3 text-[14px] text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:border-[#6B7B3A]/50 focus:bg-[#FEFCF7] focus:outline-none transition-colors";
   const smallInputCls = "flex-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 px-3 py-2 text-[13px] text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:border-[#6B7B3A]/50 focus:bg-[#FEFCF7] focus:outline-none transition-colors";
@@ -550,7 +548,7 @@ export function PostView({ initialPost }: PostViewProps) {
 
           <div className="relative">
             {/* 태그 + 지역 뱃지 */}
-            {(tags.length > 0 || regionParts.length > 0 || post.is_notice) && (
+            {(tags.length > 0 || regionDisplay || post.is_notice) && (
               <div className="mb-4 flex flex-wrap items-center gap-1.5">
                 {post.is_notice && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#C0392B]/10 text-[#C0392B] text-[10px] font-bold tracking-wider uppercase">
@@ -565,14 +563,13 @@ export function PostView({ initialPost }: PostViewProps) {
                     {tag}
                   </span>
                 ))}
-                {regionParts.map((part) => (
+                {regionDisplay && (
                   <span
-                    key={part}
                     className="inline-flex items-center px-2.5 py-1 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 border border-[#E8E0D0]/60 dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-400 text-[11px] font-medium"
                   >
-                    {part}
+                    {regionDisplay}
                   </span>
-                ))}
+                )}
                 {/* ··· 더보기 메뉴 (본인 또는 관리자만 노출) */}
                 {!post.is_notice && (post.is_mine || isAdmin) && (
                   <div className="relative ml-auto">

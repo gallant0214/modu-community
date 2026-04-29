@@ -6,6 +6,7 @@ import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import type { Post } from "@/app/lib/types";
 import { useAuth } from "@/app/components/auth-provider";
 import { SendMessageModal } from "@/app/components/send-message-modal";
+import { formatRegionShort } from "@/app/lib/region-format";
 
 function formatDateTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -43,11 +44,8 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
   const tags = hideCategoryTag ? allTags.filter((t) => t !== hideCategoryTag) : allTags;
   const commentsCount = Number(post.comments_count);
 
-  // 지역 배지: "대구 - 수성구" 형태면 2개 배지로 분리
-  const regionParts: string[] = (() => {
-    if (!post.region || post.region === "전국") return [];
-    return post.region.split(/\s*-\s*/).map((p) => p.trim()).filter(Boolean);
-  })();
+  // 지역 배지: "대구광역시 - 수성구" → "대구 수성구" 한 태그 (약어)
+  const regionDisplay = formatRegionShort(post.region);
 
   return (
     <Link
@@ -70,14 +68,13 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
               {tag}
             </span>
           ))}
-          {regionParts.map((part) => (
+          {regionDisplay && (
             <span
-              key={part}
               className="shrink-0 rounded-md bg-[#F5F0E5] dark:bg-zinc-800 px-1.5 py-0.5 text-[11px] font-medium text-[#6B5D47] dark:text-zinc-400 border border-[#E8E0D0]/60 dark:border-zinc-700"
             >
-              {part}
+              {regionDisplay}
             </span>
-          ))}
+          )}
           {/* Title */}
           <span className="truncate text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 group-hover:text-[#6B7B3A] transition-colors">
             {post.title}
