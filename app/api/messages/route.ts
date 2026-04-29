@@ -4,6 +4,7 @@ import { supabase } from "@/app/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { sanitize, validateLength } from "@/app/lib/security";
+import { sendPushToUser } from "@/app/lib/notifications";
 
 // GET /api/messages?type=received|sent
 export async function GET(req: NextRequest) {
@@ -79,15 +80,25 @@ export async function POST(req: NextRequest) {
 
   const content = sanitize(validateLength(rawContent, 1000));
 
-  const { error } = await supabase.from("messages").insert({
+  const { data: inserted, error } = await supabase.from("messages").insert({
     sender_uid: user.uid,
     receiver_uid: receiverUid,
     sender_nickname: senderNickname,
     receiver_nickname: receiverNickname,
     content,
     parent_id: parentId,
-  });
+  }).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // 받는 사람에게 푸시 알림 (notify_message OFF 면 sendPushToUser 내부에서 스킵)
+  const preview = content.length > 60 ? content.slice(0, 60) + "…" : content;
+  sendPushToUser(
+    receiverUid,
+    "message",
+    `${senderNickname} 님이 쪽지를 보냈어요`,
+    preview,
+    { messageId: String(inserted?.id || ""), senderNickname },
+  ).catch(() => {});
 
   return NextResponse.json({ success: true });
 }

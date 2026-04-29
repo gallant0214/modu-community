@@ -580,6 +580,7 @@ export type Database = {
           notify_job: boolean | null
           notify_keyword: boolean | null
           notify_like: boolean | null
+          notify_message: boolean | null
           notify_notice: boolean | null
           notify_promo: boolean | null
           notify_reply: boolean | null
@@ -592,6 +593,7 @@ export type Database = {
           notify_job?: boolean | null
           notify_keyword?: boolean | null
           notify_like?: boolean | null
+          notify_message?: boolean | null
           notify_notice?: boolean | null
           notify_promo?: boolean | null
           notify_reply?: boolean | null
@@ -604,6 +606,7 @@ export type Database = {
           notify_job?: boolean | null
           notify_keyword?: boolean | null
           notify_like?: boolean | null
+          notify_message?: boolean | null
           notify_notice?: boolean | null
           notify_promo?: boolean | null
           notify_reply?: boolean | null

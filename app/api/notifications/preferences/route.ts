@@ -12,6 +12,7 @@ const DEFAULT_PREFS = {
   notify_notice: true,
   notify_promo: false,
   notify_keyword: true,
+  notify_message: true,
 };
 
 // 알림 설정 조회
@@ -36,6 +37,7 @@ export async function GET(request: Request) {
     notify_notice: data.notify_notice,
     notify_promo: data.notify_promo,
     notify_keyword: data.notify_keyword,
+    notify_message: (data as { notify_message?: boolean | null }).notify_message ?? true,
   });
 }
 
@@ -54,6 +56,7 @@ export async function POST(request: Request) {
     notify_notice: body.notify_notice ?? true,
     notify_promo: body.notify_promo ?? false,
     notify_keyword: body.notify_keyword ?? true,
+    notify_message: body.notify_message ?? true,
   };
 
   const { error } = await supabase

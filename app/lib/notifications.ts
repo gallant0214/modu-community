@@ -43,6 +43,7 @@ export async function sendPushToUser(
         promo: "notify_promo",
         keyword: "notify_keyword",
         like: "notify_like",
+        message: "notify_message",
       };
       const prefKey = typeMap[type];
       if (prefKey && pref[prefKey] === false) {
