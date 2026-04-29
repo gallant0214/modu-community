@@ -46,3 +46,7 @@ next-env.d.ts
 
 # Supabase CLI temp files
 supabase/.temp/
+
+
+# Firebase service account (절대 git에 추가 금지)
+*firebase-adminsdk*.json
