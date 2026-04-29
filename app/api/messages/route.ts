@@ -19,12 +19,14 @@ export async function GET(req: NextRequest) {
         .from("messages")
         .select("*")
         .eq("receiver_uid", user.uid)
+        .eq("deleted_by_receiver", false)
         .order("created_at", { ascending: false })
         .limit(50),
       supabase
         .from("messages")
         .select("*", { count: "exact", head: true })
         .eq("receiver_uid", user.uid)
+        .eq("deleted_by_receiver", false)
         .eq("is_read", false),
     ]);
     if (msgRes.error) return NextResponse.json({ error: msgRes.error.message }, { status: 500 });
@@ -38,6 +40,7 @@ export async function GET(req: NextRequest) {
     .from("messages")
     .select("*")
     .eq("sender_uid", user.uid)
+    .eq("deleted_by_sender", false)
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -479,6 +479,10 @@ export type Database = {
         Row: {
           content: string
           created_at: string | null
+          deleted_by_receiver: boolean
+          deleted_by_receiver_at: string | null
+          deleted_by_sender: boolean
+          deleted_by_sender_at: string | null
           id: number
           is_read: boolean | null
           parent_id: number | null
@@ -490,6 +494,10 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string | null
+          deleted_by_receiver?: boolean
+          deleted_by_receiver_at?: string | null
+          deleted_by_sender?: boolean
+          deleted_by_sender_at?: string | null
           id?: number
           is_read?: boolean | null
           parent_id?: number | null
@@ -501,6 +509,10 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string | null
+          deleted_by_receiver?: boolean
+          deleted_by_receiver_at?: string | null
+          deleted_by_sender?: boolean
+          deleted_by_sender_at?: string | null
           id?: number
           is_read?: boolean | null
           parent_id?: number | null

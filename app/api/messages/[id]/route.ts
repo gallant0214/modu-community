@@ -46,3 +46,40 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   return NextResponse.json({ original, replies: replies || [] });
 }
+
+// DELETE /api/messages/[id] — soft delete (이용자 시점에서만 숨김. DB 에는 남음)
+//   sender 가 삭제 → deleted_by_sender = true
+//   receiver 가 삭제 → deleted_by_receiver = true
+//   양쪽 다 아니면 403
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const user = await verifyAuth(req);
+  if (!user) return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+
+  const { id } = await params;
+  const msgId = Number(id);
+
+  const { data: msg } = await supabase
+    .from("messages")
+    .select("sender_uid, receiver_uid")
+    .eq("id", msgId)
+    .maybeSingle();
+  if (!msg) return NextResponse.json({ error: "쪽지를 찾을 수 없습니다" }, { status: 404 });
+
+  const now = new Date().toISOString();
+  const update: Record<string, unknown> = {};
+  if (msg.sender_uid === user.uid) {
+    update.deleted_by_sender = true;
+    update.deleted_by_sender_at = now;
+  }
+  if (msg.receiver_uid === user.uid) {
+    update.deleted_by_receiver = true;
+    update.deleted_by_receiver_at = now;
+  }
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  }
+
+  const { error } = await supabase.from("messages").update(update).eq("id", msgId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true });
+}
