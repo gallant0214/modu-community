@@ -565,9 +565,19 @@ function NotificationDropdown({
 
 /* ── 데스크톱 메뉴 링크 ── */
 function NavLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  const router = useRouter();
+  // 같은 탭이 active 상태에서 다시 클릭 시 → 쿼리 파라미터까지 클리어해서 새로 이동
+  // (예: /my?tab=receivedMessages 에서 MY 클릭 시 /my 로 깔끔하게)
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (active) {
+      e.preventDefault();
+      router.replace(href);
+    }
+  };
   return (
     <Link
       href={href}
+      onClick={handleClick}
       className={`relative text-[13px] px-3.5 py-1.5 rounded-full transition-all font-medium whitespace-nowrap ${
         active
           ? "text-[#6B7B3A] bg-[#EFE7D5] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A] font-bold"
@@ -602,10 +612,19 @@ function MobileNavLink({
     user: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
   }[icon || "home"];
 
+  const router = useRouter();
+  // active 상태에서 다시 클릭 시 → 쿼리 파라미터 클리어
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (active) {
+      e.preventDefault();
+      router.replace(href);
+    }
+    onClick();
+  };
   return (
     <Link
       href={href}
-      onClick={onClick}
+      onClick={handleClick}
       className={`flex items-center gap-3 px-3.5 py-3 rounded-2xl text-[14px] font-semibold transition-colors ${
         active
           ? "bg-[#EFE7D5] dark:bg-[#6B7B3A]/20 text-[#6B7B3A] dark:text-[#A8B87A]"
