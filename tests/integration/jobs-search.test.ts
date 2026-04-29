@@ -62,7 +62,7 @@ describe("jobs search RPC", () => {
       p_limit: 20,
       p_offset: 0,
     });
-    for (const j of data ?? []) {
+    for (const j of (data ?? []) as unknown as { is_closed: boolean | null }[]) {
       expect(j.is_closed).not.toBe(true);
     }
   });
@@ -82,8 +82,9 @@ describe("jobs search RPC", () => {
       p_limit: 20,
       p_offset: 0,
     });
-    if (data && data.length > 0) {
-      for (const j of data) {
+    const rows = (data ?? []) as unknown as { title: string; description: string | null }[];
+    if (rows.length > 0) {
+      for (const j of rows) {
         const text = `${j.title} ${j.description || ""}`;
         expect(text.toLowerCase().includes("수영") || text.includes("수영")).toBe(true);
       }
