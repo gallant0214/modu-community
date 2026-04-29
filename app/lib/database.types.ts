@@ -613,6 +613,30 @@ export type Database = {
         }
         Relationships: []
       }
+      user_blocks: {
+        Row: {
+          id: number
+          blocker_uid: string
+          blocked_uid: string
+          blocked_nickname: string
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          blocker_uid: string
+          blocked_uid: string
+          blocked_nickname: string
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          blocker_uid?: string
+          blocked_uid?: string
+          blocked_nickname?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       post_bookmarks: {
         Row: {
           created_at: string | null
