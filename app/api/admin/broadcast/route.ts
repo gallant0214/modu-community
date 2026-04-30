@@ -51,7 +51,8 @@ export async function POST(request: Request) {
   const broadcastId = bc.id;
 
   const bType = broadcast_type || "notice";
-  const isPromo = bType === "promo";
+  // "ad" / "promo" 모두 광고 유형으로 취급 (관리자 UI 는 "ad" 로 보냄)
+  const isPromo = bType === "promo" || bType === "ad";
 
   // 디바이스 등록된 모든 사용자
   const { data: tokens } = await supabase

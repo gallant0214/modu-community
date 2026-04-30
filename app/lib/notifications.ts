@@ -41,6 +41,8 @@ export async function sendPushToUser(
         job: "notify_job",
         notice: "notify_notice",
         promo: "notify_promo",
+        ad: "notify_promo",       // 관리자 UI 가 "ad" 로 보냄 → notify_promo 로 매핑
+        event: "notify_promo",    // 이벤트도 광고와 같은 토글 (별도 토글 없음)
         keyword: "notify_keyword",
         like: "notify_like",
         message: "notify_message",
