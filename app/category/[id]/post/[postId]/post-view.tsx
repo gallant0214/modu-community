@@ -162,12 +162,20 @@ export function PostView({ initialPost }: PostViewProps) {
   }, [nickname]);
 
   useEffect(() => {
-    const token = localStorage.getItem("fb_token");
-    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-    Promise.all([
-      fetch(`/api/post/${postId}`, { headers: authHeaders }).then((r) => r.json()),
-      fetch(`/api/post/${postId}/comments`, { headers: authHeaders }).then((r) => r.json()),
-    ]).then(([postData, commentsData]) => {
+    let cancelled = false;
+    // getIdToken() 으로 fresh Firebase 토큰 사용 — localStorage 의 fb_token 은
+    // 만료(1시간) 시 자동 refresh 안 되어 verifyAuth 실패 → is_mine=false 로
+    // 수정/삭제 메뉴가 본인 글에서도 안 보이는 버그 방지.
+    // deps 에 user/getIdToken 추가해 로그인 상태 결정 후 재페치.
+    (async () => {
+      const token = await getIdToken();
+      if (cancelled) return;
+      const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const [postData, commentsData] = await Promise.all([
+        fetch(`/api/post/${postId}`, { headers: authHeaders }).then((r) => r.json()),
+        fetch(`/api/post/${postId}/comments`, { headers: authHeaders }).then((r) => r.json()),
+      ]);
+      if (cancelled) return;
       setPost(postData);
       setLikes(Number(postData?.likes ?? 0));
       if (postData?.is_liked) setLiked(true);
@@ -182,21 +190,22 @@ export function PostView({ initialPost }: PostViewProps) {
         const id = Number(hcParam);
         if (!Number.isNaN(id)) {
           setHighlightCommentId(id);
-          // 렌더 후 스크롤 (렌더 완료 대기)
           setTimeout(() => {
             const el = document.getElementById(`comment-${id}`);
             if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
           }, 120);
         }
       }
-    }).catch(() => setLoading(false));
+    })().catch(() => { if (!cancelled) setLoading(false); });
 
     // 북마크 상태 로드
     fetch(`/api/posts/${postId}/bookmark`)
       .then((r) => r.json())
       .then((data) => { if (data.bookmarked) setBookmarked(true); })
       .catch(() => {});
-  }, [postId]);
+
+    return () => { cancelled = true; };
+  }, [postId, user, getIdToken]);
 
   // 하이라이트 댓글 자동 해제 (애니메이션 종료 시점)
   useEffect(() => {
@@ -270,7 +279,7 @@ export function PostView({ initialPost }: PostViewProps) {
   }
 
   async function handleDelete() {
-    const token = localStorage.getItem("fb_token");
+    const token = await getIdToken();
     if (!token) { alert("로그인이 필요합니다"); return; }
     try {
       // Firebase auth(작성자 본인)만으로 삭제 — body는 비어있어도 됨
@@ -781,7 +790,7 @@ export function PostView({ initialPost }: PostViewProps) {
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={async () => {
-                  const token = localStorage.getItem("fb_token");
+                  const token = await getIdToken();
                   const res = await fetch(`/api/posts/${postId}/bookmark`, {
                     method: "POST",
                     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -839,7 +848,7 @@ export function PostView({ initialPost }: PostViewProps) {
             <div className="ml-auto flex items-center gap-1">
               <button
                 onClick={async () => {
-                  const token = localStorage.getItem("fb_token");
+                  const token = await getIdToken();
                   const res = await fetch(`/api/posts/${postId}/bookmark`, {
                     method: "POST",
                     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -1097,7 +1106,7 @@ export function PostView({ initialPost }: PostViewProps) {
                                       <button
                                         onClick={async () => {
                                           setMenuOpenCommentId(null);
-                                          const token = localStorage.getItem("fb_token");
+                                          const token = await getIdToken();
                                           const res = await fetch(`/api/comments/${comment.id}`, {
                                             method: "PATCH",
                                             headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
