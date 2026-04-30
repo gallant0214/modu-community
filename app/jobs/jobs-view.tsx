@@ -649,6 +649,18 @@ export function JobsView({ initialData }: JobsViewProps) {
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
+      // 브라우저 back 으로 /jobs?page=N 에 다시 들어왔을 때 대비:
+      // URL 의 page 가 initialData.page 와 다르면 URL 기준으로 동기화
+      // (initialData 는 캐시된 RSC 가 page=1 일 수 있어 신뢰 못 함)
+      if (typeof window !== "undefined") {
+        const sp = new URLSearchParams(window.location.search);
+        const urlPage = Math.max(1, Number(sp.get("page")) || 1);
+        const initPage = initialData?.page || 1;
+        if (urlPage !== initPage) {
+          loadJobs(urlPage);
+          return;
+        }
+      }
       if (initialData) return;
     }
     loadJobs(1);
