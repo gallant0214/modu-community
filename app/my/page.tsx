@@ -177,6 +177,10 @@ function MyPageContent() {
   const [deleteMessageDialog, setDeleteMessageDialog] = useState<{ id: number; type: "received" | "sent" } | null>(null);
   const [deleteAllMessagesDialog, setDeleteAllMessagesDialog] = useState<"received" | "sent" | null>(null);
 
+  /* 알림 삭제 확인 */
+  const [deleteNotificationDialog, setDeleteNotificationDialog] = useState<number | null>(null);
+  const [deleteAllNotificationsDialog, setDeleteAllNotificationsDialog] = useState<boolean>(false);
+
   /* 카운트 */
   const [counts, setCounts] = useState({ posts: 0, comments: 0, jobs: 0, bookmarks: 0, jobBookmarks: 0, notifications: 0, receivedMessages: 0, sentMessages: 0 });
   const [unreadNotifications, setUnreadNotifications] = useState(0);
@@ -426,6 +430,49 @@ function MyPageContent() {
       }
     } catch {
       alert("쪽지를 삭제하지 못했습니다.");
+    }
+  };
+
+  /* 알림 개별 삭제 */
+  const confirmDeleteNotification = async () => {
+    if (!deleteNotificationDialog) return;
+    const id = deleteNotificationDialog;
+    setDeleteNotificationDialog(null);
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/notifications/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("삭제 실패");
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      setCounts((c) => ({ ...c, notifications: Math.max(0, c.notifications - 1) }));
+    } catch {
+      alert("알림을 삭제하지 못했습니다.");
+    }
+  };
+
+  /* 알림 모두 삭제 */
+  const confirmDeleteAllNotifications = async () => {
+    setDeleteAllNotificationsDialog(false);
+    if (notifications.length === 0) return;
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      await Promise.all(
+        notifications.map((n) =>
+          fetch(`/api/notifications/${n.id}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => null),
+        ),
+      );
+      setNotifications([]);
+      setCounts((c) => ({ ...c, notifications: 0 }));
+      setUnreadNotifications(0);
+    } catch {
+      alert("알림을 삭제하지 못했습니다.");
     }
   };
 
@@ -1284,6 +1331,15 @@ function MyPageContent() {
                 </div>
               ) : (
                 <div className="px-4 pt-4 pb-6">
+                  {/* 모두 삭제 */}
+                  <div className="flex justify-end mb-1">
+                    <button
+                      onClick={() => setDeleteAllNotificationsDialog(true)}
+                      className="text-[12px] font-bold text-[#C0392B] hover:text-[#A33121] px-2 py-1"
+                    >
+                      모두 삭제
+                    </button>
+                  </div>
                   {/* 요약 바 */}
                   <div className="flex items-center justify-between px-1 mb-3">
                     <div className="inline-flex items-center gap-2">
@@ -1354,6 +1410,15 @@ function MyPageContent() {
                                   </svg>
                                   {formatDate(n.created_at)}
                                 </span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setDeleteNotificationDialog(n.id); }}
+                                  aria-label="알림 삭제"
+                                  className="ml-1 p-1 rounded-md text-[#A89B80] hover:text-[#C0392B] hover:bg-[#C0392B]/10 transition-colors"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
                               </div>
 
                               {/* 제목 */}
@@ -1536,6 +1601,62 @@ function MyPageContent() {
                       </button>
                       <button
                         onClick={confirmDeleteAllMessages}
+                        className="flex-1 py-3 text-[14px] font-bold text-[#C0392B] hover:bg-[#FBEFEC] dark:hover:bg-red-900/20"
+                      >
+                        모두 삭제
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── 알림 개별 삭제 확인 ── */}
+              {deleteNotificationDialog !== null && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setDeleteNotificationDialog(null)}>
+                  <div className="absolute inset-0 bg-black/40" />
+                  <div className="relative w-full max-w-xs bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                    <div className="px-5 pt-6 pb-4 text-center">
+                      <h3 className="font-bold text-[15px] text-[#2A251D] dark:text-zinc-100 mb-2">알림 삭제</h3>
+                      <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">이 알림을 삭제하시겠습니까?</p>
+                    </div>
+                    <div className="flex border-t border-[#E8E0D0] dark:border-zinc-700">
+                      <button
+                        onClick={() => setDeleteNotificationDialog(null)}
+                        className="flex-1 py-3 text-[14px] font-medium text-[#3A342A] dark:text-zinc-200 border-r border-[#E8E0D0] dark:border-zinc-700 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                      >
+                        취소
+                      </button>
+                      <button
+                        onClick={confirmDeleteNotification}
+                        className="flex-1 py-3 text-[14px] font-bold text-[#C0392B] hover:bg-[#FBEFEC] dark:hover:bg-red-900/20"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── 알림 모두 삭제 확인 ── */}
+              {deleteAllNotificationsDialog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setDeleteAllNotificationsDialog(false)}>
+                  <div className="absolute inset-0 bg-black/40" />
+                  <div className="relative w-full max-w-xs bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                    <div className="px-5 pt-6 pb-4 text-center">
+                      <h3 className="font-bold text-[15px] text-[#2A251D] dark:text-zinc-100 mb-2">모두 삭제</h3>
+                      <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
+                        {notifications.length}개의 알림을 모두 삭제하시겠습니까?
+                      </p>
+                    </div>
+                    <div className="flex border-t border-[#E8E0D0] dark:border-zinc-700">
+                      <button
+                        onClick={() => setDeleteAllNotificationsDialog(false)}
+                        className="flex-1 py-3 text-[14px] font-medium text-[#3A342A] dark:text-zinc-200 border-r border-[#E8E0D0] dark:border-zinc-700 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                      >
+                        취소
+                      </button>
+                      <button
+                        onClick={confirmDeleteAllNotifications}
                         className="flex-1 py-3 text-[14px] font-bold text-[#C0392B] hover:bg-[#FBEFEC] dark:hover:bg-red-900/20"
                       >
                         모두 삭제
