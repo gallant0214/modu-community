@@ -108,16 +108,17 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // 받는 사람에게 푸시 알림 (notify_message OFF 면 sendPushToUser 내부에서 스킵)
-  const preview = content.length > 60 ? content.slice(0, 60) + "…" : content;
+  // title 은 "{닉네임} 님이 쪽지를 보냈어요", body 는 쪽지 본문 미리보기.
+  // 알림 리스트(notification_logs)와 푸시 배너 모두 이 형식으로 표시됨.
+  const preview = content.length > 200 ? content.slice(0, 200) + "…" : content;
   sendPushToUser(
     receiverUid,
     "message",
-    "새 쪽지",
-    `${senderNickname} 께서 쪽지를 발송하셨습니다`,
+    `${senderNickname} 님이 쪽지를 보냈어요`,
+    preview,
     {
       messageId: String(inserted?.id || ""),
       senderNickname,
-      preview,
     },
   ).catch(() => {});
 
