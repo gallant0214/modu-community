@@ -469,12 +469,13 @@ export async function GET(req: NextRequest) {
     salText = salText.replace(/(.+?)\s*~\s*\1/g, "$1");
     const salary = salText ? `${it.salTpNm} ${salText}` : "";
     const addr = [it.basicAddr, it.detailAddr].filter(Boolean).join(" ");
+    // "채용시까지 (2026-05-12)" / "26-05-12" 모두 마감일 날짜만 추출.
+    // closeDt 가 "채용시까지" 라벨만 있고 날짜가 없으면 빈 문자열 →
+    // jobs-view 의 getRecruitStatus 가 빈 deadline 을 "상시모집" 으로 분류.
     let deadline = "";
     if (it.closeDt) {
       const dateMatch = it.closeDt.match(/(\d{2})-(\d{2})-(\d{2})/);
-      if (it.closeDt.includes("채용시까지")) {
-        deadline = dateMatch ? `채용시까지 (20${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]})` : "채용시까지";
-      } else if (dateMatch) {
+      if (dateMatch) {
         deadline = `20${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
       }
     }
