@@ -171,7 +171,8 @@ function MyPageContent() {
   /* 쪽지 상세 */
   const [messageThread, setMessageThread] = useState<{ original: Message; replies: Message[] } | null>(null);
   const [showReplyModal, setShowReplyModal] = useState(false);
-  const [replyTo, setReplyTo] = useState<{ nickname: string; parentId: number } | null>(null);
+  // parentId 있으면 답장 (받은쪽지), 없으면 다시보내기 (보낸쪽지 → 새 thread).
+  const [replyTo, setReplyTo] = useState<{ nickname: string; parentId?: number } | null>(null);
 
   /* 쪽지 삭제 확인 */
   const [deleteMessageDialog, setDeleteMessageDialog] = useState<{ id: number; type: "received" | "sent" } | null>(null);
@@ -1685,18 +1686,33 @@ function MyPageContent() {
                         <MessageBubble key={r.id} msg={r} />
                       ))}
                     </div>
-                    <div className="shrink-0 px-5 py-3 border-t border-[#E8E0D0] dark:border-zinc-700">
+                    <div className="shrink-0 px-5 py-3 border-t border-[#E8E0D0] dark:border-zinc-700 flex gap-2">
                       <button
-                        onClick={() => {
-                          const orig = messageThread.original;
-                          const replyNickname = orig.sender_uid === user?.uid ? orig.receiver_nickname : orig.sender_nickname;
-                          setReplyTo({ nickname: replyNickname, parentId: orig.id });
-                          setShowReplyModal(true);
-                        }}
-                        className="w-full py-2.5 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-sm font-semibold rounded-xl transition-colors"
+                        onClick={() => setMessageThread(null)}
+                        className="flex-1 py-2.5 bg-[#F5F0E5] dark:bg-zinc-800 hover:bg-[#EFE7D5] dark:hover:bg-zinc-700 text-[#3A342A] dark:text-zinc-200 text-sm font-semibold rounded-xl transition-colors"
                       >
-                        답장하기
+                        닫기
                       </button>
+                      {(() => {
+                        const orig = messageThread.original;
+                        const isOwnSent = orig.sender_uid === user?.uid;
+                        // 보낸 쪽지: 같은 수신자에게 새 thread 로 다시 보내기 (parentId 없음)
+                        // 받은 쪽지: 보낸 사람에게 답장 (parentId = 원본 id)
+                        return (
+                          <button
+                            onClick={() => {
+                              const replyNickname = isOwnSent ? orig.receiver_nickname : orig.sender_nickname;
+                              setReplyTo(isOwnSent
+                                ? { nickname: replyNickname }
+                                : { nickname: replyNickname, parentId: orig.id });
+                              setShowReplyModal(true);
+                            }}
+                            className="flex-1 py-2.5 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-sm font-semibold rounded-xl transition-colors"
+                          >
+                            {isOwnSent ? "다시보내기" : "답장하기"}
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -1710,14 +1726,20 @@ function MyPageContent() {
                   receiverNickname={replyTo.nickname}
                   parentId={replyTo.parentId}
                   onSent={() => {
-                    // 답장 보낸 후 스레드 새로고침
-                    if (messageThread) {
-                      getIdToken().then((token) => {
-                        if (!token) return;
-                        fetch(`/api/messages/${messageThread.original.id}`, { headers: { Authorization: `Bearer ${token}` } })
-                          .then((r) => r.json())
-                          .then((data) => setMessageThread({ original: data.original, replies: data.replies || [] }));
-                      });
+                    if (replyTo.parentId) {
+                      // 답장: 현재 스레드 새로고침
+                      if (messageThread) {
+                        getIdToken().then((token) => {
+                          if (!token) return;
+                          fetch(`/api/messages/${messageThread.original.id}`, { headers: { Authorization: `Bearer ${token}` } })
+                            .then((r) => r.json())
+                            .then((data) => setMessageThread({ original: data.original, replies: data.replies || [] }));
+                        });
+                      }
+                    } else {
+                      // 다시보내기: 새 thread 라 상세 모달은 닫고 보낸쪽지함 새로고침
+                      setMessageThread(null);
+                      loadTabData("sentMessages");
                     }
                   }}
                 />
