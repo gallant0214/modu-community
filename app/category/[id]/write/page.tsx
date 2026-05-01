@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createPost } from "@/app/lib/actions";
@@ -55,7 +55,7 @@ function WritePageContent() {
   const router = useRouter();
   const params = useParams();
   const categoryId = params.id as string;
-  const { user, nickname, getIdToken } = useAuth();
+  const { user, nickname, activeRegionName, getIdToken } = useAuth();
 
   const [selectedExamType, setSelectedExamType] = useState("기타");
   const [showConfirm, setShowConfirm] = useState(false);
@@ -69,9 +69,32 @@ function WritePageContent() {
   const [uploadPercent, setUploadPercent] = useState(0);
   const [richContent, setRichContent] = useState("");
 
+  // 누락 필드 스크롤 ref
+  const regionRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // 활동 지역으로 초기화 ("경북 - 구미시" 형태 분리)
+  const parseActiveRegion = (full: string) => {
+    if (!full) return { group: "", sub: "" };
+    const parts = full.split(" - ");
+    if (parts.length === 2) return { group: parts[0], sub: parts[1] };
+    return { group: full, sub: "" };
+  };
+  const initialActive = parseActiveRegion(activeRegionName || "");
+
   /* 지역 선택 (2단계 바텀시트) */
-  const [regionGroupName, setRegionGroupName] = useState("");
-  const [regionSubName, setRegionSubName] = useState("");
+  const [regionGroupName, setRegionGroupName] = useState(initialActive.group);
+  const [regionSubName, setRegionSubName] = useState(initialActive.sub);
+
+  // 활동 지역이 비동기로 들어오면 초기 입력 (사용자가 아직 직접 선택 안 했을 때만)
+  useEffect(() => {
+    if (!activeRegionName) return;
+    if (regionGroupName || regionSubName) return;
+    const parsed = parseActiveRegion(activeRegionName);
+    setRegionGroupName(parsed.group);
+    setRegionSubName(parsed.sub);
+  }, [activeRegionName]);
   const [showRegion, setShowRegion] = useState(false);
   const [regionStep, setRegionStep] = useState<"group" | "sub">("group");
   const [selectedGroup, setSelectedGroup] = useState<RegionGroup | null>(null);
@@ -103,7 +126,19 @@ function WritePageContent() {
     setContentError(cErr);
     setRegionError(rErr);
 
-    if (tErr || cErr || rErr) return;
+    // 첫 누락 필드로 스크롤 (지역 우선 → 제목 → 내용)
+    if (rErr) {
+      regionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (tErr) {
+      titleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (cErr) {
+      contentRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
 
     // 닉네임과 UID 자동 설정
     formData.set("author", nickname);
@@ -231,7 +266,7 @@ function WritePageContent() {
               </div>
             </div>
 
-            <div>
+            <div ref={regionRef}>
               <FieldLabel required>지역 선택</FieldLabel>
               <input type="hidden" name="region" value={regionDisplay} />
               <button
@@ -287,7 +322,7 @@ function WritePageContent() {
 
           {/* ─── 섹션 3: 후기 내용 ─── */}
           <Section number={3} title="후기 내용" subtitle="생생하고 구체적인 경험일수록 더 큰 도움이 됩니다">
-            <div>
+            <div ref={titleRef}>
               <FieldLabel required>제목</FieldLabel>
               <input
                 name="title"
@@ -302,7 +337,7 @@ function WritePageContent() {
               />
             </div>
 
-            <div>
+            <div ref={contentRef}>
               <FieldLabel required>내용</FieldLabel>
               <RichEditor
                 onChange={(html) => { setRichContent(html); if (contentError) setContentError(false); }}

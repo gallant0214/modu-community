@@ -16,22 +16,28 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   nickname: string | null;
+  activeRegionCode: string;
+  activeRegionName: string;
   signInWithGoogle: () => Promise<void>;
   signInWithApple: () => Promise<void>;
   signOutUser: () => Promise<void>;
   getIdToken: () => Promise<string | null>;
   refreshNickname: () => Promise<void>;
+  setActiveRegionLocal: (code: string, name: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   nickname: null,
+  activeRegionCode: "",
+  activeRegionName: "",
   signInWithGoogle: async () => {},
   signInWithApple: async () => {},
   signOutUser: async () => {},
   getIdToken: async () => null,
   refreshNickname: async () => {},
+  setActiveRegionLocal: () => {},
 });
 
 /**
@@ -119,9 +125,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [nickname, setNickname] = useState<string | null>(null);
+  const [activeRegionCode, setActiveRegionCode] = useState("");
+  const [activeRegionName, setActiveRegionName] = useState("");
 
   const NICKNAME_CACHE_KEY = "cached_nickname";
   const NICKNAME_UID_KEY = "cached_nickname_uid";
+  const REGION_CODE_KEY = "cached_active_region_code";
+  const REGION_NAME_KEY = "cached_active_region_name";
 
   const fetchNickname = async (uid: string, token: string, retries = 2) => {
     for (let attempt = 0; attempt <= retries; attempt++) {
@@ -137,6 +147,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             localStorage.setItem(NICKNAME_CACHE_KEY, name);
             localStorage.setItem(NICKNAME_UID_KEY, uid);
           }
+          const rCode = data.activeRegionCode || "";
+          const rName = data.activeRegionName || "";
+          setActiveRegionCode(rCode);
+          setActiveRegionName(rName);
+          if (rCode) localStorage.setItem(REGION_CODE_KEY, rCode); else localStorage.removeItem(REGION_CODE_KEY);
+          if (rName) localStorage.setItem(REGION_NAME_KEY, rName); else localStorage.removeItem(REGION_NAME_KEY);
           return;
         }
         if (res.status >= 400 && res.status < 500) break;
@@ -154,6 +170,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
       setNickname(null);
     }
+    const cachedRegionCode = localStorage.getItem(REGION_CODE_KEY) || "";
+    const cachedRegionName = localStorage.getItem(REGION_NAME_KEY) || "";
+    setActiveRegionCode(cachedRegionCode);
+    setActiveRegionName(cachedRegionName);
   };
 
   useEffect(() => {
@@ -170,12 +190,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unsubscribe = onAuthStateChanged(auth, (u: User | null) => {
         setUser(u);
         if (u) {
-          // 1단계: 캐시된 닉네임으로 즉시 로그인 완료 표시 (빠름)
+          // 1단계: 캐시된 닉네임/지역으로 즉시 로그인 완료 표시 (빠름)
           const cachedUid = localStorage.getItem(NICKNAME_UID_KEY);
           const cachedNickname = localStorage.getItem(NICKNAME_CACHE_KEY);
           if (cachedUid === u.uid && cachedNickname) {
             setNickname(cachedNickname);
           }
+          setActiveRegionCode(localStorage.getItem(REGION_CODE_KEY) || "");
+          setActiveRegionName(localStorage.getItem(REGION_NAME_KEY) || "");
           setLoading(false); // 즉시 로딩 해제 — 화면 먼저 보여줌
 
           // 2단계: 토큰 + 닉네임을 백그라운드에서 갱신 (블로킹 안 함)
@@ -186,6 +208,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           localStorage.removeItem("fb_token");
           setNickname(null);
+          setActiveRegionCode("");
+          setActiveRegionName("");
           setLoading(false);
         }
       });
@@ -269,8 +293,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { signOut, auth } = await loadFirebase();
     await signOut(auth);
     setNickname(null);
+    setActiveRegionCode("");
+    setActiveRegionName("");
     localStorage.removeItem(NICKNAME_CACHE_KEY);
     localStorage.removeItem(NICKNAME_UID_KEY);
+    localStorage.removeItem(REGION_CODE_KEY);
+    localStorage.removeItem(REGION_NAME_KEY);
+  };
+
+  const setActiveRegionLocal = (code: string, name: string) => {
+    setActiveRegionCode(code);
+    setActiveRegionName(name);
+    if (code) localStorage.setItem(REGION_CODE_KEY, code); else localStorage.removeItem(REGION_CODE_KEY);
+    if (name) localStorage.setItem(REGION_NAME_KEY, name); else localStorage.removeItem(REGION_NAME_KEY);
   };
 
   const getIdToken = async () => {
@@ -285,7 +320,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, nickname, signInWithGoogle, signInWithApple, signOutUser, getIdToken, refreshNickname }}>
+    <AuthContext.Provider value={{ user, loading, nickname, activeRegionCode, activeRegionName, signInWithGoogle, signInWithApple, signOutUser, getIdToken, refreshNickname, setActiveRegionLocal }}>
       {children}
     </AuthContext.Provider>
   );

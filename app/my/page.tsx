@@ -8,6 +8,7 @@ import { deleteUser } from "firebase/auth";
 import { auth } from "@/app/lib/firebase-client";
 import type { Post, JobPost, Message } from "@/app/lib/types";
 import { SendMessageModal } from "@/app/components/send-message-modal";
+import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 
 /* ── 유틸 ── */
 function formatDate(dateStr: string) {
@@ -131,7 +132,7 @@ function CardRow({ label, count, badge, nBadge, onClick, icon }: { label: string
 }
 
 /* ── 설정 행 ── */
-function SettingRow({ label, onClick, icon, danger }: { label: string; onClick?: () => void; icon: React.ReactNode; danger?: boolean }) {
+function SettingRow({ label, onClick, icon, danger, value }: { label: string; onClick?: () => void; icon: React.ReactNode; danger?: boolean; value?: string }) {
   return (
     <button
       onClick={onClick}
@@ -139,6 +140,7 @@ function SettingRow({ label, onClick, icon, danger }: { label: string; onClick?:
     >
       <span className={danger ? "text-red-400" : "text-[#999]"}>{icon}</span>
       <span className={`flex-1 text-sm ${danger ? "text-red-500" : "text-[#333] dark:text-zinc-200"}`}>{label}</span>
+      {value ? <span className="text-xs text-[#8C8270] dark:text-zinc-500 max-w-[150px] truncate">{value}</span> : null}
       <svg className="w-4 h-4 text-[#CCC]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
       </svg>
@@ -164,7 +166,7 @@ export default function MyPage() {
 function MyPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, loading, nickname, signInWithGoogle, signInWithApple, signOutUser, getIdToken, refreshNickname } = useAuth();
+  const { user, loading, nickname, activeRegionCode, activeRegionName, signInWithGoogle, signInWithApple, signOutUser, getIdToken, refreshNickname, setActiveRegionLocal } = useAuth();
 
   /* 탭 & 데이터 */
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
@@ -204,6 +206,44 @@ function MyPageContent() {
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showNotifPrefs, setShowNotifPrefs] = useState(false);
+  const [showRegionModal, setShowRegionModal] = useState(false);
+  const [regionStep, setRegionStep] = useState<"group" | "sub">("group");
+  const [regionGroup, setRegionGroup] = useState<RegionGroup | null>(null);
+  const [savingRegion, setSavingRegion] = useState(false);
+
+  const closeRegionModal = () => {
+    setShowRegionModal(false);
+    setRegionStep("group");
+    setRegionGroup(null);
+  };
+
+  const saveActiveRegion = async (code: string, name: string) => {
+    if (savingRegion) return;
+    setSavingRegion(true);
+    try {
+      const token = await getIdToken();
+      if (!token) {
+        alert("로그인이 필요합니다.");
+        return;
+      }
+      const res = await fetch("/api/nicknames", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ activeRegionCode: code, activeRegionName: name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        alert(data.error || "지역 저장에 실패했습니다.");
+        return;
+      }
+      setActiveRegionLocal(code, name);
+      closeRegionModal();
+    } catch {
+      alert("지역 저장에 실패했습니다.");
+    } finally {
+      setSavingRegion(false);
+    }
+  };
 
   /* 알림 설정 — 앱과 동일 8개 토글 */
   const [notifPrefs, setNotifPrefs] = useState({
@@ -2030,6 +2070,12 @@ function MyPageContent() {
         <Card title="설정">
           <SettingRow label="알림 설정" onClick={() => setShowNotifPrefs(true)} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>} />
           <SettingRow label="키워드 설정" onClick={() => router.push("/keywords")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>} />
+          <SettingRow
+            label="내가 활동하는 지역"
+            value={activeRegionName || "미설정"}
+            onClick={() => { setShowRegionModal(true); setRegionStep("group"); setRegionGroup(null); }}
+            icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+          />
           <SettingRow label="문의하기" onClick={() => router.push("/inquiry")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} />
           <SettingRow label="이용약관" onClick={() => window.open("/terms.html", "_blank")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} />
           <SettingRow label="개인정보처리방침" onClick={() => window.open("/privacy.html", "_blank")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>} />
@@ -2140,6 +2186,63 @@ function MyPageContent() {
           onClick={() => setShowNotifPrefs(false)}
           className="w-full mt-5 py-2.5 border border-[#E8E0D0] dark:border-zinc-600 rounded-xl text-sm text-[#666] dark:text-zinc-400"
         >닫기</button>
+      </Modal>
+
+      {/* 내가 활동하는 지역 모달 */}
+      <Modal
+        open={showRegionModal}
+        onClose={closeRegionModal}
+        title={regionStep === "group" ? "내가 활동하는 지역" : regionGroup?.name || ""}
+      >
+        <div className="max-h-[60vh] overflow-y-auto -mx-5 -my-4">
+          {regionStep === "group" ? (
+            <div>
+              {activeRegionName ? (
+                <button
+                  onClick={() => saveActiveRegion("", "")}
+                  disabled={savingRegion}
+                  className="w-full flex items-center justify-between px-5 py-3 text-[13px] text-red-500 hover:bg-red-50 dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/60 dark:border-zinc-800 transition-colors"
+                >
+                  <span>현재 설정 해제 ({activeRegionName})</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              ) : null}
+              {REGION_GROUPS.map(g => (
+                <button
+                  key={g.code}
+                  onClick={() => { setRegionGroup(g); setRegionStep("sub"); }}
+                  className="w-full flex items-center justify-between px-5 py-3 text-[14px] text-[#3A342A] dark:text-zinc-100 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/60 dark:border-zinc-800 last:border-0 transition-colors"
+                >
+                  <span>{g.name}{activeRegionCode === g.code ? <span className="ml-2 text-[11px] text-[#6B7B3A]">선택됨</span> : null}</span>
+                  <svg className="w-4 h-4 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div>
+              <button
+                onClick={() => { setRegionStep("group"); setRegionGroup(null); }}
+                className="w-full flex items-center gap-1 px-5 py-3 text-[13px] text-[#8C8270] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/60 dark:border-zinc-800 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>뒤로
+              </button>
+              {regionGroup?.subRegions.map(s => {
+                const fullName = `${regionGroup.name} - ${s.name}`;
+                return (
+                  <button
+                    key={s.code}
+                    onClick={() => saveActiveRegion(s.code, fullName)}
+                    disabled={savingRegion}
+                    className="w-full flex items-center justify-between px-5 py-3 text-[14px] text-[#3A342A] dark:text-zinc-100 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/60 dark:border-zinc-800 last:border-0 transition-colors disabled:opacity-50"
+                  >
+                    <span>{s.name}{activeRegionCode === s.code ? <span className="ml-2 text-[11px] text-[#6B7B3A]">선택됨</span> : null}</span>
+                    <svg className="w-4 h-4 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </Modal>
 
       {/* 탈퇴 확인 다이얼로그 */}

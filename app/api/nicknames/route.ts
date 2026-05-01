@@ -14,9 +14,10 @@ export async function GET(req: NextRequest) {
   const name = req.nextUrl.searchParams.get("name")?.trim();
 
   if (uid) {
-    const { data } = await supabase
+    // active_region_* 컬럼은 마이그레이션 후 추가 — 런타임엔 존재. 타입 우회.
+    const { data } = await (supabase as any)
       .from("nicknames")
-      .select("name, changed_at")
+      .select("name, changed_at, active_region_code, active_region_name")
       .eq("firebase_uid", uid)
       .maybeSingle();
     if (data) {
@@ -26,9 +27,15 @@ export async function GET(req: NextRequest) {
       const remainingDays = canChange
         ? 0
         : Math.ceil((THREE_WEEKS_MS - (Date.now() - changedAt)) / (24 * 60 * 60 * 1000));
-      return NextResponse.json({ nickname: data.name, canChange, remainingDays });
+      return NextResponse.json({
+        nickname: data.name,
+        canChange,
+        remainingDays,
+        activeRegionCode: data.active_region_code || "",
+        activeRegionName: data.active_region_name || "",
+      });
     }
-    return NextResponse.json({ nickname: null, canChange: true, remainingDays: 0 });
+    return NextResponse.json({ nickname: null, canChange: true, remainingDays: 0, activeRegionCode: "", activeRegionName: "" });
   }
 
   if (name) {
@@ -123,4 +130,46 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ success: true, nickname: name });
+}
+
+// PUT /api/nicknames — 활동 지역(active_region_code/name) 갱신 (Firebase 인증 필수)
+export async function PUT(req: NextRequest) {
+  const user = await verifyAuth(req);
+  if (!user) {
+    return NextResponse.json({ success: false, error: "로그인이 필요합니다" }, { status: 401 });
+  }
+
+  const body = await req.json();
+  const regionCodeRaw = typeof body.activeRegionCode === "string" ? body.activeRegionCode.trim() : "";
+  const regionNameRaw = typeof body.activeRegionName === "string" ? body.activeRegionName.trim() : "";
+  const regionCode = sanitize(validateLength(regionCodeRaw, 50));
+  const regionName = sanitize(validateLength(regionNameRaw, 100));
+
+  // 닉네임 row가 이미 있는 경우 update, 없으면 빈 row 생성
+  const { data: existing } = await supabase
+    .from("nicknames")
+    .select("id")
+    .eq("firebase_uid", user.uid)
+    .maybeSingle();
+
+  if (!existing) {
+    return NextResponse.json({ success: false, error: "닉네임을 먼저 설정해주세요" }, { status: 400 });
+  }
+
+  const { error } = await (supabase as any)
+    .from("nicknames")
+    .update({
+      active_region_code: regionCode || null,
+      active_region_name: regionName || null,
+    })
+    .eq("firebase_uid", user.uid);
+  if (error) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    success: true,
+    activeRegionCode: regionCode,
+    activeRegionName: regionName,
+  });
 }
