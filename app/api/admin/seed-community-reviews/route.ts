@@ -1053,9 +1053,35 @@ const newPosts: PostData[] = [
 ];
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({} as { password?: string; cacheOnly?: boolean }));
+  const body = await request.json().catch(() => ({} as { password?: string; cacheOnly?: boolean; debug?: boolean }));
   const password = body.password ?? "";
   const cacheOnly = body.cacheOnly === true;
+  const debug = body.debug === true;
+
+  // 디버그 모드: 평문 비교 없이 길이/source만 반환 (안전)
+  if (debug) {
+    const { data: dbRow } = await supabase
+      .from("admin_settings")
+      .select("value")
+      .eq("key", "admin_password")
+      .maybeSingle();
+    const dbVal = dbRow?.value ?? null;
+    const envVal = process.env.ADMIN_PASSWORD ?? null;
+    return NextResponse.json({
+      debug: true,
+      input_length: password.length,
+      input_first_charcode: password.length > 0 ? password.charCodeAt(0) : null,
+      input_last_charcode: password.length > 0 ? password.charCodeAt(password.length - 1) : null,
+      db_set: dbVal !== null,
+      db_length: dbVal?.length ?? null,
+      env_set: envVal !== null,
+      env_length: envVal?.length ?? null,
+      match_db: dbVal !== null && password === dbVal,
+      match_env: envVal !== null && password === envVal,
+      effective_source: dbVal !== null ? "db" : (envVal !== null ? "env" : "none"),
+    });
+  }
+
   if (!(await verifyAdminPassword(password))) {
     return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
   }
