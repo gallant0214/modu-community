@@ -1,9 +1,19 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { verifyAdminPassword } from "@/app/lib/admin-auth";
+import { invalidateCache } from "@/app/lib/cache";
 import { REGION_GROUPS } from "@/app/lib/region-data";
 
 export const dynamic = "force-dynamic";
+
+async function flushCommunityCache(categoryIds: number[]) {
+  await invalidateCache("posts:*").catch(() => {});
+  await invalidateCache("categories:*").catch(() => {});
+  revalidatePath("/");
+  revalidatePath("/community");
+  for (const id of categoryIds) revalidatePath(`/category/${id}`);
+}
 
 function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -533,9 +543,18 @@ const newPosts: PostData[] = [
 ];
 
 export async function POST(request: Request) {
-  const { password } = await request.json().catch(() => ({ password: "" }));
+  const body = await request.json().catch(() => ({} as { password?: string; cacheOnly?: boolean }));
+  const password = body.password ?? "";
+  const cacheOnly = body.cacheOnly === true;
   if (!(await verifyAdminPassword(password))) {
     return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
+  }
+
+  const allCategoryIds = Array.from(new Set(newPosts.map((p) => p.categoryId)));
+
+  if (cacheOnly) {
+    await flushCommunityCache(allCategoryIds);
+    return NextResponse.json({ success: true, cacheOnly: true, revalidated: ["/", "/community", ...allCategoryIds.map((id) => `/category/${id}`)] });
   }
 
   let postsInserted = 0;
@@ -594,6 +613,8 @@ export async function POST(request: Request) {
       .update({ comments_count: count ?? 0 })
       .eq("id", postId);
   }
+
+  await flushCommunityCache(allCategoryIds);
 
   return NextResponse.json({ success: true, postsInserted, commentsInserted });
 }
