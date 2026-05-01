@@ -60,6 +60,8 @@ interface MyNotification {
   broadcast_type: string;
   created_at: string;
   is_read: boolean;
+  type?: string;
+  data?: string | null;
 }
 
 /* ── 공통 모달 ── */
@@ -1377,7 +1379,32 @@ function MyPageContent() {
                               el.scrollIntoView({ behavior: "smooth", block: "center" });
                             }
                           }}
+                          onClick={async () => {
+                            // 쪽지 알림이면 메시지 상세 모달 열기 (n.data에 messageId 있음)
+                            if (n.type === "message" && n.data) {
+                              try {
+                                const parsed = typeof n.data === "string" ? JSON.parse(n.data) : n.data;
+                                const messageId = Number(parsed?.messageId);
+                                if (!messageId) return;
+                                const token = await getIdToken();
+                                if (!token) return;
+                                const headers = { Authorization: `Bearer ${token}` };
+                                const res = await fetch(`/api/messages/${messageId}`, { headers });
+                                if (!res.ok) {
+                                  alert("쪽지를 찾을 수 없습니다 (삭제됐을 수 있어요)");
+                                  return;
+                                }
+                                const data = await res.json();
+                                if (!data.original) return;
+                                setMessageThread({ original: data.original, replies: data.replies || [] });
+                              } catch {
+                                alert("쪽지를 불러오지 못했습니다");
+                              }
+                            }
+                          }}
                           className={`relative rounded-2xl overflow-hidden transition-colors ${
+                            n.type === "message" ? "cursor-pointer" : ""
+                          } ${
                             isUnread
                               ? "bg-[#FBF7EB] dark:bg-zinc-900/70 border border-[#6B7B3A]/35 shadow-[0_1px_0_rgba(0,0,0,0.02),0_10px_26px_-22px_rgba(107,123,58,0.4)]"
                               : "bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 shadow-[0_1px_0_rgba(0,0,0,0.02)]"
