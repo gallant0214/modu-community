@@ -22,16 +22,24 @@ export function WebPushInitializer() {
     registered.current = true;
     (async () => {
       try {
+        console.log("[web-push] requesting token...");
         const pushToken = await requestWebPushToken();
-        if (!pushToken) return; // 권한 거부/미지원
+        console.log("[web-push] token:", pushToken ? `${pushToken.slice(0, 20)}...` : "null (permission denied or unsupported)");
+        if (!pushToken) return;
         const authToken = await getIdToken();
-        if (!authToken) return;
-        await fetch("/api/notifications/token", {
+        if (!authToken) {
+          console.warn("[web-push] no auth token, skip register");
+          return;
+        }
+        const res = await fetch("/api/notifications/token", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
           body: JSON.stringify({ token: pushToken, platform: "web" }),
         });
-      } catch {}
+        console.log("[web-push] register status:", res.status);
+      } catch (e) {
+        console.warn("[web-push] register flow error:", e);
+      }
     })();
   }, [user, getIdToken]);
 
