@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { sendPushToUser } from "@/app/lib/notifications";
+import { waitUntil } from "@vercel/functions";
 
 export const dynamic = "force-dynamic";
 
@@ -86,13 +87,15 @@ export async function POST(
           like_count: newLikes,
         });
 
-        sendPushToUser(
-          postOwnerUid,
-          "like",
-          `"${postTitle}" 글에 좋아요`,
-          `회원님의 글에 좋아요가 ${newLikes}개 달렸습니다`,
-          { postId: String(id), type: "post_like" },
-        ).catch(() => {});
+        waitUntil(
+          sendPushToUser(
+            postOwnerUid,
+            "like",
+            `"${postTitle}" 글에 좋아요`,
+            `회원님의 글에 좋아요가 ${newLikes}개 달렸습니다`,
+            { postId: String(id), type: "post_like" },
+          ).catch(() => {}),
+        );
       }
     } catch {}
   }

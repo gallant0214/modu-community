@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { sanitize, validateLength } from "@/app/lib/security";
 import { sendPushToUser } from "@/app/lib/notifications";
+import { waitUntil } from "@vercel/functions";
 
 // GET /api/messages?type=received|sent
 export async function GET(req: NextRequest) {
@@ -111,16 +112,19 @@ export async function POST(req: NextRequest) {
   // title 은 "{닉네임} 님이 쪽지를 보냈어요", body 는 쪽지 본문 미리보기.
   // 알림 리스트(notification_logs)와 푸시 배너 모두 이 형식으로 표시됨.
   const preview = content.length > 200 ? content.slice(0, 200) + "…" : content;
-  sendPushToUser(
-    receiverUid,
-    "message",
-    `${senderNickname} 님이 쪽지를 보냈어요`,
-    preview,
-    {
-      messageId: String(inserted?.id || ""),
-      senderNickname,
-    },
-  ).catch(() => {});
+  // waitUntil: 응답 즉시 리턴하면서도 백그라운드 푸시 작업이 함수 종료에 의해 잘리지 않게 보장
+  waitUntil(
+    sendPushToUser(
+      receiverUid,
+      "message",
+      `${senderNickname} 님이 쪽지를 보냈어요`,
+      preview,
+      {
+        messageId: String(inserted?.id || ""),
+        senderNickname,
+      },
+    ).catch(() => {}),
+  );
 
   return NextResponse.json({ success: true });
 }

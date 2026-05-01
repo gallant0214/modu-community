@@ -70,30 +70,36 @@ export async function sendPushToUser(
 
     if (!tokens || tokens.length === 0) return;
 
-    // 4. FCM 발송
+    // 4. FCM 발송 — 모든 토큰 병렬, 한 번의 배치 호출
     const app = getAdmin();
     const messaging = getMessaging(app);
 
-    const message = {
+    const tokenList = tokens.map((t) => t.token);
+    const multicast = {
       notification: { title, body },
       data: { type, ...data },
       apns: {
         payload: { aps: { sound: "default", badge: 1 } },
       },
+      tokens: tokenList,
     };
 
-    for (const t of tokens) {
-      try {
-        await messaging.send({ ...message, token: t.token });
-      } catch (err: unknown) {
-        const code = (err as { code?: string })?.code;
+    const result = await messaging.sendEachForMulticast(multicast);
+    // 실패 토큰 — 만료/무효 만 정리
+    const toDelete: string[] = [];
+    result.responses.forEach((r, idx) => {
+      if (!r.success) {
+        const code = (r.error as { code?: string } | undefined)?.code;
         if (
           code === "messaging/invalid-registration-token" ||
           code === "messaging/registration-token-not-registered"
         ) {
-          await supabase.from("device_tokens").delete().eq("token", t.token);
+          toDelete.push(tokenList[idx]);
         }
       }
+    });
+    if (toDelete.length > 0) {
+      await supabase.from("device_tokens").delete().in("token", toDelete);
     }
   } catch (error) {
     console.error("Push notification error:", error);

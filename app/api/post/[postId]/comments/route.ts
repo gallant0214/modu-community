@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { sendPushToUser } from "@/app/lib/notifications";
+import { waitUntil } from "@vercel/functions";
 
 export const dynamic = "force-dynamic";
 
@@ -130,13 +131,15 @@ export async function POST(
         .eq("id", parent_id)
         .maybeSingle();
       if (parentComment?.firebase_uid && parentComment.firebase_uid !== user.uid) {
-        sendPushToUser(
-          parentComment.firebase_uid,
-          "reply",
-          "내 댓글에 답글이 달렸어요",
-          content.trim().substring(0, 100),
-          { postId: String(pid), commentId: String(newCommentId) },
-        ).catch(() => {});
+        waitUntil(
+          sendPushToUser(
+            parentComment.firebase_uid,
+            "reply",
+            "내 댓글에 답글이 달렸어요",
+            content.trim().substring(0, 100),
+            { postId: String(pid), commentId: String(newCommentId) },
+          ).catch(() => {}),
+        );
       }
     } else {
       const { data: post } = await supabase
@@ -145,13 +148,15 @@ export async function POST(
         .eq("id", pid)
         .maybeSingle();
       if (post?.firebase_uid && post.firebase_uid !== user.uid) {
-        sendPushToUser(
-          post.firebase_uid,
-          "comment",
-          `"${(post.title || "").substring(0, 30)}" 글에 댓글이 달렸어요`,
-          content.trim().substring(0, 100),
-          { postId: String(pid), commentId: String(newCommentId) },
-        ).catch(() => {});
+        waitUntil(
+          sendPushToUser(
+            post.firebase_uid,
+            "comment",
+            `"${(post.title || "").substring(0, 30)}" 글에 댓글이 달렸어요`,
+            content.trim().substring(0, 100),
+            { postId: String(pid), commentId: String(newCommentId) },
+          ).catch(() => {}),
+        );
       }
     }
   } catch {}
