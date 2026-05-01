@@ -46,12 +46,31 @@ function formatMoney(v: string) {
 
 /* 복제용 파서 */
 function parseSalary(salary: string) {
-  if (!salary) return { salaryType: "", salaryAmount: "", salaryIncentive: false, salaryQuickPay: false };
+  if (!salary) return { salaryType: "", salaryAmount: "", salaryIncentive: false, salaryQuickPay: false, salaryMin: "", salaryMax: "", salaryDirectSub: "월급" };
   const trimmed = salary.trim();
   if (trimmed === "급여 협의" || trimmed === "협의") {
-    return { salaryType: "협의", salaryAmount: "", salaryIncentive: false, salaryQuickPay: false };
+    return { salaryType: "협의", salaryAmount: "", salaryIncentive: false, salaryQuickPay: false, salaryMin: "", salaryMax: "", salaryDirectSub: "월급" };
   }
-  const m = trimmed.match(/^(시급|월급|건당)(?:\s+([\d,]+)\s*원)?\s*(?:\(([^)]*)\))?$/);
+  // "월급 200만원 ~ 300만원" or "주급 50만원 ~ 80만원" or "연봉 3,000만원 ~ 4,000만원"
+  const rangeWithSub = trimmed.match(/^(주급|월급|연봉)\s+([\d,]+)만원\s*~\s*([\d,]+)만원$/);
+  if (rangeWithSub) {
+    return { salaryType: "직접 입력", salaryAmount: "", salaryIncentive: false, salaryQuickPay: false, salaryMin: rangeWithSub[2], salaryMax: rangeWithSub[3], salaryDirectSub: rangeWithSub[1] };
+  }
+  // "200만원 ~ 300만원" (legacy, no sub prefix)
+  const rangeMatch = trimmed.match(/^([\d,]+)만원\s*~\s*([\d,]+)만원$/);
+  if (rangeMatch) {
+    return { salaryType: "직접 입력", salaryAmount: "", salaryIncentive: false, salaryQuickPay: false, salaryMin: rangeMatch[1], salaryMax: rangeMatch[2], salaryDirectSub: "월급" };
+  }
+  // "200만원 이상" / "200만원 이하" (legacy)
+  const minMatch = trimmed.match(/^([\d,]+)만원\s*이상$/);
+  if (minMatch) {
+    return { salaryType: "직접 입력", salaryAmount: "", salaryIncentive: false, salaryQuickPay: false, salaryMin: minMatch[1], salaryMax: "", salaryDirectSub: "월급" };
+  }
+  const maxMatch = trimmed.match(/^([\d,]+)만원\s*이하$/);
+  if (maxMatch) {
+    return { salaryType: "직접 입력", salaryAmount: "", salaryIncentive: false, salaryQuickPay: false, salaryMin: "", salaryMax: maxMatch[1], salaryDirectSub: "월급" };
+  }
+  const m = trimmed.match(/^(시급|주급|월급|연봉|건당)(?:\s+([\d,]+)\s*원)?\s*(?:\(([^)]*)\))?$/);
   if (m) {
     const [, type, amount = "", extras = ""] = m;
     return {
@@ -59,9 +78,12 @@ function parseSalary(salary: string) {
       salaryAmount: amount,
       salaryIncentive: extras.includes("인센티브"),
       salaryQuickPay: extras.includes("주급") || extras.includes("당일지급"),
+      salaryMin: "",
+      salaryMax: "",
+      salaryDirectSub: "월급",
     };
   }
-  return { salaryType: "", salaryAmount: "", salaryIncentive: false, salaryQuickPay: false };
+  return { salaryType: "", salaryAmount: "", salaryIncentive: false, salaryQuickPay: false, salaryMin: "", salaryMax: "", salaryDirectSub: "월급" };
 }
 function parseDeadline(deadline: string) {
   if (!deadline) return { deadlineType: "", deadlineDate: "" };
@@ -198,7 +220,8 @@ function SelectButton({ value, placeholder, onClick }: { value: string; placehol
 const inputCls = "w-full px-4 py-3 border border-[#E8E0D0] dark:border-zinc-700 rounded-xl text-[14px] bg-[#FBF7EB] dark:bg-zinc-800 text-[#2A251D] dark:text-zinc-100 placeholder-[#A89B80] focus:outline-none focus:border-[#6B7B3A]/50 focus:bg-[#FEFCF7] dark:focus:bg-zinc-900 transition-colors";
 
 const EMPLOYMENT_TYPES = ["정규직", "계약직", "아르바이트", "프리랜서(위촉직)", "파트타임", "교육생/연수생", "인턴", "기타"];
-const SALARY_TYPES = ["시급", "월급", "건당", "협의", "직접 입력"];
+const SALARY_TYPES = ["시급", "주급", "월급", "연봉", "건당", "협의", "직접 입력"];
+const DIRECT_SUBTYPES = ["주급", "월급", "연봉"] as const;
 const HEADCOUNT_OPTIONS = ["1명", "2~3명", "4명 이상", "직접 입력"];
 const PREFERENCES_OPTIONS = ["동종업계 경력자", "관련 자격증 소지자", "장기근무 가능자", "초보 가능", "인근 거주자", "대학생 가능", "운전 가능자"];
 const BENEFITS_OPTIONS = ["4대보험", "인센티브", "식대지원", "회원권 제공", "교육 지원", "퇴직금"];
@@ -244,6 +267,7 @@ export default function JobWritePage() {
   const [salaryQuickPay, setSalaryQuickPay] = useState(false);
   const [salaryMin, setSalaryMin] = useState("");
   const [salaryMax, setSalaryMax] = useState("");
+  const [salaryDirectSub, setSalaryDirectSub] = useState<string>("월급");
   const [headcount, setHeadcount] = useState("");
   const [headcountCustom, setHeadcountCustom] = useState("");
   const [preferences, setPreferences] = useState<string[]>([]);
@@ -282,6 +306,9 @@ export default function JobWritePage() {
         setSalaryAmount(ps.salaryAmount);
         setSalaryIncentive(ps.salaryIncentive);
         setSalaryQuickPay(ps.salaryQuickPay);
+        setSalaryMin(ps.salaryMin);
+        setSalaryMax(ps.salaryMax);
+        setSalaryDirectSub(ps.salaryDirectSub);
         const pd = parseDeadline(data.deadline || "");
         setDeadlineType(pd.deadlineType);
         setDeadlineDate(pd.deadlineDate);
@@ -333,9 +360,9 @@ export default function JobWritePage() {
     if (salaryType === "협의") return "급여 협의";
     if (salaryType === "직접 입력") {
       if (!salaryMin && !salaryMax) return "";
-      if (salaryMin && salaryMax) return `${salaryMin}만원 ~ ${salaryMax}만원`;
-      if (salaryMin) return `${salaryMin}만원 이상`;
-      return `${salaryMax}만원 이하`;
+      if (salaryMin && salaryMax) return `${salaryDirectSub} ${salaryMin}만원 ~ ${salaryMax}만원`;
+      if (salaryMin) return `${salaryDirectSub} ${salaryMin}만원 이상`;
+      return `${salaryDirectSub} ${salaryMax}만원 이하`;
     }
     if (!salaryAmount) return salaryType;
     let s = `${salaryType} ${salaryAmount}원`;
@@ -368,7 +395,13 @@ export default function JobWritePage() {
       [!description.trim(), "description", "내용"],
       [!deadlineType, "deadline", "모집기간"],
       [!employmentType || (employmentType === "기타" && !employmentCustom.trim()), "employment", "근무형태"],
-      [!salaryType || (salaryType === "직접 입력" && !salaryMin && !salaryMax), "salary", "급여"],
+      [
+        !salaryType
+          || (salaryType === "직접 입력" && (!salaryMin || !salaryMax))
+          || (salaryType !== "협의" && salaryType !== "직접 입력" && !salaryAmount),
+        "salary",
+        "급여",
+      ],
       [!headcount || (headcount === "직접 입력" && !headcountCustom.trim()), "headcount", "모집 인원"],
     ];
     for (const [fail, key, label] of checks) {
@@ -858,7 +891,20 @@ export default function JobWritePage() {
                   placeholder="최대 금액" className={`${inputCls} flex-1`} inputMode="numeric" />
                 <span className="text-[13px] font-semibold text-[#6B5D47] shrink-0">만원</span>
               </div>
-              <button onClick={() => { if (salaryMin || salaryMax) setShowSalary(false); }} disabled={!salaryMin && !salaryMax}
+              <div className="flex items-center gap-4 pt-1">
+                {DIRECT_SUBTYPES.map(sub => (
+                  <button key={sub} type="button" onClick={() => setSalaryDirectSub(sub)}
+                    className="flex items-center gap-2 text-[13px] text-[#2A251D] dark:text-zinc-200">
+                    <span className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                      salaryDirectSub === sub ? "bg-[#6B7B3A]" : "border-2 border-[#E8E0D0] dark:border-zinc-700"
+                    }`}>
+                      {salaryDirectSub === sub && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
+                    </span>
+                    {sub}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => { if (salaryMin && salaryMax) setShowSalary(false); }} disabled={!salaryMin || !salaryMax}
                 className="w-full py-3 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-[13px] font-semibold rounded-xl disabled:opacity-50 shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)] transition-colors">확인</button>
             </div>
           )}
