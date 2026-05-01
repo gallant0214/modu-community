@@ -1977,7 +1977,9 @@ function MessageCard({ message, type, onClick, onDelete }: { message: Message; t
               {type === "received" ? "보낸 사람" : "받는 사람"}: {otherName}
             </span>
             {isUnread && (
-              <span className="w-2 h-2 rounded-full bg-[#6B7B3A] animate-pulse" />
+              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#C0392B] text-white text-[10px] font-bold leading-none">
+                N
+              </span>
             )}
             <span className="ml-auto text-[11px] text-[#A89B80] dark:text-zinc-500">{formatDate(message.created_at)}</span>
           </div>
