@@ -100,7 +100,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 }
 
 /* ── 카드 행 ── */
-function CardRow({ label, count, badge, onClick, icon }: { label: string; count?: number; badge?: number; onClick?: () => void; icon: React.ReactNode }) {
+function CardRow({ label, count, badge, nBadge, onClick, icon }: { label: string; count?: number; badge?: number; nBadge?: boolean; onClick?: () => void; icon: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
@@ -108,6 +108,9 @@ function CardRow({ label, count, badge, onClick, icon }: { label: string; count?
     >
       <span className="text-[#6B7B3A]">{icon}</span>
       <span className="flex-1 text-sm text-[#333] dark:text-zinc-200">{label}</span>
+      {nBadge && (
+        <span className="text-[10px] font-bold text-white bg-[#C0392B] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center leading-none">N</span>
+      )}
       {badge !== undefined && badge > 0 && (
         <span className="text-[11px] font-bold text-white bg-[#C0392B] min-w-[20px] h-5 px-1.5 rounded-full flex items-center justify-center">{badge}</span>
       )}
@@ -1835,7 +1838,7 @@ function MyPageContent() {
           <CardRow label="내가 등록한 구인글" count={counts.jobs} onClick={() => router.push("/my?tab=jobs")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} />
           <CardRow label="구인 북마크" count={counts.jobBookmarks} onClick={() => router.push("/my?tab=jobBookmarks")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>} />
           <CardRow label="알림 리스트" badge={unreadNotifications} onClick={() => router.push("/my?tab=notifications")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>} />
-          <CardRow label="받은 쪽지함" count={counts.receivedMessages} badge={unreadMessages} onClick={() => router.push("/my?tab=receivedMessages")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} />
+          <CardRow label="받은 쪽지함" count={counts.receivedMessages} nBadge={unreadMessages > 0} onClick={() => router.push("/my?tab=receivedMessages")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} />
           <CardRow label="보낸 쪽지함" count={counts.sentMessages} onClick={() => router.push("/my?tab=sentMessages")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>} />
         </Card>
 
