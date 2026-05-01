@@ -1797,12 +1797,9 @@ function MyPageContent() {
                       </button>
                     </div>
                     <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-                      {/* 원본 메시지 */}
+                      {/* 단일 메시지(원본)만 표시 — 답장 누적 표시 안 함.
+                         답장은 보낸쪽지함 / 받은쪽지함에서 별도 row 로 확인. */}
                       <MessageBubble msg={messageThread.original} isOriginal />
-                      {/* 답장들 */}
-                      {messageThread.replies.map((r) => (
-                        <MessageBubble key={r.id} msg={r} />
-                      ))}
                     </div>
                     <div className="shrink-0 px-5 py-3 border-t border-[#E8E0D0] dark:border-zinc-700 flex gap-2">
                       <button
@@ -1844,21 +1841,10 @@ function MyPageContent() {
                   receiverNickname={replyTo.nickname}
                   parentId={replyTo.parentId}
                   onSent={() => {
-                    if (replyTo.parentId) {
-                      // 답장: 현재 스레드 새로고침
-                      if (messageThread) {
-                        getIdToken().then((token) => {
-                          if (!token) return;
-                          fetch(`/api/messages/${messageThread.original.id}`, { headers: { Authorization: `Bearer ${token}` } })
-                            .then((r) => r.json())
-                            .then((data) => setMessageThread({ original: data.original, replies: data.replies || [] }));
-                        });
-                      }
-                    } else {
-                      // 다시보내기: 새 thread 라 상세 모달은 닫고 보낸쪽지함 새로고침
-                      setMessageThread(null);
-                      loadTabData("sentMessages");
-                    }
+                    // 답장/다시보내기 모두 단일 메시지 정책 — 상세 모달 닫고
+                    // 보낸쪽지함 새로고침. 답장 누적 표시 안 함.
+                    setMessageThread(null);
+                    loadTabData("sentMessages");
                   }}
                 />
               )}
