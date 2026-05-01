@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/app/components/auth-provider";
 import { NavBar } from "@/app/components/nav-bar";
 import { AppResilience } from "@/app/components/app-resilience";
+import { WebPushInitializer } from "@/app/components/web-push-initializer";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = Geist({
@@ -69,6 +70,7 @@ export default function RootLayout({
       >
         <AuthProvider>
           <AppResilience />
+          <WebPushInitializer />
           <NavBar />
           {children}
         </AuthProvider>
