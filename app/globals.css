@@ -3,6 +3,14 @@
 /* 다크 모드를 클래스 기반으로 전환 — .dark 클래스가 없으면 dark: 유틸리티 전부 비활성 */
 @variant dark (&:where(.dark, .dark *));
 
+/* 모바일 가로 흔들림/스크롤 방지 — 어느 자식이 overflow 해도 화면 밖으로 안 새 나감.
+   세로 스크롤은 정상 동작. */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+  overscroll-behavior-x: none;
+}
+
 /* 카테고리 필터 스크롤바: 데스크톱만 얇게, 모바일 숨김 */
 .category-scroll::-webkit-scrollbar {
   height: 4px;

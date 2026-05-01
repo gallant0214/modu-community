@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
@@ -203,6 +203,58 @@ function MyPageContent() {
   /* 모달 상태 */
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showNotifPrefs, setShowNotifPrefs] = useState(false);
+
+  /* 알림 설정 — 앱과 동일 8개 토글 */
+  const [notifPrefs, setNotifPrefs] = useState({
+    notify_comment: true,
+    notify_reply: true,
+    notify_like: true,
+    notify_message: true,
+    notify_job: true,
+    notify_notice: true,
+    notify_promo: true,
+    notify_keyword: true,
+  });
+  const notifPrefsLoaded = useRef(false);
+  useEffect(() => {
+    if (!user || notifPrefsLoaded.current) return;
+    notifPrefsLoaded.current = true;
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/notifications/preferences", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        setNotifPrefs((prev) => ({
+          notify_comment: data.notify_comment ?? prev.notify_comment,
+          notify_reply: data.notify_reply ?? prev.notify_reply,
+          notify_like: data.notify_like ?? prev.notify_like,
+          notify_message: data.notify_message ?? prev.notify_message,
+          notify_job: data.notify_job ?? prev.notify_job,
+          notify_notice: data.notify_notice ?? prev.notify_notice,
+          notify_promo: data.notify_promo ?? prev.notify_promo,
+          notify_keyword: data.notify_keyword ?? prev.notify_keyword,
+        }));
+      } catch {}
+    })();
+  }, [user, getIdToken]);
+
+  const toggleNotifPref = async (key: keyof typeof notifPrefs, value: boolean) => {
+    setNotifPrefs((prev) => ({ ...prev, [key]: value }));
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      await fetch("/api/notifications/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...notifPrefs, [key]: value }),
+      });
+    } catch {}
+  };
 
   /* 닉네임 */
   const [nicknameInput, setNicknameInput] = useState("");
@@ -1919,6 +1971,7 @@ function MyPageContent() {
 
         {/* ── 3. 설정 카드 ── */}
         <Card title="설정">
+          <SettingRow label="알림 설정" onClick={() => setShowNotifPrefs(true)} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>} />
           <SettingRow label="키워드 설정" onClick={() => router.push("/keywords")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>} />
           <SettingRow label="문의하기" onClick={() => router.push("/inquiry")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} />
           <SettingRow label="이용약관" onClick={() => window.open("/terms.html", "_blank")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} />
@@ -1990,6 +2043,46 @@ function MyPageContent() {
             >{nicknameLoading ? "저장 중..." : "저장하기"}</button>
           </>
         )}
+      </Modal>
+
+      {/* 알림 설정 모달 — 앱과 동일 8개 토글 */}
+      <Modal open={showNotifPrefs} onClose={() => setShowNotifPrefs(false)} title="알림 설정">
+        <p className="text-xs text-[#A89B80] mb-4">받고 싶은 알림을 선택하세요</p>
+        <div className="space-y-3">
+          {[
+            { key: "notify_comment", label: "게시글의 댓글", desc: "내 게시글에 새 댓글이 달리면 알림" },
+            { key: "notify_reply", label: "댓글의 댓글", desc: "내 댓글에 대댓글이 달리면 알림" },
+            { key: "notify_like", label: "좋아요", desc: "내 게시글에 좋아요가 달리면 알림" },
+            { key: "notify_message", label: "쪽지", desc: "쪽지를 받으면 알림" },
+            { key: "notify_job", label: "구인", desc: "새로운 구인 게시글 알림" },
+            { key: "notify_notice", label: "공지", desc: "서비스 공지사항 알림" },
+            { key: "notify_promo", label: "광고/프로모션", desc: "이벤트 및 프로모션 알림" },
+            { key: "notify_keyword", label: "키워드 알림", desc: "등록된 키워드가 포함된 게시글 알림" },
+          ].map((item) => {
+            const k = item.key as keyof typeof notifPrefs;
+            const checked = notifPrefs[k];
+            return (
+              <div key={item.key} className="flex items-start gap-3 py-2 border-b border-[#E8E0D0]/50 dark:border-zinc-800 last:border-0">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{item.label}</p>
+                  <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mt-0.5">{item.desc}</p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={checked}
+                  onClick={() => toggleNotifPref(k, !checked)}
+                  className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${checked ? "bg-[#6B7B3A]" : "bg-[#D6CCB6] dark:bg-zinc-700"}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-5" : ""}`} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        <button
+          onClick={() => setShowNotifPrefs(false)}
+          className="w-full mt-5 py-2.5 border border-[#E8E0D0] dark:border-zinc-600 rounded-xl text-sm text-[#666] dark:text-zinc-400"
+        >닫기</button>
       </Modal>
 
       {/* 탈퇴 확인 다이얼로그 */}
