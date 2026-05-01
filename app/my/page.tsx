@@ -1851,6 +1851,63 @@ function MyPageContent() {
                     <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
                       {/* 단일 메시지(원본)만 표시 — 답장 누적 표시 안 함.
                          답장은 보낸쪽지함 / 받은쪽지함에서 별도 row 로 확인. */}
+                      {(() => {
+                        const m = messageThread.original;
+                        const isMine = m.sender_uid === user?.uid;
+                        if (isMine) return null;
+                        const otherNick = m.sender_nickname;
+                        return (
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={async () => {
+                                const reasons = ["욕설/비방", "스팸/광고", "도배", "음란/선정성", "사기/허위", "기타"];
+                                const reason = window.prompt(
+                                  `신고 사유를 입력하세요\n\n예시: ${reasons.join(", ")}`,
+                                );
+                                if (!reason?.trim()) return;
+                                try {
+                                  const token = await getIdToken();
+                                  if (!token) return alert("로그인이 필요합니다");
+                                  const res = await fetch("/api/reports", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                    body: JSON.stringify({ target_type: "message", target_id: m.id, reason }),
+                                  });
+                                  if (!res.ok) throw new Error("신고 실패");
+                                  alert("신고가 접수되었습니다. 검토 후 조치하겠습니다.");
+                                } catch {
+                                  alert("신고할 수 없습니다");
+                                }
+                              }}
+                              className="px-3 py-1 text-[11px] font-bold text-[#8C8270] dark:text-zinc-400 border border-[#8C8270]/40 dark:border-zinc-600 rounded-md hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                            >
+                              신고
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!window.confirm(`${otherNick} 님을 차단하시겠습니까?\n차단된 사용자와는 쪽지를 주고받을 수 없습니다.`)) return;
+                                try {
+                                  const token = await getIdToken();
+                                  if (!token) return alert("로그인이 필요합니다");
+                                  const res = await fetch("/api/users/block", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                    body: JSON.stringify({ nickname: otherNick }),
+                                  });
+                                  if (!res.ok) throw new Error("차단 실패");
+                                  alert(`${otherNick} 님을 차단했습니다.`);
+                                  setMessageThread(null);
+                                } catch {
+                                  alert("차단할 수 없습니다");
+                                }
+                              }}
+                              className="px-3 py-1 text-[11px] font-bold text-[#C0392B] border border-[#C0392B]/40 rounded-md hover:bg-[#FBEFEC] dark:hover:bg-red-900/20"
+                            >
+                              차단
+                            </button>
+                          </div>
+                        );
+                      })()}
                       <MessageBubble msg={messageThread.original} isOriginal />
                     </div>
                     <div className="shrink-0 px-5 py-3 border-t border-[#E8E0D0] dark:border-zinc-700 flex gap-2">
