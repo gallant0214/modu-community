@@ -44,7 +44,13 @@ function generateRandomNickname() {
 }
 
 /* ── 타입 ── */
-type Tab = "posts" | "comments" | "jobs" | "bookmarks" | "jobBookmarks" | "notifications" | "receivedMessages" | "sentMessages";
+type Tab = "posts" | "comments" | "jobs" | "bookmarks" | "jobBookmarks" | "notifications" | "receivedMessages" | "sentMessages" | "blocks";
+
+interface BlockedUser {
+  blocked_uid: string;
+  blocked_nickname: string;
+  created_at: string;
+}
 interface MyComment {
   id: number;
   post_id: number;
@@ -171,6 +177,8 @@ function MyPageContent() {
   const [notifications, setNotifications] = useState<MyNotification[]>([]);
   const [receivedMessages, setReceivedMessages] = useState<Message[]>([]);
   const [sentMessages, setSentMessages] = useState<Message[]>([]);
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
+  const [unblockingNickname, setUnblockingNickname] = useState<string | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
 
   /* 쪽지 상세 */
@@ -188,7 +196,7 @@ function MyPageContent() {
   const [deleteAllNotificationsDialog, setDeleteAllNotificationsDialog] = useState<boolean>(false);
 
   /* 카운트 */
-  const [counts, setCounts] = useState({ posts: 0, comments: 0, jobs: 0, bookmarks: 0, jobBookmarks: 0, notifications: 0, receivedMessages: 0, sentMessages: 0 });
+  const [counts, setCounts] = useState({ posts: 0, comments: 0, jobs: 0, bookmarks: 0, jobBookmarks: 0, notifications: 0, receivedMessages: 0, sentMessages: 0, blocks: 0 });
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
 
@@ -224,7 +232,7 @@ function MyPageContent() {
       if (!token) return;
       const headers = { Authorization: `Bearer ${token}` };
       try {
-        const [pRes, cRes, jRes, bpRes, bjRes, nRes, rmRes, smRes] = await Promise.all([
+        const [pRes, cRes, jRes, bpRes, bjRes, nRes, rmRes, smRes, blkRes] = await Promise.all([
           fetch(`/api/posts/my?uid=${user.uid}`, { headers }),
           fetch(`/api/comments/my?uid=${user.uid}`, { headers }),
           fetch(`/api/jobs/my?uid=${user.uid}`, { headers }),
@@ -233,9 +241,10 @@ function MyPageContent() {
           fetch(`/api/notifications/web`, { headers }),
           fetch(`/api/messages?type=received`, { headers }),
           fetch(`/api/messages?type=sent`, { headers }),
+          fetch(`/api/users/blocks`, { headers }),
         ]);
-        const [pData, cData, jData, bpData, bjData, nData, rmData, smData] = await Promise.all([
-          pRes.json(), cRes.json(), jRes.json(), bpRes.json(), bjRes.json(), nRes.json(), rmRes.json(), smRes.json(),
+        const [pData, cData, jData, bpData, bjData, nData, rmData, smData, blkData] = await Promise.all([
+          pRes.json(), cRes.json(), jRes.json(), bpRes.json(), bjRes.json(), nRes.json(), rmRes.json(), smRes.json(), blkRes.json(),
         ]);
         const nextCounts = {
           posts: (pData.posts || []).length,
@@ -246,6 +255,7 @@ function MyPageContent() {
           notifications: (nData.notifications || []).length,
           receivedMessages: (rmData.messages || []).length,
           sentMessages: (smData.messages || []).length,
+          blocks: (blkData.blocks || []).length,
         };
         const unread = (nData.notifications || []).filter((n: { is_read: boolean }) => !n.is_read).length;
         setUnreadMessages(rmData.unreadCount || 0);
@@ -303,6 +313,7 @@ function MyPageContent() {
           else if (tab === "notifications") setNotifications(parsed.data);
           else if (tab === "receivedMessages") setReceivedMessages(parsed.data);
           else if (tab === "sentMessages") setSentMessages(parsed.data);
+          else if (tab === "blocks") setBlockedUsers(parsed.data);
           hadCache = true;
         }
       }
@@ -375,6 +386,12 @@ function MyPageContent() {
         const list = data.messages || [];
         setSentMessages(list);
         saveCache(list);
+      } else if (tab === "blocks") {
+        const res = await fetch(`/api/users/blocks`, { headers });
+        const data = await res.json();
+        const list = data.blocks || [];
+        setBlockedUsers(list);
+        saveCache(list);
       }
     } catch {}
     setDataLoading(false);
@@ -383,6 +400,40 @@ function MyPageContent() {
   useEffect(() => {
     if (activeTab) loadTabData(activeTab);
   }, [activeTab, loadTabData]);
+
+  /* 차단 해제 */
+  const handleUnblock = async (nickname: string) => {
+    if (unblockingNickname) return;
+    setUnblockingNickname(nickname);
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/users/block`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ nickname }),
+      });
+      if (!res.ok) throw new Error("해제 실패");
+      setBlockedUsers((prev) => prev.filter((b) => b.blocked_nickname !== nickname));
+      setCounts((c) => ({ ...c, blocks: Math.max(0, c.blocks - 1) }));
+      // localStorage 캐시도 동기화 — 다음 진입 시 stale 한 차단 목록이 잠깐 보이지 않도록
+      if (user) {
+        try {
+          const cacheKey = `my_tab_blocks_${user.uid}`;
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            const next = (parsed.data || []).filter((b: BlockedUser) => b.blocked_nickname !== nickname);
+            localStorage.setItem(cacheKey, JSON.stringify({ data: next, ts: Date.now() }));
+          }
+        } catch {}
+      }
+    } catch {
+      alert("차단을 해제하지 못했습니다.");
+    } finally {
+      setUnblockingNickname(null);
+    }
+  };
 
   /* 쪽지 삭제 (개별) */
   const confirmDeleteMessage = async () => {
@@ -486,7 +537,7 @@ function MyPageContent() {
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     const highlightParam = searchParams.get("highlight");
-    const validTabs: Tab[] = ["posts", "comments", "jobs", "bookmarks", "jobBookmarks", "notifications", "receivedMessages", "sentMessages"];
+    const validTabs: Tab[] = ["posts", "comments", "jobs", "bookmarks", "jobBookmarks", "notifications", "receivedMessages", "sentMessages", "blocks"];
     if (tabParam && validTabs.includes(tabParam as Tab)) {
       setActiveTab(tabParam as Tab);
       if (tabParam === "notifications" && highlightParam) {
@@ -660,7 +711,7 @@ function MyPageContent() {
     const tabLabels: Record<Tab, string> = {
       posts: "내가 쓴 글", comments: "내가 쓴 댓글", jobs: "내가 등록한 구인글",
       bookmarks: "후기 북마크", jobBookmarks: "구인 북마크", notifications: "알림 리스트",
-      receivedMessages: "받은 쪽지함", sentMessages: "보낸 쪽지함",
+      receivedMessages: "받은 쪽지함", sentMessages: "보낸 쪽지함", blocks: "차단된 사용자",
     };
 
     return (
@@ -1585,6 +1636,43 @@ function MyPageContent() {
                 </div>
               ))}
 
+              {/* ── 차단된 사용자 ── */}
+              {activeTab === "blocks" && (blockedUsers.length === 0 ? (
+                <EmptyTabState
+                  icon={
+                    <svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728A9 9 0 015.636 5.636" />
+                    </svg>
+                  }
+                  title="차단된 사용자가 없습니다"
+                />
+              ) : (
+                <div className="px-4 pt-4 pb-6 space-y-2">
+                  {blockedUsers.map((b) => (
+                    <div
+                      key={b.blocked_uid}
+                      className="flex items-center justify-between bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl px-4 py-3"
+                    >
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
+                          {b.blocked_nickname}
+                        </span>
+                        <span className="text-[11px] text-[#A89B80] dark:text-zinc-500">
+                          {formatDateTime(b.created_at)} 차단
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleUnblock(b.blocked_nickname)}
+                        disabled={unblockingNickname === b.blocked_nickname}
+                        className="shrink-0 ml-3 px-3 py-1.5 text-[12px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] border border-[#6B7B3A]/40 dark:border-[#A8B87A]/40 rounded-lg hover:bg-[#EFE7D5] dark:hover:bg-[#6B7B3A]/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {unblockingNickname === b.blocked_nickname ? "해제 중…" : "차단 해제"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ))}
+
               {/* ── 쪽지 삭제 확인 (개별) ── */}
               {deleteMessageDialog && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setDeleteMessageDialog(null)}>
@@ -1840,6 +1928,7 @@ function MyPageContent() {
           <CardRow label="알림 리스트" badge={unreadNotifications} onClick={() => router.push("/my?tab=notifications")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>} />
           <CardRow label="받은 쪽지함" count={counts.receivedMessages} nBadge={unreadMessages > 0} onClick={() => router.push("/my?tab=receivedMessages")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} />
           <CardRow label="보낸 쪽지함" count={counts.sentMessages} onClick={() => router.push("/my?tab=sentMessages")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>} />
+          <CardRow label="차단된 사용자" count={counts.blocks} onClick={() => router.push("/my?tab=blocks")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728A9 9 0 015.636 5.636" /></svg>} />
         </Card>
 
         {/* ── 3. 설정 카드 ── */}
