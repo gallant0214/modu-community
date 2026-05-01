@@ -387,9 +387,13 @@ export default function AdminPage() {
                           <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                             report.target_type === "post"
                               ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400"
+                              : report.target_type === "job"
+                              ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                              : report.target_type === "message"
+                              ? "bg-pink-100 text-pink-700 dark:bg-pink-950 dark:text-pink-400"
                               : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
                           }`}>
-                            {report.target_type === "post" ? "게시글" : report.target_type === "job" ? "구인글" : "댓글"}
+                            {report.target_type === "post" ? "종목후기" : report.target_type === "job" ? "구인글" : report.target_type === "message" ? "쪽지" : "댓글"}
                           </span>
                           {report.category_name && (
                             <span className="text-xs text-zinc-400">{report.category_name}</span>
@@ -407,9 +411,24 @@ export default function AdminPage() {
                       <div className="mb-3 rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800">
                         {report.target_type === "post" ? (
                           <>
-                            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">신고된 게시글</p>
+                            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">신고된 종목후기</p>
                             <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{report.post_title || "(삭제된 게시글)"}</p>
                             <p className="mt-0.5 text-xs text-zinc-400">작성자: {report.post_author || "-"}</p>
+                          </>
+                        ) : report.target_type === "message" ? (
+                          <>
+                            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">신고된 쪽지</p>
+                            <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{report.message_content || "(삭제된 쪽지)"}</p>
+                            <p className="mt-0.5 text-xs text-zinc-400">발신자: {report.message_sender || "-"}</p>
+                            {report.message_receiver && (
+                              <p className="text-xs text-zinc-400">수신자: {report.message_receiver}</p>
+                            )}
+                          </>
+                        ) : report.target_type === "job" ? (
+                          <>
+                            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">신고된 구인글</p>
+                            <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{report.job_title || "(삭제된 구인글)"}</p>
+                            <p className="mt-0.5 text-xs text-zinc-400">작성자: {report.job_author || "-"}</p>
                           </>
                         ) : (
                           <>

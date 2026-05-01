@@ -36,7 +36,7 @@ export interface Comment {
 
 export interface Report {
   id: number;
-  target_type: "post" | "comment" | "job";
+  target_type: "post" | "comment" | "job" | "message";
   target_id: number;
   post_id: number;
   category_id: number;
@@ -52,6 +52,13 @@ export interface Report {
   comment_content?: string;
   comment_author?: string;
   category_name?: string;
+  // 구인글 신고용
+  job_title?: string;
+  job_author?: string;
+  // 쪽지 신고용
+  message_content?: string;
+  message_sender?: string;
+  message_receiver?: string;
 }
 
 export interface Post {
