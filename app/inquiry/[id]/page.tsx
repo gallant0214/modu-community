@@ -211,10 +211,8 @@ function InquiryDetailContent({ id }: { id: string }) {
               {inquiry.title}
             </h1>
 
-            {/* 메타 */}
+            {/* 메타 — 본인이 작성한 글이라 이메일/작성자 미노출, 날짜시간만 */}
             <div className="mt-4 pt-4 border-t border-[#E8E0D0]/60 dark:border-zinc-800 flex items-center gap-2 flex-wrap text-[12px] text-[#8C8270] dark:text-zinc-500">
-              <span className="font-semibold text-[#3A342A] dark:text-zinc-200">{inquiry.author}</span>
-              <span className="text-[#C7B89B]">·</span>
               <span>{formatDateTime(inquiry.created_at)}</span>
             </div>
           </div>
