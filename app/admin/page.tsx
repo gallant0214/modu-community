@@ -199,6 +199,12 @@ export default function AdminPage() {
               관리자 페이지
             </h1>
           </div>
+          <Link
+            href="/admin/practical-oral-notice"
+            className="rounded-lg bg-[#6B7B3A] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#5a6830]"
+          >
+            📢 실기·구술 공지
+          </Link>
         </header>
 
         {/* Tabs */}

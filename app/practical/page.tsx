@@ -213,6 +213,20 @@ export default function PracticalPage() {
               </button>
             ))}
           </div>
+
+          {/* 26년 실기·구술 필독 공지 (실기/구술 모두 노출) */}
+          <Link
+            href="/practical/notice"
+            className="block mb-4 px-4 py-3 rounded-2xl border border-[#C0392B] bg-[#FFF5F3] dark:bg-zinc-900 hover:shadow-sm transition-all"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-[15px]">📢</span>
+              <span className="font-bold text-[#C0392B] text-[14px] flex-1 truncate">
+                26년 실기 구술 필독 사항
+              </span>
+              <span className="text-[#C0392B] text-lg">›</span>
+            </div>
+          </Link>
         </div>
 
         {tab === "practical" ? (

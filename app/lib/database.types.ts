@@ -942,6 +942,93 @@ export type Database = {
         }
         Relationships: []
       }
+      practical_oral_notices: {
+        Row: {
+          id: number
+          audience: string
+          slug: string
+          icon: string | null
+          badge: string | null
+          title: string
+          summary: string | null
+          content: string
+          display_order: number | null
+          is_active: boolean | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: number
+          audience?: string
+          slug: string
+          icon?: string | null
+          badge?: string | null
+          title: string
+          summary?: string | null
+          content?: string
+          display_order?: number | null
+          is_active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: number
+          audience?: string
+          slug?: string
+          icon?: string | null
+          badge?: string | null
+          title?: string
+          summary?: string | null
+          content?: string
+          display_order?: number | null
+          is_active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      sport_organizations: {
+        Row: {
+          id: number
+          audience: string
+          sport_name: string
+          org_name: string
+          phone: string | null
+          zipcode: string | null
+          address: string | null
+          website: string | null
+          display_order: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: number
+          audience?: string
+          sport_name: string
+          org_name: string
+          phone?: string | null
+          zipcode?: string | null
+          address?: string | null
+          website?: string | null
+          display_order?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: number
+          audience?: string
+          sport_name?: string
+          org_name?: string
+          phone?: string | null
+          zipcode?: string | null
+          address?: string | null
+          website?: string | null
+          display_order?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
