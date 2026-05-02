@@ -1095,7 +1095,7 @@ function MyPageContent() {
                               className={`text-[15px] font-bold tracking-tight leading-snug ${
                                 isOpen
                                   ? "text-[#2A251D] dark:text-zinc-100"
-                                  : "text-[#8C8270] dark:text-zinc-500"
+                                  : "text-[#4A4238] dark:text-zinc-400"
                               }`}
                             >
                               {job.title}
@@ -1666,19 +1666,29 @@ function MyPageContent() {
               `}</style>
 
               {/* ── 받은 쪽지함 ── */}
-              {activeTab === "receivedMessages" && (receivedMessages.length === 0 ? (
-                <EmptyTabState icon={<svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} title="받은 쪽지가 없습니다" />
-              ) : (
+              {activeTab === "receivedMessages" && (
                 <div className="px-4 pt-4 pb-6 space-y-2">
                   <div className="flex justify-end mb-1">
                     <button
                       onClick={() => setDeleteAllMessagesDialog("received")}
                       className="text-[12px] font-bold text-[#C0392B] hover:text-[#A33121] px-2 py-1"
+                      disabled={receivedMessages.length === 0}
                     >
                       모두 삭제
                     </button>
                   </div>
-                  {receivedMessages.map((m) => (
+                  <div className="flex items-center gap-1.5 px-3 py-2 -mt-1 mb-1 rounded-lg bg-[#FBF7EB] dark:bg-zinc-800/60 border border-[#E8E0D0] dark:border-zinc-700">
+                    <svg className="w-3.5 h-3.5 text-[#A89B80] dark:text-zinc-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+                      읽지 않은 쪽지는 30일 후 자동 삭제됩니다.
+                    </p>
+                  </div>
+                  {receivedMessages.length === 0 ? (
+                    <EmptyTabState icon={<svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} title="받은 쪽지가 없습니다" />
+                  ) : (
+                    receivedMessages.map((m) => (
                     <MessageCard
                       key={m.id}
                       message={m}
@@ -1694,9 +1704,10 @@ function MyPageContent() {
                       }}
                       onDelete={() => setDeleteMessageDialog({ id: m.id, type: "received" })}
                     />
-                  ))}
+                  ))
+                  )}
                 </div>
-              ))}
+              )}
 
               {/* ── 보낸 쪽지함 ── */}
               {activeTab === "sentMessages" && (sentMessages.length === 0 ? (
@@ -2296,26 +2307,33 @@ function MessageCard({ message, type, onClick, onDelete }: { message: Message; t
   const otherName = type === "received" ? message.sender_nickname : message.receiver_nickname;
   return (
     <div
-      className={`relative rounded-2xl overflow-hidden transition-colors ${
+      className={`relative rounded-2xl overflow-hidden transition-colors flex ${
         isUnread
-          ? "bg-[#FBF7EB] dark:bg-zinc-900/70 border border-[#6B7B3A]/35 shadow-[0_1px_0_rgba(0,0,0,0.02),0_10px_26px_-22px_rgba(107,123,58,0.4)]"
+          ? "bg-[#F5F0E5] dark:bg-zinc-800 border border-[#6B7B3A]/50 shadow-[0_1px_0_rgba(0,0,0,0.03),0_10px_26px_-20px_rgba(107,123,58,0.55)]"
           : "bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700"
       }`}
     >
-      <button onClick={onClick} className="w-full text-left">
+      {isUnread && <div className="w-1 self-stretch bg-[#6B7B3A] dark:bg-[#A8B87A]" />}
+      <button onClick={onClick} className="flex-1 text-left">
         <div className="px-4 py-3.5 pr-12">
           <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[12px] font-bold text-[#3A342A] dark:text-zinc-200">
-              {type === "received" ? "보낸 사람" : "받는 사람"}: {otherName}
-            </span>
             {isUnread && (
-              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#C0392B] text-white text-[10px] font-bold leading-none">
-                N
+              <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md bg-[#6B7B3A] text-white text-[10px] font-extrabold leading-none tracking-wide">
+                NEW
               </span>
             )}
+            <span className={`text-[12px] ${isUnread ? "font-extrabold text-[#2A251D] dark:text-zinc-100" : "font-bold text-[#3A342A] dark:text-zinc-200"}`}>
+              {type === "received" ? "보낸 사람" : "받는 사람"}: {otherName}
+            </span>
             <span className="ml-auto text-[11px] text-[#A89B80] dark:text-zinc-500">{formatDate(message.created_at)}</span>
           </div>
-          <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400 line-clamp-2 leading-relaxed">{message.content}</p>
+          <p className={`text-[13px] line-clamp-2 leading-relaxed ${
+            isUnread
+              ? "font-semibold text-[#3A342A] dark:text-zinc-200"
+              : "text-[#A89B80] dark:text-zinc-500"
+          }`}>
+            {message.content}
+          </p>
         </div>
       </button>
       {onDelete && (
