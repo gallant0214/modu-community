@@ -15,8 +15,48 @@ export default function AdminPage() {
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"pending" | "resolved" | "inquiries" | "kpi">("pending");
+  const [reportFilter, setReportFilter] = useState<"all" | "post" | "job" | "comment" | "message">("all");
   const [kpiData, setKpiData] = useState<any>(null);
   const [kpiLoading, setKpiLoading] = useState(false);
+
+  // KPI 기간 분석
+  const [rangePreset, setRangePreset] = useState<"day" | "week" | "month" | "custom">("week");
+  const [rangeFrom, setRangeFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10);
+  });
+  const [rangeTo, setRangeTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [rangeData, setRangeData] = useState<any>(null);
+  const [rangeLoading, setRangeLoading] = useState(false);
+
+  function applyPreset(preset: "day" | "week" | "month") {
+    const now = new Date();
+    const to = new Date(now);
+    const from = new Date(now);
+    if (preset === "day") {
+      // do nothing — same day
+    } else if (preset === "week") {
+      from.setDate(now.getDate() - 6);
+    } else if (preset === "month") {
+      from.setDate(now.getDate() - 29);
+    }
+    setRangeFrom(from.toISOString().slice(0, 10));
+    setRangeTo(to.toISOString().slice(0, 10));
+    setRangePreset(preset);
+  }
+
+  async function loadRangeKpi() {
+    setRangeLoading(true);
+    try {
+      const res = await fetch("/api/admin/kpi/range", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: storedPassword, from: rangeFrom, to: rangeTo }),
+      });
+      const data = await res.json();
+      if (!data.error) setRangeData(data);
+    } catch {}
+    setRangeLoading(false);
+  }
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -85,7 +125,18 @@ export default function AdminPage() {
   const resolvedReports = reports.filter((r) => r.resolved);
   const pendingInquiries = inquiries.filter((inq) => !inq.hidden);
   const resolvedInquiries = inquiries.filter((inq) => inq.hidden);
-  const displayReports = tab === "pending" ? pendingReports : resolvedReports;
+  const baseReports = tab === "pending" ? pendingReports : resolvedReports;
+  const displayReports = reportFilter === "all"
+    ? baseReports
+    : baseReports.filter((r) => r.target_type === reportFilter);
+
+  // 미처리 신고 타입별 카운트
+  const pendingByType = {
+    post: pendingReports.filter((r) => r.target_type === "post").length,
+    job: pendingReports.filter((r) => r.target_type === "job").length,
+    comment: pendingReports.filter((r) => r.target_type === "comment").length,
+    message: pendingReports.filter((r) => r.target_type === "message").length,
+  };
 
   const selectedInq = inquiries.find((inq) => inq.id === selectedInquiry);
 
@@ -307,6 +358,92 @@ export default function AdminPage() {
                   </div>
                 )}
 
+                {/* 기간 분석 */}
+                <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+                  <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-3">기간 분석</h3>
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {([
+                      { key: "day" as const, label: "오늘" },
+                      { key: "week" as const, label: "최근 7일" },
+                      { key: "month" as const, label: "최근 30일" },
+                      { key: "custom" as const, label: "직접 설정" },
+                    ]).map((p) => (
+                      <button
+                        key={p.key}
+                        onClick={() => p.key === "custom" ? setRangePreset("custom") : applyPreset(p.key)}
+                        className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                          rangePreset === p.key
+                            ? "bg-violet-500 text-white"
+                            : "border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <input
+                      type="date"
+                      value={rangeFrom}
+                      onChange={(e) => { setRangeFrom(e.target.value); setRangePreset("custom"); }}
+                      max={rangeTo}
+                      className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                    />
+                    <span className="text-xs text-zinc-400">~</span>
+                    <input
+                      type="date"
+                      value={rangeTo}
+                      onChange={(e) => { setRangeTo(e.target.value); setRangePreset("custom"); }}
+                      min={rangeFrom}
+                      max={new Date().toISOString().slice(0, 10)}
+                      className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                    />
+                    <button
+                      onClick={loadRangeKpi}
+                      disabled={rangeLoading}
+                      className="rounded-lg bg-violet-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-600 disabled:opacity-50"
+                    >
+                      {rangeLoading ? "조회 중..." : "조회"}
+                    </button>
+                  </div>
+                  {rangeData ? (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="mb-1.5 text-[11px] font-semibold text-zinc-400">콘텐츠</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <KpiCard label="게시글" value={rangeData.posts} />
+                          <KpiCard label="댓글" value={rangeData.comments} />
+                        </div>
+                      </div>
+                      <div>
+                        <p className="mb-1.5 text-[11px] font-semibold text-zinc-400">구인</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <KpiCard label="등록 구인글" value={rangeData.jobs} />
+                        </div>
+                      </div>
+                      <div>
+                        <p className="mb-1.5 text-[11px] font-semibold text-zinc-400">참여</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <KpiCard label="게시글 좋아요" value={rangeData.postLikes} />
+                          <KpiCard label="댓글 좋아요" value={rangeData.commentLikes} />
+                          <KpiCard label="게시글 북마크" value={rangeData.postBookmarks} />
+                          <KpiCard label="구인 북마크" value={rangeData.jobBookmarks} />
+                        </div>
+                      </div>
+                      <div>
+                        <p className="mb-1.5 text-[11px] font-semibold text-zinc-400">스토어 클릭</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <KpiCard label="총 클릭" value={rangeData.storeClicks?.total || 0} accent />
+                          <KpiCard label="Google Play" value={rangeData.storeClicks?.google_play || 0} />
+                          <KpiCard label="App Store" value={rangeData.storeClicks?.app_store || 0} />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="py-4 text-center text-xs text-zinc-400">기간을 선택하고 조회 버튼을 눌러주세요.</p>
+                  )}
+                </div>
+
                 {/* 새로고침 */}
                 <button
                   onClick={async () => {
@@ -336,6 +473,38 @@ export default function AdminPage() {
         {/* 신고 목록 (미처리 / 처리완료) */}
         {(tab === "pending" || tab === "resolved") && (
           <div className="p-4">
+            {/* 타입별 필터 (미처리 탭에서만 노출) */}
+            {tab === "pending" && pendingReports.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {([
+                  { key: "all", label: "전체", count: pendingReports.length, color: "zinc" },
+                  { key: "post", label: "게시글", count: pendingByType.post, color: "violet" },
+                  { key: "job", label: "구인글", count: pendingByType.job, color: "amber" },
+                  { key: "comment", label: "댓글", count: pendingByType.comment, color: "blue" },
+                  { key: "message", label: "쪽지", count: pendingByType.message, color: "pink" },
+                ] as const).map((f) => {
+                  const active = reportFilter === f.key;
+                  return (
+                    <button
+                      key={f.key}
+                      onClick={() => setReportFilter(f.key)}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                        active
+                          ? f.color === "violet" ? "bg-violet-500 text-white"
+                          : f.color === "amber" ? "bg-amber-500 text-white"
+                          : f.color === "blue" ? "bg-blue-500 text-white"
+                          : f.color === "pink" ? "bg-pink-500 text-white"
+                          : "bg-zinc-700 text-white dark:bg-zinc-200 dark:text-zinc-900"
+                          : "border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      {f.label} <span className="ml-1 opacity-80">{f.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {/* 처리완료 탭일 때 처리된 문의도 표시 */}
             {tab === "resolved" && resolvedInquiries.length > 0 && (
               <div className="mb-4">
