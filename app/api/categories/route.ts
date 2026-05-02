@@ -2,7 +2,7 @@ import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { cached } from "@/app/lib/cache";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export async function GET() {
   const categories = await cached("categories:all", 300, async () => {

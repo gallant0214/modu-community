@@ -1,5 +1,6 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { verifyAdminPassword } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,9 @@ export async function PATCH(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  revalidatePath("/api/practical-oral-notice");
+  revalidatePath("/practical/notice");
+  if (data?.slug) revalidatePath(`/practical/notice/${data.slug}`);
   return NextResponse.json({ success: true, notice: data });
 }
 
@@ -66,5 +70,7 @@ export async function DELETE(
     .eq("id", Number(id));
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  revalidatePath("/api/practical-oral-notice");
+  revalidatePath("/practical/notice");
   return NextResponse.json({ success: true });
 }

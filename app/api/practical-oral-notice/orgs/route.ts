@@ -2,7 +2,7 @@ import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { escapePostgrestQuery } from "@/app/lib/security";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 // GET /api/practical-oral-notice/orgs?audience=main|disabled&q=keyword
 export async function GET(request: Request) {

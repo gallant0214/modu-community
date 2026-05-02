@@ -1,7 +1,7 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 // GET /api/practical-oral-notice?audience=main|disabled
 // 활성 공지 카드 목록 (최신 정보)
