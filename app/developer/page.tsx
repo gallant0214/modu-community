@@ -668,7 +668,7 @@ export default function AdminPage() {
                       <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-600 dark:bg-green-950 dark:text-green-400">완료</span>
                       {inq.reply && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-600 dark:bg-violet-950 dark:text-violet-400">답변됨</span>}
                       <span className="flex-1 truncate text-sm text-zinc-900 dark:text-zinc-100">{inq.title}</span>
-                      <span className="shrink-0 text-xs text-zinc-400">{inq.author}</span>
+                      <span className="shrink-0 text-xs text-zinc-400">{inq.current_nickname || inq.author}</span>
                       <span className="shrink-0 text-xs text-zinc-400">{new Date(inq.created_at).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}</span>
                     </button>
                   ))}
@@ -718,7 +718,7 @@ export default function AdminPage() {
                       <span className="flex-1 truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{inq.title}</span>
                     </div>
                     <div className="mt-2 flex items-center gap-3 text-xs text-zinc-400">
-                      <span>{inq.author}</span>
+                      <span>{inq.current_nickname || inq.author}</span>
                       {inq.email && <span>{inq.email}</span>}
                       <span>{new Date(inq.created_at).toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" })}</span>
                     </div>
@@ -1039,11 +1039,11 @@ export default function AdminPage() {
             <div className="select-text space-y-3">
               <div className="flex border-b border-zinc-100 pb-2 dark:border-zinc-800">
                 <span className="w-16 shrink-0 text-sm font-medium text-zinc-500 dark:text-zinc-400">이름</span>
-                <span className="text-sm text-zinc-900 dark:text-zinc-100">{selectedInq.author}</span>
+                <span className="text-sm text-zinc-900 dark:text-zinc-100">{selectedInq.current_nickname || selectedInq.author}</span>
               </div>
               <div className="flex border-b border-zinc-100 pb-2 dark:border-zinc-800">
                 <span className="w-16 shrink-0 text-sm font-medium text-zinc-500 dark:text-zinc-400">이메일</span>
-                <span className="text-sm text-zinc-900 dark:text-zinc-100">{selectedInq.email || "-"}</span>
+                <span className="text-sm text-zinc-900 dark:text-zinc-100">{selectedInq.current_email || selectedInq.email || "-"}</span>
               </div>
               <div className="flex border-b border-zinc-100 pb-2 dark:border-zinc-800">
                 <span className="w-16 shrink-0 text-sm font-medium text-zinc-500 dark:text-zinc-400">제목</span>
@@ -1106,7 +1106,10 @@ export default function AdminPage() {
           <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
             <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">삭제하시겠습니까?</h3>
             <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-              신고된 {reports.find((r) => r.id === deleteConfirmId)?.target_type === "post" ? "게시글" : "댓글"}을 삭제하고 처리 완료로 이동합니다.
+              신고된 {(() => {
+                const t = reports.find((r) => r.id === deleteConfirmId)?.target_type;
+                return t === "post" ? "게시글" : t === "job" ? "구인글" : t === "message" ? "쪽지" : "댓글";
+              })()}을(를) 삭제하고 처리 완료로 이동합니다.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={() => setDeleteConfirmId(null)} disabled={deleting} className="rounded-lg border border-zinc-200 px-5 py-2.5 text-sm font-semibold text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">아니오</button>
@@ -1135,14 +1138,31 @@ export default function AdminPage() {
 
 // ===== 신고 카드 컴포넌트 =====
 function ReportCard({ report, onResolve, onDelete }: { report: Report; onResolve?: (id: number) => void; onDelete?: (id: number) => void }) {
+  const tagColor =
+    report.target_type === "post" ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400"
+    : report.target_type === "job" ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+    : report.target_type === "message" ? "bg-pink-100 text-pink-700 dark:bg-pink-950 dark:text-pink-400"
+    : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400";
+  const tagLabel =
+    report.target_type === "post" ? "종목후기"
+    : report.target_type === "job" ? "구인글"
+    : report.target_type === "message" ? "쪽지"
+    : "댓글";
+  const targetWord =
+    report.target_type === "post" ? "게시글이"
+    : report.target_type === "job" ? "구인글이"
+    : report.target_type === "message" ? "쪽지가"
+    : "댓글이";
+  const detailHref =
+    report.target_type === "job" ? `/jobs/${report.target_id}`
+    : `/category/${report.category_id}/post/${report.post_id}`;
+
   return (
     <div className={`rounded-2xl border bg-white p-4 dark:bg-zinc-900 ${report.resolved ? "border-green-200 dark:border-green-900" : "border-zinc-200 dark:border-zinc-800"}`}>
       {/* 상단 */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${report.target_type === "post" ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400" : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400"}`}>
-            {report.target_type === "post" ? "게시글" : "댓글"}
-          </span>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${tagColor}`}>{tagLabel}</span>
           {report.category_name && <span className="text-xs text-zinc-400">{report.category_name}</span>}
           {report.resolved && report.deleted_at && <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-600 dark:bg-red-950 dark:text-red-400">삭제됨</span>}
           {report.resolved && !report.deleted_at && <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-600 dark:bg-green-950 dark:text-green-400">처리됨</span>}
@@ -1150,21 +1170,61 @@ function ReportCard({ report, onResolve, onDelete }: { report: Report; onResolve
         <span className="text-xs text-zinc-400">{new Date(report.created_at).toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
       </div>
 
+      {/* 신고자 정보 */}
+      <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-900 dark:bg-blue-950/30">
+        <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">신고자</p>
+        <p className="mt-1 text-sm text-blue-900 dark:text-blue-100">
+          {report.reporter_nickname || report.reporter_email || "-"}
+          {report.reporter_email && report.reporter_nickname ? (
+            <span className="ml-2 text-xs text-blue-700/70 dark:text-blue-400/80">{report.reporter_email}</span>
+          ) : null}
+        </p>
+      </div>
+
       {/* 신고 대상 */}
       <div className="mb-3 rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800">
         {report.target_type === "post" ? (
           <>
-            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">신고된 게시글</p>
-            <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{report.post_title || "(삭제된 게시글)"}</p>
-            <p className="mt-0.5 text-xs text-zinc-400">작성자: {report.post_author || "-"}</p>
+            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">신고된 종목후기</p>
+            <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{report.post_title || (report.target_exists ? "(제목 없음)" : "(삭제된 게시글)")}</p>
+            <p className="mt-0.5 text-xs text-zinc-400">
+              작성자: {report.post_author || "-"}
+              {report.post_author_email ? <span className="ml-1.5 text-zinc-400/80">{report.post_author_email}</span> : null}
+            </p>
+          </>
+        ) : report.target_type === "message" ? (
+          <>
+            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">쪽지 내용</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{report.message_content || (report.target_exists ? "(내용 없음)" : "(삭제된 쪽지)")}</p>
+            <p className="mt-0.5 text-xs text-zinc-400">
+              발신자: {report.message_sender || "-"}
+              {report.message_sender_email ? <span className="ml-1.5 text-zinc-400/80">{report.message_sender_email}</span> : null}
+            </p>
+            {report.message_receiver && <p className="text-xs text-zinc-400">수신자: {report.message_receiver}</p>}
+          </>
+        ) : report.target_type === "job" ? (
+          <>
+            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">신고된 구인글</p>
+            <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{report.job_title || (report.target_exists ? "(제목 없음)" : "(삭제된 구인글)")}</p>
+            <p className="mt-0.5 text-xs text-zinc-400">
+              작성자: {report.job_author || "-"}
+              {report.job_author_email ? <span className="ml-1.5 text-zinc-400/80">{report.job_author_email}</span> : null}
+            </p>
           </>
         ) : (
           <>
             <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">신고된 댓글</p>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{report.comment_content || "(삭제된 댓글)"}</p>
-            <p className="mt-0.5 text-xs text-zinc-400">작성자: {report.comment_author || "-"}</p>
-            <hr className="my-2 border-zinc-200 dark:border-zinc-700" />
-            <p className="text-xs text-zinc-400">게시글: {report.post_title || "(삭제된 게시글)"}</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{report.comment_content || (report.target_exists ? "(내용 없음)" : "(삭제된 댓글)")}</p>
+            <p className="mt-0.5 text-xs text-zinc-400">
+              작성자: {report.comment_author || "-"}
+              {report.comment_author_email ? <span className="ml-1.5 text-zinc-400/80">{report.comment_author_email}</span> : null}
+            </p>
+            {report.post_title ? (
+              <>
+                <hr className="my-2 border-zinc-200 dark:border-zinc-700" />
+                <p className="text-xs text-zinc-400">게시글: {report.post_title}</p>
+              </>
+            ) : null}
           </>
         )}
       </div>
@@ -1180,7 +1240,7 @@ function ReportCard({ report, onResolve, onDelete }: { report: Report; onResolve
       {report.deleted_at && (
         <div className="mb-3 rounded-xl bg-zinc-100 px-4 py-3 dark:bg-zinc-800">
           <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">삭제 기록</p>
-          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">관리자에 의해 {report.target_type === "post" ? "게시글이" : "댓글이"} 삭제되었습니다.</p>
+          <p className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">관리자에 의해 {targetWord} 삭제되었습니다.</p>
           <p className="mt-0.5 text-xs text-zinc-400">삭제 시각: {new Date(report.deleted_at).toLocaleString("ko-KR")}</p>
         </div>
       )}
@@ -1190,7 +1250,9 @@ function ReportCard({ report, onResolve, onDelete }: { report: Report; onResolve
         {!report.resolved && onDelete && (
           <button onClick={() => onDelete(report.id)} className="rounded-lg bg-red-500 px-4 py-2 text-xs font-semibold text-white hover:bg-red-600">삭제하기</button>
         )}
-        <Link href={`/category/${report.category_id}/post/${report.post_id}`} className="rounded-lg bg-violet-500 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-600">바로가기</Link>
+        {report.target_type !== "message" && (
+          <Link href={detailHref} className="rounded-lg bg-violet-500 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-600">바로가기</Link>
+        )}
         {!report.resolved && onResolve && (
           <button onClick={() => onResolve(report.id)} className="rounded-lg border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">처리 완료</button>
         )}
