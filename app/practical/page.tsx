@@ -182,25 +182,6 @@ export default function PracticalPage() {
     <div className={pageShell}>
       <div className="mx-auto max-w-2xl">
         <div className="px-4 pt-4 pb-0">
-          <section className={`relative overflow-hidden rounded-3xl p-6 sm:p-7 mb-4 shadow-[0_1px_0_rgba(0,0,0,0.02),0_12px_32px_-20px_rgba(107,93,71,0.28)] ${surfaceCard}`}>
-            <div aria-hidden className="absolute -top-16 -right-10 w-40 h-40 rounded-full bg-[#6B7B3A]/10 blur-3xl" />
-            <div aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#6B7B3A]/40 to-transparent" />
-            <div className="relative">
-              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold mb-3 ${accentSoft}`}>
-                같은 종목을 준비하는 사람들과
-              </span>
-              <h1 className="text-[26px] sm:text-[28px] font-bold tracking-[-0.03em] text-[#2F2A24] dark:text-zinc-100 mb-2 leading-tight">
-                운동 종목별 이야기와 후기,
-                <br />
-                준비 정보가 모이는 곳
-              </h1>
-              <p className="text-sm leading-relaxed text-[#6B5D47] dark:text-zinc-400">
-                시험 준비 과정, 실기·구술 팁, 현장 경험, 일상적인 종목 이야기까지.
-                각 운동 종목에 대한 다양한 이야기를 한곳에서 보고 나눌 수 있습니다.
-              </p>
-            </div>
-          </section>
-
           <div className={`flex rounded-2xl p-1 mb-4 ${surfaceCard}`}>
             {(["practical", "oral"] as MainTab[]).map((t) => (
               <button key={t} onClick={() => { setTab(t); setSelectedSport(null); }}
