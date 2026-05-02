@@ -2,6 +2,7 @@ import Link from "next/link";
 import { supabase } from "@/app/lib/supabase";
 import DisclaimerBanner from "@/app/components/disclaimer-banner";
 import { notFound } from "next/navigation";
+import { sanitizeRichContent } from "@/app/lib/sanitize";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,7 @@ export default async function NoticeDetailPage(props: {
 
         <div
           className="prose prose-sm max-w-none bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl p-5 text-[#2A251D] dark:text-zinc-100"
-          dangerouslySetInnerHTML={{ __html: notice.content || "" }}
+          dangerouslySetInnerHTML={{ __html: sanitizeRichContent(notice.content || "") }}
         />
 
         <style>{`

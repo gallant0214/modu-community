@@ -10,6 +10,7 @@ import { shareOrCopy } from "@/app/lib/share";
 import { SendMessageModal } from "@/app/components/send-message-modal";
 import { optimizeCloudinaryUrl } from "@/app/lib/cloudinary-url";
 import { formatRegionShort } from "@/app/lib/region-format";
+import { sanitizePostBody } from "@/app/lib/sanitize";
 
 interface PostViewProps {
   /** SSR 에서 서버가 미리 조회한 공개 필드 — is_liked/is_bookmarked/is_mine/ip_display 는 없음 */
@@ -751,7 +752,7 @@ export function PostView({ initialPost }: PostViewProps) {
           ) : (
             <div
               className="prose prose-sm max-w-none text-[15px] leading-[1.85] text-[#3A342A] dark:text-zinc-200 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:my-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_blockquote]:border-l-3 [&_blockquote]:border-[#6B7B3A] [&_blockquote]:pl-4 [&_blockquote]:text-[#6B5D47] [&_p]:my-1"
-              dangerouslySetInnerHTML={{ __html: (post.content as string).replace(/\n/g, "<br>") }}
+              dangerouslySetInnerHTML={{ __html: sanitizePostBody((post.content as string).replace(/\n/g, "<br>")) }}
             />
           )}
           {post.images && (
