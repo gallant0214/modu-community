@@ -1,8 +1,15 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { escapePostgrestQuery } from "@/app/lib/security";
+import { getBlockedUidsForRequest } from "@/app/lib/block-filter";
 
 export const dynamic = "force-dynamic";
+
+type RowWithUid = { firebase_uid?: string | null; [k: string]: unknown };
+function filterBlocked<T extends RowWithUid>(rows: T[], blockedSet: Set<string>): T[] {
+  if (blockedSet.size === 0) return rows;
+  return rows.filter((r) => !r.firebase_uid || !blockedSet.has(r.firebase_uid));
+}
 
 /**
  * 초성 문자를 해당 한글 음절 범위 정규식으로 변환
@@ -42,11 +49,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ posts: [], jobs: [] });
   }
 
+  const blocked = await getBlockedUidsForRequest(request);
+  const blockedSet = new Set(blocked);
+  const fetchSize = limit + Math.min(blocked.length, 20);
+
   if (choRegex) {
     // 초성 검색: PostgreSQL ~ regex 통한 rpc
     const [postsRes, jobsRes] = await Promise.all([
-      supabase.rpc("search_posts_by_regex", { p_pattern: choRegex, p_limit: limit }),
-      supabase.rpc("search_jobs_by_regex", { p_pattern: choRegex, p_limit: limit }),
+      supabase.rpc("search_posts_by_regex", { p_pattern: choRegex, p_limit: fetchSize }),
+      supabase.rpc("search_jobs_by_regex", { p_pattern: choRegex, p_limit: fetchSize }),
     ]);
     if (postsRes.error || jobsRes.error) {
       return NextResponse.json(
@@ -54,7 +65,10 @@ export async function GET(request: Request) {
         { status: 500 },
       );
     }
-    return NextResponse.json({ posts: postsRes.data, jobs: jobsRes.data });
+    return NextResponse.json({
+      posts: filterBlocked(postsRes.data || [], blockedSet).slice(0, limit),
+      jobs: filterBlocked(jobsRes.data || [], blockedSet).slice(0, limit),
+    });
   }
 
   // 일반 검색: ILIKE (PostgREST에선 wildcard가 * 임)
@@ -66,14 +80,14 @@ export async function GET(request: Request) {
       .or("is_notice.eq.false,is_notice.is.null")
       .or(`title.ilike.${wild},content.ilike.${wild},author.ilike.${wild},region.ilike.${wild}`)
       .order("created_at", { ascending: false })
-      .limit(limit),
+      .limit(fetchSize),
     supabase
       .from("job_posts")
       .select("*")
       .or("is_closed.eq.false,is_closed.is.null")
       .or(`title.ilike.${wild},description.ilike.${wild},center_name.ilike.${wild},sport.ilike.${wild},region_name.ilike.${wild},address.ilike.${wild}`)
       .order("created_at", { ascending: false })
-      .limit(limit),
+      .limit(fetchSize),
   ]);
 
   if (postsRes.error || jobsRes.error) {
@@ -83,10 +97,12 @@ export async function GET(request: Request) {
     );
   }
 
-  const posts = postsRes.data.map(({ categories: cat, ...p }) => ({
-    ...p,
-    category_name: cat?.name ?? null,
-  }));
+  const posts = filterBlocked(postsRes.data, blockedSet)
+    .slice(0, limit)
+    .map(({ categories: cat, ...p }) => ({
+      ...p,
+      category_name: cat?.name ?? null,
+    }));
 
-  return NextResponse.json({ posts, jobs: jobsRes.data });
+  return NextResponse.json({ posts, jobs: filterBlocked(jobsRes.data || [], blockedSet).slice(0, limit) });
 }

@@ -1,6 +1,8 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { cached } from "@/app/lib/cache";
+import { escapePostgrestQuery } from "@/app/lib/security";
+import { getBlockedUidsForRequest } from "@/app/lib/block-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -50,10 +52,14 @@ export async function GET(
   const currentPage = Math.max(1, Number(url.searchParams.get("page")) || 1);
   const perPage = 10;
   const offset = (currentPage - 1) * perPage;
-  const searchQuery = url.searchParams.get("q")?.trim() || "";
+  const rawQuery = url.searchParams.get("q")?.trim() || "";
+  const searchQuery = escapePostgrestQuery(rawQuery);
   const searchFilter = (url.searchParams.get("searchType") || "all") as SearchFilter;
   const isSearching = searchQuery.length > 0;
   const wild = `*${searchQuery}*`;
+  const blocked = await getBlockedUidsForRequest(request);
+  const blockedSet = new Set(blocked);
+  const fetchSize = perPage + Math.min(blocked.length, 20);
 
   const noticePostsPromise = cached("notices", 300, async () => {
     const { data } = await supabase
@@ -99,8 +105,8 @@ export async function GET(
     const { data } = await applySort(
       baseFilter(supabase.from("posts").select("*")),
       "latest",
-    ).range(offset, offset + perPage - 1);
-    posts = data || [];
+    ).range(offset, offset + fetchSize - 1);
+    posts = (data || []).filter((p: { firebase_uid?: string | null }) => !p.firebase_uid || !blockedSet.has(p.firebase_uid)).slice(0, perPage);
   } else {
     const cacheKey = `posts:cat:${catId}:sort:${sortMode}:p:${currentPage}`;
     const result = await cached(cacheKey, 60, async () => {
@@ -118,11 +124,13 @@ export async function GET(
           .eq("category_id", catId)
           .or("is_notice.eq.false,is_notice.is.null"),
         sortMode,
-      ).range(offset, offset + perPage - 1);
+      ).range(offset, offset + perPage + 20 - 1);
 
       return { posts: data || [], totalCount: tc };
     });
-    posts = result.posts;
+    posts = (result.posts as { firebase_uid?: string | null }[])
+      .filter((p) => !p.firebase_uid || !blockedSet.has(p.firebase_uid))
+      .slice(0, perPage);
     totalCount = result.totalCount;
   }
 

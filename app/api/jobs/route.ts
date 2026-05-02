@@ -6,6 +6,7 @@ import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib
 import { sendKeywordAlerts } from "@/app/lib/notifications";
 import { invalidateCache } from "@/app/lib/cache";
 import { fetchJobsPage } from "@/app/lib/jobs-query";
+import { getBlockedUidsForRequest } from "@/app/lib/block-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -13,17 +14,32 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
+    const blocked = await getBlockedUidsForRequest(request);
+    const blockedSet = new Set(blocked);
+    const baseLimit = Number(url.searchParams.get("limit")) || 20;
+    // 차단 글 후처리 시 부족분 보충용으로 약간 더 가져옴
+    const fetchLimit = baseLimit + Math.min(blocked.length, 20);
+
     const result = await fetchJobsPage({
       regionCode: url.searchParams.get("region_code") || "",
       sort: url.searchParams.get("sort") || "latest",
       page: Number(url.searchParams.get("page")) || 1,
-      limit: Number(url.searchParams.get("limit")) || 20,
+      limit: fetchLimit,
       q: url.searchParams.get("q")?.trim() || "",
       searchType: url.searchParams.get("searchType") || "all",
       employmentType: url.searchParams.get("employment_type") || "",
       hideClosed: url.searchParams.get("hide_closed") === "true",
       sportFilter: url.searchParams.get("sport") || "",
     });
+
+    if (blocked.length > 0) {
+      result.posts = result.posts
+        .filter((p) => !p.firebase_uid || !blockedSet.has(p.firebase_uid))
+        .slice(0, baseLimit);
+    } else {
+      result.posts = result.posts.slice(0, baseLimit);
+    }
+
     return NextResponse.json(result);
   } catch (e) {
     console.error("GET /api/jobs error:", e);

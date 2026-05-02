@@ -6,6 +6,7 @@ import { verifyAuth } from "@/app/lib/firebase-admin";
 import { sendPushToUser } from "@/app/lib/notifications";
 import { invalidateCache } from "@/app/lib/cache";
 import { waitUntil } from "@vercel/functions";
+import { getBlockedUidsForRequest } from "@/app/lib/block-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -27,12 +28,19 @@ export async function GET(
   const user = await verifyAuth(request);
   const pid = Number(postId);
 
-  const { data: rows, error } = await supabase
+  const { data: allRows, error } = await supabase
     .from("comments")
     .select("id, post_id, parent_id, author, content, likes, ip_address, firebase_uid, created_at, updated_at, hidden")
     .eq("post_id", pid)
     .order("created_at", { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // 차단 사용자 댓글 제거 (비로그인 시 빈 배열 → 필터 미적용)
+  const blocked = await getBlockedUidsForRequest(request);
+  const blockedSet = new Set(blocked);
+  const rows = blockedSet.size === 0
+    ? allRows
+    : allRows.filter((c) => !c.firebase_uid || !blockedSet.has(c.firebase_uid));
 
   // reply_count는 별도 쿼리로 (parent_id 기준 그룹)
   const { data: replyParents } = await supabase
