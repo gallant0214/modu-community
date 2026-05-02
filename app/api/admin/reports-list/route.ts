@@ -62,9 +62,9 @@ export async function POST(req: Request) {
     return data || [];
   };
   const [postRows, commentRows, jobRows, messageRows, categoryRows] = await Promise.all([
-    fetchIn("posts", postIds, "id, title, author, password, category_id"),
-    fetchIn("comments", commentIds, "id, content, author, password, post_id"),
-    fetchIn("job_posts", jobIds, "id, title, author_name, password"),
+    fetchIn("posts", postIds, "id, title, author, firebase_uid, category_id"),
+    fetchIn("comments", commentIds, "id, content, author, firebase_uid, post_id"),
+    fetchIn("job_posts", jobIds, "id, title, author_name, firebase_uid"),
     fetchIn("messages", messageIds, "id, content, sender_uid, sender_nickname, receiver_uid, receiver_nickname"),
     fetchIn("categories", categoryIds, "id, name"),
   ]);
@@ -80,16 +80,17 @@ export async function POST(req: Request) {
     if (r.reporter_uid) uidSet.add(r.reporter_uid);
     if (r.target_type === "post") {
       const p = postMap.get(r.target_id);
-      if (p?.password) uidSet.add(p.password);
+      if (p?.firebase_uid) uidSet.add(p.firebase_uid);
     } else if (r.target_type === "comment") {
       const c = commentMap.get(r.target_id);
-      if (c?.password) uidSet.add(c.password);
+      if (c?.firebase_uid) uidSet.add(c.firebase_uid);
     } else if (r.target_type === "job") {
       const j = jobMap.get(r.target_id);
-      if (j?.password) uidSet.add(j.password);
+      if (j?.firebase_uid) uidSet.add(j.firebase_uid);
     } else if (r.target_type === "message") {
       const m = messageMap.get(r.target_id);
       if (m?.sender_uid) uidSet.add(m.sender_uid);
+      if (m?.receiver_uid) uidSet.add(m.receiver_uid);
     }
   }
   const uids = Array.from(uidSet);
@@ -150,7 +151,7 @@ export async function POST(req: Request) {
       if (p) {
         target_exists = true;
         post_title = p.title;
-        const authorUid = p.password;
+        const authorUid = p.firebase_uid;
         post_author = (authorUid && nicknameMap.get(authorUid)) || p.author || null;
         post_author_email = authorUid ? emailMap.get(authorUid) || null : null;
       }
@@ -159,7 +160,7 @@ export async function POST(req: Request) {
       if (c) {
         target_exists = true;
         comment_content = c.content;
-        const authorUid = c.password;
+        const authorUid = c.firebase_uid;
         comment_author = (authorUid && nicknameMap.get(authorUid)) || c.author || null;
         comment_author_email = authorUid ? emailMap.get(authorUid) || null : null;
       }
@@ -175,7 +176,7 @@ export async function POST(req: Request) {
       if (j) {
         target_exists = true;
         job_title = j.title;
-        const authorUid = j.password;
+        const authorUid = j.firebase_uid;
         job_author = (authorUid && nicknameMap.get(authorUid)) || j.author_name || null;
         job_author_email = authorUid ? emailMap.get(authorUid) || null : null;
       }
