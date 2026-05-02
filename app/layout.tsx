@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/app/components/auth-provider";
+import RequireNicknameModal from "@/app/components/require-nickname-modal";
 import { NavBar } from "@/app/components/nav-bar";
 import { AppResilience } from "@/app/components/app-resilience";
 import { WebPushInitializer } from "@/app/components/web-push-initializer";
@@ -73,6 +74,7 @@ export default function RootLayout({
           <WebPushInitializer />
           <NavBar />
           {children}
+          <RequireNicknameModal />
         </AuthProvider>
         <SpeedInsights />
       </body>

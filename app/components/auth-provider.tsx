@@ -16,6 +16,8 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   nickname: string | null;
+  nicknameLoaded: boolean;
+  setNicknameLocal: (name: string) => void;
   activeRegionCode: string;
   activeRegionName: string;
   signInWithGoogle: () => Promise<void>;
@@ -30,6 +32,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   nickname: null,
+  nicknameLoaded: false,
+  setNicknameLocal: () => {},
   activeRegionCode: "",
   activeRegionName: "",
   signInWithGoogle: async () => {},
@@ -125,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [nickname, setNickname] = useState<string | null>(null);
+  const [nicknameLoaded, setNicknameLoaded] = useState(false);
   const [activeRegionCode, setActiveRegionCode] = useState("");
   const [activeRegionName, setActiveRegionName] = useState("");
 
@@ -146,6 +151,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (name) {
             localStorage.setItem(NICKNAME_CACHE_KEY, name);
             localStorage.setItem(NICKNAME_UID_KEY, uid);
+          } else {
+            // 서버 응답에서 닉네임 없음 = 캐시 정리
+            localStorage.removeItem(NICKNAME_CACHE_KEY);
+            localStorage.removeItem(NICKNAME_UID_KEY);
           }
           const rCode = data.activeRegionCode || "";
           const rName = data.activeRegionName || "";
@@ -153,6 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setActiveRegionName(rName);
           if (rCode) localStorage.setItem(REGION_CODE_KEY, rCode); else localStorage.removeItem(REGION_CODE_KEY);
           if (rName) localStorage.setItem(REGION_NAME_KEY, rName); else localStorage.removeItem(REGION_NAME_KEY);
+          setNicknameLoaded(true);
           return;
         }
         if (res.status >= 400 && res.status < 500) break;
@@ -174,6 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cachedRegionName = localStorage.getItem(REGION_NAME_KEY) || "";
     setActiveRegionCode(cachedRegionCode);
     setActiveRegionName(cachedRegionName);
+    setNicknameLoaded(true);
   };
 
   useEffect(() => {
@@ -195,6 +206,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const cachedNickname = localStorage.getItem(NICKNAME_CACHE_KEY);
           if (cachedUid === u.uid && cachedNickname) {
             setNickname(cachedNickname);
+            setNicknameLoaded(true); // 캐시 hit → 즉시 loaded
+          } else {
+            setNickname(null);
+            setNicknameLoaded(false); // 캐시 miss → fetchNickname 완료 후에만 loaded
           }
           setActiveRegionCode(localStorage.getItem(REGION_CODE_KEY) || "");
           setActiveRegionName(localStorage.getItem(REGION_NAME_KEY) || "");
@@ -208,6 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           localStorage.removeItem("fb_token");
           setNickname(null);
+          setNicknameLoaded(false);
           setActiveRegionCode("");
           setActiveRegionName("");
           setLoading(false);
@@ -320,7 +336,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, nickname, activeRegionCode, activeRegionName, signInWithGoogle, signInWithApple, signOutUser, getIdToken, refreshNickname, setActiveRegionLocal }}>
+    <AuthContext.Provider value={{ user, loading, nickname, nicknameLoaded, setNicknameLocal: (name: string) => { setNickname(name); setNicknameLoaded(true); }, activeRegionCode, activeRegionName, signInWithGoogle, signInWithApple, signOutUser, getIdToken, refreshNickname, setActiveRegionLocal }}>
       {children}
     </AuthContext.Provider>
   );
