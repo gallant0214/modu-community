@@ -1,5 +1,6 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
+import { escapePostgrestQuery } from "@/app/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -7,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const audience = searchParams.get("audience") === "disabled" ? "disabled" : "main";
-  const q = (searchParams.get("q") || "").trim();
+  const q = escapePostgrestQuery((searchParams.get("q") || "").trim());
 
   let query = supabase
     .from("sport_organizations")

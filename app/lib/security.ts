@@ -24,6 +24,19 @@ export function sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
   return result;
 }
 
+/**
+ * PostgREST `.or()` / `.ilike()` filter injection 방어.
+ * 사용자 입력에서 PostgREST 문법을 깨거나 다른 조건을 inject 할 수 있는
+ * 특수문자(쉼표·괄호·와일드카드·콜론)를 제거하고 길이 제한 적용.
+ */
+export function escapePostgrestQuery(q: string, maxLength = 100): string {
+  return q
+    .replace(/[,()*%:]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
 // ============================================
 // Rate Limiting (메모리 + 슬라이딩 윈도우)
 // ============================================

@@ -2,9 +2,11 @@ export const dynamic = "force-dynamic";
 
 import { supabase } from "@/app/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
+import { escapePostgrestQuery } from "@/app/lib/security";
 
 export async function GET(req: NextRequest) {
-  const q = req.nextUrl.searchParams.get("q")?.trim();
+  const rawQ = req.nextUrl.searchParams.get("q")?.trim();
+  const q = rawQ ? escapePostgrestQuery(rawQ) : "";
   if (!q) {
     return NextResponse.json({ posts: [] });
   }

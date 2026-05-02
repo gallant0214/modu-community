@@ -1,5 +1,6 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
+import { escapePostgrestQuery } from "@/app/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -27,14 +28,19 @@ function choToRegex(query: string): string | null {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const q = url.searchParams.get("q")?.trim();
+  const rawQ = url.searchParams.get("q")?.trim();
   const limit = Math.min(Number(url.searchParams.get("limit")) || 20, 50);
 
-  if (!q) {
+  if (!rawQ) {
     return NextResponse.json({ posts: [], jobs: [] });
   }
 
-  const choRegex = choToRegex(q);
+  // 초성 검색은 한글 자모만 다루므로 raw q 사용. 일반 검색은 PostgREST 인젝션 방어.
+  const choRegex = choToRegex(rawQ);
+  const q = escapePostgrestQuery(rawQ);
+  if (!choRegex && !q) {
+    return NextResponse.json({ posts: [], jobs: [] });
+  }
 
   if (choRegex) {
     // 초성 검색: PostgreSQL ~ regex 통한 rpc
