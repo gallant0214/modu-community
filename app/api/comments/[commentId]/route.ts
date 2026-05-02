@@ -2,6 +2,8 @@ import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 import { verifyAuth, isAdminUid } from "@/app/lib/firebase-admin";
+import { invalidateCache } from "@/app/lib/cache";
+import { waitUntil } from "@vercel/functions";
 
 export const dynamic = "force-dynamic";
 
@@ -136,6 +138,15 @@ export async function DELETE(
 
   const pid = post_id || row.post_id;
   if (pid) await recomputePostCommentsCount(Number(pid));
+
+  // 댓글 수 변경 → 리스트 캐시 무효화
+  waitUntil(
+    Promise.allSettled([
+      invalidateCache("posts:latest:*"),
+      invalidateCache("posts:popular:*"),
+      invalidateCache("posts:cat:*"),
+    ]),
+  );
 
   return NextResponse.json({ success: true });
 }

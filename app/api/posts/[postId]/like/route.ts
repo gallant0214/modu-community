@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { sendPushToUser } from "@/app/lib/notifications";
+import { invalidateCache } from "@/app/lib/cache";
 import { waitUntil } from "@vercel/functions";
 
 export const dynamic = "force-dynamic";
@@ -99,6 +100,15 @@ export async function POST(
       }
     } catch {}
   }
+
+  // 리스트 화면(최신/인기/카테고리) 캐시 무효화 — 좋아요 수가 즉시 반영되도록
+  waitUntil(
+    Promise.allSettled([
+      invalidateCache("posts:latest:*"),
+      invalidateCache("posts:popular:*"),
+      invalidateCache("posts:cat:*"),
+    ]),
+  );
 
   return NextResponse.json({ unliked, likes: newLikes });
 }

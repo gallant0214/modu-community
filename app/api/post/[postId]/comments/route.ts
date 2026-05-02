@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { sendPushToUser } from "@/app/lib/notifications";
+import { invalidateCache } from "@/app/lib/cache";
 import { waitUntil } from "@vercel/functions";
 
 export const dynamic = "force-dynamic";
@@ -160,6 +161,15 @@ export async function POST(
       }
     }
   } catch {}
+
+  // 리스트 화면 캐시 무효화 — 댓글수가 즉시 반영되도록
+  waitUntil(
+    Promise.allSettled([
+      invalidateCache("posts:latest:*"),
+      invalidateCache("posts:popular:*"),
+      invalidateCache("posts:cat:*"),
+    ]),
+  );
 
   return NextResponse.json({ success: true });
 }

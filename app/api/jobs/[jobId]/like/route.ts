@@ -2,6 +2,8 @@ import { supabase } from "@/app/lib/supabase";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
+import { invalidateCache } from "@/app/lib/cache";
+import { waitUntil } from "@vercel/functions";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +87,9 @@ export async function POST(
     .select("likes")
     .eq("id", id)
     .maybeSingle();
+
+  // 최신 구인 리스트 캐시 무효화 — 좋아요 수 즉시 반영
+  waitUntil(invalidateCache("jobs:latest:*"));
 
   return NextResponse.json({ unliked, likes: job?.likes ?? 0 });
 }
