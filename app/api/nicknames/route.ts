@@ -115,18 +115,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 기존 닉네임 삭제
-  await supabase.from("nicknames").delete().eq("firebase_uid", user.uid);
-  await supabase.from("nicknames").delete().eq("name", name);
-
-  // 새 닉네임 등록
-  const { error } = await supabase.from("nicknames").insert({
-    name,
-    firebase_uid: user.uid,
-    changed_at: new Date().toISOString(),
-  });
-  if (error) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  // 본인 row 가 이미 있으면 UPDATE — active_region_* 등 다른 컬럼은 보존
+  // 없으면 INSERT (동명의 orphan row 가 있다면 사전 정리)
+  if (current) {
+    const { error } = await supabase
+      .from("nicknames")
+      .update({ name, changed_at: new Date().toISOString() })
+      .eq("firebase_uid", user.uid);
+    if (error) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
+  } else {
+    await supabase.from("nicknames").delete().eq("name", name);
+    const { error } = await supabase.from("nicknames").insert({
+      name,
+      firebase_uid: user.uid,
+      changed_at: new Date().toISOString(),
+    });
+    if (error) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ success: true, nickname: name });
