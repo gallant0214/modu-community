@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   const safePostId = post_id ? Number(post_id) : 0;
   const safeCategoryId = category_id ? Number(category_id) : 0;
 
-  const { error } = await supabase.from("reports").insert({
+  const { error } = await (supabase as any).from("reports").insert({
     target_type,
     target_id: Number(target_id),
     post_id: safePostId,
@@ -32,6 +32,7 @@ export async function POST(request: Request) {
     custom_reason: custom_reason
       ? sanitize(validateLength(custom_reason.trim(), 500))
       : null,
+    reporter_uid: user.uid,
   });
 
   if (error) {

@@ -526,7 +526,7 @@ export default function AdminPage() {
                     >
                       <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-600 dark:bg-green-950 dark:text-green-400">완료</span>
                       <span className="flex-1 truncate text-sm text-zinc-900 dark:text-zinc-100">{inq.title}</span>
-                      <span className="shrink-0 text-xs text-zinc-400">{inq.author}</span>
+                      <span className="shrink-0 text-xs text-zinc-400">{inq.current_nickname || inq.author}</span>
                       <span className="shrink-0 text-xs text-zinc-400">
                         {new Date(inq.created_at).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
                       </span>
@@ -583,18 +583,35 @@ export default function AdminPage() {
                         <span className="text-xs text-zinc-400">{new Date(report.created_at).toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
                       </div>
 
+                      {/* 신고자 정보 */}
+                      <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-900 dark:bg-blue-950/30">
+                        <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">신고자</p>
+                        <p className="mt-1 text-sm text-blue-900 dark:text-blue-100">
+                          {report.reporter_nickname || report.reporter_email || "-"}
+                          {report.reporter_email && report.reporter_nickname ? (
+                            <span className="ml-2 text-xs text-blue-700/70 dark:text-blue-400/80">{report.reporter_email}</span>
+                          ) : null}
+                        </p>
+                      </div>
+
                       <div className="mb-3 rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800">
                         {report.target_type === "post" ? (
                           <>
                             <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">신고된 종목후기</p>
-                            <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{report.post_title || "(삭제된 게시글)"}</p>
-                            <p className="mt-0.5 text-xs text-zinc-400">작성자: {report.post_author || "-"}</p>
+                            <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{report.post_title || (report.target_exists ? "(제목 없음)" : "(삭제된 게시글)")}</p>
+                            <p className="mt-0.5 text-xs text-zinc-400">
+                              작성자: {report.post_author || "-"}
+                              {report.post_author_email ? <span className="ml-1.5 text-zinc-400/80">{report.post_author_email}</span> : null}
+                            </p>
                           </>
                         ) : report.target_type === "message" ? (
                           <>
-                            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">신고된 쪽지</p>
-                            <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{report.message_content || "(삭제된 쪽지)"}</p>
-                            <p className="mt-0.5 text-xs text-zinc-400">발신자: {report.message_sender || "-"}</p>
+                            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">쪽지 내용</p>
+                            <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{report.message_content || (report.target_exists ? "(내용 없음)" : "(삭제된 쪽지)")}</p>
+                            <p className="mt-0.5 text-xs text-zinc-400">
+                              발신자: {report.message_sender || "-"}
+                              {report.message_sender_email ? <span className="ml-1.5 text-zinc-400/80">{report.message_sender_email}</span> : null}
+                            </p>
                             {report.message_receiver && (
                               <p className="text-xs text-zinc-400">수신자: {report.message_receiver}</p>
                             )}
@@ -602,16 +619,26 @@ export default function AdminPage() {
                         ) : report.target_type === "job" ? (
                           <>
                             <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">신고된 구인글</p>
-                            <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{report.job_title || "(삭제된 구인글)"}</p>
-                            <p className="mt-0.5 text-xs text-zinc-400">작성자: {report.job_author || "-"}</p>
+                            <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{report.job_title || (report.target_exists ? "(제목 없음)" : "(삭제된 구인글)")}</p>
+                            <p className="mt-0.5 text-xs text-zinc-400">
+                              작성자: {report.job_author || "-"}
+                              {report.job_author_email ? <span className="ml-1.5 text-zinc-400/80">{report.job_author_email}</span> : null}
+                            </p>
                           </>
                         ) : (
                           <>
                             <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">신고된 댓글</p>
-                            <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{report.comment_content || "(삭제된 댓글)"}</p>
-                            <p className="mt-0.5 text-xs text-zinc-400">작성자: {report.comment_author || "-"}</p>
-                            <hr className="my-2 border-zinc-200 dark:border-zinc-700" />
-                            <p className="text-xs text-zinc-400">게시글: {report.post_title || "(삭제된 게시글)"}</p>
+                            <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{report.comment_content || (report.target_exists ? "(내용 없음)" : "(삭제된 댓글)")}</p>
+                            <p className="mt-0.5 text-xs text-zinc-400">
+                              작성자: {report.comment_author || "-"}
+                              {report.comment_author_email ? <span className="ml-1.5 text-zinc-400/80">{report.comment_author_email}</span> : null}
+                            </p>
+                            {report.post_title ? (
+                              <>
+                                <hr className="my-2 border-zinc-200 dark:border-zinc-700" />
+                                <p className="text-xs text-zinc-400">게시글: {report.post_title}</p>
+                              </>
+                            ) : null}
                           </>
                         )}
                       </div>
@@ -693,7 +720,7 @@ export default function AdminPage() {
                     >
                       <span className="w-12 text-center text-xs text-zinc-400">{pendingInquiries.length - i}</span>
                       <span className="flex-1 truncate pl-3 text-sm text-zinc-900 dark:text-zinc-100">{inq.title}</span>
-                      <span className="w-20 text-center text-xs text-zinc-500 dark:text-zinc-400">{inq.author}</span>
+                      <span className="w-20 text-center text-xs text-zinc-500 dark:text-zinc-400">{inq.current_nickname || inq.author}</span>
                       <span className="w-24 text-center text-xs text-zinc-400">
                         {new Date(inq.created_at).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
                       </span>
@@ -713,7 +740,7 @@ export default function AdminPage() {
                     >
                       <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-1 leading-snug">{inq.title}</p>
                       <div className="flex items-center gap-2 text-xs text-zinc-400">
-                        <span>{inq.author}</span>
+                        <span>{inq.current_nickname || inq.author}</span>
                         <span>·</span>
                         <span>{new Date(inq.created_at).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}</span>
                       </div>
@@ -747,11 +774,11 @@ export default function AdminPage() {
             <div className="select-text space-y-3">
               <div className="flex border-b border-zinc-100 pb-2 dark:border-zinc-800">
                 <span className="w-16 shrink-0 text-sm font-medium text-zinc-500 dark:text-zinc-400">이름</span>
-                <span className="text-sm text-zinc-900 dark:text-zinc-100">{selectedInq.author}</span>
+                <span className="text-sm text-zinc-900 dark:text-zinc-100">{selectedInq.current_nickname || selectedInq.author}</span>
               </div>
               <div className="flex border-b border-zinc-100 pb-2 dark:border-zinc-800">
                 <span className="w-16 shrink-0 text-sm font-medium text-zinc-500 dark:text-zinc-400">이메일</span>
-                <span className="text-sm text-zinc-900 dark:text-zinc-100">{selectedInq.email || "-"}</span>
+                <span className="text-sm text-zinc-900 dark:text-zinc-100">{selectedInq.current_email || selectedInq.email || "-"}</span>
               </div>
               <div className="flex border-b border-zinc-100 pb-2 dark:border-zinc-800">
                 <span className="w-16 shrink-0 text-sm font-medium text-zinc-500 dark:text-zinc-400">제목</span>

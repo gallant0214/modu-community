@@ -362,25 +362,50 @@ export async function createReport(
   });
 }
 
+function getInternalUrl(path: string): string {
+  // 같은 Vercel 프로젝트 내부 fetch — VERCEL_URL 은 https 프로토콜 자동 추가
+  const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || vercelUrl || "http://localhost:3000";
+  return `${baseUrl}${path}`;
+}
+
 export async function getReports(adminPassword: string) {
   if (!(await verifyAdminPassword(adminPassword))) {
     return { error: "관리자 비밀번호가 일치하지 않습니다" };
   }
-  const { data, error } = await supabase.rpc("admin_reports_with_targets");
-  if (error) return { error: error.message };
-  return { reports: data };
+  // 신고자/작성자 닉네임·이메일까지 보강된 라우트 호출
+  try {
+    const res = await fetch(getInternalUrl("/api/admin/reports-list"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: adminPassword }),
+      cache: "no-store",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.error || "신고 목록을 불러올 수 없습니다" };
+    return { reports: data.reports };
+  } catch (e: any) {
+    return { error: e?.message || "네트워크 오류" };
+  }
 }
 
 export async function getInquiries(adminPassword: string) {
   if (!(await verifyAdminPassword(adminPassword))) {
     return { error: "관리자 비밀번호가 일치하지 않습니다" };
   }
-  const { data, error } = await supabase
-    .from("inquiries")
-    .select("id, author, email, title, content, reply, replied_at, hidden, created_at")
-    .order("created_at", { ascending: false });
-  if (error) return { error: error.message };
-  return { inquiries: data };
+  try {
+    const res = await fetch(getInternalUrl("/api/admin/inquiries-list"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: adminPassword }),
+      cache: "no-store",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { error: data.error || "문의 목록을 불러올 수 없습니다" };
+    return { inquiries: data.inquiries };
+  } catch (e: any) {
+    return { error: e?.message || "네트워크 오류" };
+  }
 }
 
 export async function resolveReport(id: number, adminPassword: string) {

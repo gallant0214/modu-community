@@ -10,13 +10,17 @@ export interface Category {
 export interface Inquiry {
   id: number;
   author: string;
-  email?: string;
+  email?: string | null;
   title: string;
   content: string;
   reply: string | null;
   replied_at: string | null;
   hidden: boolean;
   created_at: string;
+  firebase_uid?: string | null;
+  // 보강 (admin/inquiries-list)
+  current_nickname?: string | null;
+  current_email?: string | null;
 }
 
 export interface Comment {
@@ -45,21 +49,33 @@ export interface Report {
   resolved: boolean;
   resolved_at: string | null;
   deleted_at: string | null;
+  target_hidden?: boolean;
   created_at: string;
+  // 신고자
+  reporter_uid?: string | null;
+  reporter_nickname?: string | null;
+  reporter_email?: string | null;
+  // 실제 타겟 존재 여부 (게시글이 살아있는지)
+  target_exists?: boolean;
   // joined fields
-  post_title?: string;
-  post_author?: string;
-  comment_content?: string;
-  comment_author?: string;
-  category_name?: string;
+  post_title?: string | null;
+  post_author?: string | null;
+  post_author_email?: string | null;
+  comment_content?: string | null;
+  comment_author?: string | null;
+  comment_author_email?: string | null;
+  category_name?: string | null;
   // 구인글 신고용
-  job_title?: string;
-  job_author?: string;
+  job_title?: string | null;
+  job_author?: string | null;
+  job_author_email?: string | null;
   // 쪽지 신고용
-  message_content?: string;
-  message_sender?: string;
-  message_receiver?: string;
+  message_content?: string | null;
+  message_sender?: string | null;
+  message_sender_email?: string | null;
+  message_receiver?: string | null;
 }
+
 
 export interface Post {
   id: number;

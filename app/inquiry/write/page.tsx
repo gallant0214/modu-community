@@ -45,9 +45,10 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
 function InquiryWriteContent() {
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
-  const { user, getIdToken } = useAuth();
+  const { user, nickname, getIdToken } = useAuth();
 
   const userEmail = user?.email || "";
+  const displayName = nickname || userEmail || "사용자";
 
   const [titleError, setTitleError] = useState(false);
   const [contentError, setContentError] = useState(false);
@@ -75,7 +76,7 @@ function InquiryWriteContent() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          author: userEmail,
+          author: displayName,
           email: userEmail,
           title,
           content,
