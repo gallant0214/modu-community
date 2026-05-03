@@ -1668,7 +1668,16 @@ function MyPageContent() {
               {/* ── 받은 쪽지함 ── */}
               {activeTab === "receivedMessages" && (
                 <div className="px-4 pt-4 pb-6 space-y-2">
-                  <div className="flex justify-end mb-1">
+                  <div className="flex justify-end items-center gap-3 mb-1">
+                    <button
+                      onClick={() => { setReplyTo({ nickname: "" }); setShowReplyModal(true); }}
+                      className="inline-flex items-center gap-1 text-[12px] font-bold text-[#6B7B3A] hover:text-[#5A6930] px-2 py-1"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      쪽지 쓰기
+                    </button>
                     <button
                       onClick={() => setDeleteAllMessagesDialog("received")}
                       className="text-[12px] font-bold text-[#C0392B] hover:text-[#A33121] px-2 py-1"
@@ -1994,16 +2003,15 @@ function MyPageContent() {
                 </div>
               )}
 
-              {/* 답장 모달 */}
+              {/* 쪽지 쓰기 / 답장 모달 — receiverNickname 이 빈 값이면 신규 작성 모드 */}
               {replyTo && (
                 <SendMessageModal
                   open={showReplyModal}
                   onClose={() => { setShowReplyModal(false); setReplyTo(null); }}
                   receiverNickname={replyTo.nickname}
                   parentId={replyTo.parentId}
+                  allowEditReceiver={!replyTo.nickname}
                   onSent={() => {
-                    // 답장/다시보내기 모두 단일 메시지 정책 — 상세 모달 닫고
-                    // 보낸쪽지함 새로고침. 답장 누적 표시 안 함.
                     setMessageThread(null);
                     loadTabData("sentMessages");
                   }}

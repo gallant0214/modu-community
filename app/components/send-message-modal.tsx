@@ -1,27 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/app/components/auth-provider";
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** 받는 사람 닉네임. allowEditReceiver=true 일 땐 초기값으로 사용 (빈 값 가능). */
   receiverNickname: string;
   parentId?: number;
   onSent?: () => void;
+  /** true 면 받는 사람 입력란이 편집 가능. 빈 값에서 시작 시 신규 작성 모드. */
+  allowEditReceiver?: boolean;
 }
 
-export function SendMessageModal({ open, onClose, receiverNickname, parentId, onSent }: Props) {
+export function SendMessageModal({ open, onClose, receiverNickname, parentId, onSent, allowEditReceiver }: Props) {
   const { user, getIdToken, signInWithGoogle } = useAuth();
+  const [receiver, setReceiver] = useState(receiverNickname);
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
+  // 모달 열릴 때마다 입력 상태 초기화
+  useEffect(() => {
+    if (open) {
+      setReceiver(receiverNickname);
+      setContent("");
+      setError("");
+      setSuccess(false);
+    }
+  }, [open, receiverNickname]);
+
   if (!open) return null;
 
   const handleSend = async () => {
+    const trimmedReceiver = receiver.trim();
+    if (allowEditReceiver) {
+      if (!trimmedReceiver) { setError("받는 사람을 입력해주세요."); return; }
+      if (trimmedReceiver.length < 2 || trimmedReceiver.length > 8) {
+        setError("닉네임은 2~8자여야 합니다.");
+        return;
+      }
+    }
     if (!content.trim()) { setError("내용을 입력해주세요."); return; }
     setSending(true);
     setError("");
@@ -30,7 +52,7 @@ export function SendMessageModal({ open, onClose, receiverNickname, parentId, on
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ receiver_nickname: receiverNickname, content: content.trim(), parent_id: parentId || null }),
+        body: JSON.stringify({ receiver_nickname: allowEditReceiver ? trimmedReceiver : receiverNickname, content: content.trim(), parent_id: parentId || null }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "전송에 실패했습니다."); return; }
@@ -85,9 +107,23 @@ export function SendMessageModal({ open, onClose, receiverNickname, parentId, on
             <>
               <div>
                 <label className="block text-[12px] font-semibold text-[#8C8270] dark:text-zinc-400 mb-1.5">받는 사람</label>
-                <div className="px-3 py-2.5 rounded-xl bg-[#F5F0E5] dark:bg-zinc-800 text-[13px] font-medium text-[#3A342A] dark:text-zinc-200">
-                  {receiverNickname}
-                </div>
+                {allowEditReceiver ? (
+                  <input
+                    type="text"
+                    value={receiver}
+                    onChange={(e) => { setReceiver(e.target.value); setError(""); }}
+                    placeholder="닉네임 (2~8자)"
+                    maxLength={16}
+                    autoFocus
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    className="w-full px-3 py-2.5 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[13px] text-[#3A342A] dark:text-zinc-100 placeholder-[#A89B80] focus:outline-none focus:ring-1 focus:ring-[#6B7B3A]/50"
+                  />
+                ) : (
+                  <div className="px-3 py-2.5 rounded-xl bg-[#F5F0E5] dark:bg-zinc-800 text-[13px] font-medium text-[#3A342A] dark:text-zinc-200">
+                    {receiverNickname}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-[12px] font-semibold text-[#8C8270] dark:text-zinc-400 mb-1.5">내용</label>
