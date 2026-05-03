@@ -233,7 +233,7 @@ export default async function Home() {
         </section>
 
         {/* ===== 9. 최종 CTA ===== */}
-        <section className="lp-section">
+        <section id="app-download" className="lp-section" style={{ scrollMarginTop: "calc(56px + env(safe-area-inset-top, 0px) + 8px)" }}>
           <div className="lp-c">
             <div className="lp-final-cta">
               <div className="lp-label" style={{background:"rgba(255,255,255,.15)",color:"#fff"}}>앱 다운로드</div>

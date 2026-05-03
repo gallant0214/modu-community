@@ -145,7 +145,7 @@ export function NavBar() {
         <Link href="/" className="flex items-center gap-2 mr-4 shrink-0 group">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <Image src="/logo.png" alt="로고" width={28} height={28} className="rounded-lg" priority />
-          <span className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 whitespace-nowrap tracking-tight">모두의 지도사</span>
+          <span className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 whitespace-nowrap tracking-tight">모두의 지도사 커뮤니티</span>
         </Link>
 
         {/* 데스크톱 메뉴 */}
@@ -157,6 +157,18 @@ export function NavBar() {
           <NavLink href="/#faq" active={false}>FAQ</NavLink>
           <NavLink href="/my" active={isActive("/my")}>MY</NavLink>
         </div>
+
+        {/* 데스크톱: 앱으로 이용하기 버튼 (MY 와 닉네임 사이) */}
+        <Link
+          href="/#app-download"
+          className="hidden md:inline-flex items-center gap-1.5 mr-2 text-[12px] font-semibold px-3 py-1.5 rounded-xl border border-[#6B7B3A]/40 text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A]/40 hover:bg-[#EFE7D5] dark:hover:bg-[#6B7B3A]/15 transition-colors whitespace-nowrap"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <rect x="6" y="2" width="12" height="20" rx="2.5" />
+            <path strokeLinecap="round" d="M11 18h2" />
+          </svg>
+          앱으로 이용하기
+        </Link>
 
         {/* 데스크톱 로그인/로그아웃 */}
         <div className="hidden md:flex items-center gap-2 shrink-0">
@@ -334,6 +346,21 @@ export function NavBar() {
               <MobileNavLink href="/jobs" active={isActive("/jobs")} onClick={() => setMenuOpen(false)} icon="briefcase">스포츠 구인</MobileNavLink>
               <MobileNavLink href="/#faq" active={false} onClick={() => setMenuOpen(false)} icon="help">FAQ</MobileNavLink>
               <MobileNavLink href="/my" active={isActive("/my")} onClick={() => setMenuOpen(false)} icon="user">MY</MobileNavLink>
+            </div>
+
+            {/* 앱으로 이용하기 버튼 */}
+            <div className="px-3 pb-3">
+              <Link
+                href="/#app-download"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl border border-[#6B7B3A]/40 text-[13px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A]/40 hover:bg-[#EFE7D5] dark:hover:bg-[#6B7B3A]/15 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <rect x="6" y="2" width="12" height="20" rx="2.5" />
+                  <path strokeLinecap="round" d="M11 18h2" />
+                </svg>
+                앱으로 이용하기
+              </Link>
             </div>
 
             {/* 하단 유저/로그인 블록 */}
