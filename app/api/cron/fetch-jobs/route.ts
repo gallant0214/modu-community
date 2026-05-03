@@ -267,28 +267,71 @@ function extractJobDuty(html: string): string | null {
 }
 
 /**
- * W24 상세 페이지 HTML 의 emp_sumup_wrp 블록에서 풀 title 추출.
- * 형식: "<회사명> <실제 채용 제목>" — 회사명 prefix 가 알려져 있으면 제거.
- * <title> 태그는 SEO 메타이므로 사용 금지.
+ * 트레일링 ellipsis (...,  …) 와 그 앞의 공백을 제거.
+ * "...어쩌고저쩌고..." → 앞 dots 만 strip 후 뒤 dots 제거.
+ */
+function stripEllipsis(s: string): string {
+  return s.replace(/[…\s]*\.{2,}\s*$/g, "").replace(/\s*…\s*$/g, "").trim();
+}
+
+/**
+ * W24 상세 페이지 HTML 에서 풀 title 추출.
+ *   1) emp_sumup_wrp div (회사명 + 본문 제목)
+ *   2) og:title 메타 (회사명 + 본문 제목 형식인 경우 회사명 prefix 제거)
+ *   3) <title> 태그 (SEO 메타)
+ * 후보들 중 가장 길고 trailing "..." 이 없는 것을 선택.
  */
 function extractFullTitle(html: string, companyName?: string): string | null {
-  // emp_sumup_wrp div 안에 회사명 + 본문 제목이 함께 들어있음
-  const m = html.match(/<div[^>]*class="[^"]*\bemp_sumup_wrp\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
-  if (!m) return null;
-  let t = decodeEntities(m[1].replace(/<[^>]+>/g, "")).trim().replace(/\s+/g, " ");
-  if (t.length < 5) return null;
+  const candidates: string[] = [];
 
-  // 회사명 prefix 제거
-  if (companyName) {
-    const cn = companyName.trim();
-    if (cn && t.startsWith(cn)) {
-      t = t.slice(cn.length).trim();
-    }
+  // 1) emp_sumup_wrp
+  const m1 = html.match(/<div[^>]*class="[^"]*\bemp_sumup_wrp\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+  if (m1) {
+    const t = decodeEntities(m1[1].replace(/<[^>]+>/g, "")).trim().replace(/\s+/g, " ");
+    if (t.length >= 5) candidates.push(t);
   }
 
-  // 거부 조건: SEO 메타, '...' 잘림 표시, 너무 짧음
-  if (t.length < 5 || t.startsWith("채용정보") || t.startsWith("...")) return null;
-  return t.slice(0, 300);
+  // 2) og:title 메타
+  const m2 = html.match(/<meta\s+[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i)
+    || html.match(/<meta\s+[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
+  if (m2) {
+    const t = decodeEntities(m2[1]).trim().replace(/\s+/g, " ");
+    if (t.length >= 5) candidates.push(t);
+  }
+
+  // 3) <title> 태그
+  const m3 = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (m3) {
+    const t = decodeEntities(m3[1]).trim().replace(/\s+/g, " ");
+    if (t.length >= 5) candidates.push(t);
+  }
+
+  if (candidates.length === 0) return null;
+
+  // 회사명 prefix 제거 + 잘림/메타 거부 + 길이순 정렬
+  const cleaned = candidates
+    .map((raw) => {
+      let t = raw;
+      // "[고용24] " 같은 사이트 prefix 제거
+      t = t.replace(/^\[?\s*고용24\s*[\]\-:|·]?\s*/, "").trim();
+      if (companyName) {
+        const cn = companyName.trim();
+        if (cn && t.startsWith(cn)) t = t.slice(cn.length).trim();
+      }
+      // SEO/메타 잡음 + 시작점 잘림
+      if (t.length < 5 || t.startsWith("채용정보") || t.startsWith("...") || t.startsWith("…")) return null;
+      // 트레일링 dots 제거 (이게 핵심 — 잘려있으면 ellipsis 만 제거하고 부분 제목이라도 살림)
+      const stripped = stripEllipsis(t);
+      if (stripped.length < 5) return null;
+      return stripped;
+    })
+    .filter((x): x is string => !!x);
+
+  if (cleaned.length === 0) return null;
+
+  // 가장 긴 것 우선
+  cleaned.sort((a, b) => b.length - a.length);
+  return cleaned[0].slice(0, 300);
 }
 
 async function fetchDetailContact(url: string, companyHint?: string): Promise<{ phone: string | null; email: string | null; jobDuty: string | null; fullTitle: string | null }> {
@@ -469,7 +512,16 @@ export async function GET(req: NextRequest) {
     }
     // "333만원 ~ 333만원" → "333만원" (최소=최대 동일할 때)
     salText = salText.replace(/(.+?)\s*~\s*\1/g, "$1");
-    const salary = salText ? `${it.salTpNm} ${salText}` : "";
+    let salary = salText ? `${it.salTpNm} ${salText}` : "";
+    // salTpNm 안에 첫 금액이 포함되고 sal 에 둘째 금액만 있는 W24 케이스 보정:
+    // 합친 후 "연봉 3000만원 5000만원" 처럼 두 금액이 ~ 없이 붙어있으면 다시 ~ 삽입.
+    {
+      const re = /(\d[\d,]*\s*(?:만원|원))[^\d가-힣~]+(\d[\d,]*\s*(?:만원|원))/;
+      const m = salary.match(re);
+      if (m && m.index !== undefined && m[1] !== m[2]) {
+        salary = salary.slice(0, m.index) + `${m[1]} ~ ${m[2]}` + salary.slice(m.index + m[0].length);
+      }
+    }
     const addr = [it.basicAddr, it.detailAddr].filter(Boolean).join(" ");
     // "채용시까지 (2026-05-12)" / "26-05-12" 모두 마감일 날짜만 추출.
     // closeDt 가 "채용시까지" 라벨만 있고 날짜가 없으면 빈 문자열 →
@@ -485,12 +537,14 @@ export async function GET(req: NextRequest) {
     // 상세 HTML 에서 추출된 직무내용(모집요강) + full title 가져오기
     const detail = detailMap.get(it.wantedAuthNo) || { phone: null, email: null, jobDuty: null, fullTitle: null };
 
-    // W24 목록 API 가 title 을 잘라서 "...어쩌고" 형식으로 보낼 때
+    // W24 목록 API 가 title 을 잘라서 "...어쩌고..." 형식으로 보낼 때
     // 상세 HTML 에서 추출한 fullTitle 로 보강 (잘리지 않은 형태면 길이가 더 김)
-    let finalTitle = it.title.replace(/^[.…\s]+/, "").trim();
-    if (detail.fullTitle && detail.fullTitle.length > finalTitle.length && !detail.fullTitle.startsWith("...")) {
+    let finalTitle = stripEllipsis(it.title.replace(/^[.…\s]+/, ""));
+    if (detail.fullTitle && detail.fullTitle.length > finalTitle.length && !detail.fullTitle.startsWith("...") && !detail.fullTitle.startsWith("…")) {
       finalTitle = detail.fullTitle;
     }
+    // 마지막 안전장치: 어느 소스로 결정됐든 트레일링 ellipsis 는 항상 제거
+    finalTitle = stripEllipsis(finalTitle);
 
     // 목록 API 의 title 이 잘려서 EXCLUDE_TITLE 키워드(바리스타/베이커리 등)를
     // 못 잡는 사례 보강 — 상세 HTML 의 fullTitle 로 보강된 시점에 필터 재실행.
