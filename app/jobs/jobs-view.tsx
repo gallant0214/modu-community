@@ -17,7 +17,7 @@ const SPORTS = [
   "소프트볼","클라이밍","필라테스","요가","헬스/PT","태권도","유도","검도",
   "복싱","킥복싱","무에타이","주짓수","합기도","씨름","핸드볼","럭비",
   "아이스하키","스케이트","스키/스노보드","사이클","트라이애슬론","육상",
-  "체조","승마","댄스스포츠","기타",
+  "체조","승마","댄스스포츠","무용","기타",
 ];
 const EMPLOYMENT_TYPES = ["정규직","계약직","파트타임","프리랜서","인턴","기타"];
 
@@ -143,7 +143,7 @@ function JobCard({ job }: { job: JobPost }) {
 
       {/* 제목 */}
       <h3 className={`text-[16px] font-bold leading-snug mb-3 line-clamp-2 tracking-tight ${
-        isClosed ? "text-[#A89B80] dark:text-zinc-500 line-through" : "text-[#2A251D] dark:text-zinc-100"
+        isClosed ? "text-[#4A4238] dark:text-zinc-400" : "text-[#2A251D] dark:text-zinc-100"
       }`}>
         {job.title}
       </h3>

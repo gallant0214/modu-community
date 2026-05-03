@@ -259,11 +259,16 @@ export default function JobWritePage() {
   const cloneId = searchParams.get("clone");
   const { user, loading, signInWithGoogle, signInWithApple, getIdToken, nickname } = useAuth();
 
-  /* 카테고리(종목) 서버에서 로드 */
+  /* 카테고리(종목) 서버에서 로드 — 구인글 한정으로 무용/기타 추가 */
   const [categories, setCategories] = useState<{ id: number; name: string; emoji: string }[]>([]);
   useEffect(() => {
     fetch("/api/categories").then(r => r.json()).then(data => {
-      setCategories(Array.isArray(data) ? data.map((c: any) => ({ id: c.id, name: c.name, emoji: c.emoji })) : []);
+      const base = Array.isArray(data) ? data.map((c: any) => ({ id: c.id, name: c.name, emoji: c.emoji })) : [];
+      setCategories([
+        ...base,
+        { id: -1, name: "무용", emoji: "💃" },
+        { id: -2, name: "기타", emoji: "🏷️" },
+      ]);
     }).catch(() => {});
   }, []);
 
