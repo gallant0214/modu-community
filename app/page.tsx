@@ -1,8 +1,20 @@
 export const revalidate = false;
 
 import Link from "next/link";
+import Image from "next/image";
 import { AppStoreButton } from "@/app/components/app-store-button";
 import { GooglePlayButton } from "@/app/components/google-play-button";
+
+const APP_PREVIEWS = [
+  { src: "/app-preview/1.webp", label: "홈 화면", desc: "인기 종목·게시글을 한눈에" },
+  { src: "/app-preview/2.webp", label: "실기·구술 필독", desc: "26년 정책·일정·요건 정리" },
+  { src: "/app-preview/3.webp", label: "종목별 구술", desc: "공통·종목별 구술 자료" },
+  { src: "/app-preview/4.webp", label: "종목별 후기", desc: "보디빌딩·검도·게이트볼 등" },
+  { src: "/app-preview/5.webp", label: "지역별 구인", desc: "서울·부산·대구… 지역으로 탐색" },
+  { src: "/app-preview/6.webp", label: "MY", desc: "내 글·북마크·쪽지·알림" },
+  { src: "/app-preview/7.webp", label: "실기 동작 (사진)", desc: "동작별 체크리스트" },
+  { src: "/app-preview/8.webp", label: "실기 동작 (해부)", desc: "근육 도식 + 체크리스트" },
+];
 
 export default async function Home() {
 
@@ -198,22 +210,26 @@ export default async function Home() {
           <div className="lp-c"><div className="lp-card">
             <div className="lp-label">앱 미리보기</div>
             <h2 className="lp-title">앱에서는 이렇게 이용할 수 있어요</h2>
-            <div className="lp-grid-3">
-              <div className="lp-preview">
-                <div className="lp-preview-icon">💬</div>
-                <h3>후기 피드</h3>
-                <p>종목·시험장별 후기를 카드 형식으로 탐색하고 북마크할 수 있습니다.</p>
-              </div>
-              <div className="lp-preview">
-                <div className="lp-preview-icon">🔍</div>
-                <h3>구인 공고 필터</h3>
-                <p>종목 · 지역 · 근무 형태로 나에게 맞는 일자리를 찾으세요.</p>
-              </div>
-              <div className="lp-preview">
-                <div className="lp-preview-icon">🔔</div>
-                <h3>키워드 알림</h3>
-                <p>관심 종목의 새 후기, 맞춤 구인 알림을 실시간으로 받아보세요.</p>
-              </div>
+            <p className="lp-desc">실제 앱 화면 — 홈, 실기·구술, 종목후기, 구인, MY 까지 한눈에 확인하세요.</p>
+            <div className="lp-screenshot-grid">
+              {APP_PREVIEWS.map((p) => (
+                <figure key={p.src} className="lp-screenshot">
+                  <div className="lp-screenshot-frame">
+                    <Image
+                      src={p.src}
+                      alt={`${p.label} 화면`}
+                      width={360}
+                      height={783}
+                      sizes="(min-width: 1024px) 220px, (min-width: 640px) 30vw, 45vw"
+                      className="lp-screenshot-img"
+                    />
+                  </div>
+                  <figcaption>
+                    <span className="lp-screenshot-label">{p.label}</span>
+                    <span className="lp-screenshot-desc">{p.desc}</span>
+                  </figcaption>
+                </figure>
+              ))}
             </div>
           </div></div>
         </section>
