@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 import type { JobPost } from "@/app/lib/types";
 import type { JobsPageResult } from "@/app/lib/jobs-query";
+import { formatSalaryDisplay, formatDeadlineDisplay } from "@/app/lib/job-format";
 
 interface JobsViewProps {
   initialData: JobsPageResult | null;
@@ -100,11 +101,6 @@ const STATUS_CONFIG: Record<RecruitStatus, { label: string; bg: string; text: st
   closed: { label: "모집종료", bg: "bg-[#F5F0E5] dark:bg-zinc-800", text: "text-[#A89B80] dark:text-zinc-500", dot: "bg-[#A89B80]" },
 };
 
-/* 급여 문자열 내 숫자 그룹에 천 단위 쉼표 삽입 (4자리 이상만 포맷) */
-function formatSalaryDisplay(salary?: string) {
-  if (!salary) return "";
-  return salary.replace(/\d{4,}/g, (match) => Number(match.replace(/,/g, "")).toLocaleString());
-}
 
 /* ── 공고 카드 컴포넌트 ── */
 function JobCard({ job }: { job: JobPost }) {
@@ -180,12 +176,12 @@ function JobCard({ job }: { job: JobPost }) {
             <span className="truncate">{job.center_name}</span>
           </div>
         )}
-        {job.deadline && (
+        {formatDeadlineDisplay(job.deadline) && (
           <div className={`flex items-center gap-1.5 text-[13px] ${isClosed ? "text-[#A89B80]" : dday?.urgent ? "text-[#B47B2A] dark:text-amber-300 font-semibold" : "text-[#6B5D47] dark:text-zinc-400"}`}>
             <svg className="w-3.5 h-3.5 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            <span className="truncate">모집기간: {job.deadline}</span>
+            <span className="truncate">마감일: {formatDeadlineDisplay(job.deadline)}</span>
           </div>
         )}
       </div>

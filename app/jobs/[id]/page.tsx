@@ -7,17 +7,13 @@ import type { JobPost } from "@/app/lib/types";
 import { useAuth } from "@/app/components/auth-provider";
 import { shareOrCopy } from "@/app/lib/share";
 import { createReport } from "@/app/lib/actions";
+import { formatSalaryDisplay, formatDeadlineDisplay } from "@/app/lib/job-format";
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);
   return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}`;
 }
 
-/* 급여 문자열 내 숫자 그룹에 천 단위 쉼표 삽입 (4자리 이상만 포맷) */
-function formatSalaryDisplay(salary?: string) {
-  if (!salary) return salary || "";
-  return salary.replace(/\d{4,}/g, (match) => Number(match.replace(/,/g, "")).toLocaleString());
-}
 
 /* 스펙 그리드 항목 */
 function SpecItem({ label, value, icon }: { label: string; value?: string; icon: React.ReactNode }) {
@@ -292,10 +288,10 @@ export default function JobDetailPage() {
                     <p className="text-sm font-semibold text-[#6B7B3A] dark:text-[#A8B87A] break-words">{formatSalaryDisplay(job.salary)}</p>
                   </div>
                 )}
-                {job.deadline && (
+                {formatDeadlineDisplay(job.deadline) && (
                   <div className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800/60 px-4 py-3">
                     <p className="text-[10px] uppercase tracking-wider text-[#A89B80] dark:text-zinc-500 font-semibold mb-0.5">마감일</p>
-                    <p className="text-sm font-semibold text-[#3A342A] dark:text-zinc-100 break-words">{job.deadline}</p>
+                    <p className="text-sm font-semibold text-[#3A342A] dark:text-zinc-100 break-words">{formatDeadlineDisplay(job.deadline)}</p>
                   </div>
                 )}
               </div>
@@ -344,7 +340,7 @@ export default function JobDetailPage() {
               <SpecItem label="근무형태" value={job.employment_type} icon={Icon.type} />
               <SpecItem label="급여" value={formatSalaryDisplay(job.salary)} icon={Icon.salary} />
               <SpecItem label="모집인원" value={job.headcount} icon={Icon.headcount} />
-              <SpecItem label="마감일" value={job.deadline} icon={Icon.deadline} />
+              <SpecItem label="마감일" value={formatDeadlineDisplay(job.deadline)} icon={Icon.deadline} />
             </div>
             <div className="sm:pl-6">
               <SpecItem label="주소" value={job.address} icon={Icon.address} />

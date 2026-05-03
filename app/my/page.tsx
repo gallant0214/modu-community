@@ -9,6 +9,7 @@ import { auth } from "@/app/lib/firebase-client";
 import type { Post, JobPost, Message } from "@/app/lib/types";
 import { SendMessageModal } from "@/app/components/send-message-modal";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
+import { formatSalaryDisplay, formatDeadlineDisplay } from "@/app/lib/job-format";
 
 /* ── 유틸 ── */
 function formatDate(dateStr: string) {
@@ -1435,14 +1436,14 @@ function MyPageContent() {
                                     <svg className="w-3 h-3 text-[#6B7B3A] shrink-0" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
-                                    <span className="truncate text-[11px] font-bold text-[#6B7B3A]">{job.salary}</span>
+                                    <span className="truncate text-[11px] font-bold text-[#6B7B3A]">{formatSalaryDisplay(job.salary)}</span>
                                   </>
-                                ) : job.deadline ? (
+                                ) : formatDeadlineDisplay(job.deadline) ? (
                                   <>
                                     <svg className="w-3 h-3 text-[#A89B80] shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                     </svg>
-                                    <span className="truncate text-[11px] text-[#8C8270] dark:text-zinc-500">{job.deadline}</span>
+                                    <span className="truncate text-[11px] text-[#8C8270] dark:text-zinc-500">{formatDeadlineDisplay(job.deadline)}</span>
                                   </>
                                 ) : (
                                   <span className="text-[11px] text-[#A89B80]">급여 정보 없음</span>
