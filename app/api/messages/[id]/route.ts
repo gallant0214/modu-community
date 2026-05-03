@@ -25,26 +25,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
   }
 
-  // 원본 메시지 찾기
-  const originalId = msg.parent_id || msg.id;
-  let original = msg;
-  if (msg.parent_id) {
-    const { data: parent } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("id", originalId)
-      .maybeSingle();
-    if (parent) original = parent;
-  }
-
-  // 답장 목록
-  const { data: replies } = await supabase
-    .from("messages")
-    .select("*")
-    .eq("parent_id", originalId)
-    .order("created_at", { ascending: true });
-
-  return NextResponse.json({ original, replies: replies || [] });
+  // 요청된 messageId 자체를 original 로 반환 — 앱 모달은 단일 쪽지만 표시.
+  // (이전엔 parent 를 traverse 해서 thread root 를 original 로 줬는데,
+  //  이 때문에 답장 알림을 탭해도 항상 thread 첫 쪽지가 열리는 버그가 있었음.)
+  // replies 는 backward-compat 위해 빈 배열로 유지.
+  return NextResponse.json({ original: msg, replies: [] });
 }
 
 // DELETE /api/messages/[id] — soft delete (이용자 시점에서만 숨김. DB 에는 남음)
