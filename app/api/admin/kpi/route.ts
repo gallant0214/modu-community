@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // from/to 가 있으면 해당 범위에 대한 in-range 카운트 계산
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  const { password, from, to, visitFrom, visitTo } = body;
+  const { password, from, to, visitFrom, visitTo, reportFrom, reportTo } = body;
   if (!(await verifyAdminPassword(password))) {
     return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
   }
@@ -20,6 +20,9 @@ export async function POST(request: Request) {
   // 방문자/유입 분석 전용 별도 기간 (없으면 일반 from/to fallback)
   const visitFromDate = visitFrom ? new Date(visitFrom).toISOString() : fromDate;
   const visitToDate = visitTo ? new Date(visitTo).toISOString() : toDate;
+  // 신고 분석 전용 별도 기간
+  const reportFromDate = reportFrom ? new Date(reportFrom).toISOString() : fromDate;
+  const reportToDate = reportTo ? new Date(reportTo).toISOString() : toDate;
 
   const sb = supabase as any;
 
@@ -282,6 +285,27 @@ export async function POST(request: Request) {
     topPosts = (data || []).map((p: any) => ({ id: p.id, title: p.title, likes: p.likes, views: p.views, comments: p.comments_count }));
   } catch { /* skip */ }
 
+  // 신고 분석: target_type 별 카운트 (post/comment/job/message)
+  let reportsByType: { type: string; label: string; count: number }[] = [
+    { type: "post", label: "게시물 신고", count: 0 },
+    { type: "comment", label: "댓글 신고", count: 0 },
+    { type: "job", label: "구인글 신고", count: 0 },
+    { type: "message", label: "쪽지 신고", count: 0 },
+  ];
+  let reportsTotalForRange = 0;
+  try {
+    let q = sb.from("reports").select("target_type");
+    if (reportFromDate) q = q.gte("created_at", reportFromDate);
+    if (reportToDate) q = q.lte("created_at", reportToDate);
+    const { data } = await q.limit(50000);
+    const typeMap = new Map<string, number>();
+    for (const r of data || []) {
+      if (r.target_type) typeMap.set(r.target_type, (typeMap.get(r.target_type) || 0) + 1);
+    }
+    reportsByType = reportsByType.map((r) => ({ ...r, count: typeMap.get(r.type) || 0 }));
+    reportsTotalForRange = reportsByType.reduce((s, r) => s + r.count, 0);
+  } catch { /* skip */ }
+
   return NextResponse.json({
     range: { from: fromDate, to: toDate },
     visitRange: { from: visitFromDate, to: visitToDate },
@@ -310,5 +334,10 @@ export async function POST(request: Request) {
     },
     topCategories,
     topPosts,
+    reportAnalysis: {
+      range: { from: reportFromDate, to: reportToDate },
+      total: reportsTotalForRange,
+      byType: reportsByType,
+    },
   });
 }
