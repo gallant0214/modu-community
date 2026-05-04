@@ -7,6 +7,7 @@ import { NavBar } from "@/app/components/nav-bar";
 import { AppResilience } from "@/app/components/app-resilience";
 import { WebPushInitializer } from "@/app/components/web-push-initializer";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { VisitTracker } from "@/app/components/visit-tracker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -77,6 +78,7 @@ export default function RootLayout({
           <RequireNicknameModal />
         </AuthProvider>
         <SpeedInsights />
+        <VisitTracker />
       </body>
     </html>
   );

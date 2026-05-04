@@ -21,6 +21,9 @@ export default function AdminPage() {
   const [tab, setTab] = useState<"pending" | "resolved" | "inquiries" | "notice" | "push" | "settings" | "kpi">("pending");
   const [kpiData, setKpiData] = useState<any>(null);
   const [kpiLoading, setKpiLoading] = useState(false);
+  const [kpiRange, setKpiRange] = useState<"all" | "day" | "week" | "month" | "custom">("all");
+  const [kpiFrom, setKpiFrom] = useState<string>("");
+  const [kpiTo, setKpiTo] = useState<string>("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -107,6 +110,42 @@ export default function AdminPage() {
     setAuthStep("google");
     setFirebaseUser(null);
   }
+
+  // KPI 기간 필터 → from/to ISO string 계산
+  const computeRange = useCallback((mode: typeof kpiRange): { from?: string; to?: string } => {
+    const now = new Date();
+    const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0);
+    if (mode === "all") return {};
+    if (mode === "day") return { from: startOfDay.toISOString(), to: now.toISOString() };
+    if (mode === "week") {
+      const d = new Date(now); d.setDate(d.getDate() - 7);
+      return { from: d.toISOString(), to: now.toISOString() };
+    }
+    if (mode === "month") {
+      const d = new Date(now); d.setDate(d.getDate() - 30);
+      return { from: d.toISOString(), to: now.toISOString() };
+    }
+    // custom
+    return {
+      from: kpiFrom ? new Date(kpiFrom + "T00:00:00").toISOString() : undefined,
+      to: kpiTo ? new Date(kpiTo + "T23:59:59").toISOString() : undefined,
+    };
+  }, [kpiFrom, kpiTo]);
+
+  const loadKpi = useCallback(async (mode: typeof kpiRange) => {
+    setKpiLoading(true);
+    try {
+      const range = computeRange(mode);
+      const res = await fetch("/api/admin/kpi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: storedPassword, ...range }),
+      });
+      const data = await res.json();
+      if (!data.error) setKpiData(data);
+    } catch {}
+    setKpiLoading(false);
+  }, [storedPassword, computeRange]);
 
   const fetchData = useCallback(async (pw: string) => {
     const [reportResult, inquiryResult] = await Promise.all([
@@ -518,15 +557,7 @@ export default function AdminPage() {
           </button>
           <button onClick={async () => {
             setTab("kpi");
-            if (!kpiData) {
-              setKpiLoading(true);
-              try {
-                const res = await fetch("/api/admin/kpi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: storedPassword }) });
-                const data = await res.json();
-                if (!data.error) setKpiData(data);
-              } catch {}
-              setKpiLoading(false);
-            }
+            if (!kpiData) await loadKpi(kpiRange);
           }} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "kpi" ? "border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
             KPI
           </button>
@@ -535,67 +566,117 @@ export default function AdminPage() {
         {/* ===== KPI 대시보드 탭 ===== */}
         {tab === "kpi" && (
           <div className="p-4">
+            {/* 기간 필터 */}
+            <div className="mb-4 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { key: "day", label: "일" },
+                  { key: "week", label: "주" },
+                  { key: "month", label: "월" },
+                  { key: "all", label: "전체" },
+                  { key: "custom", label: "기간 설정" },
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      const next = key as typeof kpiRange;
+                      setKpiRange(next);
+                      if (next !== "custom") loadKpi(next);
+                    }}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                      kpiRange === key
+                        ? "bg-emerald-500 text-white shadow-sm"
+                        : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                    }`}
+                  >{label}</button>
+                ))}
+              </div>
+              {kpiRange === "custom" && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <input type="date" value={kpiFrom} onChange={(e) => setKpiFrom(e.target.value)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" />
+                  <span className="text-sm text-zinc-400">~</span>
+                  <input type="date" value={kpiTo} onChange={(e) => setKpiTo(e.target.value)}
+                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" />
+                  <button onClick={() => loadKpi("custom")}
+                    disabled={!kpiFrom || !kpiTo}
+                    className="px-4 py-1.5 rounded-lg bg-emerald-500 text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">조회</button>
+                </div>
+              )}
+              <p className="mt-2 text-[11px] text-zinc-400">
+                * "전체" = 누적값 / 그 외 = 선택 기간 내 값. 가입자/게시글/댓글/구인/방문자 등이 기간에 영향 받음.
+              </p>
+            </div>
+
             {kpiLoading ? (
               <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
             ) : kpiData ? (
               <div className="space-y-4">
                 <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
-                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">사용자</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <KpiCard label="전체 가입자" value={kpiData.users.total} />
-                    <KpiCard label="이번 달 신규" value={kpiData.users.thisMonth} accent />
-                    <KpiCard label="Google 가입" value={kpiData.providers?.google || 0} />
-                    <KpiCard label="Apple 가입" value={kpiData.providers?.apple || 0} />
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">방문자 (홈페이지)</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <KpiCard label="전체 페이지뷰" value={kpiData.visits?.total ?? 0} />
+                    <KpiCard label={kpiRange === "all" ? "전체 페이지뷰" : "기간 페이지뷰"} value={kpiData.visits?.inRange ?? 0} accent />
+                    <KpiCard label="고유 방문자 (기간)" value={kpiData.visits?.uniqueInRange ?? 0} />
                   </div>
                 </div>
                 <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
-                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">활성도 (7일)</h3>
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">사용자</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <KpiCard label="글 작성자" value={kpiData.engagement.activePostersWeek} />
-                    <KpiCard label="댓글 작성자" value={kpiData.engagement.activeCommentersWeek} />
-                    <KpiCard label="게시글 좋아요" value={kpiData.engagement.postLikes} />
-                    <KpiCard label="댓글 좋아요" value={kpiData.engagement.commentLikes} />
+                    <KpiCard label="전체 가입자" value={kpiData.users?.total ?? 0} />
+                    <KpiCard label="기간 신규 가입" value={kpiData.users?.inRange ?? 0} accent />
+                    <KpiCard label="기간 글 작성자" value={kpiData.engagement?.activePostersInRange ?? 0} />
+                    <KpiCard label="기간 댓글 작성자" value={kpiData.engagement?.activeCommentersInRange ?? 0} />
                   </div>
                 </div>
                 <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">콘텐츠</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <KpiCard label="전체 게시글" value={kpiData.posts.total} />
-                    <KpiCard label="이번 달 게시글" value={kpiData.posts.thisMonth} accent />
-                    <KpiCard label="이번 주 게시글" value={kpiData.posts.thisWeek} />
-                    <KpiCard label="전체 댓글" value={kpiData.comments.total} />
+                    <KpiCard label="전체 게시글" value={kpiData.posts?.total ?? 0} />
+                    <KpiCard label="기간 게시글" value={kpiData.posts?.inRange ?? 0} accent />
+                    <KpiCard label="전체 댓글" value={kpiData.comments?.total ?? 0} />
+                    <KpiCard label="기간 댓글" value={kpiData.comments?.inRange ?? 0} accent />
                   </div>
                 </div>
                 <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">구인</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <KpiCard label="전체 구인글" value={kpiData.jobs.total} />
-                    <KpiCard label="모집중" value={kpiData.jobs.open} accent />
-                    <KpiCard label="모집종료" value={kpiData.jobs.closed} />
-                    <KpiCard label="이번 달 등록" value={kpiData.jobs.thisMonth} />
+                    <KpiCard label="전체 구인글" value={kpiData.jobs?.total ?? 0} />
+                    <KpiCard label="기간 등록" value={kpiData.jobs?.inRange ?? 0} accent />
+                    <KpiCard label="모집중 (기간)" value={kpiData.jobs?.open ?? 0} />
+                    <KpiCard label="모집종료 (기간)" value={kpiData.jobs?.closed ?? 0} />
                   </div>
                 </div>
                 <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
-                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">참여</h3>
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">참여 (기간)</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <KpiCard label="게시글 북마크" value={kpiData.engagement.postBookmarks} />
-                    <KpiCard label="구인 북마크" value={kpiData.engagement.jobBookmarks} />
-                    <KpiCard label="미처리 신고" value={kpiData.reports.pending} warn />
-                    <KpiCard label="미답변 문의" value={kpiData.inquiries.pending} warn />
+                    <KpiCard label="게시글 좋아요" value={kpiData.engagement?.postLikesInRange ?? 0} />
+                    <KpiCard label="댓글 좋아요" value={kpiData.engagement?.commentLikesInRange ?? 0} />
+                    <KpiCard label="게시글 북마크" value={kpiData.engagement?.postBookmarksInRange ?? 0} />
+                    <KpiCard label="구인 북마크" value={kpiData.engagement?.jobBookmarksInRange ?? 0} />
+                  </div>
+                </div>
+                <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">신고/문의</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <KpiCard label="미처리 신고" value={kpiData.reports?.pending ?? 0} warn />
+                    <KpiCard label="기간 신고" value={kpiData.reports?.inRange ?? 0} />
+                    <KpiCard label="미답변 문의" value={kpiData.inquiries?.pending ?? 0} warn />
+                    <KpiCard label="기간 문의" value={kpiData.inquiries?.inRange ?? 0} />
                   </div>
                 </div>
                 <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">스토어 클릭</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <KpiCard label="Google Play (전체)" value={kpiData.storeClicks?.googlePlay || 0} />
-                    <KpiCard label="App Store (전체)" value={kpiData.storeClicks?.appStore || 0} />
-                    <KpiCard label="Google Play (이번 달)" value={kpiData.storeClicks?.googlePlayMonth || 0} accent />
-                    <KpiCard label="App Store (이번 달)" value={kpiData.storeClicks?.appStoreMonth || 0} accent />
+                    <KpiCard label="Google Play (전체)" value={kpiData.storeClicks?.googlePlayTotal ?? 0} />
+                    <KpiCard label="App Store (전체)" value={kpiData.storeClicks?.appStoreTotal ?? 0} />
+                    <KpiCard label="Google Play (기간)" value={kpiData.storeClicks?.googlePlayInRange ?? 0} accent />
+                    <KpiCard label="App Store (기간)" value={kpiData.storeClicks?.appStoreInRange ?? 0} accent />
                   </div>
                 </div>
                 {kpiData.topCategories?.length > 0 && (
                   <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
-                    <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">이번 달 인기 종목</h3>
+                    <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">기간 인기 종목</h3>
                     {kpiData.topCategories.map((c: any, i: number) => (
                       <div key={c.name} className="flex items-center gap-2 py-1">
                         <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold flex items-center justify-center">{i+1}</span>
@@ -607,7 +688,7 @@ export default function AdminPage() {
                 )}
                 {kpiData.topPosts?.length > 0 && (
                   <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
-                    <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">이번 달 인기 게시글</h3>
+                    <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">기간 인기 게시글</h3>
                     {kpiData.topPosts.map((p: any, i: number) => (
                       <div key={p.id} className="flex items-center gap-2 py-1">
                         <span className="w-5 h-5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 text-[10px] font-bold flex items-center justify-center">{i+1}</span>
@@ -617,15 +698,7 @@ export default function AdminPage() {
                     ))}
                   </div>
                 )}
-                <button onClick={async () => {
-                  setKpiLoading(true);
-                  try {
-                    const res = await fetch("/api/admin/kpi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: storedPassword }) });
-                    const data = await res.json();
-                    if (!data.error) setKpiData(data);
-                  } catch {}
-                  setKpiLoading(false);
-                }} className="w-full py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                <button onClick={() => loadKpi(kpiRange)} className="w-full py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
                   새로고침
                 </button>
               </div>
