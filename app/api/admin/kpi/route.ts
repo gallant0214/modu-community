@@ -108,6 +108,111 @@ export async function POST(request: Request) {
     })(),
   ]);
 
+  // 방문자 상세 분석 (일별/시간별/요일별/채널/키워드) — 한 번의 큰 쿼리로 받아 인메모리 집계
+  type VisitAgg = {
+    dailyChart: { date: string; count: number }[];
+    hourlyChart: { hour: number; count: number }[];
+    weekdayChart: { weekday: number; count: number }[]; // 0=일 ~ 6=토
+    channels: { name: string; count: number; percent: number }[];
+    keywords: { keyword: string; count: number; percent: number }[];
+  };
+  const visitsAgg: VisitAgg = await (async () => {
+    const empty: VisitAgg = { dailyChart: [], hourlyChart: [], weekdayChart: [], channels: [], keywords: [] };
+    try {
+      let q = sb.from("site_visits").select("visited_at, referrer");
+      if (fromDate) q = q.gte("visited_at", fromDate);
+      if (toDate) q = q.lte("visited_at", toDate);
+      const { data } = await q.order("visited_at", { ascending: true }).limit(50000);
+      if (!data || data.length === 0) return empty;
+
+      const dayMap = new Map<string, number>();
+      const hourArr = new Array(24).fill(0);
+      const wkArr = new Array(7).fill(0);
+      const channelMap = new Map<string, number>();
+      const keywordMap = new Map<string, number>();
+
+      const classifyChannel = (ref: string | null | undefined): string => {
+        if (!ref) return "직접 방문";
+        try {
+          const u = new URL(ref);
+          const h = u.hostname.toLowerCase();
+          if (/(^|\.)naver\.com$/.test(h)) {
+            if (/map\./.test(h)) return "네이버 지도";
+            if (/blog\./.test(h)) return "네이버 블로그";
+            if (/cafe\./.test(h)) return "네이버 카페";
+            return "네이버 검색";
+          }
+          if (/(^|\.)google\./.test(h)) return "Google 검색";
+          if (/(^|\.)daum\.net$/.test(h)) return "다음 검색";
+          if (/(^|\.)bing\.com$/.test(h)) return "Bing 검색";
+          if (/(^|\.)instagram\.com$/.test(h)) return "인스타그램";
+          if (/(^|\.)facebook\.com$/.test(h) || /(^|\.)fb\.com$/.test(h)) return "페이스북";
+          if (/(^|\.)youtube\.com$/.test(h)) return "유튜브";
+          if (/(^|\.)twitter\.com$/.test(h) || /(^|\.)x\.com$/.test(h)) return "트위터/X";
+          if (/(^|\.)kakao\.com$/.test(h)) return "카카오";
+          return h.replace(/^www\./, "");
+        } catch {
+          return "기타";
+        }
+      };
+
+      const extractKeyword = (ref: string | null | undefined): string | null => {
+        if (!ref) return null;
+        try {
+          const u = new URL(ref);
+          const params = u.searchParams;
+          // Naver/Daum/Bing → query, Google → q
+          const keys = ["query", "q", "wd", "search", "keyword"];
+          for (const k of keys) {
+            const v = params.get(k);
+            if (v && v.trim()) return v.trim().slice(0, 80);
+          }
+          return null;
+        } catch {
+          return null;
+        }
+      };
+
+      for (const row of data) {
+        const dt = new Date(row.visited_at);
+        if (isNaN(dt.getTime())) continue;
+        const yyyy = dt.getFullYear();
+        const mm = String(dt.getMonth() + 1).padStart(2, "0");
+        const dd = String(dt.getDate()).padStart(2, "0");
+        const dayKey = `${yyyy}-${mm}-${dd}`;
+        dayMap.set(dayKey, (dayMap.get(dayKey) || 0) + 1);
+        hourArr[dt.getHours()]++;
+        wkArr[dt.getDay()]++;
+        const ch = classifyChannel(row.referrer);
+        channelMap.set(ch, (channelMap.get(ch) || 0) + 1);
+        const kw = extractKeyword(row.referrer);
+        if (kw) keywordMap.set(kw, (keywordMap.get(kw) || 0) + 1);
+      }
+
+      const dailyChart = [...dayMap.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([date, count]) => ({ date, count }));
+      const hourlyChart = hourArr.map((count, hour) => ({ hour, count }));
+      const weekdayChart = wkArr.map((count, weekday) => ({ weekday, count }));
+
+      const totalChannel = [...channelMap.values()].reduce((a, b) => a + b, 0) || 1;
+      const channels = [...channelMap.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([name, count]) => ({ name, count, percent: Math.round((count / totalChannel) * 10000) / 100 }));
+
+      const totalKeyword = [...keywordMap.values()].reduce((a, b) => a + b, 0) || 1;
+      const keywords = [...keywordMap.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([keyword, count]) => ({ keyword, count, percent: Math.round((count / totalKeyword) * 10000) / 100 }));
+
+      return { dailyChart, hourlyChart, weekdayChart, channels, keywords };
+    } catch {
+      return empty;
+    }
+  })();
+
   // store_clicks total은 전체 모드에서도 보고 싶으니 추가 조회
   const [storeAppAllTotal, storeGoogleAllTotal] = await Promise.all([
     (async () => {
@@ -189,6 +294,7 @@ export async function POST(request: Request) {
       total: visitsTotal,
       inRange: visitsInRange,
       uniqueInRange: uniqueVisitorsRange,
+      ...visitsAgg,
     },
     topCategories,
     topPosts,

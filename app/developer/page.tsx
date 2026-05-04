@@ -620,6 +620,14 @@ export default function AdminPage() {
                     <KpiCard label="고유 방문자 (기간)" value={kpiData.visits?.uniqueInRange ?? 0} />
                   </div>
                 </div>
+
+                {/* ===== 유입 분석 (네이버 스마트플레이스 스타일) ===== */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <VisitDailyChart daily={kpiData.visits?.dailyChart || []} total={kpiData.visits?.inRange ?? 0} />
+                  <VisitChannels channels={kpiData.visits?.channels || []} />
+                  <VisitHourlyChart hourly={kpiData.visits?.hourlyChart || []} weekday={kpiData.visits?.weekdayChart || []} />
+                  <VisitKeywords keywords={kpiData.visits?.keywords || []} />
+                </div>
                 <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">사용자</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1341,6 +1349,152 @@ function KpiCard({ label, value, accent, warn }: { label: string; value: number;
         {value.toLocaleString()}
       </p>
       <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{label}</p>
+    </div>
+  );
+}
+
+/* ── 유입 분석: 일별 차트 ── */
+function VisitDailyChart({ daily, total }: { daily: { date: string; count: number }[]; total: number }) {
+  const max = Math.max(1, ...daily.map((d) => d.count));
+  const fmtDate = (s: string) => {
+    const [, m, d] = s.split("-");
+    return `${Number(m)}.${Number(d)}`;
+  };
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+      <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-2">유입 수</h3>
+      <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 mb-3">
+        {total.toLocaleString()}<span className="text-sm font-medium text-zinc-400 ml-1">회</span>
+      </p>
+      {daily.length === 0 ? (
+        <p className="text-center py-8 text-xs text-zinc-400">데이터가 없습니다</p>
+      ) : (
+        <div className="flex items-end gap-1 h-32 px-1">
+          {daily.map((d) => (
+            <div key={d.date} className="flex-1 flex flex-col items-center justify-end h-full">
+              <div className="w-full bg-emerald-400 dark:bg-emerald-600 rounded-t-sm transition-all"
+                style={{ height: `${(d.count / max) * 100}%`, minHeight: d.count > 0 ? 2 : 0 }}
+                title={`${d.date}: ${d.count}회`}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-1 mt-2 px-1">
+        {daily.map((d) => (
+          <span key={d.date} className="flex-1 text-center text-[10px] text-zinc-400">{fmtDate(d.date)}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── 유입 분석: 채널 ── */
+function VisitChannels({ channels }: { channels: { name: string; count: number; percent: number }[] }) {
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+      <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">유입 채널</h3>
+      {channels.length === 0 ? (
+        <p className="text-center py-8 text-xs text-zinc-400">데이터가 없습니다</p>
+      ) : (
+        <div className="space-y-1.5">
+          {channels.map((c, i) => (
+            <div key={c.name} className="relative rounded-lg overflow-hidden">
+              <div className="absolute inset-y-0 left-0 bg-emerald-50 dark:bg-emerald-950/30" style={{ width: `${c.percent}%` }} />
+              <div className="relative flex items-center justify-between px-3 py-2">
+                <div className="flex items-center gap-2.5">
+                  <span className={`text-xs font-bold ${i === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}>{i + 1}</span>
+                  <span className={`text-sm ${i === 0 ? "font-bold text-emerald-700 dark:text-emerald-400" : "text-zinc-700 dark:text-zinc-300"}`}>{c.name}</span>
+                </div>
+                <span className={`text-sm font-bold ${i === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-700 dark:text-zinc-200"}`}>
+                  {c.percent.toFixed(2)}%
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── 유입 분석: 시간/요일별 ── */
+function VisitHourlyChart({ hourly, weekday }: { hourly: { hour: number; count: number }[]; weekday: { weekday: number; count: number }[] }) {
+  const [mode, setMode] = useState<"hour" | "weekday">("hour");
+  const data = mode === "hour"
+    ? hourly.map((d) => ({ label: `${d.hour}시`, count: d.count }))
+    : weekday.map((d) => ({ label: ["일","월","화","수","목","금","토"][d.weekday], count: d.count }));
+  const max = Math.max(1, ...data.map((d) => d.count));
+  const W = 320, H = 100, pad = 8;
+  const xStep = data.length > 1 ? (W - pad * 2) / (data.length - 1) : 0;
+  const points = data.map((d, i) => {
+    const x = pad + i * xStep;
+    const y = H - pad - ((d.count / max) * (H - pad * 2));
+    return `${x},${y}`;
+  }).join(" ");
+
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200">시간·요일별</h3>
+        <div className="flex gap-1 rounded-full bg-zinc-100 dark:bg-zinc-800 p-0.5">
+          <button onClick={() => setMode("hour")}
+            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${mode === "hour" ? "bg-zinc-900 text-white" : "text-zinc-500"}`}>시간별</button>
+          <button onClick={() => setMode("weekday")}
+            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${mode === "weekday" ? "bg-zinc-900 text-white" : "text-zinc-500"}`}>요일별</button>
+        </div>
+      </div>
+      {data.every((d) => d.count === 0) ? (
+        <p className="text-center py-8 text-xs text-zinc-400">데이터가 없습니다</p>
+      ) : (
+        <>
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-28">
+            <polyline fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" points={points} />
+            {data.map((d, i) => {
+              const x = pad + i * xStep;
+              const y = H - pad - ((d.count / max) * (H - pad * 2));
+              return <circle key={i} cx={x} cy={y} r="2" fill="#10b981" />;
+            })}
+          </svg>
+          <div className="flex justify-between mt-1 px-2">
+            {(mode === "hour"
+              ? ["0시","3시","6시","9시","12시","15시","18시","21시"]
+              : ["일","월","화","수","목","금","토"]
+            ).map((l) => (
+              <span key={l} className="text-[10px] text-zinc-400">{l}</span>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── 유입 분석: 키워드 ── */
+function VisitKeywords({ keywords }: { keywords: { keyword: string; count: number; percent: number }[] }) {
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+      <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">유입 키워드</h3>
+      {keywords.length === 0 ? (
+        <p className="text-center py-8 text-xs text-zinc-400">데이터가 없습니다</p>
+      ) : (
+        <div className="space-y-1.5">
+          {keywords.map((k, i) => (
+            <div key={k.keyword} className="relative rounded-lg overflow-hidden">
+              <div className="absolute inset-y-0 left-0 bg-emerald-50 dark:bg-emerald-950/30" style={{ width: `${k.percent}%` }} />
+              <div className="relative flex items-center justify-between px-3 py-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className={`text-xs font-bold shrink-0 ${i === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400"}`}>{i + 1}</span>
+                  <span className={`text-sm truncate ${i === 0 ? "font-bold text-emerald-700 dark:text-emerald-400" : "text-zinc-700 dark:text-zinc-300"}`}>{k.keyword}</span>
+                </div>
+                <span className={`text-sm font-bold shrink-0 ml-2 ${i === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-700 dark:text-zinc-200"}`}>
+                  {k.percent.toFixed(2)}%
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

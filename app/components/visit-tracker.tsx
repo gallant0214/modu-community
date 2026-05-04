@@ -14,7 +14,8 @@ export function VisitTracker() {
     if (pathname.startsWith("/admin") || pathname.startsWith("/developer")) return;
     if (pathname.startsWith("/api")) return;
 
-    const body = JSON.stringify({ path: pathname });
+    const referrer = typeof document !== "undefined" ? document.referrer || "" : "";
+    const body = JSON.stringify({ path: pathname, referrer });
     const url = "/api/track-visit";
 
     try {
