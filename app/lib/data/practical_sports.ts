@@ -3627,10 +3627,10 @@ export const practicalSports: PracticalSport[] = [
       },
     ],
   },
-  // 45. 자전거(사이클)
+  // 45. 자전거
   {
     id: "cycling_1",
-    name: "자전거(사이클) 1급",
+    name: "자전거 1급",
     sections: [
       {
         title: "2급 전문·1급 생활 — Roller 주행 (100점)",
@@ -3657,7 +3657,7 @@ export const practicalSports: PracticalSport[] = [
   },
   {
     id: "cycling_2",
-    name: "자전거(사이클) 2급",
+    name: "자전거 2급",
     sections: [
       {
         title: "2급 생활·유소년·노인 — 기능코스 (100점)",
@@ -4371,6 +4371,86 @@ export const practicalSports: PracticalSport[] = [
           {
             label: "지도방법 (50점)",
             detail: "지도자 철학 및 윤리, 지도방법, 스포츠 4대악, 대회, 체력·트레이닝·상해·영양",
+          },
+        ],
+      },
+    ],
+  },
+  // 54-1. 킥복싱 (2급 생활만 시행, 2025·2026 필기시험 합격자 한정)
+  {
+    id: "kickboxing",
+    name: "킥복싱 2급",
+    sections: [
+      {
+        title: "펀치",
+        points: "20점",
+        items: [
+          { label: "원·투 스트레이트 동작 수행 (4점)" },
+          { label: "라이트·레프트 훅 동작 수행 (4점)" },
+          { label: "라이트·레프트 어퍼컷 동작 수행 (4점)" },
+          { label: "백스핀 블로우 동작 수행 (4점)" },
+          { label: "동작 과정에서 시선이 타점을 정확하게 주시 (4점)" },
+        ],
+      },
+      {
+        title: "킥",
+        points: "20점",
+        items: [
+          { label: "라운드 하우스킥(로우·미들·하이) 자세 정확성 (4점)" },
+          { label: "프론트킥(앞차기) 자세 정확성 (4점)" },
+          { label: "사이드킥 자세 정확성 (4점)" },
+          { label: "니킥 자세 정확성 (4점)" },
+          { label: "터닝훅킥(뒤돌려차기·뒤후리기) 자세 정확성 (4점)" },
+        ],
+      },
+      {
+        title: "콤비네이션 (쉐도우, *1분 내 실행)",
+        points: "20점",
+        items: [
+          { label: "콤비네이션 동작 중 스텝·자세·시선 수행 (7점)" },
+          { label: "펀치·킥 연결동작이 매끄럽게 수행 (7점)" },
+          {
+            label: "방어동작(회피동작) 적절성 (6점)",
+            deduction: "회피동작 부재 시 감점",
+          },
+        ],
+      },
+      {
+        title: "미트치기 (*1분 내 실행)",
+        points: "20점",
+        items: [
+          { label: "미트치기 수행 중 타점 포인트 정확 주시·타격 (7점)" },
+          {
+            label: "미트치기 수행 중 타이밍과 리듬 조화 (7점)",
+            deduction: "타이밍·리듬 부재 시 감점",
+          },
+          { label: "미트치기 수행 중 중심이동 안정성 (6점)" },
+        ],
+      },
+      {
+        title: "미트잡기 (*1분 내 실행)",
+        points: "20점",
+        items: [
+          { label: "선수와 구두·제스처를 통해 합 맞추기 (5점)" },
+          {
+            label: "미트잡기 중 타이밍과 리듬 조화 (5점)",
+            deduction: "타이밍 불일치 시 감점",
+          },
+          { label: "정확한 타격 포인트에 미트 위치 (5점)" },
+          { label: "선수 이동동선에 맞춰 미트 매끄럽게 유도 (5점)" },
+        ],
+      },
+      {
+        title: "구술평가 (시행방법: 규정 2문제·지도방법 2문제 / 합격기준 70점 이상)",
+        points: "100점(별도)",
+        items: [
+          {
+            label: "규정 (50점)",
+            detail: "시설/도구, 경기운영",
+          },
+          {
+            label: "지도방법 (50점)",
+            detail: "지도방법, 지도자의 자질",
           },
         ],
       },
@@ -6039,7 +6119,7 @@ export const practicalSports: PracticalSport[] = [
   },
   {
     id: "cycling_disabled_1",
-    name: "사이클1급[장애인]",
+    name: "자전거1급[장애인]",
     sections: [
       {
         title: "기본",
@@ -6065,7 +6145,7 @@ export const practicalSports: PracticalSport[] = [
   },
   {
     id: "cycling_disabled_2",
-    name: "사이클2급[장애인]",
+    name: "자전거2급[장애인]",
     sections: [
       {
         title: "기본",
