@@ -18,9 +18,14 @@ export default function AdminPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"pending" | "resolved" | "inquiries" | "notice" | "push" | "settings" | "kpi">("pending");
+  const [tab, setTab] = useState<"report" | "pending" | "resolved" | "inquiries" | "notice" | "push" | "settings" | "kpi">("report");
   const [kpiData, setKpiData] = useState<any>(null);
   const [kpiLoading, setKpiLoading] = useState(false);
+  // 리포트 탭 상태
+  const [reportData, setReportData] = useState<any>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportPeriod, setReportPeriod] = useState<"day" | "week" | "month">("week");
+  const [reportOffset, setReportOffset] = useState<number>(0);
   const [kpiRange, setKpiRange] = useState<"all" | "day" | "week" | "month" | "custom">("all");
   const [kpiFrom, setKpiFrom] = useState<string>("");
   const [kpiTo, setKpiTo] = useState<string>("");
@@ -145,6 +150,21 @@ export default function AdminPage() {
     };
   }, []);
 
+  // 리포트 데이터 로드
+  const loadReport = useCallback(async (period: "day" | "week" | "month", offset: number) => {
+    setReportLoading(true);
+    try {
+      const res = await fetch("/api/admin/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: storedPassword, period, offset }),
+      });
+      const data = await res.json();
+      if (!data.error) setReportData(data);
+    } catch {}
+    setReportLoading(false);
+  }, [storedPassword]);
+
   const loadKpi = useCallback(async (
     mainMode: typeof kpiRange,
     visitMode: typeof kpiVisitRange,
@@ -198,11 +218,20 @@ export default function AdminPage() {
     setRefreshing(true);
     if (tab === "kpi") {
       await loadKpi(kpiRange, kpiVisitRange, kpiReportRange);
+    } else if (tab === "report") {
+      await loadReport(reportPeriod, reportOffset);
     } else {
       await fetchData(storedPassword);
     }
     setRefreshing(false);
   }
+
+  // 인증 직후 리포트 탭이 기본이라 첫 데이터 로드
+  useEffect(() => {
+    if (authStep === "authenticated" && storedPassword && tab === "report" && !reportData) {
+      loadReport(reportPeriod, reportOffset);
+    }
+  }, [authStep, storedPassword, tab, reportData, reportPeriod, reportOffset, loadReport]);
 
   async function handleResolve(id: number) {
     await resolveReport(id, storedPassword);
@@ -566,8 +595,14 @@ export default function AdminPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <button onClick={() => setTab("pending")} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "pending" ? "border-b-2 border-red-500 text-red-600 dark:text-red-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
+        <div className="flex items-center border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 overflow-x-auto">
+          <button onClick={async () => {
+            setTab("report");
+            if (!reportData) await loadReport(reportPeriod, reportOffset);
+          }} className={`flex-1 min-w-[80px] py-3 text-center text-sm font-semibold transition-colors ${tab === "report" ? "border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
+            리포트
+          </button>
+          <button onClick={() => setTab("pending")} className={`flex-1 min-w-[80px] py-3 text-center text-sm font-semibold transition-colors ${tab === "pending" ? "border-b-2 border-red-500 text-red-600 dark:text-red-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
             미처리 신고 <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-600 dark:bg-red-950 dark:text-red-400">{pendingReports.length}</span>
           </button>
           <button onClick={() => setTab("resolved")} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "resolved" ? "border-b-2 border-green-500 text-green-600 dark:text-green-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
@@ -781,6 +816,26 @@ export default function AdminPage() {
               </div>
             ) : (
               <p className="text-center py-16 text-sm text-zinc-400">KPI 데이터를 불러올 수 없습니다.</p>
+            )}
+          </div>
+        )}
+
+        {/* ===== 리포트 탭 ===== */}
+        {tab === "report" && (
+          <div className="p-4">
+            {reportLoading && !reportData ? (
+              <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
+            ) : reportData ? (
+              <ReportTabContent
+                data={reportData}
+                period={reportPeriod}
+                offset={reportOffset}
+                onChangePeriod={(p) => { setReportPeriod(p); setReportOffset(0); loadReport(p, 0); }}
+                onChangeOffset={(o) => { setReportOffset(o); loadReport(reportPeriod, o); }}
+                loading={reportLoading}
+              />
+            ) : (
+              <p className="text-center py-16 text-sm text-zinc-400">리포트 데이터를 불러올 수 없습니다.</p>
             )}
           </div>
         )}
@@ -1406,6 +1461,318 @@ function ReportCard({ report, onResolve, onDelete }: { report: Report; onResolve
         {!report.resolved && onResolve && (
           <button onClick={() => onResolve(report.id)} className="rounded-lg border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-500 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">처리 완료</button>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ── 리포트 탭 ── */
+function ReportTabContent({
+  data, period, offset, onChangePeriod, onChangeOffset, loading,
+}: {
+  data: any;
+  period: "day" | "week" | "month";
+  offset: number;
+  onChangePeriod: (p: "day" | "week" | "month") => void;
+  onChangeOffset: (o: number) => void;
+  loading: boolean;
+}) {
+  const fmtRange = (from: string, to: string) => {
+    const f = new Date(from); const t = new Date(to);
+    const wk = ["일","월","화","수","목","금","토"];
+    const fmt = (d: Date) => `${String(d.getFullYear()).slice(2)}. ${d.getMonth() + 1}. ${d.getDate()}. ${wk[d.getDay()]}`;
+    return `${fmt(f)} - ${fmt(t)}`;
+  };
+
+  return (
+    <div className={`space-y-4 ${loading ? "opacity-60 pointer-events-none" : ""}`}>
+      {/* ── 기간 헤더 ── */}
+      <div className="flex flex-wrap items-stretch gap-3">
+        <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 px-4 py-2 flex items-center gap-2">
+          <select
+            value={period}
+            onChange={(e) => onChangePeriod(e.target.value as "day" | "week" | "month")}
+            className="bg-transparent text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none cursor-pointer"
+          >
+            <option value="day">일간</option>
+            <option value="week">주간</option>
+            <option value="month">월간</option>
+          </select>
+        </div>
+        <div className="flex-1 min-w-[260px] rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 px-4 py-2 flex items-center justify-between">
+          <button onClick={() => onChangeOffset(offset + 1)}
+            className="text-emerald-500 hover:text-emerald-600 px-2"
+            aria-label="이전 기간"
+          >◀</button>
+          <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+            {fmtRange(data.range.from, data.range.to)}
+          </span>
+          <button onClick={() => onChangeOffset(Math.max(0, offset - 1))}
+            disabled={offset === 0}
+            className={`px-2 ${offset === 0 ? "text-zinc-300 dark:text-zinc-700" : "text-emerald-500 hover:text-emerald-600"}`}
+            aria-label="다음 기간"
+          >▶</button>
+        </div>
+      </div>
+
+      {/* ── 방문 전 지표 (3카드) ── */}
+      <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+        <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">
+          방문 전 지표 <span className="text-emerald-500 ml-1">3</span>
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <ReportSummaryCard label="사이트 방문" m={data.metrics.visits} />
+          <ReportSummaryCard label="신규 가입" m={data.metrics.signups} />
+          <ReportSummaryCard label="스토어 클릭" m={data.metrics.storeClicks} />
+        </div>
+      </div>
+
+      {/* ── 방문 후 지표 (3카드) ── */}
+      <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+        <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">
+          방문 후 지표 <span className="text-emerald-500 ml-1">3</span>
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <ReportSummaryCard label="게시글 작성" m={data.metrics.posts} />
+          <ReportSummaryCard label="댓글 작성" m={data.metrics.comments} />
+          <ReportSummaryCard label="구인글 등록" m={data.metrics.jobs} />
+        </div>
+      </div>
+
+      {/* ── 상세 카드 (2열) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ReportDetailCard
+          title="사이트 방문"
+          m={data.metrics.visits}
+          period={period}
+          extra={
+            data.inflow?.channels?.length > 0 && (
+              <div className="mt-4 space-y-1">
+                <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1.5">유입 채널 Top 5</p>
+                {data.inflow.channels.map((c: any, i: number) => (
+                  <div key={c.name} className="flex items-center gap-2 py-0.5">
+                    <span className="text-xs font-bold text-zinc-400 w-4">{i+1}</span>
+                    <span className="flex-1 text-xs text-zinc-700 dark:text-zinc-300 truncate">{c.name}</span>
+                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{c.count}회</span>
+                  </div>
+                ))}
+              </div>
+            )
+          }
+        />
+        <ReportDetailCard
+          title="신규 가입"
+          m={data.metrics.signups}
+          period={period}
+        />
+        <ReportDetailCard
+          title="게시글 작성"
+          m={data.metrics.posts}
+          period={period}
+          extra={
+            data.topCategories?.length > 0 && (
+              <div className="mt-4 space-y-1">
+                <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1.5">인기 종목 Top 5</p>
+                {data.topCategories.map((c: any, i: number) => (
+                  <div key={c.name} className="flex items-center gap-2 py-0.5">
+                    <span className="text-xs font-bold text-zinc-400 w-4">{i+1}</span>
+                    <span className="flex-1 text-xs text-zinc-700 dark:text-zinc-300 truncate">{c.name}</span>
+                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{c.count}회</span>
+                  </div>
+                ))}
+              </div>
+            )
+          }
+        />
+        <ReportDetailCard
+          title="댓글 작성"
+          m={data.metrics.comments}
+          period={period}
+        />
+        <ReportDetailCard
+          title="구인글 등록"
+          m={data.metrics.jobs}
+          period={period}
+        />
+        <ReportDetailCard
+          title="스토어 클릭"
+          m={data.metrics.storeClicks}
+          period={period}
+          extra={
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800 p-2 text-center">
+                <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{(data.metrics.storeClicks.appStore ?? 0).toLocaleString()}</p>
+                <p className="text-[10px] text-zinc-500">App Store</p>
+              </div>
+              <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800 p-2 text-center">
+                <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100">{(data.metrics.storeClicks.googlePlay ?? 0).toLocaleString()}</p>
+                <p className="text-[10px] text-zinc-500">Google Play</p>
+              </div>
+            </div>
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+function ReportSummaryCard({ label, m }: { label: string; m: { current: number; previous: number; changePct: number } }) {
+  const up = m.changePct > 0;
+  const flat = m.changePct === 0;
+  return (
+    <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800 p-3">
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{label}</span>
+        {!flat && (
+          <span className={`text-xs font-bold ${up ? "text-red-500" : "text-blue-500"}`}>
+            {up ? "↑" : "↓"}{Math.abs(m.changePct)}%
+          </span>
+        )}
+      </div>
+      <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-1">
+        {m.current.toLocaleString()}<span className="text-sm font-medium text-zinc-400 ml-0.5">회</span>
+      </p>
+      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">지난 기간 {m.previous.toLocaleString()}회</p>
+    </div>
+  );
+}
+
+function ReportDetailCard({
+  title, m, period, extra,
+}: {
+  title: string;
+  m: { current: number; previous: number; changePct: number; daily: { date: string; count: number }[]; prevDaily: { date: string; count: number }[] };
+  period: "day" | "week" | "month";
+  extra?: React.ReactNode;
+}) {
+  const days = m.daily.length || 1;
+  const avg = (m.current / days).toFixed(period === "day" ? 0 : 1);
+  const up = m.changePct > 0;
+  const flat = m.changePct === 0;
+
+  // 라벨(녹색) + 숫자(검은색) + 평균 - 줄바꿈 포함
+  // 예: "한 주 사이트 방문은 998회,\n일 평균 142회 입니다."
+  const periodWord = period === "day" ? "일" : period === "week" ? "주" : "달";
+
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+      <p className="text-sm text-zinc-700 dark:text-zinc-200 leading-relaxed">
+        한 {periodWord} <span className="font-bold text-emerald-600 dark:text-emerald-400">{title}</span>은 <span className="font-bold">{m.current.toLocaleString()}회</span>,
+        <br />
+        일 평균 <span className="font-bold">{avg}회</span> 입니다.
+      </p>
+      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
+        {flat ? "전기간과 동일합니다." : (
+          <>지난 기간 대비 <span className={`font-bold ${up ? "text-red-500" : "text-blue-500"}`}>{up ? "+" : ""}{m.changePct}%</span> {up ? "증가" : "감소"}했습니다.</>
+        )}
+      </p>
+      <DualLineChart current={m.daily} previous={m.prevDaily} period={period} />
+      {extra}
+    </div>
+  );
+}
+
+/* ── 듀얼 라인차트 (이번 기간 vs 지난 기간 오버레이) ── */
+function DualLineChart({
+  current, previous, period,
+}: {
+  current: { date: string; count: number }[];
+  previous: { date: string; count: number }[];
+  period: "day" | "week" | "month";
+}) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  if (current.length === 0) return <p className="text-center py-8 text-xs text-zinc-400">데이터가 없습니다</p>;
+
+  const W = 320, H = 130, padX = 14, padTop = 14, padBottom = 28;
+  const plotH = H - padTop - padBottom;
+  const max = Math.max(1, ...current.map(d => d.count), ...previous.map(d => d.count));
+  const xStep = current.length > 1 ? (W - padX * 2) / (current.length - 1) : 0;
+  const labelY = padTop + plotH + 16;
+
+  const curPts = current.map((d, i) => ({
+    x: padX + i * xStep,
+    y: padTop + plotH - (d.count / max) * plotH,
+    ...d,
+  }));
+  const prevPts = previous.map((d, i) => ({
+    x: padX + i * xStep,
+    y: padTop + plotH - (d.count / max) * plotH,
+    ...d,
+  }));
+
+  const wkLabel = ["월","화","수","목","금","토","일"];
+  const xLabels = current.map((d, i) => {
+    const dt = new Date(d.date);
+    if (period === "month") {
+      // 30일 → 5일 간격으로 라벨
+      return i % 5 === 0 ? `${dt.getMonth()+1}.${dt.getDate()}` : "";
+    }
+    if (period === "week") {
+      // 7일 → 요일
+      const wkIdx = (dt.getDay() + 6) % 7; // 월=0, 화=1, ..., 일=6
+      return wkLabel[wkIdx];
+    }
+    // day → 시간 단위 표시 (단일 일이라 라벨 1개)
+    return `${dt.getMonth()+1}.${dt.getDate()}`;
+  });
+
+  const onMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const xRatio = (e.clientX - rect.left) / rect.width;
+    const xInSvg = xRatio * W;
+    let nearest = 0, minDist = Infinity;
+    curPts.forEach((p, i) => {
+      const d = Math.abs(p.x - xInSvg);
+      if (d < minDist) { minDist = d; nearest = i; }
+    });
+    setHoverIdx(nearest);
+  };
+
+  const hovered = hoverIdx !== null ? curPts[hoverIdx] : null;
+  const hoveredPrev = hoverIdx !== null ? prevPts[hoverIdx] : null;
+
+  return (
+    <div className="mt-3">
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full h-32 cursor-crosshair"
+        onMouseMove={onMouseMove}
+        onMouseLeave={() => setHoverIdx(null)}
+      >
+        {/* 지난 기간 (회색) */}
+        <polyline fill="none" stroke="#d4d4d8" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"
+          points={prevPts.map(p => `${p.x},${p.y}`).join(" ")} />
+        {/* 이번 기간 (에메랄드) */}
+        <polyline fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
+          points={curPts.map(p => `${p.x},${p.y}`).join(" ")} />
+        {curPts.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={hoverIdx === i ? 3 : 2} fill="#10b981" />
+        ))}
+        {/* x축 라벨 */}
+        {curPts.map((p, i) => xLabels[i] && (
+          <text key={`l-${i}`} x={p.x} y={labelY} textAnchor="middle" fontSize="10" fill="#a1a1aa"
+            style={{ pointerEvents: "none" }}>{xLabels[i]}</text>
+        ))}
+        {hovered && (
+          <>
+            <line x1={hovered.x} y1={padTop} x2={hovered.x} y2={padTop + plotH} stroke="#10b981" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
+            <text x={hovered.x} y={Math.max(hovered.y - 8, padTop + 4)}
+              textAnchor={hovered.x < 30 ? "start" : hovered.x > W - 30 ? "end" : "middle"}
+              fontSize="11" fontWeight="700" fill="#065f46" className="dark:fill-emerald-300"
+              style={{ pointerEvents: "none" }}>
+              {hovered.count}회{hoveredPrev && hoveredPrev.count !== hovered.count ? ` (지난 ${hoveredPrev.count}회)` : ""}
+            </text>
+          </>
+        )}
+      </svg>
+      <div className="flex items-center gap-3 mt-1 text-[10px] text-zinc-500 dark:text-zinc-400">
+        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-zinc-300" />지난 기간</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500" />이번 기간</span>
       </div>
     </div>
   );
