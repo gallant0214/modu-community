@@ -2007,6 +2007,7 @@ function ReportAnalysisBox({
 
 /* ── 유입 분석: 일별 차트 ── */
 function VisitDailyChart({ daily, total }: { daily: { date: string; count: number }[]; total: number }) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const max = Math.max(1, ...daily.map((d) => d.count));
   const fmtDate = (s: string) => {
     const [, m, d] = s.split("-");
@@ -2021,20 +2022,51 @@ function VisitDailyChart({ daily, total }: { daily: { date: string; count: numbe
       {daily.length === 0 ? (
         <p className="text-center py-8 text-xs text-zinc-400">데이터가 없습니다</p>
       ) : (
-        <div className="flex items-end gap-1 h-32 px-1">
-          {daily.map((d) => (
-            <div key={d.date} className="flex-1 flex flex-col items-center justify-end h-full">
-              <div className="w-full bg-emerald-400 dark:bg-emerald-600 rounded-t-sm transition-all"
-                style={{ height: `${(d.count / max) * 100}%`, minHeight: d.count > 0 ? 2 : 0 }}
-                title={`${d.date}: ${d.count}회`}
-              />
-            </div>
-          ))}
+        <div className="relative h-32 px-1">
+          {/* 막대 */}
+          <div className="flex items-end gap-1 h-full">
+            {daily.map((d, i) => (
+              <div
+                key={d.date}
+                className="flex-1 flex flex-col items-center justify-end h-full cursor-pointer relative"
+                onMouseEnter={() => setHoverIdx(i)}
+                onMouseLeave={() => setHoverIdx(null)}
+              >
+                <div className={`w-full rounded-t-sm transition-all ${
+                  hoverIdx === i
+                    ? "bg-emerald-500 dark:bg-emerald-500"
+                    : "bg-emerald-400 dark:bg-emerald-600"
+                }`}
+                  style={{ height: `${(d.count / max) * 100}%`, minHeight: d.count > 0 ? 2 : 0 }}
+                />
+              </div>
+            ))}
+          </div>
+          {/* 툴팁 (절대 위치, 가장자리 잘림 방지) */}
+          {hoverIdx !== null && (() => {
+            const total = daily.length;
+            const leftPct = ((hoverIdx + 0.5) / total) * 100;
+            const isLeft = hoverIdx <= 1;
+            const isRight = hoverIdx >= total - 2;
+            const transform = isLeft ? "translateX(0)" : isRight ? "translateX(-100%)" : "translateX(-50%)";
+            return (
+              <div
+                className="absolute -top-1 -translate-y-full px-2 py-1 rounded-md bg-emerald-50 border border-emerald-200 dark:bg-emerald-950 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold whitespace-nowrap pointer-events-none shadow-sm z-10"
+                style={{ left: `${leftPct}%`, transform }}
+              >
+                {fmtDate(daily[hoverIdx].date)} · {daily[hoverIdx].count}회
+              </div>
+            );
+          })()}
         </div>
       )}
       <div className="flex gap-1 mt-2 px-1">
-        {daily.map((d) => (
-          <span key={d.date} className="flex-1 text-center text-[10px] text-zinc-400">{fmtDate(d.date)}</span>
+        {daily.map((d, i) => (
+          <span key={d.date}
+            className={`flex-1 text-center text-[10px] transition-colors ${
+              hoverIdx === i ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-zinc-400"
+            }`}
+          >{fmtDate(d.date)}</span>
         ))}
       </div>
     </div>
