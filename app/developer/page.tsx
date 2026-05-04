@@ -1785,10 +1785,13 @@ function DualLineChart({
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
-        className="w-full h-32 cursor-crosshair"
+        preserveAspectRatio="none"
+        className="w-full h-32 cursor-crosshair block"
         onMouseMove={onMouseMove}
         onMouseLeave={() => setHoverIdx(null)}
       >
+        {/* 마우스 이벤트 캐치용 투명 오버레이 — 빈 공간에서도 hover 작동 */}
+        <rect x="0" y="0" width={W} height={H} fill="transparent" pointerEvents="all" />
         {/* 지난 기간 (회색) */}
         <polyline fill="none" stroke="#d4d4d8" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"
           points={prevPts.map(p => `${p.x},${p.y}`).join(" ")} />
@@ -2137,10 +2140,12 @@ function VisitHourlyChart({ hourly, weekday }: { hourly: { hour: number; count: 
         <svg
           ref={svgRef}
           viewBox={`0 0 ${W} ${H}`}
-          className="w-full h-32 cursor-crosshair"
+          preserveAspectRatio="none"
+          className="w-full h-32 cursor-crosshair block"
           onMouseMove={onMouseMove}
           onMouseLeave={() => setHoverIdx(null)}
         >
+          <rect x="0" y="0" width={W} height={H} fill="transparent" pointerEvents="all" />
           <polyline fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" points={polyPoints} />
           {pointsArr.map((p, i) => (
             <circle key={i} cx={p.x} cy={p.y} r={hoverIdx === i ? 3.5 : 2} fill="#10b981" />
