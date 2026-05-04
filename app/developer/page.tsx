@@ -24,8 +24,10 @@ export default function AdminPage() {
   const [kpiRange, setKpiRange] = useState<"all" | "day" | "week" | "month" | "custom">("all");
   const [kpiFrom, setKpiFrom] = useState<string>("");
   const [kpiTo, setKpiTo] = useState<string>("");
-  // 방문자/유입 분석은 별도 기간 — 기본 '주'
-  const [kpiVisitRange, setKpiVisitRange] = useState<"all" | "day" | "week" | "month">("week");
+  // 유입수 + 시간·요일별 전용 기간 — 기본 '주', custom 지원
+  const [kpiVisitRange, setKpiVisitRange] = useState<"all" | "day" | "week" | "month" | "custom">("week");
+  const [kpiVisitFrom, setKpiVisitFrom] = useState<string>("");
+  const [kpiVisitTo, setKpiVisitTo] = useState<string>("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -114,7 +116,12 @@ export default function AdminPage() {
   }
 
   // KPI 기간 필터 → from/to ISO string 계산
-  const computeRange = useCallback((mode: typeof kpiRange | "all" | "day" | "week" | "month" | "custom"): { from?: string; to?: string } => {
+  // mode 가 custom 일 때 customFrom/customTo 둘 다 받아서 처리 (메인/방문자 각각의 from/to 사용)
+  const computeRange = useCallback((
+    mode: "all" | "day" | "week" | "month" | "custom",
+    customFrom?: string,
+    customTo?: string,
+  ): { from?: string; to?: string } => {
     const now = new Date();
     const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0);
     if (mode === "all") return {};
@@ -129,16 +136,16 @@ export default function AdminPage() {
     }
     // custom
     return {
-      from: kpiFrom ? new Date(kpiFrom + "T00:00:00").toISOString() : undefined,
-      to: kpiTo ? new Date(kpiTo + "T23:59:59").toISOString() : undefined,
+      from: customFrom ? new Date(customFrom + "T00:00:00").toISOString() : undefined,
+      to: customTo ? new Date(customTo + "T23:59:59").toISOString() : undefined,
     };
-  }, [kpiFrom, kpiTo]);
+  }, []);
 
   const loadKpi = useCallback(async (mainMode: typeof kpiRange, visitMode: typeof kpiVisitRange) => {
     setKpiLoading(true);
     try {
-      const main = computeRange(mainMode);
-      const visit = computeRange(visitMode);
+      const main = computeRange(mainMode, kpiFrom, kpiTo);
+      const visit = computeRange(visitMode, kpiVisitFrom, kpiVisitTo);
       const res = await fetch("/api/admin/kpi", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -153,7 +160,7 @@ export default function AdminPage() {
       if (!data.error) setKpiData(data);
     } catch {}
     setKpiLoading(false);
-  }, [storedPassword, computeRange]);
+  }, [storedPassword, computeRange, kpiFrom, kpiTo, kpiVisitFrom, kpiVisitTo]);
 
   const fetchData = useCallback(async (pw: string) => {
     const [reportResult, inquiryResult] = await Promise.all([
@@ -578,46 +585,52 @@ export default function AdminPage() {
               <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
             ) : kpiData ? (
               <div className="space-y-4">
-                {/* ── 방문자/유입 분석 — 자체 기간 셀렉터 ── */}
-                <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
-                  <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-                    <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide">방문자 (홈페이지)</h3>
-                    <div className="flex gap-1 rounded-full bg-zinc-100 dark:bg-zinc-800 p-0.5">
-                      {[
-                        { key: "day", label: "일" },
-                        { key: "week", label: "주" },
-                        { key: "month", label: "월" },
-                        { key: "all", label: "전체" },
-                      ].map(({ key, label }) => (
-                        <button
-                          key={key}
-                          onClick={() => {
-                            const next = key as typeof kpiVisitRange;
-                            setKpiVisitRange(next);
-                            loadKpi(kpiRange, next);
-                          }}
-                          className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                            kpiVisitRange === key
-                              ? "bg-emerald-500 text-white"
-                              : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-                          }`}
-                        >{label}</button>
-                      ))}
+                {/* ── 유입수 + 시간·요일별 전용 기간 셀렉터 ── */}
+                <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-3">
+                  <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">
+                    유입수 · 시간·요일별 기간 필터 (이 두 카드만 적용)
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[
+                      { key: "day", label: "일" },
+                      { key: "week", label: "주" },
+                      { key: "month", label: "월" },
+                      { key: "all", label: "전체" },
+                      { key: "custom", label: "기간 설정" },
+                    ].map(({ key, label }) => (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          const next = key as typeof kpiVisitRange;
+                          setKpiVisitRange(next);
+                          if (next !== "custom") loadKpi(kpiRange, next);
+                        }}
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                          kpiVisitRange === key
+                            ? "bg-emerald-500 text-white shadow-sm"
+                            : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                        }`}
+                      >{label}</button>
+                    ))}
+                  </div>
+                  {kpiVisitRange === "custom" && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <input type="date" value={kpiVisitFrom} onChange={(e) => setKpiVisitFrom(e.target.value)}
+                        className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" />
+                      <span className="text-sm text-zinc-400">~</span>
+                      <input type="date" value={kpiVisitTo} onChange={(e) => setKpiVisitTo(e.target.value)}
+                        className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" />
+                      <button onClick={() => loadKpi(kpiRange, "custom")}
+                        disabled={!kpiVisitFrom || !kpiVisitTo}
+                        className="px-4 py-1.5 rounded-lg bg-emerald-500 text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">조회</button>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <KpiCard label="전체 페이지뷰" value={kpiData.visits?.total ?? 0} />
-                    <KpiCard label={kpiVisitRange === "all" ? "전체 페이지뷰" : "기간 페이지뷰"} value={kpiData.visits?.inRange ?? 0} accent />
-                    <KpiCard label="고유 방문자 (기간)" value={kpiData.visits?.uniqueInRange ?? 0} />
-                  </div>
+                  )}
                 </div>
 
-                {/* ===== 유입 분석 (네이버 스마트플레이스 스타일) ===== */}
+                {/* ===== 유입수 (좌) + 시간·요일별 (우) ===== */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <VisitDailyChart daily={kpiData.visits?.dailyChart || []} total={kpiData.visits?.inRange ?? 0} />
-                  <VisitChannels channels={kpiData.visits?.channels || []} />
                   <VisitHourlyChart hourly={kpiData.visits?.hourlyChart || []} weekday={kpiData.visits?.weekdayChart || []} />
-                  <VisitKeywords keywords={kpiData.visits?.keywords || []} />
                 </div>
 
                 {/* ── 메인 기간 셀렉터 — 사용자/콘텐츠/구인/참여/신고문의/스토어 클릭 ── */}
@@ -1464,14 +1477,17 @@ function VisitHourlyChart({ hourly, weekday }: { hourly: { hour: number; count: 
     ? hourly.map((d) => ({ label: `${d.hour}시`, count: d.count }))
     : weekday.map((d) => ({ label: ["일","월","화","수","목","금","토"][d.weekday], count: d.count }));
   const max = Math.max(1, ...data.map((d) => d.count));
-  const W = 320, H = 100, pad = 8;
-  const xStep = data.length > 1 ? (W - pad * 2) / (data.length - 1) : 0;
+  // 차트 영역(plotting) 과 라벨 영역(label band) 분리해서 라벨이 데이터 포인트와 정확히 정렬되게
+  const W = 320, H = 130, padX = 14, padTop = 14, padBottom = 24;
+  const plotH = H - padTop - padBottom;
+  const xStep = data.length > 1 ? (W - padX * 2) / (data.length - 1) : 0;
   const pointsArr = data.map((d, i) => {
-    const x = pad + i * xStep;
-    const y = H - pad - ((d.count / max) * (H - pad * 2));
+    const x = padX + i * xStep;
+    const y = padTop + plotH - ((d.count / max) * plotH);
     return { x, y, ...d };
   });
   const polyPoints = pointsArr.map((p) => `${p.x},${p.y}`).join(" ");
+  const labelY = padTop + plotH + 16; // 라벨 baseline
 
   // mode 바뀌면 hover 초기화
   useEffect(() => { setHoverIdx(null); }, [mode]);
@@ -1499,6 +1515,11 @@ function VisitHourlyChart({ hourly, weekday }: { hourly: { hour: number; count: 
     else if (hovered.x > W - 30) { tooltipAnchor = "end"; }
   }
 
+  // 표시할 라벨 인덱스 — 시간 모드는 0/3/6/9/12/15/18/21 만, 요일 모드는 전부
+  const labelIdxSet = mode === "hour"
+    ? new Set([0, 3, 6, 9, 12, 15, 18, 21])
+    : new Set([0, 1, 2, 3, 4, 5, 6]);
+
   return (
     <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
       <div className="flex items-center justify-between mb-3">
@@ -1513,47 +1534,51 @@ function VisitHourlyChart({ hourly, weekday }: { hourly: { hour: number; count: 
       {data.every((d) => d.count === 0) ? (
         <p className="text-center py-8 text-xs text-zinc-400">데이터가 없습니다</p>
       ) : (
-        <>
-          <svg
-            ref={svgRef}
-            viewBox={`0 0 ${W} ${H}`}
-            className="w-full h-28 cursor-crosshair"
-            onMouseMove={onMouseMove}
-            onMouseLeave={() => setHoverIdx(null)}
-          >
-            <polyline fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" points={polyPoints} />
-            {pointsArr.map((p, i) => (
-              <circle key={i} cx={p.x} cy={p.y} r={hoverIdx === i ? 3.5 : 2} fill="#10b981" />
-            ))}
-            {hovered && (
-              <>
-                {/* 가이드 세로선 */}
-                <line x1={hovered.x} y1={pad} x2={hovered.x} y2={H - pad} stroke="#10b981" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
-                {/* 툴팁 텍스트 */}
-                <text
-                  x={tooltipX}
-                  y={Math.max(hovered.y - 8, 12)}
-                  textAnchor={tooltipAnchor}
-                  fontSize="11"
-                  fontWeight="700"
-                  fill="#065f46"
-                  className="dark:fill-emerald-300"
-                  style={{ pointerEvents: "none" }}
-                >
-                  {hovered.label} · {hovered.count}회
-                </text>
-              </>
-            )}
-          </svg>
-          <div className="flex justify-between mt-1 px-2">
-            {(mode === "hour"
-              ? ["0시","3시","6시","9시","12시","15시","18시","21시"]
-              : ["일","월","화","수","목","금","토"]
-            ).map((l) => (
-              <span key={l} className="text-[10px] text-zinc-400">{l}</span>
-            ))}
-          </div>
-        </>
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${W} ${H}`}
+          className="w-full h-32 cursor-crosshair"
+          onMouseMove={onMouseMove}
+          onMouseLeave={() => setHoverIdx(null)}
+        >
+          <polyline fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" points={polyPoints} />
+          {pointsArr.map((p, i) => (
+            <circle key={i} cx={p.x} cy={p.y} r={hoverIdx === i ? 3.5 : 2} fill="#10b981" />
+          ))}
+          {/* x축 라벨 — 데이터 포인트와 정확히 같은 x 좌표 */}
+          {pointsArr.map((p, i) => labelIdxSet.has(i) && (
+            <text
+              key={`l-${i}`}
+              x={p.x}
+              y={labelY}
+              textAnchor="middle"
+              fontSize="10"
+              fill="#a1a1aa"
+              style={{ pointerEvents: "none" }}
+            >
+              {p.label}
+            </text>
+          ))}
+          {hovered && (
+            <>
+              {/* 가이드 세로선 */}
+              <line x1={hovered.x} y1={padTop} x2={hovered.x} y2={padTop + plotH} stroke="#10b981" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
+              {/* 툴팁 텍스트 */}
+              <text
+                x={tooltipX}
+                y={Math.max(hovered.y - 8, padTop + 4)}
+                textAnchor={tooltipAnchor}
+                fontSize="11"
+                fontWeight="700"
+                fill="#065f46"
+                className="dark:fill-emerald-300"
+                style={{ pointerEvents: "none" }}
+              >
+                {hovered.label} · {hovered.count}회
+              </text>
+            </>
+          )}
+        </svg>
       )}
     </div>
   );
