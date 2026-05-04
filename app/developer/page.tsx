@@ -741,9 +741,6 @@ export default function AdminPage() {
                           className="px-4 py-1.5 rounded-lg bg-emerald-500 text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">조회</button>
                       </div>
                     )}
-                    <p className="mt-2 text-[11px] text-zinc-400">
-                      * "전체" = 누적값 / 그 외 = 선택 기간 내 값.
-                    </p>
                   </div>
 
                   <KpiSubsection title="사용자">
