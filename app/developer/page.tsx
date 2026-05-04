@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { signInWithPopup, onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { auth, googleProvider } from "@/app/lib/firebase-client";
@@ -1421,17 +1421,47 @@ function VisitChannels({ channels }: { channels: { name: string; count: number; 
 /* ── 유입 분석: 시간/요일별 ── */
 function VisitHourlyChart({ hourly, weekday }: { hourly: { hour: number; count: number }[]; weekday: { weekday: number; count: number }[] }) {
   const [mode, setMode] = useState<"hour" | "weekday">("hour");
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
   const data = mode === "hour"
     ? hourly.map((d) => ({ label: `${d.hour}시`, count: d.count }))
     : weekday.map((d) => ({ label: ["일","월","화","수","목","금","토"][d.weekday], count: d.count }));
   const max = Math.max(1, ...data.map((d) => d.count));
   const W = 320, H = 100, pad = 8;
   const xStep = data.length > 1 ? (W - pad * 2) / (data.length - 1) : 0;
-  const points = data.map((d, i) => {
+  const pointsArr = data.map((d, i) => {
     const x = pad + i * xStep;
     const y = H - pad - ((d.count / max) * (H - pad * 2));
-    return `${x},${y}`;
-  }).join(" ");
+    return { x, y, ...d };
+  });
+  const polyPoints = pointsArr.map((p) => `${p.x},${p.y}`).join(" ");
+
+  // mode 바뀌면 hover 초기화
+  useEffect(() => { setHoverIdx(null); }, [mode]);
+
+  const onMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = svgRef.current;
+    if (!svg || data.length === 0) return;
+    const rect = svg.getBoundingClientRect();
+    const xRatio = (e.clientX - rect.left) / rect.width;
+    const xInSvg = xRatio * W;
+    let nearest = 0, minDist = Infinity;
+    pointsArr.forEach((p, i) => {
+      const d = Math.abs(p.x - xInSvg);
+      if (d < minDist) { minDist = d; nearest = i; }
+    });
+    setHoverIdx(nearest);
+  };
+
+  const hovered = hoverIdx !== null ? pointsArr[hoverIdx] : null;
+  // 툴팁 위치 — 좌우 가장자리 잘리지 않게 보정
+  let tooltipX = 0, tooltipAnchor: "start" | "middle" | "end" = "middle";
+  if (hovered) {
+    tooltipX = hovered.x;
+    if (hovered.x < 30) { tooltipAnchor = "start"; }
+    else if (hovered.x > W - 30) { tooltipAnchor = "end"; }
+  }
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
@@ -1448,13 +1478,36 @@ function VisitHourlyChart({ hourly, weekday }: { hourly: { hour: number; count: 
         <p className="text-center py-8 text-xs text-zinc-400">데이터가 없습니다</p>
       ) : (
         <>
-          <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-28">
-            <polyline fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" points={points} />
-            {data.map((d, i) => {
-              const x = pad + i * xStep;
-              const y = H - pad - ((d.count / max) * (H - pad * 2));
-              return <circle key={i} cx={x} cy={y} r="2" fill="#10b981" />;
-            })}
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${W} ${H}`}
+            className="w-full h-28 cursor-crosshair"
+            onMouseMove={onMouseMove}
+            onMouseLeave={() => setHoverIdx(null)}
+          >
+            <polyline fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" points={polyPoints} />
+            {pointsArr.map((p, i) => (
+              <circle key={i} cx={p.x} cy={p.y} r={hoverIdx === i ? 3.5 : 2} fill="#10b981" />
+            ))}
+            {hovered && (
+              <>
+                {/* 가이드 세로선 */}
+                <line x1={hovered.x} y1={pad} x2={hovered.x} y2={H - pad} stroke="#10b981" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
+                {/* 툴팁 텍스트 */}
+                <text
+                  x={tooltipX}
+                  y={Math.max(hovered.y - 8, 12)}
+                  textAnchor={tooltipAnchor}
+                  fontSize="11"
+                  fontWeight="700"
+                  fill="#065f46"
+                  className="dark:fill-emerald-300"
+                  style={{ pointerEvents: "none" }}
+                >
+                  {hovered.label} · {hovered.count}회
+                </text>
+              </>
+            )}
           </svg>
           <div className="flex justify-between mt-1 px-2">
             {(mode === "hour"
