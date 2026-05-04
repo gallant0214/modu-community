@@ -1755,17 +1755,44 @@ function DualLineChart({
           <text key={`l-${i}`} x={p.x} y={labelY} textAnchor="middle" fontSize="10" fill="#a1a1aa"
             style={{ pointerEvents: "none" }}>{xLabels[i]}</text>
         ))}
-        {hovered && (
-          <>
-            <line x1={hovered.x} y1={padTop} x2={hovered.x} y2={padTop + plotH} stroke="#10b981" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
-            <text x={hovered.x} y={Math.max(hovered.y - 8, padTop + 4)}
-              textAnchor={hovered.x < 30 ? "start" : hovered.x > W - 30 ? "end" : "middle"}
-              fontSize="11" fontWeight="700" fill="#065f46" className="dark:fill-emerald-300"
-              style={{ pointerEvents: "none" }}>
-              {hovered.count}회{hoveredPrev && hoveredPrev.count !== hovered.count ? ` (지난 ${hoveredPrev.count}회)` : ""}
-            </text>
-          </>
-        )}
+        {hovered && (() => {
+          const tooltipText = `${hovered.count}회` + (hoveredPrev && hoveredPrev.count !== hovered.count ? ` (지난 ${hoveredPrev.count}회)` : "");
+          // 툴팁 y: 데이터 포인트 위에 표시. 단 너무 위에 가면 잘리므로 padTop+12 이상.
+          // count=0 같이 바닥에 있는 점은 위로 16px 띄워 항상 보이게.
+          const tooltipY = Math.max(hovered.y - 10, padTop + 12);
+          // 텍스트 크기 추정 (한국어 + 숫자 평균 7px/char @ fontSize 11)
+          const estW = tooltipText.length * 7 + 12;
+          // 좌우 잘림 방지: 텍스트 시작/끝 좌표 클램프
+          const anchorMode: "start" | "middle" | "end" =
+            hovered.x - estW / 2 < 4 ? "start"
+              : hovered.x + estW / 2 > W - 4 ? "end"
+              : "middle";
+          const rectX = anchorMode === "start" ? hovered.x - 4
+            : anchorMode === "end" ? hovered.x - estW + 4
+            : hovered.x - estW / 2;
+          return (
+            <>
+              <line x1={hovered.x} y1={padTop} x2={hovered.x} y2={padTop + plotH} stroke="#10b981" strokeWidth="1" strokeDasharray="2 2" opacity="0.4" />
+              {/* 배경 pill — 0회 등 텍스트 가독성 보장 */}
+              <rect
+                x={rectX} y={tooltipY - 11}
+                width={estW} height={15}
+                rx={3}
+                fill="#ecfdf5"
+                stroke="#a7f3d0"
+                strokeWidth="0.5"
+                className="dark:fill-emerald-950 dark:stroke-emerald-800"
+                style={{ pointerEvents: "none" }}
+              />
+              <text x={hovered.x} y={tooltipY}
+                textAnchor={anchorMode}
+                fontSize="11" fontWeight="700" fill="#065f46" className="dark:fill-emerald-300"
+                style={{ pointerEvents: "none" }}>
+                {tooltipText}
+              </text>
+            </>
+          );
+        })()}
       </svg>
       <div className="flex items-center gap-3 mt-1 text-[10px] text-zinc-500 dark:text-zinc-400">
         <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-zinc-300" />지난 기간</span>
