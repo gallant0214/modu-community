@@ -483,6 +483,12 @@ export type Database = {
           deleted_by_receiver_at: string | null
           deleted_by_sender: boolean
           deleted_by_sender_at: string | null
+          archived_by_receiver: boolean
+          archived_by_receiver_at: string | null
+          archived_by_sender: boolean
+          archived_by_sender_at: string | null
+          spam_reported_by_receiver: boolean
+          spam_reported_at: string | null
           id: number
           is_read: boolean | null
           parent_id: number | null
@@ -498,6 +504,12 @@ export type Database = {
           deleted_by_receiver_at?: string | null
           deleted_by_sender?: boolean
           deleted_by_sender_at?: string | null
+          archived_by_receiver?: boolean
+          archived_by_receiver_at?: string | null
+          archived_by_sender?: boolean
+          archived_by_sender_at?: string | null
+          spam_reported_by_receiver?: boolean
+          spam_reported_at?: string | null
           id?: number
           is_read?: boolean | null
           parent_id?: number | null
@@ -513,6 +525,12 @@ export type Database = {
           deleted_by_receiver_at?: string | null
           deleted_by_sender?: boolean
           deleted_by_sender_at?: string | null
+          archived_by_receiver?: boolean
+          archived_by_receiver_at?: string | null
+          archived_by_sender?: boolean
+          archived_by_sender_at?: string | null
+          spam_reported_by_receiver?: boolean
+          spam_reported_at?: string | null
           id?: number
           is_read?: boolean | null
           parent_id?: number | null

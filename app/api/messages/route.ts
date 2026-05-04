@@ -7,7 +7,7 @@ import { sanitize, validateLength } from "@/app/lib/security";
 import { sendPushToUser } from "@/app/lib/notifications";
 import { waitUntil } from "@vercel/functions";
 
-// GET /api/messages?type=received|sent
+// GET /api/messages?type=received|sent|archived|spam
 export async function GET(req: NextRequest) {
   const user = await verifyAuth(req);
   if (!user) return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
@@ -15,12 +15,15 @@ export async function GET(req: NextRequest) {
   const type = req.nextUrl.searchParams.get("type") || "received";
 
   if (type === "received") {
+    // 받은쪽지함 — 보관/스팸 제외
     const [msgRes, unreadRes] = await Promise.all([
       supabase
         .from("messages")
         .select("*")
         .eq("receiver_uid", user.uid)
         .eq("deleted_by_receiver", false)
+        .eq("archived_by_receiver", false)
+        .eq("spam_reported_by_receiver", false)
         .order("created_at", { ascending: false })
         .limit(50),
       supabase
@@ -28,6 +31,8 @@ export async function GET(req: NextRequest) {
         .select("*", { count: "exact", head: true })
         .eq("receiver_uid", user.uid)
         .eq("deleted_by_receiver", false)
+        .eq("archived_by_receiver", false)
+        .eq("spam_reported_by_receiver", false)
         .eq("is_read", false),
     ]);
     if (msgRes.error) return NextResponse.json({ error: msgRes.error.message }, { status: 500 });
@@ -37,11 +42,42 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  if (type === "archived") {
+    // 보관쪽지함 — 사용자 입장에서 보관 처리한 것 (받은/보낸 양쪽 모두)
+    const { data, error } = await supabase
+      .from("messages")
+      .select("*")
+      .or(
+        `and(receiver_uid.eq.${user.uid},archived_by_receiver.eq.true,deleted_by_receiver.eq.false),` +
+        `and(sender_uid.eq.${user.uid},archived_by_sender.eq.true,deleted_by_sender.eq.false)`,
+      )
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ messages: data });
+  }
+
+  if (type === "spam") {
+    // 스팸쪽지함 — 받은쪽지에서 스팸으로 신고한 것만
+    const { data, error } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("receiver_uid", user.uid)
+      .eq("deleted_by_receiver", false)
+      .eq("spam_reported_by_receiver", true)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ messages: data });
+  }
+
+  // 보낸쪽지함 — 보관 제외
   const { data, error } = await supabase
     .from("messages")
     .select("*")
     .eq("sender_uid", user.uid)
     .eq("deleted_by_sender", false)
+    .eq("archived_by_sender", false)
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
