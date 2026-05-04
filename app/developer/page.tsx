@@ -24,6 +24,8 @@ export default function AdminPage() {
   const [kpiRange, setKpiRange] = useState<"all" | "day" | "week" | "month" | "custom">("all");
   const [kpiFrom, setKpiFrom] = useState<string>("");
   const [kpiTo, setKpiTo] = useState<string>("");
+  // 방문자/유입 분석은 별도 기간 — 기본 '주'
+  const [kpiVisitRange, setKpiVisitRange] = useState<"all" | "day" | "week" | "month">("week");
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -112,7 +114,7 @@ export default function AdminPage() {
   }
 
   // KPI 기간 필터 → from/to ISO string 계산
-  const computeRange = useCallback((mode: typeof kpiRange): { from?: string; to?: string } => {
+  const computeRange = useCallback((mode: typeof kpiRange | "all" | "day" | "week" | "month" | "custom"): { from?: string; to?: string } => {
     const now = new Date();
     const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0);
     if (mode === "all") return {};
@@ -132,14 +134,20 @@ export default function AdminPage() {
     };
   }, [kpiFrom, kpiTo]);
 
-  const loadKpi = useCallback(async (mode: typeof kpiRange) => {
+  const loadKpi = useCallback(async (mainMode: typeof kpiRange, visitMode: typeof kpiVisitRange) => {
     setKpiLoading(true);
     try {
-      const range = computeRange(mode);
+      const main = computeRange(mainMode);
+      const visit = computeRange(visitMode);
       const res = await fetch("/api/admin/kpi", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: storedPassword, ...range }),
+        body: JSON.stringify({
+          password: storedPassword,
+          ...main,
+          visitFrom: visit.from,
+          visitTo: visit.to,
+        }),
       });
       const data = await res.json();
       if (!data.error) setKpiData(data);
@@ -557,7 +565,7 @@ export default function AdminPage() {
           </button>
           <button onClick={async () => {
             setTab("kpi");
-            if (!kpiData) await loadKpi(kpiRange);
+            if (!kpiData) await loadKpi(kpiRange, kpiVisitRange);
           }} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "kpi" ? "border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
             KPI
           </button>
@@ -566,57 +574,40 @@ export default function AdminPage() {
         {/* ===== KPI 대시보드 탭 ===== */}
         {tab === "kpi" && (
           <div className="p-4">
-            {/* 기간 필터 */}
-            <div className="mb-4 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                {[
-                  { key: "day", label: "일" },
-                  { key: "week", label: "주" },
-                  { key: "month", label: "월" },
-                  { key: "all", label: "전체" },
-                  { key: "custom", label: "기간 설정" },
-                ].map(({ key, label }) => (
-                  <button
-                    key={key}
-                    onClick={() => {
-                      const next = key as typeof kpiRange;
-                      setKpiRange(next);
-                      if (next !== "custom") loadKpi(next);
-                    }}
-                    className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                      kpiRange === key
-                        ? "bg-emerald-500 text-white shadow-sm"
-                        : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                    }`}
-                  >{label}</button>
-                ))}
-              </div>
-              {kpiRange === "custom" && (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <input type="date" value={kpiFrom} onChange={(e) => setKpiFrom(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" />
-                  <span className="text-sm text-zinc-400">~</span>
-                  <input type="date" value={kpiTo} onChange={(e) => setKpiTo(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" />
-                  <button onClick={() => loadKpi("custom")}
-                    disabled={!kpiFrom || !kpiTo}
-                    className="px-4 py-1.5 rounded-lg bg-emerald-500 text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">조회</button>
-                </div>
-              )}
-              <p className="mt-2 text-[11px] text-zinc-400">
-                * "전체" = 누적값 / 그 외 = 선택 기간 내 값. 가입자/게시글/댓글/구인/방문자 등이 기간에 영향 받음.
-              </p>
-            </div>
-
             {kpiLoading ? (
               <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
             ) : kpiData ? (
               <div className="space-y-4">
+                {/* ── 방문자/유입 분석 — 자체 기간 셀렉터 ── */}
                 <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
-                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">방문자 (홈페이지)</h3>
+                  <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                    <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide">방문자 (홈페이지)</h3>
+                    <div className="flex gap-1 rounded-full bg-zinc-100 dark:bg-zinc-800 p-0.5">
+                      {[
+                        { key: "day", label: "일" },
+                        { key: "week", label: "주" },
+                        { key: "month", label: "월" },
+                        { key: "all", label: "전체" },
+                      ].map(({ key, label }) => (
+                        <button
+                          key={key}
+                          onClick={() => {
+                            const next = key as typeof kpiVisitRange;
+                            setKpiVisitRange(next);
+                            loadKpi(kpiRange, next);
+                          }}
+                          className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                            kpiVisitRange === key
+                              ? "bg-emerald-500 text-white"
+                              : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                          }`}
+                        >{label}</button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <KpiCard label="전체 페이지뷰" value={kpiData.visits?.total ?? 0} />
-                    <KpiCard label={kpiRange === "all" ? "전체 페이지뷰" : "기간 페이지뷰"} value={kpiData.visits?.inRange ?? 0} accent />
+                    <KpiCard label={kpiVisitRange === "all" ? "전체 페이지뷰" : "기간 페이지뷰"} value={kpiData.visits?.inRange ?? 0} accent />
                     <KpiCard label="고유 방문자 (기간)" value={kpiData.visits?.uniqueInRange ?? 0} />
                   </div>
                 </div>
@@ -627,6 +618,51 @@ export default function AdminPage() {
                   <VisitChannels channels={kpiData.visits?.channels || []} />
                   <VisitHourlyChart hourly={kpiData.visits?.hourlyChart || []} weekday={kpiData.visits?.weekdayChart || []} />
                   <VisitKeywords keywords={kpiData.visits?.keywords || []} />
+                </div>
+
+                {/* ── 메인 기간 셀렉터 — 사용자/콘텐츠/구인/참여/신고문의/스토어 클릭 ── */}
+                <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-3">
+                  <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">
+                    아래 항목 (사용자 · 콘텐츠 · 구인 · 참여 · 신고/문의 · 스토어 클릭) 기간 필터
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[
+                      { key: "day", label: "일" },
+                      { key: "week", label: "주" },
+                      { key: "month", label: "월" },
+                      { key: "all", label: "전체" },
+                      { key: "custom", label: "기간 설정" },
+                    ].map(({ key, label }) => (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          const next = key as typeof kpiRange;
+                          setKpiRange(next);
+                          if (next !== "custom") loadKpi(next, kpiVisitRange);
+                        }}
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                          kpiRange === key
+                            ? "bg-emerald-500 text-white shadow-sm"
+                            : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                        }`}
+                      >{label}</button>
+                    ))}
+                  </div>
+                  {kpiRange === "custom" && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <input type="date" value={kpiFrom} onChange={(e) => setKpiFrom(e.target.value)}
+                        className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" />
+                      <span className="text-sm text-zinc-400">~</span>
+                      <input type="date" value={kpiTo} onChange={(e) => setKpiTo(e.target.value)}
+                        className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" />
+                      <button onClick={() => loadKpi("custom", kpiVisitRange)}
+                        disabled={!kpiFrom || !kpiTo}
+                        className="px-4 py-1.5 rounded-lg bg-emerald-500 text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">조회</button>
+                    </div>
+                  )}
+                  <p className="mt-2 text-[11px] text-zinc-400">
+                    * "전체" = 누적값 / 그 외 = 선택 기간 내 값. 방문자/유입 분석은 위 자체 셀렉터 사용.
+                  </p>
                 </div>
                 <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">사용자</h3>
@@ -706,7 +742,7 @@ export default function AdminPage() {
                     ))}
                   </div>
                 )}
-                <button onClick={() => loadKpi(kpiRange)} className="w-full py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                <button onClick={() => loadKpi(kpiRange, kpiVisitRange)} className="w-full py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm font-semibold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
                   새로고침
                 </button>
               </div>

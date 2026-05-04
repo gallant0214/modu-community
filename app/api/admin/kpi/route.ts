@@ -10,13 +10,16 @@ export const dynamic = "force-dynamic";
 // from/to 가 있으면 해당 범위에 대한 in-range 카운트 계산
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  const { password, from, to } = body;
+  const { password, from, to, visitFrom, visitTo } = body;
   if (!(await verifyAdminPassword(password))) {
     return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
   }
 
   const fromDate = from ? new Date(from).toISOString() : null;
   const toDate = to ? new Date(to).toISOString() : null;
+  // 방문자/유입 분석 전용 별도 기간 (없으면 일반 from/to fallback)
+  const visitFromDate = visitFrom ? new Date(visitFrom).toISOString() : fromDate;
+  const visitToDate = visitTo ? new Date(visitTo).toISOString() : toDate;
 
   const sb = supabase as any;
 
@@ -90,16 +93,24 @@ export async function POST(request: Request) {
     countRange("store_clicks", "clicked_at", (q) => q.eq("store", "app_store")),
     countRange("store_clicks", "clicked_at", (q) => q.eq("store", "google_play")),
     countRange("store_clicks", "clicked_at", (q) => q.eq("store", "google_play")),
-    // 방문자 (페이지뷰)
+    // 방문자 (페이지뷰) — 방문자 전용 기간 사용
     countAll("site_visits"),
-    countRange("site_visits", "visited_at"),
-    // 기간내 unique 방문자 (DISTINCT ip_hash) — view 없이 RPC 또는 직접 raw count
+    (async () => {
+      try {
+        let q = sb.from("site_visits").select("*", { count: "exact", head: true });
+        if (visitFromDate) q = q.gte("visited_at", visitFromDate);
+        if (visitToDate) q = q.lte("visited_at", visitToDate);
+        const { count } = await q;
+        return count ?? 0;
+      } catch { return 0; }
+    })(),
+    // 기간내 unique 방문자 (DISTINCT ip_hash)
     (async () => {
       try {
         let q = sb.from("site_visits").select("ip_hash", { head: false }).not("ip_hash", "is", null);
-        if (fromDate) q = q.gte("visited_at", fromDate);
-        if (toDate) q = q.lte("visited_at", toDate);
-        const { data } = await q.limit(50000); // 안전 한도
+        if (visitFromDate) q = q.gte("visited_at", visitFromDate);
+        if (visitToDate) q = q.lte("visited_at", visitToDate);
+        const { data } = await q.limit(50000);
         if (!data) return 0;
         const set = new Set<string>();
         for (const r of data) if (r.ip_hash) set.add(r.ip_hash);
@@ -120,8 +131,8 @@ export async function POST(request: Request) {
     const empty: VisitAgg = { dailyChart: [], hourlyChart: [], weekdayChart: [], channels: [], keywords: [] };
     try {
       let q = sb.from("site_visits").select("visited_at, referrer");
-      if (fromDate) q = q.gte("visited_at", fromDate);
-      if (toDate) q = q.lte("visited_at", toDate);
+      if (visitFromDate) q = q.gte("visited_at", visitFromDate);
+      if (visitToDate) q = q.lte("visited_at", visitToDate);
       const { data } = await q.order("visited_at", { ascending: true }).limit(50000);
       if (!data || data.length === 0) return empty;
 
@@ -273,6 +284,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     range: { from: fromDate, to: toDate },
+    visitRange: { from: visitFromDate, to: visitToDate },
     users: { total: usersTotal, inRange: usersInRange },
     posts: { total: postsTotal, inRange: postsInRange },
     comments: { total: commentsTotal, inRange: commentsInRange },
