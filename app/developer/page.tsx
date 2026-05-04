@@ -585,18 +585,18 @@ export default function AdminPage() {
               <div className="flex justify-center py-16"><div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
             ) : kpiData ? (
               <div className="space-y-4">
-                {/* ── 유입수 + 시간·요일별 전용 기간 셀렉터 ── */}
+                {/* ── 유입수 + 시간·요일별 + 유입 채널 전용 기간 셀렉터 ── */}
                 <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-3">
                   <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">
-                    유입수 · 시간·요일별 기간 필터 (이 두 카드만 적용)
+                    유입수 · 시간·요일별 · 유입 채널 기간 필터 (기본: 주)
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     {[
-                      { key: "day", label: "일" },
                       { key: "week", label: "주" },
                       { key: "month", label: "월" },
+                      { key: "day", label: "일" },
                       { key: "all", label: "전체" },
-                      { key: "custom", label: "기간 설정" },
+                      { key: "custom", label: "직접선택" },
                     ].map(({ key, label }) => (
                       <button
                         key={key}
