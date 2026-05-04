@@ -633,6 +633,9 @@ export default function AdminPage() {
                   <VisitHourlyChart hourly={kpiData.visits?.hourlyChart || []} weekday={kpiData.visits?.weekdayChart || []} />
                 </div>
 
+                {/* ===== 유입 채널 (전폭) ===== */}
+                <VisitChannels channels={kpiData.visits?.channels || []} />
+
                 {/* ── 메인 기간 셀렉터 — 사용자/콘텐츠/구인/참여/신고문의/스토어 클릭 ── */}
                 <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-3">
                   <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">
