@@ -24,8 +24,10 @@ export default function AdminPage() {
   // 리포트 탭 상태
   const [reportData, setReportData] = useState<any>(null);
   const [reportLoading, setReportLoading] = useState(false);
-  const [reportPeriod, setReportPeriod] = useState<"day" | "week" | "month">("week");
+  const [reportPeriod, setReportPeriod] = useState<"day" | "week" | "month" | "custom">("week");
   const [reportOffset, setReportOffset] = useState<number>(0);
+  const [reportCustomFrom, setReportCustomFrom] = useState<string>("");
+  const [reportCustomTo, setReportCustomTo] = useState<string>("");
   const [kpiRange, setKpiRange] = useState<"all" | "day" | "week" | "month" | "custom">("all");
   const [kpiFrom, setKpiFrom] = useState<string>("");
   const [kpiTo, setKpiTo] = useState<string>("");
@@ -151,13 +153,23 @@ export default function AdminPage() {
   }, []);
 
   // 리포트 데이터 로드
-  const loadReport = useCallback(async (period: "day" | "week" | "month", offset: number) => {
+  const loadReport = useCallback(async (
+    period: "day" | "week" | "month" | "custom",
+    offset: number,
+    customFrom?: string,
+    customTo?: string,
+  ) => {
     setReportLoading(true);
     try {
       const res = await fetch("/api/admin/report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: storedPassword, period, offset }),
+        body: JSON.stringify({
+          password: storedPassword,
+          period,
+          offset,
+          ...(period === "custom" ? { customFrom, customTo } : {}),
+        }),
       });
       const data = await res.json();
       if (!data.error) setReportData(data);
@@ -219,7 +231,7 @@ export default function AdminPage() {
     if (tab === "kpi") {
       await loadKpi(kpiRange, kpiVisitRange, kpiReportRange);
     } else if (tab === "report") {
-      await loadReport(reportPeriod, reportOffset);
+      await loadReport(reportPeriod, reportOffset, reportCustomFrom, reportCustomTo);
     } else {
       await fetchData(storedPassword);
     }
@@ -229,7 +241,7 @@ export default function AdminPage() {
   // 인증 직후 리포트 탭이 기본이라 첫 데이터 로드
   useEffect(() => {
     if (authStep === "authenticated" && storedPassword && tab === "report" && !reportData) {
-      loadReport(reportPeriod, reportOffset);
+      loadReport(reportPeriod, reportOffset, reportCustomFrom, reportCustomTo);
     }
   }, [authStep, storedPassword, tab, reportData, reportPeriod, reportOffset, loadReport]);
 
@@ -598,7 +610,7 @@ export default function AdminPage() {
         <div className="flex items-center border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 overflow-x-auto">
           <button onClick={async () => {
             setTab("report");
-            if (!reportData) await loadReport(reportPeriod, reportOffset);
+            if (!reportData && reportPeriod !== "custom") await loadReport(reportPeriod, reportOffset);
           }} className={`flex-1 min-w-[80px] py-3 text-center text-sm font-semibold transition-colors ${tab === "report" ? "border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
             리포트
           </button>
@@ -827,8 +839,17 @@ export default function AdminPage() {
                 data={reportData}
                 period={reportPeriod}
                 offset={reportOffset}
-                onChangePeriod={(p) => { setReportPeriod(p); setReportOffset(0); loadReport(p, 0); }}
-                onChangeOffset={(o) => { setReportOffset(o); loadReport(reportPeriod, o); }}
+                customFrom={reportCustomFrom}
+                customTo={reportCustomTo}
+                onChangePeriod={(p) => {
+                  setReportPeriod(p);
+                  setReportOffset(0);
+                  if (p !== "custom") loadReport(p, 0);
+                }}
+                onChangeOffset={(o) => { setReportOffset(o); loadReport(reportPeriod, o, reportCustomFrom, reportCustomTo); }}
+                onChangeCustomFrom={setReportCustomFrom}
+                onChangeCustomTo={setReportCustomTo}
+                onApplyCustom={() => loadReport("custom", 0, reportCustomFrom, reportCustomTo)}
                 loading={reportLoading}
               />
             ) : (
@@ -1465,13 +1486,20 @@ function ReportCard({ report, onResolve, onDelete }: { report: Report; onResolve
 
 /* ── 리포트 탭 ── */
 function ReportTabContent({
-  data, period, offset, onChangePeriod, onChangeOffset, loading,
+  data, period, offset, customFrom, customTo,
+  onChangePeriod, onChangeOffset, onChangeCustomFrom, onChangeCustomTo, onApplyCustom,
+  loading,
 }: {
   data: any;
-  period: "day" | "week" | "month";
+  period: "day" | "week" | "month" | "custom";
   offset: number;
-  onChangePeriod: (p: "day" | "week" | "month") => void;
+  customFrom: string;
+  customTo: string;
+  onChangePeriod: (p: "day" | "week" | "month" | "custom") => void;
   onChangeOffset: (o: number) => void;
+  onChangeCustomFrom: (v: string) => void;
+  onChangeCustomTo: (v: string) => void;
+  onApplyCustom: () => void;
   loading: boolean;
 }) {
   const fmtRange = (from: string, to: string) => {
@@ -1480,6 +1508,7 @@ function ReportTabContent({
     const fmt = (d: Date) => `${String(d.getFullYear()).slice(2)}. ${d.getMonth() + 1}. ${d.getDate()}. ${wk[d.getDay()]}`;
     return `${fmt(f)} - ${fmt(t)}`;
   };
+  const isCustom = period === "custom";
 
   return (
     <div className={`space-y-4 ${loading ? "opacity-60 pointer-events-none" : ""}`}>
@@ -1488,28 +1517,47 @@ function ReportTabContent({
         <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 px-4 py-2 flex items-center gap-2">
           <select
             value={period}
-            onChange={(e) => onChangePeriod(e.target.value as "day" | "week" | "month")}
+            onChange={(e) => onChangePeriod(e.target.value as "day" | "week" | "month" | "custom")}
             className="bg-transparent text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none cursor-pointer"
           >
             <option value="day">일간</option>
             <option value="week">주간</option>
             <option value="month">월간</option>
+            <option value="custom">기간 선택</option>
           </select>
         </div>
-        <div className="flex-1 min-w-[260px] rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 px-4 py-2 flex items-center justify-between">
-          <button onClick={() => onChangeOffset(offset + 1)}
-            className="text-emerald-500 hover:text-emerald-600 px-2"
-            aria-label="이전 기간"
-          >◀</button>
-          <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-            {fmtRange(data.range.from, data.range.to)}
-          </span>
-          <button onClick={() => onChangeOffset(Math.max(0, offset - 1))}
-            disabled={offset === 0}
-            className={`px-2 ${offset === 0 ? "text-zinc-300 dark:text-zinc-700" : "text-emerald-500 hover:text-emerald-600"}`}
-            aria-label="다음 기간"
-          >▶</button>
-        </div>
+        {isCustom ? (
+          <div className="flex-1 min-w-[260px] rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 px-4 py-2 flex items-center gap-2 flex-wrap">
+            <input type="date" value={customFrom} onChange={(e) => onChangeCustomFrom(e.target.value)}
+              className="px-2 py-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" />
+            <span className="text-sm text-zinc-400">~</span>
+            <input type="date" value={customTo} onChange={(e) => onChangeCustomTo(e.target.value)}
+              className="px-2 py-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" />
+            <button onClick={onApplyCustom}
+              disabled={!customFrom || !customTo}
+              className="ml-auto px-4 py-1 rounded-md bg-emerald-500 text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">조회</button>
+            {data?.range?.from && data?.range?.to && customFrom && customTo && (
+              <span className="basis-full text-[11px] text-zinc-400 mt-1">
+                현재 조회 중: {fmtRange(data.range.from, data.range.to)}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="flex-1 min-w-[260px] rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 px-4 py-2 flex items-center justify-between">
+            <button onClick={() => onChangeOffset(offset + 1)}
+              className="text-emerald-500 hover:text-emerald-600 px-2"
+              aria-label="이전 기간"
+            >◀</button>
+            <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+              {fmtRange(data.range.from, data.range.to)}
+            </span>
+            <button onClick={() => onChangeOffset(Math.max(0, offset - 1))}
+              disabled={offset === 0}
+              className={`px-2 ${offset === 0 ? "text-zinc-300 dark:text-zinc-700" : "text-emerald-500 hover:text-emerald-600"}`}
+              aria-label="다음 기간"
+            >▶</button>
+          </div>
+        )}
       </div>
 
       {/* ── 방문 전 지표 (3카드) ── */}
@@ -1639,7 +1687,7 @@ function ReportDetailCard({
 }: {
   title: string;
   m: { current: number; previous: number; changePct: number; daily: { date: string; count: number }[]; prevDaily: { date: string; count: number }[] };
-  period: "day" | "week" | "month";
+  period: "day" | "week" | "month" | "custom";
   extra?: React.ReactNode;
 }) {
   const days = m.daily.length || 1;
@@ -1648,8 +1696,7 @@ function ReportDetailCard({
   const flat = m.changePct === 0;
 
   // 라벨(녹색) + 숫자(검은색) + 평균 - 줄바꿈 포함
-  // 예: "한 주 사이트 방문은 998회,\n일 평균 142회 입니다."
-  const periodWord = period === "day" ? "일" : period === "week" ? "주" : "달";
+  const periodWord = period === "day" ? "일" : period === "week" ? "주" : period === "month" ? "달" : "기간";
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
@@ -1675,7 +1722,7 @@ function DualLineChart({
 }: {
   current: { date: string; count: number }[];
   previous: { date: string; count: number }[];
-  period: "day" | "week" | "month";
+  period: "day" | "week" | "month" | "custom";
 }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -1702,16 +1749,17 @@ function DualLineChart({
   const wkLabel = ["월","화","수","목","금","토","일"];
   const xLabels = current.map((d, i) => {
     const dt = new Date(d.date);
-    if (period === "month") {
-      // 30일 → 5일 간격으로 라벨
-      return i % 5 === 0 ? `${dt.getMonth()+1}.${dt.getDate()}` : "";
+    const len = current.length;
+    if (period === "month" || (period === "custom" && len > 14)) {
+      // 긴 기간 → 일정 간격(약 5~7일)으로 라벨
+      const step = Math.max(1, Math.ceil(len / 6));
+      return i % step === 0 ? `${dt.getMonth()+1}.${dt.getDate()}` : "";
     }
-    if (period === "week") {
-      // 7일 → 요일
-      const wkIdx = (dt.getDay() + 6) % 7; // 월=0, 화=1, ..., 일=6
+    if (period === "week" || (period === "custom" && len === 7)) {
+      const wkIdx = (dt.getDay() + 6) % 7;
       return wkLabel[wkIdx];
     }
-    // day → 시간 단위 표시 (단일 일이라 라벨 1개)
+    // day or custom 짧은 기간 → 모두 날짜 표시
     return `${dt.getMonth()+1}.${dt.getDate()}`;
   });
 

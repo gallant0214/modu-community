@@ -4,24 +4,46 @@ import { verifyAdminPassword } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
-type Period = "day" | "week" | "month";
+type Period = "day" | "week" | "month" | "custom";
+type Range = { from: Date; to: Date; days: number };
 
-function periodDays(p: Period): number {
+function periodDays(p: Exclude<Period, "custom">): number {
   return p === "day" ? 1 : p === "week" ? 7 : 30;
 }
 
 // offset: 0 = 현재 기간, 1 = 직전 기간, 2 = 그 이전, ...
-function getRange(period: Period, offset: number) {
+function getAutoRange(period: Exclude<Period, "custom">, offset: number): Range {
   const days = periodDays(period);
   const now = new Date();
-  // 오늘 00시 기준으로 기간 계산
   const today = new Date(now); today.setHours(0, 0, 0, 0);
-  // 현재 기간(offset=0)의 끝 = 지금, 시작 = today - (days-1)*86400000 의 00시
-  // offset 단위로 days 일씩 뒤로 이동
   const endOffsetMs = offset * days * 86400000;
   const to = new Date(now.getTime() - endOffsetMs);
   const from = new Date(today.getTime() - (days - 1 + offset * days) * 86400000);
   return { from, to, days };
+}
+
+// custom 모드: customFrom~customTo 가 cur, 같은 길이의 직전이 prev
+function getCustomRanges(customFrom: string, customTo: string): { cur: Range; prev: Range } {
+  const f = new Date(customFrom + "T00:00:00");
+  const t = new Date(customTo + "T23:59:59");
+  const days = Math.max(1, Math.round((t.getTime() - f.getTime()) / 86400000) + 1);
+  const cur: Range = { from: f, to: t, days };
+  const prevTo = new Date(f.getTime() - 1);
+  const prevFrom = new Date(prevTo.getTime() - (days - 1) * 86400000);
+  prevFrom.setHours(0, 0, 0, 0);
+  prevTo.setHours(23, 59, 59, 999);
+  const prev: Range = { from: prevFrom, to: prevTo, days };
+  return { cur, prev };
+}
+
+function resolveRanges(
+  period: Period, offset: number, customFrom?: string, customTo?: string,
+): { cur: Range; prev: Range } {
+  if (period === "custom" && customFrom && customTo) {
+    return getCustomRanges(customFrom, customTo);
+  }
+  const auto = period === "custom" ? "week" : period;
+  return { cur: getAutoRange(auto, offset), prev: getAutoRange(auto, offset + 1) };
 }
 
 function dailyKey(d: Date): string {
@@ -68,12 +90,10 @@ function changePct(cur: number, prev: number): number {
 async function buildMetric(
   table: string,
   dateCol: string,
-  period: Period,
-  offset: number,
+  cur: Range,
+  prev: Range,
   extraFilter?: (q: any) => any,
 ) {
-  const cur = getRange(period, offset);
-  const prev = getRange(period, offset + 1);
   const [curRows, prevRows] = await Promise.all([
     metricRows(table, dateCol, cur.from, cur.to, extraFilter),
     metricRows(table, dateCol, prev.from, prev.to, extraFilter),
@@ -124,8 +144,8 @@ function extractKeyword(ref: string | null | undefined): string | null {
   } catch { return null; }
 }
 
-async function inflowAnalysis(period: Period, offset: number) {
-  const { from, to } = getRange(period, offset);
+async function inflowAnalysis(cur: Range) {
+  const { from, to } = cur;
   try {
     const sb = supabase as any;
     const { data } = await sb.from("site_visits")
@@ -151,8 +171,8 @@ async function inflowAnalysis(period: Period, offset: number) {
   } catch { return { channels: [], keywords: [] }; }
 }
 
-async function topCategoriesInRange(period: Period, offset: number) {
-  const { from, to } = getRange(period, offset);
+async function topCategoriesInRange(cur: Range) {
+  const { from, to } = cur;
   try {
     const sb = supabase as any;
     const { data } = await sb.from("posts").select("category_id")
@@ -170,23 +190,31 @@ async function topCategoriesInRange(period: Period, offset: number) {
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  const { password, period = "week", offset = 0 } = body;
+  const { password, period = "week", offset = 0, customFrom, customTo } = body;
   if (!(await verifyAdminPassword(password))) {
     return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
   }
-  const p: Period = period === "day" || period === "month" ? period : "week";
+  const validPeriods: Period[] = ["day", "week", "month", "custom"];
+  const p: Period = validPeriods.includes(period) ? period : "week";
   const off = Math.max(0, Number(offset) || 0);
 
+  // custom 모드는 customFrom/customTo 둘 다 있어야 함
+  if (p === "custom" && (!customFrom || !customTo)) {
+    return NextResponse.json({ error: "기간을 선택해주세요" }, { status: 400 });
+  }
+
+  const { cur, prev } = resolveRanges(p, off, customFrom, customTo);
+
   const [visits, signups, posts, comments, jobs, storeApp, storeGoogle, inflow, topCats] = await Promise.all([
-    buildMetric("site_visits", "visited_at", p, off),
-    buildMetric("nicknames", "created_at", p, off),
-    buildMetric("posts", "created_at", p, off),
-    buildMetric("comments", "created_at", p, off),
-    buildMetric("job_posts", "created_at", p, off),
-    buildMetric("store_clicks", "clicked_at", p, off, (q: any) => q.eq("store", "app_store")),
-    buildMetric("store_clicks", "clicked_at", p, off, (q: any) => q.eq("store", "google_play")),
-    inflowAnalysis(p, off),
-    topCategoriesInRange(p, off),
+    buildMetric("site_visits", "visited_at", cur, prev),
+    buildMetric("nicknames", "created_at", cur, prev),
+    buildMetric("posts", "created_at", cur, prev),
+    buildMetric("comments", "created_at", cur, prev),
+    buildMetric("job_posts", "created_at", cur, prev),
+    buildMetric("store_clicks", "clicked_at", cur, prev, (q: any) => q.eq("store", "app_store")),
+    buildMetric("store_clicks", "clicked_at", cur, prev, (q: any) => q.eq("store", "google_play")),
+    inflowAnalysis(cur),
+    topCategoriesInRange(cur),
   ]);
 
   // 스토어 클릭은 두 스토어 합산
@@ -200,9 +228,6 @@ export async function POST(request: Request) {
     googlePlay: storeGoogle.current,
   };
   storeClicks.changePct = changePct(storeClicks.current, storeClicks.previous);
-
-  const cur = getRange(p, off);
-  const prev = getRange(p, off + 1);
 
   return NextResponse.json({
     period: p,
