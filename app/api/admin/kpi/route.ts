@@ -137,9 +137,26 @@ export async function POST(request: Request) {
       if (visitFromDate) q = q.gte("visited_at", visitFromDate);
       if (visitToDate) q = q.lte("visited_at", visitToDate);
       const { data } = await q.order("visited_at", { ascending: true }).limit(50000);
-      if (!data || data.length === 0) return empty;
 
+      // 0회 날도 차트에 표시되도록 기간 내 모든 날짜를 0 으로 미리 채움
       const dayMap = new Map<string, number>();
+      const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      if (visitFromDate && visitToDate) {
+        const start = new Date(visitFromDate); start.setHours(0, 0, 0, 0);
+        const end = new Date(visitToDate); end.setHours(0, 0, 0, 0);
+        for (let t = start.getTime(); t <= end.getTime(); t += 86400000) {
+          dayMap.set(dayKey(new Date(t)), 0);
+        }
+      }
+
+      if (!data || data.length === 0) {
+        // 데이터 없어도 0 채워진 dailyChart 는 반환 (빈 차트 대신 0 라인 표시)
+        const dailyChart = [...dayMap.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([date, count]) => ({ date, count }));
+        return { ...empty, dailyChart };
+      }
+
       const hourArr = new Array(24).fill(0);
       const wkArr = new Array(7).fill(0);
       const channelMap = new Map<string, number>();
@@ -190,11 +207,10 @@ export async function POST(request: Request) {
       for (const row of data) {
         const dt = new Date(row.visited_at);
         if (isNaN(dt.getTime())) continue;
-        const yyyy = dt.getFullYear();
-        const mm = String(dt.getMonth() + 1).padStart(2, "0");
-        const dd = String(dt.getDate()).padStart(2, "0");
-        const dayKey = `${yyyy}-${mm}-${dd}`;
-        dayMap.set(dayKey, (dayMap.get(dayKey) || 0) + 1);
+        const k = dayKey(dt);
+        // 미리 채운 키만 카운트 (기간 밖 데이터 안전 무시)
+        if (dayMap.has(k)) dayMap.set(k, (dayMap.get(k) || 0) + 1);
+        else dayMap.set(k, 1);
         hourArr[dt.getHours()]++;
         wkArr[dt.getDay()]++;
         const ch = classifyChannel(row.referrer);
