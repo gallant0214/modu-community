@@ -6,15 +6,25 @@ const cspReportOnly =
   "default-src 'self'; " +
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' " +
     "https://*.gstatic.com https://*.googleapis.com https://apis.google.com " +
-    "https://*.firebaseapp.com https://*.firebase.com; " +
+    "https://*.firebaseapp.com https://*.firebase.com " +
+    // Google AdSense
+    "https://pagead2.googlesyndication.com https://*.googlesyndication.com " +
+    "https://*.googleadservices.com https://*.doubleclick.net https://tpc.googlesyndication.com " +
+    "https://adservice.google.com https://adservice.google.co.kr; " +
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
   "img-src 'self' data: blob: https:; " +
   "font-src 'self' data: https://fonts.gstatic.com; " +
   "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com " +
     "wss://*.firebaseio.com https://*.firebase.com https://*.firebaseapp.com " +
     "https://securetoken.googleapis.com https://identitytoolkit.googleapis.com " +
-    "https://*.neon.tech https://firebasestorage.googleapis.com; " +
-  "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://appleid.apple.com; " +
+    "https://*.neon.tech https://firebasestorage.googleapis.com " +
+    // Google AdSense
+    "https://pagead2.googlesyndication.com https://*.googlesyndication.com " +
+    "https://*.doubleclick.net https://*.google.com; " +
+  "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://appleid.apple.com " +
+    // Google AdSense iframe
+    "https://googleads.g.doubleclick.net https://tpc.googlesyndication.com " +
+    "https://*.googlesyndication.com; " +
   "object-src 'none'; " +
   "base-uri 'self'; " +
   "form-action 'self'; " +

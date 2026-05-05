@@ -48,6 +48,8 @@ export const metadata: Metadata = {
   other: {
     "color-scheme": "light",
     "msvalidate.01": "0BB0F3FA8383FA4BC8A43B4559FFA2AF",
+    // Google AdSense — 사이트 소유 확인 + 광고 게재용
+    "google-adsense-account": "ca-pub-8524743081350160",
   },
 };
 
@@ -61,6 +63,12 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <link rel="manifest" href="/manifest.json" />
+        {/* Google AdSense */}
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8524743081350160"
+          crossOrigin="anonymous"
+        />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
