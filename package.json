@@ -27,6 +27,7 @@
     "@upstash/redis": "^1.37.0",
     "@vercel/functions": "^3.5.0",
     "@vercel/speed-insights": "^2.0.0",
+    "browser-image-compression": "^2.0.2",
     "cloudinary": "^2.9.0",
     "firebase": "^12.11.0",
     "firebase-admin": "^13.7.0",

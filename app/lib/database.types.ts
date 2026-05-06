@@ -1047,6 +1047,110 @@ export type Database = {
         }
         Relationships: []
       }
+      trade_post_bookmarks: {
+        Row: {
+          id: number
+          trade_post_id: number
+          firebase_uid: string
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          trade_post_id: number
+          firebase_uid: string
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          trade_post_id?: number
+          firebase_uid?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trade_post_bookmarks_trade_post_id_fkey"
+            columns: ["trade_post_id"]
+            isOneToOne: false
+            referencedRelation: "trade_posts"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      trade_posts: {
+        Row: {
+          id: number
+          firebase_uid: string
+          category: string
+          title: string
+          body: string | null
+          region_sido: string
+          region_sigungu: string
+          contact_phone: string
+          image_urls: string[]
+          product_name: string | null
+          condition_text: string | null
+          price_manwon: number | null
+          center_name: string | null
+          equipment_info: Json | null
+          center_info: Json | null
+          view_count: number
+          share_count: number
+          bookmark_count: number
+          status: string
+          agreed_to_terms: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          firebase_uid: string
+          category: string
+          title: string
+          body?: string | null
+          region_sido: string
+          region_sigungu: string
+          contact_phone: string
+          image_urls?: string[]
+          product_name?: string | null
+          condition_text?: string | null
+          price_manwon?: number | null
+          center_name?: string | null
+          equipment_info?: Json | null
+          center_info?: Json | null
+          view_count?: number
+          share_count?: number
+          bookmark_count?: number
+          status?: string
+          agreed_to_terms?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          firebase_uid?: string
+          category?: string
+          title?: string
+          body?: string | null
+          region_sido?: string
+          region_sigungu?: string
+          contact_phone?: string
+          image_urls?: string[]
+          product_name?: string | null
+          condition_text?: string | null
+          price_manwon?: number | null
+          center_name?: string | null
+          equipment_info?: Json | null
+          center_info?: Json | null
+          view_count?: number
+          share_count?: number
+          bookmark_count?: number
+          status?: string
+          agreed_to_terms?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
