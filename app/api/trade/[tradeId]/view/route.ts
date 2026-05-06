@@ -1,0 +1,29 @@
+import { supabase } from "@/app/lib/supabase";
+import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+
+// POST /api/trade/[tradeId]/view — 조회수 +1 (단순 증가, 로그인 불필요)
+export async function POST(
+  _request: Request,
+  { params }: { params: Promise<{ tradeId: string }> }
+) {
+  const { tradeId } = await params;
+  const id = Number(tradeId);
+
+  const { data: post } = await supabase
+    .from("trade_posts")
+    .select("view_count")
+    .eq("id", id)
+    .single();
+
+  if (!post) return NextResponse.json({ error: "글을 찾을 수 없습니다" }, { status: 404 });
+
+  const next = (post.view_count ?? 0) + 1;
+  await supabase
+    .from("trade_posts")
+    .update({ view_count: next })
+    .eq("id", id);
+
+  return NextResponse.json({ view_count: next });
+}
