@@ -44,17 +44,31 @@ export async function GET(req: NextRequest) {
 
   if (type === "archived") {
     // 보관쪽지함 — 사용자 입장에서 보관 처리한 것 (받은/보낸 양쪽 모두)
-    const { data, error } = await supabase
-      .from("messages")
-      .select("*")
-      .or(
-        `and(receiver_uid.eq.${user.uid},archived_by_receiver.eq.true,deleted_by_receiver.eq.false),` +
-        `and(sender_uid.eq.${user.uid},archived_by_sender.eq.true,deleted_by_sender.eq.false)`,
-      )
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ messages: data });
+    // .or() + 중첩 and() 를 두 개 단순 쿼리로 분리 (런타임 안정성)
+    const [recvRes, sendRes] = await Promise.all([
+      supabase
+        .from("messages")
+        .select("*")
+        .eq("receiver_uid", user.uid)
+        .eq("archived_by_receiver", true)
+        .eq("deleted_by_receiver", false)
+        .order("created_at", { ascending: false })
+        .limit(50),
+      supabase
+        .from("messages")
+        .select("*")
+        .eq("sender_uid", user.uid)
+        .eq("archived_by_sender", true)
+        .eq("deleted_by_sender", false)
+        .order("created_at", { ascending: false })
+        .limit(50),
+    ]);
+    if (recvRes.error) return NextResponse.json({ error: recvRes.error.message }, { status: 500 });
+    if (sendRes.error) return NextResponse.json({ error: sendRes.error.message }, { status: 500 });
+    const merged = [...(recvRes.data || []), ...(sendRes.data || [])]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 50);
+    return NextResponse.json({ messages: merged });
   }
 
   if (type === "spam") {

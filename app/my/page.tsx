@@ -403,7 +403,8 @@ function MyPageContent() {
   const loadTabData = useCallback(async (tab: Tab) => {
     if (!user) return;
     // 1단계: localStorage 캐시 즉시 표시 (탭 전환 체감 속도 향상)
-    const cacheKey = `my_tab_${tab}_${user.uid}`;
+    // v2 = 보관/스팸 탭 추가 후 옛 캐시 키 무효화 (cross-tab 잘못 저장 방지)
+    const cacheKey = `my_tab_v2_${tab}_${user.uid}`;
     let hadCache = false;
     try {
       const cached = localStorage.getItem(cacheKey);
