@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
     if (recvRes.error) return NextResponse.json({ error: recvRes.error.message }, { status: 500 });
     if (sendRes.error) return NextResponse.json({ error: sendRes.error.message }, { status: 500 });
     const merged = [...(recvRes.data || []), ...(sendRes.data || [])]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
       .slice(0, 50);
     return NextResponse.json({ messages: merged });
   }
