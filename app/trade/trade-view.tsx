@@ -32,9 +32,16 @@ function formatRelativeTime(iso: string) {
 }
 
 function formatPrice(n: number | null | undefined): string {
-  if (n === null || n === undefined) return "";
-  if (n >= 10000) return `${(n / 10000).toFixed(n % 10000 === 0 ? 0 : 1)}억원`;
-  return `${n.toLocaleString()}만원`;
+  if (n === null || n === undefined || n <= 0) return "-";
+  // 1억 이상은 "X억원" 또는 "X억 Y,000만원"
+  if (n >= 10000) {
+    const eok = Math.floor(n / 10000);
+    const rest = n % 10000;
+    if (rest === 0) return `${eok}억원`;
+    return `${eok}억 ${rest.toLocaleString()}만원`;
+  }
+  // 1억 미만은 원 단위로 환산해 표시 (예: 12만원 → "120,000원")
+  return `${(n * 10000).toLocaleString()}원`;
 }
 
 export function TradeView({ initialData, initialCategory, initialQuery }: Props) {
@@ -189,13 +196,46 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
           </div>
         ) : (
           <ul className="space-y-2.5">
-            {posts.map(p => (
+            {posts.map(p => {
+              const ci = p.center_info && typeof p.center_info === "object"
+                ? (p.center_info as Record<string, unknown>)
+                : null;
+              const premiumAmount = ci && ci.premium && typeof ci.premium === "object"
+                ? (ci.premium as Record<string, number>).amount_manwon
+                : 0;
+              const premiumNeg = ci && ci.premium && typeof ci.premium === "object"
+                ? (ci.premium as Record<string, string>).negotiable
+                : "";
+              const premiumText = premiumAmount > 0
+                ? `권리금 ${formatPrice(premiumAmount)}`
+                : premiumNeg
+                  ? `권리금 ${premiumNeg}`
+                  : "";
+              const categoryLabel = p.category === "center" ? "[센터매매]" : "[중고거래]";
+              const categoryColor = p.category === "center" ? "#C0392B" : "#6B7B3A";
+
+              const equipmentInfoLine = [
+                p.region_sido && p.region_sigungu ? `${p.region_sido} ${p.region_sigungu}` : null,
+                p.condition_text || null,
+                formatRelativeTime(p.created_at),
+              ].filter(Boolean).join(" · ");
+
+              const centerSummaryLine = [
+                ci?.area_pyeong ? `${(ci.area_pyeong as number).toLocaleString()}평` : null,
+                premiumText || null,
+              ].filter(Boolean).join(" · ");
+              const centerInfoLine = [
+                p.region_sido && p.region_sigungu ? `${p.region_sido} ${p.region_sigungu}` : null,
+                formatRelativeTime(p.created_at),
+              ].filter(Boolean).join(" · ");
+
+              return (
               <li key={p.id}>
                 <Link href={`/trade/${p.id}`}
                   className="block bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl overflow-hidden hover:border-[#6B7B3A]/40 hover:shadow-[0_8px_24px_-12px_rgba(107,93,71,0.25)] transition-all">
-                  <div className="flex">
+                  <div className="flex gap-3 p-3 sm:p-4">
                     {/* 썸네일 */}
-                    <div className="w-28 sm:w-32 aspect-square shrink-0 bg-[#F5F0E5] dark:bg-zinc-800 relative">
+                    <div className="w-24 sm:w-28 aspect-square shrink-0 bg-[#F5F0E5] dark:bg-zinc-800 rounded-xl overflow-hidden">
                       {p.image_urls?.[0] ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={p.image_urls[0]} alt={p.title} className="w-full h-full object-cover" />
@@ -206,65 +246,49 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
                           </svg>
                         </div>
                       )}
-                      {/* 카테고리 배지 */}
-                      <span className={`absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${
-                        p.category === "center"
-                          ? "bg-[#C0392B]/90 text-white"
-                          : "bg-[#6B7B3A]/90 text-white"
-                      }`}>
-                        {p.category === "center" ? "센터매매" : "중고"}
-                      </span>
                     </div>
 
                     {/* 본문 */}
-                    <div className="flex-1 min-w-0 p-3 sm:p-4 flex flex-col justify-between">
+                    <div className="flex-1 min-w-0 flex flex-col justify-between gap-1.5">
+                      {/* 카테고리 라벨 + 제목 */}
                       <div className="min-w-0">
-                        <h3 className="text-[14px] sm:text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 leading-tight tracking-tight line-clamp-2">
+                        <span className="text-[11px] font-bold tracking-wide" style={{ color: categoryColor }}>
+                          {categoryLabel}
+                        </span>
+                        <h3 className="mt-0.5 text-[14px] sm:text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 leading-tight tracking-tight line-clamp-2">
                           {p.title}
                         </h3>
+                      </div>
+
+                      {/* 카테고리별 정보 라인 */}
+                      <div className="space-y-0.5 min-w-0">
                         {p.category === "equipment" ? (
-                          <p className="mt-1 text-[12px] text-[#6B5D47] dark:text-zinc-400 line-clamp-1">
-                            {p.product_name}{p.condition_text ? ` · ${p.condition_text}` : ""}
-                          </p>
+                          <>
+                            <p className="text-[15px] sm:text-[16px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
+                              {formatPrice(p.price_manwon ?? null)}
+                            </p>
+                            <p className="text-[11px] text-[#8C8270] dark:text-zinc-500 truncate">
+                              {equipmentInfoLine}
+                            </p>
+                          </>
                         ) : (
-                          <p className="mt-1 text-[12px] text-[#6B5D47] dark:text-zinc-400 line-clamp-1">
-                            {p.center_info && typeof p.center_info === "object" && "store_type" in p.center_info
-                              ? String((p.center_info as Record<string, unknown>).store_type)
-                              : ""}
-                            {p.center_info && typeof p.center_info === "object" && "area_pyeong" in p.center_info
-                              ? ` · ${(p.center_info as Record<string, unknown>).area_pyeong}평`
-                              : ""}
-                          </p>
+                          <>
+                            <p className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200 truncate">
+                              {centerSummaryLine || "-"}
+                            </p>
+                            <p className="text-[11px] text-[#8C8270] dark:text-zinc-500 truncate">
+                              {centerInfoLine}
+                            </p>
+                          </>
                         )}
                       </div>
 
-                      <div className="flex items-end justify-between mt-2 gap-2">
-                        <div className="min-w-0">
-                          {p.category === "equipment" ? (
-                            <p className="text-[15px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] tracking-tight">
-                              {formatPrice(p.price_manwon ?? null)}
-                            </p>
-                          ) : (
-                            <p className="text-[12px] text-[#6B5D47] dark:text-zinc-400">
-                              {p.center_info && typeof p.center_info === "object" && "premium" in p.center_info
-                                ? `권리금 ${formatPrice(((p.center_info as Record<string, Record<string, number>>).premium?.amount_manwon) ?? 0)}`
-                                : ""}
-                            </p>
-                          )}
-                          <p className="text-[11px] text-[#8C8270] dark:text-zinc-500 truncate mt-0.5">
-                            {p.region_sido} {p.region_sigungu}
-                          </p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-[10px] text-[#A89B80] dark:text-zinc-500">{formatRelativeTime(p.created_at)}</p>
-                          <p className="text-[10px] text-[#A89B80] dark:text-zinc-500 mt-0.5">조회 {p.view_count}</p>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </Link>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
 

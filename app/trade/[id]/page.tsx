@@ -14,7 +14,8 @@ interface TradePostDetail extends TradePost {
 
 function formatDate(iso: string) {
   const d = new Date(iso);
-  return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}`;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 function formatPrice(n: number | null | undefined): string {
   if (n === null || n === undefined || n === 0) return "-";
