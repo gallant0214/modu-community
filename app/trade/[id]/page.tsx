@@ -180,9 +180,9 @@ export default function TradeDetailPage() {
   const renderMember = () => {
     if (!ci?.member_count) return null;
     const mc = ci.member_count as Record<string, unknown>;
-    if (mc.type === "number") return <InfoRow label="회원수" value={`${(mc.value as number)?.toLocaleString?.() || mc.value}명`} />;
-    if (mc.type === "meet_to_tell") return <InfoRow label="회원수" value="만나면 알려드림" />;
-    if (mc.type === "etc") return <InfoRow label="회원수" value={String(mc.text || "")} />;
+    if (mc.type === "number") return <InfoRow label="보유회원수" value={`${(mc.value as number)?.toLocaleString?.() || mc.value}명`} />;
+    if (mc.type === "meet_to_tell") return <InfoRow label="보유회원수" value="만나면 알려드림" />;
+    if (mc.type === "etc") return <InfoRow label="보유회원수" value={String(mc.text || "")} />;
     return null;
   };
 
@@ -245,7 +245,7 @@ export default function TradeDetailPage() {
               <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[11px] font-bold ${
                 post.category === "center" ? "bg-[#C0392B] text-white" : "bg-[#6B7B3A] text-white"
               }`}>
-                {post.category === "center" ? "센터매매" : "운동기구 중고"}
+                {post.category === "center" ? "센터매매" : "중고거래"}
               </span>
               {post.image_urls.length > 1 && (
                 <span className="absolute bottom-3 right-3 px-2.5 py-1 bg-black/60 text-white text-[11px] rounded-full">
@@ -292,6 +292,7 @@ export default function TradeDetailPage() {
               <InfoRow label="센터명" value={post.center_name || "-"} />
               <InfoRow label="거래 방식" value={methodLabels.length ? methodLabels.join(", ") : "-"} />
               <InfoRow label="지역" value={`${post.region_sido} ${post.region_sigungu}`} />
+              {post.region_detail && <InfoRow label="상세 주소" value={post.region_detail} />}
             </div>
           </section>
         ) : (

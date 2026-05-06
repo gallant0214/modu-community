@@ -93,6 +93,7 @@ export async function POST(request: Request) {
     body: content,               // 리치에디터 HTML 또는 일반 텍스트
     region_sido,
     region_sigungu,
+    region_detail,               // 중고거래 필수, 센터매매 선택
     contact_phone,
     image_urls,                  // string[]
     // equipment 전용
@@ -126,6 +127,9 @@ export async function POST(request: Request) {
   if (category === "equipment") {
     if (!product_name?.trim() || !condition_text?.trim() || price_manwon === undefined || price_manwon === null || !center_name?.trim()) {
       return NextResponse.json({ error: "중고거래 필수 항목을 모두 입력해주세요" }, { status: 400 });
+    }
+    if (!region_detail?.trim()) {
+      return NextResponse.json({ error: "중고거래는 상세 주소(만남 장소·동·번지 등)를 입력해주세요" }, { status: 400 });
     }
   } else {
     // category === 'center'

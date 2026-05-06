@@ -152,7 +152,7 @@ const TRADE_METHODS = [
 type TradeMethodKey = typeof TRADE_METHODS[number]["key"];
 
 const NEGOTIABLE_OPTIONS = ["협의 가능", "조정 불가"] as const;
-const MEMBER_COUNT_TYPES = ["숫자 입력", "만나면 알려드림", "기타 직접 입력"] as const;
+const MEMBER_COUNT_TYPES = ["숫자 입력", "기타"] as const;
 
 /* ══════════════════════════════════
    메인 페이지
@@ -182,6 +182,7 @@ export default function TradeWritePage() {
   const [body, setBody] = useState("");
   const [regionCode, setRegionCode] = useState("");
   const [regionName, setRegionName] = useState(""); // "서울 강남구" 형태
+  const [regionDetail, setRegionDetail] = useState(""); // 중고거래 필수: 상세 주소(만남 장소·동·번지)
   const [contactPhone, setContactPhone] = useState("");
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -203,11 +204,8 @@ export default function TradeWritePage() {
   const [centerNameValue, setCenterNameValue] = useState("");
   const [areaPyeong, setAreaPyeong] = useState("");
   const [deposit, setDeposit] = useState("");
-  const [depositNeg, setDepositNeg] = useState<typeof NEGOTIABLE_OPTIONS[number]>("협의 가능");
   const [monthly, setMonthly] = useState("");
-  const [monthlyNeg, setMonthlyNeg] = useState<typeof NEGOTIABLE_OPTIONS[number]>("협의 가능");
   const [mgmtFee, setMgmtFee] = useState("");
-  const [mgmtFeeNeg, setMgmtFeeNeg] = useState<typeof NEGOTIABLE_OPTIONS[number]>("협의 가능");
   const [premium, setPremium] = useState("");
   const [premiumNeg, setPremiumNeg] = useState<typeof NEGOTIABLE_OPTIONS[number]>("협의 가능");
   const [memberType, setMemberType] = useState<typeof MEMBER_COUNT_TYPES[number]>("숫자 입력");
@@ -228,7 +226,7 @@ export default function TradeWritePage() {
 
   /* refs for scroll on validation error */
   const fieldRefs: Record<string, React.RefObject<HTMLDivElement | null>> = {
-    region: useRef(null),
+    region: useRef(null), regionDetail: useRef(null),
     productName: useRef(null), conditionText: useRef(null), priceManwon: useRef(null),
     centerName: useRef(null), tradeMethods: useRef(null), images: useRef(null),
     contact: useRef(null), title: useRef(null),
@@ -319,6 +317,7 @@ export default function TradeWritePage() {
     }
 
     if (tradeCategory === "equipment") {
+      if (!regionDetail.trim()) { fieldRefs.regionDetail?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("중고거래는 상세 주소(만남 장소·동·번지)를 입력해주세요."); return false; }
       if (!productName.trim()) { fieldRefs.productName?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("제품명을 입력해주세요."); return false; }
       if (!conditionText.trim()) { fieldRefs.conditionText?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("상태 등급을 입력해주세요."); return false; }
       if (!priceManwon.trim()) { fieldRefs.priceManwon?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("가격을 입력해주세요."); return false; }
@@ -332,8 +331,8 @@ export default function TradeWritePage() {
       if (!areaPyeong.trim()) { fieldRefs.area?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("평수를 입력해주세요."); return false; }
       if (!deposit.trim()) { fieldRefs.deposit?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("보증금을 입력해주세요."); return false; }
       if (!monthly.trim()) { fieldRefs.monthly?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("월세를 입력해주세요."); return false; }
-      if (memberType === "숫자 입력" && !memberValue.trim()) { fieldRefs.member?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("회원수를 입력해주세요."); return false; }
-      if (memberType === "기타 직접 입력" && !memberEtc.trim()) { fieldRefs.member?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("회원수 기타 항목을 입력해주세요."); return false; }
+      if (memberType === "숫자 입력" && !memberValue.trim()) { fieldRefs.member?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("보유회원수를 입력해주세요."); return false; }
+      if (memberType === "기타" && !memberEtc.trim()) { fieldRefs.member?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("보유회원수 기타 항목을 입력해주세요."); return false; }
       if (!body.trim()) { alert("인수 조건 및 상세 내용을 입력해주세요."); return false; }
     }
 
@@ -355,6 +354,7 @@ export default function TradeWritePage() {
         body: body.trim(),
         region_sido: sido,
         region_sigungu: sigungu,
+        region_detail: tradeCategory === "equipment" ? regionDetail.trim() : null,
         contact_phone: contactPhone.trim(),
         image_urls: imageUrls,
         agreed_to_terms: true,
@@ -377,9 +377,9 @@ export default function TradeWritePage() {
         };
       } else {
         const memberCount: Record<string, unknown> =
-          memberType === "숫자 입력" ? { type: "number", value: parseNum(memberValue) }
-          : memberType === "만나면 알려드림" ? { type: "meet_to_tell" }
-          : { type: "etc", text: memberEtc.trim() };
+          memberType === "숫자 입력"
+            ? { type: "number", value: parseNum(memberValue) }
+            : { type: "etc", text: memberEtc.trim() };
 
         payload = {
           ...payload,
@@ -389,9 +389,9 @@ export default function TradeWritePage() {
             name_visible: centerNameVisible === "public",
             name: centerNameVisible === "public" ? centerNameValue.trim() : null,
             area_pyeong: parseNum(areaPyeong),
-            deposit:  { amount_manwon: parseNum(deposit),  negotiable: depositNeg },
-            monthly:  { amount_manwon: parseNum(monthly),  negotiable: monthlyNeg },
-            mgmt_fee: { amount_manwon: parseNum(mgmtFee),  negotiable: mgmtFeeNeg },
+            deposit:  { amount_manwon: parseNum(deposit) },
+            monthly:  { amount_manwon: parseNum(monthly) },
+            mgmt_fee: { amount_manwon: parseNum(mgmtFee) },
             premium:  { amount_manwon: parseNum(premium),  negotiable: premiumNeg },
             member_count: memberCount,
           },
@@ -550,6 +550,19 @@ export default function TradeWritePage() {
               </button>
             </Field>
           </div>
+
+          {/* 중고거래 전용 — 상세 주소 (필수) */}
+          {tradeCategory === "equipment" && (
+            <div ref={fieldRefs.regionDetail}>
+              <Field label="상세 주소" required hint="만남 장소·동·번지 등">
+                <input type="text" value={regionDetail} onChange={e => setRegionDetail(e.target.value.slice(0, 100))}
+                  placeholder="예) 강남대로 110길 GS25 앞 / 역삼동 OO헬스장 인근"
+                  className={inputCls}
+                  disabled={!regionName} />
+                {!regionName && <p className="text-[11px] text-[#A89B80] mt-1.5">지역(시·군·구)을 먼저 선택해 주세요.</p>}
+              </Field>
+            </div>
+          )}
         </Section>
 
         {/* ─── equipment 전용 ─── */}
@@ -670,20 +683,20 @@ export default function TradeWritePage() {
               </div>
             </Section>
 
-            <Section number={4} title="금액 정보" subtitle="각 항목 옆에 협의 가능 여부를 선택하세요">
+            <Section number={4} title="금액 정보" subtitle="권리금만 협의 여부를 선택하세요">
               <div ref={fieldRefs.deposit}>
-                <MoneyField label="보증금" required value={deposit} onChange={setDeposit} neg={depositNeg} setNeg={setDepositNeg} />
+                <PlainMoneyField label="보증금" required value={deposit} onChange={setDeposit} />
               </div>
               <div ref={fieldRefs.monthly}>
-                <MoneyField label="월세" required value={monthly} onChange={setMonthly} neg={monthlyNeg} setNeg={setMonthlyNeg} />
+                <PlainMoneyField label="월세" required value={monthly} onChange={setMonthly} />
               </div>
-              <MoneyField label="관리비" value={mgmtFee} onChange={setMgmtFee} neg={mgmtFeeNeg} setNeg={setMgmtFeeNeg} />
+              <PlainMoneyField label="관리비" value={mgmtFee} onChange={setMgmtFee} />
               <MoneyField label="권리금" value={premium} onChange={setPremium} neg={premiumNeg} setNeg={setPremiumNeg} />
             </Section>
 
-            <Section number={5} title="회원수">
+            <Section number={5} title="보유회원수">
               <div ref={fieldRefs.member}>
-                <Field label="회원수" required>
+                <Field label="보유회원수" required>
                   <div className="flex gap-1.5 mb-2 flex-wrap">
                     {MEMBER_COUNT_TYPES.map(t => (
                       <button key={t} onClick={() => setMemberType(t)}
@@ -703,9 +716,9 @@ export default function TradeWritePage() {
                       <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">명</span>
                     </div>
                   )}
-                  {memberType === "기타 직접 입력" && (
+                  {memberType === "기타" && (
                     <input type="text" value={memberEtc} onChange={e => setMemberEtc(e.target.value.slice(0, 100))}
-                      placeholder="예) 정회원 200명 + 휴면 50명" className={inputCls} />
+                      placeholder="예) 정회원 200명 + 휴면 50명, 만나서 알려드림 등" className={inputCls} />
                   )}
                 </Field>
               </div>
@@ -714,7 +727,7 @@ export default function TradeWritePage() {
         )}
 
         {/* ─── 사진 (공통) ─── */}
-        <Section number={tradeCategory === "equipment" ? 5 : 6} title="사진 등록" subtitle="1~10장 (자동으로 200KB 고화질 압축됩니다)">
+        <Section number={tradeCategory === "equipment" ? 5 : 6} title="사진 등록" subtitle="1~10장 첨부">
           <div ref={fieldRefs.images}>
             <Field label={`사진 ${imageUrls.length}/10`} required>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -729,16 +742,16 @@ export default function TradeWritePage() {
                   </div>
                 ))}
                 {imageUrls.length < 10 && (
-                  <label className="aspect-square rounded-xl border-2 border-dashed border-[#E8E0D0] dark:border-zinc-700 flex flex-col items-center justify-center text-[#A89B80] hover:border-[#6B7B3A]/50 hover:bg-[#F5F0E5]/40 cursor-pointer transition-colors">
+                  <label className="aspect-square rounded-xl border-2 border-dashed border-[#E8E0D0] dark:border-zinc-700 flex items-center justify-center text-[#A89B80] hover:border-[#6B7B3A]/50 hover:bg-[#F5F0E5]/40 cursor-pointer transition-colors">
                     {uploading ? (
                       <div className="w-5 h-5 border-2 border-[#6B7B3A] border-t-transparent rounded-full animate-spin" />
                     ) : (
-                      <>
-                        <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                      <div className="flex flex-col items-center justify-center gap-1">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                         </svg>
                         <span className="text-[11px] font-semibold">사진 추가</span>
-                      </>
+                      </div>
                     )}
                     <input type="file" accept="image/*" multiple className="hidden"
                       onChange={e => { handleImageUpload(e.target.files); e.currentTarget.value = ""; }} disabled={uploading} />
@@ -900,7 +913,27 @@ export default function TradeWritePage() {
 }
 
 /* ──────────────────────────────────────────
-   금액 입력 + 협의 토글 — 센터 매매 전용
+   금액 입력 (협의 토글 없음) — 보증금/월세/관리비
+   ────────────────────────────────────────── */
+function PlainMoneyField({ label, required, value, onChange }: {
+  label: string;
+  required?: boolean;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <Field label={label} required={required}>
+      <div className="flex items-center gap-2">
+        <input type="text" value={value} onChange={e => onChange(formatNumber(e.target.value))}
+          placeholder="금액" className={`${inputCls} flex-1`} inputMode="numeric" />
+        <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">만원</span>
+      </div>
+    </Field>
+  );
+}
+
+/* ──────────────────────────────────────────
+   금액 입력 + 협의 토글 — 센터 매매 권리금 전용
    ────────────────────────────────────────── */
 function MoneyField({ label, required, value, onChange, neg, setNeg }: {
   label: string;

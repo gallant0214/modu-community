@@ -1085,6 +1085,7 @@ export type Database = {
           body: string | null
           region_sido: string
           region_sigungu: string
+          region_detail: string | null
           contact_phone: string
           image_urls: string[]
           product_name: string | null
@@ -1109,6 +1110,7 @@ export type Database = {
           body?: string | null
           region_sido: string
           region_sigungu: string
+          region_detail?: string | null
           contact_phone: string
           image_urls?: string[]
           product_name?: string | null
@@ -1133,6 +1135,7 @@ export type Database = {
           body?: string | null
           region_sido?: string
           region_sigungu?: string
+          region_detail?: string | null
           contact_phone?: string
           image_urls?: string[]
           product_name?: string | null
