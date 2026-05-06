@@ -46,7 +46,8 @@ function generateRandomNickname() {
 }
 
 /* ── 타입 ── */
-type Tab = "posts" | "comments" | "jobs" | "bookmarks" | "jobBookmarks" | "notifications" | "receivedMessages" | "sentMessages" | "blocks";
+type Tab = "posts" | "comments" | "jobs" | "bookmarks" | "jobBookmarks" | "notifications" | "receivedMessages" | "sentMessages" | "archivedMessages" | "spamMessages" | "blocks";
+type MessageTab = "receivedMessages" | "sentMessages" | "archivedMessages" | "spamMessages";
 
 interface BlockedUser {
   blocked_uid: string;
@@ -181,6 +182,12 @@ function MyPageContent() {
   const [notifications, setNotifications] = useState<MyNotification[]>([]);
   const [receivedMessages, setReceivedMessages] = useState<Message[]>([]);
   const [sentMessages, setSentMessages] = useState<Message[]>([]);
+  const [archivedMessages, setArchivedMessages] = useState<Message[]>([]);
+  const [spamMessages, setSpamMessages] = useState<Message[]>([]);
+  /* 쪽지 일괄선택 */
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<number>>(new Set());
+  const [bulkDeleteDialog, setBulkDeleteDialog] = useState(false);
+  useEffect(() => { setSelectedMessageIds(new Set()); }, [activeTab]);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [unblockingNickname, setUnblockingNickname] = useState<string | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
@@ -200,7 +207,7 @@ function MyPageContent() {
   const [deleteAllNotificationsDialog, setDeleteAllNotificationsDialog] = useState<boolean>(false);
 
   /* 카운트 */
-  const [counts, setCounts] = useState({ posts: 0, comments: 0, jobs: 0, bookmarks: 0, jobBookmarks: 0, notifications: 0, receivedMessages: 0, sentMessages: 0, blocks: 0 });
+  const [counts, setCounts] = useState({ posts: 0, comments: 0, jobs: 0, bookmarks: 0, jobBookmarks: 0, notifications: 0, receivedMessages: 0, sentMessages: 0, archivedMessages: 0, spamMessages: 0, blocks: 0 });
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
 
@@ -326,7 +333,7 @@ function MyPageContent() {
       if (!token) return;
       const headers = { Authorization: `Bearer ${token}` };
       try {
-        const [pRes, cRes, jRes, bpRes, bjRes, nRes, rmRes, smRes, blkRes] = await Promise.all([
+        const [pRes, cRes, jRes, bpRes, bjRes, nRes, rmRes, smRes, amRes, spRes, blkRes] = await Promise.all([
           fetch(`/api/posts/my?uid=${user.uid}`, { headers }),
           fetch(`/api/comments/my?uid=${user.uid}`, { headers }),
           fetch(`/api/jobs/my?uid=${user.uid}`, { headers }),
@@ -335,10 +342,12 @@ function MyPageContent() {
           fetch(`/api/notifications/web`, { headers }),
           fetch(`/api/messages?type=received`, { headers }),
           fetch(`/api/messages?type=sent`, { headers }),
+          fetch(`/api/messages?type=archived`, { headers }),
+          fetch(`/api/messages?type=spam`, { headers }),
           fetch(`/api/users/blocks`, { headers }),
         ]);
-        const [pData, cData, jData, bpData, bjData, nData, rmData, smData, blkData] = await Promise.all([
-          pRes.json(), cRes.json(), jRes.json(), bpRes.json(), bjRes.json(), nRes.json(), rmRes.json(), smRes.json(), blkRes.json(),
+        const [pData, cData, jData, bpData, bjData, nData, rmData, smData, amData, spData, blkData] = await Promise.all([
+          pRes.json(), cRes.json(), jRes.json(), bpRes.json(), bjRes.json(), nRes.json(), rmRes.json(), smRes.json(), amRes.json(), spRes.json(), blkRes.json(),
         ]);
         const nextCounts = {
           posts: (pData.posts || []).length,
@@ -349,6 +358,8 @@ function MyPageContent() {
           notifications: (nData.notifications || []).length,
           receivedMessages: (rmData.messages || []).length,
           sentMessages: (smData.messages || []).length,
+          archivedMessages: (amData.messages || []).length,
+          spamMessages: (spData.messages || []).length,
           blocks: (blkData.blocks || []).length,
         };
         const unread = (nData.notifications || []).filter((n: { is_read: boolean }) => !n.is_read).length;
@@ -407,6 +418,8 @@ function MyPageContent() {
           else if (tab === "notifications") setNotifications(parsed.data);
           else if (tab === "receivedMessages") setReceivedMessages(parsed.data);
           else if (tab === "sentMessages") setSentMessages(parsed.data);
+          else if (tab === "archivedMessages") setArchivedMessages(parsed.data);
+          else if (tab === "spamMessages") setSpamMessages(parsed.data);
           else if (tab === "blocks") setBlockedUsers(parsed.data);
           hadCache = true;
         }
@@ -480,6 +493,18 @@ function MyPageContent() {
         const list = data.messages || [];
         setSentMessages(list);
         saveCache(list);
+      } else if (tab === "archivedMessages") {
+        const res = await fetch(`/api/messages?type=archived`, { headers });
+        const data = await res.json();
+        const list = data.messages || [];
+        setArchivedMessages(list);
+        saveCache(list);
+      } else if (tab === "spamMessages") {
+        const res = await fetch(`/api/messages?type=spam`, { headers });
+        const data = await res.json();
+        const list = data.messages || [];
+        setSpamMessages(list);
+        saveCache(list);
       } else if (tab === "blocks") {
         const res = await fetch(`/api/users/blocks`, { headers });
         const data = await res.json();
@@ -551,6 +576,147 @@ function MyPageContent() {
       }
     } catch {
       alert("쪽지를 삭제하지 못했습니다.");
+    }
+  };
+
+  /* ── 쪽지 일괄선택 헬퍼 ── */
+  const currentMessageList = (tab: MessageTab): Message[] => {
+    if (tab === "receivedMessages") return receivedMessages;
+    if (tab === "sentMessages") return sentMessages;
+    if (tab === "archivedMessages") return archivedMessages;
+    return spamMessages;
+  };
+
+  const toggleSelectMessage = (id: number) => {
+    setSelectedMessageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllMessages = () => {
+    if (!activeTab) return;
+    const list = currentMessageList(activeTab as MessageTab);
+    if (selectedMessageIds.size === list.length && list.length > 0) {
+      setSelectedMessageIds(new Set());
+    } else {
+      setSelectedMessageIds(new Set(list.map((m) => m.id)));
+    }
+  };
+
+  /* 일괄 삭제 */
+  const confirmBulkDeleteMessages = async () => {
+    setBulkDeleteDialog(false);
+    const ids = Array.from(selectedMessageIds);
+    if (ids.length === 0) return;
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/messages/${id}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => null),
+        ),
+      );
+      const filterOut = (list: Message[]) => list.filter((m) => !selectedMessageIds.has(m.id));
+      setReceivedMessages(filterOut);
+      setSentMessages(filterOut);
+      setArchivedMessages(filterOut);
+      setSpamMessages(filterOut);
+      setCounts((c) => ({
+        ...c,
+        receivedMessages: Math.max(0, c.receivedMessages - receivedMessages.filter((m) => selectedMessageIds.has(m.id)).length),
+        sentMessages: Math.max(0, c.sentMessages - sentMessages.filter((m) => selectedMessageIds.has(m.id)).length),
+        archivedMessages: Math.max(0, c.archivedMessages - archivedMessages.filter((m) => selectedMessageIds.has(m.id)).length),
+        spamMessages: Math.max(0, c.spamMessages - spamMessages.filter((m) => selectedMessageIds.has(m.id)).length),
+      }));
+      setSelectedMessageIds(new Set());
+    } catch {
+      alert("쪽지를 삭제하지 못했습니다.");
+    }
+  };
+
+  /* 일괄 보관 / 보관해제 */
+  const bulkArchiveMessages = async () => {
+    if (selectedMessageIds.size === 0) return;
+    const ids = Array.from(selectedMessageIds);
+    const isUnarchive = activeTab === "archivedMessages";
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/messages/${id}/archive`, {
+            method: isUnarchive ? "DELETE" : "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => null),
+        ),
+      );
+      // 가장 단순한 정합성 보장 — 서버에서 4개 탭 다시 페치
+      const headers = { Authorization: `Bearer ${token}` };
+      const [r, s, a, sp] = await Promise.all([
+        fetch(`/api/messages?type=received`, { headers }).then((r) => r.json()).catch(() => ({ messages: [] })),
+        fetch(`/api/messages?type=sent`, { headers }).then((r) => r.json()).catch(() => ({ messages: [] })),
+        fetch(`/api/messages?type=archived`, { headers }).then((r) => r.json()).catch(() => ({ messages: [] })),
+        fetch(`/api/messages?type=spam`, { headers }).then((r) => r.json()).catch(() => ({ messages: [] })),
+      ]);
+      setReceivedMessages(r.messages || []);
+      setSentMessages(s.messages || []);
+      setArchivedMessages(a.messages || []);
+      setSpamMessages(sp.messages || []);
+      setCounts((c) => ({
+        ...c,
+        receivedMessages: (r.messages || []).length,
+        sentMessages: (s.messages || []).length,
+        archivedMessages: (a.messages || []).length,
+        spamMessages: (sp.messages || []).length,
+      }));
+      setSelectedMessageIds(new Set());
+    } catch {
+      alert(isUnarchive ? "보관 해제에 실패했습니다." : "보관에 실패했습니다.");
+    }
+  };
+
+  /* 일괄 스팸 신고 / 해제 */
+  const bulkSpamMessages = async () => {
+    if (selectedMessageIds.size === 0) return;
+    const ids = Array.from(selectedMessageIds);
+    const isUnspam = activeTab === "spamMessages";
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/messages/${id}/spam`, {
+            method: isUnspam ? "DELETE" : "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => null),
+        ),
+      );
+      const headers = { Authorization: `Bearer ${token}` };
+      const [r, s, a, sp] = await Promise.all([
+        fetch(`/api/messages?type=received`, { headers }).then((r) => r.json()).catch(() => ({ messages: [] })),
+        fetch(`/api/messages?type=sent`, { headers }).then((r) => r.json()).catch(() => ({ messages: [] })),
+        fetch(`/api/messages?type=archived`, { headers }).then((r) => r.json()).catch(() => ({ messages: [] })),
+        fetch(`/api/messages?type=spam`, { headers }).then((r) => r.json()).catch(() => ({ messages: [] })),
+      ]);
+      setReceivedMessages(r.messages || []);
+      setSentMessages(s.messages || []);
+      setArchivedMessages(a.messages || []);
+      setSpamMessages(sp.messages || []);
+      setCounts((c) => ({
+        ...c,
+        receivedMessages: (r.messages || []).length,
+        sentMessages: (s.messages || []).length,
+        archivedMessages: (a.messages || []).length,
+        spamMessages: (sp.messages || []).length,
+      }));
+      setSelectedMessageIds(new Set());
+    } catch {
+      alert(isUnspam ? "스팸 해제에 실패했습니다." : "스팸 신고에 실패했습니다.");
     }
   };
 
@@ -631,7 +797,7 @@ function MyPageContent() {
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     const highlightParam = searchParams.get("highlight");
-    const validTabs: Tab[] = ["posts", "comments", "jobs", "bookmarks", "jobBookmarks", "notifications", "receivedMessages", "sentMessages", "blocks"];
+    const validTabs: Tab[] = ["posts", "comments", "jobs", "bookmarks", "jobBookmarks", "notifications", "receivedMessages", "sentMessages", "archivedMessages", "spamMessages", "blocks"];
     if (tabParam && validTabs.includes(tabParam as Tab)) {
       setActiveTab(tabParam as Tab);
       if (tabParam === "notifications" && highlightParam) {
@@ -805,7 +971,9 @@ function MyPageContent() {
     const tabLabels: Record<Tab, string> = {
       posts: "내가 쓴 글", comments: "내가 쓴 댓글", jobs: "내가 등록한 구인글",
       bookmarks: "후기 북마크", jobBookmarks: "구인 북마크", notifications: "알림 리스트",
-      receivedMessages: "받은 쪽지함", sentMessages: "보낸 쪽지함", blocks: "차단된 사용자",
+      receivedMessages: "받은 쪽지함", sentMessages: "보낸 쪽지함",
+      archivedMessages: "보관 쪽지함", spamMessages: "스팸 쪽지함",
+      blocks: "차단된 사용자",
     };
 
     return (
@@ -1666,89 +1834,128 @@ function MyPageContent() {
                 }
               `}</style>
 
-              {/* ── 받은 쪽지함 ── */}
-              {activeTab === "receivedMessages" && (
-                <div className="px-4 pt-4 pb-6 space-y-2">
-                  <div className="flex justify-end items-center gap-3 mb-1">
-                    <button
-                      onClick={() => { setReplyTo({ nickname: "" }); setShowReplyModal(true); }}
-                      className="inline-flex items-center gap-1 text-[12px] font-bold text-[#6B7B3A] hover:text-[#5A6930] px-2 py-1"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      쪽지 쓰기
-                    </button>
-                    <button
-                      onClick={() => setDeleteAllMessagesDialog("received")}
-                      className="text-[12px] font-bold text-[#C0392B] hover:text-[#A33121] px-2 py-1"
-                      disabled={receivedMessages.length === 0}
-                    >
-                      모두 삭제
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1.5 px-3 py-2 -mt-1 mb-1 rounded-lg bg-[#FBF7EB] dark:bg-zinc-800/60 border border-[#E8E0D0] dark:border-zinc-700">
-                    <svg className="w-3.5 h-3.5 text-[#A89B80] dark:text-zinc-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
-                      읽지 않은 쪽지는 30일 후 자동 삭제됩니다.
-                    </p>
-                  </div>
-                  {receivedMessages.length === 0 ? (
-                    <EmptyTabState icon={<svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} title="받은 쪽지가 없습니다" />
-                  ) : (
-                    receivedMessages.map((m) => (
-                    <MessageCard
-                      key={m.id}
-                      message={m}
-                      type="received"
-                      onClick={async () => {
-                        const token = await getIdToken();
-                        if (!token) return;
-                        const headers = { Authorization: `Bearer ${token}` };
-                        if (!m.is_read) fetch(`/api/messages/${m.id}/read`, { method: "POST", headers }).catch(() => {});
-                        const res = await fetch(`/api/messages/${m.id}`, { headers });
-                        const data = await res.json();
-                        setMessageThread({ original: data.original, replies: data.replies || [] });
-                      }}
-                      onDelete={() => setDeleteMessageDialog({ id: m.id, type: "received" })}
-                    />
-                  ))
-                  )}
-                </div>
-              )}
+              {/* ── 쪽지함 (받은/보낸/보관/스팸) ── */}
+              {(activeTab === "receivedMessages" || activeTab === "sentMessages" || activeTab === "archivedMessages" || activeTab === "spamMessages") && (() => {
+                const tab = activeTab as MessageTab;
+                const list = currentMessageList(tab);
+                const allSelected = list.length > 0 && selectedMessageIds.size === list.length;
+                const archiveLabel = tab === "archivedMessages" ? "보관 해제" : "보관";
+                const spamLabel = tab === "spamMessages" ? "스팸 해제" : "스팸 신고";
+                const showSpamBtn = tab === "receivedMessages" || tab === "spamMessages";
+                const policyText: Record<MessageTab, string | null> = {
+                  receivedMessages: "읽지 않은 쪽지는 30일 후 자동 삭제됩니다.",
+                  sentMessages: null,
+                  archivedMessages: "보관함은 자동 삭제되지 않습니다.",
+                  spamMessages: "스팸 쪽지는 신고 후 15일이 지나면 자동 삭제됩니다.",
+                };
+                const emptyTitle: Record<MessageTab, string> = {
+                  receivedMessages: "받은 쪽지가 없습니다",
+                  sentMessages: "보낸 쪽지가 없습니다",
+                  archivedMessages: "보관 쪽지가 없습니다",
+                  spamMessages: "스팸 쪽지가 없습니다",
+                };
+                return (
+                  <div className="px-4 pt-4 pb-6 space-y-2">
+                    {/* 상단 보조 액션 — 받은쪽지함만 '쪽지 쓰기' */}
+                    {tab === "receivedMessages" && (
+                      <div className="flex justify-end items-center gap-3 mb-1">
+                        <button
+                          onClick={() => { setReplyTo({ nickname: "" }); setShowReplyModal(true); }}
+                          className="inline-flex items-center gap-1 text-[12px] font-bold text-[#6B7B3A] hover:text-[#5A6930] px-2 py-1"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          쪽지 쓰기
+                        </button>
+                      </div>
+                    )}
 
-              {/* ── 보낸 쪽지함 ── */}
-              {activeTab === "sentMessages" && (sentMessages.length === 0 ? (
-                <EmptyTabState icon={<svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>} title="보낸 쪽지가 없습니다" />
-              ) : (
-                <div className="px-4 pt-4 pb-6 space-y-2">
-                  <div className="flex justify-end mb-1">
-                    <button
-                      onClick={() => setDeleteAllMessagesDialog("sent")}
-                      className="text-[12px] font-bold text-[#C0392B] hover:text-[#A33121] px-2 py-1"
-                    >
-                      모두 삭제
-                    </button>
+                    {/* 일괄 액션바 — 전체선택 + 삭제 + 보관 + 스팸 */}
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#FBF7EB] dark:bg-zinc-800/60 border border-[#E8E0D0] dark:border-zinc-700">
+                      <button
+                        onClick={toggleSelectAllMessages}
+                        className="flex items-center gap-2"
+                        disabled={list.length === 0}
+                      >
+                        <span className={`w-5 h-5 rounded border flex items-center justify-center ${allSelected ? "bg-[#6B7B3A] border-[#6B7B3A]" : "border-[#A89B80] dark:border-zinc-500 bg-transparent"}`}>
+                          {allSelected && (
+                            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </span>
+                        <span className="text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                          {selectedMessageIds.size > 0 ? `${selectedMessageIds.size}개 선택` : "전체"}
+                        </span>
+                      </button>
+                      <div className="flex-1" />
+                      <button
+                        onClick={() => { if (selectedMessageIds.size === 0) { alert("선택된 쪽지가 없습니다"); return; } setBulkDeleteDialog(true); }}
+                        className="text-[11px] font-semibold px-2.5 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[#C0392B] hover:bg-[#FBEFEC] dark:hover:bg-red-900/20"
+                      >
+                        삭제
+                      </button>
+                      <button
+                        onClick={() => { if (selectedMessageIds.size === 0) { alert("선택된 쪽지가 없습니다"); return; } bulkArchiveMessages(); }}
+                        className="text-[11px] font-semibold px-2.5 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                      >
+                        {archiveLabel}
+                      </button>
+                      {showSpamBtn && (
+                        <button
+                          onClick={() => { if (selectedMessageIds.size === 0) { alert("선택된 쪽지가 없습니다"); return; } bulkSpamMessages(); }}
+                          className="text-[11px] font-semibold px-2.5 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                        >
+                          {spamLabel}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 정책 안내 */}
+                    {policyText[tab] && (
+                      <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#FBF7EB] dark:bg-zinc-800/60 border border-[#E8E0D0] dark:border-zinc-700">
+                        <svg className="w-3.5 h-3.5 text-[#A89B80] dark:text-zinc-500 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400">{policyText[tab]}</p>
+                      </div>
+                    )}
+
+                    {list.length === 0 ? (
+                      <EmptyTabState
+                        icon={<svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>}
+                        title={emptyTitle[tab]}
+                      />
+                    ) : (
+                      list.map((m) => {
+                        const isReceiverSide = user ? m.receiver_uid === user.uid : tab === "receivedMessages";
+                        return (
+                          <MessageCard
+                            key={m.id}
+                            message={m}
+                            type={isReceiverSide ? "received" : "sent"}
+                            currentUid={user?.uid}
+                            checked={selectedMessageIds.has(m.id)}
+                            onToggle={() => toggleSelectMessage(m.id)}
+                            onClick={async () => {
+                              const token = await getIdToken();
+                              if (!token) return;
+                              const headers = { Authorization: `Bearer ${token}` };
+                              if (isReceiverSide && !m.is_read) {
+                                fetch(`/api/messages/${m.id}/read`, { method: "POST", headers }).catch(() => {});
+                              }
+                              const res = await fetch(`/api/messages/${m.id}`, { headers });
+                              const data = await res.json();
+                              setMessageThread({ original: data.original, replies: data.replies || [] });
+                            }}
+                          />
+                        );
+                      })
+                    )}
                   </div>
-                  {sentMessages.map((m) => (
-                    <MessageCard
-                      key={m.id}
-                      message={m}
-                      type="sent"
-                      onClick={async () => {
-                        const token = await getIdToken();
-                        if (!token) return;
-                        const res = await fetch(`/api/messages/${m.id}`, { headers: { Authorization: `Bearer ${token}` } });
-                        const data = await res.json();
-                        setMessageThread({ original: data.original, replies: data.replies || [] });
-                      }}
-                      onDelete={() => setDeleteMessageDialog({ id: m.id, type: "sent" })}
-                    />
-                  ))}
-                </div>
-              ))}
+                );
+              })()}
 
               {/* ── 차단된 사용자 ── */}
               {activeTab === "blocks" && (blockedUsers.length === 0 ? (
@@ -1805,6 +2012,35 @@ function MyPageContent() {
                       </button>
                       <button
                         onClick={confirmDeleteMessage}
+                        className="flex-1 py-3 text-[14px] font-bold text-[#C0392B] hover:bg-[#FBEFEC] dark:hover:bg-red-900/20"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── 쪽지 일괄 삭제 확인 ── */}
+              {bulkDeleteDialog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setBulkDeleteDialog(false)}>
+                  <div className="absolute inset-0 bg-black/40" />
+                  <div className="relative w-full max-w-xs bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                    <div className="px-5 pt-6 pb-4 text-center">
+                      <h3 className="font-bold text-[15px] text-[#2A251D] dark:text-zinc-100 mb-2">쪽지 삭제</h3>
+                      <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
+                        {selectedMessageIds.size}개의 쪽지를 삭제하시겠습니까?
+                      </p>
+                    </div>
+                    <div className="flex border-t border-[#E8E0D0] dark:border-zinc-700">
+                      <button
+                        onClick={() => setBulkDeleteDialog(false)}
+                        className="flex-1 py-3 text-[14px] font-medium text-[#3A342A] dark:text-zinc-200 border-r border-[#E8E0D0] dark:border-zinc-700 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                      >
+                        취소
+                      </button>
+                      <button
+                        onClick={confirmBulkDeleteMessages}
                         className="flex-1 py-3 text-[14px] font-bold text-[#C0392B] hover:bg-[#FBEFEC] dark:hover:bg-red-900/20"
                       >
                         삭제
@@ -2084,6 +2320,8 @@ function MyPageContent() {
           <CardRow label="알림 리스트" badge={unreadNotifications} onClick={() => router.push("/my?tab=notifications")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>} />
           <CardRow label="받은 쪽지함" count={counts.receivedMessages} nBadge={unreadMessages > 0} onClick={() => router.push("/my?tab=receivedMessages")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} />
           <CardRow label="보낸 쪽지함" count={counts.sentMessages} onClick={() => router.push("/my?tab=sentMessages")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>} />
+          <CardRow label="보관 쪽지함" count={counts.archivedMessages} onClick={() => router.push("/my?tab=archivedMessages")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8l7 4 7-4M5 8a2 2 0 012-2h10a2 2 0 012 2M5 8v8a2 2 0 002 2h10a2 2 0 002-2V8" /></svg>} />
+          <CardRow label="스팸 쪽지함" count={counts.spamMessages} onClick={() => router.push("/my?tab=spamMessages")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.16 16.25A2 2 0 005 19z" /></svg>} />
         </Card>
 
         {/* ── 3. 설정 카드 ── */}
@@ -2311,9 +2549,20 @@ function EmptyTabState({ icon, title }: { icon: React.ReactNode; title: string }
   );
 }
 
-function MessageCard({ message, type, onClick, onDelete }: { message: Message; type: "received" | "sent"; onClick: () => void; onDelete?: () => void }) {
-  const isUnread = type === "received" && !message.is_read;
-  const otherName = type === "received" ? message.sender_nickname : message.receiver_nickname;
+function MessageCard({ message, type, onClick, onDelete, currentUid, checked, onToggle }: {
+  message: Message;
+  type: "received" | "sent";
+  onClick: () => void;
+  onDelete?: () => void;
+  currentUid?: string;
+  checked?: boolean;
+  onToggle?: () => void;
+}) {
+  // 보관/스팸 함에서는 type prop 만으로는 부족 — currentUid 로 실제 받은쪽인지 판별
+  const isReceiverSide = currentUid ? message.receiver_uid === currentUid : type === "received";
+  const isUnread = isReceiverSide && !message.is_read;
+  const otherName = isReceiverSide ? message.sender_nickname : message.receiver_nickname;
+  const showCheckbox = onToggle !== undefined;
   return (
     <div
       className={`relative rounded-2xl overflow-hidden transition-colors flex ${
@@ -2323,8 +2572,29 @@ function MessageCard({ message, type, onClick, onDelete }: { message: Message; t
       }`}
     >
       {isUnread && <div className="w-1 self-stretch bg-[#6B7B3A] dark:bg-[#A8B87A]" />}
+      {showCheckbox && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggle!(); }}
+          aria-label={checked ? "선택 해제" : "선택"}
+          className="shrink-0 px-3 self-stretch flex items-center justify-center"
+        >
+          <span
+            className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+              checked
+                ? "bg-[#6B7B3A] border-[#6B7B3A]"
+                : "border-[#A89B80] dark:border-zinc-500 bg-transparent"
+            }`}
+          >
+            {checked && (
+              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </span>
+        </button>
+      )}
       <button onClick={onClick} className="flex-1 text-left">
-        <div className="px-4 py-3.5 pr-12">
+        <div className={`px-4 py-3.5 ${onDelete ? "pr-12" : "pr-4"}`}>
           <div className="flex items-center gap-2 mb-1.5">
             {isUnread && (
               <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-md bg-[#6B7B3A] text-white text-[10px] font-extrabold leading-none tracking-wide">
@@ -2332,7 +2602,7 @@ function MessageCard({ message, type, onClick, onDelete }: { message: Message; t
               </span>
             )}
             <span className={`text-[12px] ${isUnread ? "font-extrabold text-[#2A251D] dark:text-zinc-100" : "font-bold text-[#3A342A] dark:text-zinc-200"}`}>
-              {type === "received" ? "보낸 사람" : "받는 사람"}: {otherName}
+              {isReceiverSide ? "보낸 사람" : "받는 사람"}: {otherName}
             </span>
             <span className="ml-auto text-[11px] text-[#A89B80] dark:text-zinc-500">{formatDate(message.created_at)}</span>
           </div>
@@ -2360,6 +2630,33 @@ function MessageCard({ message, type, onClick, onDelete }: { message: Message; t
   );
 }
 
+// URL 하이퍼링크 렌더링 — http(s):// 또는 www. 로 시작하는 토큰 자동 인식,
+// 새 탭(target=_blank)에서 열리고 referrer/opener 차단(noopener noreferrer)
+const URL_REGEX = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+function renderTextWithLinks(text: string): React.ReactNode {
+  if (!text) return null;
+  const parts = text.split(URL_REGEX);
+  return parts.map((part, i) => {
+    if (URL_REGEX.test(part)) {
+      // split 결과로 들어온 매칭 토큰 — split 후 lastIndex 가 stateful 이라 한 번 더 reset
+      URL_REGEX.lastIndex = 0;
+      const href = part.startsWith("http") ? part : `https://${part}`;
+      return (
+        <a
+          key={i}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[#6B7B3A] dark:text-[#A8B87A] underline break-all hover:text-[#5A6930]"
+        >
+          {part}
+        </a>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
 function MessageBubble({ msg, isOriginal }: { msg: Message; isOriginal?: boolean }) {
   return (
     <div className={`rounded-2xl p-4 ${isOriginal ? "bg-[#F5F0E5] dark:bg-zinc-800" : "bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700"}`}>
@@ -2367,7 +2664,9 @@ function MessageBubble({ msg, isOriginal }: { msg: Message; isOriginal?: boolean
         <span className="text-[12px] font-bold text-[#3A342A] dark:text-zinc-200">{msg.sender_nickname}</span>
         <span className="text-[11px] text-[#A89B80] dark:text-zinc-500">{formatDateTime(msg.created_at)}</span>
       </div>
-      <p className="text-[13px] text-[#6B5D47] dark:text-zinc-300 leading-relaxed whitespace-pre-line">{msg.content}</p>
+      <p className="text-[13px] text-[#6B5D47] dark:text-zinc-300 leading-relaxed whitespace-pre-line">
+        {renderTextWithLinks(msg.content)}
+      </p>
     </div>
   );
 }
