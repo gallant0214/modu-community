@@ -373,8 +373,8 @@ function RegionBottomSheet({
             </svg>
             뒤로
           </button>
-          {/* 하위 지역이 2개 이상이면 광역시·도 무관하게 "전체" 선택 가능 */}
-          {selectedGroup && selectedGroup.subRegions.length > 1 && (() => {
+          {/* 광역시/특별시는 "전체" 선택 가능 */}
+          {selectedGroup && /특별시|광역시|특별자치시/.test(selectedGroup.name) && (() => {
             const total = getGroupTotal(selectedGroup);
             return (
               <button
