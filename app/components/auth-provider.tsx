@@ -20,6 +20,9 @@ interface AuthContextType {
   setNicknameLocal: (name: string) => void;
   activeRegionCode: string;
   activeRegionName: string;
+  termsAgreed: boolean;
+  termsLoaded: boolean;
+  setTermsAgreedLocal: () => void;
   signInWithGoogle: () => Promise<void>;
   signInWithApple: () => Promise<void>;
   signOutUser: () => Promise<void>;
@@ -36,6 +39,9 @@ const AuthContext = createContext<AuthContextType>({
   setNicknameLocal: () => {},
   activeRegionCode: "",
   activeRegionName: "",
+  termsAgreed: false,
+  termsLoaded: false,
+  setTermsAgreedLocal: () => {},
   signInWithGoogle: async () => {},
   signInWithApple: async () => {},
   signOutUser: async () => {},
@@ -132,11 +138,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [nicknameLoaded, setNicknameLoaded] = useState(false);
   const [activeRegionCode, setActiveRegionCode] = useState("");
   const [activeRegionName, setActiveRegionName] = useState("");
+  const [termsAgreed, setTermsAgreed] = useState(false);
+  const [termsLoaded, setTermsLoaded] = useState(false);
 
   const NICKNAME_CACHE_KEY = "cached_nickname";
   const NICKNAME_UID_KEY = "cached_nickname_uid";
   const REGION_CODE_KEY = "cached_active_region_code";
   const REGION_NAME_KEY = "cached_active_region_name";
+  const TERMS_AGREED_KEY = "cached_terms_agreed";
+
+  const setTermsAgreedLocal = () => {
+    setTermsAgreed(true);
+    setTermsLoaded(true);
+    if (typeof window !== "undefined") {
+      try { localStorage.setItem(TERMS_AGREED_KEY, "1"); } catch {}
+    }
+  };
 
   const fetchNickname = async (uid: string, token: string, retries = 2) => {
     for (let attempt = 0; attempt <= retries; attempt++) {
@@ -162,6 +179,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setActiveRegionName(rName);
           if (rCode) localStorage.setItem(REGION_CODE_KEY, rCode); else localStorage.removeItem(REGION_CODE_KEY);
           if (rName) localStorage.setItem(REGION_NAME_KEY, rName); else localStorage.removeItem(REGION_NAME_KEY);
+          const agreed = !!(data.termsAgreedAt && data.privacyAgreedAt);
+          setTermsAgreed(agreed);
+          setTermsLoaded(true);
+          if (agreed) localStorage.setItem(TERMS_AGREED_KEY, "1"); else localStorage.removeItem(TERMS_AGREED_KEY);
           setNicknameLoaded(true);
           return;
         }
@@ -222,10 +243,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }).catch(() => {});
         } else {
           localStorage.removeItem("fb_token");
+          localStorage.removeItem(TERMS_AGREED_KEY);
           setNickname(null);
           setNicknameLoaded(false);
           setActiveRegionCode("");
           setActiveRegionName("");
+          setTermsAgreed(false);
+          setTermsLoaded(false);
           setLoading(false);
         }
       });
@@ -336,7 +360,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, nickname, nicknameLoaded, setNicknameLocal: (name: string) => { setNickname(name); setNicknameLoaded(true); }, activeRegionCode, activeRegionName, signInWithGoogle, signInWithApple, signOutUser, getIdToken, refreshNickname, setActiveRegionLocal }}>
+    <AuthContext.Provider value={{ user, loading, nickname, nicknameLoaded, setNicknameLocal: (name: string) => { setNickname(name); setNicknameLoaded(true); }, activeRegionCode, activeRegionName, termsAgreed, termsLoaded, setTermsAgreedLocal, signInWithGoogle, signInWithApple, signOutUser, getIdToken, refreshNickname, setActiveRegionLocal }}>
       {children}
     </AuthContext.Provider>
   );

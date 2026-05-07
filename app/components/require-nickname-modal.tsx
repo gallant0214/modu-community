@@ -11,8 +11,9 @@ import { useAuth } from "./auth-provider";
  * - 닉네임 설정 완료될 때까지 다른 화면 사용 불가
  */
 export default function RequireNicknameModal() {
-  const { user, nickname, nicknameLoaded, getIdToken, refreshNickname, setNicknameLocal } = useAuth();
-  const visible = !!user && nicknameLoaded && !nickname;
+  const { user, nickname, nicknameLoaded, termsAgreed, termsLoaded, getIdToken, refreshNickname, setNicknameLocal } = useAuth();
+  // 약관·개인정보 동의가 먼저 — 동의 전에는 닉네임 모달 띄우지 않음
+  const visible = !!user && termsLoaded && termsAgreed && nicknameLoaded && !nickname;
 
   const [input, setInput] = useState("");
   const [error, setError] = useState("");

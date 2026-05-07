@@ -14,10 +14,10 @@ export async function GET(req: NextRequest) {
   const name = req.nextUrl.searchParams.get("name")?.trim();
 
   if (uid) {
-    // active_region_* 컬럼은 마이그레이션 후 추가 — 런타임엔 존재. 타입 우회.
+    // active_region_*, terms_*는 마이그레이션 후 추가 — 런타임엔 존재. 타입 우회.
     const { data } = await (supabase as any)
       .from("nicknames")
-      .select("name, changed_at, active_region_code, active_region_name")
+      .select("name, changed_at, active_region_code, active_region_name, terms_agreed_at, privacy_agreed_at, terms_version")
       .eq("firebase_uid", uid)
       .maybeSingle();
     if (data) {
@@ -27,15 +27,24 @@ export async function GET(req: NextRequest) {
       const remainingDays = canChange
         ? 0
         : Math.ceil((THREE_WEEKS_MS - (Date.now() - changedAt)) / (24 * 60 * 60 * 1000));
+      // placeholder name (약관만 동의하고 닉네임 미설정 상태) 는 nickname=null 로 응답
+      const isPlaceholder = typeof data.name === "string" && data.name.startsWith("__pending_");
       return NextResponse.json({
-        nickname: data.name,
+        nickname: isPlaceholder ? null : data.name,
         canChange,
         remainingDays,
         activeRegionCode: data.active_region_code || "",
         activeRegionName: data.active_region_name || "",
+        termsAgreedAt: data.terms_agreed_at || null,
+        privacyAgreedAt: data.privacy_agreed_at || null,
+        termsVersion: data.terms_version || null,
       });
     }
-    return NextResponse.json({ nickname: null, canChange: true, remainingDays: 0, activeRegionCode: "", activeRegionName: "" });
+    return NextResponse.json({
+      nickname: null, canChange: true, remainingDays: 0,
+      activeRegionCode: "", activeRegionName: "",
+      termsAgreedAt: null, privacyAgreedAt: null, termsVersion: null,
+    });
   }
 
   if (name) {
