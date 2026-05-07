@@ -4,7 +4,7 @@ import { verifyAuth } from "@/app/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/bookmarks?type=posts|jobs — 내 북마크 목록
+// GET /api/bookmarks?type=posts|jobs|trade — 내 북마크 목록
 export async function GET(request: Request) {
   const user = await verifyAuth(request);
   if (!user) return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
@@ -22,6 +22,19 @@ export async function GET(request: Request) {
     const bookmarks = (data || [])
       .filter((b) => b.job_posts)
       .map((b) => ({ ...b.job_posts, bookmarked_at: b.created_at }));
+    return NextResponse.json({ bookmarks });
+  }
+
+  if (type === "trade") {
+    const { data, error } = await supabase
+      .from("trade_post_bookmarks")
+      .select("created_at, trade_posts(*)")
+      .eq("firebase_uid", user.uid)
+      .order("created_at", { ascending: false });
+    if (error) return NextResponse.json({ bookmarks: [] });
+    const bookmarks = (data || [])
+      .filter((b) => b.trade_posts && (b.trade_posts as { status?: string }).status !== "deleted")
+      .map((b) => ({ ...b.trade_posts, bookmarked_at: b.created_at }));
     return NextResponse.json({ bookmarks });
   }
 

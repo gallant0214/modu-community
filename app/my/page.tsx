@@ -7,6 +7,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { deleteUser } from "firebase/auth";
 import { auth } from "@/app/lib/firebase-client";
 import type { Post, JobPost, Message } from "@/app/lib/types";
+import type { TradePost } from "@/app/lib/trade-query";
 import { SendMessageModal } from "@/app/components/send-message-modal";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 import { formatSalaryDisplay, formatDeadlineDisplay } from "@/app/lib/job-format";
@@ -46,7 +47,7 @@ function generateRandomNickname() {
 }
 
 /* ── 타입 ── */
-type Tab = "posts" | "comments" | "jobs" | "bookmarks" | "jobBookmarks" | "notifications" | "receivedMessages" | "sentMessages" | "archivedMessages" | "spamMessages" | "blocks";
+type Tab = "posts" | "comments" | "jobs" | "myTrades" | "bookmarks" | "jobBookmarks" | "tradeBookmarks" | "notifications" | "receivedMessages" | "sentMessages" | "archivedMessages" | "spamMessages" | "blocks";
 type MessageTab = "receivedMessages" | "sentMessages" | "archivedMessages" | "spamMessages";
 
 interface BlockedUser {
@@ -179,6 +180,8 @@ function MyPageContent() {
   const [jobs, setJobs] = useState<JobPost[]>([]);
   const [bookmarkPosts, setBookmarkPosts] = useState<Post[]>([]);
   const [bookmarkJobs, setBookmarkJobs] = useState<JobPost[]>([]);
+  const [myTrades, setMyTrades] = useState<TradePost[]>([]);
+  const [tradeBookmarks, setTradeBookmarks] = useState<TradePost[]>([]);
   const [notifications, setNotifications] = useState<MyNotification[]>([]);
   const [receivedMessages, setReceivedMessages] = useState<Message[]>([]);
   const [sentMessages, setSentMessages] = useState<Message[]>([]);
@@ -207,7 +210,7 @@ function MyPageContent() {
   const [deleteAllNotificationsDialog, setDeleteAllNotificationsDialog] = useState<boolean>(false);
 
   /* 카운트 */
-  const [counts, setCounts] = useState({ posts: 0, comments: 0, jobs: 0, bookmarks: 0, jobBookmarks: 0, notifications: 0, receivedMessages: 0, sentMessages: 0, archivedMessages: 0, spamMessages: 0, blocks: 0 });
+  const [counts, setCounts] = useState({ posts: 0, comments: 0, jobs: 0, myTrades: 0, bookmarks: 0, jobBookmarks: 0, tradeBookmarks: 0, notifications: 0, receivedMessages: 0, sentMessages: 0, archivedMessages: 0, spamMessages: 0, blocks: 0 });
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
 
@@ -333,12 +336,14 @@ function MyPageContent() {
       if (!token) return;
       const headers = { Authorization: `Bearer ${token}` };
       try {
-        const [pRes, cRes, jRes, bpRes, bjRes, nRes, rmRes, smRes, amRes, spRes, blkRes] = await Promise.all([
+        const [pRes, cRes, jRes, mtRes, bpRes, bjRes, btRes, nRes, rmRes, smRes, amRes, spRes, blkRes] = await Promise.all([
           fetch(`/api/posts/my?uid=${user.uid}`, { headers }),
           fetch(`/api/comments/my?uid=${user.uid}`, { headers }),
           fetch(`/api/jobs/my?uid=${user.uid}`, { headers }),
+          fetch(`/api/trade/my`, { headers }),
           fetch(`/api/bookmarks?type=posts`, { headers }),
           fetch(`/api/bookmarks?type=jobs`, { headers }),
+          fetch(`/api/bookmarks?type=trade`, { headers }),
           fetch(`/api/notifications/web`, { headers }),
           fetch(`/api/messages?type=received`, { headers }),
           fetch(`/api/messages?type=sent`, { headers }),
@@ -346,15 +351,17 @@ function MyPageContent() {
           fetch(`/api/messages?type=spam`, { headers }),
           fetch(`/api/users/blocks`, { headers }),
         ]);
-        const [pData, cData, jData, bpData, bjData, nData, rmData, smData, amData, spData, blkData] = await Promise.all([
-          pRes.json(), cRes.json(), jRes.json(), bpRes.json(), bjRes.json(), nRes.json(), rmRes.json(), smRes.json(), amRes.json(), spRes.json(), blkRes.json(),
+        const [pData, cData, jData, mtData, bpData, bjData, btData, nData, rmData, smData, amData, spData, blkData] = await Promise.all([
+          pRes.json(), cRes.json(), jRes.json(), mtRes.json(), bpRes.json(), bjRes.json(), btRes.json(), nRes.json(), rmRes.json(), smRes.json(), amRes.json(), spRes.json(), blkRes.json(),
         ]);
         const nextCounts = {
           posts: (pData.posts || []).length,
           comments: (cData.comments || []).length,
           jobs: (jData.posts || []).length,
+          myTrades: (mtData.posts || []).length,
           bookmarks: (bpData.bookmarks || []).length,
           jobBookmarks: (bjData.bookmarks || []).length,
+          tradeBookmarks: (btData.bookmarks || []).length,
           notifications: (nData.notifications || []).length,
           receivedMessages: (rmData.messages || []).length,
           sentMessages: (smData.messages || []).length,
@@ -417,6 +424,8 @@ function MyPageContent() {
           else if (tab === "bookmarks") setBookmarkPosts(parsed.data);
           else if (tab === "jobBookmarks") setBookmarkJobs(parsed.data);
           else if (tab === "notifications") setNotifications(parsed.data);
+          else if (tab === "myTrades") setMyTrades(parsed.data);
+          else if (tab === "tradeBookmarks") setTradeBookmarks(parsed.data);
           else if (tab === "receivedMessages") setReceivedMessages(parsed.data);
           else if (tab === "sentMessages") setSentMessages(parsed.data);
           else if (tab === "archivedMessages") setArchivedMessages(parsed.data);
@@ -455,6 +464,18 @@ function MyPageContent() {
         const data = await res.json();
         const list = data.posts || [];
         setJobs(list);
+        saveCache(list);
+      } else if (tab === "myTrades") {
+        const res = await fetch(`/api/trade/my`, { headers });
+        const data = await res.json();
+        const list = data.posts || [];
+        setMyTrades(list);
+        saveCache(list);
+      } else if (tab === "tradeBookmarks") {
+        const res = await fetch(`/api/bookmarks?type=trade`, { headers });
+        const data = await res.json();
+        const list = data.bookmarks || [];
+        setTradeBookmarks(list);
         saveCache(list);
       } else if (tab === "bookmarks") {
         const res = await fetch(`/api/bookmarks?type=posts`, { headers });
@@ -798,7 +819,7 @@ function MyPageContent() {
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     const highlightParam = searchParams.get("highlight");
-    const validTabs: Tab[] = ["posts", "comments", "jobs", "bookmarks", "jobBookmarks", "notifications", "receivedMessages", "sentMessages", "archivedMessages", "spamMessages", "blocks"];
+    const validTabs: Tab[] = ["posts", "comments", "jobs", "myTrades", "bookmarks", "jobBookmarks", "tradeBookmarks", "notifications", "receivedMessages", "sentMessages", "archivedMessages", "spamMessages", "blocks"];
     if (tabParam && validTabs.includes(tabParam as Tab)) {
       setActiveTab(tabParam as Tab);
       if (tabParam === "notifications" && highlightParam) {
@@ -970,8 +991,10 @@ function MyPageContent() {
   /* ── 탭 상세 뷰 ── */
   if (activeTab) {
     const tabLabels: Record<Tab, string> = {
-      posts: "내가 쓴 글", comments: "내가 쓴 댓글", jobs: "내가 등록한 구인글",
-      bookmarks: "후기 북마크", jobBookmarks: "구인 북마크", notifications: "알림 리스트",
+      posts: "내가 작성한 글", comments: "내가 작성한 댓글", jobs: "내가 등록한 구인글",
+      myTrades: "내가 등록한 거래글",
+      bookmarks: "후기 북마크", jobBookmarks: "구인 북마크", tradeBookmarks: "거래 북마크",
+      notifications: "알림 리스트",
       receivedMessages: "받은 쪽지함", sentMessages: "보낸 쪽지함",
       archivedMessages: "보관 쪽지함", spamMessages: "스팸 쪽지함",
       blocks: "차단된 사용자",
@@ -1632,6 +1655,56 @@ function MyPageContent() {
                   </ul>
                 </div>
               ))}
+
+              {/* ── 내가 등록한 거래글 / 거래 북마크 — 단순 카드 리스트 ── */}
+              {(activeTab === "myTrades" || activeTab === "tradeBookmarks") && (() => {
+                const list = activeTab === "myTrades" ? myTrades : tradeBookmarks;
+                const emptyTitle = activeTab === "myTrades" ? "등록한 거래글이 없습니다" : "북마크한 거래글이 없습니다";
+                if (list.length === 0) {
+                  return (
+                    <EmptyTabState
+                      icon={<svg className="w-7 h-7 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 9h13.5l3.5 4.5V18a1 1 0 01-1 1h-1.5a2.5 2.5 0 01-5 0H10a2.5 2.5 0 01-5 0H4a1 1 0 01-1-1V9zm0 0V6a1 1 0 011-1h12a1 1 0 011 1v3" /></svg>}
+                      title={emptyTitle}
+                    />
+                  );
+                }
+                return (
+                  <div className="px-4 pt-4 pb-6">
+                    <ul className="space-y-3">
+                      {list.map((t) => (
+                        <li key={t.id} className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl overflow-hidden">
+                          <Link
+                            href={`/trade/${t.id}`}
+                            className="flex gap-3 px-4 py-3 hover:bg-[#FBF7EB]/50 dark:hover:bg-zinc-800/40 transition-colors"
+                          >
+                            <div className="shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
+                              {t.image_urls && t.image_urls[0] ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img src={t.image_urls[0]} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <svg className="w-6 h-6 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`text-[10px] font-bold ${t.category === "equipment" ? "text-[#6B7B3A]" : "text-[#C0392B]"}`}>
+                                  {t.category === "equipment" ? "[중고거래]" : "[센터매매]"}
+                                </span>
+                              </div>
+                              <p className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 line-clamp-2">{t.title}</p>
+                              <p className="text-[11px] text-[#A89B80] dark:text-zinc-500 mt-1">
+                                {[t.region_sido, t.region_sigungu].filter(Boolean).join(" ")}
+                              </p>
+                            </div>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
 
               {activeTab === "notifications" && (notifications.length === 0 ? (
                 <div className="px-4 py-10">
@@ -2311,13 +2384,16 @@ function MyPageContent() {
           </div>
         </div>
 
-        {/* ── 2. 내 활동 카드 ── */}
+        {/* ── 2. 내 활동 카드 ──
+            순서: 작성한 것(글/댓글/구인글/거래글) → 저장한 것(후기/구인/거래 북마크) */}
         <Card title="내 활동">
-          <CardRow label="내가 쓴 글" count={counts.posts} onClick={() => router.push("/my?tab=posts")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} />
-          <CardRow label="내가 쓴 댓글" count={counts.comments} onClick={() => router.push("/my?tab=comments")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>} />
-          <CardRow label="후기 북마크" count={counts.bookmarks} onClick={() => router.push("/my?tab=bookmarks")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>} />
+          <CardRow label="내가 작성한 글" count={counts.posts} onClick={() => router.push("/my?tab=posts")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} />
+          <CardRow label="내가 작성한 댓글" count={counts.comments} onClick={() => router.push("/my?tab=comments")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>} />
           <CardRow label="내가 등록한 구인글" count={counts.jobs} onClick={() => router.push("/my?tab=jobs")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} />
+          <CardRow label="내가 등록한 거래글" count={counts.myTrades} onClick={() => router.push("/my?tab=myTrades")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9h13.5l3.5 4.5V18a1 1 0 01-1 1h-1.5a2.5 2.5 0 01-5 0H10a2.5 2.5 0 01-5 0H4a1 1 0 01-1-1V9zm0 0V6a1 1 0 011-1h12a1 1 0 011 1v3" /></svg>} />
+          <CardRow label="후기 북마크" count={counts.bookmarks} onClick={() => router.push("/my?tab=bookmarks")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>} />
           <CardRow label="구인 북마크" count={counts.jobBookmarks} onClick={() => router.push("/my?tab=jobBookmarks")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>} />
+          <CardRow label="거래 북마크" count={counts.tradeBookmarks} onClick={() => router.push("/my?tab=tradeBookmarks")} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>} />
         </Card>
 
         {/* ── 2-1. 내 메세지 카드 — 알림 리스트 + 쪽지 4함 ── */}
