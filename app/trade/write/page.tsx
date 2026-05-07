@@ -183,9 +183,11 @@ export default function TradeWritePage() {
     if (isEdit) return; // 수정 모드는 기존 값 유지
     if (!activeRegionCode || !activeRegionName) return;
     if (regionCode || regionName) return; // 이미 사용자가 선택했으면 건드리지 않음
+    // "대구광역시 - 수성구" 같은 하이픈 분리자를 공백으로 정규화
+    const normalized = activeRegionName.replace(/\s*-\s*/g, " ").replace(/\s+/g, " ").trim();
     setRegionCode(activeRegionCode);
-    setRegionName(activeRegionName);
-    setRegionDetail(prev => (prev.trim() ? prev : `${activeRegionName} `));
+    setRegionName(normalized);
+    setRegionDetail(prev => (prev.trim() ? prev : `${normalized} `));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEdit, activeRegionCode, activeRegionName]);
 
