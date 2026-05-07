@@ -1333,7 +1333,95 @@ export default function AdminPage() {
               {userError && <p className="mt-2 text-sm text-red-500">{userError}</p>}
             </div>
 
-            {/* ── 전체 유저 리스트 (30명/페이지) ── */}
+            {userResult && (
+              <div className="space-y-4">
+                {userResult.matchedFromHistory && (
+                  <div className="rounded-lg bg-amber-50 px-4 py-2.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                    입력하신 닉네임은 현재 사용 중이 아닙니다 — 닉네임 이력에서 매칭하여 표시합니다.
+                  </div>
+                )}
+
+                {/* 기본 정보 */}
+                <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                  <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">기본 정보</h3>
+                  <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                    <Field label="현재 닉네임" value={userResult.nickname} />
+                    <Field label="firebase_uid" value={userResult.firebase_uid} mono />
+                    <Field label="이메일" value={userResult.firebaseUser?.email || "-"} />
+                    <Field label="이메일 인증" value={userResult.firebaseUser?.emailVerified ? "예" : "아니오"} />
+                    <Field label="로그인 제공자" value={(userResult.firebaseUser?.providers || []).join(", ") || "-"} />
+                    <Field label="가입 시각" value={userResult.firebaseUser?.createdAt ? new Date(userResult.firebaseUser.createdAt).toLocaleString("ko-KR") : "-"} />
+                    <Field label="마지막 로그인" value={userResult.firebaseUser?.lastSignInAt ? new Date(userResult.firebaseUser.lastSignInAt).toLocaleString("ko-KR") : "-"} />
+                    <Field label="계정 비활성" value={userResult.firebaseUser?.disabled ? "예" : "아니오"} />
+                    <Field label="활동 지역" value={userResult.nicknames_record?.active_region_name || "-"} />
+                    <Field label="약관 동의 시각" value={userResult.nicknames_record?.terms_agreed_at ? new Date(userResult.nicknames_record.terms_agreed_at).toLocaleString("ko-KR") : "-"} />
+                    <Field label="개인정보 동의 시각" value={userResult.nicknames_record?.privacy_agreed_at ? new Date(userResult.nicknames_record.privacy_agreed_at).toLocaleString("ko-KR") : "-"} />
+                    <Field label="약관 버전" value={userResult.nicknames_record?.terms_version || "-"} />
+                    <Field label="마지막 닉네임 변경" value={userResult.nicknames_record?.changed_at ? new Date(userResult.nicknames_record.changed_at).toLocaleString("ko-KR") : "-"} />
+                  </dl>
+                </div>
+
+                {/* 활동 카운트 */}
+                <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                  <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">활동 카운트</h3>
+                  <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-5">
+                    <Stat label="작성 글" value={userResult.counts.posts} />
+                    <Stat label="작성 댓글" value={userResult.counts.comments} />
+                    <Stat label="구인글" value={userResult.counts.jobs} />
+                    <Stat label="거래글" value={userResult.counts.trades} />
+                    <Stat label="차단함" value={userResult.counts.blocks_made} />
+                    <Stat label="보낸 쪽지" value={userResult.counts.messages_sent} />
+                    <Stat label="받은 쪽지" value={userResult.counts.messages_received} />
+                    <Stat label="후기 북마크" value={userResult.counts.post_bookmarks} />
+                    <Stat label="구인 북마크" value={userResult.counts.job_bookmarks} />
+                    <Stat label="거래 북마크" value={userResult.counts.trade_bookmarks} />
+                  </div>
+                </div>
+
+                {/* 닉네임 이력 */}
+                <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                  <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">닉네임 변경 이력 ({userResult.nickname_history.length}건)</h3>
+                  {userResult.nickname_history.length === 0 ? (
+                    <p className="text-xs text-zinc-400">기록 없음 (이력 시스템 도입 이전 사용자일 수 있음)</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[600px] text-xs">
+                        <thead className="text-zinc-500 dark:text-zinc-400">
+                          <tr className="border-b border-zinc-200 dark:border-zinc-800">
+                            <th className="py-1.5 text-left font-semibold">변경 시각</th>
+                            <th className="py-1.5 text-left font-semibold">이전 닉네임</th>
+                            <th className="py-1.5 text-left font-semibold">→ 새 닉네임</th>
+                            <th className="py-1.5 text-left font-semibold">사유</th>
+                            <th className="py-1.5 text-left font-semibold">IP</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {userResult.nickname_history.map((h: any) => (
+                            <tr key={h.id} className="border-b border-zinc-100 dark:border-zinc-800">
+                              <td className="py-1.5 text-zinc-600 dark:text-zinc-300">{new Date(h.changed_at).toLocaleString("ko-KR")}</td>
+                              <td className="py-1.5 text-zinc-700 dark:text-zinc-200">{h.old_nickname || <span className="text-zinc-400">(없음)</span>}</td>
+                              <td className="py-1.5 font-semibold text-cyan-700 dark:text-cyan-300">{h.new_nickname}</td>
+                              <td className="py-1.5 text-zinc-500">{h.reason || "-"}</td>
+                              <td className="py-1.5 font-mono text-[10px] text-zinc-400">{h.ip_address || "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* 최근 활동 */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <RecentList title="최근 작성 글" items={userResult.recent.posts.map((p: any) => ({ id: p.id, label: p.title, time: p.created_at }))} />
+                  <RecentList title="최근 작성 댓글" items={userResult.recent.comments.map((c: any) => ({ id: c.id, label: c.content, time: c.created_at }))} />
+                  <RecentList title="최근 구인글" items={userResult.recent.jobs.map((j: any) => ({ id: j.id, label: j.title + (j.is_closed ? " (마감)" : ""), time: j.created_at }))} />
+                  <RecentList title="최근 거래글" items={userResult.recent.trades.map((t: any) => ({ id: t.id, label: `[${t.category}] ${t.title} (${t.status})`, time: t.created_at }))} />
+                </div>
+              </div>
+            )}
+
+            {/* ── 전체 유저 리스트 (30명/페이지) — 맨 아래 ── */}
             <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200">
@@ -1434,94 +1522,6 @@ export default function AdminPage() {
                 </>
               ) : null}
             </div>
-
-            {userResult && (
-              <div className="space-y-4">
-                {userResult.matchedFromHistory && (
-                  <div className="rounded-lg bg-amber-50 px-4 py-2.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-                    입력하신 닉네임은 현재 사용 중이 아닙니다 — 닉네임 이력에서 매칭하여 표시합니다.
-                  </div>
-                )}
-
-                {/* 기본 정보 */}
-                <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                  <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">기본 정보</h3>
-                  <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-                    <Field label="현재 닉네임" value={userResult.nickname} />
-                    <Field label="firebase_uid" value={userResult.firebase_uid} mono />
-                    <Field label="이메일" value={userResult.firebaseUser?.email || "-"} />
-                    <Field label="이메일 인증" value={userResult.firebaseUser?.emailVerified ? "예" : "아니오"} />
-                    <Field label="로그인 제공자" value={(userResult.firebaseUser?.providers || []).join(", ") || "-"} />
-                    <Field label="가입 시각" value={userResult.firebaseUser?.createdAt ? new Date(userResult.firebaseUser.createdAt).toLocaleString("ko-KR") : "-"} />
-                    <Field label="마지막 로그인" value={userResult.firebaseUser?.lastSignInAt ? new Date(userResult.firebaseUser.lastSignInAt).toLocaleString("ko-KR") : "-"} />
-                    <Field label="계정 비활성" value={userResult.firebaseUser?.disabled ? "예" : "아니오"} />
-                    <Field label="활동 지역" value={userResult.nicknames_record?.active_region_name || "-"} />
-                    <Field label="약관 동의 시각" value={userResult.nicknames_record?.terms_agreed_at ? new Date(userResult.nicknames_record.terms_agreed_at).toLocaleString("ko-KR") : "-"} />
-                    <Field label="개인정보 동의 시각" value={userResult.nicknames_record?.privacy_agreed_at ? new Date(userResult.nicknames_record.privacy_agreed_at).toLocaleString("ko-KR") : "-"} />
-                    <Field label="약관 버전" value={userResult.nicknames_record?.terms_version || "-"} />
-                    <Field label="마지막 닉네임 변경" value={userResult.nicknames_record?.changed_at ? new Date(userResult.nicknames_record.changed_at).toLocaleString("ko-KR") : "-"} />
-                  </dl>
-                </div>
-
-                {/* 활동 카운트 */}
-                <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                  <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">활동 카운트</h3>
-                  <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-5">
-                    <Stat label="작성 글" value={userResult.counts.posts} />
-                    <Stat label="작성 댓글" value={userResult.counts.comments} />
-                    <Stat label="구인글" value={userResult.counts.jobs} />
-                    <Stat label="거래글" value={userResult.counts.trades} />
-                    <Stat label="차단함" value={userResult.counts.blocks_made} />
-                    <Stat label="보낸 쪽지" value={userResult.counts.messages_sent} />
-                    <Stat label="받은 쪽지" value={userResult.counts.messages_received} />
-                    <Stat label="후기 북마크" value={userResult.counts.post_bookmarks} />
-                    <Stat label="구인 북마크" value={userResult.counts.job_bookmarks} />
-                    <Stat label="거래 북마크" value={userResult.counts.trade_bookmarks} />
-                  </div>
-                </div>
-
-                {/* 닉네임 이력 */}
-                <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                  <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">닉네임 변경 이력 ({userResult.nickname_history.length}건)</h3>
-                  {userResult.nickname_history.length === 0 ? (
-                    <p className="text-xs text-zinc-400">기록 없음 (이력 시스템 도입 이전 사용자일 수 있음)</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[600px] text-xs">
-                        <thead className="text-zinc-500 dark:text-zinc-400">
-                          <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                            <th className="py-1.5 text-left font-semibold">변경 시각</th>
-                            <th className="py-1.5 text-left font-semibold">이전 닉네임</th>
-                            <th className="py-1.5 text-left font-semibold">→ 새 닉네임</th>
-                            <th className="py-1.5 text-left font-semibold">사유</th>
-                            <th className="py-1.5 text-left font-semibold">IP</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {userResult.nickname_history.map((h: any) => (
-                            <tr key={h.id} className="border-b border-zinc-100 dark:border-zinc-800">
-                              <td className="py-1.5 text-zinc-600 dark:text-zinc-300">{new Date(h.changed_at).toLocaleString("ko-KR")}</td>
-                              <td className="py-1.5 text-zinc-700 dark:text-zinc-200">{h.old_nickname || <span className="text-zinc-400">(없음)</span>}</td>
-                              <td className="py-1.5 font-semibold text-cyan-700 dark:text-cyan-300">{h.new_nickname}</td>
-                              <td className="py-1.5 text-zinc-500">{h.reason || "-"}</td>
-                              <td className="py-1.5 font-mono text-[10px] text-zinc-400">{h.ip_address || "-"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
-                {/* 최근 활동 */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <RecentList title="최근 작성 글" items={userResult.recent.posts.map((p: any) => ({ id: p.id, label: p.title, time: p.created_at }))} />
-                  <RecentList title="최근 작성 댓글" items={userResult.recent.comments.map((c: any) => ({ id: c.id, label: c.content, time: c.created_at }))} />
-                  <RecentList title="최근 구인글" items={userResult.recent.jobs.map((j: any) => ({ id: j.id, label: j.title + (j.is_closed ? " (마감)" : ""), time: j.created_at }))} />
-                  <RecentList title="최근 거래글" items={userResult.recent.trades.map((t: any) => ({ id: t.id, label: `[${t.category}] ${t.title} (${t.status})`, time: t.created_at }))} />
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
