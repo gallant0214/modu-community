@@ -18,7 +18,38 @@ export default function AdminPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"report" | "pending" | "resolved" | "inquiries" | "notice" | "push" | "settings" | "kpi">("report");
+  const [tab, setTab] = useState<"report" | "pending" | "resolved" | "inquiries" | "notice" | "push" | "settings" | "kpi" | "user">("report");
+
+  // USER 탭 — 닉네임 조회 상태
+  const [userQuery, setUserQuery] = useState("");
+  const [userResult, setUserResult] = useState<any>(null);
+  const [userLoading, setUserLoading] = useState(false);
+  const [userError, setUserError] = useState<string>("");
+  const lookupUser = async () => {
+    if (!storedPassword) return;
+    const q = userQuery.trim();
+    if (!q) { setUserError("닉네임을 입력하세요"); return; }
+    setUserLoading(true);
+    setUserError("");
+    setUserResult(null);
+    try {
+      const res = await fetch("/api/admin/users/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: storedPassword, nickname: q }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setUserError(data?.error || "조회 실패");
+      } else {
+        setUserResult(data);
+      }
+    } catch (e: any) {
+      setUserError(e?.message || "네트워크 오류");
+    } finally {
+      setUserLoading(false);
+    }
+  };
   const [kpiData, setKpiData] = useState<any>(null);
   const [kpiLoading, setKpiLoading] = useState(false);
   // 리포트 탭 상태
@@ -638,6 +669,9 @@ export default function AdminPage() {
           }} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "kpi" ? "border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
             KPI
           </button>
+          <button onClick={() => setTab("user")} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "user" ? "border-b-2 border-cyan-500 text-cyan-600 dark:text-cyan-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
+            USER
+          </button>
         </div>
 
         {/* ===== KPI 대시보드 탭 ===== */}
@@ -1235,6 +1269,121 @@ export default function AdminPage() {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ===== USER 조회 탭 ===== */}
+        {tab === "user" && (
+          <div className="p-4 space-y-4">
+            <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+              <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">닉네임으로 사용자 조회</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={userQuery}
+                  onChange={(e) => setUserQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") lookupUser(); }}
+                  placeholder="닉네임을 입력 (현재/과거 닉네임 모두 검색 가능)"
+                  className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                />
+                <button
+                  onClick={lookupUser}
+                  disabled={userLoading}
+                  className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-600 disabled:opacity-50"
+                >
+                  {userLoading ? "조회 중…" : "조회"}
+                </button>
+              </div>
+              {userError && <p className="mt-2 text-sm text-red-500">{userError}</p>}
+            </div>
+
+            {userResult && (
+              <div className="space-y-4">
+                {userResult.matchedFromHistory && (
+                  <div className="rounded-lg bg-amber-50 px-4 py-2.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                    입력하신 닉네임은 현재 사용 중이 아닙니다 — 닉네임 이력에서 매칭하여 표시합니다.
+                  </div>
+                )}
+
+                {/* 기본 정보 */}
+                <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                  <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">기본 정보</h3>
+                  <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                    <Field label="현재 닉네임" value={userResult.nickname} />
+                    <Field label="firebase_uid" value={userResult.firebase_uid} mono />
+                    <Field label="이메일" value={userResult.firebaseUser?.email || "-"} />
+                    <Field label="이메일 인증" value={userResult.firebaseUser?.emailVerified ? "예" : "아니오"} />
+                    <Field label="로그인 제공자" value={(userResult.firebaseUser?.providers || []).join(", ") || "-"} />
+                    <Field label="가입 시각" value={userResult.firebaseUser?.createdAt ? new Date(userResult.firebaseUser.createdAt).toLocaleString("ko-KR") : "-"} />
+                    <Field label="마지막 로그인" value={userResult.firebaseUser?.lastSignInAt ? new Date(userResult.firebaseUser.lastSignInAt).toLocaleString("ko-KR") : "-"} />
+                    <Field label="계정 비활성" value={userResult.firebaseUser?.disabled ? "예" : "아니오"} />
+                    <Field label="활동 지역" value={userResult.nicknames_record?.active_region_name || "-"} />
+                    <Field label="약관 동의 시각" value={userResult.nicknames_record?.terms_agreed_at ? new Date(userResult.nicknames_record.terms_agreed_at).toLocaleString("ko-KR") : "-"} />
+                    <Field label="개인정보 동의 시각" value={userResult.nicknames_record?.privacy_agreed_at ? new Date(userResult.nicknames_record.privacy_agreed_at).toLocaleString("ko-KR") : "-"} />
+                    <Field label="약관 버전" value={userResult.nicknames_record?.terms_version || "-"} />
+                    <Field label="마지막 닉네임 변경" value={userResult.nicknames_record?.changed_at ? new Date(userResult.nicknames_record.changed_at).toLocaleString("ko-KR") : "-"} />
+                  </dl>
+                </div>
+
+                {/* 활동 카운트 */}
+                <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                  <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">활동 카운트</h3>
+                  <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-5">
+                    <Stat label="작성 글" value={userResult.counts.posts} />
+                    <Stat label="작성 댓글" value={userResult.counts.comments} />
+                    <Stat label="구인글" value={userResult.counts.jobs} />
+                    <Stat label="거래글" value={userResult.counts.trades} />
+                    <Stat label="차단함" value={userResult.counts.blocks_made} />
+                    <Stat label="보낸 쪽지" value={userResult.counts.messages_sent} />
+                    <Stat label="받은 쪽지" value={userResult.counts.messages_received} />
+                    <Stat label="후기 북마크" value={userResult.counts.post_bookmarks} />
+                    <Stat label="구인 북마크" value={userResult.counts.job_bookmarks} />
+                    <Stat label="거래 북마크" value={userResult.counts.trade_bookmarks} />
+                  </div>
+                </div>
+
+                {/* 닉네임 이력 */}
+                <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                  <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">닉네임 변경 이력 ({userResult.nickname_history.length}건)</h3>
+                  {userResult.nickname_history.length === 0 ? (
+                    <p className="text-xs text-zinc-400">기록 없음 (이력 시스템 도입 이전 사용자일 수 있음)</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[600px] text-xs">
+                        <thead className="text-zinc-500 dark:text-zinc-400">
+                          <tr className="border-b border-zinc-200 dark:border-zinc-800">
+                            <th className="py-1.5 text-left font-semibold">변경 시각</th>
+                            <th className="py-1.5 text-left font-semibold">이전 닉네임</th>
+                            <th className="py-1.5 text-left font-semibold">→ 새 닉네임</th>
+                            <th className="py-1.5 text-left font-semibold">사유</th>
+                            <th className="py-1.5 text-left font-semibold">IP</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {userResult.nickname_history.map((h: any) => (
+                            <tr key={h.id} className="border-b border-zinc-100 dark:border-zinc-800">
+                              <td className="py-1.5 text-zinc-600 dark:text-zinc-300">{new Date(h.changed_at).toLocaleString("ko-KR")}</td>
+                              <td className="py-1.5 text-zinc-700 dark:text-zinc-200">{h.old_nickname || <span className="text-zinc-400">(없음)</span>}</td>
+                              <td className="py-1.5 font-semibold text-cyan-700 dark:text-cyan-300">{h.new_nickname}</td>
+                              <td className="py-1.5 text-zinc-500">{h.reason || "-"}</td>
+                              <td className="py-1.5 font-mono text-[10px] text-zinc-400">{h.ip_address || "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* 최근 활동 */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <RecentList title="최근 작성 글" items={userResult.recent.posts.map((p: any) => ({ id: p.id, label: p.title, time: p.created_at }))} />
+                  <RecentList title="최근 작성 댓글" items={userResult.recent.comments.map((c: any) => ({ id: c.id, label: c.content, time: c.created_at }))} />
+                  <RecentList title="최근 구인글" items={userResult.recent.jobs.map((j: any) => ({ id: j.id, label: j.title + (j.is_closed ? " (마감)" : ""), time: j.created_at }))} />
+                  <RecentList title="최근 거래글" items={userResult.recent.trades.map((t: any) => ({ id: t.id, label: `[${t.category}] ${t.title} (${t.status})`, time: t.created_at }))} />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -2216,6 +2365,46 @@ function VisitHourlyChart({ hourly, weekday }: { hourly: { hour: number; count: 
             </>
           )}
         </svg>
+      )}
+    </div>
+  );
+}
+
+/* ── USER 탭 보조 컴포넌트 ── */
+function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div className="flex flex-col rounded-md bg-zinc-50 px-3 py-2 dark:bg-zinc-800/50">
+      <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">{label}</span>
+      <span className={`mt-0.5 text-sm break-all ${mono ? "font-mono text-[11px]" : ""} text-zinc-800 dark:text-zinc-100`}>{value}</span>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-800/50">
+      <p className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">{label}</p>
+      <p className="mt-0.5 text-base font-bold text-cyan-600 dark:text-cyan-400">{value}</p>
+    </div>
+  );
+}
+
+function RecentList({ title, items }: { title: string; items: { id: number; label: string; time: string }[] }) {
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-2">{title} ({items.length})</h3>
+      {items.length === 0 ? (
+        <p className="text-xs text-zinc-400">없음</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {items.slice(0, 10).map((it) => (
+            <li key={it.id} className="flex items-start gap-2 text-xs">
+              <span className="shrink-0 text-[10px] text-zinc-400">{new Date(it.time).toLocaleDateString("ko-KR")}</span>
+              <span className="flex-1 truncate text-zinc-700 dark:text-zinc-300">{it.label}</span>
+            </li>
+          ))}
+          {items.length > 10 && <li className="text-[10px] text-zinc-400">… 외 {items.length - 10}건</li>}
+        </ul>
       )}
     </div>
   );

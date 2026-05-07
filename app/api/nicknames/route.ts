@@ -124,6 +124,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // 닉네임 이력 기록 — 추후 분쟁/문의 추적용. 실패해도 본 작업은 진행.
+  const ipAddr = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+    || req.headers.get("x-real-ip")
+    || null;
+  const userAgent = req.headers.get("user-agent") || null;
+  const oldNick = current?.name && !current.name.startsWith("__pending_") ? current.name : null;
+  await (supabase as any).from("nickname_history").insert({
+    firebase_uid: user.uid,
+    email: user.email || null,
+    old_nickname: oldNick,
+    new_nickname: name,
+    ip_address: ipAddr,
+    user_agent: userAgent,
+    reason: isFirstSetup ? "first_setup" : "user_change",
+  }).then(() => {}, () => {}); // 실패 무시
+
   // 본인 row 가 이미 있으면 UPDATE — active_region_* 등 다른 컬럼은 보존
   // 없으면 INSERT (동명의 orphan row 가 있다면 사전 정리)
   if (current) {
