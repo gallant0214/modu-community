@@ -25,6 +25,42 @@ export default function AdminPage() {
   const [userResult, setUserResult] = useState<any>(null);
   const [userLoading, setUserLoading] = useState(false);
   const [userError, setUserError] = useState<string>("");
+  // USER 탭 — 전체 유저 리스트 + 페이지네이션 (30명/페이지)
+  const [userListPage, setUserListPage] = useState(1);
+  const [userListData, setUserListData] = useState<{
+    users: any[]; total: number; page: number; limit: number; totalPages: number;
+  } | null>(null);
+  const [userListLoading, setUserListLoading] = useState(false);
+  const [userListError, setUserListError] = useState<string>("");
+  const loadUserList = useCallback(async (page: number) => {
+    if (!storedPassword) return;
+    setUserListLoading(true);
+    setUserListError("");
+    try {
+      const res = await fetch("/api/admin/users/list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: storedPassword, page, limit: 30 }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setUserListError(data?.error || "조회 실패");
+        setUserListData(null);
+      } else {
+        setUserListData(data);
+      }
+    } catch (e: any) {
+      setUserListError(e?.message || "네트워크 오류");
+    } finally {
+      setUserListLoading(false);
+    }
+  }, [storedPassword]);
+  // USER 탭 진입 시 첫 페이지 자동 로드 (캐시 없을 때만)
+  useEffect(() => {
+    if (tab === "user" && storedPassword && !userListData && !userListLoading) {
+      loadUserList(userListPage);
+    }
+  }, [tab, storedPassword, userListData, userListLoading, userListPage, loadUserList]);
   const lookupUser = async () => {
     if (!storedPassword) return;
     const q = userQuery.trim();
@@ -1276,7 +1312,7 @@ export default function AdminPage() {
         {tab === "user" && (
           <div className="p-4 space-y-4">
             <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-              <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">닉네임으로 사용자 조회</p>
+              <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">닉네임으로 사용자 조회 (특정 사용자 상세)</p>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -1295,6 +1331,108 @@ export default function AdminPage() {
                 </button>
               </div>
               {userError && <p className="mt-2 text-sm text-red-500">{userError}</p>}
+            </div>
+
+            {/* ── 전체 유저 리스트 (30명/페이지) ── */}
+            <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200">
+                  전체 유저
+                  {userListData && (
+                    <span className="ml-2 text-xs font-normal text-zinc-400">
+                      총 {userListData.total.toLocaleString()}명 · {userListData.page}/{userListData.totalPages || 1}p
+                    </span>
+                  )}
+                </h3>
+                <button
+                  onClick={() => { setUserListData(null); loadUserList(userListPage); }}
+                  disabled={userListLoading}
+                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  {userListLoading ? "로드 중…" : "새로고침"}
+                </button>
+              </div>
+
+              {userListError && <p className="mb-2 text-sm text-red-500">{userListError}</p>}
+
+              {userListLoading && !userListData ? (
+                <div className="flex justify-center py-12"><div className="h-6 w-6 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" /></div>
+              ) : userListData && userListData.users.length === 0 ? (
+                <p className="py-8 text-center text-xs text-zinc-400">사용자가 없습니다</p>
+              ) : userListData ? (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[820px] text-xs">
+                      <thead className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                        <tr>
+                          <th className="py-2 pr-2 text-left font-semibold">#</th>
+                          <th className="py-2 pr-2 text-left font-semibold">닉네임 (이메일)</th>
+                          <th className="py-2 pr-2 text-left font-semibold">가입일</th>
+                          <th className="py-2 pr-2 text-right font-semibold">닉변</th>
+                          <th className="py-2 pr-2 text-right font-semibold">글</th>
+                          <th className="py-2 pr-2 text-right font-semibold">댓글</th>
+                          <th className="py-2 pr-2 text-right font-semibold">구인</th>
+                          <th className="py-2 pr-2 text-right font-semibold">거래</th>
+                          <th className="py-2 pr-2 text-right font-semibold">상세</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {userListData.users.map((u: any, i: number) => {
+                          const startIdx = (userListData.page - 1) * userListData.limit;
+                          return (
+                            <tr key={u.firebase_uid} className="border-b border-zinc-100 last:border-0 dark:border-zinc-800">
+                              <td className="py-1.5 pr-2 text-zinc-400">{startIdx + i + 1}</td>
+                              <td className="py-1.5 pr-2">
+                                <div className="font-semibold text-zinc-800 dark:text-zinc-100">{u.nickname}</div>
+                                <div className="text-[10px] text-zinc-400">{u.email || "-"}</div>
+                              </td>
+                              <td className="py-1.5 pr-2 text-zinc-600 dark:text-zinc-300">
+                                {u.created_at ? new Date(u.created_at).toLocaleDateString("ko-KR") : "-"}
+                              </td>
+                              <td className="py-1.5 pr-2 text-right tabular-nums text-zinc-700 dark:text-zinc-200">{u.nick_change_count}</td>
+                              <td className="py-1.5 pr-2 text-right tabular-nums text-zinc-700 dark:text-zinc-200">{u.posts}</td>
+                              <td className="py-1.5 pr-2 text-right tabular-nums text-zinc-700 dark:text-zinc-200">{u.comments}</td>
+                              <td className="py-1.5 pr-2 text-right tabular-nums text-zinc-700 dark:text-zinc-200">{u.jobs}</td>
+                              <td className="py-1.5 pr-2 text-right tabular-nums text-zinc-700 dark:text-zinc-200">{u.trades}</td>
+                              <td className="py-1.5 pr-2 text-right">
+                                <button
+                                  onClick={() => { setUserQuery(u.nickname); lookupUser(); }}
+                                  className="rounded-md bg-cyan-50 px-2 py-1 text-[10px] font-bold text-cyan-700 hover:bg-cyan-100 dark:bg-cyan-950/40 dark:text-cyan-300 dark:hover:bg-cyan-950/60"
+                                >
+                                  조회
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* 페이지네이션 */}
+                  {userListData.totalPages > 1 && (
+                    <div className="mt-4 flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => { const p = Math.max(1, userListPage - 1); setUserListPage(p); loadUserList(p); }}
+                        disabled={userListPage <= 1 || userListLoading}
+                        className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-30 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      >
+                        이전
+                      </button>
+                      <span className="text-xs text-zinc-500">
+                        {userListPage} / {userListData.totalPages}
+                      </span>
+                      <button
+                        onClick={() => { const p = Math.min(userListData.totalPages, userListPage + 1); setUserListPage(p); loadUserList(p); }}
+                        disabled={userListPage >= userListData.totalPages || userListLoading}
+                        className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-30 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      >
+                        다음
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : null}
             </div>
 
             {userResult && (
