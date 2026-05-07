@@ -445,7 +445,7 @@ export default function TradeWritePage() {
 
     if (!title.trim()) return failValidation("title", "제목을 입력해주세요.");
     if (!regionCode || !regionName.includes(" ")) return failValidation("region", "지역을 시·군·구까지 선택해주세요.");
-    if (tradeCategory === "equipment" && imageUrls.length < 1) return failValidation("images", "사진을 최소 1장 등록해주세요.");
+    if (tradeCategory === "equipment" && imageUrls.length < 1) return failValidation("images", "사기 방지를 위해 실제 판매하시는 물품 사진을 1장 이상 첨부해 주세요.");
     if (!contactPhone.trim()) return failValidation("contact", "연락처를 입력해주세요.");
 
     if (tradeCategory === "equipment") {

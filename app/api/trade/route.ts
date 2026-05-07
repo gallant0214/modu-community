@@ -145,7 +145,7 @@ export async function POST(request: Request) {
   // 이미지 — equipment(중고거래)는 최소 1장 필수, center(센터매매)는 선택
   const imgs: string[] = Array.isArray(image_urls) ? image_urls.filter((u: unknown) => typeof u === "string") : [];
   if (category === "equipment" && imgs.length < 1) {
-    return NextResponse.json({ error: "사진을 최소 1장 이상 등록해주세요" }, { status: 400 });
+    return NextResponse.json({ error: "사기 방지를 위해 실제 판매하시는 물품 사진을 1장 이상 첨부해 주세요." }, { status: 400 });
   }
   if (imgs.length > 10) {
     return NextResponse.json({ error: "사진은 최대 10장까지 등록할 수 있습니다" }, { status: 400 });
