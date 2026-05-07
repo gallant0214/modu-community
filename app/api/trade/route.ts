@@ -171,11 +171,15 @@ export async function POST(request: Request) {
     insertRow.condition_text = sanitize(validateLength(String(condition_text).trim(), 100));
     insertRow.price_manwon = Math.max(0, Math.floor(Number(price_manwon)));
     insertRow.center_name = sanitize(validateLength(String(center_name).trim(), 100));
+    insertRow.region_detail = sanitize(validateLength(String(region_detail).trim(), 200));
     insertRow.equipment_info = equipment_info ?? null;
   } else {
     insertRow.center_info = center_info;
     // 센터매매에서 중고용 컬럼은 비움
     insertRow.center_name = null;
+    if (region_detail && String(region_detail).trim()) {
+      insertRow.region_detail = sanitize(validateLength(String(region_detail).trim(), 200));
+    }
   }
 
   const { data, error } = await supabase

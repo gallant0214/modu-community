@@ -6,6 +6,7 @@ import Link from "next/link";
 import imageCompression from "browser-image-compression";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 import { useAuth } from "@/app/components/auth-provider";
+import { UploadProgress } from "@/app/components/upload-progress";
 
 /* ══════════════════════════════════
    유틸 (구인 글쓰기와 동일)
@@ -429,10 +430,11 @@ export default function TradeWritePage() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "등록에 실패했습니다."); return; }
+      if (!res.ok) { setError(data.error || "등록에 실패했습니다."); setShowConfirm(false); return; }
       router.replace(`/trade`);
     } catch {
       setError("오류가 발생했습니다.");
+      setShowConfirm(false);
     } finally {
       setSubmitting(false);
     }
@@ -932,10 +934,10 @@ export default function TradeWritePage() {
         title="등록 전 한 번만 확인해 주세요"
         footer={
           <div className="flex gap-2">
-            <button onClick={() => setShowConfirm(false)} className="flex-1 py-3 border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 rounded-xl text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] transition-colors">취소</button>
-            <button onClick={() => { setShowConfirm(false); handleSubmit(); }} disabled={!confirmChecked || submitting}
+            <button onClick={() => setShowConfirm(false)} disabled={submitting} className="flex-1 py-3 border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 rounded-xl text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] disabled:opacity-50 transition-colors">취소</button>
+            <button onClick={handleSubmit} disabled={!confirmChecked || submitting}
               className={`flex-1 py-3 rounded-xl text-[13px] font-semibold transition-all ${
-                confirmChecked
+                confirmChecked && !submitting
                   ? "bg-[#C0392B] text-white hover:bg-[#A93226] shadow-[0_4px_14px_-4px_rgba(192,57,43,0.4)]"
                   : "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-700 dark:text-zinc-400 cursor-not-allowed"
               }`}>
@@ -954,7 +956,10 @@ export default function TradeWritePage() {
               <li>위반 시 게시글 삭제, 계정 정지 등의 조치가 이루어질 수 있습니다.</li>
             </ul>
           </div>
-          <button onClick={() => setConfirmChecked(!confirmChecked)} className="w-full flex items-center gap-2.5 pt-1">
+          {submitting && (
+            <UploadProgress phase="saving" uploadPercent={0} savingLabel="거래 글 저장 중..." />
+          )}
+          <button onClick={() => setConfirmChecked(!confirmChecked)} disabled={submitting} className="w-full flex items-center gap-2.5 pt-1 disabled:opacity-50">
             <span className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 transition-colors ${
               confirmChecked
                 ? "bg-[#C0392B] shadow-[0_2px_8px_-2px_rgba(192,57,43,0.4)]"
