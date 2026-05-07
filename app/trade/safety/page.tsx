@@ -46,6 +46,13 @@ export default function TradeSafetyPage() {
           </ul>
         </section>
 
+        {/* 자체 안전결제 미제공 안내 */}
+        <section className="bg-[#FFF4E5] dark:bg-zinc-800/60 border border-[#F5D9B0] dark:border-zinc-700 rounded-3xl p-4 sm:p-5">
+          <p className="text-[13px] text-[#3A342A] dark:text-zinc-200 leading-relaxed">
+            ℹ️ <strong>모두의 지도사 커뮤니티는 자체 안전결제(에스크로)를 제공하지 않습니다.</strong> 거래는 사용자 간 직접 이루어지므로, 부득이하게 송금·택배 거래가 필요한 경우 외부 안전결제 서비스(카카오페이·네이버페이 등)를 활용하시되, 본 플랫폼이 결제·배송을 보증하지 않는다는 점을 반드시 인지해 주세요.
+          </p>
+        </section>
+
         {/* 피해 예방 방법 */}
         <section className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-5 sm:p-6">
           <h2 className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 mb-3">
@@ -53,32 +60,32 @@ export default function TradeSafetyPage() {
           </h2>
           <ol className="space-y-3 text-[13px] text-[#3A342A] dark:text-zinc-200 leading-relaxed">
             <li>
-              <strong className="text-[#6B7B3A]">1. 직거래 우선</strong>
-              <p className="mt-1 text-[#6B5D47] dark:text-zinc-400">실물을 직접 보고 결제하는 것이 가장 안전합니다. 운동기구는 부피가 크니 용달 약속 전에도 영상 통화로 작동 확인을 요청하세요.</p>
+              <strong className="text-[#6B7B3A]">1. 직거래 강력 권장</strong>
+              <p className="mt-1 text-[#6B5D47] dark:text-zinc-400">운동기구는 부피가 크고, 센터매매는 매장 실사가 필수이므로 가능한 직거래로 진행하세요. 실물을 직접 보고 거래하는 것이 가장 안전합니다.</p>
             </li>
             <li>
-              <strong className="text-[#6B7B3A]">2. 안전결제 사용</strong>
-              <p className="mt-1 text-[#6B5D47] dark:text-zinc-400">택배 거래는 카카오페이·네이버페이 안전결제(에스크로) 등 본인이 신뢰하는 결제 수단을 이용하세요. 판매자가 안전결제를 거부한다면 의심하세요.</p>
+              <strong className="text-[#6B7B3A]">2. 영상 통화로 사전 확인</strong>
+              <p className="mt-1 text-[#6B5D47] dark:text-zinc-400">멀어서 직거래가 어려운 경우, 입금·약속 전 반드시 영상 통화로 물품 실물·작동 상태(센터매매는 매장 내부)를 확인하세요. 사진만으로는 사기 매물을 가려낼 수 없습니다.</p>
             </li>
             <li>
-              <strong className="text-[#6B7B3A]">3. 계좌·번호 사기 조회</strong>
+              <strong className="text-[#6B7B3A]">3. 택배 거래 지양</strong>
+              <p className="mt-1 text-[#6B5D47] dark:text-zinc-400">송금 후 택배 거래는 사기 위험이 가장 높습니다. 부득이한 경우에만 카카오페이·네이버페이 등 외부 안전결제(에스크로)를 사용하고, 판매자가 안전결제를 거부하면 의심하세요.</p>
+            </li>
+            <li>
+              <strong className="text-[#6B7B3A]">4. 계좌·번호 사기 조회</strong>
               <p className="mt-1 text-[#6B5D47] dark:text-zinc-400">입금 전 <a href="https://thecheat.co.kr" target="_blank" rel="noopener noreferrer" className="text-[#C0392B] underline">더치트(thecheat.co.kr)</a> 또는 경찰청 <a href="https://ecrm.police.go.kr" target="_blank" rel="noopener noreferrer" className="text-[#C0392B] underline">사이버범죄 신고시스템(ECRM)</a> 에서 상대방 계좌·전화번호의 사기 이력을 확인하세요.</p>
             </li>
             <li>
-              <strong className="text-[#6B7B3A]">4. 사진 역검색</strong>
+              <strong className="text-[#6B7B3A]">5. 사진 역검색</strong>
               <p className="mt-1 text-[#6B5D47] dark:text-zinc-400">매물 사진을 구글·네이버 이미지 검색으로 역검색해 다른 곳에서 도용된 사진은 아닌지 확인하세요. 같은 사진이 여러 사이트에 있으면 사기일 가능성이 높습니다.</p>
             </li>
             <li>
-              <strong className="text-[#6B7B3A]">5. 개인정보 노출 금지</strong>
-              <p className="mt-1 text-[#6B5D47] dark:text-zinc-400">주민등록번호, 신분증 사본, 비밀번호, OTP 번호 등은 어떤 이유로도 거래 상대방에게 보내지 마세요. 정상 거래에서 요구할 일이 없습니다.</p>
-            </li>
-            <li>
-              <strong className="text-[#6B7B3A]">6. 비정상 계좌·재촉 의심</strong>
-              <p className="mt-1 text-[#6B5D47] dark:text-zinc-400">"오늘 안에 입금해야 보내준다", "법인 명의 통장으로 입금해라" 같은 재촉이나 명의 불일치 계좌는 사기 패턴입니다.</p>
+              <strong className="text-[#6B7B3A]">6. 개인정보·금전 요구 거절</strong>
+              <p className="mt-1 text-[#6B5D47] dark:text-zinc-400">주민등록번호, 신분증 사본, OTP, 비밀번호는 어떤 이유로도 보내지 마세요. "오늘 안에 입금", "추가 배송비·계약금" 같은 재촉·반복 입금 요구 또한 전형적인 사기 패턴입니다.</p>
             </li>
             <li>
               <strong className="text-[#6B7B3A]">7. 만남 장소·시간</strong>
-              <p className="mt-1 text-[#6B5D47] dark:text-zinc-400">직거래는 사람 많은 공공장소(편의점·지하철역·공원)에서 낮 시간대에 약속하세요. 한적한 곳·심야는 피해 주세요.</p>
+              <p className="mt-1 text-[#6B5D47] dark:text-zinc-400">직거래는 사람 많은 공공장소(편의점·지하철역·공원)에서 낮 시간대에 약속하세요. 한적한 곳·심야는 피해 주시고, 가능하면 동행자와 함께 가세요.</p>
             </li>
           </ol>
         </section>
