@@ -154,6 +154,7 @@ export function NavBar() {
           <NavLink href="/practical" active={isActive("/practical")}>실기·구술</NavLink>
           <NavLink href="/community" active={isActive("/community") || isActive("/category")}>종목별 커뮤니티</NavLink>
           <NavLink href="/jobs" active={isActive("/jobs")}>스포츠 구인</NavLink>
+          <NavLink href="/trade" active={isActive("/trade")}>거래</NavLink>
           <NavLink href="/#faq" active={false}>FAQ</NavLink>
           <NavLink href="/my" active={isActive("/my")}>MY</NavLink>
         </div>
@@ -344,6 +345,7 @@ export function NavBar() {
               <MobileNavLink href="/practical" active={isActive("/practical")} onClick={() => setMenuOpen(false)} icon="book">실기·구술</MobileNavLink>
               <MobileNavLink href="/community" active={isActive("/community") || isActive("/category")} onClick={() => setMenuOpen(false)} icon="chat">종목별 커뮤니티</MobileNavLink>
               <MobileNavLink href="/jobs" active={isActive("/jobs")} onClick={() => setMenuOpen(false)} icon="briefcase">스포츠 구인</MobileNavLink>
+              <MobileNavLink href="/trade" active={isActive("/trade")} onClick={() => setMenuOpen(false)} icon="trade">거래</MobileNavLink>
               <MobileNavLink href="/#faq" active={false} onClick={() => setMenuOpen(false)} icon="help">FAQ</MobileNavLink>
               <MobileNavLink href="/my" active={isActive("/my")} onClick={() => setMenuOpen(false)} icon="user">MY</MobileNavLink>
             </div>
@@ -628,13 +630,14 @@ function MobileNavLink({
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
-  icon?: "home" | "book" | "chat" | "briefcase" | "help" | "user";
+  icon?: "home" | "book" | "chat" | "briefcase" | "trade" | "help" | "user";
 }) {
   const iconPath = {
     home: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",
     book: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253",
     chat: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z",
     briefcase: "M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
+    trade: "M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z",
     help: "M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
     user: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
   }[icon || "home"];
