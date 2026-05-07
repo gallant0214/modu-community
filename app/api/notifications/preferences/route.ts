@@ -9,6 +9,7 @@ const DEFAULT_PREFS = {
   notify_reply: true,
   notify_like: true,
   notify_job: true,
+  notify_trade: true,
   notify_notice: true,
   notify_promo: false,
   notify_keyword: true,
@@ -34,6 +35,7 @@ export async function GET(request: Request) {
     notify_reply: data.notify_reply,
     notify_like: data.notify_like ?? true,
     notify_job: data.notify_job,
+    notify_trade: (data as { notify_trade?: boolean | null }).notify_trade ?? true,
     notify_notice: data.notify_notice,
     notify_promo: data.notify_promo,
     notify_keyword: data.notify_keyword,
@@ -53,15 +55,17 @@ export async function POST(request: Request) {
     notify_reply: body.notify_reply ?? true,
     notify_like: body.notify_like ?? true,
     notify_job: body.notify_job ?? true,
+    notify_trade: body.notify_trade ?? true,
     notify_notice: body.notify_notice ?? true,
     notify_promo: body.notify_promo ?? false,
     notify_keyword: body.notify_keyword ?? true,
     notify_message: body.notify_message ?? true,
   };
 
+  // notify_trade 가 generated types 에 아직 없을 수 있어 cast — 컬럼은 DB 에 존재
   const { error } = await supabase
     .from("notification_preferences")
-    .upsert(prefs, { onConflict: "firebase_uid" });
+    .upsert(prefs as never, { onConflict: "firebase_uid" });
 
   if (error) {
     console.error("Notification prefs POST error:", error.message);

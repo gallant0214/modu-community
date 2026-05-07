@@ -257,13 +257,14 @@ function MyPageContent() {
     }
   };
 
-  /* 알림 설정 — 앱과 동일 8개 토글 */
+  /* 알림 설정 — 앱과 동일 9개 토글 */
   const [notifPrefs, setNotifPrefs] = useState({
     notify_comment: true,
     notify_reply: true,
     notify_like: true,
     notify_message: true,
     notify_job: true,
+    notify_trade: true,
     notify_notice: true,
     notify_promo: true,
     notify_keyword: true,
@@ -287,6 +288,7 @@ function MyPageContent() {
           notify_like: data.notify_like ?? prev.notify_like,
           notify_message: data.notify_message ?? prev.notify_message,
           notify_job: data.notify_job ?? prev.notify_job,
+          notify_trade: data.notify_trade ?? prev.notify_trade,
           notify_notice: data.notify_notice ?? prev.notify_notice,
           notify_promo: data.notify_promo ?? prev.notify_promo,
           notify_keyword: data.notify_keyword ?? prev.notify_keyword,
@@ -2498,6 +2500,7 @@ function MyPageContent() {
             { key: "notify_like", label: "좋아요", desc: "내 게시글에 좋아요가 달리면 알림" },
             { key: "notify_message", label: "쪽지", desc: "쪽지를 받으면 알림" },
             { key: "notify_job", label: "구인", desc: "새로운 구인 게시글 알림" },
+            { key: "notify_trade", label: "거래", desc: "새로운 거래 게시글 알림" },
             { key: "notify_notice", label: "공지", desc: "서비스 공지사항 알림" },
             { key: "notify_promo", label: "광고/프로모션", desc: "이벤트 및 프로모션 알림" },
             { key: "notify_keyword", label: "키워드 알림", desc: "등록된 키워드가 포함된 게시글 알림" },
