@@ -803,33 +803,36 @@ function TradeWritePage() {
                 <Field label="거래 방식" required>
                   <div className="space-y-2">
                     {TRADE_METHODS.map(m => (
-                      <button key={m.key} onClick={() => toggleMethod(m.key)}
-                        className={`w-full flex items-center gap-3 px-4 py-3 border rounded-xl text-left text-[14px] transition-colors ${
-                          tradeMethods.has(m.key)
-                            ? "border-[#6B7B3A]/50 bg-[#F5F0E5] dark:bg-zinc-800 text-[#2A251D] dark:text-zinc-100 font-semibold"
-                            : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 text-[#3A342A] dark:text-zinc-200 hover:border-[#6B7B3A]/40"
-                        }`}>
-                        <span className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 transition-colors ${
-                          tradeMethods.has(m.key)
-                            ? "bg-[#6B7B3A] shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)]"
-                            : "border-2 border-[#E8E0D0] dark:border-zinc-700"
-                        }`}>
-                          {tradeMethods.has(m.key) && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                        </span>
-                        <span>{m.label}</span>
-                      </button>
+                      <div key={m.key} className="space-y-2">
+                        <button onClick={() => toggleMethod(m.key)}
+                          className={`w-full flex items-center gap-3 px-4 py-3 border rounded-xl text-left text-[14px] transition-colors ${
+                            tradeMethods.has(m.key)
+                              ? "border-[#6B7B3A]/50 bg-[#F5F0E5] dark:bg-zinc-800 text-[#2A251D] dark:text-zinc-100 font-semibold"
+                              : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 text-[#3A342A] dark:text-zinc-200 hover:border-[#6B7B3A]/40"
+                          }`}>
+                          <span className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 transition-colors ${
+                            tradeMethods.has(m.key)
+                              ? "bg-[#6B7B3A] shadow-[0_2px_8px_-2px_rgba(107,123,58,0.4)]"
+                              : "border-2 border-[#E8E0D0] dark:border-zinc-700"
+                          }`}>
+                            {tradeMethods.has(m.key) && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                          </span>
+                          <span>{m.label}</span>
+                        </button>
+                        {/* 용달거래 선택 시 — 바로 아래 상차 가능 서브 체크박스 */}
+                        {m.key === "delivery" && tradeMethods.has("delivery") && (
+                          <label className="flex items-center gap-2.5 px-4 py-3 ml-1 text-[13px] text-[#6B5D47] dark:text-zinc-400 cursor-pointer">
+                            <input type="checkbox" checked={deliveryLoading} onChange={e => setDeliveryLoading(e.target.checked)} className="w-4 h-4 rounded accent-[#6B7B3A]" />
+                            용달거래 — 상차 가능
+                          </label>
+                        )}
+                        {/* 기타 선택 시 — 바로 아래 직접 입력란 */}
+                        {m.key === "etc" && tradeMethods.has("etc") && (
+                          <input type="text" value={tradeMethodEtc} onChange={e => setTradeMethodEtc(e.target.value.slice(0, 50))}
+                            placeholder="기타 거래 방식 입력" className={inputCls} />
+                        )}
+                      </div>
                     ))}
-
-                    {tradeMethods.has("delivery") && (
-                      <label className="flex items-center gap-2.5 px-4 py-3 ml-1 text-[13px] text-[#6B5D47] dark:text-zinc-400 cursor-pointer">
-                        <input type="checkbox" checked={deliveryLoading} onChange={e => setDeliveryLoading(e.target.checked)} className="w-4 h-4 rounded accent-[#6B7B3A]" />
-                        용달거래 — 상차 가능
-                      </label>
-                    )}
-                    {tradeMethods.has("etc") && (
-                      <input type="text" value={tradeMethodEtc} onChange={e => setTradeMethodEtc(e.target.value.slice(0, 50))}
-                        placeholder="기타 거래 방식 입력" className={inputCls} />
-                    )}
                   </div>
                 </Field>
               </div>
