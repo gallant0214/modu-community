@@ -158,13 +158,27 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
           ))}
         </div>
 
+        {/* 사기 피해 예방 공지 (실기·구술 패턴) */}
+        <Link
+          href="/trade/safety"
+          className="block px-4 py-3 rounded-2xl border border-[#C0392B] bg-[#FFF5F3] dark:bg-zinc-900 hover:shadow-sm transition-all"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-[15px]">⚠️</span>
+            <span className="font-bold text-[#C0392B] text-[14px] flex-1 truncate">
+              사기 피해 예방 안내 — 거래 전 꼭 읽어주세요
+            </span>
+            <span className="text-[#C0392B] text-lg">›</span>
+          </div>
+        </Link>
+
         {/* 검색바 */}
         <form onSubmit={handleSearch} className="flex items-center gap-2 px-3.5 py-2.5 border border-[#E8E0D0] dark:border-zinc-700 rounded-xl bg-[#FBF7EB] dark:bg-zinc-800 focus-within:border-[#6B7B3A]/50 focus-within:bg-[#FEFCF7] transition-colors">
           <svg className="w-4 h-4 text-[#A89B80] shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input type="text" value={searchInput} onChange={e => setSearchInput(e.target.value)}
-            placeholder="제품명·센터명·제목 검색"
+            placeholder="제품명, 지역, 제목 검색"
             className="flex-1 text-[13px] bg-transparent text-[#3A342A] dark:text-zinc-100 placeholder-[#A89B80] focus:outline-none" />
           {searchInput && (
             <button type="button" onClick={() => { setSearchInput(""); setQuery(""); updateUrl({ q: "" }); fetchPage({ category, q: "", page: 1, append: false }); }}
