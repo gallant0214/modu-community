@@ -132,7 +132,7 @@ export async function PATCH(
   }
   if (!contact_phone?.trim()) return NextResponse.json({ error: "연락처를 입력해주세요" }, { status: 400 });
   const imgs: string[] = Array.isArray(image_urls) ? image_urls.filter((u: unknown) => typeof u === "string") : [];
-  if (imgs.length < 1) return NextResponse.json({ error: "사진을 최소 1장 이상 등록해주세요" }, { status: 400 });
+  if (category === "equipment" && imgs.length < 1) return NextResponse.json({ error: "사진을 최소 1장 이상 등록해주세요" }, { status: 400 });
   if (imgs.length > 10) return NextResponse.json({ error: "사진은 최대 10장까지" }, { status: 400 });
 
   if (category === "equipment") {

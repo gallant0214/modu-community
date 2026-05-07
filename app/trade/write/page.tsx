@@ -445,7 +445,7 @@ export default function TradeWritePage() {
 
     if (!title.trim()) return failValidation("title", "제목을 입력해주세요.");
     if (!regionCode || !regionName.includes(" ")) return failValidation("region", "지역을 시·군·구까지 선택해주세요.");
-    if (imageUrls.length < 1) return failValidation("images", "사진을 최소 1장 등록해주세요.");
+    if (tradeCategory === "equipment" && imageUrls.length < 1) return failValidation("images", "사진을 최소 1장 등록해주세요.");
     if (!contactPhone.trim()) return failValidation("contact", "연락처를 입력해주세요.");
 
     if (tradeCategory === "equipment") {
@@ -922,9 +922,9 @@ export default function TradeWritePage() {
         )}
 
         {/* ─── 사진 (공통) ─── */}
-        <Section number={tradeCategory === "equipment" ? 5 : 7} title="사진 등록" subtitle="1~10장 첨부">
+        <Section number={tradeCategory === "equipment" ? 5 : 7} title="사진 등록" subtitle={tradeCategory === "equipment" ? "1~10장 첨부 (필수)" : "1~10장 첨부 (선택)"}>
           <div ref={fieldRefs.images}>
-            <Field label={`사진 ${imageUrls.length}/10`} required>
+            <Field label={`사진 ${imageUrls.length}/10`} required={tradeCategory === "equipment"}>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {imageUrls.map((url, i) => (
                   <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-[#E8E0D0] dark:border-zinc-700">
