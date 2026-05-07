@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { getReports, resolveReport, deleteReportTarget, getInquiries, hideInquiry, deleteInquiry } from "@/app/lib/actions";
 import type { Report, Inquiry } from "@/app/lib/types";
+import { ANALYTICS_EXCLUDE_KEY } from "@/app/lib/use-tab-analytics";
 
 
 export default function AdminPage() {
@@ -28,6 +29,19 @@ export default function AdminPage() {
   const [rangeData, setRangeData] = useState<any>(null);
   const [rangeLoading, setRangeLoading] = useState(false);
   const [tabStatsData, setTabStatsData] = useState<any>(null);
+  const [analyticsExcluded, setAnalyticsExcluded] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setAnalyticsExcluded(localStorage.getItem(ANALYTICS_EXCLUDE_KEY) === "true");
+  }, []);
+
+  function toggleAnalyticsExclusion() {
+    const next = !analyticsExcluded;
+    if (next) localStorage.setItem(ANALYTICS_EXCLUDE_KEY, "true");
+    else localStorage.removeItem(ANALYTICS_EXCLUDE_KEY);
+    setAnalyticsExcluded(next);
+  }
 
   function applyPreset(preset: "day" | "week" | "month") {
     const now = new Date();
@@ -481,6 +495,28 @@ export default function AdminPage() {
                   ) : (
                     <p className="py-4 text-center text-xs text-zinc-400">기간을 선택하고 조회 버튼을 눌러주세요.</p>
                   )}
+                </div>
+
+                {/* 추적 제외 토글 */}
+                <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">이 브라우저 추적 제외</p>
+                      <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                        켜면 본 브라우저에서 들어가는 탭 방문은 통계에 잡히지 않습니다. (개발환경 localhost 는 자동 제외)
+                      </p>
+                    </div>
+                    <button
+                      onClick={toggleAnalyticsExclusion}
+                      className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${
+                        analyticsExcluded
+                          ? "bg-violet-500 text-white hover:bg-violet-600"
+                          : "border border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                      }`}
+                    >
+                      {analyticsExcluded ? "제외 중 (끄기)" : "제외 켜기"}
+                    </button>
+                  </div>
                 </div>
 
                 {/* 탭 방문 통계 */}

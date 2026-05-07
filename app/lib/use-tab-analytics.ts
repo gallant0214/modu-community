@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 const SESSION_KEY = "moducm_anon_session_id";
+export const ANALYTICS_EXCLUDE_KEY = "moducm_analytics_excluded";
 
 function getOrCreateSessionId(): string {
   if (typeof window === "undefined") return "";
@@ -19,6 +20,21 @@ function getOrCreateSessionId(): string {
   }
 }
 
+/** 추적 제외 조건: 개발환경(localhost) 자동 제외 + 사용자가 명시적으로 토글한 경우 */
+function isAnalyticsExcluded(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1" || host.startsWith("192.168.")) {
+      return true;
+    }
+    if (localStorage.getItem(ANALYTICS_EXCLUDE_KEY) === "true") {
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
 type TabKey = "practical" | "community" | "jobs" | "trade";
 
 /**
@@ -29,6 +45,8 @@ type TabKey = "practical" | "community" | "jobs" | "trade";
  */
 export function useTabAnalytics(tab_key: TabKey) {
   useEffect(() => {
+    if (isAnalyticsExcluded()) return;
+
     let visitId: number | null = null;
     let leaveSent = false;
     let cancelled = false;
