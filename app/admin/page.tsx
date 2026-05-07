@@ -27,6 +27,7 @@ export default function AdminPage() {
   const [rangeTo, setRangeTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [rangeData, setRangeData] = useState<any>(null);
   const [rangeLoading, setRangeLoading] = useState(false);
+  const [tabStatsData, setTabStatsData] = useState<any>(null);
 
   function applyPreset(preset: "day" | "week" | "month") {
     const now = new Date();
@@ -47,16 +48,48 @@ export default function AdminPage() {
   async function loadRangeKpi() {
     setRangeLoading(true);
     try {
-      const res = await fetch("/api/admin/kpi/range", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: storedPassword, from: rangeFrom, to: rangeTo }),
-      });
-      const data = await res.json();
+      const [rangeRes, tabRes] = await Promise.all([
+        fetch("/api/admin/kpi/range", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: storedPassword, from: rangeFrom, to: rangeTo }),
+        }),
+        fetch("/api/admin/kpi/tab-stats", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: storedPassword, from: rangeFrom, to: rangeTo }),
+        }),
+      ]);
+      const data = await rangeRes.json();
       if (!data.error) setRangeData(data);
+      const tabData = await tabRes.json();
+      if (!tabData.error) setTabStatsData(tabData);
     } catch {}
     setRangeLoading(false);
   }
+
+  function formatDuration(sec: number): string {
+    if (!sec || sec <= 0) return "-";
+    if (sec < 60) return `${sec}초`;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    if (m < 60) return s > 0 ? `${m}분 ${s}초` : `${m}분`;
+    const h = Math.floor(m / 60);
+    const remM = m % 60;
+    return remM > 0 ? `${h}시간 ${remM}분` : `${h}시간`;
+  }
+
+  const TAB_LABELS: Record<string, string> = {
+    practical: "실기·구술",
+    community: "종목후기",
+    jobs: "구인",
+    trade: "거래",
+  };
+  const PLATFORM_LABELS: Record<string, string> = {
+    web: "웹",
+    ios: "iOS",
+    android: "Android",
+  };
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -449,6 +482,108 @@ export default function AdminPage() {
                     <p className="py-4 text-center text-xs text-zinc-400">기간을 선택하고 조회 버튼을 눌러주세요.</p>
                   )}
                 </div>
+
+                {/* 탭 방문 통계 */}
+                {tabStatsData && (
+                  <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+                    <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-1">
+                      탭 방문 통계
+                    </h3>
+                    <p className="mb-3 text-[11px] text-zinc-400">
+                      {tabStatsData.from} ~ {tabStatsData.to} · 총 {tabStatsData.total_visits.toLocaleString()}회 방문
+                    </p>
+
+                    {/* 탭별 요약 */}
+                    <p className="mb-1.5 text-[11px] font-semibold text-zinc-400">탭별 (방문수 / 평균 체류)</p>
+                    <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {(["practical", "community", "jobs", "trade"] as const).map((t) => {
+                        const s = tabStatsData.by_tab?.[t] || { visits: 0, avg_duration_sec: 0 };
+                        return (
+                          <div
+                            key={t}
+                            className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800"
+                          >
+                            <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                              {TAB_LABELS[t]}
+                            </p>
+                            <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                              {s.visits.toLocaleString()}
+                              <span className="ml-1 text-[11px] font-medium text-zinc-400">회</span>
+                            </p>
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                              평균 {formatDuration(s.avg_duration_sec)}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* 플랫폼별 요약 */}
+                    <p className="mb-1.5 text-[11px] font-semibold text-zinc-400">플랫폼별</p>
+                    <div className="mb-4 grid grid-cols-3 gap-2">
+                      {(["web", "ios", "android"] as const).map((p) => {
+                        const s = tabStatsData.by_platform?.[p] || { visits: 0, avg_duration_sec: 0 };
+                        return (
+                          <div
+                            key={p}
+                            className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800"
+                          >
+                            <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                              {PLATFORM_LABELS[p]}
+                            </p>
+                            <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                              {s.visits.toLocaleString()}
+                              <span className="ml-1 text-[11px] font-medium text-zinc-400">회</span>
+                            </p>
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                              평균 {formatDuration(s.avg_duration_sec)}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* 탭 × 플랫폼 표 */}
+                    <p className="mb-1.5 text-[11px] font-semibold text-zinc-400">탭 × 플랫폼 상세</p>
+                    <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+                      <table className="w-full text-[12px]">
+                        <thead className="bg-zinc-50 dark:bg-zinc-800">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-500">탭</th>
+                            <th className="px-3 py-2 text-right font-semibold text-zinc-500">웹</th>
+                            <th className="px-3 py-2 text-right font-semibold text-zinc-500">iOS</th>
+                            <th className="px-3 py-2 text-right font-semibold text-zinc-500">Android</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(["practical", "community", "jobs", "trade"] as const).map((t) => (
+                            <tr key={t} className="border-t border-zinc-100 dark:border-zinc-800">
+                              <td className="px-3 py-2 font-semibold text-zinc-700 dark:text-zinc-200">
+                                {TAB_LABELS[t]}
+                              </td>
+                              {(["web", "ios", "android"] as const).map((p) => {
+                                const s = tabStatsData.by_tab_platform?.[`${t}__${p}`] || {
+                                  visits: 0,
+                                  avg_duration_sec: 0,
+                                };
+                                return (
+                                  <td key={p} className="px-3 py-2 text-right">
+                                    <span className="font-semibold text-zinc-800 dark:text-zinc-100">
+                                      {s.visits.toLocaleString()}
+                                    </span>
+                                    <span className="ml-1 text-zinc-400">
+                                      ({formatDuration(s.avg_duration_sec)})
+                                    </span>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
 
                 {/* 새로고침 */}
                 <button
