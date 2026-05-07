@@ -148,7 +148,7 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
         </div>
       </div>
 
-      <div className="mx-auto max-w-2xl px-4 sm:px-6 py-5 space-y-4">
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 pt-12 pb-5 space-y-4">
         {/* 카테고리 탭 */}
         <div className="flex gap-1.5">
           {CATEGORY_TABS.map(tab => (
