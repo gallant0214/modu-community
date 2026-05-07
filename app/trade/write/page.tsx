@@ -340,7 +340,7 @@ export default function TradeWritePage() {
     contact: useRef(null), title: useRef(null), body: useRef(null),
     industry: useRef(null), storeType: useRef(null),
     centerNameValue: useRef(null), area: useRef(null),
-    deposit: useRef(null), monthly: useRef(null), member: useRef(null),
+    deposit: useRef(null), monthly: useRef(null), mgmtFee: useRef(null), premium: useRef(null), member: useRef(null),
   };
 
   const addItem = () => {
@@ -474,6 +474,8 @@ export default function TradeWritePage() {
       if (!areaPyeong.trim()) return failValidation("area", "평수를 입력해주세요.");
       if (!deposit.trim()) return failValidation("deposit", "보증금을 입력해주세요.");
       if (!monthly.trim()) return failValidation("monthly", "월세를 입력해주세요.");
+      if (!mgmtFee.trim()) return failValidation("mgmtFee", "관리비를 입력해주세요.");
+      if (premiumNeg !== "권리금없음" && !premium.trim()) return failValidation("premium", "권리금을 입력해주세요. (없으면 권리금없음 선택)");
       if (memberType === "숫자 입력" && !memberValue.trim()) return failValidation("member", "보유회원수를 입력해주세요.");
       if (memberType === "기타" && !memberEtc.trim()) return failValidation("member", "보유회원수 기타 항목을 입력해주세요.");
     }
@@ -876,11 +878,15 @@ export default function TradeWritePage() {
               <div ref={fieldRefs.monthly}>
                 <PlainMoneyField label="월세" required value={monthly} onChange={setMonthly} />
               </div>
-              <PlainMoneyField label="관리비" value={mgmtFee} onChange={setMgmtFee} />
+              <div ref={fieldRefs.mgmtFee}>
+                <PlainMoneyField label="관리비" required value={mgmtFee} onChange={setMgmtFee} />
+              </div>
             </Section>
 
             <Section number={5} title="권리금" subtitle="권리금 여부와 금액을 선택하세요">
-              <PremiumField value={premium} onChange={setPremium} neg={premiumNeg} setNeg={setPremiumNeg} />
+              <div ref={fieldRefs.premium}>
+                <PremiumField value={premium} onChange={setPremium} neg={premiumNeg} setNeg={setPremiumNeg} />
+              </div>
             </Section>
 
             <Section number={6} title="보유회원수">
