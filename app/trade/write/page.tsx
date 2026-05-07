@@ -189,9 +189,8 @@ export default function TradeWritePage() {
   const [agreed, setAgreed] = useState(false);
 
   /* ─── equipment 전용 ─── */
-  const [productName, setProductName] = useState("");
-  const [conditionText, setConditionText] = useState("");
-  const [priceManwon, setPriceManwon] = useState("");
+  type EquipItem = { name: string; condition: string; price: string };
+  const [items, setItems] = useState<EquipItem[]>([{ name: "", condition: "", price: "" }]);
   const [centerName, setCenterName] = useState(""); // 중고: 필수 공개
   const [tradeMethods, setTradeMethods] = useState<Set<TradeMethodKey>>(new Set());
   const [deliveryLoading, setDeliveryLoading] = useState(false);
@@ -227,12 +226,22 @@ export default function TradeWritePage() {
   /* refs for scroll on validation error */
   const fieldRefs: Record<string, React.RefObject<HTMLDivElement | null>> = {
     region: useRef(null), regionDetail: useRef(null),
-    productName: useRef(null), conditionText: useRef(null), priceManwon: useRef(null),
+    items: useRef(null),
     centerName: useRef(null), tradeMethods: useRef(null), images: useRef(null),
-    contact: useRef(null), title: useRef(null),
+    contact: useRef(null), title: useRef(null), body: useRef(null),
     industry: useRef(null), storeType: useRef(null),
     centerNameValue: useRef(null), area: useRef(null),
     deposit: useRef(null), monthly: useRef(null), member: useRef(null),
+  };
+
+  const addItem = () => {
+    setItems(prev => prev.length >= 10 ? prev : [...prev, { name: "", condition: "", price: "" }]);
+  };
+  const removeItem = (idx: number) => {
+    setItems(prev => prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx));
+  };
+  const updateItem = (idx: number, key: keyof EquipItem, value: string) => {
+    setItems(prev => prev.map((it, i) => (i === idx ? { ...it, [key]: value } : it)));
   };
 
   /* 지역 = "시도 시군구" 한 줄 */
@@ -317,11 +326,15 @@ export default function TradeWritePage() {
     }
 
     if (tradeCategory === "equipment") {
-      if (!regionDetail.trim()) { fieldRefs.regionDetail?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("중고거래는 상세 주소(만남 장소·동·번지)를 입력해주세요."); return false; }
-      if (!productName.trim()) { fieldRefs.productName?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("제품명을 입력해주세요."); return false; }
-      if (!conditionText.trim()) { fieldRefs.conditionText?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("상태 등급을 입력해주세요."); return false; }
-      if (!priceManwon.trim()) { fieldRefs.priceManwon?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("가격을 입력해주세요."); return false; }
       if (!centerName.trim()) { fieldRefs.centerName?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("센터명은 중고거래에서 필수입니다."); return false; }
+      if (!regionDetail.trim()) { fieldRefs.regionDetail?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("중고거래는 상세 주소(만남 장소·동·번지)를 입력해주세요."); return false; }
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const prefix = items.length > 1 ? `${i + 1}번 물품의 ` : "";
+        if (!it.name.trim()) { fieldRefs.items?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert(`${prefix}제품명을 입력해주세요.`); return false; }
+        if (!it.condition.trim()) { fieldRefs.items?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert(`${prefix}상태 등급을 입력해주세요.`); return false; }
+        if (!it.price.trim()) { fieldRefs.items?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert(`${prefix}가격을 입력해주세요.`); return false; }
+      }
       if (tradeMethods.size === 0) { fieldRefs.tradeMethods?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("거래 방식을 1개 이상 선택해주세요."); return false; }
       if (tradeMethods.has("etc") && !tradeMethodEtc.trim()) { fieldRefs.tradeMethods?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("기타 거래 방식 내용을 입력해주세요."); return false; }
     } else {
@@ -333,7 +346,12 @@ export default function TradeWritePage() {
       if (!monthly.trim()) { fieldRefs.monthly?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("월세를 입력해주세요."); return false; }
       if (memberType === "숫자 입력" && !memberValue.trim()) { fieldRefs.member?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("보유회원수를 입력해주세요."); return false; }
       if (memberType === "기타" && !memberEtc.trim()) { fieldRefs.member?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("보유회원수 기타 항목을 입력해주세요."); return false; }
-      if (!body.trim()) { alert("인수 조건 및 상세 내용을 입력해주세요."); return false; }
+    }
+
+    if (!body.trim()) {
+      fieldRefs.body?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      alert(tradeCategory === "center" ? "인수 조건 및 상세 내용을 입력해주세요." : "상세 설명을 입력해주세요.");
+      return false;
     }
 
     if (!agreed) { alert("동의 항목을 체크해주세요."); return false; }
@@ -367,13 +385,18 @@ export default function TradeWritePage() {
           else if (m === "etc") methods.push({ type: "etc", text: tradeMethodEtc.trim() });
           else methods.push({ type: m });
         }
+        const itemList = items.map(it => ({
+          name: it.name.trim(),
+          condition: it.condition.trim(),
+          price_manwon: parseNum(it.price),
+        }));
         payload = {
           ...payload,
-          product_name: productName.trim(),
-          condition_text: conditionText.trim(),
-          price_manwon: parseNum(priceManwon),
+          product_name: itemList[0].name,
+          condition_text: itemList[0].condition,
+          price_manwon: itemList[0].price_manwon,
           center_name: centerName.trim(),
-          equipment_info: { trade_methods: methods },
+          equipment_info: { trade_methods: methods, items: itemList },
         };
       } else {
         const memberCount: Record<string, unknown> =
@@ -487,7 +510,7 @@ export default function TradeWritePage() {
               거래 글 등록
             </h1>
             <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed mb-5 max-w-md">
-              운동기구 중고거래나 센터 매매 글을 등록할 수 있어요. 정확한 정보를 입력해주세요.
+              운동기구 중고거래나 센터매매 글을 등록할 수 있어요. 정확한 정보를 입력해주세요.
             </p>
           </div>
         </section>
@@ -504,11 +527,11 @@ export default function TradeWritePage() {
         <p className="text-[11px] text-[#A89B80] px-1"><span className="text-[#C0392B] font-bold">*</span> 표시는 필수 입력 항목입니다</p>
 
         {/* ─── 카테고리 토글 ─── */}
-        <Section number={1} title="거래 종류" subtitle="중고 운동기구 / 센터 매매 중 선택하세요">
+        <Section number={1} title="거래 종류" subtitle="중고거래 / 센터매매 중 선택하세요">
           <div className="flex gap-1.5">
             {([
-              { v: "equipment", label: "운동기구 중고거래" },
-              { v: "center", label: "센터 매매" },
+              { v: "equipment", label: "중고거래" },
+              { v: "center", label: "센터매매" },
             ] as const).map(opt => (
               <button key={opt.v} onClick={() => setTradeCategory(opt.v)}
                 className={`flex-1 px-3 py-3 rounded-xl text-[13px] font-semibold transition-all ${
@@ -551,50 +574,79 @@ export default function TradeWritePage() {
             </Field>
           </div>
 
-          {/* 중고거래 전용 — 상세 주소 (필수) */}
+          {/* 중고거래 전용 — 센터명 + 상세 주소 (필수) */}
           {tradeCategory === "equipment" && (
-            <div ref={fieldRefs.regionDetail}>
-              <Field label="상세 주소" required hint="만남 장소·동·번지 등">
-                <input type="text" value={regionDetail} onChange={e => setRegionDetail(e.target.value.slice(0, 100))}
-                  placeholder="예) 강남대로 110길 GS25 앞 / 역삼동 OO헬스장 인근"
-                  className={inputCls}
-                  disabled={!regionName} />
-                {!regionName && <p className="text-[11px] text-[#A89B80] mt-1.5">지역(시·군·구)을 먼저 선택해 주세요.</p>}
-              </Field>
-            </div>
+            <>
+              <div ref={fieldRefs.centerName}>
+                <Field label="센터명" required hint="중고거래는 필수 공개" count={centerName.length} max={50}>
+                  <input type="text" value={centerName} onChange={e => setCenterName(e.target.value.slice(0, 50))}
+                    placeholder="제품을 보관·사용 중인 센터명" className={inputCls} />
+                </Field>
+              </div>
+              <div ref={fieldRefs.regionDetail}>
+                <Field label="상세 주소" required hint="만남 장소·동·번지 등">
+                  <input type="text" value={regionDetail} onChange={e => setRegionDetail(e.target.value.slice(0, 100))}
+                    placeholder="예) 강남대로 110길 GS25 앞 / 역삼동 OO헬스장 인근"
+                    className={inputCls}
+                    disabled={!regionName} />
+                  {!regionName && <p className="text-[11px] text-[#A89B80] mt-1.5">지역(시·군·구)을 먼저 선택해 주세요.</p>}
+                </Field>
+              </div>
+            </>
           )}
         </Section>
 
         {/* ─── equipment 전용 ─── */}
         {tradeCategory === "equipment" && (
           <>
-            <Section number={3} title="제품 정보" subtitle="판매하려는 제품 정보를 입력하세요">
-              <div ref={fieldRefs.productName}>
-                <Field label="제품명" required count={productName.length} max={80}>
-                  <input type="text" value={productName} onChange={e => setProductName(e.target.value.slice(0, 80))}
-                    placeholder="예) 덤벨 1~20kg 일괄, 라이프피트너스 트레드밀, 인서레지 인클라인프레스" className={inputCls} />
-                </Field>
-              </div>
-              <div ref={fieldRefs.conditionText}>
-                <Field label="상태 등급" required count={conditionText.length} max={50}>
-                  <input type="text" value={conditionText} onChange={e => setConditionText(e.target.value.slice(0, 50))}
-                    placeholder='예) "S급 / 거의 새 것", "A급 사용감 적음", "B급 정상 작동"' className={inputCls} />
-                </Field>
-              </div>
-              <div ref={fieldRefs.priceManwon}>
-                <Field label="가격" required>
-                  <div className="flex items-center gap-2">
-                    <input type="text" value={priceManwon} onChange={e => setPriceManwon(formatNumber(e.target.value))}
-                      placeholder="가격" className={`${inputCls} flex-1`} inputMode="numeric" />
-                    <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">만원</span>
+            <Section number={3} title="제품 정보" subtitle="판매하려는 제품 정보를 입력하세요 (여러 개 등록 가능)">
+              <div ref={fieldRefs.items} className="space-y-4">
+                {items.map((item, idx) => (
+                  <div key={idx}
+                    className={items.length > 1
+                      ? "relative p-4 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl bg-[#FBF7EB]/40 dark:bg-zinc-900/40 space-y-4"
+                      : "space-y-4"}>
+                    {items.length > 1 && (
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#6B7B3A]">
+                          <span className="w-5 h-5 rounded-full bg-[#6B7B3A] text-white text-[11px] flex items-center justify-center">{idx + 1}</span>
+                          물품 {idx + 1}
+                        </span>
+                        <button type="button" onClick={() => removeItem(idx)}
+                          className="text-[12px] text-[#C0392B] hover:text-[#A93226] font-semibold">
+                          삭제
+                        </button>
+                      </div>
+                    )}
+                    <Field label="제품명" required count={item.name.length} max={80}>
+                      <input type="text" value={item.name}
+                        onChange={e => updateItem(idx, "name", e.target.value.slice(0, 80))}
+                        placeholder="예) 마이마운틴, 덤벨 1~20kg 일괄" className={inputCls} />
+                    </Field>
+                    <Field label="상태 등급" required count={item.condition.length} max={50}>
+                      <input type="text" value={item.condition}
+                        onChange={e => updateItem(idx, "condition", e.target.value.slice(0, 50))}
+                        placeholder="예) S급 거의 새 것, A급 사용감 적음" className={inputCls} />
+                    </Field>
+                    <Field label="가격" required>
+                      <div className="flex items-center gap-2">
+                        <input type="text" value={item.price}
+                          onChange={e => updateItem(idx, "price", formatNumber(e.target.value))}
+                          placeholder="가격" className={`${inputCls} flex-1`} inputMode="numeric" />
+                        <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">만원</span>
+                      </div>
+                    </Field>
                   </div>
-                </Field>
-              </div>
-              <div ref={fieldRefs.centerName}>
-                <Field label="센터명" required hint="센터명은 중고거래에서 필수 공개입니다" count={centerName.length} max={50}>
-                  <input type="text" value={centerName} onChange={e => setCenterName(e.target.value.slice(0, 50))}
-                    placeholder="제품을 보관·사용 중인 센터명" className={inputCls} />
-                </Field>
+                ))}
+                {items.length < 10 && (
+                  <button type="button" onClick={addItem}
+                    className="w-full flex items-center justify-center gap-1.5 py-3 border-2 border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl text-[13px] font-semibold text-[#6B7B3A] hover:border-[#6B7B3A]/50 hover:bg-[#F5F0E5]/40 transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    물품 추가
+                  </button>
+                )}
               </div>
             </Section>
 
@@ -765,21 +817,22 @@ export default function TradeWritePage() {
         {/* ─── 연락처 + 상세설명 (공통) ─── */}
         <Section number={tradeCategory === "equipment" ? 6 : 7} title="연락처 & 상세 내용">
           <div ref={fieldRefs.contact}>
-            <Field label="연락처" required hint="상세 페이지에서 클릭 시에만 노출">
+            <Field label="연락처" required>
               <input type="tel" value={contactPhone} onChange={e => setContactPhone(formatPhone(e.target.value))}
                 placeholder="010-0000-0000" maxLength={13} className={inputCls} />
             </Field>
           </div>
-          <Field label={tradeCategory === "center" ? "인수 조건 및 상세 내용" : "상세 설명"}
-            hint={tradeCategory === "center" ? "필수" : "선택"}
-            count={body.length} max={2000}
-            required={tradeCategory === "center"}>
-            <textarea value={body} onChange={e => setBody(e.target.value.slice(0, 2000))}
-              placeholder={tradeCategory === "center"
-                ? "인수 조건, 회원 인계 여부, 시설/기구 인계 범위, 매매 사유 등을 자유롭게 작성하세요."
-                : "기구 상태, 사용 기간, 일괄 구매 할인 등 추가 정보를 자유롭게 작성하세요."}
-              rows={6} style={{ minHeight: 160 }} className={`${inputCls} resize-none leading-relaxed`} />
-          </Field>
+          <div ref={fieldRefs.body}>
+            <Field label={tradeCategory === "center" ? "인수 조건 및 상세 내용" : "상세 설명"}
+              count={body.length} max={2000}
+              required>
+              <textarea value={body} onChange={e => setBody(e.target.value.slice(0, 2000))}
+                placeholder={tradeCategory === "center"
+                  ? "인수 조건, 회원 인계 여부, 시설/기구 인계 범위, 매매 사유 등을 자유롭게 작성하세요."
+                  : "기구 상태, 사용 기간, 일괄 구매 할인 등 추가 정보를 자유롭게 작성하세요."}
+                rows={6} style={{ minHeight: 160 }} className={`${inputCls} resize-none leading-relaxed`} />
+            </Field>
+          </div>
         </Section>
 
         {/* ─── 동의 (공통) ─── */}

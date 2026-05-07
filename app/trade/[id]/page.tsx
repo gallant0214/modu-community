@@ -196,6 +196,20 @@ export default function TradeDetailPage() {
     return m.type;
   });
 
+  type EquipItem = { name: string; condition: string; price_manwon: number };
+  const rawItems = (ei?.items && Array.isArray(ei.items) ? ei.items : []) as Array<Partial<EquipItem>>;
+  const equipItems: EquipItem[] = rawItems.length > 0
+    ? rawItems.map(it => ({
+        name: String(it.name || ""),
+        condition: String(it.condition || ""),
+        price_manwon: Number(it.price_manwon || 0),
+      }))
+    : [{
+        name: post.product_name || "",
+        condition: post.condition_text || "",
+        price_manwon: post.price_manwon || 0,
+      }];
+
   return (
     <div className="min-h-screen bg-[#F8F4EC] dark:bg-zinc-950 pb-24">
       {/* 헤더 */}
@@ -286,15 +300,37 @@ export default function TradeDetailPage() {
         {post.category === "equipment" ? (
           <section className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-5 sm:p-6">
             <h2 className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 mb-2">제품 정보</h2>
-            <div>
-              <InfoRow label="가격" accent value={formatPrice(post.price_manwon)} />
-              <InfoRow label="제품명" value={post.product_name || "-"} />
-              <InfoRow label="상태" value={post.condition_text || "-"} />
-              <InfoRow label="센터명" value={post.center_name || "-"} />
-              <InfoRow label="거래 방식" value={methodLabels.length ? methodLabels.join(", ") : "-"} />
-              <InfoRow label="지역" value={`${post.region_sido} ${post.region_sigungu}`} />
-              {post.region_detail && <InfoRow label="상세 주소" value={post.region_detail} />}
-            </div>
+            {equipItems.length > 1 ? (
+              <div className="space-y-3">
+                {equipItems.map((it, i) => (
+                  <div key={i} className="border border-[#E8E0D0]/70 dark:border-zinc-700 rounded-2xl p-3 sm:p-4 bg-[#FBF7EB]/40 dark:bg-zinc-900/40">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="w-5 h-5 rounded-full bg-[#6B7B3A] text-white text-[11px] font-bold flex items-center justify-center">{i + 1}</span>
+                      <span className="text-[12px] font-bold text-[#6B7B3A]">물품 {i + 1}</span>
+                    </div>
+                    <InfoRow label="가격" accent value={formatPrice(it.price_manwon)} />
+                    <InfoRow label="제품명" value={it.name || "-"} />
+                    <InfoRow label="상태" value={it.condition || "-"} />
+                  </div>
+                ))}
+                <div className="pt-1">
+                  <InfoRow label="센터명" value={post.center_name || "-"} />
+                  <InfoRow label="거래 방식" value={methodLabels.length ? methodLabels.join(", ") : "-"} />
+                  <InfoRow label="지역" value={`${post.region_sido} ${post.region_sigungu}`} />
+                  {post.region_detail && <InfoRow label="상세 주소" value={post.region_detail} />}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <InfoRow label="가격" accent value={formatPrice(equipItems[0].price_manwon)} />
+                <InfoRow label="제품명" value={equipItems[0].name || "-"} />
+                <InfoRow label="상태" value={equipItems[0].condition || "-"} />
+                <InfoRow label="센터명" value={post.center_name || "-"} />
+                <InfoRow label="거래 방식" value={methodLabels.length ? methodLabels.join(", ") : "-"} />
+                <InfoRow label="지역" value={`${post.region_sido} ${post.region_sigungu}`} />
+                {post.region_detail && <InfoRow label="상세 주소" value={post.region_detail} />}
+              </div>
+            )}
           </section>
         ) : (
           <section className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-5 sm:p-6">

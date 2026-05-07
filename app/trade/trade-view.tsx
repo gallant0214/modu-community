@@ -16,7 +16,7 @@ interface Props {
 const CATEGORY_TABS: { v: Category; label: string }[] = [
   { v: "all", label: "전체" },
   { v: "equipment", label: "중고거래" },
-  { v: "center", label: "센터 매매" },
+  { v: "center", label: "센터매매" },
 ];
 
 function formatRelativeTime(iso: string) {
