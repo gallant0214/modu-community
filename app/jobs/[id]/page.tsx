@@ -179,7 +179,7 @@ export default function JobDetailPage() {
       <div className="mx-auto max-w-2xl px-4 sm:px-6 py-4 sm:py-6">
 
         {/* 상단 바 */}
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-1.5 mb-4">
           <Link
             href={backHref}
             className="inline-flex items-center gap-1.5 -ml-1 px-1 py-0.5 rounded-lg text-[#6B7B3A] hover:bg-[#F5F0E5]/60 dark:hover:bg-zinc-800 transition-colors flex-1"
@@ -189,28 +189,56 @@ export default function JobDetailPage() {
             </svg>
             <span className="text-[11px] font-bold tracking-[0.15em] uppercase">{backLabel}</span>
           </Link>
-          <div className="flex items-center gap-1.5">
-            {(isOwner || isAdmin) && (
-              <>
-                <Link
-                  href={`/jobs/${jobId}/edit`}
-                  className="px-3 py-1.5 text-xs border border-[#E8E0D0] dark:border-zinc-700 rounded-lg text-[#6B5D47] dark:text-zinc-400 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
-                >수정</Link>
-                <button
-                  onClick={handleClose}
-                  className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${
-                    job.is_closed
-                      ? "border-[#6B7B3A] text-[#6B7B3A] bg-[#F5F0E5] hover:bg-[#EFE7D5]"
-                      : "border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-400 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-                  }`}
-                >{job.is_closed ? "모집재개" : "모집종료"}</button>
-                <button
-                  onClick={() => isOwner ? setShowDeleteConfirm(true) : setShowAdminDelete(true)}
-                  className="px-3 py-1.5 text-xs border border-red-200 dark:border-red-900 rounded-lg text-red-500 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
-                >삭제</button>
-              </>
-            )}
-          </div>
+          <button
+            onClick={async () => {
+              if (!user) { alert("로그인 후 이용 가능합니다"); return; }
+              const token = await getIdToken();
+              const res = await fetch(`/api/jobs/${jobId}/bookmark`, {
+                method: "POST",
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+              });
+              if (res.ok) setBookmarked(!bookmarked);
+            }}
+            aria-label="북마크"
+            title={bookmarked ? "북마크 저장됨" : "북마크"}
+            className={`p-2 rounded-lg border transition-colors ${
+              bookmarked
+                ? "border-[#6B7B3A] text-[#6B7B3A] bg-[#F5F0E5]"
+                : "border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-400 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+            }`}>
+            <svg width="16" height="16" fill={bookmarked ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+            </svg>
+          </button>
+          <button
+            onClick={handleShare}
+            aria-label="공유"
+            title="공유하기"
+            className="p-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-400 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors">
+            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+            </svg>
+          </button>
+          {(isOwner || isAdmin) && (
+            <>
+              <Link
+                href={`/jobs/${jobId}/edit`}
+                className="px-3 py-1.5 text-xs border border-[#E8E0D0] dark:border-zinc-700 rounded-lg text-[#6B5D47] dark:text-zinc-400 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
+              >수정</Link>
+              <button
+                onClick={handleClose}
+                className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${
+                  job.is_closed
+                    ? "border-[#6B7B3A] text-[#6B7B3A] bg-[#F5F0E5] hover:bg-[#EFE7D5]"
+                    : "border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-400 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                }`}
+              >{job.is_closed ? "모집재개" : "모집종료"}</button>
+              <button
+                onClick={() => isOwner ? setShowDeleteConfirm(true) : setShowAdminDelete(true)}
+                className="px-3 py-1.5 text-xs border border-red-200 dark:border-red-900 rounded-lg text-red-500 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+              >삭제</button>
+            </>
+          )}
         </div>
 
         {/* 히어로 카드 */}
@@ -404,40 +432,6 @@ export default function JobDetailPage() {
             </div>
           )}
         </section>
-
-        {/* 북마크 & 공유 액션 */}
-        <div className="flex gap-2.5 mb-8">
-          <button
-            onClick={async () => {
-              if (!user) { alert("로그인 후 이용 가능합니다"); return; }
-              const token = await getIdToken();
-              const res = await fetch(`/api/jobs/${jobId}/bookmark`, {
-                method: "POST",
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
-              });
-              if (res.ok) setBookmarked(!bookmarked);
-            }}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border transition-all font-medium text-sm ${
-              bookmarked
-                ? "bg-[#6B7B3A] border-[#6B7B3A] text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)]"
-                : "bg-[#FEFCF7] border-[#E8E0D0] text-[#6B5D47] hover:bg-[#F5F0E5] dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            }`}
-          >
-            <svg className="w-4.5 h-4.5" width="18" height="18" fill={bookmarked ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
-            </svg>
-            {bookmarked ? "북마크 저장됨" : "북마크"}
-          </button>
-          <button
-            onClick={handleShare}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border border-[#E8E0D0] bg-[#FEFCF7] text-[#6B5D47] hover:bg-[#F5F0E5] dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-all font-medium text-sm"
-          >
-            <svg className="w-4.5 h-4.5" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
-            </svg>
-            공유하기
-          </button>
-        </div>
 
         {/* 공유 토스트 */}
         {shareToast && (
