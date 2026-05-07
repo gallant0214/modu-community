@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import imageCompression from "browser-image-compression";
@@ -158,7 +158,19 @@ const MEMBER_COUNT_TYPES = ["숫자 입력", "기타"] as const;
 /* ══════════════════════════════════
    메인 페이지
    ══════════════════════════════════ */
-export default function TradeWritePage() {
+export default function TradeWritePageWrapper() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center items-center min-h-screen bg-[#F8F4EC] dark:bg-zinc-950">
+        <div className="w-7 h-7 border-2 border-[#6B7B3A] border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <TradeWritePage />
+    </Suspense>
+  );
+}
+
+function TradeWritePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get("id");
