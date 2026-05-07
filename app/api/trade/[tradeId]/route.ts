@@ -2,6 +2,10 @@ import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { invalidateCache } from "@/app/lib/cache";
+import { sanitize, validateLength } from "@/app/lib/security";
+import type { Database } from "@/app/lib/database.types";
+
+type TradePostUpdate = Database["public"]["Tables"]["trade_posts"]["Update"];
 
 export const dynamic = "force-dynamic";
 
@@ -73,4 +77,111 @@ export async function DELETE(
 
   await invalidateCache("trade:*").catch(() => {});
   return NextResponse.json({ success: true });
+}
+
+// PATCH /api/trade/[tradeId] — 본인만 수정
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ tradeId: string }> }
+) {
+  const user = await verifyAuth(request);
+  if (!user) return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+
+  const { tradeId } = await params;
+  const id = Number(tradeId);
+  if (!Number.isFinite(id) || id <= 0) {
+    return NextResponse.json({ error: "잘못된 ID" }, { status: 400 });
+  }
+
+  const { data: existing } = await supabase
+    .from("trade_posts")
+    .select("firebase_uid, category")
+    .eq("id", id)
+    .single();
+
+  if (!existing) return NextResponse.json({ error: "글을 찾을 수 없습니다" }, { status: 404 });
+  if (existing.firebase_uid !== user.uid) {
+    return NextResponse.json({ error: "본인 글만 수정할 수 있습니다" }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+
+  const {
+    title,
+    body: content,
+    region_sido,
+    region_sigungu,
+    region_detail,
+    contact_phone,
+    image_urls,
+    product_name,
+    condition_text,
+    price_manwon,
+    center_name,
+    equipment_info,
+    center_info,
+  } = body;
+
+  const category = existing.category as "equipment" | "center";
+
+  // 공통 필수 검증
+  if (!title?.trim()) return NextResponse.json({ error: "제목을 입력해주세요" }, { status: 400 });
+  if (!region_sido?.trim() || !region_sigungu?.trim()) {
+    return NextResponse.json({ error: "지역을 선택해주세요" }, { status: 400 });
+  }
+  if (!contact_phone?.trim()) return NextResponse.json({ error: "연락처를 입력해주세요" }, { status: 400 });
+  const imgs: string[] = Array.isArray(image_urls) ? image_urls.filter((u: unknown) => typeof u === "string") : [];
+  if (imgs.length < 1) return NextResponse.json({ error: "사진을 최소 1장 이상 등록해주세요" }, { status: 400 });
+  if (imgs.length > 10) return NextResponse.json({ error: "사진은 최대 10장까지" }, { status: 400 });
+
+  if (category === "equipment") {
+    if (!product_name?.trim() || !condition_text?.trim() || price_manwon === undefined || price_manwon === null || !center_name?.trim()) {
+      return NextResponse.json({ error: "중고거래 필수 항목을 모두 입력해주세요" }, { status: 400 });
+    }
+    if (!region_detail?.trim()) {
+      return NextResponse.json({ error: "중고거래는 상세 주소를 입력해주세요" }, { status: 400 });
+    }
+  } else {
+    if (!center_info || typeof center_info !== "object") {
+      return NextResponse.json({ error: "센터 매매 상세 정보를 입력해주세요" }, { status: 400 });
+    }
+    const ci = center_info as Record<string, unknown>;
+    if (!ci.industry || !ci.store_type || !ci.area_pyeong) {
+      return NextResponse.json({ error: "센터 매매 필수 항목을 모두 입력해주세요" }, { status: 400 });
+    }
+  }
+
+  const updateRow: TradePostUpdate = {
+    title: sanitize(validateLength(title.trim(), 200)),
+    body: content ? sanitize(validateLength(String(content).trim(), 10000)) : null,
+    region_sido: sanitize(validateLength(region_sido.trim(), 50)),
+    region_sigungu: sanitize(validateLength(region_sigungu.trim(), 50)),
+    region_detail: region_detail?.trim() ? sanitize(validateLength(String(region_detail).trim(), 200)) : null,
+    contact_phone: sanitize(validateLength(contact_phone.trim(), 30)),
+    image_urls: imgs,
+  };
+
+  if (category === "equipment") {
+    updateRow.product_name = sanitize(validateLength(String(product_name).trim(), 100));
+    updateRow.condition_text = sanitize(validateLength(String(condition_text).trim(), 100));
+    updateRow.price_manwon = Math.max(0, Math.floor(Number(price_manwon)));
+    updateRow.center_name = sanitize(validateLength(String(center_name).trim(), 100));
+    updateRow.equipment_info = equipment_info ?? null;
+  } else {
+    updateRow.center_info = center_info;
+  }
+
+  const { error } = await supabase
+    .from("trade_posts")
+    .update(updateRow)
+    .eq("id", id);
+
+  if (error) {
+    console.error("PATCH /api/trade insert error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  await invalidateCache("trade:*").catch(() => {});
+  return NextResponse.json({ success: true, id });
 }

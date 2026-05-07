@@ -218,45 +218,22 @@ export default function TradeDetailPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F4EC] dark:bg-zinc-950 pb-24">
-      {/* 헤더 */}
-      <div className="sticky top-14 z-30 bg-[#F8F4EC]/85 dark:bg-zinc-950/85 backdrop-blur-md border-b border-[#E8E0D0]/70 dark:border-zinc-800">
-        <div className="mx-auto max-w-2xl flex items-center justify-between gap-2 px-4 sm:px-6 py-3">
-          <Link href="/trade" className="inline-flex items-center gap-1.5 -ml-1 px-1 py-0.5 rounded-lg text-[#6B7B3A] hover:bg-[#F5F0E5]/60 dark:hover:bg-zinc-800 transition-colors">
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 pt-4 pb-5 space-y-4">
+        {/* 상단 바 (구인 상세 패턴) */}
+        <div className="flex items-center gap-2">
+          <Link href="/trade" className="inline-flex items-center gap-1.5 -ml-1 px-1 py-0.5 rounded-lg text-[#6B7B3A] hover:bg-[#F5F0E5]/60 dark:hover:bg-zinc-800 transition-colors flex-1">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
             <span className="text-[11px] font-bold tracking-[0.15em] uppercase">거래 게시판</span>
           </Link>
-          <div className="flex items-center gap-1">
-            <button onClick={handleBookmark} className="p-2 rounded-lg hover:bg-[#F5F0E5]/60 dark:hover:bg-zinc-800 transition-colors" title="북마크">
-              <svg className="w-5 h-5" fill={bookmarked ? "#6B7B3A" : "none"} stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-              </svg>
-            </button>
-            <button onClick={handleShare} className="p-2 rounded-lg hover:bg-[#F5F0E5]/60 dark:hover:bg-zinc-800 transition-colors" title="공유">
-              <svg className="w-5 h-5 text-[#3A342A] dark:text-zinc-200" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12s-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m9.032 4.026a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684zm0-9.366a3 3 0 105.368-2.684 3 3 0 00-5.368 2.684z" />
-              </svg>
-            </button>
-            {post.is_owner && (
-              <>
-                <Link href={`/trade/${post.id}/edit`} className="p-2 rounded-lg hover:bg-[#F5F0E5]/60 dark:hover:bg-zinc-800" title="수정">
-                  <svg className="w-5 h-5 text-[#3A342A] dark:text-zinc-200" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </Link>
-                <button onClick={() => setShowDeleteConfirm(true)} className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-[#C0392B]" title="삭제">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V3a1 1 0 011-1h4a1 1 0 011 1v4" />
-                  </svg>
-                </button>
-              </>
-            )}
-          </div>
+          {post.is_owner && (
+            <div className="flex items-center gap-1.5">
+              <Link href={`/trade/${post.id}/edit`} className="px-3 py-1.5 text-xs border border-[#E8E0D0] dark:border-zinc-700 rounded-lg text-[#6B5D47] dark:text-zinc-400 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors">수정</Link>
+              <button onClick={() => setShowDeleteConfirm(true)} className="px-3 py-1.5 text-xs border border-red-200 dark:border-red-900 rounded-lg text-red-500 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-red-50 dark:hover:bg-red-950 transition-colors">삭제</button>
+            </div>
+          )}
         </div>
-      </div>
-
-      <div className="mx-auto max-w-2xl px-4 sm:px-6 py-5 space-y-4">
         {/* 사진 슬라이더 */}
         {post.image_urls?.length > 0 && (
           <div className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl overflow-hidden">
@@ -363,6 +340,32 @@ export default function TradeDetailPage() {
             <p className="text-[14px] text-[#3A342A] dark:text-zinc-200 leading-relaxed whitespace-pre-wrap break-words">{post.body}</p>
           </section>
         )}
+
+        {/* 북마크 & 공유 액션 (구인 상세 패턴) */}
+        <div className="flex gap-2.5">
+          <button
+            onClick={handleBookmark}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border transition-all font-medium text-sm ${
+              bookmarked
+                ? "bg-[#6B7B3A] border-[#6B7B3A] text-white shadow-[0_4px_14px_-4px_rgba(107,123,58,0.4)]"
+                : "bg-[#FEFCF7] border-[#E8E0D0] text-[#6B5D47] hover:bg-[#F5F0E5] dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            }`}
+          >
+            <svg width="18" height="18" fill={bookmarked ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+            </svg>
+            {bookmarked ? "북마크 저장됨" : "북마크"}
+          </button>
+          <button
+            onClick={handleShare}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border border-[#E8E0D0] bg-[#FEFCF7] text-[#6B5D47] hover:bg-[#F5F0E5] dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-all font-medium text-sm"
+          >
+            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+            </svg>
+            공유하기
+          </button>
+        </div>
 
         {/* 안내 */}
         <div className="px-1 text-[11px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">

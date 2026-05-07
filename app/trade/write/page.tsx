@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import imageCompression from "browser-image-compression";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
@@ -160,6 +160,9 @@ const MEMBER_COUNT_TYPES = ["숫자 입력", "기타"] as const;
    ══════════════════════════════════ */
 export default function TradeWritePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("id");
+  const isEdit = !!editId;
   const { user, loading, signInWithGoogle, signInWithApple, getIdToken } = useAuth();
 
   /* 카테고리 (구인글 종목 드롭다운과 동일 패턴 — 업종으로 사용) */
@@ -174,6 +177,98 @@ export default function TradeWritePage() {
       ]);
     }).catch(() => {});
   }, []);
+
+  // edit 모드 — 기존 글 데이터 로드 후 상태 prefill
+  const [editLoaded, setEditLoaded] = useState(!isEdit);
+  useEffect(() => {
+    if (!isEdit || !editId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getIdToken().catch(() => null);
+        const res = await fetch(`/api/trade/${editId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) {
+          alert("수정할 글을 불러오지 못했습니다.");
+          router.replace("/trade");
+          return;
+        }
+        const p = await res.json();
+        if (cancelled) return;
+        setTradeCategory(p.category === "center" ? "center" : "equipment");
+        setTitle(p.title || "");
+        setBody(p.body || "");
+        const regionFull = [p.region_sido, p.region_sigungu].filter(Boolean).join(" ");
+        setRegionName(regionFull);
+        setRegionCode("loaded"); // 비어있지 않게만 (검증 통과용)
+        setRegionDetail(p.region_detail || "");
+        setContactPhone(p.contact_phone || "");
+        setImageUrls(Array.isArray(p.image_urls) ? p.image_urls : []);
+        setAgreed(true);
+        if (p.category === "equipment") {
+          const ei = (p.equipment_info && typeof p.equipment_info === "object" ? p.equipment_info : {}) as Record<string, unknown>;
+          const rawItems = Array.isArray(ei.items) ? ei.items as Array<Partial<{ name: string; condition: string; price_manwon: number }>> : [];
+          const loaded: EquipItem[] = rawItems.length > 0
+            ? rawItems.map(it => ({
+                name: String(it.name || ""),
+                condition: String(it.condition || ""),
+                price: it.price_manwon ? Number(it.price_manwon).toLocaleString() : "",
+              }))
+            : [{
+                name: p.product_name || "",
+                condition: p.condition_text || "",
+                price: p.price_manwon ? Number(p.price_manwon).toLocaleString() : "",
+              }];
+          setItems(loaded);
+          setCenterName(p.center_name || "");
+          const methods = Array.isArray(ei.trade_methods) ? ei.trade_methods as Array<{ type: string; loading?: boolean; text?: string }> : [];
+          const methodSet = new Set<TradeMethodKey>();
+          for (const m of methods) {
+            if (m.type === "direct" || m.type === "parcel" || m.type === "delivery" || m.type === "etc") {
+              methodSet.add(m.type as TradeMethodKey);
+              if (m.type === "delivery" && m.loading) setDeliveryLoading(true);
+              if (m.type === "etc" && m.text) setTradeMethodEtc(m.text);
+            }
+          }
+          setTradeMethods(methodSet);
+        } else {
+          const ci = (p.center_info && typeof p.center_info === "object" ? p.center_info : {}) as Record<string, unknown>;
+          setIndustry(String(ci.industry || ""));
+          setStoreType(String(ci.store_type || ""));
+          setCenterNameVisible(ci.name_visible ? "public" : "private");
+          setCenterNameValue(String(ci.name || ""));
+          setAreaPyeong(ci.area_pyeong ? Number(ci.area_pyeong).toLocaleString() : "");
+          const money = (k: string) => {
+            const m = ci[k] as { amount_manwon?: number } | undefined;
+            return m?.amount_manwon ? Number(m.amount_manwon).toLocaleString() : "";
+          };
+          setDeposit(money("deposit"));
+          setMonthly(money("monthly"));
+          setMgmtFee(money("mgmt_fee"));
+          setPremium(money("premium"));
+          const premiumObj = ci.premium as { negotiable?: string } | undefined;
+          if (premiumObj?.negotiable === "협의가능" || premiumObj?.negotiable === "조정불가" || premiumObj?.negotiable === "권리금없음") {
+            setPremiumNeg(premiumObj.negotiable);
+          }
+          const mc = ci.member_count as Record<string, unknown> | undefined;
+          if (mc?.type === "number") {
+            setMemberType("숫자 입력");
+            setMemberValue(mc.value ? Number(mc.value).toLocaleString() : "");
+          } else if (mc?.type === "etc") {
+            setMemberType("기타");
+            setMemberEtc(String(mc.text || ""));
+          }
+        }
+        setEditLoaded(true);
+      } catch {
+        alert("글 정보를 불러오지 못했습니다.");
+        router.replace("/trade");
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, editId]);
 
   /* ─── 카테고리 (중고/매매) ─── */
   const [tradeCategory, setTradeCategory] = useState<"equipment" | "center">("equipment");
@@ -247,8 +342,23 @@ export default function TradeWritePage() {
 
   /* 지역 = "시도 시군구" 한 줄 */
   const handleRegionSelect = (code: string, name: string, parent: string) => {
+    const fullName = `${parent} ${name}`;
     setRegionCode(code);
-    setRegionName(`${parent} ${name}`);
+    setRegionName(fullName);
+    // 상세 주소 칸에 시·군·구 자동 prefix (이전 region prefix 가 있으면 교체, 사용자가 추가한 부분은 보존)
+    setRegionDetail(prev => {
+      const trimmed = prev.trim();
+      if (!trimmed) return `${fullName} `;
+      // 이전 prefix(같은 시·도 또는 다른 시·도)를 검출해서 교체
+      // 예) "서울 강남구 역삼동" → 새 지역 선택 시 "{새지역} 역삼동"
+      const tokens = trimmed.split(/\s+/);
+      // 첫 2 토큰이 "시도 시군구" 형태일 가능성이 높음 → 제거 후 새 prefix
+      if (tokens.length >= 2) {
+        const rest = tokens.slice(2).join(" ");
+        return rest ? `${fullName} ${rest}` : `${fullName} `;
+      }
+      return `${fullName} ${trimmed}`;
+    });
     setShowRegion(false);
   };
 
@@ -328,7 +438,20 @@ export default function TradeWritePage() {
 
     if (tradeCategory === "equipment") {
       if (!centerName.trim()) { fieldRefs.centerName?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("센터명은 중고거래에서 필수입니다."); return false; }
-      if (!regionDetail.trim()) { fieldRefs.regionDetail?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("중고거래는 상세 주소(만남 장소·동·번지)를 입력해주세요."); return false; }
+      // 상세 주소: 자동 prefix(시·도 시·군·구) 외 추가 입력 필수
+      const trimmedDetail = regionDetail.trim();
+      const regionPrefix = regionName.trim();
+      if (!trimmedDetail) {
+        fieldRefs.regionDetail?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        alert("중고거래는 추가 상세 주소를 입력해주세요."); return false;
+      }
+      const extra = regionPrefix && trimmedDetail.startsWith(regionPrefix)
+        ? trimmedDetail.slice(regionPrefix.length).trim()
+        : trimmedDetail;
+      if (!extra) {
+        fieldRefs.regionDetail?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        alert("추가 상세 주소를 입력해주세요."); return false;
+      }
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
         const prefix = items.length > 1 ? `${i + 1}번 물품의 ` : "";
@@ -373,7 +496,7 @@ export default function TradeWritePage() {
         body: body.trim(),
         region_sido: sido,
         region_sigungu: sigungu,
-        region_detail: tradeCategory === "equipment" ? regionDetail.trim() : null,
+        region_detail: regionDetail.trim() || null,
         contact_phone: contactPhone.trim(),
         image_urls: imageUrls,
         agreed_to_terms: true,
@@ -424,14 +547,14 @@ export default function TradeWritePage() {
         };
       }
 
-      const res = await fetch("/api/trade", {
-        method: "POST",
+      const res = await fetch(isEdit && editId ? `/api/trade/${editId}` : "/api/trade", {
+        method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "등록에 실패했습니다."); setShowConfirm(false); return; }
-      router.replace(`/trade`);
+      if (!res.ok) { setError(data.error || (isEdit ? "수정에 실패했습니다." : "등록에 실패했습니다.")); setShowConfirm(false); return; }
+      router.replace(isEdit && editId ? `/trade/${editId}` : `/trade`);
     } catch {
       setError("오류가 발생했습니다.");
       setShowConfirm(false);
@@ -440,7 +563,7 @@ export default function TradeWritePage() {
     }
   };
 
-  if (loading) return (
+  if (loading || (isEdit && !editLoaded)) return (
     <div className="flex justify-center items-center min-h-screen bg-[#F8F4EC] dark:bg-zinc-950">
       <div className="w-7 h-7 border-2 border-[#6B7B3A] border-t-transparent rounded-full animate-spin" />
     </div>
@@ -508,13 +631,13 @@ export default function TradeWritePage() {
           <div className="relative">
             <div className="inline-flex items-center gap-2 mb-4">
               <span className="w-6 h-px bg-[#6B7B3A]" />
-              <span className="text-[11px] font-bold tracking-[0.15em] text-[#6B7B3A] uppercase">New Trade</span>
+              <span className="text-[11px] font-bold tracking-[0.15em] text-[#6B7B3A] uppercase">{isEdit ? "Edit Trade" : "New Trade"}</span>
             </div>
             <h1 className="text-[22px] sm:text-[26px] font-bold text-[#2A251D] dark:text-zinc-100 leading-tight tracking-tight mb-2">
-              거래 글 등록
+              {isEdit ? "거래 글 수정" : "거래 글 등록"}
             </h1>
             <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed mb-5 max-w-md">
-              운동기구 중고거래나 센터매매 글을 등록할 수 있어요. 정확한 정보를 입력해주세요.
+              {isEdit ? "글 내용을 수정할 수 있어요. 정확한 정보를 입력해주세요." : "운동기구 중고거래나 센터매매 글을 등록할 수 있어요. 정확한 정보를 입력해주세요."}
             </p>
           </div>
         </section>
@@ -578,26 +701,31 @@ export default function TradeWritePage() {
             </Field>
           </div>
 
-          {/* 중고거래 전용 — 센터명 + 상세 주소 (필수) */}
+          {/* 중고거래 전용 — 센터명 (필수 공개) */}
           {tradeCategory === "equipment" && (
-            <>
-              <div ref={fieldRefs.centerName}>
-                <Field label="센터명" required hint="중고거래는 필수 공개" count={centerName.length} max={50}>
-                  <input type="text" value={centerName} onChange={e => setCenterName(e.target.value.slice(0, 50))}
-                    placeholder="제품을 보관·사용 중인 센터명" className={inputCls} />
-                </Field>
-              </div>
-              <div ref={fieldRefs.regionDetail}>
-                <Field label="상세 주소" required hint="만남 장소·동·번지 등">
-                  <input type="text" value={regionDetail} onChange={e => setRegionDetail(e.target.value.slice(0, 100))}
-                    placeholder="예) 강남대로 110길 GS25 앞 / 역삼동 OO헬스장 인근"
-                    className={inputCls}
-                    disabled={!regionName} />
-                  {!regionName && <p className="text-[11px] text-[#A89B80] mt-1.5">지역(시·군·구)을 먼저 선택해 주세요.</p>}
-                </Field>
-              </div>
-            </>
+            <div ref={fieldRefs.centerName}>
+              <Field label="센터명" required hint="중고거래는 필수 공개" count={centerName.length} max={50}>
+                <input type="text" value={centerName} onChange={e => setCenterName(e.target.value.slice(0, 50))}
+                  placeholder="제품을 보관·사용 중인 센터명" className={inputCls} />
+              </Field>
+            </div>
           )}
+
+          {/* 상세 주소 — 중고거래 필수, 센터매매 선택 */}
+          <div ref={fieldRefs.regionDetail}>
+            <Field
+              label="상세 주소"
+              required={tradeCategory === "equipment"}
+              hint={tradeCategory === "equipment" ? "시·군·구 뒤에 추가 주소 필수 입력" : "선택 — 추가 주소 입력 가능"}
+            >
+              <input type="text" value={regionDetail} onChange={e => setRegionDetail(e.target.value.slice(0, 100))}
+                placeholder={regionName ? `${regionName} 역삼동 OO빌딩 1층 등` : "지역을 먼저 선택해 주세요"}
+                className={inputCls}
+                disabled={!regionName} />
+              {!regionName && <p className="text-[11px] text-[#A89B80] mt-1.5">지역(시·군·구)을 먼저 선택해 주세요.</p>}
+              {regionName && <p className="text-[11px] text-[#A89B80] mt-1.5">시·군·구가 자동 입력됩니다. 그 뒤에 추가 주소를 입력해 주세요.</p>}
+            </Field>
+          </div>
         </Section>
 
         {/* ─── equipment 전용 ─── */}
@@ -866,7 +994,7 @@ export default function TradeWritePage() {
             onClick={() => { if (validate()) { setShowConfirm(true); setConfirmChecked(false); } }}
             disabled={submitting}
             className="w-full py-4 bg-[#6B7B3A] hover:bg-[#5A6930] text-white font-bold text-[15px] rounded-2xl disabled:opacity-50 shadow-[0_12px_32px_-12px_rgba(107,123,58,0.6)] transition-all hover:-translate-y-0.5">
-            {submitting ? "등록 중..." : "거래 글 등록하기"}
+            {submitting ? (isEdit ? "수정 중..." : "등록 중...") : (isEdit ? "거래 글 수정하기" : "거래 글 등록하기")}
           </button>
         </div>
       </div>
@@ -931,7 +1059,7 @@ export default function TradeWritePage() {
             </svg>
           </div>
         }
-        title="등록 전 한 번만 확인해 주세요"
+        title={isEdit ? "수정 전 한 번만 확인해 주세요" : "등록 전 한 번만 확인해 주세요"}
         footer={
           <div className="flex gap-2">
             <button onClick={() => setShowConfirm(false)} disabled={submitting} className="flex-1 py-3 border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 rounded-xl text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] disabled:opacity-50 transition-colors">취소</button>
@@ -941,7 +1069,7 @@ export default function TradeWritePage() {
                   ? "bg-[#C0392B] text-white hover:bg-[#A93226] shadow-[0_4px_14px_-4px_rgba(192,57,43,0.4)]"
                   : "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-700 dark:text-zinc-400 cursor-not-allowed"
               }`}>
-              {submitting ? "등록 중..." : "동의하고 등록"}
+              {submitting ? (isEdit ? "수정 중..." : "등록 중...") : (isEdit ? "동의하고 수정" : "동의하고 등록")}
             </button>
           </div>
         }>
@@ -957,7 +1085,7 @@ export default function TradeWritePage() {
             </ul>
           </div>
           {submitting && (
-            <UploadProgress phase="saving" uploadPercent={0} savingLabel="거래 글 저장 중..." />
+            <UploadProgress phase="saving" uploadPercent={0} savingLabel={isEdit ? "거래 글 수정 중..." : "거래 글 저장 중..."} />
           )}
           <button onClick={() => setConfirmChecked(!confirmChecked)} disabled={submitting} className="w-full flex items-center gap-2.5 pt-1 disabled:opacity-50">
             <span className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 transition-colors ${
