@@ -161,18 +161,24 @@ export default function TradeDetailPage() {
   const renderMoney = (key: string, label: string) => {
     if (!ci || !ci[key]) return null;
     const m = ci[key] as { amount_manwon?: number; negotiable?: string };
+    const isNone = m.negotiable === "권리금없음";
+    const isAgree = m.negotiable === "협의가능" || m.negotiable === "협의 가능";
     return (
       <InfoRow
         label={label}
         value={
-          <>
-            {formatPrice(m.amount_manwon ?? 0)}
-            {m.negotiable && (
-              <span className={`ml-1 text-[11px] font-semibold ${m.negotiable === "협의 가능" ? "text-[#6B7B3A]" : "text-[#C0392B]"}`}>
-                ({m.negotiable})
-              </span>
-            )}
-          </>
+          isNone ? (
+            <span className="text-[#8C8270] dark:text-zinc-400 font-semibold">권리금 없음</span>
+          ) : (
+            <>
+              {formatPrice(m.amount_manwon ?? 0)}
+              {m.negotiable && (
+                <span className={`ml-1 text-[11px] font-semibold ${isAgree ? "text-[#6B7B3A]" : "text-[#C0392B]"}`}>
+                  ({m.negotiable})
+                </span>
+              )}
+            </>
+          )
         }
       />
     );

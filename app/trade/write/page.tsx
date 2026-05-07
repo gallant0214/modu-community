@@ -151,7 +151,7 @@ const TRADE_METHODS = [
 
 type TradeMethodKey = typeof TRADE_METHODS[number]["key"];
 
-const NEGOTIABLE_OPTIONS = ["협의 가능", "조정 불가"] as const;
+const NEGOTIABLE_OPTIONS = ["협의가능", "조정불가", "권리금없음"] as const;
 const MEMBER_COUNT_TYPES = ["숫자 입력", "기타"] as const;
 
 /* ══════════════════════════════════
@@ -206,7 +206,7 @@ export default function TradeWritePage() {
   const [monthly, setMonthly] = useState("");
   const [mgmtFee, setMgmtFee] = useState("");
   const [premium, setPremium] = useState("");
-  const [premiumNeg, setPremiumNeg] = useState<typeof NEGOTIABLE_OPTIONS[number]>("협의 가능");
+  const [premiumNeg, setPremiumNeg] = useState<typeof NEGOTIABLE_OPTIONS[number]>("협의가능");
   const [memberType, setMemberType] = useState<typeof MEMBER_COUNT_TYPES[number]>("숫자 입력");
   const [memberValue, setMemberValue] = useState("");
   const [memberEtc, setMemberEtc] = useState("");
@@ -415,7 +415,9 @@ export default function TradeWritePage() {
             deposit:  { amount_manwon: parseNum(deposit) },
             monthly:  { amount_manwon: parseNum(monthly) },
             mgmt_fee: { amount_manwon: parseNum(mgmtFee) },
-            premium:  { amount_manwon: parseNum(premium),  negotiable: premiumNeg },
+            premium:  premiumNeg === "권리금없음"
+              ? { amount_manwon: 0, negotiable: "권리금없음" }
+              : { amount_manwon: parseNum(premium), negotiable: premiumNeg },
             member_count: memberCount,
           },
         };
@@ -735,7 +737,7 @@ export default function TradeWritePage() {
               </div>
             </Section>
 
-            <Section number={4} title="금액 정보" subtitle="권리금만 협의 여부를 선택하세요">
+            <Section number={4} title="지출정보" subtitle="보증금·월세·관리비를 입력하세요">
               <div ref={fieldRefs.deposit}>
                 <PlainMoneyField label="보증금" required value={deposit} onChange={setDeposit} />
               </div>
@@ -743,10 +745,13 @@ export default function TradeWritePage() {
                 <PlainMoneyField label="월세" required value={monthly} onChange={setMonthly} />
               </div>
               <PlainMoneyField label="관리비" value={mgmtFee} onChange={setMgmtFee} />
-              <MoneyField label="권리금" value={premium} onChange={setPremium} neg={premiumNeg} setNeg={setPremiumNeg} />
             </Section>
 
-            <Section number={5} title="보유회원수">
+            <Section number={5} title="권리금" subtitle="권리금 여부와 금액을 선택하세요">
+              <PremiumField value={premium} onChange={setPremium} neg={premiumNeg} setNeg={setPremiumNeg} />
+            </Section>
+
+            <Section number={6} title="보유회원수">
               <div ref={fieldRefs.member}>
                 <Field label="보유회원수" required>
                   <div className="flex gap-1.5 mb-2 flex-wrap">
@@ -779,7 +784,7 @@ export default function TradeWritePage() {
         )}
 
         {/* ─── 사진 (공통) ─── */}
-        <Section number={tradeCategory === "equipment" ? 5 : 6} title="사진 등록" subtitle="1~10장 첨부">
+        <Section number={tradeCategory === "equipment" ? 5 : 7} title="사진 등록" subtitle="1~10장 첨부">
           <div ref={fieldRefs.images}>
             <Field label={`사진 ${imageUrls.length}/10`} required>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -815,7 +820,7 @@ export default function TradeWritePage() {
         </Section>
 
         {/* ─── 연락처 + 상세설명 (공통) ─── */}
-        <Section number={tradeCategory === "equipment" ? 6 : 7} title="연락처 & 상세 내용">
+        <Section number={tradeCategory === "equipment" ? 6 : 8} title="연락처 & 상세 내용">
           <div ref={fieldRefs.contact}>
             <Field label="연락처" required>
               <input type="tel" value={contactPhone} onChange={e => setContactPhone(formatPhone(e.target.value))}
@@ -986,24 +991,19 @@ function PlainMoneyField({ label, required, value, onChange }: {
 }
 
 /* ──────────────────────────────────────────
-   금액 입력 + 협의 토글 — 센터 매매 권리금 전용
+   권리금 전용 — [협의가능][조정불가][권리금없음] + 금액
+   "권리금없음" 선택 시 금액 입력 숨김
    ────────────────────────────────────────── */
-function MoneyField({ label, required, value, onChange, neg, setNeg }: {
-  label: string;
-  required?: boolean;
+function PremiumField({ value, onChange, neg, setNeg }: {
   value: string;
   onChange: (v: string) => void;
   neg: typeof NEGOTIABLE_OPTIONS[number];
   setNeg: (v: typeof NEGOTIABLE_OPTIONS[number]) => void;
 }) {
+  const noPremium = neg === "권리금없음";
   return (
-    <Field label={label} required={required}>
+    <Field label="권리금">
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <input type="text" value={value} onChange={e => onChange(formatNumber(e.target.value))}
-            placeholder="금액" className={`${inputCls} flex-1`} inputMode="numeric" />
-          <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">만원</span>
-        </div>
         <div className="flex gap-1.5">
           {NEGOTIABLE_OPTIONS.map(opt => (
             <button key={opt} onClick={() => setNeg(opt)}
@@ -1016,6 +1016,13 @@ function MoneyField({ label, required, value, onChange, neg, setNeg }: {
             </button>
           ))}
         </div>
+        {!noPremium && (
+          <div className="flex items-center gap-2">
+            <input type="text" value={value} onChange={e => onChange(formatNumber(e.target.value))}
+              placeholder="금액" className={`${inputCls} flex-1`} inputMode="numeric" />
+            <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">만원</span>
+          </div>
+        )}
       </div>
     </Field>
   );
