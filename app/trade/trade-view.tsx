@@ -132,23 +132,18 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
 
   return (
     <div className="min-h-screen bg-[#F8F4EC] dark:bg-zinc-950 pb-28">
-      {/* 헤더 */}
-      <div className="sticky top-14 z-30 bg-[#F8F4EC]/85 dark:bg-zinc-950/85 backdrop-blur-md border-b border-[#E8E0D0]/70 dark:border-zinc-800">
-        <div className="mx-auto max-w-2xl px-4 sm:px-6 py-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">거래 게시판</span>
-            <Link href="/trade/write"
-              className="inline-flex items-center gap-1 px-3.5 py-1.5 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-[12px] font-semibold rounded-full shadow-[0_4px_12px_-4px_rgba(107,123,58,0.5)] transition-colors">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              글쓰기
-            </Link>
-          </div>
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 pt-4 pb-5 space-y-4">
+        {/* 헤더 (non-sticky) */}
+        <div className="flex items-center justify-between">
+          <span className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">거래 게시판</span>
+          <Link href="/trade/write"
+            className="inline-flex items-center gap-1 px-3 py-1 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-[12px] font-semibold rounded-full shadow-[0_4px_12px_-4px_rgba(107,123,58,0.5)] transition-colors">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            글쓰기
+          </Link>
         </div>
-      </div>
-
-      <div className="mx-auto max-w-2xl px-4 sm:px-6 pt-14 pb-5 space-y-4">
         {/* 카테고리 탭 */}
         <div className="flex gap-1.5">
           {CATEGORY_TABS.map(tab => (
