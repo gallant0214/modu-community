@@ -1413,10 +1413,42 @@ export default function AdminPage() {
 
                 {/* 최근 활동 */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <RecentList title="최근 작성 글" items={userResult.recent.posts.map((p: any) => ({ id: p.id, label: p.title, time: p.created_at }))} />
-                  <RecentList title="최근 작성 댓글" items={userResult.recent.comments.map((c: any) => ({ id: c.id, label: c.content, time: c.created_at }))} />
-                  <RecentList title="최근 구인글" items={userResult.recent.jobs.map((j: any) => ({ id: j.id, label: j.title + (j.is_closed ? " (마감)" : ""), time: j.created_at }))} />
-                  <RecentList title="최근 거래글" items={userResult.recent.trades.map((t: any) => ({ id: t.id, label: `[${t.category}] ${t.title} (${t.status})`, time: t.created_at }))} />
+                  <RecentList
+                    title="최근 작성 글"
+                    items={userResult.recent.posts.map((p: any) => ({
+                      id: p.id,
+                      label: p.title,
+                      time: p.created_at,
+                      url: p.category_id ? `/category/${p.category_id}/post/${p.id}` : null,
+                    }))}
+                  />
+                  <RecentList
+                    title="최근 작성 댓글"
+                    items={userResult.recent.comments.map((c: any) => ({
+                      id: c.id,
+                      label: c.content,
+                      time: c.created_at,
+                      url: c.posts?.category_id && c.post_id ? `/category/${c.posts.category_id}/post/${c.post_id}?hc=${c.id}` : null,
+                    }))}
+                  />
+                  <RecentList
+                    title="최근 구인글"
+                    items={userResult.recent.jobs.map((j: any) => ({
+                      id: j.id,
+                      label: j.title + (j.is_closed ? " (마감)" : ""),
+                      time: j.created_at,
+                      url: `/jobs/${j.id}`,
+                    }))}
+                  />
+                  <RecentList
+                    title="최근 거래글"
+                    items={userResult.recent.trades.map((t: any) => ({
+                      id: t.id,
+                      label: `[${t.category}] ${t.title} (${t.status})`,
+                      time: t.created_at,
+                      url: `/trade/${t.id}`,
+                    }))}
+                  />
                 </div>
               </div>
             )}
@@ -2527,21 +2559,45 @@ function Stat({ label, value }: { label: string; value: number | string }) {
   );
 }
 
-function RecentList({ title, items }: { title: string; items: { id: number; label: string; time: string }[] }) {
+function RecentList({ title, items }: { title: string; items: { id: number; label: string; time: string; url: string | null }[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const INITIAL = 5;
+  const visible = expanded ? items : items.slice(0, INITIAL);
+  const hiddenCount = items.length - INITIAL;
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-2">{title} ({items.length})</h3>
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{title} ({items.length})</h3>
+        {items.length > INITIAL && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="rounded-md bg-cyan-50 px-2 py-1 text-[10px] font-bold text-cyan-700 hover:bg-cyan-100 dark:bg-cyan-950/40 dark:text-cyan-300 dark:hover:bg-cyan-950/60"
+          >
+            {expanded ? "− 접기" : `+ 더보기 (${hiddenCount})`}
+          </button>
+        )}
+      </div>
       {items.length === 0 ? (
         <p className="text-xs text-zinc-400">없음</p>
       ) : (
         <ul className="space-y-1.5">
-          {items.slice(0, 10).map((it) => (
+          {visible.map((it) => (
             <li key={it.id} className="flex items-start gap-2 text-xs">
               <span className="shrink-0 text-[10px] text-zinc-400">{new Date(it.time).toLocaleDateString("ko-KR")}</span>
-              <span className="flex-1 truncate text-zinc-700 dark:text-zinc-300">{it.label}</span>
+              {it.url ? (
+                <a
+                  href={it.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 truncate text-cyan-700 hover:underline dark:text-cyan-400"
+                >
+                  {it.label}
+                </a>
+              ) : (
+                <span className="flex-1 truncate text-zinc-700 dark:text-zinc-300">{it.label}</span>
+              )}
             </li>
           ))}
-          {items.length > 10 && <li className="text-[10px] text-zinc-400">… 외 {items.length - 10}건</li>}
         </ul>
       )}
     </div>
