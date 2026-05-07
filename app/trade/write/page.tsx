@@ -163,7 +163,7 @@ export default function TradeWritePage() {
   const searchParams = useSearchParams();
   const editId = searchParams.get("id");
   const isEdit = !!editId;
-  const { user, loading, signInWithGoogle, signInWithApple, getIdToken } = useAuth();
+  const { user, loading, signInWithGoogle, signInWithApple, getIdToken, activeRegionCode, activeRegionName } = useAuth();
 
   /* 카테고리 (구인글 종목 드롭다운과 동일 패턴 — 업종으로 사용) */
   const [categories, setCategories] = useState<{ id: number; name: string; emoji: string }[]>([]);
@@ -177,6 +177,17 @@ export default function TradeWritePage() {
       ]);
     }).catch(() => {});
   }, []);
+
+  // 신규 작성 모드 — "내가 활동하는 지역"이 설정돼 있으면 자동 입력
+  useEffect(() => {
+    if (isEdit) return; // 수정 모드는 기존 값 유지
+    if (!activeRegionCode || !activeRegionName) return;
+    if (regionCode || regionName) return; // 이미 사용자가 선택했으면 건드리지 않음
+    setRegionCode(activeRegionCode);
+    setRegionName(activeRegionName);
+    setRegionDetail(prev => (prev.trim() ? prev : `${activeRegionName} `));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, activeRegionCode, activeRegionName]);
 
   // edit 모드 — 기존 글 데이터 로드 후 상태 prefill
   const [editLoaded, setEditLoaded] = useState(!isEdit);
@@ -415,70 +426,59 @@ export default function TradeWritePage() {
     });
   };
 
-  /* 유효성 검사 */
-  const validate = (): boolean => {
-    if (!user) { alert("거래 등록은 로그인 후 가능합니다."); return false; }
+  /* 유효성 검사 — alert 가 닫힌 후 해당 입력란으로 스크롤 */
+  const failValidation = (refKey: keyof typeof fieldRefs | null, message: string): false => {
+    alert(message);
+    if (refKey && fieldRefs[refKey]?.current) {
+      // alert 닫힌 직후 다음 tick 에 스크롤 (브라우저 alert 가 동기 블록 후 해제되므로)
+      setTimeout(() => {
+        fieldRefs[refKey]?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 0);
+    }
+    return false;
+  };
 
-    if (!title.trim()) {
-      fieldRefs.title?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      alert("제목을 입력해주세요."); return false;
-    }
-    if (!regionCode || !regionName.includes(" ")) {
-      fieldRefs.region?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      alert("지역을 시·군·구까지 선택해주세요."); return false;
-    }
-    if (imageUrls.length < 1) {
-      fieldRefs.images?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      alert("사진을 최소 1장 등록해주세요."); return false;
-    }
-    if (!contactPhone.trim()) {
-      fieldRefs.contact?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      alert("연락처를 입력해주세요."); return false;
-    }
+  const validate = (): boolean => {
+    if (!user) return failValidation(null, "거래 등록은 로그인 후 가능합니다.");
+
+    if (!title.trim()) return failValidation("title", "제목을 입력해주세요.");
+    if (!regionCode || !regionName.includes(" ")) return failValidation("region", "지역을 시·군·구까지 선택해주세요.");
+    if (imageUrls.length < 1) return failValidation("images", "사진을 최소 1장 등록해주세요.");
+    if (!contactPhone.trim()) return failValidation("contact", "연락처를 입력해주세요.");
 
     if (tradeCategory === "equipment") {
-      if (!centerName.trim()) { fieldRefs.centerName?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("센터명은 중고거래에서 필수입니다."); return false; }
+      if (!centerName.trim()) return failValidation("centerName", "센터명은 중고거래에서 필수입니다.");
       // 상세 주소: 자동 prefix(시·도 시·군·구) 외 추가 입력 필수
       const trimmedDetail = regionDetail.trim();
       const regionPrefix = regionName.trim();
-      if (!trimmedDetail) {
-        fieldRefs.regionDetail?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-        alert("중고거래는 추가 상세 주소를 입력해주세요."); return false;
-      }
+      if (!trimmedDetail) return failValidation("regionDetail", "중고거래는 추가 상세 주소를 입력해주세요.");
       const extra = regionPrefix && trimmedDetail.startsWith(regionPrefix)
         ? trimmedDetail.slice(regionPrefix.length).trim()
         : trimmedDetail;
-      if (!extra) {
-        fieldRefs.regionDetail?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-        alert("추가 상세 주소를 입력해주세요."); return false;
-      }
+      if (!extra) return failValidation("regionDetail", "추가 상세 주소를 입력해주세요.");
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
         const prefix = items.length > 1 ? `${i + 1}번 물품의 ` : "";
-        if (!it.name.trim()) { fieldRefs.items?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert(`${prefix}제품명을 입력해주세요.`); return false; }
-        if (!it.condition.trim()) { fieldRefs.items?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert(`${prefix}상태 등급을 입력해주세요.`); return false; }
-        if (!it.price.trim()) { fieldRefs.items?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert(`${prefix}가격을 입력해주세요.`); return false; }
+        if (!it.name.trim()) return failValidation("items", `${prefix}제품명을 입력해주세요.`);
+        if (!it.condition.trim()) return failValidation("items", `${prefix}상태 등급을 입력해주세요.`);
+        if (!it.price.trim()) return failValidation("items", `${prefix}가격을 입력해주세요.`);
       }
-      if (tradeMethods.size === 0) { fieldRefs.tradeMethods?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("거래 방식을 1개 이상 선택해주세요."); return false; }
-      if (tradeMethods.has("etc") && !tradeMethodEtc.trim()) { fieldRefs.tradeMethods?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("기타 거래 방식 내용을 입력해주세요."); return false; }
+      if (tradeMethods.size === 0) return failValidation("tradeMethods", "거래 방식을 1개 이상 선택해주세요.");
+      if (tradeMethods.has("etc") && !tradeMethodEtc.trim()) return failValidation("tradeMethods", "기타 거래 방식 내용을 입력해주세요.");
     } else {
-      if (!industry.trim()) { fieldRefs.industry?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("업종을 선택해주세요."); return false; }
-      if (!storeType.trim()) { fieldRefs.storeType?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("매장 종류를 입력해주세요."); return false; }
-      if (centerNameVisible === "public" && !centerNameValue.trim()) { fieldRefs.centerNameValue?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("센터명을 공개로 선택하셨습니다. 이름을 입력해주세요."); return false; }
-      if (!areaPyeong.trim()) { fieldRefs.area?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("평수를 입력해주세요."); return false; }
-      if (!deposit.trim()) { fieldRefs.deposit?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("보증금을 입력해주세요."); return false; }
-      if (!monthly.trim()) { fieldRefs.monthly?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("월세를 입력해주세요."); return false; }
-      if (memberType === "숫자 입력" && !memberValue.trim()) { fieldRefs.member?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("보유회원수를 입력해주세요."); return false; }
-      if (memberType === "기타" && !memberEtc.trim()) { fieldRefs.member?.current?.scrollIntoView({ behavior: "smooth", block: "center" }); alert("보유회원수 기타 항목을 입력해주세요."); return false; }
+      if (!industry.trim()) return failValidation("industry", "업종을 선택해주세요.");
+      if (!storeType.trim()) return failValidation("storeType", "매장 종류를 입력해주세요.");
+      if (centerNameVisible === "public" && !centerNameValue.trim()) return failValidation("centerNameValue", "센터명을 공개로 선택하셨습니다. 이름을 입력해주세요.");
+      if (!areaPyeong.trim()) return failValidation("area", "평수를 입력해주세요.");
+      if (!deposit.trim()) return failValidation("deposit", "보증금을 입력해주세요.");
+      if (!monthly.trim()) return failValidation("monthly", "월세를 입력해주세요.");
+      if (memberType === "숫자 입력" && !memberValue.trim()) return failValidation("member", "보유회원수를 입력해주세요.");
+      if (memberType === "기타" && !memberEtc.trim()) return failValidation("member", "보유회원수 기타 항목을 입력해주세요.");
     }
 
-    if (!body.trim()) {
-      fieldRefs.body?.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      alert(tradeCategory === "center" ? "인수 조건 및 상세 내용을 입력해주세요." : "상세 설명을 입력해주세요.");
-      return false;
-    }
+    if (!body.trim()) return failValidation("body", tradeCategory === "center" ? "인수 조건 및 상세 내용을 입력해주세요." : "상세 설명을 입력해주세요.");
 
-    if (!agreed) { alert("동의 항목을 체크해주세요."); return false; }
+    if (!agreed) return failValidation(null, "동의 항목을 체크해주세요.");
     return true;
   };
 
