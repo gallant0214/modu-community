@@ -134,7 +134,7 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
     <div className="min-h-screen bg-[#F8F4EC] dark:bg-zinc-950 pb-28">
       {/* 헤더 */}
       <div className="sticky top-14 z-30 bg-[#F8F4EC]/85 dark:bg-zinc-950/85 backdrop-blur-md border-b border-[#E8E0D0]/70 dark:border-zinc-800">
-        <div className="mx-auto max-w-2xl px-4 sm:px-6 py-3">
+        <div className="mx-auto max-w-2xl px-4 sm:px-6 py-1.5">
           <div className="flex items-center justify-between">
             <span className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">거래 게시판</span>
             <Link href="/trade/write"
@@ -148,7 +148,7 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
         </div>
       </div>
 
-      <div className="mx-auto max-w-2xl px-4 sm:px-6 pt-20 pb-5 space-y-4">
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 pt-14 pb-5 space-y-4">
         {/* 카테고리 탭 */}
         <div className="flex gap-1.5">
           {CATEGORY_TABS.map(tab => (
