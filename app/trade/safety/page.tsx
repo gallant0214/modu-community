@@ -46,13 +46,6 @@ export default function TradeSafetyPage() {
           </ul>
         </section>
 
-        {/* 자체 안전결제 미제공 안내 */}
-        <section className="bg-[#FFF4E5] dark:bg-zinc-800/60 border border-[#F5D9B0] dark:border-zinc-700 rounded-3xl p-4 sm:p-5">
-          <p className="text-[13px] text-[#3A342A] dark:text-zinc-200 leading-relaxed">
-            ℹ️ <strong>모두의 지도사 커뮤니티는 자체 안전결제(에스크로)를 제공하지 않습니다.</strong> 거래는 사용자 간 직접 이루어지므로, 부득이하게 송금·택배 거래가 필요한 경우 외부 안전결제 서비스(카카오페이·네이버페이 등)를 활용하시되, 본 플랫폼이 결제·배송을 보증하지 않는다는 점을 반드시 인지해 주세요.
-          </p>
-        </section>
-
         {/* 피해 예방 방법 */}
         <section className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-5 sm:p-6">
           <h2 className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 mb-3">
