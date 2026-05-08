@@ -18,7 +18,8 @@ function formatDate(iso: string) {
   return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 function formatPrice(n: number | null | undefined): string {
-  if (n === null || n === undefined || n === 0) return "-";
+  if (n === null || n === undefined) return "-";
+  if (n === 0) return "0만원";
   if (n >= 10000) return `${(n / 10000).toFixed(n % 10000 === 0 ? 0 : 1)}억원`;
   return `${n.toLocaleString()}만원`;
 }
