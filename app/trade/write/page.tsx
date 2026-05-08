@@ -153,7 +153,7 @@ const TRADE_METHODS = [
 type TradeMethodKey = typeof TRADE_METHODS[number]["key"];
 
 const NEGOTIABLE_OPTIONS = ["협의가능", "조정불가", "권리금없음"] as const;
-const MEMBER_COUNT_TYPES = ["숫자 입력", "기타"] as const;
+const MEMBER_COUNT_TYPES = ["회원수", "기타"] as const;
 
 /* ══════════════════════════════════
    메인 페이지
@@ -279,7 +279,7 @@ function TradeWritePage() {
           }
           const mc = ci.member_count as Record<string, unknown> | undefined;
           if (mc?.type === "number") {
-            setMemberType("숫자 입력");
+            setMemberType("회원수");
             setMemberValue(mc.value ? Number(mc.value).toLocaleString() : "");
           } else if (mc?.type === "etc") {
             setMemberType("기타");
@@ -328,7 +328,7 @@ function TradeWritePage() {
   const [mgmtFee, setMgmtFee] = useState("");
   const [premium, setPremium] = useState("");
   const [premiumNeg, setPremiumNeg] = useState<typeof NEGOTIABLE_OPTIONS[number]>("협의가능");
-  const [memberType, setMemberType] = useState<typeof MEMBER_COUNT_TYPES[number]>("숫자 입력");
+  const [memberType, setMemberType] = useState<typeof MEMBER_COUNT_TYPES[number]>("회원수");
   const [memberValue, setMemberValue] = useState("");
   const [memberEtc, setMemberEtc] = useState("");
 
@@ -485,7 +485,7 @@ function TradeWritePage() {
       if (!monthly.trim()) return failValidation("monthly", "월세를 입력해주세요.");
       if (!mgmtFee.trim()) return failValidation("mgmtFee", "관리비를 입력해주세요.");
       if (premiumNeg !== "권리금없음" && !premium.trim()) return failValidation("premium", "권리금을 입력해주세요. (없으면 권리금없음 선택)");
-      if (memberType === "숫자 입력" && !memberValue.trim()) return failValidation("member", "보유회원수를 입력해주세요.");
+      if (memberType === "회원수" && !memberValue.trim()) return failValidation("member", "보유회원수를 입력해주세요.");
       if (memberType === "기타" && !memberEtc.trim()) return failValidation("member", "보유회원수 기타 항목을 입력해주세요.");
     }
 
@@ -538,7 +538,7 @@ function TradeWritePage() {
         };
       } else {
         const memberCount: Record<string, unknown> =
-          memberType === "숫자 입력"
+          memberType === "회원수"
             ? { type: "number", value: parseNum(memberValue) }
             : { type: "etc", text: memberEtc.trim() };
 
@@ -911,7 +911,7 @@ function TradeWritePage() {
                       </button>
                     ))}
                   </div>
-                  {memberType === "숫자 입력" && (
+                  {memberType === "회원수" && (
                     <div className="flex items-center gap-2">
                       <input type="text" value={memberValue} onChange={e => setMemberValue(formatNumber(e.target.value))}
                         placeholder="회원 수" className={`${inputCls} flex-1`} inputMode="numeric" />
@@ -920,7 +920,7 @@ function TradeWritePage() {
                   )}
                   {memberType === "기타" && (
                     <input type="text" value={memberEtc} onChange={e => setMemberEtc(e.target.value.slice(0, 100))}
-                      placeholder="예) 정회원 200명 + 휴면 50명, 만나서 알려드림 등" className={inputCls} />
+                      placeholder="예) 유효회원 200명+ 휴면회원 20명 , 회원양도 없음 등" className={inputCls} />
                   )}
                 </Field>
               </div>
