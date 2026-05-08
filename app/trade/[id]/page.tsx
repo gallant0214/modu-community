@@ -10,6 +10,7 @@ import type { TradePost } from "@/app/lib/trade-query";
 interface TradePostDetail extends TradePost {
   is_bookmarked?: boolean;
   is_owner?: boolean;
+  is_admin?: boolean;
 }
 
 function formatDate(iso: string) {
@@ -257,10 +258,15 @@ export default function TradeDetailPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
             </svg>
           </button>
-          {post.is_owner && (
+          {(post.is_owner || post.is_admin) && (
             <>
-              <Link href={`/trade/${post.id}/edit`} className="shrink-0 whitespace-nowrap px-3 py-1.5 text-xs border border-[#E8E0D0] dark:border-zinc-700 rounded-lg text-[#6B5D47] dark:text-zinc-400 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors">수정</Link>
-              <button onClick={() => setShowDeleteConfirm(true)} className="shrink-0 whitespace-nowrap px-3 py-1.5 text-xs border border-red-200 dark:border-red-900 rounded-lg text-red-500 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-red-50 dark:hover:bg-red-950 transition-colors">삭제</button>
+              {post.is_owner && (
+                <Link href={`/trade/${post.id}/edit`} className="shrink-0 whitespace-nowrap px-3 py-1.5 text-xs border border-[#E8E0D0] dark:border-zinc-700 rounded-lg text-[#6B5D47] dark:text-zinc-400 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors">수정</Link>
+              )}
+              {!post.is_owner && post.is_admin && (
+                <Link href={`/trade/${post.id}/edit`} className="shrink-0 whitespace-nowrap px-3 py-1.5 text-xs border border-amber-300 dark:border-amber-700 rounded-lg text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-950 transition-colors">관리자 수정</Link>
+              )}
+              <button onClick={() => setShowDeleteConfirm(true)} className={`shrink-0 whitespace-nowrap px-3 py-1.5 text-xs border rounded-lg transition-colors ${!post.is_owner && post.is_admin ? "border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-950" : "border-red-200 dark:border-red-900 text-red-500 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-red-50 dark:hover:bg-red-950"}`}>{!post.is_owner && post.is_admin ? "관리자 삭제" : "삭제"}</button>
             </>
           )}
         </div>

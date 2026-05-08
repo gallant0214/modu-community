@@ -1,6 +1,6 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
-import { verifyAuth } from "@/app/lib/firebase-admin";
+import { verifyAuth, isAdminUid } from "@/app/lib/firebase-admin";
 import { invalidateCache } from "@/app/lib/cache";
 import { sanitize, validateLength } from "@/app/lib/security";
 import type { Database } from "@/app/lib/database.types";
@@ -8,6 +8,20 @@ import type { Database } from "@/app/lib/database.types";
 type TradePostUpdate = Database["public"]["Tables"]["trade_posts"]["Update"];
 
 export const dynamic = "force-dynamic";
+
+async function checkAdminEmail(email: string | null | undefined): Promise<boolean> {
+  if (!email) return false;
+  const { count } = await supabase
+    .from("admin_emails")
+    .select("id", { count: "exact", head: true })
+    .eq("email", email.toLowerCase());
+  return (count ?? 0) > 0;
+}
+
+async function checkIsAdmin(uid: string, email: string | null | undefined): Promise<boolean> {
+  if (isAdminUid(uid)) return true;
+  return await checkAdminEmail(email);
+}
 
 // GET /api/trade/[tradeId] — 단건 조회 (+ 로그인 시 is_bookmarked 동기화)
 export async function GET(
@@ -56,7 +70,8 @@ export async function GET(
   }
 
   const is_owner = !!user && user.uid === post.firebase_uid;
-  return NextResponse.json({ ...post, author_nickname, is_bookmarked, is_owner });
+  const is_admin = !!user && (await checkIsAdmin(user.uid, user.email));
+  return NextResponse.json({ ...post, author_nickname, is_bookmarked, is_owner, is_admin });
 }
 
 // DELETE /api/trade/[tradeId] — 본인 또는 관리자만 삭제 (소프트 = status='deleted')
@@ -77,7 +92,9 @@ export async function DELETE(
     .single();
 
   if (!post) return NextResponse.json({ error: "글을 찾을 수 없습니다" }, { status: 404 });
-  if (post.firebase_uid !== user.uid) {
+  const isOwner = post.firebase_uid === user.uid;
+  const isAdmin = await checkIsAdmin(user.uid, user.email);
+  if (!isOwner && !isAdmin) {
     return NextResponse.json({ error: "본인 글만 삭제할 수 있습니다" }, { status: 403 });
   }
 
@@ -113,7 +130,9 @@ export async function PATCH(
     .single();
 
   if (!existing) return NextResponse.json({ error: "글을 찾을 수 없습니다" }, { status: 404 });
-  if (existing.firebase_uid !== user.uid) {
+  const isOwnerEdit = existing.firebase_uid === user.uid;
+  const isAdminEdit = await checkIsAdmin(user.uid, user.email);
+  if (!isOwnerEdit && !isAdminEdit) {
     return NextResponse.json({ error: "본인 글만 수정할 수 있습니다" }, { status: 403 });
   }
 
