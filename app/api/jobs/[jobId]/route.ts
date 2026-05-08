@@ -37,6 +37,20 @@ export async function GET(
     .select("*", { count: "exact", head: true })
     .eq("job_post_id", id);
 
+  // 작성자 닉네임 — 고용24 임포트(source='work24') 글은 null. 일반 사용자 글만 표시.
+  let author_nickname: string | null = null;
+  const isWork24 = (job as { source?: string | null }).source === "work24";
+  if (job.firebase_uid && !isWork24) {
+    const { data: nick } = await supabase
+      .from("nicknames")
+      .select("name")
+      .eq("firebase_uid", job.firebase_uid)
+      .maybeSingle();
+    if (nick?.name && !nick.name.startsWith("__pending_")) {
+      author_nickname = nick.name;
+    }
+  }
+
   let isLiked = false;
   let isBookmarked = false;
   const user = await verifyAuth(request);
@@ -63,6 +77,7 @@ export async function GET(
     is_liked: isLiked,
     is_bookmarked: isBookmarked,
     is_mine: user ? job.firebase_uid === user.uid : false,
+    author_nickname,
   });
 }
 
