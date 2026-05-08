@@ -125,7 +125,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "자기 자신에게는 보낼 수 없습니다" }, { status: 400 });
   }
 
-  // 양방향 차단 체크 — 어느 한쪽이라도 차단했으면 발송 불가
+  // 양방향 차단 체크 — 어느 한쪽이라도 차단했으면 silent drop
+  // 발송자에겐 정상 발송된 것처럼 보이지만 DB INSERT 안 함 + 푸시 안 보냄.
+  // 카카오/인스타 패턴: 차단된 줄 모르게 조용히 버려서 차단 보호 강화.
   const { data: blockRow } = await supabase
     .from("user_blocks")
     .select("id")
@@ -136,7 +138,7 @@ export async function POST(req: NextRequest) {
     .limit(1)
     .maybeSingle();
   if (blockRow) {
-    return NextResponse.json({ error: "차단된 사용자에게는 쪽지를 보낼 수 없습니다" }, { status: 403 });
+    return NextResponse.json({ success: true });
   }
 
   const { data: sender } = await supabase
