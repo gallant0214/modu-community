@@ -220,7 +220,10 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
                 : premiumNeg
                   ? `권리금 ${premiumNeg}`
                   : "";
-              const categoryLabel = p.category === "center" ? "[센터매매]" : "[중고거래]";
+              const storeType = p.category === "center" && ci?.store_type ? String(ci.store_type).trim() : "";
+              const categoryLabel = p.category === "center"
+                ? (storeType ? `[센터매매] ${storeType}` : "[센터매매]")
+                : "[중고거래]";
               const categoryColor = p.category === "center" ? "#C0392B" : "#6B7B3A";
 
               const equipmentInfoLine = [
