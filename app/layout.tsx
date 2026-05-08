@@ -21,7 +21,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "모두의 지도사 커뮤니티",
+  title: "모두의 지도사 — 체육지도사 종목별 후기·실기구술·스포츠 구인·거래 커뮤니티",
   description: "종목별 경험과 정보를 나누는 커뮤니티. 실기·구술 후기, 스포츠 구인 공고를 한곳에서 확인하세요.",
   metadataBase: new URL("https://moducm.com"),
   openGraph: {
