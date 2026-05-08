@@ -106,6 +106,7 @@ export async function POST(request: Request) {
     tradesRes,
     sentMsgRes,
     recvMsgRes,
+    messagesListRes,
     bookmarksRes,
     jobBmRes,
     tradeBmRes,
@@ -117,6 +118,13 @@ export async function POST(request: Request) {
     sb.from("trade_posts").select("id, title, category, status, created_at").eq("firebase_uid", uid).order("created_at", { ascending: false }).limit(100),
     sb.from("messages").select("id", { count: "exact", head: true }).eq("sender_uid", uid),
     sb.from("messages").select("id", { count: "exact", head: true }).eq("receiver_uid", uid),
+    // 쪽지 본문 — 법적 분쟁 대응. 양방향 최근 100건. 사용자 측 삭제 메시지도 포함 (증빙 목적)
+    sb
+      .from("messages")
+      .select("id, sender_uid, sender_nickname, receiver_uid, receiver_nickname, content, parent_id, is_read, created_at, deleted_by_sender, deleted_by_receiver, spam_reported_by_receiver, spam_reported_at")
+      .or(`sender_uid.eq.${uid},receiver_uid.eq.${uid}`)
+      .order("created_at", { ascending: false })
+      .limit(100),
     sb.from("post_bookmarks").select("id", { count: "exact", head: true }).eq("firebase_uid", uid),
     sb.from("job_post_bookmarks").select("id", { count: "exact", head: true }).eq("firebase_uid", uid),
     sb.from("trade_post_bookmarks").select("id", { count: "exact", head: true }).eq("firebase_uid", uid),
@@ -157,5 +165,11 @@ export async function POST(request: Request) {
       jobs: jobsRes.data || [],
       trades: tradesRes.data || [],
     },
+    messages: (messagesListRes.data || []).map((m: any) => ({
+      ...m,
+      direction: m.sender_uid === uid ? "sent" : "received",
+      counterpart_nickname: m.sender_uid === uid ? m.receiver_nickname : m.sender_nickname,
+      counterpart_uid: m.sender_uid === uid ? m.receiver_uid : m.sender_uid,
+    })),
   });
 }

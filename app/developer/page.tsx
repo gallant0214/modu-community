@@ -94,6 +94,8 @@ export default function AdminPage() {
   const [tabStatsLoading, setTabStatsLoading] = useState(false);
   // 추적 제외 토글 — 본인 트래픽 제거
   const [analyticsExcluded, setAnalyticsExcluded] = useState(false);
+  // USER 탭 쪽지 펼침 — 법적 분쟁 대응 목적, 기본 접힘
+  const [userMessagesExpanded, setUserMessagesExpanded] = useState(false);
   // 리포트 탭 상태
   const [reportData, setReportData] = useState<any>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -1678,6 +1680,93 @@ export default function AdminPage() {
                       url: `/trade/${t.id}`,
                     }))}
                   />
+                </div>
+
+                {/* ===== 쪽지 본문 (법적 분쟁 대응) ===== */}
+                <div className="rounded-xl border border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/20">
+                  <button
+                    onClick={() => setUserMessagesExpanded((v) => !v)}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3"
+                  >
+                    <div className="text-left">
+                      <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100">
+                        🔒 쪽지 본문 ({(userResult.messages || []).length}건 / 전체 보낸 {userResult.counts?.messages_sent || 0} · 받은 {userResult.counts?.messages_received || 0})
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-400">
+                        법적 분쟁 대응 전용 · 사용자 측 삭제 메시지도 증빙 목적으로 표시됨 · 외부 유출 금지
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                      {userMessagesExpanded ? "접기" : "펼치기"}
+                    </span>
+                  </button>
+                  {userMessagesExpanded && (
+                    <div className="border-t border-amber-200 dark:border-amber-900">
+                      {(userResult.messages || []).length === 0 ? (
+                        <p className="px-4 py-6 text-center text-[12px] text-zinc-400">주고받은 쪽지가 없습니다.</p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-[12px]">
+                            <thead className="bg-amber-100/60 dark:bg-amber-950/40">
+                              <tr>
+                                <th className="px-3 py-2 text-left font-semibold text-zinc-600 dark:text-zinc-300">시간</th>
+                                <th className="px-2 py-2 text-center font-semibold text-zinc-600 dark:text-zinc-300">방향</th>
+                                <th className="px-2 py-2 text-left font-semibold text-zinc-600 dark:text-zinc-300">상대방</th>
+                                <th className="px-3 py-2 text-left font-semibold text-zinc-600 dark:text-zinc-300">내용</th>
+                                <th className="px-2 py-2 text-center font-semibold text-zinc-600 dark:text-zinc-300">상태</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(userResult.messages || []).map((m: any) => {
+                                const flags: string[] = [];
+                                if (m.spam_reported_by_receiver) flags.push("스팸신고");
+                                if (m.deleted_by_sender) flags.push("발신측삭제");
+                                if (m.deleted_by_receiver) flags.push("수신측삭제");
+                                if (!m.is_read) flags.push("미읽음");
+                                return (
+                                  <tr key={m.id} className="border-t border-amber-100 dark:border-amber-950/60 align-top">
+                                    <td className="px-3 py-2 whitespace-nowrap text-zinc-500 dark:text-zinc-400">
+                                      {new Date(m.created_at).toLocaleString("ko-KR", { year: "2-digit", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                                    </td>
+                                    <td className="px-2 py-2 text-center whitespace-nowrap">
+                                      <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${m.direction === "sent" ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"}`}>
+                                        {m.direction === "sent" ? "보냄" : "받음"}
+                                      </span>
+                                    </td>
+                                    <td className="px-2 py-2 whitespace-nowrap text-zinc-700 dark:text-zinc-200">
+                                      {m.counterpart_nickname}
+                                    </td>
+                                    <td className="px-3 py-2 text-zinc-800 dark:text-zinc-100 whitespace-pre-wrap break-words max-w-[320px]">
+                                      {m.content}
+                                      {m.parent_id && <span className="ml-1 text-[10px] text-zinc-400">↵ 답장</span>}
+                                    </td>
+                                    <td className="px-2 py-2 text-center whitespace-nowrap">
+                                      {flags.length === 0 ? (
+                                        <span className="text-zinc-400">-</span>
+                                      ) : (
+                                        <div className="flex flex-col gap-0.5 text-[10px]">
+                                          {flags.map((f) => (
+                                            <span key={f} className={`inline-block rounded px-1.5 py-0.5 font-semibold ${f === "스팸신고" ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300" : f.includes("삭제") ? "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400" : "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300"}`}>
+                                              {f}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      {(userResult.counts?.messages_sent || 0) + (userResult.counts?.messages_received || 0) > (userResult.messages || []).length && (
+                        <p className="px-4 py-3 text-center text-[11px] text-zinc-400 border-t border-amber-100 dark:border-amber-950/60">
+                          최근 100건만 표시됩니다 · 더 오래된 쪽지가 필요하면 별도 조회 필요
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
