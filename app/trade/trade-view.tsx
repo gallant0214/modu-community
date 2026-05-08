@@ -232,9 +232,7 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
                   ? `권리금 ${premiumNeg}`
                   : "";
               const storeType = p.category === "center" && ci?.store_type ? String(ci.store_type).trim() : "";
-              const categoryLabel = p.category === "center"
-                ? (storeType ? `[센터매매] ${storeType}` : "[센터매매]")
-                : "[중고거래]";
+              const categoryBracket = p.category === "center" ? "[센터매매]" : "[중고거래]";
               const categoryColor = p.category === "center" ? "#C0392B" : "#6B7B3A";
 
               const equipmentInfoLine = [
@@ -275,8 +273,11 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
                     <div className="flex-1 min-w-0 flex flex-col justify-between gap-1.5">
                       {/* 카테고리 라벨 + 제목 */}
                       <div className="min-w-0">
-                        <span className="text-[11px] font-bold tracking-wide" style={{ color: categoryColor }}>
-                          {categoryLabel}
+                        <span className="text-[11px] font-bold tracking-wide">
+                          <span style={{ color: categoryColor }}>{categoryBracket}</span>
+                          {storeType && (
+                            <span className="text-[#2A251D] dark:text-zinc-100"> {storeType}</span>
+                          )}
                         </span>
                         <h3 className="mt-0.5 text-[14px] sm:text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 leading-tight tracking-tight line-clamp-2">
                           {p.title}
