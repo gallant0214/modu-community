@@ -714,16 +714,6 @@ function TradeWritePage() {
             </Field>
           </div>
 
-          {/* 중고거래 전용 — 센터명 (필수 공개) */}
-          {tradeCategory === "equipment" && (
-            <div ref={fieldRefs.centerName}>
-              <Field label="센터명" required hint="중고거래는 필수 공개" count={centerName.length} max={50}>
-                <input type="text" value={centerName} onChange={e => setCenterName(e.target.value.slice(0, 50))}
-                  placeholder="제품을 보관·사용 중인 센터명" className={inputCls} />
-              </Field>
-            </div>
-          )}
-
           {/* 상세 주소 — 중고거래 필수, 센터매매 선택 */}
           <div ref={fieldRefs.regionDetail}>
             <Field
@@ -739,6 +729,16 @@ function TradeWritePage() {
               {regionName && <p className="text-[11px] text-[#A89B80] mt-1.5">시·군·구가 자동 입력됩니다. 그 뒤에 추가 주소를 입력해 주세요.</p>}
             </Field>
           </div>
+
+          {/* 중고거래 전용 — 센터명 (상세 주소 밑) */}
+          {tradeCategory === "equipment" && (
+            <div ref={fieldRefs.centerName}>
+              <Field label="센터명" required hint="중고거래는 필수 공개" count={centerName.length} max={50}>
+                <input type="text" value={centerName} onChange={e => setCenterName(e.target.value.slice(0, 50))}
+                  placeholder="제품을 보관·사용 중인 센터명" className={inputCls} />
+              </Field>
+            </div>
+          )}
         </Section>
 
         {/* ─── equipment 전용 ─── */}
@@ -871,7 +871,7 @@ function TradeWritePage() {
                 <Field label="평수" required>
                   <div className="flex items-center gap-2">
                     <input type="text" value={areaPyeong} onChange={e => setAreaPyeong(formatNumber(e.target.value))}
-                      placeholder="평수" className={`${inputCls} flex-1`} inputMode="numeric" />
+                      placeholder="예) 120 (실평수)" className={`${inputCls} flex-1`} inputMode="numeric" />
                     <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">평</span>
                   </div>
                 </Field>
@@ -880,13 +880,13 @@ function TradeWritePage() {
 
             <Section number={4} title="지출정보" subtitle="보증금·월세·관리비를 입력하세요">
               <div ref={fieldRefs.deposit}>
-                <PlainMoneyField label="보증금" required value={deposit} onChange={setDeposit} />
+                <PlainMoneyField label="보증금" required value={deposit} onChange={setDeposit} placeholder="예) 2000" />
               </div>
               <div ref={fieldRefs.monthly}>
-                <PlainMoneyField label="월세" required value={monthly} onChange={setMonthly} />
+                <PlainMoneyField label="월세" required value={monthly} onChange={setMonthly} placeholder="예) 250" />
               </div>
               <div ref={fieldRefs.mgmtFee}>
-                <PlainMoneyField label="관리비" required value={mgmtFee} onChange={setMgmtFee} />
+                <PlainMoneyField label="관리비" required value={mgmtFee} onChange={setMgmtFee} placeholder="예) 50" />
               </div>
             </Section>
 
@@ -1099,17 +1099,18 @@ function TradeWritePage() {
 /* ──────────────────────────────────────────
    금액 입력 (협의 토글 없음) — 보증금/월세/관리비
    ────────────────────────────────────────── */
-function PlainMoneyField({ label, required, value, onChange }: {
+function PlainMoneyField({ label, required, value, onChange, placeholder }: {
   label: string;
   required?: boolean;
   value: string;
   onChange: (v: string) => void;
+  placeholder?: string;
 }) {
   return (
     <Field label={label} required={required}>
       <div className="flex items-center gap-2">
         <input type="text" value={value} onChange={e => onChange(formatNumber(e.target.value))}
-          placeholder="예) 1000" className={`${inputCls} flex-1`} inputMode="numeric" />
+          placeholder={placeholder || "예) 1000"} className={`${inputCls} flex-1`} inputMode="numeric" />
         <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">만원</span>
       </div>
     </Field>
@@ -1145,7 +1146,7 @@ function PremiumField({ value, onChange, neg, setNeg }: {
         {!noPremium && (
           <div className="flex items-center gap-2">
             <input type="text" value={value} onChange={e => onChange(formatNumber(e.target.value))}
-              placeholder="예) 5000" className={`${inputCls} flex-1`} inputMode="numeric" />
+              placeholder="예) 3000" className={`${inputCls} flex-1`} inputMode="numeric" />
             <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">만원</span>
           </div>
         )}
