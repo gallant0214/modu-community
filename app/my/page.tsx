@@ -266,7 +266,7 @@ function MyPageContent() {
     notify_job: true,
     notify_trade: true,
     notify_notice: true,
-    notify_promo: true,
+    notify_promo: false,
     notify_keyword: true,
   });
   const notifPrefsLoaded = useRef(false);

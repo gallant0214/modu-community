@@ -35,12 +35,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "제목과 내용을 입력해주세요" }, { status: 400 });
   }
 
+  // 정보통신망법 제50조 — 광고성 메시지 제목에 (광고) 강제 부착
+  const isAd = broadcast_type === "ad" || broadcast_type === "promo";
+  let finalTitle = title.trim();
+  if (isAd && !/^\(광고\)/u.test(finalTitle)) {
+    finalTitle = `(광고) ${finalTitle.replace(/^\(광고\)\s*/u, "")}`;
+  }
+  // 광고성은 본문에 발신자·수신거부 안내 없으면 자동 추가
+  let finalBody = body.trim();
+  if (isAd) {
+    const hasSender = /모두의\s*지도사/u.test(finalBody);
+    const hasOptOut = /수신거부|수신\s*거부|알림\s*설정/u.test(finalBody);
+    const tail: string[] = [];
+    if (!hasSender) tail.push("[모두의 지도사]");
+    if (!hasOptOut) tail.push("수신거부: 마이 → 알림 설정");
+    if (tail.length > 0) finalBody = `${finalBody}\n\n${tail.join(" · ")}`;
+  }
+
   // 브로드캐스트 저장
   const { data: bc, error: insertErr } = await supabase
     .from("admin_broadcasts")
     .insert({
-      title: title.trim(),
-      body: body.trim(),
+      title: finalTitle,
+      body: finalBody,
       image_url: image_url || null,
       link_url: link_url || null,
       broadcast_type: broadcast_type || "notice",
@@ -80,7 +97,7 @@ export async function POST(request: Request) {
 
   for (const uid of targetUids) {
     try {
-      await sendPushToUser(uid, bType, title.trim(), body.trim(), {
+      await sendPushToUser(uid, bType, finalTitle, finalBody, {
         type: "admin_broadcast",
         broadcastId: String(broadcastId),
         broadcast_type: bType,

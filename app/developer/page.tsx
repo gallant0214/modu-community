@@ -6,6 +6,7 @@ import { signInWithPopup, onAuthStateChanged, signOut, type User } from "firebas
 import { auth, googleProvider } from "@/app/lib/firebase-client";
 import { getReports, resolveReport, deleteReportTarget, getInquiries, hideInquiry, unhideInquiry, deleteInquiry, replyToInquiry } from "@/app/lib/actions";
 import type { Report, Inquiry } from "@/app/lib/types";
+import { ANALYTICS_EXCLUDE_KEY } from "@/app/lib/use-tab-analytics";
 
 type AuthStep = "loading" | "google" | "blocked" | "password" | "authenticated";
 
@@ -88,6 +89,11 @@ export default function AdminPage() {
   };
   const [kpiData, setKpiData] = useState<any>(null);
   const [kpiLoading, setKpiLoading] = useState(false);
+  // 탭 방문 통계 (tab_visits 집계)
+  const [tabStatsData, setTabStatsData] = useState<any>(null);
+  const [tabStatsLoading, setTabStatsLoading] = useState(false);
+  // 추적 제외 토글 — 본인 트래픽 제거
+  const [analyticsExcluded, setAnalyticsExcluded] = useState(false);
   // 리포트 탭 상태
   const [reportData, setReportData] = useState<any>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -272,6 +278,53 @@ export default function AdminPage() {
     setKpiLoading(false);
   }, [storedPassword, computeRange, kpiFrom, kpiTo, kpiVisitFrom, kpiVisitTo, kpiReportFrom, kpiReportTo]);
 
+  // 탭 방문 통계 — 유입수 기간(kpiVisit*) 그대로 사용
+  const loadTabStats = useCallback(async (visitMode: typeof kpiVisitRange) => {
+    if (!storedPassword) return;
+    setTabStatsLoading(true);
+    try {
+      const visit = computeRange(visitMode, kpiVisitFrom, kpiVisitTo);
+      // "all" 의 경우 from/to 없으면 광범위 기본값 적용 (90일)
+      const today = new Date().toISOString().slice(0, 10);
+      const fallbackFrom = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 89);
+        return d.toISOString().slice(0, 10);
+      })();
+      const res = await fetch("/api/admin/kpi/tab-stats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password: storedPassword,
+          from: visit.from || fallbackFrom,
+          to: visit.to || today,
+        }),
+      });
+      const data = await res.json();
+      if (!data.error) setTabStatsData(data);
+    } catch {}
+    setTabStatsLoading(false);
+  }, [storedPassword, computeRange, kpiVisitFrom, kpiVisitTo]);
+
+  function formatTabDuration(sec: number): string {
+    if (!sec || sec <= 0) return "-";
+    if (sec < 60) return `${sec}초`;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    if (m < 60) return s > 0 ? `${m}분 ${s}초` : `${m}분`;
+    const h = Math.floor(m / 60);
+    const remM = m % 60;
+    return remM > 0 ? `${h}시간 ${remM}분` : `${h}시간`;
+  }
+
+  function toggleAnalyticsExclusion() {
+    if (typeof window === "undefined") return;
+    const next = !analyticsExcluded;
+    if (next) localStorage.setItem(ANALYTICS_EXCLUDE_KEY, "true");
+    else localStorage.removeItem(ANALYTICS_EXCLUDE_KEY);
+    setAnalyticsExcluded(next);
+  }
+
   const fetchData = useCallback(async (pw: string) => {
     const [reportResult, inquiryResult] = await Promise.all([
       getReports(pw),
@@ -398,13 +451,17 @@ export default function AdminPage() {
     setPushMsg(null);
     try {
       const token = await firebaseUser?.getIdToken();
+      // 광고/프로모션 발송은 정보통신망법 제50조에 따라 제목에 (광고) 자동 부착
+      const finalTitle = pushType === "ad"
+        ? `(광고) ${pushTitle.trim().replace(/^\(광고\)\s*/u, "")}`
+        : pushTitle.trim();
       const res = await fetch("/api/admin/broadcast", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ title: pushTitle.trim(), body: pushBody.trim(), broadcast_type: pushType || "notice" }),
+        body: JSON.stringify({ title: finalTitle, body: pushBody.trim(), broadcast_type: pushType || "notice" }),
       });
       const data = await res.json();
       if (data.error) { setPushMsg({ type: "error", text: data.error }); }
@@ -702,6 +759,10 @@ export default function AdminPage() {
           <button onClick={async () => {
             setTab("kpi");
             if (!kpiData) await loadKpi(kpiRange, kpiVisitRange, kpiReportRange);
+            if (!tabStatsData) await loadTabStats(kpiVisitRange);
+            if (typeof window !== "undefined") {
+              setAnalyticsExcluded(localStorage.getItem(ANALYTICS_EXCLUDE_KEY) === "true");
+            }
           }} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "kpi" ? "border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
             KPI
           </button>
@@ -908,6 +969,124 @@ export default function AdminPage() {
             ) : (
               <p className="text-center py-16 text-sm text-zinc-400">KPI 데이터를 불러올 수 없습니다.</p>
             )}
+
+            {/* ===== 추적 제외 토글 ===== */}
+            <div className="mt-4 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">이 브라우저 추적 제외</p>
+                  <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                    켜면 본 브라우저의 탭 방문은 통계에 잡히지 않음. (개발 환경 localhost·127·192.168 은 자동 제외)
+                  </p>
+                </div>
+                <button
+                  onClick={toggleAnalyticsExclusion}
+                  className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-colors ${
+                    analyticsExcluded
+                      ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                      : "border border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                  }`}
+                >
+                  {analyticsExcluded ? "제외 중 (끄기)" : "제외 켜기"}
+                </button>
+              </div>
+            </div>
+
+            {/* ===== 탭 방문 통계 (tab_visits) ===== */}
+            <div className="mt-4 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">탭 방문 통계</h3>
+                <button
+                  onClick={() => loadTabStats(kpiVisitRange)}
+                  disabled={tabStatsLoading}
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                >
+                  {tabStatsLoading ? "조회 중..." : "새로고침"}
+                </button>
+              </div>
+              {tabStatsData ? (
+                <>
+                  <p className="mb-3 text-[11px] text-zinc-400">
+                    {tabStatsData.from} ~ {tabStatsData.to} · 총 {(tabStatsData.total_visits || 0).toLocaleString()}회 방문
+                  </p>
+                  {/* 탭별 카드 */}
+                  <p className="mb-1.5 text-[11px] font-semibold text-zinc-400">탭별 (방문수 / 평균 체류)</p>
+                  <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {(["practical", "community", "jobs", "trade"] as const).map((t) => {
+                      const s = tabStatsData.by_tab?.[t] || { visits: 0, avg_duration_sec: 0 };
+                      const label = t === "practical" ? "실기·구술" : t === "community" ? "종목후기" : t === "jobs" ? "구인" : "거래";
+                      return (
+                        <div key={t} className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800">
+                          <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">{label}</p>
+                          <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                            {(s.visits || 0).toLocaleString()}
+                            <span className="ml-1 text-[11px] font-medium text-zinc-400">회</span>
+                          </p>
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">평균 {formatTabDuration(s.avg_duration_sec)}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* 플랫폼별 카드 */}
+                  <p className="mb-1.5 text-[11px] font-semibold text-zinc-400">플랫폼별</p>
+                  <div className="mb-4 grid grid-cols-3 gap-2">
+                    {(["web", "ios", "android"] as const).map((p) => {
+                      const s = tabStatsData.by_platform?.[p] || { visits: 0, avg_duration_sec: 0 };
+                      const label = p === "web" ? "웹" : p === "ios" ? "iOS" : "Android";
+                      return (
+                        <div key={p} className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800">
+                          <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">{label}</p>
+                          <p className="mt-1 text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                            {(s.visits || 0).toLocaleString()}
+                            <span className="ml-1 text-[11px] font-medium text-zinc-400">회</span>
+                          </p>
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">평균 {formatTabDuration(s.avg_duration_sec)}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* 탭 × 플랫폼 표 */}
+                  <p className="mb-1.5 text-[11px] font-semibold text-zinc-400">탭 × 플랫폼 상세</p>
+                  <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+                    <table className="w-full text-[12px]">
+                      <thead className="bg-zinc-50 dark:bg-zinc-800">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold text-zinc-500">탭</th>
+                          <th className="px-3 py-2 text-right font-semibold text-zinc-500">웹</th>
+                          <th className="px-3 py-2 text-right font-semibold text-zinc-500">iOS</th>
+                          <th className="px-3 py-2 text-right font-semibold text-zinc-500">Android</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(["practical", "community", "jobs", "trade"] as const).map((t) => {
+                          const label = t === "practical" ? "실기·구술" : t === "community" ? "종목후기" : t === "jobs" ? "구인" : "거래";
+                          return (
+                            <tr key={t} className="border-t border-zinc-100 dark:border-zinc-800">
+                              <td className="px-3 py-2 font-semibold text-zinc-700 dark:text-zinc-200">{label}</td>
+                              {(["web", "ios", "android"] as const).map((p) => {
+                                const s = tabStatsData.by_tab_platform?.[`${t}__${p}`] || { visits: 0, avg_duration_sec: 0 };
+                                return (
+                                  <td key={p} className="px-3 py-2 text-right">
+                                    <span className="font-semibold text-zinc-800 dark:text-zinc-100">{(s.visits || 0).toLocaleString()}</span>
+                                    <span className="ml-1 text-zinc-400">({formatTabDuration(s.avg_duration_sec)})</span>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : tabStatsLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <p className="py-4 text-center text-[12px] text-zinc-400">기간을 선택하고 새로고침을 눌러 주세요.</p>
+              )}
+            </div>
           </div>
         )}
 
@@ -1145,9 +1324,37 @@ export default function AdminPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">알림 제목 *</label>
-                  <input type="text" value={pushTitle} onChange={(e) => { setPushTitle(e.target.value); setPushMsg(null); }}
-                    placeholder="예: 새로운 기능이 추가되었어요!"
-                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100" />
+                  {pushType === "ad" ? (
+                    <div className="flex w-full items-stretch overflow-hidden rounded-xl border border-amber-300 bg-zinc-50 focus-within:border-amber-500 dark:border-amber-700 dark:bg-zinc-800">
+                      <span className="select-none bg-amber-100 px-3 py-3 text-sm font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-400">(광고)</span>
+                      <input
+                        type="text"
+                        value={pushTitle}
+                        onChange={(e) => {
+                          // 사용자가 (광고) 를 직접 못 입력하게 — 들어오면 제거
+                          let v = e.target.value;
+                          v = v.replace(/^\(광고\)\s*/u, "");
+                          setPushTitle(v);
+                          setPushMsg(null);
+                        }}
+                        placeholder="예: 봄맞이 이벤트 안내"
+                        className="flex-1 bg-transparent px-3 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none dark:text-zinc-100"
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={pushTitle}
+                      onChange={(e) => { setPushTitle(e.target.value); setPushMsg(null); }}
+                      placeholder="예: 새로운 기능이 추가되었어요!"
+                      className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    />
+                  )}
+                  {pushType === "ad" && (
+                    <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+                      정보통신망법 제50조: 광고성 메시지는 제목 시작에 (광고) 표시 의무. 자동으로 붙이며 제거할 수 없습니다.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">알림 내용 *</label>
@@ -1370,6 +1577,16 @@ export default function AdminPage() {
                     <Field label="개인정보 동의 시각" value={userResult.nicknames_record?.privacy_agreed_at ? new Date(userResult.nicknames_record.privacy_agreed_at).toLocaleString("ko-KR") : "-"} />
                     <Field label="약관 버전" value={userResult.nicknames_record?.terms_version || "-"} />
                     <Field label="마지막 닉네임 변경" value={userResult.nicknames_record?.changed_at ? new Date(userResult.nicknames_record.changed_at).toLocaleString("ko-KR") : "-"} />
+                    <Field
+                      label="광고/프로모션 동의"
+                      value={
+                        userResult.notification_prefs?.notify_promo
+                          ? `동의 (${userResult.notification_prefs.notify_promo_agreed_at ? new Date(userResult.notification_prefs.notify_promo_agreed_at).toLocaleString("ko-KR") : "시점 미기록"})`
+                          : userResult.notification_prefs?.notify_promo_agreed_at
+                            ? `현재 거부 (마지막 동의 ${new Date(userResult.notification_prefs.notify_promo_agreed_at).toLocaleString("ko-KR")})`
+                            : "미동의"
+                      }
+                    />
                   </dl>
                 </div>
 

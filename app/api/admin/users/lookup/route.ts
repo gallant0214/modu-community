@@ -88,7 +88,17 @@ export async function POST(request: Request) {
     .order("changed_at", { ascending: false })
     .limit(100);
 
-  // 5) 활동 카운트 — 병렬
+  // 5) 알림 설정 (광고/프로모션 동의 시점 등)
+  const { data: prefsRow } = await sb
+    .from("notification_preferences")
+    .select("notify_promo, notify_promo_agreed_at")
+    .eq("firebase_uid", uid)
+    .maybeSingle();
+  const notification_prefs = prefsRow
+    ? { notify_promo: !!prefsRow.notify_promo, notify_promo_agreed_at: prefsRow.notify_promo_agreed_at || null }
+    : { notify_promo: false, notify_promo_agreed_at: null };
+
+  // 6) 활동 카운트 — 병렬
   const [
     postsRes,
     commentsRes,
@@ -128,6 +138,7 @@ export async function POST(request: Request) {
       terms_version: nick.terms_version,
     },
     nickname_history: history || [],
+    notification_prefs,
     counts: {
       posts: postsRes.data?.length || 0,
       comments: commentsRes.data?.length || 0,

@@ -49,6 +49,22 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
 
   const body = await request.json();
+
+  // 정보통신망법: 광고/프로모션 동의 시점 증빙 보관
+  // - 기존 동의 시점 조회 후 OFF→ON 전환되는 순간에만 timestamp 기록
+  // - ON→ON 유지 시에는 기존 timestamp 보존
+  // - ON→OFF 시에는 timestamp 유지 (마지막 동의 이력 흔적 보존)
+  const { data: existing } = await supabase
+    .from("notification_preferences")
+    .select("notify_promo, notify_promo_agreed_at" as never)
+    .eq("firebase_uid", user.uid)
+    .maybeSingle();
+  const prevPromo = (existing as { notify_promo?: boolean | null } | null)?.notify_promo ?? false;
+  const prevAgreedAt = (existing as { notify_promo_agreed_at?: string | null } | null)?.notify_promo_agreed_at ?? null;
+  const nextPromo = body.notify_promo ?? false;
+  const turnedOn = !prevPromo && nextPromo === true;
+  const promoAgreedAt = turnedOn ? new Date().toISOString() : prevAgreedAt;
+
   const prefs = {
     firebase_uid: user.uid,
     notify_comment: body.notify_comment ?? true,
@@ -57,12 +73,12 @@ export async function POST(request: Request) {
     notify_job: body.notify_job ?? true,
     notify_trade: body.notify_trade ?? true,
     notify_notice: body.notify_notice ?? true,
-    notify_promo: body.notify_promo ?? false,
+    notify_promo: nextPromo,
+    notify_promo_agreed_at: promoAgreedAt,
     notify_keyword: body.notify_keyword ?? true,
     notify_message: body.notify_message ?? true,
   };
 
-  // notify_trade 가 generated types 에 아직 없을 수 있어 cast — 컬럼은 DB 에 존재
   const { error } = await supabase
     .from("notification_preferences")
     .upsert(prefs as never, { onConflict: "firebase_uid" });
@@ -71,5 +87,5 @@ export async function POST(request: Request) {
     console.error("Notification prefs POST error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, promo_agreed_at: promoAgreedAt });
 }
