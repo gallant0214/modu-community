@@ -342,7 +342,6 @@ export default function TradeDetailPage() {
           <section className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-5 sm:p-6">
             <h2 className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 mb-2">매매 정보</h2>
             <div>
-              <InfoRow label="업종" value={String(ci?.industry || "-")} />
               <InfoRow label="매장 종류" value={String(ci?.store_type || "-")} />
               <InfoRow label="센터명" value={ci?.name_visible ? String(ci?.name || "-") : "비공개"} />
               <InfoRow label="평수" value={ci?.area_pyeong ? `${(ci.area_pyeong as number).toLocaleString()}평` : "-"} />

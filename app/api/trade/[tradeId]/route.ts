@@ -147,7 +147,7 @@ export async function PATCH(
       return NextResponse.json({ error: "센터 매매 상세 정보를 입력해주세요" }, { status: 400 });
     }
     const ci = center_info as Record<string, unknown>;
-    if (!ci.industry || !ci.store_type || !ci.area_pyeong) {
+    if (!ci.store_type || !ci.area_pyeong) {
       return NextResponse.json({ error: "센터 매매 필수 항목을 모두 입력해주세요" }, { status: 400 });
     }
   }

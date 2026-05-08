@@ -260,7 +260,6 @@ function TradeWritePage() {
           setTradeMethods(methodSet);
         } else {
           const ci = (p.center_info && typeof p.center_info === "object" ? p.center_info : {}) as Record<string, unknown>;
-          setIndustry(String(ci.industry || ""));
           setStoreType(String(ci.store_type || ""));
           setCenterNameVisible(ci.name_visible ? "public" : "private");
           setCenterNameValue(String(ci.name || ""));
@@ -320,7 +319,6 @@ function TradeWritePage() {
   const [tradeMethodEtc, setTradeMethodEtc] = useState("");
 
   /* ─── center 전용 ─── */
-  const [industry, setIndustry] = useState("");          // 업종 (드롭다운)
   const [storeType, setStoreType] = useState("");        // 매장 종류 (직접 입력)
   const [centerNameVisible, setCenterNameVisible] = useState<"public" | "private">("private");
   const [centerNameValue, setCenterNameValue] = useState("");
@@ -338,8 +336,6 @@ function TradeWritePage() {
   const [showRegion, setShowRegion] = useState(false);
   const [regionStep, setRegionStep] = useState<"group" | "sub">("group");
   const [selectedGroup, setSelectedGroup] = useState<RegionGroup | null>(null);
-  const [showIndustry, setShowIndustry] = useState(false);
-  const [industrySearch, setIndustrySearch] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmChecked, setConfirmChecked] = useState(false);
 
@@ -352,7 +348,7 @@ function TradeWritePage() {
     items: useRef(null),
     centerName: useRef(null), tradeMethods: useRef(null), images: useRef(null),
     contact: useRef(null), title: useRef(null), body: useRef(null),
-    industry: useRef(null), storeType: useRef(null),
+    storeType: useRef(null),
     centerNameValue: useRef(null), area: useRef(null),
     deposit: useRef(null), monthly: useRef(null), mgmtFee: useRef(null), premium: useRef(null), member: useRef(null),
   };
@@ -482,7 +478,6 @@ function TradeWritePage() {
       if (tradeMethods.size === 0) return failValidation("tradeMethods", "거래 방식을 1개 이상 선택해주세요.");
       if (tradeMethods.has("etc") && !tradeMethodEtc.trim()) return failValidation("tradeMethods", "기타 거래 방식 내용을 입력해주세요.");
     } else {
-      if (!industry.trim()) return failValidation("industry", "업종을 선택해주세요.");
       if (!storeType.trim()) return failValidation("storeType", "매장 종류를 입력해주세요.");
       if (centerNameVisible === "public" && !centerNameValue.trim()) return failValidation("centerNameValue", "센터명을 공개로 선택하셨습니다. 이름을 입력해주세요.");
       if (!areaPyeong.trim()) return failValidation("area", "평수를 입력해주세요.");
@@ -550,7 +545,6 @@ function TradeWritePage() {
         payload = {
           ...payload,
           center_info: {
-            industry,
             store_type: storeType.trim(),
             name_visible: centerNameVisible === "public",
             name: centerNameVisible === "public" ? centerNameValue.trim() : null,
@@ -847,11 +841,6 @@ function TradeWritePage() {
         {tradeCategory === "center" && (
           <>
             <Section number={3} title="센터 기본 정보">
-              <div ref={fieldRefs.industry}>
-                <Field label="업종" required hint="구인 글쓰기와 동일한 종목 분류">
-                  <SelectButton value={industry} placeholder="업종을 선택해 주세요" onClick={() => { setShowIndustry(true); setIndustrySearch(""); }} />
-                </Field>
-              </div>
               <div ref={fieldRefs.storeType}>
                 <Field label="매장 종류" required count={storeType.length} max={30}>
                   <input type="text" value={storeType} onChange={e => setStoreType(e.target.value.slice(0, 30))}
@@ -1052,28 +1041,6 @@ function TradeWritePage() {
             ))}
           </div>
         )}
-      </Modal>
-
-      {/* 업종 선택 모달 (구인글 종목 모달과 동일 패턴) */}
-      <Modal open={showIndustry} onClose={() => setShowIndustry(false)} title="업종 선택" subtitle="업종을 검색하거나 선택하세요">
-        <div className="px-5 py-3 sticky top-0 bg-[#FEFCF7] dark:bg-zinc-900 z-10 border-b border-[#E8E0D0]/60 dark:border-zinc-800">
-          <div className="flex items-center gap-2 px-3.5 py-2.5 border border-[#E8E0D0] dark:border-zinc-700 rounded-xl bg-[#FBF7EB] dark:bg-zinc-800 focus-within:border-[#6B7B3A]/50 focus-within:bg-[#FEFCF7] transition-colors">
-            <svg className="w-4 h-4 text-[#A89B80] shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input type="text" value={industrySearch} onChange={e => setIndustrySearch(e.target.value)} placeholder="업종 검색 (초성 가능)"
-              className="flex-1 text-[13px] bg-transparent text-[#3A342A] dark:text-zinc-100 placeholder-[#A89B80] focus:outline-none" />
-          </div>
-        </div>
-        <div>
-          {categories.filter(c => matchSearch(c.name, industrySearch)).map(c => (
-            <RadioItem key={c.id} label={`${c.emoji} ${c.name}`} selected={industry === c.name}
-              onSelect={() => { setIndustry(c.name); setShowIndustry(false); }} />
-          ))}
-          {categories.filter(c => matchSearch(c.name, industrySearch)).length === 0 && (
-            <p className="text-center text-[13px] text-[#A89B80] py-10">일치하는 업종이 없습니다</p>
-          )}
-        </div>
       </Modal>
 
       {/* 등록 전 경고 모달 (구인글과 동일 패턴) */}
