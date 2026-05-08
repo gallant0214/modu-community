@@ -234,16 +234,17 @@ function TradeWritePage() {
         if (p.category === "equipment") {
           const ei = (p.equipment_info && typeof p.equipment_info === "object" ? p.equipment_info : {}) as Record<string, unknown>;
           const rawItems = Array.isArray(ei.items) ? ei.items as Array<Partial<{ name: string; condition: string; price_manwon: number }>> : [];
+          // DB 저장은 만원 단위, UI 표시는 원 단위 (×10000)
           const loaded: EquipItem[] = rawItems.length > 0
             ? rawItems.map(it => ({
                 name: String(it.name || ""),
                 condition: String(it.condition || ""),
-                price: it.price_manwon ? Number(it.price_manwon).toLocaleString() : "",
+                price: it.price_manwon ? (Number(it.price_manwon) * 10000).toLocaleString() : "",
               }))
             : [{
                 name: p.product_name || "",
                 condition: p.condition_text || "",
-                price: p.price_manwon ? Number(p.price_manwon).toLocaleString() : "",
+                price: p.price_manwon ? (Number(p.price_manwon) * 10000).toLocaleString() : "",
               }];
           setItems(loaded);
           setCenterName(p.center_name || "");
@@ -264,9 +265,10 @@ function TradeWritePage() {
           setCenterNameVisible(ci.name_visible ? "public" : "private");
           setCenterNameValue(String(ci.name || ""));
           setAreaPyeong(ci.area_pyeong ? Number(ci.area_pyeong).toLocaleString() : "");
+          // DB 저장은 만원 단위, UI 표시는 원 단위 (×10000)
           const money = (k: string) => {
             const m = ci[k] as { amount_manwon?: number } | undefined;
-            return m?.amount_manwon ? Number(m.amount_manwon).toLocaleString() : "";
+            return m?.amount_manwon ? (Number(m.amount_manwon) * 10000).toLocaleString() : "";
           };
           setDeposit(money("deposit"));
           setMonthly(money("monthly"));
@@ -525,10 +527,11 @@ function TradeWritePage() {
           else if (m === "etc") methods.push({ type: "etc", text: tradeMethodEtc.trim() });
           else methods.push({ type: m });
         }
+        // UI 입력은 원 단위, DB 저장은 만원 단위 (÷10000)
         const itemList = items.map(it => ({
           name: it.name.trim(),
           condition: it.condition.trim(),
-          price_manwon: parseNum(it.price),
+          price_manwon: Math.round(parseNum(it.price) / 10000),
         }));
         payload = {
           ...payload,
@@ -552,12 +555,12 @@ function TradeWritePage() {
             name_visible: centerNameVisible === "public",
             name: centerNameVisible === "public" ? centerNameValue.trim() : null,
             area_pyeong: parseNum(areaPyeong),
-            deposit:  { amount_manwon: parseNum(deposit) },
-            monthly:  { amount_manwon: parseNum(monthly) },
-            mgmt_fee: { amount_manwon: parseNum(mgmtFee) },
+            deposit:  { amount_manwon: Math.round(parseNum(deposit) / 10000) },
+            monthly:  { amount_manwon: Math.round(parseNum(monthly) / 10000) },
+            mgmt_fee: { amount_manwon: Math.round(parseNum(mgmtFee) / 10000) },
             premium:  premiumNeg === "권리금없음"
               ? { amount_manwon: 0, negotiable: "권리금없음" }
-              : { amount_manwon: parseNum(premium), negotiable: premiumNeg },
+              : { amount_manwon: Math.round(parseNum(premium) / 10000), negotiable: premiumNeg },
             member_count: memberCount,
           },
         };
@@ -781,7 +784,7 @@ function TradeWritePage() {
                         <input type="text" value={item.price}
                           onChange={e => updateItem(idx, "price", formatNumber(e.target.value))}
                           placeholder="가격" className={`${inputCls} flex-1`} inputMode="numeric" />
-                        <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">만원</span>
+                        <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">원</span>
                       </div>
                     </Field>
                   </div>
@@ -1085,9 +1088,9 @@ function TradeWritePage() {
         title={isEdit ? "수정 전 한 번만 확인해 주세요" : "등록 전 한 번만 확인해 주세요"}
         footer={
           <div className="flex gap-2">
-            <button onClick={() => setShowConfirm(false)} disabled={submitting} className="flex-1 py-3 border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 rounded-xl text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] disabled:opacity-50 transition-colors">취소</button>
+            <button onClick={() => setShowConfirm(false)} disabled={submitting} className="flex-1 py-4 border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 rounded-xl text-[17px] font-semibold text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] disabled:opacity-50 transition-colors">취소</button>
             <button onClick={handleSubmit} disabled={!confirmChecked || submitting}
-              className={`flex-1 py-3 rounded-xl text-[13px] font-semibold transition-all ${
+              className={`flex-1 py-4 rounded-xl text-[17px] font-semibold transition-all ${
                 confirmChecked && !submitting
                   ? "bg-[#C0392B] text-white hover:bg-[#A93226] shadow-[0_4px_14px_-4px_rgba(192,57,43,0.4)]"
                   : "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-700 dark:text-zinc-400 cursor-not-allowed"
@@ -1140,7 +1143,7 @@ function PlainMoneyField({ label, required, value, onChange }: {
       <div className="flex items-center gap-2">
         <input type="text" value={value} onChange={e => onChange(formatNumber(e.target.value))}
           placeholder="금액" className={`${inputCls} flex-1`} inputMode="numeric" />
-        <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">만원</span>
+        <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">원</span>
       </div>
     </Field>
   );
@@ -1176,7 +1179,7 @@ function PremiumField({ value, onChange, neg, setNeg }: {
           <div className="flex items-center gap-2">
             <input type="text" value={value} onChange={e => onChange(formatNumber(e.target.value))}
               placeholder="금액" className={`${inputCls} flex-1`} inputMode="numeric" />
-            <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">만원</span>
+            <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">원</span>
           </div>
         )}
       </div>
