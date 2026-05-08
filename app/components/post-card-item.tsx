@@ -85,6 +85,7 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
           {/* Title */}
           <span className="truncate text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 group-hover:text-[#6B7B3A] transition-colors">
             {post.title}
+            {!!(post.images && String(post.images).trim()) && <span> 📷</span>}
           </span>
           {/* Comment count inline */}
           {commentsCount > 0 && (
