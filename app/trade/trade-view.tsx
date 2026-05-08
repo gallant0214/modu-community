@@ -233,7 +233,8 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
                   : "";
               const storeType = p.category === "center" && ci?.store_type ? String(ci.store_type).trim() : "";
               const categoryBracket = p.category === "center" ? "[센터매매]" : "[중고거래]";
-              const categoryColor = p.category === "center" ? "#C0392B" : "#6B7B3A";
+              // 중고거래=파랑, 센터매매=빨강
+              const categoryColor = p.category === "center" ? "#C0392B" : "#1A6FCB";
 
               const equipmentInfoLine = [
                 p.region_sido && p.region_sigungu ? `${p.region_sido} ${p.region_sigungu}` : null,
