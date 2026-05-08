@@ -354,6 +354,7 @@ export default function TradeDetailPage() {
             <h2 className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 mb-2">매매 정보</h2>
             <div>
               <InfoRow label="매장 종류" value={String(ci?.store_type || "-")} />
+              <InfoRow label="지역" value={`${post.region_sido} ${post.region_sigungu}`} />
               <InfoRow label="센터명" value={ci?.name_visible ? String(ci?.name || "-") : "비공개"} />
               <InfoRow label="평수" value={ci?.area_pyeong ? `${(ci.area_pyeong as number).toLocaleString()}평` : "-"} />
               {renderMoney("deposit", "보증금")}
@@ -361,7 +362,6 @@ export default function TradeDetailPage() {
               {renderMoney("mgmt_fee", "관리비")}
               {renderMoney("premium", "권리금")}
               {renderMember()}
-              <InfoRow label="지역" value={`${post.region_sido} ${post.region_sigungu}`} />
             </div>
           </section>
         )}
