@@ -333,10 +333,9 @@ export default function TradeDetailPage() {
                   </div>
                 ))}
                 <div className="pt-1">
-                  <InfoRow label="센터명" value={post.center_name || "-"} />
                   <InfoRow label="거래 방식" value={methodLabels.length ? methodLabels.join(", ") : "-"} />
-                  <InfoRow label="지역" value={`${post.region_sido} ${post.region_sigungu}`} />
                   {post.region_detail && <InfoRow label="상세 주소" value={post.region_detail} />}
+                  <InfoRow label="센터명" value={post.center_name || "-"} />
                 </div>
               </div>
             ) : (
@@ -344,10 +343,9 @@ export default function TradeDetailPage() {
                 <InfoRow label="가격" accent value={formatPriceWon(equipItems[0].price_manwon)} />
                 <InfoRow label="제품명" value={equipItems[0].name || "-"} />
                 <InfoRow label="상태" value={equipItems[0].condition || "-"} />
-                <InfoRow label="센터명" value={post.center_name || "-"} />
                 <InfoRow label="거래 방식" value={methodLabels.length ? methodLabels.join(", ") : "-"} />
-                <InfoRow label="지역" value={`${post.region_sido} ${post.region_sigungu}`} />
                 {post.region_detail && <InfoRow label="상세 주소" value={post.region_detail} />}
+                <InfoRow label="센터명" value={post.center_name || "-"} />
               </div>
             )}
           </section>
