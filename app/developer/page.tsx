@@ -202,6 +202,7 @@ export default function AdminPage() {
   }
 
   // KPI 기간 필터 → from/to ISO string 계산
+  // 리포트 라우트(getAutoRange)와 동일하게 캘린더 일자 기준 (오늘 + 지난 N-1일)
   // mode 가 custom 일 때 customFrom/customTo 둘 다 받아서 처리 (메인/방문자 각각의 from/to 사용)
   const computeRange = useCallback((
     mode: "all" | "day" | "week" | "month" | "custom",
@@ -213,11 +214,11 @@ export default function AdminPage() {
     if (mode === "all") return {};
     if (mode === "day") return { from: startOfDay.toISOString(), to: now.toISOString() };
     if (mode === "week") {
-      const d = new Date(now); d.setDate(d.getDate() - 7);
+      const d = new Date(startOfDay); d.setDate(d.getDate() - 6);
       return { from: d.toISOString(), to: now.toISOString() };
     }
     if (mode === "month") {
-      const d = new Date(now); d.setDate(d.getDate() - 30);
+      const d = new Date(startOfDay); d.setDate(d.getDate() - 29);
       return { from: d.toISOString(), to: now.toISOString() };
     }
     // custom
