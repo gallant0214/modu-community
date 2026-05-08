@@ -17,11 +17,24 @@ function formatDate(iso: string) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+// 센터매매 — 만원/억원 단위 (보증금·월세·관리비·권리금)
 function formatPrice(n: number | null | undefined): string {
   if (n === null || n === undefined) return "-";
   if (n === 0) return "0만원";
   if (n >= 10000) return `${(n / 10000).toFixed(n % 10000 === 0 ? 0 : 1)}억원`;
   return `${n.toLocaleString()}만원`;
+}
+// 중고거래 — 원 단위 표시. amount_manwon × 10000.
+function formatPriceWon(n: number | null | undefined): string {
+  if (n === null || n === undefined) return "-";
+  if (n === 0) return "0원";
+  if (n >= 10000) {
+    const eok = Math.floor(n / 10000);
+    const rest = n % 10000;
+    if (rest === 0) return `${eok}억원`;
+    return `${eok}억 ${rest.toLocaleString()}만원`;
+  }
+  return `${(n * 10000).toLocaleString()}원`;
 }
 
 /* 라벨-값 행 */
@@ -314,7 +327,7 @@ export default function TradeDetailPage() {
                       <span className="w-5 h-5 rounded-full bg-[#6B7B3A] text-white text-[11px] font-bold flex items-center justify-center">{i + 1}</span>
                       <span className="text-[12px] font-bold text-[#6B7B3A]">물품 {i + 1}</span>
                     </div>
-                    <InfoRow label="가격" accent value={formatPrice(it.price_manwon)} />
+                    <InfoRow label="가격" accent value={formatPriceWon(it.price_manwon)} />
                     <InfoRow label="제품명" value={it.name || "-"} />
                     <InfoRow label="상태" value={it.condition || "-"} />
                   </div>
@@ -328,7 +341,7 @@ export default function TradeDetailPage() {
               </div>
             ) : (
               <div>
-                <InfoRow label="가격" accent value={formatPrice(equipItems[0].price_manwon)} />
+                <InfoRow label="가격" accent value={formatPriceWon(equipItems[0].price_manwon)} />
                 <InfoRow label="제품명" value={equipItems[0].name || "-"} />
                 <InfoRow label="상태" value={equipItems[0].condition || "-"} />
                 <InfoRow label="센터명" value={post.center_name || "-"} />
