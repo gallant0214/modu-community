@@ -49,6 +49,8 @@ export async function POST(request: Request) {
     postsTotal, postsInRange,
     commentsTotal, commentsInRange,
     jobsTotal, jobsOpen, jobsClosed, jobsInRange,
+    tradesTotal, tradesEquipTotal, tradesCenterTotal, tradesInRange, tradesEquipInRange, tradesCenterInRange,
+    tradeBookmarksTotal, tradeBookmarksInRange,
     reportsTotal, reportsPending, reportsInRange,
     inquiriesTotal, inquiriesPending, inquiriesInRange,
     postLikesTotal, postLikesInRange,
@@ -72,6 +74,26 @@ export async function POST(request: Request) {
     countRange("job_posts", "created_at", (q) => q.eq("is_closed", false)),
     countRange("job_posts", "created_at", (q) => q.eq("is_closed", true)),
     countRange("job_posts"),
+    // 거래글 (status='active' 만 카운트, 'deleted' 는 제외)
+    countAll("trade_posts"),
+    (async () => {
+      try {
+        const { count } = await sb.from("trade_posts").select("*", { count: "exact", head: true }).eq("category", "equipment");
+        return count ?? 0;
+      } catch { return 0; }
+    })(),
+    (async () => {
+      try {
+        const { count } = await sb.from("trade_posts").select("*", { count: "exact", head: true }).eq("category", "center");
+        return count ?? 0;
+      } catch { return 0; }
+    })(),
+    countRange("trade_posts"),
+    countRange("trade_posts", "created_at", (q) => q.eq("category", "equipment")),
+    countRange("trade_posts", "created_at", (q) => q.eq("category", "center")),
+    // 거래 북마크
+    countAll("trade_post_bookmarks"),
+    countRange("trade_post_bookmarks"),
     // 신고
     countAll("reports"),
     countRange("reports", "created_at", (q) => q.eq("resolved", false)),
@@ -329,6 +351,16 @@ export async function POST(request: Request) {
     posts: { total: postsTotal, inRange: postsInRange },
     comments: { total: commentsTotal, inRange: commentsInRange },
     jobs: { total: jobsTotal, open: jobsOpen, closed: jobsClosed, inRange: jobsInRange },
+    trades: {
+      total: tradesTotal,
+      equipmentTotal: tradesEquipTotal,
+      centerTotal: tradesCenterTotal,
+      inRange: tradesInRange,
+      equipmentInRange: tradesEquipInRange,
+      centerInRange: tradesCenterInRange,
+      bookmarksTotal: tradeBookmarksTotal,
+      bookmarksInRange: tradeBookmarksInRange,
+    },
     reports: { total: reportsTotal, pending: reportsPending, inRange: reportsInRange },
     inquiries: { total: inquiriesTotal, pending: inquiriesPending, inRange: inquiriesInRange },
     engagement: {

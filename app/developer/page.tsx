@@ -846,11 +846,23 @@ export default function AdminPage() {
                     <KpiCard label="모집종료 (기간)" value={kpiData.jobs?.closed ?? 0} />
                   </KpiSubsection>
 
+                  <KpiSubsection title="거래">
+                    <KpiCard label="전체 거래글" value={kpiData.trades?.total ?? 0} />
+                    <KpiCard label="기간 등록" value={kpiData.trades?.inRange ?? 0} accent />
+                    <KpiCard label="중고거래 (전체)" value={kpiData.trades?.equipmentTotal ?? 0} />
+                    <KpiCard label="센터매매 (전체)" value={kpiData.trades?.centerTotal ?? 0} />
+                    <KpiCard label="중고거래 (기간)" value={kpiData.trades?.equipmentInRange ?? 0} />
+                    <KpiCard label="센터매매 (기간)" value={kpiData.trades?.centerInRange ?? 0} />
+                    <KpiCard label="거래 북마크 (전체)" value={kpiData.trades?.bookmarksTotal ?? 0} />
+                    <KpiCard label="거래 북마크 (기간)" value={kpiData.trades?.bookmarksInRange ?? 0} />
+                  </KpiSubsection>
+
                   <KpiSubsection title="참여 (기간)">
                     <KpiCard label="게시글 좋아요" value={kpiData.engagement?.postLikesInRange ?? 0} />
                     <KpiCard label="댓글 좋아요" value={kpiData.engagement?.commentLikesInRange ?? 0} />
                     <KpiCard label="게시글 북마크" value={kpiData.engagement?.postBookmarksInRange ?? 0} />
                     <KpiCard label="구인 북마크" value={kpiData.engagement?.jobBookmarksInRange ?? 0} />
+                    <KpiCard label="거래 북마크" value={kpiData.trades?.bookmarksInRange ?? 0} />
                   </KpiSubsection>
 
                   <KpiSubsection title="신고/문의">
