@@ -107,41 +107,63 @@ export async function sendPushToUser(
 }
 
 /**
- * 키워드 알림: 새 게시글/구인글에 키워드 알림 켜둔 사용자에게 알림
+ * 키워드 알림 — 새 게시글/구인글/거래글이 작성됐을 때, 사용자가 등록해 둔
+ *  키워드(user_keywords) 가 제목/본문에 실제로 매칭되는 경우에만 푸시.
+ *
+ *  필터 단계:
+ *  1) user_keywords 전체 로드 → 사용자별 키워드 set 구성
+ *  2) 컨텐츠(title+body) 와 각 키워드를 부분 일치(대소문자 무시) 비교 →
+ *     일치한 사용자 uid 만 후보로 수집
+ *  3) excludeUid(작성자) 제외
+ *  4) notification_preferences.notify_keyword 가 false 인 사용자 제외
+ *  5) sendPushToUser 호출 (해당 함수 내부에서도 한 번 더 안전 체크)
  */
 export async function sendKeywordAlerts(
   contentTitle: string,
   contentBody: string,
-  type: "post" | "job",
+  type: "post" | "job" | "trade",
   targetId: number,
-  excludeUid?: string
+  excludeUid?: string,
 ) {
   try {
-    // 키워드 알림이 켜진 사용자의 device_tokens 조회 (별도 쿼리 + JS join)
-    const { data: tokens } = await supabase
-      .from("device_tokens")
-      .select("firebase_uid")
-      .limit(100000);
-    const uids = [...new Set((tokens || []).map((t) => t.firebase_uid))];
+    // 1) 전체 유저 키워드 로드
+    const { data: kwRows } = await supabase
+      .from("user_keywords")
+      .select("firebase_uid, keyword");
+    if (!kwRows || kwRows.length === 0) return;
 
-    if (uids.length === 0) return;
+    // 2) 컨텐츠와 키워드 매칭 (lowercase 부분 일치)
+    const haystack = `${contentTitle ?? ""}\n${contentBody ?? ""}`.toLowerCase();
+    const matchedUids = new Set<string>();
+    for (const row of kwRows) {
+      const kw = String(row.keyword || "").trim().toLowerCase();
+      if (!kw) continue;
+      if (haystack.includes(kw)) {
+        matchedUids.add(row.firebase_uid);
+      }
+    }
+    if (excludeUid) matchedUids.delete(excludeUid);
+    if (matchedUids.size === 0) return;
 
+    // 3) notify_keyword 가 명시적 OFF 인 사용자 제외
+    const uidArr = Array.from(matchedUids);
     const { data: prefs } = await supabase
       .from("notification_preferences")
       .select("firebase_uid, notify_keyword")
-      .in("firebase_uid", uids);
+      .in("firebase_uid", uidArr);
     const prefMap = new Map((prefs || []).map((p) => [p.firebase_uid, p.notify_keyword]));
+    const finalUids = uidArr.filter((uid) => prefMap.get(uid) !== false);
 
-    const targetUids = uids.filter((uid) => {
-      if (uid === excludeUid) return false;
-      return prefMap.get(uid) !== false; // 명시적 OFF가 아닌 경우 발송
-    });
-
-    for (const uid of targetUids) {
+    // 4) 발송
+    const titleLabel =
+      type === "post" ? "새 게시글" :
+      type === "job" ? "새 구인글" :
+      "새 거래글";
+    for (const uid of finalUids) {
       await sendPushToUser(
-        uid as string,
+        uid,
         "keyword",
-        type === "post" ? "새 게시글" : "새 구인글",
+        titleLabel,
         contentTitle,
         { targetType: type, targetId: String(targetId) },
       );

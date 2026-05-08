@@ -5,6 +5,7 @@ import { verifyAuth } from "@/app/lib/firebase-admin";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 import { invalidateCache } from "@/app/lib/cache";
 import { getBlockedUidsForRequest } from "@/app/lib/block-filter";
+import { sendKeywordAlerts } from "@/app/lib/notifications";
 import type { Database } from "@/app/lib/database.types";
 
 type TradePostInsert = Database["public"]["Tables"]["trade_posts"]["Insert"];
@@ -194,6 +195,17 @@ export async function POST(request: Request) {
   }
 
   await invalidateCache("trade:*").catch(() => {});
+
+  // 키워드 알림 — 작성자 본인 제외, 키워드 매칭 + notify_keyword ON 사용자에게만
+  if (data?.id) {
+    sendKeywordAlerts(
+      title.trim(),
+      (content || "").trim(),
+      "trade",
+      data.id,
+      user.uid,
+    ).catch(() => {});
+  }
 
   // ipAddr는 로깅 용도로만 — 컬럼은 없음
   void ipAddr;
