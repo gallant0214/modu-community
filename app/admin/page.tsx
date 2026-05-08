@@ -473,6 +473,30 @@ export default function AdminPage() {
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                           <KpiCard label="등록 구인글" value={rangeData.jobs} />
                         </div>
+                        {rangeData.days > 0 && (
+                          <RangeReport
+                            label="구인글 등록"
+                            count={rangeData.jobs}
+                            days={rangeData.days}
+                            prev={rangeData.compare?.jobs?.prev}
+                            changePct={rangeData.compare?.jobs?.change_pct}
+                          />
+                        )}
+                      </div>
+                      <div>
+                        <p className="mb-1.5 text-[11px] font-semibold text-zinc-400">거래</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <KpiCard label="등록 거래글" value={rangeData.trades} accent />
+                        </div>
+                        {rangeData.days > 0 && (
+                          <RangeReport
+                            label="거래글 등록"
+                            count={rangeData.trades}
+                            days={rangeData.days}
+                            prev={rangeData.compare?.trades?.prev}
+                            changePct={rangeData.compare?.trades?.change_pct}
+                          />
+                        )}
                       </div>
                       <div>
                         <p className="mb-1.5 text-[11px] font-semibold text-zinc-400">참여</p>
@@ -1041,6 +1065,62 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* 기간 텍스트 리포트 — 합계/일평균/이전 동일 기간 대비 증감 */
+function RangeReport({
+  label,
+  count,
+  days,
+  prev,
+  changePct,
+}: {
+  label: string;
+  count: number;
+  days: number;
+  prev?: number;
+  changePct?: number | null;
+}) {
+  const periodText = days === 1 ? "오늘" : `${days}일간`;
+  const avg = count / days;
+  const avgText = avg >= 10 ? avg.toFixed(1) : avg.toFixed(2);
+
+  let compareLine: React.ReactNode = null;
+  if (changePct === null || changePct === undefined) {
+    compareLine = (
+      <span className="text-zinc-400">지난 동일 기간 대비 비교 불가 (이전 0건)</span>
+    );
+  } else if (changePct === 0) {
+    compareLine = (
+      <span className="text-zinc-500">지난 동일 기간 대비 변동 없음 (이전 {prev?.toLocaleString() || 0}회)</span>
+    );
+  } else if (changePct > 0) {
+    compareLine = (
+      <span>
+        지난 동일 기간 대비{" "}
+        <span className="font-bold text-emerald-600 dark:text-emerald-400">+{changePct}%</span>{" "}
+        증가 (이전 {prev?.toLocaleString() || 0}회)
+      </span>
+    );
+  } else {
+    compareLine = (
+      <span>
+        지난 동일 기간 대비{" "}
+        <span className="font-bold text-red-500">{changePct}%</span>{" "}
+        감소 (이전 {prev?.toLocaleString() || 0}회)
+      </span>
+    );
+  }
+
+  return (
+    <div className="mt-2 rounded-lg border border-zinc-100 bg-zinc-50/60 px-3 py-2 text-[12px] leading-relaxed text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-300">
+      <p>
+        {periodText} {label}은 <span className="font-bold text-zinc-900 dark:text-zinc-100">{count.toLocaleString()}회</span>,
+        일 평균 <span className="font-bold text-zinc-900 dark:text-zinc-100">{avgText}회</span>입니다.
+      </p>
+      <p className="mt-0.5">{compareLine}</p>
     </div>
   );
 }
