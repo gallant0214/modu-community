@@ -756,7 +756,7 @@ export function PostView({ initialPost }: PostViewProps) {
             />
           )}
           {post.images && (
-            <div className="mt-5 flex flex-col gap-3">
+            <div className="mt-5 flex flex-col items-center gap-3">
               {post.images.split(",").filter(Boolean).map((url: string, i: number) => {
                 const optimized = optimizeCloudinaryUrl(url.trim(), { width: 1200 });
                 return (
@@ -764,7 +764,8 @@ export function PostView({ initialPost }: PostViewProps) {
                     key={i}
                     src={optimized}
                     alt={`첨부 이미지 ${i + 1}`}
-                    className="w-full rounded-2xl border border-[#E8E0D0] dark:border-zinc-700"
+                    // 비율 보존 + 최대 높이 80vh 캡 — 폰 스크린샷 등 매우 세로로 긴 사진은 화면에 들어오게
+                    className="max-w-full max-h-[80vh] w-auto h-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-700"
                     loading="lazy"
                     decoding="async"
                   />

@@ -253,9 +253,15 @@ export default function TradeDetailPage() {
         {/* 사진 슬라이더 */}
         {post.image_urls?.length > 0 && (
           <div className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl overflow-hidden">
-            <div className="aspect-[4/3] sm:aspect-[16/10] bg-[#F5F0E5] dark:bg-zinc-800 relative">
+            <div className="bg-[#F5F0E5] dark:bg-zinc-800 relative flex items-center justify-center" style={{ maxHeight: "75vh", minHeight: 200 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={post.image_urls[activeImg]} alt={post.title} className="w-full h-full object-contain bg-black/[0.03]" />
+              <img
+                src={post.image_urls[activeImg]}
+                alt={post.title}
+                // 비율 보존 + 화면 75vh 캡. 가로/세로 긴 사진 모두 잘림 없이 전체 노출
+                className="max-w-full w-auto h-auto bg-black/[0.03]"
+                style={{ maxHeight: "75vh" }}
+              />
               <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[11px] font-bold ${
                 post.category === "center" ? "bg-[#C0392B] text-white" : "bg-[#6B7B3A] text-white"
               }`}>
