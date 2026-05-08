@@ -43,6 +43,17 @@ function formatPrice(n: number | null | undefined): string {
   // 1억 미만은 원 단위로 환산해 표시 (예: 12만원 → "120,000원")
   return `${(n * 10000).toLocaleString()}원`;
 }
+// 센터매매 전용 — 항상 만원/억원 단위 표기 (권리금 등 큰 금액 가독성 ↑)
+function formatPriceManwon(n: number | null | undefined): string {
+  if (n === null || n === undefined || n <= 0) return "-";
+  if (n >= 10000) {
+    const eok = Math.floor(n / 10000);
+    const rest = n % 10000;
+    if (rest === 0) return `${eok}억원`;
+    return `${eok}억 ${rest.toLocaleString()}만원`;
+  }
+  return `${n.toLocaleString()}만원`;
+}
 
 export function TradeView({ initialData, initialCategory, initialQuery }: Props) {
   const router = useRouter();
@@ -216,7 +227,7 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
                 ? (ci.premium as Record<string, string>).negotiable
                 : "";
               const premiumText = premiumAmount > 0
-                ? `권리금 ${formatPrice(premiumAmount)}`
+                ? `권리금 ${formatPriceManwon(premiumAmount)}`
                 : premiumNeg
                   ? `권리금 ${premiumNeg}`
                   : "";
