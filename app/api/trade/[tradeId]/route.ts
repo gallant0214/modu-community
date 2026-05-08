@@ -30,6 +30,19 @@ export async function GET(
     return NextResponse.json({ error: "글을 찾을 수 없습니다" }, { status: 404 });
   }
 
+  // 작성자 닉네임 조회 (nicknames 테이블 — placeholder 닉네임 제외)
+  let author_nickname: string | null = null;
+  if (post.firebase_uid) {
+    const { data: nick } = await supabase
+      .from("nicknames")
+      .select("name")
+      .eq("firebase_uid", post.firebase_uid)
+      .maybeSingle();
+    if (nick?.name && !nick.name.startsWith("__pending_")) {
+      author_nickname = nick.name;
+    }
+  }
+
   let is_bookmarked = false;
   const user = await verifyAuth(request).catch(() => null);
   if (user) {
@@ -43,7 +56,7 @@ export async function GET(
   }
 
   const is_owner = !!user && user.uid === post.firebase_uid;
-  return NextResponse.json({ ...post, is_bookmarked, is_owner });
+  return NextResponse.json({ ...post, author_nickname, is_bookmarked, is_owner });
 }
 
 // DELETE /api/trade/[tradeId] — 본인 또는 관리자만 삭제 (소프트 = status='deleted')
