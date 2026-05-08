@@ -2402,7 +2402,11 @@ function VisitChannels({ channels }: { channels: { name: string; count: number; 
       ) : (
         <div className="space-y-1.5">
           {channels.map((c, i) => (
-            <div key={c.name} className="relative rounded-lg overflow-hidden">
+            <div
+              key={c.name}
+              title={`${c.name}: ${c.count.toLocaleString()}회 (${c.percent.toFixed(2)}%)`}
+              className="relative rounded-lg overflow-hidden cursor-help"
+            >
               <div className="absolute inset-y-0 left-0 bg-emerald-50 dark:bg-emerald-950/30" style={{ width: `${c.percent}%` }} />
               <div className="relative flex items-center justify-between px-3 py-2">
                 <div className="flex items-center gap-2.5">
