@@ -240,10 +240,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           u.getIdToken().then((token) => {
             localStorage.setItem("fb_token", token);
             fetchNickname(u.uid, token); // await 안 함 — 백그라운드
+
+            // 로그인 이력 기록 — 세션당 1회 (자동 토큰 갱신은 무시)
+            try {
+              if (typeof sessionStorage !== "undefined" && !sessionStorage.getItem("moducm_login_logged")) {
+                sessionStorage.setItem("moducm_login_logged", "1");
+                fetch("/api/auth/login-log", {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                  body: JSON.stringify({ platform: "web" }),
+                  keepalive: true,
+                }).catch(() => {});
+              }
+            } catch {}
           }).catch(() => {});
         } else {
           localStorage.removeItem("fb_token");
           localStorage.removeItem(TERMS_AGREED_KEY);
+          try { sessionStorage.removeItem("moducm_login_logged"); } catch {}
           setNickname(null);
           setNicknameLoaded(false);
           setActiveRegionCode("");

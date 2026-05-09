@@ -98,6 +98,15 @@ export async function POST(request: Request) {
     ? { notify_promo: !!prefsRow.notify_promo, notify_promo_agreed_at: prefsRow.notify_promo_agreed_at || null }
     : { notify_promo: false, notify_promo_agreed_at: null };
 
+  // 5-1) 로그인 이력 (최근 30회)
+  const { data: loginLogRows } = await sb
+    .from("user_login_log")
+    .select("id, signed_in_at, platform, ip_hash, user_agent")
+    .eq("firebase_uid", uid)
+    .order("signed_in_at", { ascending: false })
+    .limit(30);
+  const login_log = loginLogRows || [];
+
   // 6) 활동 카운트 — 병렬
   const [
     postsRes,
@@ -147,6 +156,7 @@ export async function POST(request: Request) {
     },
     nickname_history: history || [],
     notification_prefs,
+    login_log,
     counts: {
       posts: postsRes.data?.length || 0,
       comments: commentsRes.data?.length || 0,

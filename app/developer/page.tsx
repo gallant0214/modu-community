@@ -1643,6 +1643,54 @@ export default function AdminPage() {
                   )}
                 </div>
 
+                {/* 접속 이력 (최근 30회) */}
+                <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                  <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">
+                    접속 이력 (최근 {(userResult.login_log || []).length}회)
+                  </h3>
+                  {(userResult.login_log || []).length === 0 ? (
+                    <p className="text-[12px] text-zinc-400">기록된 접속 이력이 없습니다. (2026-05-09 이후 로그인부터 기록됨)</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[12px]">
+                        <thead className="bg-zinc-50 dark:bg-zinc-800">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-500">접속 시각</th>
+                            <th className="px-2 py-2 text-center font-semibold text-zinc-500">플랫폼</th>
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-500">IP 해시</th>
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-500">User-Agent</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(userResult.login_log || []).map((l: any) => (
+                            <tr key={l.id} className="border-t border-zinc-100 dark:border-zinc-800 align-top">
+                              <td className="px-3 py-2 whitespace-nowrap text-zinc-700 dark:text-zinc-200">
+                                {new Date(l.signed_in_at).toLocaleString("ko-KR")}
+                              </td>
+                              <td className="px-2 py-2 text-center whitespace-nowrap">
+                                <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                                  l.platform === "web"
+                                    ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                                    : l.platform === "ios"
+                                      ? "bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200"
+                                      : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                                }`}>
+                                  {l.platform === "web" ? "웹" : l.platform === "ios" ? "iOS" : "Android"}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-zinc-400 font-mono text-[11px]">{l.ip_hash || "-"}</td>
+                              <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400 truncate max-w-[280px]" title={l.user_agent || ""}>
+                                {l.user_agent || "-"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="mt-2 text-[10px] text-zinc-400">최대 30건 표시 · 자동 토큰 갱신은 기록되지 않음 (실제 로그인 행위만)</p>
+                    </div>
+                  )}
+                </div>
+
                 {/* 최근 활동 */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <RecentList
