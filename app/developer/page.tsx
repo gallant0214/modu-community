@@ -89,9 +89,12 @@ export default function AdminPage() {
   };
   const [kpiData, setKpiData] = useState<any>(null);
   const [kpiLoading, setKpiLoading] = useState(false);
-  // 탭 방문 통계 (tab_visits 집계)
+  // 탭 방문 통계 (tab_visits 집계) — 자체 기간 필터
   const [tabStatsData, setTabStatsData] = useState<any>(null);
   const [tabStatsLoading, setTabStatsLoading] = useState(false);
+  const [tabStatsRange, setTabStatsRange] = useState<"all" | "day" | "week" | "month" | "custom">("week");
+  const [tabStatsFrom, setTabStatsFrom] = useState<string>("");
+  const [tabStatsTo, setTabStatsTo] = useState<string>("");
   // 추적 제외 토글 — 본인 트래픽 제거
   const [analyticsExcluded, setAnalyticsExcluded] = useState(false);
   // USER 탭 쪽지 펼침 — 법적 분쟁 대응 목적, 기본 접힘
@@ -281,22 +284,26 @@ export default function AdminPage() {
     setKpiLoading(false);
   }, [storedPassword, computeRange, kpiFrom, kpiTo, kpiVisitFrom, kpiVisitTo, kpiReportFrom, kpiReportTo]);
 
-  // 탭 방문 통계 — 유입수 기간(kpiVisit*) 그대로 사용
+  // 탭 방문 통계 — 자체 기간 필터(tabStatsRange/From/To) 사용.
   // route.ts /api/admin/kpi/tab-stats 는 from/to 를 YYYY-MM-DD 형식으로 기대 →
   // computeRange 가 리턴하는 full ISO 를 .slice(0,10) 로 잘라서 전달.
-  const loadTabStats = useCallback(async (visitMode: typeof kpiVisitRange) => {
+  const loadTabStats = useCallback(async (
+    mode: "all" | "day" | "week" | "month" | "custom",
+    customFrom?: string,
+    customTo?: string,
+  ) => {
     if (!storedPassword) return;
     setTabStatsLoading(true);
     try {
-      const visit = computeRange(visitMode, kpiVisitFrom, kpiVisitTo);
+      const r = computeRange(mode, customFrom ?? tabStatsFrom, customTo ?? tabStatsTo);
       const today = new Date().toISOString().slice(0, 10);
       const fallbackFrom = (() => {
         const d = new Date();
         d.setDate(d.getDate() - 89);
         return d.toISOString().slice(0, 10);
       })();
-      const fromYmd = visit.from ? visit.from.slice(0, 10) : fallbackFrom;
-      const toYmd = visit.to ? visit.to.slice(0, 10) : today;
+      const fromYmd = r.from ? r.from.slice(0, 10) : fallbackFrom;
+      const toYmd = r.to ? r.to.slice(0, 10) : today;
       const res = await fetch("/api/admin/kpi/tab-stats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -310,7 +317,7 @@ export default function AdminPage() {
       if (!data.error) setTabStatsData(data);
     } catch {}
     setTabStatsLoading(false);
-  }, [storedPassword, computeRange, kpiVisitFrom, kpiVisitTo]);
+  }, [storedPassword, computeRange, tabStatsFrom, tabStatsTo]);
 
   function formatTabDuration(sec: number): string {
     if (!sec || sec <= 0) return "-";
@@ -765,7 +772,7 @@ export default function AdminPage() {
           <button onClick={async () => {
             setTab("kpi");
             if (!kpiData) await loadKpi(kpiRange, kpiVisitRange, kpiReportRange);
-            if (!tabStatsData) await loadTabStats(kpiVisitRange);
+            if (!tabStatsData) await loadTabStats(tabStatsRange);
             if (typeof window !== "undefined") {
               setAnalyticsExcluded(localStorage.getItem(ANALYTICS_EXCLUDE_KEY) === "true");
             }
@@ -1003,12 +1010,50 @@ export default function AdminPage() {
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">탭 방문 통계</h3>
                 <button
-                  onClick={() => loadTabStats(kpiVisitRange)}
+                  onClick={() => loadTabStats(tabStatsRange)}
                   disabled={tabStatsLoading}
                   className="rounded-lg border border-zinc-200 bg-white px-3 py-1 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
                 >
                   {tabStatsLoading ? "조회 중..." : "새로고침"}
                 </button>
+              </div>
+              {/* 기간 필터 — 주/월/일/전체/직접선택 */}
+              <div className="mb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {[
+                    { key: "week", label: "주" },
+                    { key: "month", label: "월" },
+                    { key: "day", label: "일" },
+                    { key: "all", label: "전체" },
+                    { key: "custom", label: "직접선택" },
+                  ].map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        const next = key as typeof tabStatsRange;
+                        setTabStatsRange(next);
+                        if (next !== "custom") loadTabStats(next);
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                        tabStatsRange === key
+                          ? "bg-emerald-500 text-white shadow-sm"
+                          : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      }`}
+                    >{label}</button>
+                  ))}
+                </div>
+                {tabStatsRange === "custom" && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <input type="date" value={tabStatsFrom} onChange={(e) => setTabStatsFrom(e.target.value)}
+                      className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" />
+                    <span className="text-sm text-zinc-400">~</span>
+                    <input type="date" value={tabStatsTo} onChange={(e) => setTabStatsTo(e.target.value)}
+                      className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm" />
+                    <button onClick={() => loadTabStats("custom", tabStatsFrom, tabStatsTo)}
+                      disabled={!tabStatsFrom || !tabStatsTo || tabStatsLoading}
+                      className="px-4 py-1.5 rounded-lg bg-emerald-500 text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">조회</button>
+                  </div>
+                )}
               </div>
               {tabStatsData ? (
                 <>
