@@ -410,25 +410,46 @@ export default function TradeDetailPage() {
         </div>
       )}
 
-      {/* 연락처 모달 */}
-      <Modal open={showContact} onClose={() => setShowContact(false)} title="연락처">
-        <div className="px-5 py-6 text-center space-y-3">
-          <div className="text-[24px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight select-text">
-            {post.contact_phone}
-          </div>
-          <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">
-            번호 클릭 시 전화 연결되거나 복사 가능합니다.<br />
-            거래 시 사기 피해에 유의하세요.
-          </p>
-          <a href={`tel:${post.contact_phone}`} className="block w-full py-3 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-[14px] font-semibold rounded-xl">
-            전화 걸기
-          </a>
-          <button onClick={() => { navigator.clipboard?.writeText(post.contact_phone); setShareToast("연락처가 복사되었습니다"); setTimeout(() => setShareToast(null), 2000); setShowContact(false); }}
-            className="block w-full py-3 border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 text-[14px] font-semibold text-[#3A342A] dark:text-zinc-200 rounded-xl hover:bg-[#F5F0E5]">
-            번호 복사
-          </button>
-        </div>
-      </Modal>
+      {/* 연락처 모달 — 센터매매 + 오픈톡이면 카카오톡 연결, 그 외 전화 */}
+      {(() => {
+        const isOpenchat = post.category === "center" && (ci as any)?.contact_type === "openchat";
+        return (
+          <Modal open={showContact} onClose={() => setShowContact(false)} title={isOpenchat ? "오픈톡" : "연락처"}>
+            <div className="px-5 py-6 text-center space-y-3">
+              <div className={`${isOpenchat ? "text-[14px]" : "text-[24px]"} font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight select-text break-all`}>
+                {post.contact_phone}
+              </div>
+              <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">
+                {isOpenchat
+                  ? <>'카카오톡 연결하기'를 누르면 카카오톡 오픈채팅으로 이동합니다.<br />거래 시 사기 피해에 유의하세요.</>
+                  : <>번호 클릭 시 전화 연결되거나 복사 가능합니다.<br />거래 시 사기 피해에 유의하세요.</>}
+              </p>
+              {isOpenchat ? (
+                <>
+                  <a href={post.contact_phone} target="_blank" rel="noopener noreferrer"
+                    className="block w-full py-3 bg-[#FEE500] hover:bg-[#FFD60A] text-[#3C1E1E] text-[14px] font-bold rounded-xl">
+                    카카오톡 연결하기
+                  </a>
+                  <button onClick={() => { navigator.clipboard?.writeText(post.contact_phone); setShareToast("오픈톡 링크가 복사되었습니다"); setTimeout(() => setShareToast(null), 2000); setShowContact(false); }}
+                    className="block w-full py-3 border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 text-[14px] font-semibold text-[#3A342A] dark:text-zinc-200 rounded-xl hover:bg-[#F5F0E5]">
+                    링크 복사
+                  </button>
+                </>
+              ) : (
+                <>
+                  <a href={`tel:${post.contact_phone}`} className="block w-full py-3 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-[14px] font-semibold rounded-xl">
+                    전화 걸기
+                  </a>
+                  <button onClick={() => { navigator.clipboard?.writeText(post.contact_phone); setShareToast("연락처가 복사되었습니다"); setTimeout(() => setShareToast(null), 2000); setShowContact(false); }}
+                    className="block w-full py-3 border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-800 text-[14px] font-semibold text-[#3A342A] dark:text-zinc-200 rounded-xl hover:bg-[#F5F0E5]">
+                    번호 복사
+                  </button>
+                </>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
 
       {/* 삭제 확인 */}
       <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="글을 삭제할까요?"

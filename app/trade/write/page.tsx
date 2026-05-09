@@ -230,6 +230,10 @@ function TradeWritePage() {
         setRegionCode("loaded"); // 비어있지 않게만 (검증 통과용)
         setRegionDetail(p.region_detail || "");
         setContactPhone(p.contact_phone || "");
+        if (p.category === "center") {
+          const cinfo = (p.center_info && typeof p.center_info === "object" ? p.center_info : {}) as Record<string, unknown>;
+          setContactType(cinfo.contact_type === "openchat" ? "openchat" : "phone");
+        }
         setImageUrls(Array.isArray(p.image_urls) ? p.image_urls : []);
         setAgreed(true);
         if (p.category === "equipment") {
@@ -309,6 +313,8 @@ function TradeWritePage() {
   const [regionName, setRegionName] = useState(""); // "서울 강남구" 형태
   const [regionDetail, setRegionDetail] = useState(""); // 중고거래 필수: 상세 주소(만남 장소·동·번지)
   const [contactPhone, setContactPhone] = useState("");
+  // 센터매매 전용: 연락처 종류 (휴대폰 / 오픈톡 URL)
+  const [contactType, setContactType] = useState<"phone" | "openchat">("phone");
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [agreed, setAgreed] = useState(false);
@@ -460,6 +466,11 @@ function TradeWritePage() {
     if (!regionCode || !regionName.includes(" ")) return failValidation("region", "지역을 시·군·구까지 선택해주세요.");
     if (tradeCategory === "equipment" && imageUrls.length < 1) return failValidation("images", "사기 방지를 위해 실제 판매하시는 물품 사진을 1장 이상 첨부해 주세요.");
     if (!contactPhone.trim()) return failValidation("contact", "연락처를 입력해주세요.");
+    if (tradeCategory === "center" && contactType === "openchat") {
+      if (!/^https?:\/\/open\.kakao\.com\/o\//i.test(contactPhone.trim())) {
+        return failValidation("contact", "오픈톡 주소는 https://open.kakao.com/o/... 형식이어야 합니다.");
+      }
+    }
 
     if (tradeCategory === "equipment") {
       if (!centerName.trim()) return failValidation("centerName", "센터명은 중고거래에서 필수입니다.");
@@ -561,6 +572,7 @@ function TradeWritePage() {
               ? { amount_manwon: 0, negotiable: "권리금없음" }
               : { amount_manwon: parseNum(premium), negotiable: premiumNeg },
             member_count: memberCount,
+            contact_type: contactType,
           },
         };
       }
@@ -978,8 +990,39 @@ function TradeWritePage() {
         <Section number={tradeCategory === "equipment" ? 6 : 8} title="연락처 & 상세 내용">
           <div ref={fieldRefs.contact}>
             <Field label="연락처" required>
-              <input type="tel" value={contactPhone} onChange={e => setContactPhone(formatPhone(e.target.value))}
-                placeholder="010-0000-0000" maxLength={13} className={inputCls} />
+              {tradeCategory === "center" ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    {(["phone", "openchat"] as const).map(opt => {
+                      const active = contactType === opt;
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => { setContactType(opt); setContactPhone(""); }}
+                          className={`flex-1 px-3 py-2 rounded-lg text-[13px] font-bold transition-colors ${
+                            active
+                              ? "bg-[#6B7B3A] text-white"
+                              : "bg-[#FBF7EB] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-300 border border-[#E8E0D0] dark:border-zinc-700"
+                          }`}
+                        >
+                          {opt === "phone" ? "휴대폰" : "오픈톡"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {contactType === "phone" ? (
+                    <input type="tel" value={contactPhone} onChange={e => setContactPhone(formatPhone(e.target.value))}
+                      placeholder="010-0000-0000" maxLength={13} className={inputCls} />
+                  ) : (
+                    <input type="url" value={contactPhone} onChange={e => setContactPhone(e.target.value.slice(0, 120))}
+                      placeholder="https://open.kakao.com/o/..." maxLength={120} className={inputCls} autoComplete="off" />
+                  )}
+                </div>
+              ) : (
+                <input type="tel" value={contactPhone} onChange={e => setContactPhone(formatPhone(e.target.value))}
+                  placeholder="010-0000-0000" maxLength={13} className={inputCls} />
+              )}
             </Field>
           </div>
           <div ref={fieldRefs.body}>
