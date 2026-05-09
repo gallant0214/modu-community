@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { shareOrCopy } from "@/app/lib/share";
 import type { TradePost } from "@/app/lib/trade-query";
+import { promptLogin } from "@/app/lib/auth-prompt";
 
 interface TradePostDetail extends TradePost {
   is_bookmarked?: boolean;
@@ -108,7 +109,7 @@ export default function TradeDetailPage() {
 
   /* 북마크 토글 */
   const handleBookmark = async () => {
-    if (!user) { alert("북마크는 로그인 후 이용할 수 있습니다."); return; }
+    if (!user) { promptLogin("북마크"); return; }
     const prev = bookmarked;
     setBookmarked(!prev); // 낙관적
     try {

@@ -8,6 +8,7 @@ import { LoginRequired } from "@/app/components/login-required";
 import { useAuth } from "@/app/components/auth-provider";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 import dynamic from "next/dynamic";
+import { promptLogin } from "@/app/lib/auth-prompt";
 import { resizeImageFile, uploadWithProgress } from "@/app/lib/client-image";
 import { UploadProgress } from "@/app/components/upload-progress";
 const RichEditor = dynamic(() => import("@/app/components/rich-editor"), { ssr: false });
@@ -125,7 +126,7 @@ function EditPostContent() {
     if (!pendingData) return;
     try {
       const token = await getIdToken();
-      if (!token) { alert("로그인이 필요합니다"); setShowConfirm(false); return; }
+      if (!token) { promptLogin("글 수정"); setShowConfirm(false); return; }
 
       let uploadedUrls: string[] = [];
       if (newImages.length > 0) {

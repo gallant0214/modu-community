@@ -7,6 +7,7 @@ import imageCompression from "browser-image-compression";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 import { useAuth } from "@/app/components/auth-provider";
 import { UploadProgress } from "@/app/components/upload-progress";
+import { promptLogin } from "@/app/lib/auth-prompt";
 
 /* ══════════════════════════════════
    유틸 (구인 글쓰기와 동일)
@@ -451,7 +452,7 @@ function TradeWritePage() {
   };
 
   const validate = (): boolean => {
-    if (!user) return failValidation(null, "거래 등록은 로그인 후 가능합니다.");
+    if (!user) { promptLogin("거래 등록"); return false; }
 
     if (!title.trim()) return failValidation("title", "제목을 입력해주세요.");
     if (!regionCode || !regionName.includes(" ")) return failValidation("region", "지역을 시·군·구까지 선택해주세요.");

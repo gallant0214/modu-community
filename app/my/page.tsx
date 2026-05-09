@@ -8,6 +8,7 @@ import { deleteUser } from "firebase/auth";
 import { auth } from "@/app/lib/firebase-client";
 import type { Post, JobPost, Message } from "@/app/lib/types";
 import type { TradePost } from "@/app/lib/trade-query";
+import { promptLogin } from "@/app/lib/auth-prompt";
 import { SendMessageModal } from "@/app/components/send-message-modal";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 import { formatSalaryDisplay, formatDeadlineDisplay } from "@/app/lib/job-format";
@@ -234,10 +235,7 @@ function MyPageContent() {
     setSavingRegion(true);
     try {
       const token = await getIdToken();
-      if (!token) {
-        alert("로그인이 필요합니다.");
-        return;
-      }
+      if (!token) { promptLogin(); return; }
       const res = await fetch("/api/nicknames", {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -2241,7 +2239,7 @@ function MyPageContent() {
                                 if (!reason?.trim()) return;
                                 try {
                                   const token = await getIdToken();
-                                  if (!token) return alert("로그인이 필요합니다");
+                                  if (!token) { promptLogin(); return; }
                                   const res = await fetch("/api/reports", {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -2262,7 +2260,7 @@ function MyPageContent() {
                                 if (!window.confirm(`${otherNick} 님을 차단하시겠습니까?\n차단된 사용자와는 쪽지를 주고받을 수 없습니다.`)) return;
                                 try {
                                   const token = await getIdToken();
-                                  if (!token) return alert("로그인이 필요합니다");
+                                  if (!token) { promptLogin(); return; }
                                   const res = await fetch("/api/users/block", {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

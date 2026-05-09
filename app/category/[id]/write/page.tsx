@@ -8,6 +8,7 @@ import { LoginRequired } from "@/app/components/login-required";
 import { useAuth } from "@/app/components/auth-provider";
 import { REGION_GROUPS, type RegionGroup } from "@/app/lib/region-data";
 import { resizeImageFile, uploadWithProgress } from "@/app/lib/client-image";
+import { promptLogin } from "@/app/lib/auth-prompt";
 import { UploadProgress } from "@/app/components/upload-progress";
 import dynamic from "next/dynamic";
 const RichEditor = dynamic(() => import("@/app/components/rich-editor"), { ssr: false });
@@ -167,7 +168,7 @@ function WritePageContent() {
     setUploadPercent(0);
     try {
       const token = await getIdToken();
-      if (!token) { alert("로그인이 필요합니다"); setUploading(false); setUploadPhase("idle"); return; }
+      if (!token) { promptLogin("글 작성"); setUploading(false); setUploadPhase("idle"); return; }
 
       let imageUrls = "";
       if (selectedImages.length > 0) {

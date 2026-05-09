@@ -10,6 +10,7 @@ import { shareOrCopy } from "@/app/lib/share";
 import { SendMessageModal } from "@/app/components/send-message-modal";
 import { optimizeCloudinaryUrl } from "@/app/lib/cloudinary-url";
 import { formatRegionShort } from "@/app/lib/region-format";
+import { promptLogin } from "@/app/lib/auth-prompt";
 import { sanitizePostBody } from "@/app/lib/sanitize";
 
 interface PostViewProps {
@@ -262,9 +263,9 @@ export function PostView({ initialPost }: PostViewProps) {
   }
 
   async function handleLike() {
-    if (!user) { alert("로그인 후 이용 가능합니다"); return; }
+    if (!user) { promptLogin(); return; }
     const token = await getIdToken();
-    if (!token) { alert("로그인이 필요합니다"); return; }
+    if (!token) { promptLogin(); return; }
     // 낙관적 업데이트: 즉시 UI 반영
     const wasLiked = liked;
     const prevLikes = likes;
@@ -281,7 +282,7 @@ export function PostView({ initialPost }: PostViewProps) {
 
   async function handleDelete() {
     const token = await getIdToken();
-    if (!token) { alert("로그인이 필요합니다"); return; }
+    if (!token) { promptLogin(); return; }
     try {
       // Firebase auth(작성자 본인)만으로 삭제 — body는 비어있어도 됨
       const res = await fetch(`/api/post/${postId}`, {
@@ -303,7 +304,7 @@ export function PostView({ initialPost }: PostViewProps) {
   async function handleCommentSubmit() {
     // 이미 제출 중이면 중복 요청 차단 (여러 번 클릭 방지)
     if (commentSubmitting) return;
-    if (!user) { alert("로그인 후 이용 가능합니다"); return; }
+    if (!user) { promptLogin(); return; }
     const content = commentContent.trim();
     if (!content) {
       setCommentError("댓글 내용을 입력해주세요");
@@ -1141,9 +1142,9 @@ export function PostView({ initialPost }: PostViewProps) {
                           )}
                           <button
                             onClick={async () => {
-                              if (!user) { alert("로그인 후 이용 가능합니다"); return; }
+                              if (!user) { promptLogin(); return; }
                               const token = await getIdToken();
-                              if (!token) { alert("로그인이 필요합니다"); return; }
+                              if (!token) { promptLogin(); return; }
                               const wasLiked = likedCommentIds.has(comment.id);
                               const prevLikes = comment.likes ?? 0;
                               // 낙관적 업데이트: 즉시 UI 반영
@@ -1547,10 +1548,10 @@ export function PostView({ initialPost }: PostViewProps) {
                   </button>
                   <button
                     onClick={async () => {
-                      if (!user) { alert("로그인 후 이용 가능합니다"); return; }
+                      if (!user) { promptLogin(); return; }
                       if (!commentReportReason || commentReportTargetId === null) return;
                       const token = await getIdToken();
-                      if (!token) { alert("로그인이 필요합니다"); return; }
+                      if (!token) { promptLogin(); return; }
                       const r = await createReport(
                         "comment",
                         commentReportTargetId,
@@ -1662,10 +1663,10 @@ export function PostView({ initialPost }: PostViewProps) {
                   </button>
                   <button
                     onClick={async () => {
-                      if (!user) { alert("로그인 후 이용 가능합니다"); return; }
+                      if (!user) { promptLogin(); return; }
                       if (!reportReason) return;
                       const token = await getIdToken();
-                      if (!token) { alert("로그인이 필요합니다"); return; }
+                      if (!token) { promptLogin(); return; }
                       const r = await createReport(
                         "post",
                         Number(postId),
