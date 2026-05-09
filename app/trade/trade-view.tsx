@@ -271,8 +271,10 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
                       {/* status 라벨 — 사진 좌하단 (대표사진 표시 패턴) */}
                       {(p.status === "sold" || p.status === "reserved") && (
                         <span
-                          className={`absolute left-1.5 bottom-1.5 px-2 py-0.5 rounded text-[11px] font-bold text-white ${
-                            p.status === "sold" ? "bg-black/65" : "bg-[#C0392B]/85"
+                          className={`absolute left-1.5 bottom-1.5 px-2 py-0.5 rounded text-[11px] font-bold ${
+                            p.status === "sold"
+                              ? "bg-black/65 text-white"
+                              : "bg-[#C0392B]/85 text-[#FFE082]"
                           }`}
                         >
                           {p.status === "sold" ? "거래완료" : "계약중"}
