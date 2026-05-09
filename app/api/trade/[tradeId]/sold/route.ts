@@ -5,10 +5,12 @@ import { invalidateCache } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
 
-// POST /api/trade/[tradeId]/sold — 거래완료 / 해제 토글
-// body: { sold: boolean }
-// - sold: true → status='sold'
-// - sold: false → status='active' (거래중으로 되돌림)
+// POST /api/trade/[tradeId]/sold — 거래 status 변경
+// body: { sold?: boolean, status?: 'active'|'reserved'|'sold' }
+// - sold: true → status='sold' (legacy)
+// - sold: false → status='active' (legacy)
+// - status: 명시 시 그 값 그대로 (active/reserved/sold 만 허용)
+const ALLOWED_STATUSES = new Set(["active", "reserved", "sold"]);
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ tradeId: string }> },
@@ -23,6 +25,7 @@ export async function POST(
   }
 
   const body = await request.json().catch(() => null);
+  const requestedStatus: string | undefined = typeof body?.status === "string" ? body.status : undefined;
   const sold = !!body?.sold;
 
   const { data: post } = await supabase
@@ -39,12 +42,21 @@ export async function POST(
     return NextResponse.json({ error: "삭제된 글은 변경할 수 없습니다" }, { status: 400 });
   }
 
-  const newStatus = sold ? "sold" : "active";
+  // status 명시 시 그 값 (검증). 없으면 sold 토글 (레거시 호환).
+  let newStatus: string;
+  if (requestedStatus) {
+    if (!ALLOWED_STATUSES.has(requestedStatus)) {
+      return NextResponse.json({ error: "허용되지 않는 status" }, { status: 400 });
+    }
+    newStatus = requestedStatus;
+  } else {
+    newStatus = sold ? "sold" : "active";
+  }
   if (post.status === newStatus) {
     return NextResponse.json({ success: true, status: newStatus, unchanged: true });
   }
 
-  const { error } = await supabase
+  const { error } = await (supabase as any)
     .from("trade_posts")
     .update({ status: newStatus })
     .eq("id", id);

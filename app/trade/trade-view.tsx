@@ -257,7 +257,7 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
                   className="block bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl overflow-hidden hover:border-[#6B7B3A]/40 hover:shadow-[0_8px_24px_-12px_rgba(107,93,71,0.25)] transition-all">
                   <div className="flex gap-3 p-3 sm:p-4">
                     {/* 썸네일 */}
-                    <div className="w-24 sm:w-28 aspect-square shrink-0 bg-[#F5F0E5] dark:bg-zinc-800 rounded-xl overflow-hidden">
+                    <div className="relative w-24 sm:w-28 aspect-square shrink-0 bg-[#F5F0E5] dark:bg-zinc-800 rounded-xl overflow-hidden">
                       {p.image_urls?.[0] ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={p.image_urls[0]} alt={p.title} className="w-full h-full object-cover" />
@@ -267,6 +267,16 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                         </div>
+                      )}
+                      {/* status 라벨 — 사진 좌하단 (대표사진 표시 패턴) */}
+                      {(p.status === "sold" || p.status === "reserved") && (
+                        <span
+                          className={`absolute left-1.5 bottom-1.5 px-2 py-0.5 rounded text-[11px] font-bold text-white ${
+                            p.status === "sold" ? "bg-black/65" : "bg-[#C0392B]/85"
+                          }`}
+                        >
+                          {p.status === "sold" ? "거래완료" : "계약중"}
+                        </span>
                       )}
                     </div>
 
