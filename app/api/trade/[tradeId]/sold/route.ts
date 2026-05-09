@@ -28,11 +28,12 @@ export async function POST(
   const requestedStatus: string | undefined = typeof body?.status === "string" ? body.status : undefined;
   const sold = !!body?.sold;
 
-  const { data: post } = await supabase
+  const { data: postRaw } = await (supabase as any)
     .from("trade_posts")
-    .select("firebase_uid, status")
+    .select("firebase_uid, status, previous_status")
     .eq("id", id)
     .maybeSingle();
+  const post = postRaw as { firebase_uid: string; status: string; previous_status: string | null } | null;
 
   if (!post) return NextResponse.json({ error: "글을 찾을 수 없습니다" }, { status: 404 });
   if (post.firebase_uid !== user.uid) {
@@ -52,13 +53,32 @@ export async function POST(
   } else {
     newStatus = sold ? "sold" : "active";
   }
+
+  // 숨김 해제(active 요청 + 현재 hidden) 시 → 마지막 등록 상태(previous_status)로 자동 복원
+  // previous_status 가 없거나 deleted/hidden 이면 'active' fallback
+  if (newStatus === "active" && post.status === "hidden") {
+    const restored = post.previous_status;
+    if (restored && ALLOWED_STATUSES.has(restored) && restored !== "hidden") {
+      newStatus = restored;
+    }
+  }
+
   if (post.status === newStatus) {
     return NextResponse.json({ success: true, status: newStatus, unchanged: true });
   }
 
+  // 숨김 처리 시 → 이전 status 보관 (해제 시 복원용). hidden→hidden 분기는 위에서 unchanged 처리됨.
+  // 일반 변경 시 → previous_status 클리어 (의미가 사라짐)
+  const updateRow: Record<string, unknown> = { status: newStatus };
+  if (newStatus === "hidden" && post.status !== "hidden") {
+    updateRow.previous_status = post.status;
+  } else if (post.status === "hidden") {
+    updateRow.previous_status = null;
+  }
+
   const { error } = await (supabase as any)
     .from("trade_posts")
-    .update({ status: newStatus })
+    .update(updateRow)
     .eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
