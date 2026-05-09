@@ -282,25 +282,28 @@ export default function AdminPage() {
   }, [storedPassword, computeRange, kpiFrom, kpiTo, kpiVisitFrom, kpiVisitTo, kpiReportFrom, kpiReportTo]);
 
   // 탭 방문 통계 — 유입수 기간(kpiVisit*) 그대로 사용
+  // route.ts /api/admin/kpi/tab-stats 는 from/to 를 YYYY-MM-DD 형식으로 기대 →
+  // computeRange 가 리턴하는 full ISO 를 .slice(0,10) 로 잘라서 전달.
   const loadTabStats = useCallback(async (visitMode: typeof kpiVisitRange) => {
     if (!storedPassword) return;
     setTabStatsLoading(true);
     try {
       const visit = computeRange(visitMode, kpiVisitFrom, kpiVisitTo);
-      // "all" 의 경우 from/to 없으면 광범위 기본값 적용 (90일)
       const today = new Date().toISOString().slice(0, 10);
       const fallbackFrom = (() => {
         const d = new Date();
         d.setDate(d.getDate() - 89);
         return d.toISOString().slice(0, 10);
       })();
+      const fromYmd = visit.from ? visit.from.slice(0, 10) : fallbackFrom;
+      const toYmd = visit.to ? visit.to.slice(0, 10) : today;
       const res = await fetch("/api/admin/kpi/tab-stats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           password: storedPassword,
-          from: visit.from || fallbackFrom,
-          to: visit.to || today,
+          from: fromYmd,
+          to: toYmd,
         }),
       });
       const data = await res.json();
