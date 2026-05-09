@@ -1,7 +1,8 @@
 import { supabase } from "@/app/lib/supabase";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { invalidateCache } from "@/app/lib/cache";
+import { sendPushToUser } from "@/app/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -30,9 +31,17 @@ export async function POST(
     return NextResponse.json({ error: "잘못된 ID" }, { status: 400 });
   }
 
+  // 선택 필드 — 가격 함께 낮추기 (중고거래 전용)
+  // body: { new_price_manwon?: number }  (만원 단위 정수)
+  const body = await request.json().catch(() => ({}));
+  const rawNewPrice = body?.new_price_manwon;
+  const newPriceManwon = typeof rawNewPrice === "number" && Number.isFinite(rawNewPrice)
+    ? Math.max(0, Math.floor(rawNewPrice))
+    : null;
+
   const { data: post } = await supabase
     .from("trade_posts")
-    .select("firebase_uid, category, status, bumped_at")
+    .select("firebase_uid, category, status, bumped_at, price_manwon, product_name, title")
     .eq("id", id)
     .maybeSingle();
 
@@ -64,9 +73,25 @@ export async function POST(
   }
 
   const nowIso = new Date(now).toISOString();
-  const { error } = await supabase
+
+  // 가격 변경 동반? (중고거래만 의미 있음)
+  const willChangePrice =
+    post.category === "equipment" &&
+    newPriceManwon !== null &&
+    typeof post.price_manwon === "number" &&
+    newPriceManwon !== post.price_manwon &&
+    newPriceManwon >= 0;
+  const oldPrice = typeof post.price_manwon === "number" ? post.price_manwon : null;
+  const willDropPrice = willChangePrice && oldPrice !== null && newPriceManwon! < oldPrice && newPriceManwon! > 0;
+
+  const updateRow: Record<string, unknown> = { bumped_at: nowIso };
+  if (willChangePrice && newPriceManwon !== null) {
+    updateRow.price_manwon = newPriceManwon;
+  }
+
+  const { error } = await (supabase as any)
     .from("trade_posts")
-    .update({ bumped_at: nowIso })
+    .update(updateRow)
     .eq("id", id);
 
   if (error) {
@@ -75,5 +100,69 @@ export async function POST(
   }
 
   await invalidateCache("trade:*").catch(() => {});
-  return NextResponse.json({ success: true, bumped_at: nowIso, cooldownMs });
+
+  // 가격 인하 시 → 북마크 사용자에게 푸시 (PATCH 라우트와 동일 룰, after() 백그라운드)
+  if (willDropPrice && oldPrice !== null && newPriceManwon !== null) {
+    const ownerUid = post.firebase_uid;
+    const productLabel = post.product_name || post.title || "거래글";
+    after(async () => {
+      try {
+        const { data: bookmarks } = await (supabase as any)
+          .from("trade_post_bookmarks")
+          .select("firebase_uid")
+          .eq("trade_post_id", id);
+        const uids = Array.from(
+          new Set(
+            ((bookmarks as { firebase_uid: string }[] | null) || [])
+              .map((b) => b.firebase_uid)
+              .filter((u) => u && u !== ownerUid)
+          )
+        );
+        if (uids.length === 0) return;
+
+        const { data: blocks } = await (supabase as any)
+          .from("user_blocks")
+          .select("blocker_uid, blocked_uid")
+          .or(`blocker_uid.eq.${ownerUid},blocked_uid.eq.${ownerUid}`);
+        const blocked = new Set<string>();
+        for (const r of (blocks || []) as { blocker_uid: string; blocked_uid: string }[]) {
+          if (r.blocker_uid === ownerUid) blocked.add(r.blocked_uid);
+          if (r.blocked_uid === ownerUid) blocked.add(r.blocker_uid);
+        }
+        const targets = uids.filter((u) => !blocked.has(u));
+        if (targets.length === 0) return;
+
+        const fmt = (manwon: number) => {
+          if (manwon >= 10000) {
+            const eok = Math.floor(manwon / 10000);
+            const rest = manwon % 10000;
+            return rest === 0 ? `${eok}억원` : `${eok}억 ${rest.toLocaleString()}만원`;
+          }
+          return `${(manwon * 10000).toLocaleString()}원`;
+        };
+        const titleMsg = "관심 거래글 가격 인하";
+        const bodyMsg = `${productLabel} ${fmt(oldPrice)} → ${fmt(newPriceManwon)}`;
+
+        await Promise.all(
+          targets.map((uid) =>
+            sendPushToUser(uid, "trade_price_drop", titleMsg, bodyMsg, {
+              type: "trade_price_drop",
+              trade_id: String(id),
+            }).catch(() => {})
+          )
+        );
+      } catch (err) {
+        console.error("[trade bump+drop notify] failed:", err);
+      }
+    });
+  }
+
+  return NextResponse.json({
+    success: true,
+    bumped_at: nowIso,
+    cooldownMs,
+    price_changed: willChangePrice,
+    price_dropped: willDropPrice,
+    new_price_manwon: willChangePrice ? newPriceManwon : null,
+  });
 }
