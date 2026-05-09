@@ -267,6 +267,7 @@ export default function JobWritePage() {
       setCategories([
         ...base,
         { id: -1, name: "무용", emoji: "💃" },
+        { id: -3, name: "바레", emoji: "🩰" },
         { id: -2, name: "기타", emoji: "🏷️" },
       ]);
     }).catch(() => {});
