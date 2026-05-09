@@ -35,7 +35,8 @@ export async function sendPushToUser(
       .maybeSingle();
 
     if (pref) {
-      const typeMap: Record<string, keyof typeof pref> = {
+      // notify_trade 는 supabase generated types 에 아직 없을 수 있어 string 키로 처리
+      const typeMap: Record<string, string> = {
         comment: "notify_comment",
         reply: "notify_reply",
         job: "notify_job",
@@ -46,9 +47,11 @@ export async function sendPushToUser(
         keyword: "notify_keyword",
         like: "notify_like",
         message: "notify_message",
+        trade: "notify_trade",
+        trade_price_drop: "notify_trade",
       };
       const prefKey = typeMap[type];
-      if (prefKey && pref[prefKey] === false) {
+      if (prefKey && (pref as Record<string, unknown>)[prefKey] === false) {
         return; // 알림 OFF
       }
     }

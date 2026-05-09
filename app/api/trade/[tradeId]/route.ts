@@ -1,8 +1,10 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { verifyAuth, isAdminUid } from "@/app/lib/firebase-admin";
 import { invalidateCache } from "@/app/lib/cache";
 import { sanitize, validateLength } from "@/app/lib/security";
+import { sendPushToUser } from "@/app/lib/notifications";
 import type { Database } from "@/app/lib/database.types";
 
 type TradePostUpdate = Database["public"]["Tables"]["trade_posts"]["Update"];
@@ -125,7 +127,7 @@ export async function PATCH(
 
   const { data: existing } = await supabase
     .from("trade_posts")
-    .select("firebase_uid, category")
+    .select("firebase_uid, category, price_manwon, product_name, title")
     .eq("id", id)
     .single();
 
@@ -215,5 +217,81 @@ export async function PATCH(
   }
 
   await invalidateCache("trade:*").catch(() => {});
+
+  // 가격 인하 감지 (중고거래만) → 북마크한 사용자에게 푸시
+  // 응답을 막지 않도록 after() 로 비동기 처리.
+  if (
+    category === "equipment" &&
+    typeof existing.price_manwon === "number" &&
+    typeof updateRow.price_manwon === "number" &&
+    updateRow.price_manwon > 0 &&
+    existing.price_manwon > updateRow.price_manwon
+  ) {
+    const oldPrice = existing.price_manwon;
+    const newPrice = updateRow.price_manwon;
+    const productLabel =
+      sanitize(validateLength(String(product_name).trim(), 100)) ||
+      existing.product_name ||
+      existing.title ||
+      "거래글";
+    const ownerUid = existing.firebase_uid;
+    const tradeId = id;
+
+    after(async () => {
+      try {
+        // 1) 북마크한 사용자 조회 (작성자 본인 제외)
+        const { data: bookmarks } = await (supabase as any)
+          .from("trade_post_bookmarks")
+          .select("firebase_uid")
+          .eq("trade_post_id", tradeId);
+        const uids = Array.from(
+          new Set(
+            ((bookmarks as { firebase_uid: string }[] | null) || [])
+              .map((b) => b.firebase_uid)
+              .filter((u) => u && u !== ownerUid)
+          )
+        );
+        if (uids.length === 0) return;
+
+        // 2) 작성자 ↔ 수신자 양방향 차단된 사용자 제외 (silent drop)
+        const { data: blocks } = await (supabase as any)
+          .from("user_blocks")
+          .select("blocker_uid, blocked_uid")
+          .or(`blocker_uid.eq.${ownerUid},blocked_uid.eq.${ownerUid}`);
+        const blocked = new Set<string>();
+        for (const r of (blocks || []) as { blocker_uid: string; blocked_uid: string }[]) {
+          if (r.blocker_uid === ownerUid) blocked.add(r.blocked_uid);
+          if (r.blocked_uid === ownerUid) blocked.add(r.blocker_uid);
+        }
+        const targets = uids.filter((u) => !blocked.has(u));
+        if (targets.length === 0) return;
+
+        // 3) 가격 표시 — 만원 → 원 단위 변환 (1억 이상은 단축 표기)
+        const fmt = (manwon: number) => {
+          if (manwon >= 10000) {
+            const eok = Math.floor(manwon / 10000);
+            const rest = manwon % 10000;
+            return rest === 0 ? `${eok}억원` : `${eok}억 ${rest.toLocaleString()}만원`;
+          }
+          return `${(manwon * 10000).toLocaleString()}원`;
+        };
+        const titleMsg = "관심 거래글 가격 인하";
+        const bodyMsg = `${productLabel} ${fmt(oldPrice)} → ${fmt(newPrice)}`;
+
+        // 4) 발송 — sendPushToUser 내부에서 notify_trade 체크 + 차단·토큰 정리
+        await Promise.all(
+          targets.map((uid) =>
+            sendPushToUser(uid, "trade_price_drop", titleMsg, bodyMsg, {
+              type: "trade_price_drop",
+              trade_id: String(tradeId),
+            }).catch(() => {})
+          )
+        );
+      } catch (err) {
+        console.error("[trade price drop notify] failed:", err);
+      }
+    });
+  }
+
   return NextResponse.json({ success: true, id });
 }
