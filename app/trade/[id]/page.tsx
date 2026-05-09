@@ -218,18 +218,21 @@ export default function TradeDetailPage() {
     return m.type;
   });
 
-  type EquipItem = { name: string; condition: string; price_manwon: number };
+  type EquipItem = { name: string; condition: string; price_manwon: number; use_duration?: string };
   const rawItems = (ei?.items && Array.isArray(ei.items) ? ei.items : []) as Array<Partial<EquipItem>>;
+  const eiUseDuration = typeof ei?.use_duration === "string" ? (ei.use_duration as string) : "";
   const equipItems: EquipItem[] = rawItems.length > 0
     ? rawItems.map(it => ({
         name: String(it.name || ""),
         condition: String(it.condition || ""),
         price_manwon: Number(it.price_manwon || 0),
+        use_duration: typeof it.use_duration === "string" ? it.use_duration : eiUseDuration,
       }))
     : [{
         name: post.product_name || "",
         condition: post.condition_text || "",
         price_manwon: post.price_manwon || 0,
+        use_duration: eiUseDuration,
       }];
 
   return (
@@ -337,6 +340,7 @@ export default function TradeDetailPage() {
                     <InfoRow label="가격" accent value={formatPriceWon(it.price_manwon)} />
                     <InfoRow label="제품명" value={it.name || "-"} />
                     <InfoRow label="상태" value={it.condition || "-"} />
+                    <InfoRow label="사용기간" value={it.use_duration || "-"} />
                   </div>
                 ))}
                 <div className="pt-1">
@@ -350,6 +354,7 @@ export default function TradeDetailPage() {
                 <InfoRow label="가격" accent value={formatPriceWon(equipItems[0].price_manwon)} />
                 <InfoRow label="제품명" value={equipItems[0].name || "-"} />
                 <InfoRow label="상태" value={equipItems[0].condition || "-"} />
+                <InfoRow label="사용기간" value={equipItems[0].use_duration || "-"} />
                 <InfoRow label="거래 방식" value={methodLabels.length ? methodLabels.join(", ") : "-"} />
                 {post.region_detail && <InfoRow label="상세 주소" value={post.region_detail} />}
                 <InfoRow label="센터명" value={post.center_name || "-"} />

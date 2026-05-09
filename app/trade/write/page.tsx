@@ -234,7 +234,7 @@ function TradeWritePage() {
         setAgreed(true);
         if (p.category === "equipment") {
           const ei = (p.equipment_info && typeof p.equipment_info === "object" ? p.equipment_info : {}) as Record<string, unknown>;
-          const rawItems = Array.isArray(ei.items) ? ei.items as Array<Partial<{ name: string; condition: string; price_manwon: number }>> : [];
+          const rawItems = Array.isArray(ei.items) ? ei.items as Array<Partial<{ name: string; condition: string; price_manwon: number; use_duration: string }>> : [];
           // DB 저장은 만원 단위, UI 표시는 원 단위 (×10000)
           const loaded: EquipItem[] = rawItems.length > 0
             ? rawItems.map(it => ({
