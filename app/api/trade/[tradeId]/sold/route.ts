@@ -6,11 +6,11 @@ import { invalidateCache } from "@/app/lib/cache";
 export const dynamic = "force-dynamic";
 
 // POST /api/trade/[tradeId]/sold — 거래 status 변경
-// body: { sold?: boolean, status?: 'active'|'reserved'|'sold' }
+// body: { sold?: boolean, status?: 'active'|'reserved'|'sold'|'hidden' }
 // - sold: true → status='sold' (legacy)
 // - sold: false → status='active' (legacy)
-// - status: 명시 시 그 값 그대로 (active/reserved/sold 만 허용)
-const ALLOWED_STATUSES = new Set(["active", "reserved", "sold"]);
+// - status: 명시 시 그 값 그대로 (active/reserved/sold/hidden 만 허용)
+const ALLOWED_STATUSES = new Set(["active", "reserved", "sold", "hidden"]);
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ tradeId: string }> },
