@@ -160,14 +160,31 @@ export async function POST(request: Request) {
       if (visitToDate) q = q.lte("visited_at", visitToDate);
       const { data } = await q.order("visited_at", { ascending: true }).limit(50000);
 
-      // 0회 날도 차트에 표시되도록 기간 내 모든 날짜를 0 으로 미리 채움
+      // Vercel 서버는 UTC. 사용자에게 보여줄 시간/요일/날짜는 KST(UTC+9) 기준으로 추출.
+      const KST_OFFSET_MS = 9 * 3600 * 1000;
+      const kstParts = (d: Date) => {
+        const k = new Date(d.getTime() + KST_OFFSET_MS);
+        return {
+          hour: k.getUTCHours(),
+          weekday: k.getUTCDay(),
+          dateKey: `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")}`,
+        };
+      };
+
+      // 0회 날도 차트에 표시되도록 기간 내 모든 날짜(KST)를 0 으로 미리 채움
       const dayMap = new Map<string, number>();
-      const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       if (visitFromDate && visitToDate) {
-        const start = new Date(visitFromDate); start.setHours(0, 0, 0, 0);
-        const end = new Date(visitToDate); end.setHours(0, 0, 0, 0);
-        for (let t = start.getTime(); t <= end.getTime(); t += 86400000) {
-          dayMap.set(dayKey(new Date(t)), 0);
+        const startKey = kstParts(new Date(visitFromDate)).dateKey;
+        const endKey = kstParts(new Date(visitToDate)).dateKey;
+        const [sy, sm, sd] = startKey.split("-").map(Number);
+        const [ey, em, ed] = endKey.split("-").map(Number);
+        let cursor = Date.UTC(sy, sm - 1, sd);
+        const endTime = Date.UTC(ey, em - 1, ed);
+        while (cursor <= endTime) {
+          const c = new Date(cursor);
+          const k = `${c.getUTCFullYear()}-${String(c.getUTCMonth() + 1).padStart(2, "0")}-${String(c.getUTCDate()).padStart(2, "0")}`;
+          dayMap.set(k, 0);
+          cursor += 86400000;
         }
       }
 
@@ -229,12 +246,12 @@ export async function POST(request: Request) {
       for (const row of data) {
         const dt = new Date(row.visited_at);
         if (isNaN(dt.getTime())) continue;
-        const k = dayKey(dt);
+        const { hour, weekday, dateKey } = kstParts(dt);
         // 미리 채운 키만 카운트 (기간 밖 데이터 안전 무시)
-        if (dayMap.has(k)) dayMap.set(k, (dayMap.get(k) || 0) + 1);
-        else dayMap.set(k, 1);
-        hourArr[dt.getHours()]++;
-        wkArr[dt.getDay()]++;
+        if (dayMap.has(dateKey)) dayMap.set(dateKey, (dayMap.get(dateKey) || 0) + 1);
+        else dayMap.set(dateKey, 1);
+        hourArr[hour]++;
+        wkArr[weekday]++;
         const ch = classifyChannel(row.referrer);
         channelMap.set(ch, (channelMap.get(ch) || 0) + 1);
         const kw = extractKeyword(row.referrer);
