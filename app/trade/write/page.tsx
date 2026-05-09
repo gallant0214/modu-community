@@ -183,11 +183,11 @@ function TradeWritePage() {
   useEffect(() => {
     fetch("/api/categories").then(r => r.json()).then(data => {
       const base = Array.isArray(data) ? data.map((c: { id: number; name: string; emoji: string }) => ({ id: c.id, name: c.name, emoji: c.emoji })) : [];
-      setCategories([
-        ...base,
+      const extra = [
         { id: -1, name: "무용", emoji: "💃" },
         { id: -2, name: "기타", emoji: "🏷️" },
-      ]);
+      ].filter(e => !base.some((b: { name: string }) => b.name === e.name));
+      setCategories([...base, ...extra]);
     }).catch(() => {});
   }, []);
 
@@ -241,11 +241,13 @@ function TradeWritePage() {
                 name: String(it.name || ""),
                 condition: String(it.condition || ""),
                 price: Number.isFinite(it.price_manwon) ? Number(it.price_manwon).toLocaleString() : "",
+                useDuration: typeof it.use_duration === "string" ? it.use_duration : "",
               }))
             : [{
                 name: p.product_name || "",
                 condition: p.condition_text || "",
                 price: Number.isFinite(p.price_manwon) ? Number(p.price_manwon).toLocaleString() : "",
+                useDuration: typeof ei.use_duration === "string" ? ei.use_duration : "",
               }];
           setItems(loaded);
           setCenterName(p.center_name || "");
@@ -312,8 +314,8 @@ function TradeWritePage() {
   const [agreed, setAgreed] = useState(false);
 
   /* ─── equipment 전용 ─── */
-  type EquipItem = { name: string; condition: string; price: string };
-  const [items, setItems] = useState<EquipItem[]>([{ name: "", condition: "", price: "" }]);
+  type EquipItem = { name: string; condition: string; price: string; useDuration: string };
+  const [items, setItems] = useState<EquipItem[]>([{ name: "", condition: "", price: "", useDuration: "" }]);
   const [centerName, setCenterName] = useState(""); // 중고: 필수 공개
   const [tradeMethods, setTradeMethods] = useState<Set<TradeMethodKey>>(new Set());
   const [deliveryLoading, setDeliveryLoading] = useState(false);
@@ -355,7 +357,7 @@ function TradeWritePage() {
   };
 
   const addItem = () => {
-    setItems(prev => prev.length >= 10 ? prev : [...prev, { name: "", condition: "", price: "" }]);
+    setItems(prev => prev.length >= 10 ? prev : [...prev, { name: "", condition: "", price: "", useDuration: "" }]);
   };
   const removeItem = (idx: number) => {
     setItems(prev => prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx));
@@ -474,6 +476,7 @@ function TradeWritePage() {
         const prefix = items.length > 1 ? `${i + 1}번 물품의 ` : "";
         if (!it.name.trim()) return failValidation("items", `${prefix}제품명을 입력해주세요.`);
         if (!it.condition.trim()) return failValidation("items", `${prefix}상태 등급을 입력해주세요.`);
+        if (!it.useDuration.trim()) return failValidation("items", `${prefix}사용기간을 입력해주세요.`);
         if (!it.price.trim()) return failValidation("items", `${prefix}가격을 입력해주세요.`);
       }
       if (tradeMethods.size === 0) return failValidation("tradeMethods", "거래 방식을 1개 이상 선택해주세요.");
@@ -528,6 +531,7 @@ function TradeWritePage() {
           name: it.name.trim(),
           condition: it.condition.trim(),
           price_manwon: parseNum(it.price),
+          use_duration: it.useDuration.trim(),
         }));
         payload = {
           ...payload,
@@ -535,7 +539,7 @@ function TradeWritePage() {
           condition_text: itemList[0].condition,
           price_manwon: itemList[0].price_manwon,
           center_name: centerName.trim(),
-          equipment_info: { trade_methods: methods, items: itemList },
+          equipment_info: { trade_methods: methods, items: itemList, use_duration: itemList[0].use_duration },
         };
       } else {
         const memberCount: Record<string, unknown> =
@@ -773,6 +777,11 @@ function TradeWritePage() {
                       <input type="text" value={item.condition}
                         onChange={e => updateItem(idx, "condition", e.target.value.slice(0, 50))}
                         placeholder="예) S급 거의 새 것, A급 사용감 적음" className={inputCls} />
+                    </Field>
+                    <Field label="사용기간" required count={item.useDuration.length} max={30}>
+                      <input type="text" value={item.useDuration}
+                        onChange={e => updateItem(idx, "useDuration", e.target.value.slice(0, 30))}
+                        placeholder="예) 6개월, 1년 3개월, 2년" className={inputCls} />
                     </Field>
                     <Field label="가격" required>
                       <div className="flex items-center gap-2">

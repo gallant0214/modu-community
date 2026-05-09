@@ -264,12 +264,12 @@ export default function JobWritePage() {
   useEffect(() => {
     fetch("/api/categories").then(r => r.json()).then(data => {
       const base = Array.isArray(data) ? data.map((c: any) => ({ id: c.id, name: c.name, emoji: c.emoji })) : [];
-      setCategories([
-        ...base,
+      const extra = [
         { id: -1, name: "무용", emoji: "💃" },
         { id: -3, name: "바레", emoji: "🩰" },
         { id: -2, name: "기타", emoji: "🏷️" },
-      ]);
+      ].filter(e => !base.some((b: { name: string }) => b.name === e.name));
+      setCategories([...base, ...extra]);
     }).catch(() => {});
   }, []);
 
