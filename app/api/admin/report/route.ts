@@ -7,32 +7,43 @@ export const dynamic = "force-dynamic";
 type Period = "day" | "week" | "month" | "custom";
 type Range = { from: Date; to: Date; days: number };
 
+// Vercel 서버는 UTC 라 모든 일자/시각 경계는 KST 기준으로 명시 변환.
+const KST_OFFSET_MS = 9 * 3600 * 1000;
+
 function periodDays(p: Exclude<Period, "custom">): number {
   return p === "day" ? 1 : p === "week" ? 7 : 30;
+}
+
+// 주어진 시점의 KST 자정을 UTC 시각으로 반환 (KST 의 그 날 00:00 = UTC 의 어제 15:00)
+function kstStartOfDay(d: Date): Date {
+  const k = new Date(d.getTime() + KST_OFFSET_MS);
+  k.setUTCHours(0, 0, 0, 0);
+  return new Date(k.getTime() - KST_OFFSET_MS);
 }
 
 // offset: 0 = 현재 기간, 1 = 직전 기간, 2 = 그 이전, ...
 function getAutoRange(period: Exclude<Period, "custom">, offset: number): Range {
   const days = periodDays(period);
   const now = new Date();
-  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const today = kstStartOfDay(now);
   const endOffsetMs = offset * days * 86400000;
   const to = new Date(now.getTime() - endOffsetMs);
   const from = new Date(today.getTime() - (days - 1 + offset * days) * 86400000);
   return { from, to, days };
 }
 
-// custom 모드: customFrom~customTo 가 cur, 같은 길이의 직전이 prev
+// custom 모드: customFrom~customTo 가 cur, 같은 길이의 직전이 prev (둘 다 KST 자정 기준)
 function getCustomRanges(customFrom: string, customTo: string): { cur: Range; prev: Range } {
-  const f = new Date(customFrom + "T00:00:00");
-  const t = new Date(customTo + "T23:59:59");
+  const f = new Date(customFrom + "T00:00:00+09:00");
+  const t = new Date(customTo + "T23:59:59+09:00");
   const days = Math.max(1, Math.round((t.getTime() - f.getTime()) / 86400000) + 1);
   const cur: Range = { from: f, to: t, days };
   const prevTo = new Date(f.getTime() - 1);
-  const prevFrom = new Date(prevTo.getTime() - (days - 1) * 86400000);
-  prevFrom.setHours(0, 0, 0, 0);
-  prevTo.setHours(23, 59, 59, 999);
-  const prev: Range = { from: prevFrom, to: prevTo, days };
+  const prevFrom = kstStartOfDay(new Date(prevTo.getTime() - (days - 1) * 86400000));
+  // prevTo 는 KST 그 날 23:59:59 로 정렬
+  const prevToKst = new Date(prevTo.getTime() + KST_OFFSET_MS);
+  prevToKst.setUTCHours(23, 59, 59, 999);
+  const prev: Range = { from: prevFrom, to: new Date(prevToKst.getTime() - KST_OFFSET_MS), days };
   return { cur, prev };
 }
 
@@ -47,7 +58,8 @@ function resolveRanges(
 }
 
 function dailyKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const k = new Date(d.getTime() + KST_OFFSET_MS);
+  return `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")}`;
 }
 
 async function metricRows(
