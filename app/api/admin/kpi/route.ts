@@ -43,6 +43,13 @@ export async function POST(request: Request) {
     } catch { return 0; }
   };
 
+  // 사용자 카운트는 USER 탭(/api/admin/users/list) 과 동일 필터 적용:
+  // - placeholder 닉네임(__pending_*) 제외
+  // - firebase_uid NULL 제외 (Firebase Auth 가입 없이 닉네임만 만든 옛 행)
+  // 그래야 KPI 의 "전체 가입자" 와 USER 탭의 "총 N명" 이 일치한다.
+  const usersFilter = (q: any) =>
+    q.not("name", "ilike", "__pending_%").not("firebase_uid", "is", null);
+
   // 병렬 쿼리
   const [
     usersTotal, usersInRange,
@@ -60,9 +67,14 @@ export async function POST(request: Request) {
     storeAppTotal, storeAppRange, storeGoogleTotal, storeGoogleRange,
     visitsTotal, visitsInRange, uniqueVisitorsRange,
   ] = await Promise.all([
-    // 사용자
-    countAll("nicknames"),
-    countRange("nicknames"),
+    // 사용자 — USER 탭과 동일 필터
+    (async () => {
+      try {
+        const { count } = await usersFilter(sb.from("nicknames").select("*", { count: "exact", head: true }));
+        return count ?? 0;
+      } catch { return 0; }
+    })(),
+    countRange("nicknames", "created_at", usersFilter),
     // 게시글
     countAll("posts"),
     countRange("posts"),
