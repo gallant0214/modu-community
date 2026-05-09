@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     .select("*", { count: "exact" })
     .eq("firebase_uid", uid)
     .neq("status", "deleted")
-    .order("created_at", { ascending: false })
+    .order("effective_at", { ascending: false })
     .range(from, to);
 
   if (error) {

@@ -1101,6 +1101,8 @@ export type Database = {
           agreed_to_terms: boolean
           created_at: string
           updated_at: string
+          bumped_at: string | null
+          effective_at: string | null
         }
         Insert: {
           id?: number
@@ -1151,6 +1153,8 @@ export type Database = {
           agreed_to_terms?: boolean
           created_at?: string
           updated_at?: string
+          bumped_at?: string | null
+          effective_at?: string | null
         }
         Relationships: []
       }

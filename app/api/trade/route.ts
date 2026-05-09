@@ -47,9 +47,10 @@ export async function GET(request: Request) {
     }
 
     if (sort === "popular") {
-      qb = qb.order("view_count", { ascending: false }).order("created_at", { ascending: false });
+      qb = qb.order("view_count", { ascending: false }).order("effective_at", { ascending: false });
     } else {
-      qb = qb.order("created_at", { ascending: false });
+      // effective_at = GREATEST(created_at, bumped_at) — 끌어올린 글이 상단으로 이동.
+      qb = qb.order("effective_at", { ascending: false });
     }
 
     qb = qb.range(from, to);

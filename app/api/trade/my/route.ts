@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     .select("*")
     .eq("firebase_uid", user.uid)
     .neq("status", "deleted")
-    .order("created_at", { ascending: false })
+    .order("effective_at", { ascending: false })
     .limit(100);
 
   if (error) {
