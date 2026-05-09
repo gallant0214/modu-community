@@ -277,7 +277,7 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
                               : "bg-[#C0392B]/85 text-[#FFE082]"
                           }`}
                         >
-                          {p.status === "sold" ? "거래완료" : "계약중"}
+                          {p.status === "sold" ? "거래완료" : "예약중"}
                         </span>
                       )}
                     </div>
