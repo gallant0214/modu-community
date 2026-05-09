@@ -1569,7 +1569,18 @@ export default function AdminPage() {
                   <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                     <Field label="현재 닉네임" value={userResult.nickname} />
                     <Field label="firebase_uid" value={userResult.firebase_uid} mono />
-                    <Field label="이메일" value={userResult.firebaseUser?.email || "-"} />
+                    <Field
+                      label="이메일"
+                      value={
+                        userResult.firebaseUser?.email
+                          ? userResult.firebaseUser.email.endsWith("@privaterelay.appleid.com")
+                            ? `${userResult.firebaseUser.email} (Apple 이메일 숨기기)`
+                            : userResult.firebaseUser.email
+                          : userResult.firebaseError
+                            ? `(Firebase 오류: ${userResult.firebaseError})`
+                            : "-"
+                      }
+                    />
                     <Field label="이메일 인증" value={userResult.firebaseUser?.emailVerified ? "예" : "아니오"} />
                     <Field label="로그인 제공자" value={(userResult.firebaseUser?.providers || []).join(", ") || "-"} />
                     <Field label="가입 시각" value={userResult.firebaseUser?.createdAt ? new Date(userResult.firebaseUser.createdAt).toLocaleString("ko-KR") : "-"} />

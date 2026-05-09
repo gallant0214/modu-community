@@ -62,22 +62,30 @@ export async function POST(request: Request) {
     email: string | null;
     emailVerified: boolean;
     providers: string[];
+    providerEmails: { providerId: string; email: string | null }[];
     createdAt: string | null;
     lastSignInAt: string | null;
     disabled: boolean;
   } | null = null;
+  let firebaseError: string | null = null;
   try {
     const u = await getAuth().getUser(uid);
     firebaseUser = {
       email: u.email || null,
       emailVerified: !!u.emailVerified,
       providers: (u.providerData || []).map((p) => p.providerId),
+      providerEmails: (u.providerData || []).map((p) => ({
+        providerId: p.providerId,
+        email: p.email || null,
+      })),
       createdAt: u.metadata?.creationTime || null,
       lastSignInAt: u.metadata?.lastSignInTime || null,
       disabled: !!u.disabled,
     };
-  } catch {
+  } catch (e: any) {
     firebaseUser = null;
+    firebaseError = e?.code || e?.message || String(e);
+    console.error("[admin/users/lookup] firebase getUser failed", { uid, error: firebaseError });
   }
 
   // 4) 닉네임 이력 (최신순 100건)
@@ -145,6 +153,7 @@ export async function POST(request: Request) {
     nickname: nick.name,
     firebase_uid: uid,
     firebaseUser,
+    firebaseError,
     nicknames_record: {
       created_at: nick.created_at,
       changed_at: nick.changed_at,
