@@ -33,10 +33,12 @@ export async function fetchTradePage(args: FetchTradeArgs = {}): Promise<TradePa
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
+  // active + reserved + sold 모두 노출 — 썸네일 라벨 표시 정책과 일치.
+  // hidden / deleted 만 제외.
   let qb = supabase
     .from("trade_posts")
     .select("*", { count: "exact" })
-    .eq("status", "active");
+    .in("status", ["active", "reserved", "sold"]);
 
   if (category === "equipment" || category === "center") qb = qb.eq("category", category);
   if (sido) qb = qb.eq("region_sido", sido);

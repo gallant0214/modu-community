@@ -25,7 +25,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from("trade_posts")
       .select("region_sido, region_sigungu, created_at")
-      .eq("status", "active");
+      .in("status", ["active", "reserved", "sold"]);
     if (error) throw error;
 
     const counts: Record<string, number> = {};

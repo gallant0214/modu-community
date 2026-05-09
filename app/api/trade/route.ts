@@ -30,10 +30,12 @@ export async function GET(request: Request) {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
+    // active + reserved + sold 모두 노출 — 썸네일에 '예약중'·'거래완료' 라벨 표시되어야 의미 있음.
+    // hidden / deleted 만 제외.
     let qb = supabase
       .from("trade_posts")
       .select("*", { count: "exact" })
-      .eq("status", "active");
+      .in("status", ["active", "reserved", "sold"]);
 
     if (category === "equipment" || category === "center") qb = qb.eq("category", category);
     if (sido) qb = qb.eq("region_sido", sido);
