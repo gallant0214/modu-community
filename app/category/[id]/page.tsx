@@ -295,38 +295,23 @@ export default async function CategoryPage({ params, searchParams }: Props) {
           // 이전 그룹의 마지막 페이지 / 다음 그룹의 첫 페이지로 점프
           const prevGroupTarget = currentGroup * pageGroupSize;
           const nextGroupTarget = groupEnd + 1;
-          const btnClass = "flex h-9 w-9 items-center justify-center rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors";
-          const btnDisabled = "flex h-9 w-9 items-center justify-center rounded-lg border border-[#E8E0D0]/50 dark:border-zinc-800 bg-[#F5F0E5]/50 dark:bg-zinc-900/50 text-[#C7B89B] dark:text-zinc-600 cursor-default";
+          // 텍스트 버튼 통일 (처음/이전/다음/끝). 체육지도사 사용자 직관성 ↑.
+          const btnClass = "flex h-9 items-center justify-center rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] font-medium text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors px-3";
+          const btnDisabled = "flex h-9 items-center justify-center rounded-lg border border-[#E8E0D0]/50 dark:border-zinc-800 bg-[#F5F0E5]/50 dark:bg-zinc-900/50 text-[13px] font-medium text-[#C7B89B] dark:text-zinc-600 cursor-default px-3";
 
           return (
-            <nav className="flex items-center justify-center gap-1.5 pt-2 pb-6">
-              {/* 맨 처음 */}
+            <nav className="flex items-center justify-center gap-1.5 pt-2 pb-6 flex-wrap">
+              {/* 처음 */}
               {currentPage > 1 ? (
-                <Link href={buildPageHref(1)} aria-label="맨 처음 페이지" className={btnClass}>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M18 19l-7-7 7-7" />
-                  </svg>
-                </Link>
+                <Link href={buildPageHref(1)} aria-label="처음 페이지" className={btnClass}>처음</Link>
               ) : (
-                <span className={btnDisabled}>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7M18 19l-7-7 7-7" />
-                  </svg>
-                </span>
+                <span className={btnDisabled}>처음</span>
               )}
               {/* 이전 그룹 */}
               {hasPrevGroup ? (
-                <Link href={buildPageHref(prevGroupTarget)} aria-label="이전 그룹" className={btnClass}>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                </Link>
+                <Link href={buildPageHref(prevGroupTarget)} aria-label="이전 그룹" className={btnClass}>이전</Link>
               ) : (
-                <span className={btnDisabled}>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                </span>
+                <span className={btnDisabled}>이전</span>
               )}
               {/* 페이지 번호 (5개 단위) */}
               {pageNumbers.map((p) => {
@@ -347,31 +332,15 @@ export default async function CategoryPage({ params, searchParams }: Props) {
               })}
               {/* 다음 그룹 */}
               {hasNextGroup ? (
-                <Link href={buildPageHref(nextGroupTarget)} aria-label="다음 그룹" className={btnClass}>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </Link>
+                <Link href={buildPageHref(nextGroupTarget)} aria-label="다음 그룹" className={btnClass}>다음</Link>
               ) : (
-                <span className={btnDisabled}>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </span>
+                <span className={btnDisabled}>다음</span>
               )}
-              {/* 맨 끝 */}
+              {/* 끝 */}
               {currentPage < totalPages ? (
-                <Link href={buildPageHref(totalPages)} aria-label="맨 끝 페이지" className={btnClass}>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M6 5l7 7-7 7" />
-                  </svg>
-                </Link>
+                <Link href={buildPageHref(totalPages)} aria-label="끝 페이지" className={btnClass}>끝</Link>
               ) : (
-                <span className={btnDisabled}>
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M6 5l7 7-7 7" />
-                  </svg>
-                </span>
+                <span className={btnDisabled}>끝</span>
               )}
             </nav>
           );

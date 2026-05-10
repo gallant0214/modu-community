@@ -940,7 +940,7 @@ export function JobsView({ initialData }: JobsViewProps) {
                     aria-label="처음 페이지"
                     title="처음 페이지"
                     className="px-3 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
-                  >«</button>
+                  >처음</button>
                   <button
                     onClick={() => loadJobs(currentGroup * groupSize)}
                     disabled={!hasPrevGroup}
@@ -970,7 +970,7 @@ export function JobsView({ initialData }: JobsViewProps) {
                     aria-label="끝 페이지"
                     title="끝 페이지"
                     className="px-3 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
-                  >»</button>
+                  >끝</button>
                 </div>
               );
             })()}
