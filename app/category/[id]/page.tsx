@@ -295,23 +295,24 @@ export default async function CategoryPage({ params, searchParams }: Props) {
           // 이전 그룹의 마지막 페이지 / 다음 그룹의 첫 페이지로 점프
           const prevGroupTarget = currentGroup * pageGroupSize;
           const nextGroupTarget = groupEnd + 1;
-          // 화살표 기호 통일 (<<, <, >, >>). << / >> 는 tracking-tighter 로 두 글자 붙여보임.
-          const btnClass = "flex h-9 items-center justify-center rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] font-bold text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors px-3";
-          const btnDisabled = "flex h-9 items-center justify-center rounded-lg border border-[#E8E0D0]/50 dark:border-zinc-800 bg-[#F5F0E5]/50 dark:bg-zinc-900/50 text-[14px] font-bold text-[#C7B89B] dark:text-zinc-600 cursor-default px-3";
+          const arrowBtn = "flex h-9 items-center justify-center rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] font-bold text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors px-3";
+          const arrowDisabled = "flex h-9 items-center justify-center rounded-lg border border-[#E8E0D0]/50 dark:border-zinc-800 bg-[#F5F0E5]/50 dark:bg-zinc-900/50 text-[14px] font-bold text-[#C7B89B] dark:text-zinc-600 cursor-default px-3";
+          const textBtn = "flex h-9 items-center justify-center rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] font-medium text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors px-3";
+          const textDisabled = "flex h-9 items-center justify-center rounded-lg border border-[#E8E0D0]/50 dark:border-zinc-800 bg-[#F5F0E5]/50 dark:bg-zinc-900/50 text-[13px] font-medium text-[#C7B89B] dark:text-zinc-600 cursor-default px-3";
 
           return (
             <nav className="flex items-center justify-center gap-1.5 pt-2 pb-6 flex-wrap">
-              {/* << : 처음 */}
+              {/* « : 처음 */}
               {currentPage > 1 ? (
-                <Link href={buildPageHref(1)} aria-label="처음 페이지" className={`${btnClass} tracking-tighter`}>&lt;&lt;</Link>
+                <Link href={buildPageHref(1)} aria-label="처음 페이지" className={arrowBtn}>«</Link>
               ) : (
-                <span className={`${btnDisabled} tracking-tighter`}>&lt;&lt;</span>
+                <span className={arrowDisabled}>«</span>
               )}
-              {/* < : 이전 그룹 */}
+              {/* 이전 : 이전 그룹의 마지막 페이지 */}
               {hasPrevGroup ? (
-                <Link href={buildPageHref(prevGroupTarget)} aria-label="이전 그룹" className={btnClass}>&lt;</Link>
+                <Link href={buildPageHref(prevGroupTarget)} aria-label="이전 그룹" className={textBtn}>이전</Link>
               ) : (
-                <span className={btnDisabled}>&lt;</span>
+                <span className={textDisabled}>이전</span>
               )}
               {/* 페이지 번호 (5개 단위) */}
               {pageNumbers.map((p) => {
@@ -330,17 +331,17 @@ export default async function CategoryPage({ params, searchParams }: Props) {
                   </Link>
                 );
               })}
-              {/* > : 다음 그룹 */}
+              {/* 다음 : 다음 그룹의 첫 페이지 */}
               {hasNextGroup ? (
-                <Link href={buildPageHref(nextGroupTarget)} aria-label="다음 그룹" className={btnClass}>&gt;</Link>
+                <Link href={buildPageHref(nextGroupTarget)} aria-label="다음 그룹" className={textBtn}>다음</Link>
               ) : (
-                <span className={btnDisabled}>&gt;</span>
+                <span className={textDisabled}>다음</span>
               )}
-              {/* >> : 끝 */}
+              {/* » : 끝 */}
               {currentPage < totalPages ? (
-                <Link href={buildPageHref(totalPages)} aria-label="끝 페이지" className={`${btnClass} tracking-tighter`}>&gt;&gt;</Link>
+                <Link href={buildPageHref(totalPages)} aria-label="끝 페이지" className={arrowBtn}>»</Link>
               ) : (
-                <span className={`${btnDisabled} tracking-tighter`}>&gt;&gt;</span>
+                <span className={arrowDisabled}>»</span>
               )}
             </nav>
           );
