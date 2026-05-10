@@ -152,10 +152,7 @@ export default async function Home() {
               </div>
             </div>
             <div className="lp-section-cta">
-              <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-                <Link href="/community" className="lp-btn lp-btn-primary">종목별 후기 바로 보기 →</Link>
-                <a href="https://open.kakao.com/o/gvup8fki" target="_blank" rel="noopener noreferrer" className="lp-btn lp-btn-outline">💬 실기·구술 카카오톡 문의</a>
-              </div>
+              <Link href="/community" className="lp-btn lp-btn-primary">종목별 후기 바로 보기 →</Link>
             </div>
           </div></div>
         </section>
@@ -248,6 +245,39 @@ export default async function Home() {
             <FAQ q="Q. iOS에서도 이용할 수 있나요?" a="네, App Store와 Google Play 모두에서 다운로드 가능합니다." />
             <FAQ q="Q. 공식 시험 기관에서 운영하나요?" a="아니요. 공식 시험 주관 기관과 무관한 민간 정보 공유 서비스입니다. 반드시 공식 공지를 최종 기준으로 삼아 주세요." />
             <FAQ q="Q. 허위 공고를 발견하면?" a="앱 내 신고 기능을 통해 알려주세요. 내부 기준에 따라 게시글 삭제 및 계정 제한 조치를 진행합니다." />
+            <div className="lp-faq-item">
+              <div className="lp-faq-q">Q. 추가 문의는 어떻게 하나요?</div>
+              <div className="lp-faq-a">
+                실기·구술·필기 시험에 관한 문의는 카카오톡 오픈채팅으로 받고 있습니다.
+                <div style={{ marginTop: 12 }}>
+                  <a
+                    href="https://open.kakao.com/o/gvup8fki"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "10px 18px",
+                      backgroundColor: "#FEE500",
+                      color: "#191919",
+                      borderRadius: 8,
+                      fontWeight: 700,
+                      fontSize: 14,
+                      textDecoration: "none",
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M12 3.5C6.755 3.5 2.5 6.948 2.5 11.2c0 2.71 1.736 5.099 4.378 6.475l-1.13 4.115c-.058.21.183.385.357.262l4.93-3.218c.327.025.66.038.965.038 5.245 0 9.5-3.448 9.5-7.7C21.5 6.948 17.245 3.5 12 3.5z"
+                        fill="#191919"
+                      />
+                    </svg>
+                    카카오톡으로 문의하기
+                  </a>
+                </div>
+              </div>
+            </div>
           </div></div>
         </section>
 
