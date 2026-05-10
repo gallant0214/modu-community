@@ -352,6 +352,54 @@ export async function POST(request: Request) {
     topPosts = (data || []).map((p: any) => ({ id: p.id, title: p.title, likes: p.likes, views: p.views, comments: p.comments_count }));
   } catch { /* skip */ }
 
+  // 활동 지역 분포 (시·도 / 시·군·구) — 마케팅용
+  type RegionEntry = { name: string; count: number; percent: number };
+  type RegionAgg = {
+    total: number;       // active_region_name 설정한 사용자 수
+    unset: number;       // 지역 미설정 사용자 수
+    groups: RegionEntry[];           // 시·군·구 top 15
+    groupsByProvince: RegionEntry[]; // 시·도 전체
+  };
+  const aggregateRegions = (rows: { active_region_name: string | null }[]): RegionAgg => {
+    let total = 0, unset = 0;
+    const detail = new Map<string, number>();
+    const province = new Map<string, number>();
+    for (const r of rows || []) {
+      const region = r.active_region_name;
+      if (!region) { unset++; continue; }
+      total++;
+      detail.set(region, (detail.get(region) || 0) + 1);
+      const p = region.split(" - ")[0]?.trim() || region;
+      province.set(p, (province.get(p) || 0) + 1);
+    }
+    const denom = total || 1;
+    const groups = [...detail.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15)
+      .map(([name, count]) => ({ name, count, percent: Math.round((count / denom) * 1000) / 10 }));
+    const groupsByProvince = [...province.entries()].sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count, percent: Math.round((count / denom) * 1000) / 10 }));
+    return { total, unset, groups, groupsByProvince };
+  };
+  let regionsTotal: RegionAgg = { total: 0, unset: 0, groups: [], groupsByProvince: [] };
+  let regionsInRange: RegionAgg | null = null;
+  try {
+    const { data: allRows } = await sb.from("nicknames")
+      .select("active_region_name")
+      .not("name", "ilike", "__pending_%")
+      .not("firebase_uid", "is", null)
+      .limit(50000);
+    regionsTotal = aggregateRegions(allRows || []);
+    if (fromDate || toDate) {
+      let pq = sb.from("nicknames")
+        .select("active_region_name")
+        .not("name", "ilike", "__pending_%")
+        .not("firebase_uid", "is", null);
+      if (fromDate) pq = pq.gte("created_at", fromDate);
+      if (toDate) pq = pq.lte("created_at", toDate);
+      const { data: pRows } = await pq.limit(50000);
+      regionsInRange = aggregateRegions(pRows || []);
+    }
+  } catch { /* skip */ }
+
   // 신고 분석: target_type 별 카운트 (post/comment/job/message)
   let reportsByType: { type: string; label: string; count: number }[] = [
     { type: "post", label: "게시물 신고", count: 0 },
@@ -411,6 +459,10 @@ export async function POST(request: Request) {
     },
     topCategories,
     topPosts,
+    regions: {
+      total: regionsTotal,
+      inRange: regionsInRange,
+    },
     reportAnalysis: {
       range: { from: reportFromDate, to: reportToDate },
       total: reportsTotalForRange,

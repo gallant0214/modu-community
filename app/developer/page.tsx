@@ -985,6 +985,12 @@ export default function AdminPage() {
                       ))}
                     </div>
                   )}
+                  {kpiData.regions?.total && (
+                    <RegionPanel
+                      totalAgg={kpiData.regions.total}
+                      inRangeAgg={kpiData.regions.inRange}
+                    />
+                  )}
                 </div>
               </div>
             ) : (
@@ -2623,6 +2629,92 @@ function KpiSubsection({ title, children }: { title: string; children: React.Rea
     <div className="border-t border-zinc-100 dark:border-zinc-800 pt-4 first:border-t-0 first:pt-0">
       <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide mb-3">{title}</h3>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{children}</div>
+    </div>
+  );
+}
+
+/* ── 활동 지역 분포 (전체 + 기간 신규) ── */
+type RegionEntry = { name: string; count: number; percent: number };
+type RegionAggCli = {
+  total: number;
+  unset: number;
+  groups: RegionEntry[];
+  groupsByProvince: RegionEntry[];
+};
+function RegionPanel({ totalAgg, inRangeAgg }: { totalAgg: RegionAggCli; inRangeAgg: RegionAggCli | null }) {
+  const [view, setView] = useState<"total" | "inRange">("total");
+  const agg = view === "inRange" && inRangeAgg ? inRangeAgg : totalAgg;
+  const provinceMax = Math.max(1, ...agg.groupsByProvince.map((g) => g.count));
+
+  return (
+    <div className="border-t border-zinc-100 dark:border-zinc-800 pt-4">
+      <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wide">활동 지역 분포</h3>
+          <p className="mt-1 text-[11px] text-zinc-400">사용자가 MY 에서 설정한 &quot;내가 활동하는 지역&quot; 기준 (시·도 / 시·군·구)</p>
+        </div>
+        {inRangeAgg && (
+          <div className="inline-flex rounded-lg border border-zinc-200 bg-white p-0.5 text-[11px] dark:border-zinc-700 dark:bg-zinc-800">
+            <button
+              onClick={() => setView("total")}
+              className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
+                view === "total" ? "bg-emerald-500 text-white" : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+              }`}
+            >전체</button>
+            <button
+              onClick={() => setView("inRange")}
+              className={`px-2.5 py-1 rounded-md font-semibold transition-colors ${
+                view === "inRange" ? "bg-emerald-500 text-white" : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+              }`}
+            >기간 신규</button>
+          </div>
+        )}
+      </div>
+
+      <p className="mb-3 text-[12px] text-zinc-500 dark:text-zinc-400">
+        설정 <span className="font-bold text-zinc-800 dark:text-zinc-100">{agg.total.toLocaleString()}</span>명
+        <span className="mx-1.5">·</span>
+        미설정 <span className="font-bold text-zinc-800 dark:text-zinc-100">{agg.unset.toLocaleString()}</span>명
+      </p>
+
+      {agg.total === 0 ? (
+        <p className="text-center py-6 text-sm text-zinc-400">해당 기간에 지역을 설정한 사용자가 없습니다.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* 시·도별 */}
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <p className="mb-2 text-[11px] font-bold text-zinc-500 uppercase tracking-wide">시·도별</p>
+            <div className="space-y-1.5">
+              {agg.groupsByProvince.map((g, i) => (
+                <div key={g.name} className="flex items-center gap-2">
+                  <span className="w-5 text-[10px] font-bold text-zinc-400">{i + 1}</span>
+                  <span className="w-14 shrink-0 text-[12px] text-zinc-800 dark:text-zinc-200">{g.name}</span>
+                  <div className="flex-1 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                    <div className="h-full bg-emerald-500" style={{ width: `${(g.count / provinceMax) * 100}%` }} />
+                  </div>
+                  <span className="w-10 shrink-0 text-right text-[11px] tabular-nums text-zinc-500">{g.count}</span>
+                  <span className="w-12 shrink-0 text-right text-[11px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{g.percent.toFixed(1)}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 시·군·구 Top 15 */}
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <p className="mb-2 text-[11px] font-bold text-zinc-500 uppercase tracking-wide">시·군·구 Top 15</p>
+            <div className="space-y-1">
+              {agg.groups.map((g, i) => (
+                <div key={g.name} className="flex items-center gap-2 py-0.5">
+                  <span className="w-5 text-[10px] font-bold text-zinc-400">{i + 1}</span>
+                  <span className="flex-1 truncate text-[12px] text-zinc-800 dark:text-zinc-200">{g.name}</span>
+                  <span className="shrink-0 text-[11px] tabular-nums text-zinc-500">{g.count}</span>
+                  <span className="w-12 shrink-0 text-right text-[11px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{g.percent.toFixed(1)}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
