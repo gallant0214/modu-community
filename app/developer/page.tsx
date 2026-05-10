@@ -357,6 +357,14 @@ export default function AdminPage() {
     if (!ok) { setError("비밀번호가 일치하지 않습니다"); return; }
     setStoredPassword(password);
     setAuthStep("authenticated");
+    // 관리자 비번 인증한 브라우저는 자동으로 분석 추적 제외 (사이트 방문/탭 통계 모두)
+    // 사용자가 토글 UI 로 끄면 다시 켜짐.
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem(ANALYTICS_EXCLUDE_KEY, "true");
+        setAnalyticsExcluded(true);
+      }
+    } catch {}
   }
 
   async function handleRefresh() {
