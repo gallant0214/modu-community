@@ -30,6 +30,7 @@ export async function GET(request: Request) {
       employmentType: url.searchParams.get("employment_type") || "",
       hideClosed: url.searchParams.get("hide_closed") === "true",
       sportFilter: url.searchParams.get("sport") || "",
+      priorityRegion: url.searchParams.get("priority_region") || "",
     });
 
     if (blocked.length > 0) {

@@ -33,6 +33,7 @@ export async function queryJobs(opts: {
   limit: number;
   offset: number;
   orderCol: SortCol;
+  priorityRegion?: string;
 }) {
   const subInfo = opts.regionCode
     ? SUB_CODE_INFO[opts.regionCode.toLowerCase()]
@@ -57,6 +58,7 @@ export async function queryJobs(opts: {
       p_order_col: opts.orderCol,
       p_limit: opts.limit,
       p_offset: opts.offset,
+      p_priority_region: opts.priorityRegion || "",
     }),
     supabase.rpc("count_job_posts", baseParams),
   ]);
@@ -87,6 +89,7 @@ export async function fetchJobsPage(params: {
   employmentType?: string;
   hideClosed?: boolean;
   sportFilter?: string;
+  priorityRegion?: string;
 }): Promise<JobsPageResult> {
   const regionCode = params.regionCode || "";
   const sort = params.sort || "latest";
@@ -98,13 +101,15 @@ export async function fetchJobsPage(params: {
   const employmentType = params.employmentType || "";
   const hideClosed = params.hideClosed || false;
   const sportFilter = params.sportFilter || "";
+  const priorityRegion = params.priorityRegion || "";
 
   const searchPattern = q ? `%${q}%` : "";
   const orderCol = getSortCol(sort);
   const isSearching = !!q;
 
+  // priorityRegion 은 캐시 키에도 포함 (다른 사용자별로 정렬이 달라지므로)
   const cacheKey = !isSearching
-    ? `jobs:r:${regionCode}:s:${sort}:p:${page}:e:${employmentType}:sp:${sportFilter}:hc:${hideClosed}`
+    ? `jobs:r:${regionCode}:s:${sort}:p:${page}:e:${employmentType}:sp:${sportFilter}:hc:${hideClosed}:pr:${priorityRegion}`
     : null;
 
   const result = cacheKey
@@ -119,6 +124,7 @@ export async function fetchJobsPage(params: {
           limit,
           offset,
           orderCol,
+          priorityRegion,
         }),
       )
     : await queryJobs({
@@ -131,6 +137,7 @@ export async function fetchJobsPage(params: {
         limit,
         offset,
         orderCol,
+        priorityRegion,
       });
 
   const total = Number(result.countResult[0].total);
