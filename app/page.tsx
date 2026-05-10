@@ -152,7 +152,10 @@ export default async function Home() {
               </div>
             </div>
             <div className="lp-section-cta">
-              <Link href="/community" className="lp-btn lp-btn-primary">종목별 후기 바로 보기 →</Link>
+              <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+                <Link href="/community" className="lp-btn lp-btn-primary">종목별 후기 바로 보기 →</Link>
+                <a href="https://open.kakao.com/o/gvup8fki" target="_blank" rel="noopener noreferrer" className="lp-btn lp-btn-outline">💬 실기·구술 카카오톡 문의</a>
+              </div>
             </div>
           </div></div>
         </section>
