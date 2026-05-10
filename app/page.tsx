@@ -26,20 +26,21 @@ export default async function Home() {
         {/* ===== 1. 히어로 ===== */}
         <section className="lp-hero" id="about">
           <div className="lp-c">
-            <div className="lp-hero-chip">커뮤니티 · 스포츠 구인 · 시험 준비</div>
+            <div className="lp-hero-chip">커뮤니티 · 스포츠 구인 · 스포츠 거래 · 시험 준비</div>
             <h1 className="lp-hero-title">
               체육지도사를 준비하고
               <br />
               현장에서 일하는 사람들의 브랜드 허브
             </h1>
             <p className="lp-hero-sub">
-              종목별 후기와 정보 공유, 스포츠 업계 채용, 그리고 기출문제 풀이까지.
+              종목별 후기와 정보 공유, 스포츠 업계 채용·거래, 그리고 기출문제 풀이까지.
               <br />
               흩어진 준비 과정을 모두의 지도사 브랜드 안에서 더 차분하게 이어가세요.
             </p>
             <div className="lp-hero-ctas">
               <Link href="/community" className="lp-btn lp-btn-primary">종목별 커뮤니티 보기</Link>
               <Link href="/jobs" className="lp-btn lp-btn-outline">구인 공고 탐색</Link>
+              <Link href="/trade" className="lp-btn lp-btn-outline">스포츠 거래 보기</Link>
               <a
                 href="https://modujidosa.com/"
                 target="_blank"
@@ -49,7 +50,7 @@ export default async function Home() {
                 모두의지도사 앱 보기
               </a>
             </div>
-            <p className="lp-hero-note">무료 커뮤니티 · 스포츠 업계 전용 구인 · 기출문제 풀이앱 연결</p>
+            <p className="lp-hero-note">무료 커뮤니티 · 스포츠 업계 전용 구인·거래 · 기출문제 풀이앱 연결</p>
           </div>
         </section>
 
@@ -61,7 +62,7 @@ export default async function Home() {
                 <div className="lp-label">브랜드 안내</div>
                 <h2 className="lp-title">커뮤니티와 학습을 함께 이어가는 모두의 지도사</h2>
                 <p className="lp-desc">
-                  이 홈페이지에서는 종목별 경험, 질문, 현장 이야기, 스포츠 구인 정보를 모아보고,
+                  이 홈페이지에서는 종목별 경험, 질문, 현장 이야기, 스포츠 구인·거래 정보를 모아보고,
                   {' '}
                   <a
                     href="https://modujidosa.com/"
@@ -78,7 +79,7 @@ export default async function Home() {
                 <div className="lp-brand-card">
                   <div className="lp-brand-kicker">moducm.com</div>
                   <h3>정보를 찾고 연결되는 커뮤니티</h3>
-                  <p>종목별 후기, 질문, 준비 팁, 스포츠 구인 공고를 한곳에서 살펴보세요.</p>
+                  <p>종목별 후기, 질문, 준비 팁, 스포츠 구인 공고와 거래 게시판을 한곳에서 살펴보세요.</p>
                 </div>
                 <a
                   href="https://modujidosa.com/"
@@ -118,6 +119,7 @@ export default async function Home() {
                   <li>종목별 후기와 질문을 한 흐름으로 탐색</li>
                   <li>실기·구술 정보와 현장 경험을 함께 확인</li>
                   <li>스포츠 업계 전용 구인 공고를 바로 비교</li>
+                  <li>운동 장비·센터 거래도 한곳에서 확인</li>
                   <li>기출문제 풀이 앱까지 브랜드 안에서 자연스럽게 연결</li>
                 </ul>
               </div>
@@ -210,7 +212,7 @@ export default async function Home() {
           <div className="lp-c"><div className="lp-card">
             <div className="lp-label">앱 미리보기</div>
             <h2 className="lp-title">앱에서는 이렇게 이용할 수 있어요</h2>
-            <p className="lp-desc">실제 앱 화면 — 홈, 실기·구술, 종목후기, 구인, MY 까지 한눈에 확인하세요.</p>
+            <p className="lp-desc">실제 앱 화면 — 홈, 실기·구술, 종목후기, 구인, 거래, MY 까지 한눈에 확인하세요.</p>
             <div className="lp-screenshot-grid">
               {APP_PREVIEWS.map((p) => (
                 <figure key={p.src} className="lp-screenshot">
@@ -239,7 +241,7 @@ export default async function Home() {
           <div className="lp-c"><div className="lp-card">
             <div className="lp-label">FAQ</div>
             <h2 className="lp-title">자주 묻는 질문</h2>
-            <FAQ q="Q. 무료인가요?" a="네, 완전 무료입니다. 앱 다운로드, 후기 열람, 구인 공고 확인 모두 무료이며 별도 결제 없이 이용 가능합니다." />
+            <FAQ q="Q. 무료인가요?" a="네, 완전 무료입니다. 앱 다운로드, 후기 열람, 구인 공고 확인, 거래 게시판 이용까지 모두 무료이며 별도 결제 없이 이용 가능합니다." />
             <FAQ q="Q. 어떤 종목 후기를 볼 수 있나요?" a="생활스포츠지도사, 전문스포츠지도사, 유소년·노인스포츠지도사 등 체육지도자 자격시험 전 종목의 실기·구술 후기를 다루고 있습니다." />
             <FAQ q="Q. 구인 공고에는 어떤 분야가 있나요?" a="헬스장, PT 스튜디오, 필라테스, 요가, GX, 복싱, 수영 등 스포츠·운동 업계 전용 구인 공고만 모여 있습니다." />
             <FAQ q="Q. iOS에서도 이용할 수 있나요?" a="네, App Store와 Google Play 모두에서 다운로드 가능합니다." />
@@ -287,7 +289,7 @@ export default async function Home() {
             <div className="lp-final-cta">
               <div className="lp-label" style={{background:"rgba(255,255,255,.15)",color:"#fff"}}>앱 다운로드</div>
               <h2 className="lp-final-title">{`'모두의 지도사 커뮤니티' 앱에서`}<br />더 편하게 이용하세요.</h2>
-              <p className="lp-final-sub">시험 후기 알림, 관심 종목 즐겨찾기, 구인 공고 필터링까지<br />앱에서 더 빠르고 편리하게 사용할 수 있습니다.</p>
+              <p className="lp-final-sub">시험 후기 알림, 관심 종목 즐겨찾기, 구인 공고 필터링, 운동 장비 거래까지<br />앱에서 더 빠르고 편리하게 사용할 수 있습니다.</p>
               <div className="lp-final-buttons">
                 <AppStoreButton />
                 <GooglePlayButton />
