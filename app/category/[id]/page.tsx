@@ -283,13 +283,18 @@ export default async function CategoryPage({ params, searchParams }: Props) {
           )}
         </section>
 
-        {/* ─── Pagination ─── */}
+        {/* ─── Pagination ─── 5페이지 단위 그룹 (iOS 와 동일 패턴) */}
         {totalPages > 1 && (() => {
-          const pageGroupSize = 10;
+          const pageGroupSize = 5;
           const currentGroup = Math.floor((currentPage - 1) / pageGroupSize);
           const groupStart = currentGroup * pageGroupSize + 1;
           const groupEnd = Math.min(groupStart + pageGroupSize - 1, totalPages);
           const pageNumbers = Array.from({ length: groupEnd - groupStart + 1 }, (_, i) => groupStart + i);
+          const hasPrevGroup = currentGroup > 0;
+          const hasNextGroup = groupEnd < totalPages;
+          // 이전 그룹의 마지막 페이지 / 다음 그룹의 첫 페이지로 점프
+          const prevGroupTarget = currentGroup * pageGroupSize;
+          const nextGroupTarget = groupEnd + 1;
           const btnClass = "flex h-9 w-9 items-center justify-center rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors";
           const btnDisabled = "flex h-9 w-9 items-center justify-center rounded-lg border border-[#E8E0D0]/50 dark:border-zinc-800 bg-[#F5F0E5]/50 dark:bg-zinc-900/50 text-[#C7B89B] dark:text-zinc-600 cursor-default";
 
@@ -309,9 +314,9 @@ export default async function CategoryPage({ params, searchParams }: Props) {
                   </svg>
                 </span>
               )}
-              {/* 이전 */}
-              {currentPage > 1 ? (
-                <Link href={buildPageHref(currentPage - 1)} aria-label="이전 페이지" className={btnClass}>
+              {/* 이전 그룹 */}
+              {hasPrevGroup ? (
+                <Link href={buildPageHref(prevGroupTarget)} aria-label="이전 그룹" className={btnClass}>
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
@@ -323,7 +328,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
                   </svg>
                 </span>
               )}
-              {/* 페이지 번호 (10개 단위) */}
+              {/* 페이지 번호 (5개 단위) */}
               {pageNumbers.map((p) => {
                 const isActive = p === currentPage;
                 return (
@@ -340,9 +345,9 @@ export default async function CategoryPage({ params, searchParams }: Props) {
                   </Link>
                 );
               })}
-              {/* 다음 */}
-              {currentPage < totalPages ? (
-                <Link href={buildPageHref(currentPage + 1)} aria-label="다음 페이지" className={btnClass}>
+              {/* 다음 그룹 */}
+              {hasNextGroup ? (
+                <Link href={buildPageHref(nextGroupTarget)} aria-label="다음 그룹" className={btnClass}>
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>

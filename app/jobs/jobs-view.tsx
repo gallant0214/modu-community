@@ -923,23 +923,32 @@ export function JobsView({ initialData }: JobsViewProps) {
               <p className="text-center text-[13px] text-[#A89B80] mt-8">새로운 공고가 매일 올라오고 있어요</p>
             )}
 
-            {totalPages > 1 && (
-              <div className="flex justify-center gap-1.5 py-10">
-                <button
-                  onClick={() => loadJobs(1)}
-                  disabled={page <= 1}
-                  aria-label="처음 페이지"
-                  title="처음 페이지"
-                  className="px-3 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
-                >«</button>
-                <button
-                  onClick={() => loadJobs(page - 1)}
-                  disabled={page <= 1}
-                  className="px-3.5 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
-                >이전</button>
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  const p = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
-                  return (
+            {totalPages > 1 && (() => {
+              // 5페이지 단위 그룹 — iOS 의 Pagination 컴포넌트와 동일 패턴
+              const groupSize = 5;
+              const currentGroup = Math.floor((page - 1) / groupSize);
+              const groupStart = currentGroup * groupSize + 1;
+              const groupEnd = Math.min(groupStart + groupSize - 1, totalPages);
+              const pageNums = Array.from({ length: groupEnd - groupStart + 1 }, (_, i) => groupStart + i);
+              const hasPrevGroup = currentGroup > 0;
+              const hasNextGroup = groupEnd < totalPages;
+              return (
+                <div className="flex justify-center gap-1.5 py-10">
+                  <button
+                    onClick={() => loadJobs(1)}
+                    disabled={page <= 1}
+                    aria-label="처음 페이지"
+                    title="처음 페이지"
+                    className="px-3 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
+                  >«</button>
+                  <button
+                    onClick={() => loadJobs(currentGroup * groupSize)}
+                    disabled={!hasPrevGroup}
+                    aria-label="이전 그룹"
+                    title="이전 그룹"
+                    className="px-3.5 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
+                  >이전</button>
+                  {pageNums.map((p) => (
                     <button key={p} onClick={() => loadJobs(p)}
                       className={`min-w-[36px] px-2 py-2 text-[13px] font-semibold rounded-lg border transition-colors ${
                         p === page
@@ -947,22 +956,24 @@ export function JobsView({ initialData }: JobsViewProps) {
                           : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 text-[#6B5D47] dark:text-zinc-300"
                       }`}
                     >{p}</button>
-                  );
-                })}
-                <button
-                  onClick={() => loadJobs(page + 1)}
-                  disabled={page >= totalPages}
-                  className="px-3.5 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
-                >다음</button>
-                <button
-                  onClick={() => loadJobs(totalPages)}
-                  disabled={page >= totalPages}
-                  aria-label="끝 페이지"
-                  title="끝 페이지"
-                  className="px-3 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
-                >»</button>
-              </div>
-            )}
+                  ))}
+                  <button
+                    onClick={() => loadJobs(groupEnd + 1)}
+                    disabled={!hasNextGroup}
+                    aria-label="다음 그룹"
+                    title="다음 그룹"
+                    className="px-3.5 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
+                  >다음</button>
+                  <button
+                    onClick={() => loadJobs(totalPages)}
+                    disabled={page >= totalPages}
+                    aria-label="끝 페이지"
+                    title="끝 페이지"
+                    className="px-3 py-2 text-[13px] font-medium rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
+                  >»</button>
+                </div>
+              );
+            })()}
           </>
         )}
 
