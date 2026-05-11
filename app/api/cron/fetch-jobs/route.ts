@@ -121,9 +121,16 @@ const MARTIAL_ARTS = /태권도|유도|검도|합기도|주짓수|킥복싱|무�
 // 한글에는 \b 가 작동 안 해서 lookbehind/lookahead 로 한글 인접성 체크
 const DOJANG_WORD = /(?<![가-힣])도장(?![가-힣])/;
 
-function isSportsRelated(title: string, company: string, indTpNm: string): boolean {
+// 직무내용(jobDuty/description) 매칭용 — title 이 정상 체육 회사명이라도 실제
+// 직무가 기계설비/판매/조리 등 비-체육이면 차단. 좁고 명확한 키워드만 포함.
+const EXCLUDE_DESC = /기계설비\s*성능\s*점검|기계설비\s*유지관리|기계설비\s*운영|시설물\s*영선|기계\s*운영\s*지원|볼링장\s*기계\s*등\s*운영|볼링장\s*기계\s*운영|기계설비\s*시운전|기계설비\s*인수관리|영선\s*업무|영선\s*보수|영선\s*및\s*하자|워크웨어\s*및\s*아웃도어|아웃도어\s*및\s*잡화|매장\s*판매\s*관리|아웃도어\s*판매\s*관리|워크웨어\s*매장\s*관리|차량\s*운전\s*업무|업무용\s*차량\s*운전/i;
+
+function isSportsRelated(title: string, company: string, indTpNm: string, jobDuty: string = ""): boolean {
   // 1) 명백히 비스포츠 제목 키워드 (사무/판매/조리/청소/제조 등)
   if (EXCLUDE_TITLE.test(title)) return false;
+
+  // 1-b) 직무내용에 명백한 비-체육 키워드 — title 통과해도 직무가 기계설비/판매 등이면 차단
+  if (jobDuty && EXCLUDE_DESC.test(jobDuty)) return false;
 
   // 2) 명백히 비스포츠 업종 (가구소매/의약/인력알선 등) — title 무관하게 차단
   if (EXCLUDE_IND.test(indTpNm)) return false;
@@ -549,7 +556,7 @@ export async function GET(req: NextRequest) {
     // 목록 API 의 title 이 잘려서 EXCLUDE_TITLE 키워드(바리스타/베이커리 등)를
     // 못 잡는 사례 보강 — 상세 HTML 의 fullTitle 로 보강된 시점에 필터 재실행.
     // 이 단계에서 비스포츠 직무로 판정되면 INSERT 스킵.
-    if (!isSportsRelated(finalTitle, it.company, it.indTpNm)) continue;
+    if (!isSportsRelated(finalTitle, it.company, it.indTpNm, detail.jobDuty ?? "")) continue;
 
     // 풍부한 설명 — 모집요강(직무내용) 이 있으면 맨 앞에 추가
     const descLines = [
