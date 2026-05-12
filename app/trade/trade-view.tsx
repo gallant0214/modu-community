@@ -118,12 +118,22 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
   };
 
   /* 검색 */
+  const logTradeSearch = (q: string) => {
+    if (q.trim().length < 2) return;
+    fetch("/api/search/log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: q.trim(), scope: "trade", platform: "web" }),
+    }).catch(() => {});
+  };
+
   const handleSearch = (e?: React.FormEvent) => {
     e?.preventDefault();
     setQuery(searchInput);
     setPage(1);
     updateUrl({ q: searchInput });
     fetchPage({ category, q: searchInput, page: 1, append: false });
+    logTradeSearch(searchInput);
   };
 
   /* 더보기 */

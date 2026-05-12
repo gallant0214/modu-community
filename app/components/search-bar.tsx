@@ -50,6 +50,14 @@ export function SearchBar({ categoryId, sortMode }: { categoryId: number; sortMo
 
   function handleSearch() {
     if (!query.trim()) return;
+    // 검색어 로그 (best-effort)
+    if (query.trim().length >= 2) {
+      fetch("/api/search/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: query.trim(), scope: "community", search_type: filter, platform: "web" }),
+      }).catch(() => {});
+    }
     router.push(`/category/${categoryId}?sort=${sortMode}&searchType=${filter}&q=${encodeURIComponent(query.trim())}`);
     setOpen(false);
   }

@@ -3,7 +3,7 @@
 // 같은 도메인 루트에 위치해야 함 (/firebase-messaging-sw.js).
 // 브라우저가 SW 코드를 캐시하므로, Firebase 설정 바뀌면 SW 버전(아래 SW_VERSION) 도 업데이트할 것.
 
-self.SW_VERSION = "1";
+self.SW_VERSION = "2";
 
 importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js");
@@ -37,6 +37,25 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const data = event.notification.data || {};
   const baseUrl = self.location.origin;
+
+  // CTR 기록 — best-effort (실패해도 무시)
+  try {
+    const type = String(data.type || "").slice(0, 50);
+    if (type) {
+      const broadcastIdRaw = data.broadcastId || data.broadcast_id;
+      const broadcastId = broadcastIdRaw ? Number(broadcastIdRaw) : null;
+      fetch(baseUrl + "/api/push/click", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type,
+          platform: "web",
+          broadcast_id: Number.isFinite(broadcastId) ? broadcastId : null,
+        }),
+        keepalive: true,
+      }).catch(() => {});
+    }
+  } catch {}
 
   let url = "/";
   if (data.type === "message" && data.messageId) {

@@ -696,6 +696,14 @@ export function JobsView({ initialData }: JobsViewProps) {
   const handleSearch = () => {
     setSearchQuery(searchInput);
     setPage(1);
+    // 검색어 로그 (best-effort, 결과 도착 시 result_count 추가 업데이트는 안 함 — 단순 트리거)
+    if (searchInput.trim().length >= 2) {
+      fetch("/api/search/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: searchInput.trim(), scope: "jobs", platform: "web" }),
+      }).catch(() => {});
+    }
   };
 
   const clearAllFilters = () => {
