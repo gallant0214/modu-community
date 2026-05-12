@@ -4,6 +4,20 @@ import { verifyAdminPassword } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
+// Supabase / PostgREST 기본 max-rows = 1000.
+// .limit(N>1000) 명시도 우회 못해서, 큰 데이터 인메모리 집계는 항상 페이지네이션 필요.
+// 사용처: visit unique ip, 일별/시간별/요일별 차트, 활성 작성자 distinct uid, 인기 종목, 활동 지역 분포, 신고 분석.
+async function paginateAll<T = any>(buildQuery: () => any, pageSize = 1000, maxPages = 200): Promise<T[]> {
+  const all: T[] = [];
+  for (let p = 0; p < maxPages; p++) {
+    const { data } = await buildQuery().range(p * pageSize, p * pageSize + pageSize - 1);
+    if (!data || data.length === 0) break;
+    all.push(...(data as T[]));
+    if (data.length < pageSize) break;
+  }
+  return all;
+}
+
 // POST /api/admin/kpi
 // body: { password, from?: ISO_string, to?: ISO_string }
 // from/to 가 없으면 "전체" 모드 (기존 동작 유지)
@@ -144,11 +158,12 @@ export async function POST(request: Request) {
     // 기간내 unique 방문자 (DISTINCT ip_hash)
     (async () => {
       try {
-        let q = sb.from("site_visits").select("ip_hash", { head: false }).not("ip_hash", "is", null);
-        if (visitFromDate) q = q.gte("visited_at", visitFromDate);
-        if (visitToDate) q = q.lte("visited_at", visitToDate);
-        const { data } = await q.limit(50000);
-        if (!data) return 0;
+        const data = await paginateAll<{ ip_hash: string | null }>(() => {
+          let q = sb.from("site_visits").select("ip_hash").not("ip_hash", "is", null);
+          if (visitFromDate) q = q.gte("visited_at", visitFromDate);
+          if (visitToDate) q = q.lte("visited_at", visitToDate);
+          return q;
+        });
         const set = new Set<string>();
         for (const r of data) if (r.ip_hash) set.add(r.ip_hash);
         return set.size;
@@ -167,10 +182,12 @@ export async function POST(request: Request) {
   const visitsAgg: VisitAgg = await (async () => {
     const empty: VisitAgg = { dailyChart: [], hourlyChart: [], weekdayChart: [], channels: [], keywords: [] };
     try {
-      let q = sb.from("site_visits").select("visited_at, referrer");
-      if (visitFromDate) q = q.gte("visited_at", visitFromDate);
-      if (visitToDate) q = q.lte("visited_at", visitToDate);
-      const { data } = await q.order("visited_at", { ascending: true }).limit(50000);
+      const data = await paginateAll<{ visited_at: string; referrer: string | null }>(() => {
+        let q = sb.from("site_visits").select("visited_at, referrer").order("visited_at", { ascending: true });
+        if (visitFromDate) q = q.gte("visited_at", visitFromDate);
+        if (visitToDate) q = q.lte("visited_at", visitToDate);
+        return q;
+      });
 
       // Vercel 서버는 UTC. 사용자에게 보여줄 시간/요일/날짜는 KST(UTC+9) 기준으로 추출.
       const KST_OFFSET_MS = 9 * 3600 * 1000;
@@ -309,28 +326,34 @@ export async function POST(request: Request) {
   // 활성도 (기간 내 글/댓글 작성한 distinct firebase_uid)
   let activePostersInRange = 0, activeCommentersInRange = 0;
   try {
-    let pq = sb.from("posts").select("firebase_uid").not("firebase_uid", "is", null);
-    if (fromDate) pq = pq.gte("created_at", fromDate);
-    if (toDate) pq = pq.lte("created_at", toDate);
-    const { data: pRows } = await pq.limit(50000);
-    activePostersInRange = new Set((pRows || []).map((r: any) => r.firebase_uid)).size;
+    const pRows = await paginateAll<{ firebase_uid: string | null }>(() => {
+      let q = sb.from("posts").select("firebase_uid").not("firebase_uid", "is", null);
+      if (fromDate) q = q.gte("created_at", fromDate);
+      if (toDate) q = q.lte("created_at", toDate);
+      return q;
+    });
+    activePostersInRange = new Set(pRows.map((r) => r.firebase_uid).filter(Boolean) as string[]).size;
 
-    let cq = sb.from("comments").select("firebase_uid").not("firebase_uid", "is", null);
-    if (fromDate) cq = cq.gte("created_at", fromDate);
-    if (toDate) cq = cq.lte("created_at", toDate);
-    const { data: cRows } = await cq.limit(50000);
-    activeCommentersInRange = new Set((cRows || []).map((r: any) => r.firebase_uid)).size;
+    const cRows = await paginateAll<{ firebase_uid: string | null }>(() => {
+      let q = sb.from("comments").select("firebase_uid").not("firebase_uid", "is", null);
+      if (fromDate) q = q.gte("created_at", fromDate);
+      if (toDate) q = q.lte("created_at", toDate);
+      return q;
+    });
+    activeCommentersInRange = new Set(cRows.map((r) => r.firebase_uid).filter(Boolean) as string[]).size;
   } catch { /* skip */ }
 
   // 인기 종목 (기간 내 게시글 수 기준 top 5)
   let topCategories: { name: string; count: number }[] = [];
   try {
-    let pq = sb.from("posts").select("category_id");
-    if (fromDate) pq = pq.gte("created_at", fromDate);
-    if (toDate) pq = pq.lte("created_at", toDate);
-    const { data: pRows } = await pq.limit(50000);
+    const pRows = await paginateAll<{ category_id: number | null }>(() => {
+      let q = sb.from("posts").select("category_id");
+      if (fromDate) q = q.gte("created_at", fromDate);
+      if (toDate) q = q.lte("created_at", toDate);
+      return q;
+    });
     const map = new Map<number, number>();
-    for (const r of pRows || []) {
+    for (const r of pRows) {
       if (r.category_id) map.set(r.category_id, (map.get(r.category_id) || 0) + 1);
     }
     const top = [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
@@ -382,21 +405,24 @@ export async function POST(request: Request) {
   let regionsTotal: RegionAgg = { total: 0, unset: 0, groups: [], groupsByProvince: [] };
   let regionsInRange: RegionAgg | null = null;
   try {
-    const { data: allRows } = await sb.from("nicknames")
-      .select("active_region_name")
-      .not("name", "ilike", "__pending_%")
-      .not("firebase_uid", "is", null)
-      .limit(50000);
-    regionsTotal = aggregateRegions(allRows || []);
-    if (fromDate || toDate) {
-      let pq = sb.from("nicknames")
+    const allRows = await paginateAll<{ active_region_name: string | null }>(() =>
+      sb.from("nicknames")
         .select("active_region_name")
         .not("name", "ilike", "__pending_%")
-        .not("firebase_uid", "is", null);
-      if (fromDate) pq = pq.gte("created_at", fromDate);
-      if (toDate) pq = pq.lte("created_at", toDate);
-      const { data: pRows } = await pq.limit(50000);
-      regionsInRange = aggregateRegions(pRows || []);
+        .not("firebase_uid", "is", null)
+    );
+    regionsTotal = aggregateRegions(allRows);
+    if (fromDate || toDate) {
+      const pRows = await paginateAll<{ active_region_name: string | null }>(() => {
+        let q = sb.from("nicknames")
+          .select("active_region_name")
+          .not("name", "ilike", "__pending_%")
+          .not("firebase_uid", "is", null);
+        if (fromDate) q = q.gte("created_at", fromDate);
+        if (toDate) q = q.lte("created_at", toDate);
+        return q;
+      });
+      regionsInRange = aggregateRegions(pRows);
     }
   } catch { /* skip */ }
 
@@ -409,12 +435,14 @@ export async function POST(request: Request) {
   ];
   let reportsTotalForRange = 0;
   try {
-    let q = sb.from("reports").select("target_type");
-    if (reportFromDate) q = q.gte("created_at", reportFromDate);
-    if (reportToDate) q = q.lte("created_at", reportToDate);
-    const { data } = await q.limit(50000);
+    const data = await paginateAll<{ target_type: string | null }>(() => {
+      let q = sb.from("reports").select("target_type");
+      if (reportFromDate) q = q.gte("created_at", reportFromDate);
+      if (reportToDate) q = q.lte("created_at", reportToDate);
+      return q;
+    });
     const typeMap = new Map<string, number>();
-    for (const r of data || []) {
+    for (const r of data) {
       if (r.target_type) typeMap.set(r.target_type, (typeMap.get(r.target_type) || 0) + 1);
     }
     reportsByType = reportsByType.map((r) => ({ ...r, count: typeMap.get(r.type) || 0 }));

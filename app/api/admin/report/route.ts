@@ -210,10 +210,20 @@ async function topCategoriesInRange(cur: Range) {
   const { from, to } = cur;
   try {
     const sb = supabase as any;
-    const { data } = await sb.from("posts").select("category_id")
-      .gte("created_at", from.toISOString()).lte("created_at", to.toISOString()).limit(50000);
+    // 1000-row cap 우회 — 페이지네이션
+    const PAGE = 1000;
+    const MAX_PAGES = 100;
+    const allRows: { category_id: number | null }[] = [];
+    for (let p = 0; p < MAX_PAGES; p++) {
+      const { data } = await sb.from("posts").select("category_id")
+        .gte("created_at", from.toISOString()).lte("created_at", to.toISOString())
+        .range(p * PAGE, p * PAGE + PAGE - 1);
+      if (!data || data.length === 0) break;
+      allRows.push(...data);
+      if (data.length < PAGE) break;
+    }
     const map = new Map<number, number>();
-    for (const r of data || []) if (r.category_id) map.set(r.category_id, (map.get(r.category_id) || 0) + 1);
+    for (const r of allRows) if (r.category_id) map.set(r.category_id, (map.get(r.category_id) || 0) + 1);
     const top = [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
     if (top.length === 0) return [];
     const ids = top.map(([id]) => id);
