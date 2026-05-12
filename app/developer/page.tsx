@@ -91,6 +91,23 @@ export default function AdminPage() {
   const [kpiLoading, setKpiLoading] = useState(false);
   // 탭 방문 통계 (tab_visits 집계) — 자체 기간 필터
   const [tabStatsData, setTabStatsData] = useState<any>(null);
+  // 확장 KPI (retention/dau/funnel/dormancy/push/report-reasons/trade-funnel/job-effect/search/blocks)
+  const [extKpiData, setExtKpiData] = useState<any>(null);
+  const [extKpiLoading, setExtKpiLoading] = useState(false);
+  const loadExtKpi = useCallback(async () => {
+    if (!storedPassword) return;
+    setExtKpiLoading(true);
+    try {
+      const res = await fetch("/api/admin/kpi/extended", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: storedPassword }),
+      });
+      const data = await res.json();
+      if (!data.error) setExtKpiData(data);
+    } catch {}
+    setExtKpiLoading(false);
+  }, [storedPassword]);
   const [tabStatsLoading, setTabStatsLoading] = useState(false);
   const [tabStatsRange, setTabStatsRange] = useState<"all" | "day" | "week" | "month" | "custom">("week");
   const [tabStatsFrom, setTabStatsFrom] = useState<string>("");
@@ -781,6 +798,7 @@ export default function AdminPage() {
             setTab("kpi");
             if (!kpiData) await loadKpi(kpiRange, kpiVisitRange, kpiReportRange);
             if (!tabStatsData) await loadTabStats(tabStatsRange);
+            if (!extKpiData) await loadExtKpi();
             if (typeof window !== "undefined") {
               setAnalyticsExcluded(localStorage.getItem(ANALYTICS_EXCLUDE_KEY) === "true");
             }
@@ -1152,6 +1170,13 @@ export default function AdminPage() {
                 <p className="py-4 text-center text-[12px] text-zinc-400">기간을 선택하고 새로고침을 눌러 주세요.</p>
               )}
             </div>
+
+            {/* ===== 확장 분석 (운영·마케팅 지표 일괄) ===== */}
+            <ExtendedKpiSection
+              data={extKpiData}
+              loading={extKpiLoading}
+              onRefresh={loadExtKpi}
+            />
           </div>
         )}
 
@@ -2608,6 +2633,238 @@ function DualLineChart({
         <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-zinc-300" />지난 기간</span>
         <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500" />이번 기간</span>
       </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * 확장 KPI 섹션 — /api/admin/kpi/extended 응답을 카드/표로 표시
+ * (Retention/Actives/Funnel/Dormancy/Push/Report Reasons/Trade/Job/Search/Blocks)
+ * ───────────────────────────────────────────────────────────── */
+function ExtendedKpiSection({ data, loading, onRefresh }: { data: any; loading: boolean; onRefresh: () => void }) {
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 mt-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">확장 분석 (운영·마케팅)</h3>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="rounded-lg border border-zinc-200 bg-white px-3 py-1 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+        >
+          {loading ? "조회 중..." : "새로고침"}
+        </button>
+      </div>
+      {!data ? (
+        <p className="py-6 text-center text-[12px] text-zinc-400">새로고침을 눌러 확장 분석을 불러오세요.</p>
+      ) : (
+        <div className="space-y-5">
+
+          {/* 1. 리텐션 D1/D7/D30 */}
+          <ExtSection title="리텐션 (가입 후 N일째 로그인 비율)">
+            <div className="grid grid-cols-3 gap-2">
+              <RetentionCard label="D1" m={data.retention?.d1} />
+              <RetentionCard label="D7" m={data.retention?.d7} />
+              <RetentionCard label="D30" m={data.retention?.d30} />
+            </div>
+            <p className="mt-2 text-[11px] text-zinc-400">평가 가능한 가입자(해당 일수 경과)만 분모에 포함됩니다.</p>
+          </ExtSection>
+
+          {/* 2. 활성 사용자 */}
+          <ExtSection title="활성 사용자 (DAU / WAU / MAU)">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <KpiCard label="DAU (오늘 KST)" value={data.actives?.dau || 0} />
+              <KpiCard label="WAU (7일)" value={data.actives?.wau || 0} />
+              <KpiCard label="MAU (30일)" value={data.actives?.mau || 0} accent />
+              {data.actives?.rangeActive !== null && data.actives?.rangeActive !== undefined && (
+                <KpiCard label="지정 기간 활성" value={data.actives.rangeActive} />
+              )}
+            </div>
+            <p className="mt-2 text-[11px] text-zinc-400">기준: user_login_log distinct firebase_uid. 자동 토큰 갱신은 미포함.</p>
+          </ExtSection>
+
+          {/* 3. 활성화 펀널 */}
+          <ExtSection title="활성화 펀널 (가입 후 7일 내 첫 활동)">
+            <div className="grid grid-cols-3 gap-2">
+              <FunnelCard label="첫 글" value={data.activationFunnel?.post || 0} rate={data.activationFunnel?.postRate || 0} total={data.activationFunnel?.total || 0} />
+              <FunnelCard label="첫 댓글" value={data.activationFunnel?.comment || 0} rate={data.activationFunnel?.commentRate || 0} total={data.activationFunnel?.total || 0} />
+              <FunnelCard label="첫 거래글" value={data.activationFunnel?.trade || 0} rate={data.activationFunnel?.tradeRate || 0} total={data.activationFunnel?.total || 0} />
+            </div>
+            <p className="mt-2 text-[11px] text-zinc-400">표본: 가입 후 7일 이상 경과한 사용자 {Number(data.activationFunnel?.total || 0).toLocaleString()}명</p>
+          </ExtSection>
+
+          {/* 4. 휴면 분포 */}
+          <ExtSection title="휴면 분포 (마지막 로그인 기준)">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <KpiCard label="활성 (7일)" value={data.dormancy?.active7 || 0} accent />
+              <KpiCard label="휴면 7~30일" value={data.dormancy?.dormant7 || 0} />
+              <KpiCard label="휴면 30~90일" value={data.dormancy?.dormant30 || 0} />
+              <KpiCard label="휴면 90일+" value={data.dormancy?.dormant90 || 0} warn />
+            </div>
+            <p className="mt-2 text-[11px] text-zinc-400">총 로그인 기록 있는 사용자 {Number(data.dormancy?.usersWithLogin || 0).toLocaleString()}명. 2026-05-09 이전 로그인은 미기록.</p>
+          </ExtSection>
+
+          {/* 5. 푸시 통계 */}
+          <ExtSection title="푸시 발송 / 클릭 / 알림 OFF 비율">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <KpiCard label="발송 (성공)" value={data.pushStats?.sent || 0} />
+              <KpiCard label="클릭 (CTR)" value={data.pushStats?.clicked || 0} accent />
+              <KpiCard label="CTR %" value={data.pushStats?.ctr || 0} />
+              <KpiCard label="발송 실패" value={data.pushStats?.failed || 0} warn />
+            </div>
+            <p className="mt-3 mb-1.5 text-[11px] font-semibold text-zinc-400">알림 OFF 비율 (수신 거부자 / 설정자 {Number(data.pushStats?.prefsTotal || 0).toLocaleString()}명)</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead className="bg-zinc-50 dark:bg-zinc-800">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left font-semibold text-zinc-500">알림 종류</th>
+                    <th className="px-2 py-1.5 text-right font-semibold text-zinc-500">OFF 수</th>
+                    <th className="px-2 py-1.5 text-right font-semibold text-zinc-500">OFF 비율</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["notify_comment","댓글"],["notify_reply","답글"],["notify_like","좋아요"],
+                    ["notify_job","구인"],["notify_trade","거래"],["notify_notice","공지"],
+                    ["notify_promo","광고/프로모션"],["notify_keyword","키워드"],["notify_message","쪽지"],
+                  ].map(([key, label]) => {
+                    const r = data.pushStats?.offRates?.[key] || { off: 0, rate: 0 };
+                    return (
+                      <tr key={key} className="border-t border-zinc-100 dark:border-zinc-800">
+                        <td className="px-2 py-1.5 text-zinc-700 dark:text-zinc-200">{label}</td>
+                        <td className="px-2 py-1.5 text-right text-zinc-700 dark:text-zinc-200">{r.off.toLocaleString()}</td>
+                        <td className="px-2 py-1.5 text-right text-zinc-500">{r.rate}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </ExtSection>
+
+          {/* 6. 신고 사유 분포 */}
+          <ExtSection title={`신고 사유 분포 (전체 ${Number(data.reportReasons?.total || 0).toLocaleString()}건)`}>
+            <p className="mb-2 text-[11px] text-zinc-400">평균 처리 시간: {data.reportReasons?.avgResolveHours || 0}시간</p>
+            {(data.reportReasons?.reasons || []).length === 0 ? (
+              <p className="text-[12px] text-zinc-400 py-2">신고 사유가 없습니다.</p>
+            ) : (
+              <div className="space-y-1">
+                {(data.reportReasons?.reasons || []).slice(0, 15).map((r: any) => (
+                  <div key={r.reason} className="flex items-center gap-2">
+                    <span className="flex-1 text-[12px] text-zinc-700 dark:text-zinc-200 truncate">{r.reason}</span>
+                    <span className="text-[12px] font-bold text-zinc-900 dark:text-zinc-100">{r.count.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ExtSection>
+
+          {/* 7. 거래 funnel */}
+          <ExtSection title={`거래 status 분포 (전체 ${Number(data.tradeFunnel?.total || 0).toLocaleString()}건)`}>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <KpiCard label="판매중" value={data.tradeFunnel?.byStatus?.active || 0} />
+              <KpiCard label="예약중" value={data.tradeFunnel?.byStatus?.reserved || 0} />
+              <KpiCard label="거래완료" value={data.tradeFunnel?.byStatus?.sold || 0} accent />
+              <KpiCard label="숨김" value={data.tradeFunnel?.byStatus?.hidden || 0} />
+              <KpiCard label="삭제" value={data.tradeFunnel?.byStatus?.deleted || 0} />
+            </div>
+            <p className="mt-2 text-[11px] text-zinc-400">
+              거래완료율 {data.tradeFunnel?.soldRate || 0}% · 30일 이상 안 팔린 active {Number(data.tradeFunnel?.stale30 || 0).toLocaleString()}건
+            </p>
+          </ExtSection>
+
+          {/* 8. 구인 효과 */}
+          <ExtSection title={`구인 효과 (전체 ${Number(data.jobEffect?.total || 0).toLocaleString()}건)`}>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <KpiCard label="모집중" value={data.jobEffect?.open || 0} accent />
+              <KpiCard label="모집종료" value={data.jobEffect?.closed || 0} />
+              <KpiCard label="종료율 %" value={data.jobEffect?.closeRate || 0} />
+              <KpiCard label="평균 종료까지(일)" value={data.jobEffect?.avgCloseDays || 0} />
+            </div>
+            <p className="mt-2 text-[11px] text-zinc-400">
+              평균 조회 {data.jobEffect?.avgViews || 0} · 평균 북마크 {data.jobEffect?.avgBookmarks || 0}
+            </p>
+          </ExtSection>
+
+          {/* 9. 검색어 분석 */}
+          <ExtSection title={`검색어 Top 10 (전체 ${Number(data.searchKeywords?.total || 0).toLocaleString()}건)`}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <KeywordList title="종목후기" items={data.searchKeywords?.community || []} />
+              <KeywordList title="구인" items={data.searchKeywords?.jobs || []} />
+              <KeywordList title="거래" items={data.searchKeywords?.trade || []} />
+              <KeywordList title="0건 결과 (못 채우는 수요)" items={data.searchKeywords?.zeroResult || []} warn />
+            </div>
+          </ExtSection>
+
+          {/* 10. 차단 많이 받는 사용자 */}
+          <ExtSection title={`차단 가장 많이 받은 사용자 Top 10 (총 ${Number(data.mostBlocked?.total || 0).toLocaleString()}건 차단)`}>
+            {(data.mostBlocked?.top || []).length === 0 ? (
+              <p className="text-[12px] text-zinc-400 py-2">차단 기록이 없습니다.</p>
+            ) : (
+              <div className="space-y-1">
+                {(data.mostBlocked?.top || []).map((b: any, i: number) => (
+                  <div key={`${b.nickname}-${i}`} className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-400 text-[10px] font-bold flex items-center justify-center">{i + 1}</span>
+                    <span className="flex-1 text-[12px] text-zinc-700 dark:text-zinc-200 truncate">{b.nickname}</span>
+                    <span className="text-[12px] font-bold text-red-500">{b.count.toLocaleString()}회</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ExtSection>
+
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExtSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="border-t border-zinc-100 dark:border-zinc-800 pt-4 first:border-t-0 first:pt-0">
+      <p className="mb-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function RetentionCard({ label, m }: { label: string; m: { retained: number; total: number; rate: number } | undefined }) {
+  const v = m || { retained: 0, total: 0, rate: 0 };
+  return (
+    <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800 p-3 text-center">
+      <p className="text-[11px] text-zinc-400 font-semibold">{label}</p>
+      <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">{v.rate}%</p>
+      <p className="text-[10px] text-zinc-500">{v.retained.toLocaleString()} / {v.total.toLocaleString()}</p>
+    </div>
+  );
+}
+
+function FunnelCard({ label, value, rate, total }: { label: string; value: number; rate: number; total: number }) {
+  return (
+    <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800 p-3 text-center">
+      <p className="text-[11px] text-zinc-400 font-semibold">{label}</p>
+      <p className="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400">{rate}%</p>
+      <p className="text-[10px] text-zinc-500">{value.toLocaleString()} / {total.toLocaleString()}</p>
+    </div>
+  );
+}
+
+function KeywordList({ title, items, warn }: { title: string; items: { keyword: string; count: number }[]; warn?: boolean }) {
+  return (
+    <div className={`rounded-lg p-3 ${warn ? "bg-red-50 dark:bg-red-950/30" : "bg-zinc-50 dark:bg-zinc-800"}`}>
+      <p className={`text-[11px] font-bold mb-2 ${warn ? "text-red-600 dark:text-red-400" : "text-zinc-500"}`}>{title}</p>
+      {items.length === 0 ? (
+        <p className="text-[11px] text-zinc-400">데이터 없음</p>
+      ) : (
+        <div className="space-y-0.5">
+          {items.slice(0, 10).map((it, i) => (
+            <div key={`${it.keyword}-${i}`} className="flex items-center gap-2 text-[11px]">
+              <span className="w-4 text-zinc-400">{i + 1}</span>
+              <span className="flex-1 truncate text-zinc-700 dark:text-zinc-200">{it.keyword}</span>
+              <span className="text-zinc-500 tabular-nums">{it.count.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
