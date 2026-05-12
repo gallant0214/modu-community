@@ -400,7 +400,7 @@ export async function POST(request: Request) {
     }
   } catch { /* skip */ }
 
-  // 신고 분석: target_type 별 카운트 (post/comment/job/message)
+  // 신고 분석: target_type 별 누적 신고 카운트 (처리·삭제 무관 — '신고가 들어온 시점' 기준 통계)
   let reportsByType: { type: string; label: string; count: number }[] = [
     { type: "post", label: "게시물 신고", count: 0 },
     { type: "comment", label: "댓글 신고", count: 0 },

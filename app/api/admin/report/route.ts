@@ -71,10 +71,24 @@ async function metricRows(
 ): Promise<Date[]> {
   try {
     const sb = supabase as any;
-    let q = sb.from(table).select(dateCol).gte(dateCol, from.toISOString()).lte(dateCol, to.toISOString());
-    if (extraFilter) q = extraFilter(q);
-    const { data } = await q.limit(50000);
-    return (data || []).map((r: any) => new Date(r[dateCol]));
+    // Supabase/PostgREST 기본 max-rows = 1000 으로 캡됨. .limit() 명시도 우회 못함.
+    // range() 로 페이지네이션해 모든 row 회수 (~10만 까지 안전).
+    const PAGE = 1000;
+    const MAX_PAGES = 100; // 최대 10만 row 안전장치
+    const result: Date[] = [];
+    for (let p = 0; p < MAX_PAGES; p++) {
+      let q = sb.from(table).select(dateCol)
+        .gte(dateCol, from.toISOString())
+        .lte(dateCol, to.toISOString())
+        .order(dateCol, { ascending: true })
+        .range(p * PAGE, p * PAGE + PAGE - 1);
+      if (extraFilter) q = extraFilter(q);
+      const { data } = await q;
+      if (!data || data.length === 0) break;
+      for (const r of data) result.push(new Date(r[dateCol]));
+      if (data.length < PAGE) break;
+    }
+    return result;
   } catch {
     return [];
   }
@@ -160,14 +174,23 @@ async function inflowAnalysis(cur: Range) {
   const { from, to } = cur;
   try {
     const sb = supabase as any;
-    const { data } = await sb.from("site_visits")
-      .select("referrer")
-      .gte("visited_at", from.toISOString())
-      .lte("visited_at", to.toISOString())
-      .limit(50000);
+    // 1000-row cap 우회 (PostgREST max-rows) — 페이지네이션으로 전부 가져오기
+    const PAGE = 1000;
+    const MAX_PAGES = 100;
+    const allRows: { referrer: string | null }[] = [];
+    for (let p = 0; p < MAX_PAGES; p++) {
+      const { data } = await sb.from("site_visits")
+        .select("referrer")
+        .gte("visited_at", from.toISOString())
+        .lte("visited_at", to.toISOString())
+        .range(p * PAGE, p * PAGE + PAGE - 1);
+      if (!data || data.length === 0) break;
+      allRows.push(...data);
+      if (data.length < PAGE) break;
+    }
     const channelMap = new Map<string, number>();
     const keywordMap = new Map<string, number>();
-    for (const row of data || []) {
+    for (const row of allRows) {
       const ch = classifyChannel(row.referrer);
       channelMap.set(ch, (channelMap.get(ch) || 0) + 1);
       const kw = extractKeyword(row.referrer);
