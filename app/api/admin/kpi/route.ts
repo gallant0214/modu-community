@@ -282,7 +282,12 @@ export async function POST(request: Request) {
         hourArr[hour]++;
         wkArr[weekday]++;
         const ch = classifyChannel(row.referrer);
-        channelMap.set(ch, (channelMap.get(ch) || 0) + 1);
+        // localhost / 사설 IP / .local 채널은 관리자 dev 트래픽 — 집계 제외 (사용자 명시 요구)
+        const isLocalChannel = /^(localhost|127\.0\.0\.1|::1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(ch)
+          || ch.endsWith(".local");
+        if (!isLocalChannel) {
+          channelMap.set(ch, (channelMap.get(ch) || 0) + 1);
+        }
         const kw = extractKeyword(row.referrer);
         if (kw) keywordMap.set(kw, (keywordMap.get(kw) || 0) + 1);
       }
