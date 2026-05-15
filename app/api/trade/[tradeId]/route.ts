@@ -152,12 +152,17 @@ export async function PATCH(
     product_name,
     condition_text,
     price_manwon,
+    price_won,
     center_name,
     equipment_info,
     center_info,
+    gear_info,
   } = body;
 
-  const category = existing.category as "equipment" | "center";
+  const category = existing.category as "equipment" | "center" | "gear";
+
+  const GEAR_SUBS = ["신발", "벨트·스트랩", "요가·필라테스", "보충제", "의류", "기타"] as const;
+  type GearSub = (typeof GEAR_SUBS)[number];
 
   // 공통 필수 검증
   if (!title?.trim()) return NextResponse.json({ error: "제목을 입력해주세요" }, { status: 400 });
@@ -166,7 +171,9 @@ export async function PATCH(
   }
   if (!contact_phone?.trim()) return NextResponse.json({ error: "연락처를 입력해주세요" }, { status: 400 });
   const imgs: string[] = Array.isArray(image_urls) ? image_urls.filter((u: unknown) => typeof u === "string") : [];
-  if (category === "equipment" && imgs.length < 1) return NextResponse.json({ error: "사기 방지를 위해 실제 판매하시는 물품 사진을 1장 이상 첨부해 주세요." }, { status: 400 });
+  if ((category === "equipment" || category === "gear") && imgs.length < 1) {
+    return NextResponse.json({ error: "사기 방지를 위해 실제 판매하시는 물품 사진을 1장 이상 첨부해 주세요." }, { status: 400 });
+  }
   if (imgs.length > 10) return NextResponse.json({ error: "사진은 최대 10장까지" }, { status: 400 });
 
   if (category === "equipment") {
@@ -176,13 +183,28 @@ export async function PATCH(
     if (!region_detail?.trim()) {
       return NextResponse.json({ error: "중고거래는 상세 주소를 입력해주세요" }, { status: 400 });
     }
-  } else {
+  } else if (category === "center") {
     if (!center_info || typeof center_info !== "object") {
       return NextResponse.json({ error: "센터 매매 상세 정보를 입력해주세요" }, { status: 400 });
     }
     const ci = center_info as Record<string, unknown>;
     if (!ci.store_type || !ci.area_pyeong) {
       return NextResponse.json({ error: "센터 매매 필수 항목을 모두 입력해주세요" }, { status: 400 });
+    }
+  } else {
+    // gear
+    if (!product_name?.trim() || !condition_text?.trim() || price_won === undefined || price_won === null) {
+      return NextResponse.json({ error: "운동용품 필수 항목(제품명·상태·가격)을 모두 입력해주세요" }, { status: 400 });
+    }
+    if (Number(price_won) < 0) {
+      return NextResponse.json({ error: "가격은 0원 이상이어야 합니다" }, { status: 400 });
+    }
+    if (!gear_info || typeof gear_info !== "object") {
+      return NextResponse.json({ error: "운동용품 하위 카테고리를 선택해주세요" }, { status: 400 });
+    }
+    const gi = gear_info as Record<string, unknown>;
+    if (!gi.sub_category || !GEAR_SUBS.includes(gi.sub_category as GearSub)) {
+      return NextResponse.json({ error: "운동용품 하위 카테고리가 올바르지 않습니다" }, { status: 400 });
     }
   }
 
@@ -202,8 +224,24 @@ export async function PATCH(
     updateRow.price_manwon = Math.max(0, Math.floor(Number(price_manwon)));
     updateRow.center_name = sanitize(validateLength(String(center_name).trim(), 100));
     updateRow.equipment_info = equipment_info ?? null;
-  } else {
+  } else if (category === "center") {
     updateRow.center_info = center_info;
+  } else {
+    // gear
+    updateRow.product_name = sanitize(validateLength(String(product_name).trim(), 100));
+    updateRow.condition_text = sanitize(validateLength(String(condition_text).trim(), 100));
+    updateRow.price_won = Math.max(0, Math.floor(Number(price_won)));
+    const gi = gear_info as Record<string, unknown>;
+    const cleanGearInfo: { sub_category: string; brand?: string; size?: string } = {
+      sub_category: String(gi.sub_category),
+    };
+    if (typeof gi.brand === "string" && gi.brand.trim()) {
+      cleanGearInfo.brand = sanitize(validateLength(gi.brand.trim(), 50));
+    }
+    if (typeof gi.size === "string" && gi.size.trim()) {
+      cleanGearInfo.size = sanitize(validateLength(gi.size.trim(), 30));
+    }
+    updateRow.gear_info = cleanGearInfo;
   }
 
   const { error } = await supabase

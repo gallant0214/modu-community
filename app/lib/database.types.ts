@@ -1091,9 +1091,11 @@ export type Database = {
           product_name: string | null
           condition_text: string | null
           price_manwon: number | null
+          price_won: number | null
           center_name: string | null
           equipment_info: Json | null
           center_info: Json | null
+          gear_info: Json | null
           view_count: number
           share_count: number
           bookmark_count: number
@@ -1118,9 +1120,11 @@ export type Database = {
           product_name?: string | null
           condition_text?: string | null
           price_manwon?: number | null
+          price_won?: number | null
           center_name?: string | null
           equipment_info?: Json | null
           center_info?: Json | null
+          gear_info?: Json | null
           view_count?: number
           share_count?: number
           bookmark_count?: number
@@ -1143,9 +1147,11 @@ export type Database = {
           product_name?: string | null
           condition_text?: string | null
           price_manwon?: number | null
+          price_won?: number | null
           center_name?: string | null
           equipment_info?: Json | null
           center_info?: Json | null
+          gear_info?: Json | null
           view_count?: number
           share_count?: number
           bookmark_count?: number

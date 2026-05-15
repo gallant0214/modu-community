@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const category = url.searchParams.get("category") || "all"; // all | equipment | center
+    const category = url.searchParams.get("category") || "all"; // all | equipment | center | gear
     const q = url.searchParams.get("q")?.trim() || "";
     const sido = url.searchParams.get("sido")?.trim() || "";
     const sigungu = url.searchParams.get("sigungu")?.trim() || "";
@@ -37,7 +37,9 @@ export async function GET(request: Request) {
       .select("*", { count: "exact" })
       .in("status", ["active", "reserved", "sold"]);
 
-    if (category === "equipment" || category === "center") qb = qb.eq("category", category);
+    if (category === "equipment" || category === "center" || category === "gear") {
+      qb = qb.eq("category", category);
+    }
     if (sido) qb = qb.eq("region_sido", sido);
     if (sigungu) qb = qb.eq("region_sigungu", sigungu);
     if (q) {
@@ -92,12 +94,12 @@ export async function POST(request: Request) {
 
   const body = await request.json();
   const {
-    category,                    // 'equipment' | 'center'
+    category,                    // 'equipment' | 'center' | 'gear'
     title,
     body: content,               // 리치에디터 HTML 또는 일반 텍스트
     region_sido,
     region_sigungu,
-    region_detail,               // 중고거래 필수, 센터매매 선택
+    region_detail,               // 중고거래 필수, 센터매매·운동용품 선택
     contact_phone,
     image_urls,                  // string[]
     // equipment 전용
@@ -108,12 +110,15 @@ export async function POST(request: Request) {
     equipment_info,              // JSON: { trade_methods: [...] }
     // center 전용
     center_info,                 // JSON
+    // gear 전용 (개인 운동 용품)
+    price_won,                   // 원 단위 정수
+    gear_info,                   // JSON: { sub_category, brand?, size? }
     // 동의
     agreed_to_terms,
   } = body;
 
   // 공통 필수
-  if (!category || (category !== "equipment" && category !== "center")) {
+  if (!category || (category !== "equipment" && category !== "center" && category !== "gear")) {
     return NextResponse.json({ error: "카테고리가 올바르지 않습니다" }, { status: 400 });
   }
   if (!title?.trim()) return NextResponse.json({ error: "제목을 입력해주세요" }, { status: 400 });
@@ -127,6 +132,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "등록 전 안내사항에 동의해주세요" }, { status: 400 });
   }
 
+  // 운동용품 허용 하위 카테고리 (DB 가아닌 서버에서 화이트리스트 검증)
+  const GEAR_SUBS = ["신발", "벨트·스트랩", "요가·필라테스", "보충제", "의류", "기타"] as const;
+  type GearSub = (typeof GEAR_SUBS)[number];
+
   // 카테고리별 필수
   if (category === "equipment") {
     if (!product_name?.trim() || !condition_text?.trim() || price_manwon === undefined || price_manwon === null || !center_name?.trim()) {
@@ -135,8 +144,7 @@ export async function POST(request: Request) {
     if (!region_detail?.trim()) {
       return NextResponse.json({ error: "중고거래는 상세 주소(만남 장소·동·번지 등)를 입력해주세요" }, { status: 400 });
     }
-  } else {
-    // category === 'center'
+  } else if (category === "center") {
     if (!center_info || typeof center_info !== "object") {
       return NextResponse.json({ error: "센터 매매 상세 정보를 입력해주세요" }, { status: 400 });
     }
@@ -144,11 +152,26 @@ export async function POST(request: Request) {
     if (!ci.store_type || !ci.area_pyeong) {
       return NextResponse.json({ error: "센터 매매 필수 항목을 모두 입력해주세요" }, { status: 400 });
     }
+  } else {
+    // category === 'gear' (개인 운동 용품)
+    if (!product_name?.trim() || !condition_text?.trim() || price_won === undefined || price_won === null) {
+      return NextResponse.json({ error: "운동용품 필수 항목(제품명·상태·가격)을 모두 입력해주세요" }, { status: 400 });
+    }
+    if (Number(price_won) < 0) {
+      return NextResponse.json({ error: "가격은 0원 이상이어야 합니다" }, { status: 400 });
+    }
+    if (!gear_info || typeof gear_info !== "object") {
+      return NextResponse.json({ error: "운동용품 하위 카테고리를 선택해주세요" }, { status: 400 });
+    }
+    const gi = gear_info as Record<string, unknown>;
+    if (!gi.sub_category || !GEAR_SUBS.includes(gi.sub_category as GearSub)) {
+      return NextResponse.json({ error: "운동용품 하위 카테고리가 올바르지 않습니다" }, { status: 400 });
+    }
   }
 
-  // 이미지 — equipment(중고거래)는 최소 1장 필수, center(센터매매)는 선택
+  // 이미지 — equipment·gear 는 최소 1장 필수, center 는 선택
   const imgs: string[] = Array.isArray(image_urls) ? image_urls.filter((u: unknown) => typeof u === "string") : [];
-  if (category === "equipment" && imgs.length < 1) {
+  if ((category === "equipment" || category === "gear") && imgs.length < 1) {
     return NextResponse.json({ error: "사기 방지를 위해 실제 판매하시는 물품 사진을 1장 이상 첨부해 주세요." }, { status: 400 });
   }
   if (imgs.length > 10) {
@@ -177,10 +200,29 @@ export async function POST(request: Request) {
     insertRow.center_name = sanitize(validateLength(String(center_name).trim(), 100));
     insertRow.region_detail = sanitize(validateLength(String(region_detail).trim(), 200));
     insertRow.equipment_info = equipment_info ?? null;
-  } else {
+  } else if (category === "center") {
     insertRow.center_info = center_info;
-    // 센터매매에서 중고용 컬럼은 비움
     insertRow.center_name = null;
+    if (region_detail && String(region_detail).trim()) {
+      insertRow.region_detail = sanitize(validateLength(String(region_detail).trim(), 200));
+    }
+  } else {
+    // category === 'gear' (운동용품)
+    insertRow.product_name = sanitize(validateLength(String(product_name).trim(), 100));
+    insertRow.condition_text = sanitize(validateLength(String(condition_text).trim(), 100));
+    insertRow.price_won = Math.max(0, Math.floor(Number(price_won)));
+    // gear_info: sub_category 필수 + brand/size 옵션. 텍스트 sanitize 적용.
+    const gi = gear_info as Record<string, unknown>;
+    const cleanGearInfo: { sub_category: string; brand?: string; size?: string } = {
+      sub_category: String(gi.sub_category),
+    };
+    if (typeof gi.brand === "string" && gi.brand.trim()) {
+      cleanGearInfo.brand = sanitize(validateLength(gi.brand.trim(), 50));
+    }
+    if (typeof gi.size === "string" && gi.size.trim()) {
+      cleanGearInfo.size = sanitize(validateLength(gi.size.trim(), 30));
+    }
+    insertRow.gear_info = cleanGearInfo;
     if (region_detail && String(region_detail).trim()) {
       insertRow.region_detail = sanitize(validateLength(String(region_detail).trim(), 200));
     }
