@@ -132,10 +132,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "등록 전 안내사항에 동의해주세요" }, { status: 400 });
   }
 
-  // 운동용품 허용 하위 카테고리 (DB 가아닌 서버에서 화이트리스트 검증)
-  const GEAR_SUBS = ["신발", "벨트·스트랩", "요가·필라테스", "보충제", "의류", "기타"] as const;
-  type GearSub = (typeof GEAR_SUBS)[number];
-
   // 카테고리별 필수
   if (category === "equipment") {
     if (!product_name?.trim() || !condition_text?.trim() || price_manwon === undefined || price_manwon === null || !center_name?.trim()) {
@@ -161,11 +157,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "가격은 0원 이상이어야 합니다" }, { status: 400 });
     }
     if (!gear_info || typeof gear_info !== "object") {
-      return NextResponse.json({ error: "운동용품 하위 카테고리를 선택해주세요" }, { status: 400 });
+      return NextResponse.json({ error: "운동용품 종류를 입력해주세요" }, { status: 400 });
     }
     const gi = gear_info as Record<string, unknown>;
-    if (!gi.sub_category || !GEAR_SUBS.includes(gi.sub_category as GearSub)) {
-      return NextResponse.json({ error: "운동용품 하위 카테고리가 올바르지 않습니다" }, { status: 400 });
+    if (!gi.sub_category || typeof gi.sub_category !== "string" || !(gi.sub_category as string).trim()) {
+      return NextResponse.json({ error: "운동용품 종류를 입력해주세요" }, { status: 400 });
     }
   }
 
@@ -214,7 +210,7 @@ export async function POST(request: Request) {
     // gear_info: sub_category 필수 + brand/size 옵션. 텍스트 sanitize 적용.
     const gi = gear_info as Record<string, unknown>;
     const cleanGearInfo: { sub_category: string; brand?: string; size?: string } = {
-      sub_category: String(gi.sub_category),
+      sub_category: sanitize(validateLength(String(gi.sub_category).trim(), 30)),
     };
     if (typeof gi.brand === "string" && gi.brand.trim()) {
       cleanGearInfo.brand = sanitize(validateLength(gi.brand.trim(), 50));

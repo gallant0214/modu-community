@@ -49,10 +49,6 @@ function parseNum(v: string) {
   return Number((v || "").replace(/\D/g, "")) || 0;
 }
 
-// 운동용품 하위 카테고리 화이트리스트 — 백엔드와 동일하게 유지
-const GEAR_SUB_CATEGORIES = ["신발", "벨트·스트랩", "요가·필라테스", "보충제", "의류", "기타"] as const;
-type GearSubCategory = (typeof GEAR_SUB_CATEGORIES)[number];
-
 /* ══════════════════════════════════
    프리젠테이셔널 헬퍼 (구인글과 동일)
    ══════════════════════════════════ */
@@ -245,10 +241,7 @@ function TradeWritePage() {
           setConditionText(p.condition_text || "");
           setPriceWon(Number.isFinite(p.price_won) ? Number(p.price_won).toLocaleString() : "");
           const gi = (p.gear_info && typeof p.gear_info === "object" ? p.gear_info : {}) as Record<string, unknown>;
-          const sub = typeof gi.sub_category === "string" ? gi.sub_category : "";
-          if ((GEAR_SUB_CATEGORIES as readonly string[]).includes(sub)) {
-            setGearSubCategory(sub as GearSubCategory);
-          }
+          setGearSubCategory(typeof gi.sub_category === "string" ? gi.sub_category : "");
           setGearBrand(typeof gi.brand === "string" ? gi.brand : "");
           setGearSize(typeof gi.size === "string" ? gi.size : "");
         } else if (p.category === "equipment") {
@@ -346,10 +339,9 @@ function TradeWritePage() {
   const [productName, setProductName] = useState("");
   const [conditionText, setConditionText] = useState("");
   const [priceWon, setPriceWon] = useState("");
-  const [gearSubCategory, setGearSubCategory] = useState<GearSubCategory | "">("");
+  const [gearSubCategory, setGearSubCategory] = useState("");
   const [gearBrand, setGearBrand] = useState("");
   const [gearSize, setGearSize] = useState("");
-  const [showSubCategory, setShowSubCategory] = useState(false);
 
   /* ─── center 전용 ─── */
   const [storeType, setStoreType] = useState("");        // 매장 종류 (직접 입력)
@@ -517,7 +509,7 @@ function TradeWritePage() {
       if (tradeMethods.size === 0) return failValidation("tradeMethods", "거래 방식을 1개 이상 선택해주세요.");
       if (tradeMethods.has("etc") && !tradeMethodEtc.trim()) return failValidation("tradeMethods", "기타 거래 방식 내용을 입력해주세요.");
     } else if (tradeCategory === "gear") {
-      if (!gearSubCategory) return failValidation("items", "운동용품 종류를 선택해주세요.");
+      if (!gearSubCategory.trim()) return failValidation("items", "운동용품 종류를 입력해주세요.");
       if (!productName.trim()) return failValidation("items", "제품명을 입력해주세요.");
       if (!conditionText.trim()) return failValidation("items", "상태 등급을 입력해주세요.");
       if (!priceWon.trim()) return failValidation("items", "가격을 입력해주세요.");
@@ -584,7 +576,7 @@ function TradeWritePage() {
         };
       } else if (tradeCategory === "gear") {
         const gi: { sub_category: string; brand?: string; size?: string } = {
-          sub_category: String(gearSubCategory),
+          sub_category: gearSubCategory.trim(),
         };
         if (gearBrand.trim()) gi.brand = gearBrand.trim();
         if (gearSize.trim()) gi.size = gearSize.trim();
@@ -911,15 +903,10 @@ function TradeWritePage() {
         {tradeCategory === "gear" && (
           <Section number={3} title="운동용품 정보" subtitle="판매하려는 용품 정보를 입력하세요">
             <div ref={fieldRefs.items} className="space-y-4">
-              <Field label="종류" required>
-                <button onClick={() => setShowSubCategory(true)}
-                  className={`w-full flex items-center justify-between px-4 py-3 border rounded-xl text-[14px] text-left transition-colors ${
-                    gearSubCategory ? "border-[#6B7B3A]/40 bg-[#FBF7EB] dark:bg-zinc-800 text-[#2A251D] dark:text-zinc-100 font-medium"
-                    : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 text-[#A89B80]"
-                  } hover:border-[#6B7B3A]/50`}>
-                  <span>{gearSubCategory || "운동용품 종류를 선택해 주세요"}</span>
-                  <svg className="w-4 h-4 text-[#A89B80] shrink-0 ml-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                </button>
+              <Field label="종류" required hint="예) 신발, 벨트·스트랩, 요가·필라테스, 보충제, 의류 등" count={gearSubCategory.length} max={30}>
+                <input type="text" value={gearSubCategory}
+                  onChange={e => setGearSubCategory(e.target.value.slice(0, 30))}
+                  placeholder="예) 신발, 벨트·스트랩, 요가·필라테스, 보충제, 의류 등" className={inputCls} />
               </Field>
               <Field label="제품명" required count={productName.length} max={80}>
                 <input type="text" value={productName}
@@ -1192,31 +1179,6 @@ function TradeWritePage() {
             ))}
           </div>
         )}
-      </Modal>
-
-      {/* 운동용품 종류 선택 모달 */}
-      <Modal open={showSubCategory} onClose={() => setShowSubCategory(false)} title="운동용품 종류">
-        <div>
-          {GEAR_SUB_CATEGORIES.map(sub => {
-            const active = gearSubCategory === sub;
-            return (
-              <button key={sub}
-                onClick={() => { setGearSubCategory(sub); setShowSubCategory(false); }}
-                className={`w-full flex items-center justify-between px-5 py-4 text-[14px] text-left transition-colors border-b border-[#E8E0D0]/60 dark:border-zinc-800 last:border-0 ${
-                  active
-                    ? "bg-[#F5F0E5]/50 text-[#6B7B3A] dark:text-[#A8B87A] font-semibold"
-                    : "text-[#3A342A] dark:text-zinc-100 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-                }`}>
-                <span>{sub}</span>
-                {active && (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </button>
-            );
-          })}
-        </div>
       </Modal>
 
       {/* 등록 전 경고 모달 (구인글과 동일 패턴) */}

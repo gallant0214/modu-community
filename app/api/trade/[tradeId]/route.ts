@@ -161,9 +161,6 @@ export async function PATCH(
 
   const category = existing.category as "equipment" | "center" | "gear";
 
-  const GEAR_SUBS = ["신발", "벨트·스트랩", "요가·필라테스", "보충제", "의류", "기타"] as const;
-  type GearSub = (typeof GEAR_SUBS)[number];
-
   // 공통 필수 검증
   if (!title?.trim()) return NextResponse.json({ error: "제목을 입력해주세요" }, { status: 400 });
   if (!region_sido?.trim() || !region_sigungu?.trim()) {
@@ -200,11 +197,11 @@ export async function PATCH(
       return NextResponse.json({ error: "가격은 0원 이상이어야 합니다" }, { status: 400 });
     }
     if (!gear_info || typeof gear_info !== "object") {
-      return NextResponse.json({ error: "운동용품 하위 카테고리를 선택해주세요" }, { status: 400 });
+      return NextResponse.json({ error: "운동용품 종류를 입력해주세요" }, { status: 400 });
     }
     const gi = gear_info as Record<string, unknown>;
-    if (!gi.sub_category || !GEAR_SUBS.includes(gi.sub_category as GearSub)) {
-      return NextResponse.json({ error: "운동용품 하위 카테고리가 올바르지 않습니다" }, { status: 400 });
+    if (!gi.sub_category || typeof gi.sub_category !== "string" || !(gi.sub_category as string).trim()) {
+      return NextResponse.json({ error: "운동용품 종류를 입력해주세요" }, { status: 400 });
     }
   }
 
@@ -233,7 +230,7 @@ export async function PATCH(
     updateRow.price_won = Math.max(0, Math.floor(Number(price_won)));
     const gi = gear_info as Record<string, unknown>;
     const cleanGearInfo: { sub_category: string; brand?: string; size?: string } = {
-      sub_category: String(gi.sub_category),
+      sub_category: sanitize(validateLength(String(gi.sub_category).trim(), 30)),
     };
     if (typeof gi.brand === "string" && gi.brand.trim()) {
       cleanGearInfo.brand = sanitize(validateLength(gi.brand.trim(), 50));
