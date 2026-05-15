@@ -38,6 +38,12 @@ function formatPriceWon(n: number | null | undefined): string {
   }
   return `${(n * 10000).toLocaleString()}원`;
 }
+// 운동용품(gear) — 원 단위 직접 저장. 0=무료나눔.
+function formatPriceWonGear(n: number | null | undefined): string {
+  if (n === null || n === undefined) return "-";
+  if (n === 0) return "무료나눔";
+  return `${n.toLocaleString()}원`;
+}
 
 /* 라벨-값 행 */
 function InfoRow({ label, value, accent }: { label: string; value: React.ReactNode; accent?: boolean }) {
@@ -173,6 +179,7 @@ export default function TradeDetailPage() {
   /* center_info 정규화 */
   const ci = (post.center_info && typeof post.center_info === "object" ? post.center_info : null) as Record<string, unknown> | null;
   const ei = (post.equipment_info && typeof post.equipment_info === "object" ? post.equipment_info : null) as Record<string, unknown> | null;
+  const gi = (post.gear_info && typeof post.gear_info === "object" ? post.gear_info : null) as Record<string, unknown> | null;
 
   const renderMoney = (key: string, label: string) => {
     if (!ci || !ci[key]) return null;
@@ -287,9 +294,13 @@ export default function TradeDetailPage() {
                 style={{ maxHeight: "75vh" }}
               />
               <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                post.category === "center" ? "bg-[#C0392B] text-white" : "bg-[#6B7B3A] text-white"
+                post.category === "center"
+                  ? "bg-[#C0392B] text-white"
+                  : post.category === "gear"
+                  ? "bg-[#1A6FCB] text-white"
+                  : "bg-[#6B7B3A] text-white"
               }`}>
-                {post.category === "center" ? "센터매매" : "중고거래"}
+                {post.category === "center" ? "센터매매" : post.category === "gear" ? "운동용품" : "중고거래"}
               </span>
               {post.image_urls.length > 1 && (
                 <span className="absolute bottom-3 right-3 px-2.5 py-1 bg-black/60 text-white text-[11px] rounded-full">
@@ -326,7 +337,27 @@ export default function TradeDetailPage() {
         </section>
 
         {/* 카테고리별 상세 정보 */}
-        {post.category === "equipment" ? (
+        {post.category === "gear" ? (
+          <section className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-5 sm:p-6">
+            <h2 className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 mb-2">운동용품 정보</h2>
+            <div>
+              <InfoRow label="가격" accent value={formatPriceWonGear(post.price_won)} />
+              <InfoRow label="종류" value={String(gi?.sub_category || "-")} />
+              <InfoRow label="제품명" value={post.product_name || "-"} />
+              {typeof gi?.brand === "string" && gi.brand ? (
+                <InfoRow label="브랜드" value={gi.brand} />
+              ) : null}
+              {typeof gi?.size === "string" && gi.size ? (
+                <InfoRow label="사이즈/규격" value={gi.size} />
+              ) : null}
+              <InfoRow label="상태" value={post.condition_text || "-"} />
+              <InfoRow
+                label="지역"
+                value={`${post.region_sido} ${post.region_sigungu}${post.region_detail ? " · " + post.region_detail : ""}`}
+              />
+            </div>
+          </section>
+        ) : post.category === "equipment" ? (
           <section className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-3xl p-5 sm:p-6">
             <h2 className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 mb-2">제품 정보</h2>
             {equipItems.length > 1 ? (

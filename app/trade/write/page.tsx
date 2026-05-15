@@ -49,6 +49,10 @@ function parseNum(v: string) {
   return Number((v || "").replace(/\D/g, "")) || 0;
 }
 
+// 운동용품 하위 카테고리 화이트리스트 — 백엔드와 동일하게 유지
+const GEAR_SUB_CATEGORIES = ["신발", "벨트·스트랩", "요가·필라테스", "보충제", "의류", "기타"] as const;
+type GearSubCategory = (typeof GEAR_SUB_CATEGORIES)[number];
+
 /* ══════════════════════════════════
    프리젠테이셔널 헬퍼 (구인글과 동일)
    ══════════════════════════════════ */
@@ -222,7 +226,7 @@ function TradeWritePage() {
         }
         const p = await res.json();
         if (cancelled) return;
-        setTradeCategory(p.category === "center" ? "center" : "equipment");
+        setTradeCategory(p.category === "center" ? "center" : p.category === "gear" ? "gear" : "equipment");
         setTitle(p.title || "");
         setBody(p.body || "");
         const regionFull = [p.region_sido, p.region_sigungu].filter(Boolean).join(" ");
@@ -236,7 +240,18 @@ function TradeWritePage() {
         }
         setImageUrls(Array.isArray(p.image_urls) ? p.image_urls : []);
         setAgreed(true);
-        if (p.category === "equipment") {
+        if (p.category === "gear") {
+          setProductName(p.product_name || "");
+          setConditionText(p.condition_text || "");
+          setPriceWon(Number.isFinite(p.price_won) ? Number(p.price_won).toLocaleString() : "");
+          const gi = (p.gear_info && typeof p.gear_info === "object" ? p.gear_info : {}) as Record<string, unknown>;
+          const sub = typeof gi.sub_category === "string" ? gi.sub_category : "";
+          if ((GEAR_SUB_CATEGORIES as readonly string[]).includes(sub)) {
+            setGearSubCategory(sub as GearSubCategory);
+          }
+          setGearBrand(typeof gi.brand === "string" ? gi.brand : "");
+          setGearSize(typeof gi.size === "string" ? gi.size : "");
+        } else if (p.category === "equipment") {
           const ei = (p.equipment_info && typeof p.equipment_info === "object" ? p.equipment_info : {}) as Record<string, unknown>;
           const rawItems = Array.isArray(ei.items) ? ei.items as Array<Partial<{ name: string; condition: string; price_manwon: number; use_duration: string }>> : [];
           // DB 저장은 만원 단위, UI 표시는 원 단위 (×10000)
@@ -303,8 +318,8 @@ function TradeWritePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEdit, editId]);
 
-  /* ─── 카테고리 (중고/매매) ─── */
-  const [tradeCategory, setTradeCategory] = useState<"equipment" | "center">("equipment");
+  /* ─── 카테고리 (중고/운동용품/매매) ─── */
+  const [tradeCategory, setTradeCategory] = useState<"equipment" | "gear" | "center">("equipment");
 
   /* ─── 공통 폼 상태 ─── */
   const [title, setTitle] = useState("");
@@ -326,6 +341,15 @@ function TradeWritePage() {
   const [tradeMethods, setTradeMethods] = useState<Set<TradeMethodKey>>(new Set());
   const [deliveryLoading, setDeliveryLoading] = useState(false);
   const [tradeMethodEtc, setTradeMethodEtc] = useState("");
+
+  /* ─── gear (운동용품) 전용 ─── */
+  const [productName, setProductName] = useState("");
+  const [conditionText, setConditionText] = useState("");
+  const [priceWon, setPriceWon] = useState("");
+  const [gearSubCategory, setGearSubCategory] = useState<GearSubCategory | "">("");
+  const [gearBrand, setGearBrand] = useState("");
+  const [gearSize, setGearSize] = useState("");
+  const [showSubCategory, setShowSubCategory] = useState(false);
 
   /* ─── center 전용 ─── */
   const [storeType, setStoreType] = useState("");        // 매장 종류 (직접 입력)
@@ -464,7 +488,7 @@ function TradeWritePage() {
 
     if (!title.trim()) return failValidation("title", "제목을 입력해주세요.");
     if (!regionCode || !regionName.includes(" ")) return failValidation("region", "지역을 시·군·구까지 선택해주세요.");
-    if (tradeCategory === "equipment" && imageUrls.length < 1) return failValidation("images", "사기 방지를 위해 실제 판매하시는 물품 사진을 1장 이상 첨부해 주세요.");
+    if ((tradeCategory === "equipment" || tradeCategory === "gear") && imageUrls.length < 1) return failValidation("images", "사기 방지를 위해 실제 판매하시는 물품 사진을 1장 이상 첨부해 주세요.");
     if (!contactPhone.trim()) return failValidation("contact", "연락처를 입력해주세요.");
     if (tradeCategory === "center" && contactType === "openchat") {
       if (!/^https?:\/\/open\.kakao\.com\/o\//i.test(contactPhone.trim())) {
@@ -492,6 +516,12 @@ function TradeWritePage() {
       }
       if (tradeMethods.size === 0) return failValidation("tradeMethods", "거래 방식을 1개 이상 선택해주세요.");
       if (tradeMethods.has("etc") && !tradeMethodEtc.trim()) return failValidation("tradeMethods", "기타 거래 방식 내용을 입력해주세요.");
+    } else if (tradeCategory === "gear") {
+      if (!gearSubCategory) return failValidation("items", "운동용품 종류를 선택해주세요.");
+      if (!productName.trim()) return failValidation("items", "제품명을 입력해주세요.");
+      if (!conditionText.trim()) return failValidation("items", "상태 등급을 입력해주세요.");
+      if (!priceWon.trim()) return failValidation("items", "가격을 입력해주세요.");
+      if (parseNum(priceWon) < 0) return failValidation("items", "가격은 0원 이상이어야 합니다.");
     } else {
       if (!storeType.trim()) return failValidation("storeType", "매장 종류를 입력해주세요.");
       if (centerNameVisible === "public" && !centerNameValue.trim()) return failValidation("centerNameValue", "센터명을 공개로 선택하셨습니다. 이름을 입력해주세요.");
@@ -551,6 +581,19 @@ function TradeWritePage() {
           price_manwon: itemList[0].price_manwon,
           center_name: centerName.trim(),
           equipment_info: { trade_methods: methods, items: itemList, use_duration: itemList[0].use_duration },
+        };
+      } else if (tradeCategory === "gear") {
+        const gi: { sub_category: string; brand?: string; size?: string } = {
+          sub_category: String(gearSubCategory),
+        };
+        if (gearBrand.trim()) gi.brand = gearBrand.trim();
+        if (gearSize.trim()) gi.size = gearSize.trim();
+        payload = {
+          ...payload,
+          product_name: productName.trim(),
+          condition_text: conditionText.trim(),
+          price_won: parseNum(priceWon),
+          gear_info: gi,
         };
       } else {
         const memberCount: Record<string, unknown> =
@@ -667,7 +710,7 @@ function TradeWritePage() {
               {isEdit ? "거래 글 수정" : "거래 글 등록"}
             </h1>
             <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed mb-5 max-w-md">
-              {isEdit ? "글 내용을 수정할 수 있어요. 정확한 정보를 입력해주세요." : "운동기구 중고거래나 센터매매 글을 등록할 수 있어요. 정확한 정보를 입력해주세요."}
+              {isEdit ? "글 내용을 수정할 수 있어요. 정확한 정보를 입력해주세요." : "운동기구 중고거래·운동용품·센터매매 글을 등록할 수 있어요. 정확한 정보를 입력해주세요."}
             </p>
           </div>
         </section>
@@ -684,10 +727,11 @@ function TradeWritePage() {
         <p className="text-[11px] text-[#A89B80] px-1"><span className="text-[#C0392B] font-bold">*</span> 표시는 필수 입력 항목입니다</p>
 
         {/* ─── 카테고리 토글 ─── */}
-        <Section number={1} title="거래 종류" subtitle="중고거래 / 센터매매 중 선택하세요">
+        <Section number={1} title="거래 종류" subtitle="중고거래 / 운동용품 / 센터매매 중 선택하세요">
           <div className="flex gap-1.5">
             {([
               { v: "equipment", label: "중고거래" },
+              { v: "gear", label: "운동용품" },
               { v: "center", label: "센터매매" },
             ] as const).map(opt => (
               <button key={opt.v} onClick={() => setTradeCategory(opt.v)}
@@ -859,6 +903,52 @@ function TradeWritePage() {
           </>
         )}
 
+        {/* ─── gear (운동용품) 전용 ─── */}
+        {tradeCategory === "gear" && (
+          <Section number={3} title="운동용품 정보" subtitle="판매하려는 용품 정보를 입력하세요">
+            <div ref={fieldRefs.items} className="space-y-4">
+              <Field label="종류" required>
+                <button onClick={() => setShowSubCategory(true)}
+                  className={`w-full flex items-center justify-between px-4 py-3 border rounded-xl text-[14px] text-left transition-colors ${
+                    gearSubCategory ? "border-[#6B7B3A]/40 bg-[#FBF7EB] dark:bg-zinc-800 text-[#2A251D] dark:text-zinc-100 font-medium"
+                    : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 text-[#A89B80]"
+                  } hover:border-[#6B7B3A]/50`}>
+                  <span>{gearSubCategory || "운동용품 종류를 선택해 주세요"}</span>
+                  <svg className="w-4 h-4 text-[#A89B80] shrink-0 ml-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                </button>
+              </Field>
+              <Field label="제품명" required count={productName.length} max={80}>
+                <input type="text" value={productName}
+                  onChange={e => setProductName(e.target.value.slice(0, 80))}
+                  placeholder="예) 나이키 베이퍼플라이3, 미즈노 역도화" className={inputCls} />
+              </Field>
+              <Field label="브랜드" hint="선택" count={gearBrand.length} max={40}>
+                <input type="text" value={gearBrand}
+                  onChange={e => setGearBrand(e.target.value.slice(0, 40))}
+                  placeholder="예) 나이키, 아디다스, 룰루레몬" className={inputCls} />
+              </Field>
+              <Field label="사이즈/규격" hint="선택" count={gearSize.length} max={30}>
+                <input type="text" value={gearSize}
+                  onChange={e => setGearSize(e.target.value.slice(0, 30))}
+                  placeholder="예) 265mm, M, L, 100g" className={inputCls} />
+              </Field>
+              <Field label="상태 등급" required count={conditionText.length} max={50}>
+                <input type="text" value={conditionText}
+                  onChange={e => setConditionText(e.target.value.slice(0, 50))}
+                  placeholder='예) "S급 / 거의 새 것", "A급 사용감 적음", "미개봉"' className={inputCls} />
+              </Field>
+              <Field label="가격" required hint="0원 입력 시 무료나눔">
+                <div className="flex items-center gap-2">
+                  <input type="text" value={priceWon}
+                    onChange={e => setPriceWon(formatNumber(e.target.value))}
+                    placeholder="예) 50,000" className={`${inputCls} flex-1`} inputMode="numeric" />
+                  <span className="text-[14px] font-semibold text-[#6B5D47] shrink-0">원</span>
+                </div>
+              </Field>
+            </div>
+          </Section>
+        )}
+
         {/* ─── center 전용 ─── */}
         {tradeCategory === "center" && (
           <>
@@ -951,9 +1041,9 @@ function TradeWritePage() {
         )}
 
         {/* ─── 사진 (공통) ─── */}
-        <Section number={tradeCategory === "equipment" ? 5 : 7} title="사진 등록" subtitle={tradeCategory === "equipment" ? "1~10장 첨부 (필수)" : "1~10장 첨부 (선택)"}>
+        <Section number={tradeCategory === "equipment" ? 5 : tradeCategory === "gear" ? 4 : 7} title="사진 등록" subtitle={(tradeCategory === "equipment" || tradeCategory === "gear") ? "1~10장 첨부 (필수)" : "1~10장 첨부 (선택)"}>
           <div ref={fieldRefs.images}>
-            <Field label={`사진 ${imageUrls.length}/10`} required={tradeCategory === "equipment"}>
+            <Field label={`사진 ${imageUrls.length}/10`} required={tradeCategory === "equipment" || tradeCategory === "gear"}>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {imageUrls.map((url, i) => (
                   <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-[#E8E0D0] dark:border-zinc-700">
@@ -987,7 +1077,7 @@ function TradeWritePage() {
         </Section>
 
         {/* ─── 연락처 + 상세설명 (공통) ─── */}
-        <Section number={tradeCategory === "equipment" ? 6 : 8} title="연락처 & 상세 내용">
+        <Section number={tradeCategory === "equipment" ? 6 : tradeCategory === "gear" ? 5 : 8} title="연락처 & 상세 내용">
           <div ref={fieldRefs.contact}>
             <Field label="연락처" required>
               {tradeCategory === "center" ? (
@@ -1030,9 +1120,13 @@ function TradeWritePage() {
               count={body.length} max={2000}
               required>
               <textarea value={body} onChange={e => setBody(e.target.value.slice(0, 2000))}
-                placeholder={tradeCategory === "center"
-                  ? "인수 조건, 회원 인계 여부, 시설/기구 인계 범위, 매매 사유 등을 자유롭게 작성하세요."
-                  : "기구 상태, 사용 기간, 일괄 구매 할인 등 추가 정보를 자유롭게 작성하세요."}
+                placeholder={
+                  tradeCategory === "center"
+                    ? "인수 조건, 회원 인계 여부, 시설/기구 인계 범위, 매매 사유 등을 자유롭게 작성하세요."
+                    : tradeCategory === "gear"
+                    ? "상태 상세, 구매 시기, 사이즈 호환, 교환 가능 여부 등을 자유롭게 작성하세요."
+                    : "기구 상태, 사용 기간, 일괄 구매 할인 등 추가 정보를 자유롭게 작성하세요."
+                }
                 rows={6} style={{ minHeight: 160 }} className={`${inputCls} resize-none leading-relaxed`} />
             </Field>
           </div>
@@ -1094,6 +1188,31 @@ function TradeWritePage() {
             ))}
           </div>
         )}
+      </Modal>
+
+      {/* 운동용품 종류 선택 모달 */}
+      <Modal open={showSubCategory} onClose={() => setShowSubCategory(false)} title="운동용품 종류">
+        <div>
+          {GEAR_SUB_CATEGORIES.map(sub => {
+            const active = gearSubCategory === sub;
+            return (
+              <button key={sub}
+                onClick={() => { setGearSubCategory(sub); setShowSubCategory(false); }}
+                className={`w-full flex items-center justify-between px-5 py-4 text-[14px] text-left transition-colors border-b border-[#E8E0D0]/60 dark:border-zinc-800 last:border-0 ${
+                  active
+                    ? "bg-[#F5F0E5]/50 text-[#6B7B3A] dark:text-[#A8B87A] font-semibold"
+                    : "text-[#3A342A] dark:text-zinc-100 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                }`}>
+                <span>{sub}</span>
+                {active && (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </Modal>
 
       {/* 등록 전 경고 모달 (구인글과 동일 패턴) */}

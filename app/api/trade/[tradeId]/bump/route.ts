@@ -7,9 +7,10 @@ import { sendPushToUser } from "@/app/lib/notifications";
 export const dynamic = "force-dynamic";
 
 // 카테고리별 끌어올림 쿨다운 (밀리초)
-// 중고거래(equipment): 3일, 센터매매(center): 2일
+// 중고거래(equipment)·운동용품(gear): 3일, 센터매매(center): 2일
 const COOLDOWN_MS: Record<string, number> = {
   equipment: 3 * 24 * 60 * 60 * 1000,
+  gear: 3 * 24 * 60 * 60 * 1000,
   center: 2 * 24 * 60 * 60 * 1000,
 };
 

@@ -4,7 +4,7 @@ import type { Database } from "@/app/lib/database.types";
 export type TradePost = Database["public"]["Tables"]["trade_posts"]["Row"];
 
 export interface FetchTradeArgs {
-  category?: "all" | "equipment" | "center";
+  category?: "all" | "equipment" | "center" | "gear";
   q?: string;
   sido?: string;
   sigungu?: string;
@@ -40,7 +40,7 @@ export async function fetchTradePage(args: FetchTradeArgs = {}): Promise<TradePa
     .select("*", { count: "exact" })
     .in("status", ["active", "reserved", "sold"]);
 
-  if (category === "equipment" || category === "center") qb = qb.eq("category", category);
+  if (category === "equipment" || category === "center" || category === "gear") qb = qb.eq("category", category);
   if (sido) qb = qb.eq("region_sido", sido);
   if (sigungu) qb = qb.eq("region_sigungu", sigungu);
   if (q) {

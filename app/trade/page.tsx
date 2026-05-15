@@ -13,8 +13,8 @@ export default async function TradePage({ searchParams }: PageProps) {
   const first = (v: string | string[] | undefined): string => (Array.isArray(v) ? v[0] || "" : v || "");
 
   const cat = first(params.category);
-  const category: "all" | "equipment" | "center" =
-    cat === "equipment" || cat === "center" ? cat : "all";
+  const category: "all" | "equipment" | "center" | "gear" =
+    cat === "equipment" || cat === "center" || cat === "gear" ? cat : "all";
 
   let initialData = null;
   try {

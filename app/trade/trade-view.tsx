@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { TradePageResult, TradePost } from "@/app/lib/trade-query";
 
-type Category = "all" | "equipment" | "center";
+type Category = "all" | "equipment" | "gear" | "center";
 
 interface Props {
   initialData: TradePageResult | null;
@@ -16,6 +16,7 @@ interface Props {
 const CATEGORY_TABS: { v: Category; label: string }[] = [
   { v: "all", label: "전체" },
   { v: "equipment", label: "중고거래" },
+  { v: "gear", label: "운동용품" },
   { v: "center", label: "센터매매" },
 ];
 
@@ -53,6 +54,13 @@ function formatPriceManwon(n: number | null | undefined): string {
     return `${eok}억 ${rest.toLocaleString()}만원`;
   }
   return `${n.toLocaleString()}만원`;
+}
+
+// 운동용품(gear) — 원 단위 직접 저장. 0=무료나눔.
+function formatPriceWonGear(n: number | null | undefined): string {
+  if (n === null || n === undefined) return "-";
+  if (n === 0) return "무료나눔";
+  return `${n.toLocaleString()}원`;
 }
 
 export function TradeView({ initialData, initialCategory, initialQuery }: Props) {
@@ -242,12 +250,27 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
                   ? `권리금 ${premiumNeg}`
                   : "";
               const storeType = p.category === "center" && ci?.store_type ? String(ci.store_type).trim() : "";
-              const categoryBracket = p.category === "center" ? "[센터매매]" : "[중고거래]";
-              // 중고거래=파랑, 센터매매=빨강
+              const gi = p.gear_info && typeof p.gear_info === "object"
+                ? (p.gear_info as Record<string, unknown>)
+                : null;
+              const gearBrand = gi && typeof gi.brand === "string" ? gi.brand.trim() : "";
+              const gearSub = gi && typeof gi.sub_category === "string" ? gi.sub_category.trim() : "";
+              const categoryBracket =
+                p.category === "center" ? "[센터매매]" :
+                p.category === "gear" ? "[운동용품]" :
+                "[중고거래]";
+              // 중고거래·운동용품=파랑, 센터매매=빨강
               const categoryColor = p.category === "center" ? "#C0392B" : "#1A6FCB";
 
               const equipmentInfoLine = [
                 p.region_sido && p.region_sigungu ? `${p.region_sido} ${p.region_sigungu}` : null,
+                p.condition_text || null,
+                formatRelativeTime(p.created_at),
+              ].filter(Boolean).join(" · ");
+
+              const gearInfoLine = [
+                p.region_sido && p.region_sigungu ? `${p.region_sido} ${p.region_sigungu}` : null,
+                gearSub || null,
                 p.condition_text || null,
                 formatRelativeTime(p.created_at),
               ].filter(Boolean).join(" · ");
@@ -301,6 +324,9 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
                           {storeType && (
                             <span className="text-[#2A251D] dark:text-zinc-100"> {storeType}</span>
                           )}
+                          {p.category === "gear" && gearBrand && (
+                            <span className="text-[#2A251D] dark:text-zinc-100"> {gearBrand}</span>
+                          )}
                         </span>
                         <h3 className="mt-0.5 text-[14px] sm:text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 leading-tight tracking-tight line-clamp-2">
                           {p.title}
@@ -316,6 +342,15 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
                             </p>
                             <p className="text-[11px] text-[#8C8270] dark:text-zinc-500 truncate">
                               {equipmentInfoLine}
+                            </p>
+                          </>
+                        ) : p.category === "gear" ? (
+                          <>
+                            <p className="text-[15px] sm:text-[16px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">
+                              {formatPriceWonGear(p.price_won ?? null)}
+                            </p>
+                            <p className="text-[11px] text-[#8C8270] dark:text-zinc-500 truncate">
+                              {gearInfoLine}
                             </p>
                           </>
                         ) : (
