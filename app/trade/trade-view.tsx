@@ -165,7 +165,7 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
         {/* 헤더 (non-sticky) */}
         <div className="flex items-center justify-between">
           <span className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tracking-tight">거래 게시판</span>
-          <Link href="/trade/write"
+          <Link href={category === "all" ? "/trade/write" : `/trade/write?cat=${category}`}
             className="inline-flex items-center gap-1 px-3 py-1 bg-[#6B7B3A] hover:bg-[#5A6930] text-white text-[12px] font-semibold rounded-full shadow-[0_4px_12px_-4px_rgba(107,123,58,0.5)] transition-colors">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -384,7 +384,7 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
       </div>
 
       {/* 하단 FAB (모바일에서 빠른 글쓰기) */}
-      <Link href="/trade/write"
+      <Link href={category === "all" ? "/trade/write" : `/trade/write?cat=${category}`}
         className="sm:hidden fixed bottom-5 right-5 w-14 h-14 rounded-full bg-[#6B7B3A] hover:bg-[#5A6930] text-white shadow-[0_8px_24px_-8px_rgba(107,123,58,0.7)] flex items-center justify-center z-20"
         style={{ marginBottom: "env(safe-area-inset-bottom, 0px)" }}>
         <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">

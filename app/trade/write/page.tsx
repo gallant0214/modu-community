@@ -176,6 +176,11 @@ function TradeWritePage() {
   const searchParams = useSearchParams();
   const editId = searchParams.get("id");
   const isEdit = !!editId;
+  // 거래 탭에서 선택된 카테고리(cat=gear|center)를 prefill — 신규 작성시에만 사용
+  const initialCat = (() => {
+    const c = searchParams.get("cat");
+    return c === "gear" || c === "center" ? c : "equipment";
+  })();
   const { user, loading, signInWithGoogle, signInWithApple, getIdToken, activeRegionCode, activeRegionName } = useAuth();
 
   /* 카테고리 (구인글 종목 드롭다운과 동일 패턴 — 업종으로 사용) */
@@ -311,8 +316,8 @@ function TradeWritePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEdit, editId]);
 
-  /* ─── 카테고리 (중고/운동용품/매매) ─── */
-  const [tradeCategory, setTradeCategory] = useState<"equipment" | "gear" | "center">("equipment");
+  /* ─── 카테고리 (중고/운동용품/매매) — 신규 작성 시 거래 탭에서 넘어온 cat 으로 prefill ─── */
+  const [tradeCategory, setTradeCategory] = useState<"equipment" | "gear" | "center">(initialCat);
 
   /* ─── 공통 폼 상태 ─── */
   const [title, setTitle] = useState("");
