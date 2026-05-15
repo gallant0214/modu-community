@@ -15,8 +15,8 @@ interface Props {
 
 const CATEGORY_TABS: { v: Category; label: string }[] = [
   { v: "all", label: "전체" },
-  { v: "equipment", label: "중고거래" },
   { v: "gear", label: "운동용품" },
+  { v: "equipment", label: "중고거래" },
   { v: "center", label: "센터매매" },
 ];
 

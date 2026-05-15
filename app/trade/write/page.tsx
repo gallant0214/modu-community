@@ -710,7 +710,7 @@ function TradeWritePage() {
               {isEdit ? "거래 글 수정" : "거래 글 등록"}
             </h1>
             <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed mb-5 max-w-md">
-              {isEdit ? "글 내용을 수정할 수 있어요. 정확한 정보를 입력해주세요." : "운동기구 중고거래·운동용품·센터매매 글을 등록할 수 있어요. 정확한 정보를 입력해주세요."}
+              {isEdit ? "글 내용을 수정할 수 있어요. 정확한 정보를 입력해주세요." : "운동용품·중고거래·센터매매 글을 등록할 수 있어요. 정확한 정보를 입력해주세요."}
             </p>
           </div>
         </section>
@@ -727,11 +727,11 @@ function TradeWritePage() {
         <p className="text-[11px] text-[#A89B80] px-1"><span className="text-[#C0392B] font-bold">*</span> 표시는 필수 입력 항목입니다</p>
 
         {/* ─── 카테고리 토글 ─── */}
-        <Section number={1} title="거래 종류" subtitle="중고거래 / 운동용품 / 센터매매 중 선택하세요">
+        <Section number={1} title="거래 종류" subtitle="운동용품 / 중고거래 / 센터매매 중 선택하세요">
           <div className="flex gap-1.5">
             {([
-              { v: "equipment", label: "중고거래" },
               { v: "gear", label: "운동용품" },
+              { v: "equipment", label: "중고거래" },
               { v: "center", label: "센터매매" },
             ] as const).map(opt => (
               <button key={opt.v} onClick={() => setTradeCategory(opt.v)}
@@ -751,7 +751,11 @@ function TradeWritePage() {
           <div ref={fieldRefs.title}>
             <Field label="제목" required count={title.length} max={50}>
               <input type="text" value={title} onChange={e => setTitle(e.target.value.slice(0, 50))}
-                placeholder={tradeCategory === "equipment" ? "예) 거의 새것 덤벨 세트 1~20kg 일괄 판매" : "예) 강남구 110평 PT샵 매매 / 권리금 협의"}
+                placeholder={
+                  tradeCategory === "equipment" ? "예) 거의 새것 덤벨 세트 1~20kg 일괄 판매"
+                  : tradeCategory === "gear" ? "예) 나이키 페가수스 40 270mm 미착용 / 닥터프로틴 5kg 미개봉"
+                  : "예) 강남구 110평 PT샵 매매 / 권리금 협의"
+                }
                 className={inputCls} />
             </Field>
           </div>
