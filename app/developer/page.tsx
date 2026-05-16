@@ -950,8 +950,10 @@ export default function AdminPage() {
                     <KpiCard label="전체 거래글" value={kpiData.trades?.total ?? 0} />
                     <KpiCard label="기간 등록" value={kpiData.trades?.inRange ?? 0} accent />
                     <KpiCard label="중고거래 (전체)" value={kpiData.trades?.equipmentTotal ?? 0} />
+                    <KpiCard label="운동용품 (전체)" value={kpiData.trades?.gearTotal ?? 0} />
                     <KpiCard label="센터매매 (전체)" value={kpiData.trades?.centerTotal ?? 0} />
                     <KpiCard label="중고거래 (기간)" value={kpiData.trades?.equipmentInRange ?? 0} />
+                    <KpiCard label="운동용품 (기간)" value={kpiData.trades?.gearInRange ?? 0} />
                     <KpiCard label="센터매매 (기간)" value={kpiData.trades?.centerInRange ?? 0} />
                     <KpiCard label="거래 북마크 (전체)" value={kpiData.trades?.bookmarksTotal ?? 0} />
                     <KpiCard label="거래 북마크 (기간)" value={kpiData.trades?.bookmarksInRange ?? 0} />

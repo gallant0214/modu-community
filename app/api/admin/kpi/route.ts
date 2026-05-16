@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     postsTotal, postsInRange,
     commentsTotal, commentsInRange,
     jobsTotal, jobsOpen, jobsClosed, jobsInRange,
-    tradesTotal, tradesEquipTotal, tradesCenterTotal, tradesInRange, tradesEquipInRange, tradesCenterInRange,
+    tradesTotal, tradesEquipTotal, tradesCenterTotal, tradesGearTotal, tradesInRange, tradesEquipInRange, tradesCenterInRange, tradesGearInRange,
     tradeBookmarksTotal, tradeBookmarksInRange,
     reportsTotal, reportsPending, reportsInRange,
     inquiriesTotal, inquiriesPending, inquiriesInRange,
@@ -114,9 +114,16 @@ export async function POST(request: Request) {
         return count ?? 0;
       } catch { return 0; }
     })(),
+    (async () => {
+      try {
+        const { count } = await sb.from("trade_posts").select("*", { count: "exact", head: true }).eq("category", "gear");
+        return count ?? 0;
+      } catch { return 0; }
+    })(),
     countRange("trade_posts"),
     countRange("trade_posts", "created_at", (q) => q.eq("category", "equipment")),
     countRange("trade_posts", "created_at", (q) => q.eq("category", "center")),
+    countRange("trade_posts", "created_at", (q) => q.eq("category", "gear")),
     // 거래 북마크
     countAll("trade_post_bookmarks"),
     countRange("trade_post_bookmarks"),
@@ -465,9 +472,11 @@ export async function POST(request: Request) {
       total: tradesTotal,
       equipmentTotal: tradesEquipTotal,
       centerTotal: tradesCenterTotal,
+      gearTotal: tradesGearTotal,
       inRange: tradesInRange,
       equipmentInRange: tradesEquipInRange,
       centerInRange: tradesCenterInRange,
+      gearInRange: tradesGearInRange,
       bookmarksTotal: tradeBookmarksTotal,
       bookmarksInRange: tradeBookmarksInRange,
     },

@@ -1689,8 +1689,12 @@ function MyPageContent() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <span className={`text-[10px] font-bold ${t.category === "equipment" ? "text-[#6B7B3A]" : "text-[#C0392B]"}`}>
-                                  {t.category === "equipment" ? "[중고거래]" : "[센터매매]"}
+                                <span className={`text-[10px] font-bold ${
+                                  t.category === "equipment" ? "text-[#6B7B3A]" :
+                                  t.category === "gear" ? "text-[#1A6FCB]" :
+                                  "text-[#C0392B]"
+                                }`}>
+                                  {t.category === "equipment" ? "[중고거래]" : t.category === "gear" ? "[운동용품]" : "[센터매매]"}
                                 </span>
                               </div>
                               <p className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 line-clamp-2">{t.title}</p>

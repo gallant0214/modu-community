@@ -32,17 +32,22 @@ export async function POST(
     return NextResponse.json({ error: "잘못된 ID" }, { status: 400 });
   }
 
-  // 선택 필드 — 가격 함께 낮추기 (중고거래 전용)
-  // body: { new_price_manwon?: number }  (만원 단위 정수)
+  // 선택 필드 — 가격 함께 낮추기
+  // body: { new_price_manwon?: number }  (중고거래, 만원 단위 정수)
+  // body: { new_price_won?: number }     (운동용품, 원 단위 정수)
   const body = await request.json().catch(() => ({}));
-  const rawNewPrice = body?.new_price_manwon;
-  const newPriceManwon = typeof rawNewPrice === "number" && Number.isFinite(rawNewPrice)
-    ? Math.max(0, Math.floor(rawNewPrice))
+  const rawNewPriceManwon = body?.new_price_manwon;
+  const newPriceManwon = typeof rawNewPriceManwon === "number" && Number.isFinite(rawNewPriceManwon)
+    ? Math.max(0, Math.floor(rawNewPriceManwon))
+    : null;
+  const rawNewPriceWon = body?.new_price_won;
+  const newPriceWon = typeof rawNewPriceWon === "number" && Number.isFinite(rawNewPriceWon)
+    ? Math.max(0, Math.floor(rawNewPriceWon))
     : null;
 
   const { data: post } = await supabase
     .from("trade_posts")
-    .select("firebase_uid, category, status, bumped_at, price_manwon, product_name, title")
+    .select("firebase_uid, category, status, bumped_at, price_manwon, price_won, product_name, title")
     .eq("id", id)
     .maybeSingle();
 
@@ -75,19 +80,40 @@ export async function POST(
 
   const nowIso = new Date(now).toISOString();
 
-  // 가격 변경 동반? (중고거래만 의미 있음)
-  const willChangePrice =
+  // 가격 변경 동반? (중고거래 = price_manwon, 운동용품 = price_won)
+  const willChangeEq =
     post.category === "equipment" &&
     newPriceManwon !== null &&
     typeof post.price_manwon === "number" &&
     newPriceManwon !== post.price_manwon &&
     newPriceManwon >= 0;
-  const oldPrice = typeof post.price_manwon === "number" ? post.price_manwon : null;
-  const willDropPrice = willChangePrice && oldPrice !== null && newPriceManwon! < oldPrice && newPriceManwon! > 0;
+  const willChangeGear =
+    post.category === "gear" &&
+    newPriceWon !== null &&
+    typeof post.price_won === "number" &&
+    newPriceWon !== post.price_won &&
+    newPriceWon >= 0;
+  const willChangePrice = willChangeEq || willChangeGear;
+  // oldWon / newWon — 원 단위로 통일해 알림·계산에 사용
+  const oldWon = willChangeEq
+    ? (post.price_manwon as number) * 10000
+    : willChangeGear
+      ? (post.price_won as number)
+      : null;
+  const newWon = willChangeEq
+    ? (newPriceManwon as number) * 10000
+    : willChangeGear
+      ? (newPriceWon as number)
+      : null;
+  const willDropPrice =
+    willChangePrice && oldWon !== null && newWon !== null && newWon < oldWon && newWon > 0;
 
   const updateRow: Record<string, unknown> = { bumped_at: nowIso };
-  if (willChangePrice && newPriceManwon !== null) {
+  if (willChangeEq && newPriceManwon !== null) {
     updateRow.price_manwon = newPriceManwon;
+  }
+  if (willChangeGear && newPriceWon !== null) {
+    updateRow.price_won = newPriceWon;
   }
 
   const { error } = await (supabase as any)
@@ -103,7 +129,9 @@ export async function POST(
   await invalidateCache("trade:*").catch(() => {});
 
   // 가격 인하 시 → 북마크 사용자에게 푸시 (PATCH 라우트와 동일 룰, after() 백그라운드)
-  if (willDropPrice && oldPrice !== null && newPriceManwon !== null) {
+  if (willDropPrice && oldWon !== null && newWon !== null) {
+    const oldWonFinal = oldWon;
+    const newWonFinal = newWon;
     const ownerUid = post.firebase_uid;
     const productLabel = post.product_name || post.title || "거래글";
     after(async () => {
@@ -133,16 +161,18 @@ export async function POST(
         const targets = uids.filter((u) => !blocked.has(u));
         if (targets.length === 0) return;
 
-        const fmt = (manwon: number) => {
-          if (manwon >= 10000) {
-            const eok = Math.floor(manwon / 10000);
-            const rest = manwon % 10000;
-            return rest === 0 ? `${eok}억원` : `${eok}억 ${rest.toLocaleString()}만원`;
+        // 가격 표시 — 원 단위. 1억 이상은 단축 표기.
+        const fmt = (won: number) => {
+          if (won >= 100000000) {
+            const eok = Math.floor(won / 100000000);
+            const rest = won % 100000000;
+            const manwon = Math.floor(rest / 10000);
+            return manwon === 0 ? `${eok}억원` : `${eok}억 ${manwon.toLocaleString()}만원`;
           }
-          return `${(manwon * 10000).toLocaleString()}원`;
+          return `${won.toLocaleString()}원`;
         };
         const titleMsg = "관심 거래글 가격 인하";
-        const bodyMsg = `${productLabel} ${fmt(oldPrice)} → ${fmt(newPriceManwon)}`;
+        const bodyMsg = `${productLabel} ${fmt(oldWonFinal)} → ${fmt(newWonFinal)}`;
 
         await Promise.all(
           targets.map((uid) =>
@@ -164,6 +194,7 @@ export async function POST(
     cooldownMs,
     price_changed: willChangePrice,
     price_dropped: willDropPrice,
-    new_price_manwon: willChangePrice ? newPriceManwon : null,
+    new_price_manwon: willChangeEq ? newPriceManwon : null,
+    new_price_won: willChangeGear ? newPriceWon : null,
   });
 }

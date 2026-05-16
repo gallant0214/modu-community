@@ -127,7 +127,7 @@ export async function PATCH(
 
   const { data: existing } = await supabase
     .from("trade_posts")
-    .select("firebase_uid, category, price_manwon, product_name, title")
+    .select("firebase_uid, category, price_manwon, price_won, product_name, title")
     .eq("id", id)
     .single();
 
@@ -253,17 +253,29 @@ export async function PATCH(
 
   await invalidateCache("trade:*").catch(() => {});
 
-  // 가격 인하 감지 (중고거래만) → 북마크한 사용자에게 푸시
-  // 응답을 막지 않도록 after() 로 비동기 처리.
-  if (
+  // 가격 인하 감지 (중고거래·운동용품) → 북마크한 사용자에게 푸시
+  // 응답을 막지 않도록 after() 로 비동기 처리. 센터매매는 가격 인하 개념 자체가 미적용.
+  // equipment: price_manwon(만원 단위, 표시는 ×10000=원) / gear: price_won(원 단위)
+  const eqDrop =
     category === "equipment" &&
     typeof existing.price_manwon === "number" &&
     typeof updateRow.price_manwon === "number" &&
     updateRow.price_manwon > 0 &&
-    existing.price_manwon > updateRow.price_manwon
-  ) {
-    const oldPrice = existing.price_manwon;
-    const newPrice = updateRow.price_manwon;
+    existing.price_manwon > updateRow.price_manwon;
+  const gearDrop =
+    category === "gear" &&
+    typeof existing.price_won === "number" &&
+    typeof updateRow.price_won === "number" &&
+    updateRow.price_won > 0 &&
+    existing.price_won > updateRow.price_won;
+
+  if (eqDrop || gearDrop) {
+    const oldWon = eqDrop
+      ? (existing.price_manwon as number) * 10000
+      : (existing.price_won as number);
+    const newWon = eqDrop
+      ? (updateRow.price_manwon as number) * 10000
+      : (updateRow.price_won as number);
     const productLabel =
       sanitize(validateLength(String(product_name).trim(), 100)) ||
       existing.product_name ||
@@ -301,17 +313,18 @@ export async function PATCH(
         const targets = uids.filter((u) => !blocked.has(u));
         if (targets.length === 0) return;
 
-        // 3) 가격 표시 — 만원 → 원 단위 변환 (1억 이상은 단축 표기)
-        const fmt = (manwon: number) => {
-          if (manwon >= 10000) {
-            const eok = Math.floor(manwon / 10000);
-            const rest = manwon % 10000;
-            return rest === 0 ? `${eok}억원` : `${eok}억 ${rest.toLocaleString()}만원`;
+        // 3) 가격 표시 — 원 단위 (1억 이상은 단축 표기)
+        const fmt = (won: number) => {
+          if (won >= 100000000) {
+            const eok = Math.floor(won / 100000000);
+            const rest = won % 100000000;
+            const manwon = Math.floor(rest / 10000);
+            return manwon === 0 ? `${eok}억원` : `${eok}억 ${manwon.toLocaleString()}만원`;
           }
-          return `${(manwon * 10000).toLocaleString()}원`;
+          return `${won.toLocaleString()}원`;
         };
         const titleMsg = "관심 거래글 가격 인하";
-        const bodyMsg = `${productLabel} ${fmt(oldPrice)} → ${fmt(newPrice)}`;
+        const bodyMsg = `${productLabel} ${fmt(oldWon)} → ${fmt(newWon)}`;
 
         // 4) 발송 — sendPushToUser 내부에서 notify_trade 체크 + 차단·토큰 정리
         await Promise.all(
