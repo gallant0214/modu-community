@@ -259,8 +259,11 @@ export function TradeView({ initialData, initialCategory, initialQuery }: Props)
                 p.category === "center" ? "[센터매매]" :
                 p.category === "gear" ? "[운동용품]" :
                 "[중고거래]";
-              // 중고거래·운동용품=파랑, 센터매매=빨강
-              const categoryColor = p.category === "center" ? "#C0392B" : "#1A6FCB";
+              // 3색 분리 — 중고거래 올리브, 운동용품 파랑, 센터매매 빨강
+              const categoryColor =
+                p.category === "equipment" ? "#6B7B3A" :
+                p.category === "gear" ? "#1A6FCB" :
+                "#C0392B";
 
               const equipmentInfoLine = [
                 p.region_sido && p.region_sigungu ? `${p.region_sido} ${p.region_sigungu}` : null,

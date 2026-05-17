@@ -199,7 +199,9 @@ export default function TradeBumpPage() {
     post.category === "gear" ? "[운동용품]" :
     "[센터매매]";
   const categoryColor =
-    post.category === "center" ? "text-[#C0392B]" : "text-[#1A6FCB]";
+    post.category === "equipment" ? "text-[#6B7B3A]" :
+    post.category === "gear" ? "text-[#1A6FCB]" :
+    "text-[#C0392B]";
 
   return (
     <div className="min-h-screen bg-[#F8F4EC] dark:bg-zinc-950 pb-32">
