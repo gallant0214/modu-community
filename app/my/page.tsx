@@ -210,6 +210,12 @@ function MyPageContent() {
   const [deleteNotificationDialog, setDeleteNotificationDialog] = useState<number | null>(null);
   const [deleteAllNotificationsDialog, setDeleteAllNotificationsDialog] = useState<boolean>(false);
 
+  /* 내가 등록한 거래글 — 액션바·옵션시트 상태 (모바일 my/activity.tsx 와 동일) */
+  const [tradeOptionId, setTradeOptionId] = useState<number | null>(null);
+  const [tradeStatusUpdatingId, setTradeStatusUpdatingId] = useState<number | null>(null);
+  const [tradeHideConfirm, setTradeHideConfirm] = useState<{ id: number; hide: boolean } | null>(null);
+  const [tradeStatusConfirm, setTradeStatusConfirm] = useState<{ id: number; target: "reserved" | "sold"; currentStatus: string } | null>(null);
+
   /* 카운트 */
   const [counts, setCounts] = useState({ posts: 0, comments: 0, jobs: 0, myTrades: 0, bookmarks: 0, jobBookmarks: 0, tradeBookmarks: 0, notifications: 0, receivedMessages: 0, sentMessages: 0, archivedMessages: 0, spamMessages: 0, blocks: 0 });
   const [unreadNotifications, setUnreadNotifications] = useState(0);
@@ -923,6 +929,60 @@ function MyPageContent() {
       });
       if (!res.ok) { setJobs(backup); alert("삭제에 실패했습니다"); }
     } catch { setJobs(backup); alert("오류가 발생했습니다"); }
+  };
+
+  /* ─── 내가 등록한 거래글 — 상태 토글(reserved/sold) ─── */
+  const performTradeStatus = async (
+    tradeId: number,
+    next: "active" | "reserved" | "sold",
+  ) => {
+    setTradeStatusUpdatingId(tradeId);
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/trade/${tradeId}/sold`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: next }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(j?.error || "변경에 실패했습니다.");
+        return;
+      }
+      setMyTrades((prev) => prev.map((p) => (p.id === tradeId ? { ...p, status: next } : p)));
+    } catch (e: any) {
+      alert(e?.message || "변경에 실패했습니다.");
+    } finally {
+      setTradeStatusUpdatingId(null);
+      setTradeStatusConfirm(null);
+    }
+  };
+
+  /* ─── 내가 등록한 거래글 — 숨김 토글 ─── */
+  const performTradeHide = async (tradeId: number, hide: boolean) => {
+    setTradeStatusUpdatingId(tradeId);
+    setTradeOptionId(null);
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const next: "hidden" | "active" = hide ? "hidden" : "active";
+      const res = await fetch(`/api/trade/${tradeId}/sold`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { alert(data?.error || "변경에 실패했습니다."); return; }
+      const finalStatus = (typeof data?.status === "string" ? data.status : next) as
+        | "active" | "reserved" | "sold" | "hidden";
+      setMyTrades((prev) => prev.map((p) => (p.id === tradeId ? { ...p, status: finalStatus } : p)));
+    } catch (e: any) {
+      alert(e?.message || "변경에 실패했습니다.");
+    } finally {
+      setTradeStatusUpdatingId(null);
+      setTradeHideConfirm(null);
+    }
   };
 
   /* 탈퇴 */
@@ -1656,10 +1716,11 @@ function MyPageContent() {
                 </div>
               ))}
 
-              {/* ── 내가 등록한 거래글 / 거래 북마크 — 단순 카드 리스트 ── */}
+              {/* ── 내가 등록한 거래글 / 거래 북마크 — 모바일 my/activity.tsx 와 동일한 카드/액션 ── */}
               {(activeTab === "myTrades" || activeTab === "tradeBookmarks") && (() => {
                 const list = activeTab === "myTrades" ? myTrades : tradeBookmarks;
                 const emptyTitle = activeTab === "myTrades" ? "등록한 거래글이 없습니다" : "북마크한 거래글이 없습니다";
+                const isMyTradesTab = activeTab === "myTrades";
                 if (list.length === 0) {
                   return (
                     <EmptyTabState
@@ -1671,41 +1732,200 @@ function MyPageContent() {
                 return (
                   <div className="px-4 pt-4 pb-6">
                     <ul className="space-y-3">
-                      {list.map((t) => (
-                        <li key={t.id} className="bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl overflow-hidden">
-                          <Link
-                            href={`/trade/${t.id}`}
-                            className="flex gap-3 px-4 py-3 hover:bg-[#FBF7EB]/50 dark:hover:bg-zinc-800/40 transition-colors"
-                          >
-                            <div className="shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
-                              {t.image_urls && t.image_urls[0] ? (
-                                /* eslint-disable-next-line @next/next/no-img-element */
-                                <img src={t.image_urls[0]} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <svg className="w-6 h-6 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      {list.map((t) => {
+                        const isHidden = t.status === "hidden";
+                        const isSold = t.status === "sold";
+                        const isReserved = t.status === "reserved";
+                        const updating = tradeStatusUpdatingId === t.id;
+                        return (
+                          <li key={t.id} className="relative bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl overflow-hidden">
+                            {isMyTradesTab && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTradeOptionId(t.id); }}
+                                className="absolute top-2 right-2 z-10 p-1.5 rounded-lg text-[#A89B80] hover:bg-[#F5F0E5]/60 dark:hover:bg-zinc-800"
+                                aria-label="옵션"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                  <circle cx="12" cy="5" r="1.5" fill="currentColor" />
+                                  <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+                                  <circle cx="12" cy="19" r="1.5" fill="currentColor" />
                                 </svg>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className={`text-[10px] font-bold ${
-                                  t.category === "equipment" ? "text-[#6B7B3A]" :
-                                  t.category === "gear" ? "text-[#1A6FCB]" :
-                                  "text-[#C0392B]"
-                                }`}>
-                                  {t.category === "equipment" ? "[중고거래]" : t.category === "gear" ? "[운동용품]" : "[센터매매]"}
-                                </span>
+                              </button>
+                            )}
+                            <Link
+                              href={`/trade/${t.id}`}
+                              className={`flex gap-3 px-4 py-3 hover:bg-[#FBF7EB]/50 dark:hover:bg-zinc-800/40 transition-colors ${isMyTradesTab ? "pr-10" : ""}`}
+                            >
+                              <div className="shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
+                                {t.image_urls && t.image_urls[0] ? (
+                                  /* eslint-disable-next-line @next/next/no-img-element */
+                                  <img src={t.image_urls[0]} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <svg className="w-6 h-6 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                )}
                               </div>
-                              <p className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 line-clamp-2">{t.title}</p>
-                              <p className="text-[11px] text-[#A89B80] dark:text-zinc-500 mt-1">
-                                {[t.region_sido, t.region_sigungu].filter(Boolean).join(" ")}
-                              </p>
-                            </div>
-                          </Link>
-                        </li>
-                      ))}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  <span className={`text-[10px] font-bold ${
+                                    t.category === "equipment" ? "text-[#6B7B3A]" :
+                                    t.category === "gear" ? "text-[#1A6FCB]" :
+                                    "text-[#C0392B]"
+                                  }`}>
+                                    {t.category === "equipment" ? "[중고거래]" : t.category === "gear" ? "[운동용품]" : "[센터매매]"}
+                                  </span>
+                                  {isHidden && (
+                                    <span className="text-[10px] font-bold text-[#8C8270] dark:text-zinc-400">[숨김처리된 게시글]</span>
+                                  )}
+                                </div>
+                                <p className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 line-clamp-2">{t.title}</p>
+                                {[t.region_sido, t.region_sigungu].filter(Boolean).length > 0 && (
+                                  <p className="text-[11px] text-[#A89B80] dark:text-zinc-500 mt-1 line-clamp-1">
+                                    {[t.region_sido, t.region_sigungu].filter(Boolean).join(" ")}
+                                  </p>
+                                )}
+                                {/* 통계 — 조회·관심·공유 */}
+                                <p className="text-[11px] text-[#A89B80] dark:text-zinc-500 mt-1">
+                                  조회 {t.view_count ?? 0} · 관심 {t.bookmark_count ?? 0} · 공유 {t.share_count ?? 0}
+                                </p>
+                              </div>
+                            </Link>
+                            {/* 내가 등록한 거래글 — 하단 액션바 */}
+                            {isMyTradesTab && (
+                              <div className="flex border-t border-[#E8E0D0] dark:border-zinc-700">
+                                <button
+                                  type="button"
+                                  disabled={updating}
+                                  onClick={() => setTradeStatusConfirm({ id: t.id, target: "sold", currentStatus: t.status || "active" })}
+                                  className={`flex-1 py-3 text-[13px] font-bold border-r border-[#E8E0D0] dark:border-zinc-700 transition-colors ${
+                                    isSold
+                                      ? "bg-[#F5F0E5] dark:bg-zinc-800 text-[#6B7B3A]"
+                                      : "text-[#2A251D] dark:text-zinc-100 hover:bg-[#FBF7EB]/50 dark:hover:bg-zinc-800/40"
+                                  } disabled:opacity-50`}
+                                >
+                                  {isSold ? "거래취소" : "거래완료"}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={updating}
+                                  onClick={() => setTradeStatusConfirm({ id: t.id, target: "reserved", currentStatus: t.status || "active" })}
+                                  className={`flex-1 py-3 text-[13px] font-bold border-r border-[#E8E0D0] dark:border-zinc-700 transition-colors ${
+                                    isReserved
+                                      ? "bg-[#F5F0E5] dark:bg-zinc-800 text-[#C0392B]"
+                                      : "text-[#2A251D] dark:text-zinc-100 hover:bg-[#FBF7EB]/50 dark:hover:bg-zinc-800/40"
+                                  } disabled:opacity-50`}
+                                >
+                                  예약중
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`/trade/${t.id}/bump`)}
+                                  className="flex-1 py-3 text-[13px] font-bold text-[#2A251D] dark:text-zinc-100 hover:bg-[#FBF7EB]/50 dark:hover:bg-zinc-800/40 transition-colors"
+                                >
+                                  끌어올리기
+                                </button>
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
+                  </div>
+                );
+              })()}
+
+              {/* ⋮ 옵션 시트 — 내가 등록한 거래글 (모바일과 동일: 게시글 숨기기 / 숨김 해제) */}
+              {tradeOptionId !== null && (() => {
+                const target = myTrades.find((p) => p.id === tradeOptionId);
+                const isHidden = target?.status === "hidden";
+                return (
+                  <div
+                    className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+                    onClick={() => setTradeOptionId(null)}
+                  >
+                    <div className="w-full max-w-md mb-4 px-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="rounded-2xl bg-white dark:bg-zinc-900 overflow-hidden shadow-lg">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (tradeOptionId == null) return;
+                            setTradeHideConfirm({ id: tradeOptionId, hide: !isHidden });
+                            setTradeOptionId(null);
+                          }}
+                          className={`block w-full py-4 text-center text-[17px] font-medium ${isHidden ? "text-[#6B7B3A]" : "text-[#2A251D] dark:text-zinc-100"}`}
+                        >
+                          {isHidden ? "숨김 해제" : "게시글 숨기기"}
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setTradeOptionId(null)}
+                        className="mt-2 block w-full py-4 rounded-2xl bg-white dark:bg-zinc-900 text-[17px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] shadow-lg"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 숨기기/해제 확인 다이얼로그 */}
+              {tradeHideConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setTradeHideConfirm(null)}>
+                  <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-900 p-5" onClick={(e) => e.stopPropagation()}>
+                    <p className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 mb-2">
+                      {tradeHideConfirm.hide ? "게시글을 숨길까요?" : "숨김을 해제할까요?"}
+                    </p>
+                    <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400 mb-4 leading-relaxed">
+                      {tradeHideConfirm.hide
+                        ? "거래 게시판 목록에서는 더 이상 노출되지 않으며, 내가 등록한 거래글에서만 [숨김처리된 게시글] 라벨로 표시됩니다."
+                        : "마지막 게시 상태로 다시 거래 게시판에 노출됩니다."}
+                    </p>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setTradeHideConfirm(null)} className="flex-1 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 text-[14px] font-semibold text-[#6B5D47] dark:text-zinc-300">취소</button>
+                      <button
+                        type="button"
+                        onClick={() => performTradeHide(tradeHideConfirm.id, tradeHideConfirm.hide)}
+                        className={`flex-1 py-3 rounded-xl text-[14px] font-bold text-white ${tradeHideConfirm.hide ? "bg-[#C0392B]" : "bg-[#6B7B3A]"}`}
+                      >
+                        {tradeHideConfirm.hide ? "숨기기" : "숨김 해제"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 거래완료/예약중 토글 확인 */}
+              {tradeStatusConfirm && (() => {
+                const { target, currentStatus } = tradeStatusConfirm;
+                const next: "active" | "reserved" | "sold" = currentStatus === target ? "active" : target;
+                const goingBack = next === "active";
+                const title = goingBack
+                  ? currentStatus === "sold"
+                    ? "거래를 취소하고 판매중으로 되돌릴까요?"
+                    : currentStatus === "reserved"
+                      ? "예약을 취소하고 판매중으로 변경할까요?"
+                      : "판매중으로 변경할까요?"
+                  : target === "sold"
+                    ? "거래를 완료할까요?"
+                    : "예약중으로 변경할까요?";
+                return (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setTradeStatusConfirm(null)}>
+                    <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-900 p-5" onClick={(e) => e.stopPropagation()}>
+                      <p className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 mb-4">{title}</p>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setTradeStatusConfirm(null)} className="flex-1 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 text-[14px] font-semibold text-[#6B5D47] dark:text-zinc-300">취소</button>
+                        <button
+                          type="button"
+                          onClick={() => performTradeStatus(tradeStatusConfirm.id, next)}
+                          className="flex-1 py-3 rounded-xl text-[14px] font-bold text-white bg-[#6B7B3A]"
+                        >
+                          확인
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 );
               })()}
