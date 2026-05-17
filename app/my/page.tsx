@@ -1817,13 +1817,13 @@ function MyPageContent() {
                                 </button>
                                 <button
                                   type="button"
-                                  disabled={updating}
+                                  disabled={updating || isSold}
                                   onClick={() => setTradeStatusConfirm({ id: t.id, target: "reserved", currentStatus: t.status || "active" })}
                                   className={`flex-1 py-3 text-[13px] font-bold border-r border-[#E8E0D0] dark:border-zinc-700 transition-colors ${
                                     isReserved
                                       ? "bg-[#F5F0E5] dark:bg-zinc-800 text-[#C0392B]"
                                       : "text-[#2A251D] dark:text-zinc-100 hover:bg-[#FBF7EB]/50 dark:hover:bg-zinc-800/40"
-                                  } disabled:opacity-50`}
+                                  } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent`}
                                 >
                                   예약중
                                 </button>
