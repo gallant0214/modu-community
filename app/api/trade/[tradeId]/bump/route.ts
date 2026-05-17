@@ -33,8 +33,9 @@ export async function POST(
   }
 
   // 선택 필드 — 가격 함께 낮추기
-  // body: { new_price_manwon?: number }  (중고거래, 만원 단위 정수)
-  // body: { new_price_won?: number }     (운동용품, 원 단위 정수)
+  // body: { new_price_manwon?: number }   (중고거래, 만원 단위 정수)
+  // body: { new_price_won?: number }      (운동용품, 원 단위 정수)
+  // body: { new_premium_manwon?: number } (센터매매 권리금, 만원 단위 정수)
   const body = await request.json().catch(() => ({}));
   const rawNewPriceManwon = body?.new_price_manwon;
   const newPriceManwon = typeof rawNewPriceManwon === "number" && Number.isFinite(rawNewPriceManwon)
@@ -44,10 +45,14 @@ export async function POST(
   const newPriceWon = typeof rawNewPriceWon === "number" && Number.isFinite(rawNewPriceWon)
     ? Math.max(0, Math.floor(rawNewPriceWon))
     : null;
+  const rawNewPremiumManwon = body?.new_premium_manwon;
+  const newPremiumManwon = typeof rawNewPremiumManwon === "number" && Number.isFinite(rawNewPremiumManwon)
+    ? Math.max(0, Math.floor(rawNewPremiumManwon))
+    : null;
 
   const { data: post } = await supabase
     .from("trade_posts")
-    .select("firebase_uid, category, status, bumped_at, price_manwon, price_won, product_name, title")
+    .select("firebase_uid, category, status, bumped_at, price_manwon, price_won, center_info, product_name, title")
     .eq("id", id)
     .maybeSingle();
 
@@ -80,7 +85,10 @@ export async function POST(
 
   const nowIso = new Date(now).toISOString();
 
-  // 가격 변경 동반? (중고거래 = price_manwon, 운동용품 = price_won)
+  // 가격 변경 동반?
+  // - equipment = price_manwon (만원 단위)
+  // - gear      = price_won (원 단위)
+  // - center    = center_info.premium.amount_manwon (만원 단위, negotiable!='권리금없음' 일 때만)
   const willChangeEq =
     post.category === "equipment" &&
     newPriceManwon !== null &&
@@ -93,18 +101,49 @@ export async function POST(
     typeof post.price_won === "number" &&
     newPriceWon !== post.price_won &&
     newPriceWon >= 0;
-  const willChangePrice = willChangeEq || willChangeGear;
+
+  // center_info.premium 추출 (객체일 때만)
+  const centerInfo =
+    post.center_info && typeof post.center_info === "object" && !Array.isArray(post.center_info)
+      ? (post.center_info as Record<string, unknown>)
+      : null;
+  const existingPremium =
+    centerInfo && centerInfo.premium && typeof centerInfo.premium === "object" && !Array.isArray(centerInfo.premium)
+      ? (centerInfo.premium as Record<string, unknown>)
+      : null;
+  const existingPremiumManwon =
+    existingPremium && typeof existingPremium.amount_manwon === "number"
+      ? (existingPremium.amount_manwon as number)
+      : null;
+  const existingPremiumNegotiable =
+    existingPremium && typeof existingPremium.negotiable === "string"
+      ? (existingPremium.negotiable as string)
+      : null;
+  const willChangeCenter =
+    post.category === "center" &&
+    newPremiumManwon !== null &&
+    existingPremiumManwon !== null &&
+    existingPremiumNegotiable !== "권리금없음" &&
+    existingPremiumNegotiable !== "무권리" &&
+    newPremiumManwon !== existingPremiumManwon &&
+    newPremiumManwon >= 0;
+
+  const willChangePrice = willChangeEq || willChangeGear || willChangeCenter;
   // oldWon / newWon — 원 단위로 통일해 알림·계산에 사용
   const oldWon = willChangeEq
     ? (post.price_manwon as number) * 10000
     : willChangeGear
       ? (post.price_won as number)
-      : null;
+      : willChangeCenter
+        ? (existingPremiumManwon as number) * 10000
+        : null;
   const newWon = willChangeEq
     ? (newPriceManwon as number) * 10000
     : willChangeGear
       ? (newPriceWon as number)
-      : null;
+      : willChangeCenter
+        ? (newPremiumManwon as number) * 10000
+        : null;
   const willDropPrice =
     willChangePrice && oldWon !== null && newWon !== null && newWon < oldWon && newWon > 0;
 
@@ -114,6 +153,11 @@ export async function POST(
   }
   if (willChangeGear && newPriceWon !== null) {
     updateRow.price_won = newPriceWon;
+  }
+  if (willChangeCenter && newPremiumManwon !== null && centerInfo) {
+    // center_info JSONB 부분 갱신 — premium.amount_manwon 만 변경, negotiable 등 다른 필드 보존
+    const nextPremium = { ...(existingPremium || {}), amount_manwon: newPremiumManwon };
+    updateRow.center_info = { ...centerInfo, premium: nextPremium };
   }
 
   const { error } = await (supabase as any)
@@ -196,5 +240,6 @@ export async function POST(
     price_dropped: willDropPrice,
     new_price_manwon: willChangeEq ? newPriceManwon : null,
     new_price_won: willChangeGear ? newPriceWon : null,
+    new_premium_manwon: willChangeCenter ? newPremiumManwon : null,
   });
 }

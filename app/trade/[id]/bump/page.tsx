@@ -7,11 +7,16 @@ import { useAuth } from "@/app/components/auth-provider";
 import type { TradePost } from "@/app/lib/trade-query";
 import { promptLogin } from "@/app/lib/auth-prompt";
 
-// 빠른 인하 옵션 — 모바일 bump.tsx 와 동일 (-5/-10/-20)
-const QUICK_DISCOUNTS: { pct: number; label: string }[] = [
+// 빠른 인하 옵션 — 중고거래·운동용품: -5/-10/-20, 센터매매(권리금): -5/-10/-15
+const QUICK_DISCOUNTS_EQ: { pct: number; label: string }[] = [
   { pct: 5, label: "-5%" },
   { pct: 10, label: "-10%" },
   { pct: 20, label: "-20%" },
+];
+const QUICK_DISCOUNTS_CENTER: { pct: number; label: string }[] = [
+  { pct: 5, label: "-5%" },
+  { pct: 10, label: "-10%" },
+  { pct: 15, label: "-15%" },
 ];
 
 const formatThousand = (n: number): string => n.toLocaleString();
@@ -42,12 +47,19 @@ export default function TradeBumpPage() {
         const data = (await res.json()) as TradePost;
         if (cancelled) return;
         setPost(data);
+        const ci = data.category === "center" && data.center_info && typeof data.center_info === "object" && !Array.isArray(data.center_info)
+          ? (data.center_info as Record<string, unknown>)
+          : null;
+        const premium = ci && ci.premium && typeof ci.premium === "object" && !Array.isArray(ci.premium)
+          ? (ci.premium as Record<string, unknown>)
+          : null;
+        const premiumManwon = premium && typeof premium.amount_manwon === "number" ? (premium.amount_manwon as number) : 0;
         const startWon =
           data.category === "equipment"
             ? (data.price_manwon || 0) * 10000
             : data.category === "gear"
               ? (data.price_won || 0)
-              : 0;
+              : premiumManwon * 10000;
         setPriceWonInput(formatThousand(startWon));
       } catch {
         router.replace("/trade");
@@ -60,12 +72,33 @@ export default function TradeBumpPage() {
 
   const isEquipment = post?.category === "equipment";
   const isGear = post?.category === "gear";
-  const canChangePrice = isEquipment || isGear;
+  const isCenter = post?.category === "center";
+  // center 권리금 정보 추출 (negotiable 이 "권리금없음/무권리" 면 변경 불가)
+  const centerInfo = isCenter && post?.center_info && typeof post.center_info === "object" && !Array.isArray(post.center_info)
+    ? (post.center_info as Record<string, unknown>)
+    : null;
+  const centerPremium = centerInfo && centerInfo.premium && typeof centerInfo.premium === "object" && !Array.isArray(centerInfo.premium)
+    ? (centerInfo.premium as Record<string, unknown>)
+    : null;
+  const centerPremiumNegotiable = centerPremium && typeof centerPremium.negotiable === "string"
+    ? (centerPremium.negotiable as string)
+    : null;
+  const centerHasPremium =
+    !!centerPremium &&
+    centerPremiumNegotiable !== "권리금없음" &&
+    centerPremiumNegotiable !== "무권리" &&
+    typeof centerPremium.amount_manwon === "number" &&
+    (centerPremium.amount_manwon as number) > 0;
+  const canChangePrice = isEquipment || isGear || (isCenter && centerHasPremium);
   const originalWon = useMemo(() => {
     if (!post) return 0;
     if (post.category === "equipment") return (post.price_manwon || 0) * 10000;
     if (post.category === "gear") return post.price_won || 0;
+    if (post.category === "center" && centerPremium && typeof centerPremium.amount_manwon === "number") {
+      return (centerPremium.amount_manwon as number) * 10000;
+    }
     return 0;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post]);
   const currentWon = parseNum(priceWonInput);
   const discountWon = Math.max(0, originalWon - currentWon);
@@ -101,6 +134,9 @@ export default function TradeBumpPage() {
       }
       if (isGear && currentWon !== originalWon) {
         body.new_price_won = Math.max(0, currentWon);
+      }
+      if (isCenter && centerHasPremium && currentWon !== originalWon) {
+        body.new_premium_manwon = Math.max(0, Math.floor(currentWon / 10000));
       }
       const res = await fetch(`/api/trade/${tradeId}/bump`, {
         method: "POST",
@@ -149,7 +185,9 @@ export default function TradeBumpPage() {
 
   const headerLine = canChangePrice
     ? bookmarkCount > 0
-      ? `지금 가격을 낮추면 관심을 누른 ${bookmarkCount}명에게 알림이 가요.`
+      ? isCenter
+        ? `지금 권리금을 낮추면 관심을 누른 ${bookmarkCount}명에게 알림이 가요.`
+        : `지금 가격을 낮추면 관심을 누른 ${bookmarkCount}명에게 알림이 가요.`
       : "지금 끌어올리면 관심 사용자에게 다시 노출됩니다."
     : "지금 끌어올리면 매물 목록 상단에 다시 노출돼요.";
 
@@ -194,7 +232,7 @@ export default function TradeBumpPage() {
             <p className={`text-[11px] font-bold ${categoryColor}`}>{categoryLabel}</p>
             <p className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 line-clamp-1">{post.title}</p>
             <p className="text-[13px] text-[#2A251D] dark:text-zinc-100 mt-0.5">
-              {originalWon > 0 ? `${formatThousand(originalWon)}원` : "-"}
+              {isCenter ? "권리금 " : ""}{originalWon > 0 ? `${formatThousand(originalWon)}원` : "-"}
             </p>
           </div>
         </div>
@@ -226,7 +264,7 @@ export default function TradeBumpPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v6h6M20 20v-6h-6M4 10a8 8 0 0114-3M20 14a8 8 0 01-14 3" />
                 </svg>
               </button>
-              {QUICK_DISCOUNTS.map((d) => {
+              {(isCenter ? QUICK_DISCOUNTS_CENTER : QUICK_DISCOUNTS_EQ).map((d) => {
                 const previewWon = previewWonByPct(d.pct);
                 const active = currentWon === previewWon && previewWon > 0 && previewWon < originalWon;
                 return (
@@ -256,7 +294,7 @@ export default function TradeBumpPage() {
                     {formatThousand(originalWon)}원 → {formatThousand(currentWon)}원
                   </p>
                   <p className="text-[12px] text-[#6B7B3A] mt-0.5">
-                    {formatThousand(discountWon)}원 인하 · {discountPct}% 할인
+                    {isCenter ? "권리금 " : ""}{formatThousand(discountWon)}원 인하 · {discountPct}% 할인
                     {bookmarkCount > 0 ? ` · 관심 ${bookmarkCount}명에게 알림` : ""}
                   </p>
                 </div>
@@ -267,8 +305,11 @@ export default function TradeBumpPage() {
           <div className="flex items-start gap-2 p-3 bg-[#F5F0E5]/60 dark:bg-zinc-900/60 border border-[#E8E0D0] dark:border-zinc-700 rounded-2xl">
             <svg className="w-5 h-5 text-[#8C8270] mt-0.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 22a10 10 0 100-20 10 10 0 000 20z" /></svg>
             <p className="text-[12px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
-              센터매매는 가격을 끌어올리기 화면에서 직접 변경할 수 없습니다.<br />
-              가격 수정은 거래글 상세에서 [수정] 버튼으로 진행해 주세요.
+              {isCenter ? (
+                <>권리금이 없거나 무권리로 설정된 글은 권리금을 끌어올리기 화면에서 변경할 수 없습니다.<br />수정은 거래글 상세에서 [수정] 버튼으로 진행해 주세요.</>
+              ) : (
+                <>가격 수정은 거래글 상세에서 [수정] 버튼으로 진행해 주세요.</>
+              )}
             </p>
           </div>
         )}
