@@ -269,10 +269,12 @@ export default function PracticalPage() {
               </button>
             </div>
 
-            {/* 나머지 종목 */}
+            {/* 나머지 종목 — 가나다순 (모바일과 동일) */}
             <p className="text-xs font-bold text-[#8E8375] dark:text-zinc-500 mb-2">종목 선택</p>
             <div className="flex flex-col gap-2">
-              {practicalSports.map((sport) => (
+              {[...practicalSports]
+                .sort((a, b) => a.name.localeCompare(b.name, "ko-KR"))
+                .map((sport) => (
                 <SportButton key={sport.id} name={sport.name}
                   sub={`${sport.sections.reduce((a, s) => a + s.items.length, 0)}개 평가항목`}
                   bookmarked={practicalBookmarks.has(sport.id)}
@@ -325,10 +327,12 @@ export default function PracticalPage() {
                 </button>
               ))}
             </div>
-            {/* 종목별 */}
+            {/* 종목별 — 가나다순 (모바일과 동일) */}
             <p className="text-xs font-bold text-[#8E8375] dark:text-zinc-500 mb-2">종목 선택</p>
             <div className="flex flex-col gap-2">
-              {oralSports.map((sport) => (
+              {[...oralSports]
+                .sort((a, b) => a.name.localeCompare(b.name, "ko-KR"))
+                .map((sport) => (
                 <SportButton key={sport.id} name={sport.name}
                   sub={`${sport.questions.length}개 문항`}
                   bookmarked={oralBookmarks.has(sport.id)}
