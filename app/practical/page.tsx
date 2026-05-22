@@ -269,11 +269,16 @@ export default function PracticalPage() {
               </button>
             </div>
 
-            {/* 나머지 종목 — 가나다순 (모바일과 동일) */}
+            {/* 나머지 종목 — 일반(가나다) → 장애인(가나다) 두 그룹 분리 */}
             <p className="text-xs font-bold text-[#8E8375] dark:text-zinc-500 mb-2">종목 선택</p>
             <div className="flex flex-col gap-2">
               {[...practicalSports]
-                .sort((a, b) => a.name.localeCompare(b.name, "ko-KR"))
+                .sort((a, b) => {
+                  const da = a.name.includes("[장애인]");
+                  const db = b.name.includes("[장애인]");
+                  if (da !== db) return da ? 1 : -1;
+                  return a.name.localeCompare(b.name, "ko-KR");
+                })
                 .map((sport) => (
                 <SportButton key={sport.id} name={sport.name}
                   sub={`${sport.sections.reduce((a, s) => a + s.items.length, 0)}개 평가항목`}
@@ -327,11 +332,16 @@ export default function PracticalPage() {
                 </button>
               ))}
             </div>
-            {/* 종목별 — 가나다순 (모바일과 동일) */}
+            {/* 종목별 — 일반(가나다) → 장애인(가나다) 두 그룹 분리 */}
             <p className="text-xs font-bold text-[#8E8375] dark:text-zinc-500 mb-2">종목 선택</p>
             <div className="flex flex-col gap-2">
               {[...oralSports]
-                .sort((a, b) => a.name.localeCompare(b.name, "ko-KR"))
+                .sort((a, b) => {
+                  const da = a.name.includes("[장애인]");
+                  const db = b.name.includes("[장애인]");
+                  if (da !== db) return da ? 1 : -1;
+                  return a.name.localeCompare(b.name, "ko-KR");
+                })
                 .map((sport) => (
                 <SportButton key={sport.id} name={sport.name}
                   sub={`${sport.questions.length}개 문항`}
