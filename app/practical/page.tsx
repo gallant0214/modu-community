@@ -75,6 +75,8 @@ export default function PracticalPage() {
   const [openItem, setOpenItem] = useState<string | null>(null);
   const [openQuestionId, setOpenQuestionId] = useState<number | null>(null);
   const [restored, setRestored] = useState(false);
+  // 종목 검색 (모바일 앱 동일 패턴)
+  const [searchQuery, setSearchQuery] = useState("");
 
   // 북마크 state
   const [practicalBookmarks, setPracticalBookmarks] = useState<Set<string>>(new Set());
@@ -218,6 +220,28 @@ export default function PracticalPage() {
               <span className="text-[#C0392B] text-lg">›</span>
             </div>
           </Link>
+
+          {/* 종목 검색 (모바일 앱과 동일 패턴) */}
+          <div className="flex items-center gap-2 px-3.5 py-2.5 border border-[#E8E0D0] dark:border-zinc-700 rounded-xl bg-[#FBF7EB] dark:bg-zinc-800 focus-within:border-[#6B7B3A]/50 transition-colors">
+            <svg className="w-4 h-4 text-[#A89B80] shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="종목 검색"
+              className="flex-1 text-[13px] bg-transparent text-[#3A342A] dark:text-zinc-100 placeholder-[#A89B80] focus:outline-none"
+            />
+            {searchQuery && (
+              <button type="button" onClick={() => setSearchQuery("")}
+                className="text-[#A89B80] hover:text-[#6B5D47]" aria-label="검색어 지우기">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
 
         {tab === "practical" ? (
@@ -269,10 +293,11 @@ export default function PracticalPage() {
               </button>
             </div>
 
-            {/* 나머지 종목 — 일반(가나다) → 장애인(가나다) 두 그룹 분리 */}
+            {/* 나머지 종목 — 검색 필터 + 일반(가나다) → 장애인(가나다) 두 그룹 분리 */}
             <p className="text-xs font-bold text-[#8E8375] dark:text-zinc-500 mb-2">종목 선택</p>
             <div className="flex flex-col gap-2">
               {[...practicalSports]
+                .filter((s) => !searchQuery.trim() || s.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
                 .sort((a, b) => {
                   const da = a.name.includes("[장애인]");
                   const db = b.name.includes("[장애인]");
@@ -332,10 +357,11 @@ export default function PracticalPage() {
                 </button>
               ))}
             </div>
-            {/* 종목별 — 일반(가나다) → 장애인(가나다) 두 그룹 분리 */}
+            {/* 종목별 — 검색 필터 + 일반(가나다) → 장애인(가나다) 두 그룹 분리 */}
             <p className="text-xs font-bold text-[#8E8375] dark:text-zinc-500 mb-2">종목 선택</p>
             <div className="flex flex-col gap-2">
               {[...oralSports]
+                .filter((s) => !searchQuery.trim() || s.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
                 .sort((a, b) => {
                   const da = a.name.includes("[장애인]");
                   const db = b.name.includes("[장애인]");
