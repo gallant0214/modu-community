@@ -115,15 +115,25 @@ export default function PracticalPage() {
     }
   };
 
-  // 초기 마운트 시 sessionStorage에서 상태 복구 (exercise 상세에서 뒤로가기 시 이전 뷰 유지)
+  // 초기 마운트 시 — URL query param 우선(공유 링크 deeplink), 없으면 sessionStorage 복구
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem(PRACTICAL_STATE_KEY);
-      if (raw) {
-        const saved = JSON.parse(raw);
-        if (saved.tab) setTab(saved.tab);
-        if (saved.selectedSport) setSelectedSport(saved.selectedSport);
-        if (saved.selectedCategory) setSelectedCategory(saved.selectedCategory);
+      const sp = new URLSearchParams(window.location.search);
+      const qTab = sp.get("tab");
+      const qSport = sp.get("sport");
+      const qCategory = sp.get("category");
+      if (qSport) {
+        if (qTab === "practical" || qTab === "oral") setTab(qTab);
+        setSelectedSport(qSport);
+        if (qCategory) setSelectedCategory(qCategory);
+      } else {
+        const raw = sessionStorage.getItem(PRACTICAL_STATE_KEY);
+        if (raw) {
+          const saved = JSON.parse(raw);
+          if (saved.tab) setTab(saved.tab);
+          if (saved.selectedSport) setSelectedSport(saved.selectedSport);
+          if (saved.selectedCategory) setSelectedCategory(saved.selectedCategory);
+        }
       }
     } catch {}
     setRestored(true);
@@ -367,7 +377,14 @@ function BodybuildingView({ category, setCategory, onBack }: { category: string;
   return (
     <div className={pageShell}>
       <div className="mx-auto max-w-2xl">
-        <BackHeader title="보디빌딩" onBack={onBack} />
+        <BackHeader
+          title="보디빌딩"
+          onBack={onBack}
+          share={{
+            text: "보디빌딩 실기 정리 — 모두의 지도사",
+            url: "https://moducm.com/practical?tab=practical&sport=bodybuilding",
+          }}
+        />
         {/* 부위 필터 (sticky + 드래그 스크롤) */}
         <div className="sticky top-14 z-10 px-4 py-3 border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#F8F4EC] dark:bg-zinc-950">
           <div
@@ -435,10 +452,15 @@ function BodybuildingView({ category, setCategory, onBack }: { category: string;
 function SportPracticalView({ sport, openItem, setOpenItem, onBack }: {
   sport: PracticalSport; openItem: string | null; setOpenItem: (v: string | null) => void; onBack: () => void;
 }) {
+  const shareUrl = `https://moducm.com/practical?tab=practical&sport=${encodeURIComponent(sport.id)}`;
   return (
     <div className={pageShell}>
       <div className="mx-auto max-w-2xl">
-        <BackHeader title={`${sport.name} 실기`} onBack={onBack} />
+        <BackHeader
+          title={`${sport.name} 실기`}
+          onBack={onBack}
+          share={{ text: `${sport.name} 실기 정리 — 모두의 지도사`, url: shareUrl }}
+        />
         <div className="px-4 pt-4 pb-6 space-y-5">
           {sport.sections.map((section, sIdx) => (
             <div key={sIdx}>
@@ -500,10 +522,16 @@ function SportPracticalView({ sport, openItem, setOpenItem, onBack }: {
 function OralView({ sport, openQuestionId, setOpenQuestionId, onBack }: {
   sport: OralSport; openQuestionId: number | null; setOpenQuestionId: (v: number | null) => void; onBack: () => void;
 }) {
+  const shareUrl = `https://moducm.com/practical?tab=oral&sport=${encodeURIComponent(sport.id)}`;
   return (
     <div className={pageShell}>
       <div className="mx-auto max-w-2xl">
-        <BackHeader title={sport.name} sub={`${sport.questions.length}문항`} onBack={onBack} />
+        <BackHeader
+          title={sport.name}
+          sub={`${sport.questions.length}문항`}
+          onBack={onBack}
+          share={{ text: `${sport.name} 구술 자료 — 모두의 지도사`, url: shareUrl }}
+        />
         <div className="px-4 pt-3 pb-6 space-y-2">
           {sport.questions.map((q, idx) => {
             const prevQ = idx > 0 ? sport.questions[idx - 1] : null;
@@ -559,16 +587,53 @@ function OralView({ sport, openQuestionId, setOpenQuestionId, onBack }: {
 // ==========================================
 // 공통 컴포넌트
 // ==========================================
-function BackHeader({ title, sub, onBack }: { title: string; sub?: string; onBack: () => void }) {
+function BackHeader({ title, sub, onBack, share }: {
+  title: string;
+  sub?: string;
+  onBack: () => void;
+  share?: { text: string; url: string };
+}) {
+  const [toast, setToast] = useState<string | null>(null);
+  const handleShare = async () => {
+    if (!share) return;
+    try {
+      // Web Share API 가능 (모바일 브라우저). 데스크탑은 fallback 으로 클립보드 복사
+      if (typeof navigator !== "undefined" && (navigator as Navigator & { share?: (data: ShareData) => Promise<void> }).share) {
+        await (navigator as Navigator & { share: (data: ShareData) => Promise<void> }).share({
+          title,
+          text: share.text,
+          url: share.url,
+        });
+      } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(`${share.text}\n${share.url}`);
+        setToast("링크가 복사되었습니다");
+        setTimeout(() => setToast(null), 2000);
+      }
+    } catch {
+      // 사용자가 취소하거나 권한 거부 시 무시
+    }
+  };
   return (
-    <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#F8F4EC]/90 dark:bg-zinc-950/90 backdrop-blur-sm">
-      <button onClick={onBack} className="p-1.5 text-[#7C7368] hover:text-[#2F2A24] dark:hover:text-zinc-100">
+    <div className="sticky top-14 z-30 flex items-center gap-2 px-3 py-2.5 border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#F8F4EC]/90 dark:bg-zinc-950/90 backdrop-blur-sm">
+      <button onClick={onBack} className="p-1.5 text-[#7C7368] hover:text-[#2F2A24] dark:hover:text-zinc-100" aria-label="뒤로">
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
       </button>
       <span className="text-sm font-semibold text-[#2F2A24] dark:text-zinc-100 flex-1">{title}</span>
       {sub && <span className="text-xs text-[#8E8375] dark:text-zinc-400">{sub}</span>}
+      {share && (
+        <button onClick={handleShare} className="p-1.5 text-[#7C7368] hover:text-[#6B7B3A] dark:hover:text-[#A8B87A]" aria-label="공유하기" title="공유하기">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+        </button>
+      )}
+      {toast && (
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-20 z-50 px-4 py-2 bg-[#2A251D]/90 text-white text-[13px] rounded-full shadow-xl">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
