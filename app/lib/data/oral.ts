@@ -4753,7 +4753,7 @@ export const oralSports: OralSport[] = [
   },
   {
     id: "cycling_disabled",
-    name: "사이클[장애인]",
+    name: "자전거[장애인]",
     questions: [
       { id: 1, question: "장애인 사이클의 정의와 종목을 설명하시오.", answer: "장애인 사이클은 싱글 자전거·탠덤(2인용)·핸드사이클·트라이사이클(3륜) 등 다양한 형태의 자전거를 이용하는 종목입니다. 1988년 서울 패럴림픽 정식 종목으로 채택, UCI(국제사이클연맹) Para-cycling 부문이 주관합니다. 한국은 대한장애인사이클연맹이 주관" },
       { id: 2, question: "장애인 사이클의 등급분류를 설명하시오.", answer: "①B(Tandem): 시각장애, 비장애 파일럿과 2인용 ②H1~H5(Handcycle): 척수장애·하지절단, 손으로 페달 ③T1·T2(Tricycle): 균형 장애로 3륜 사용 ④C1~C5(Cycle): 일반 자전거 가능 등급. 숫자가 작을수록 중증. 트랙·도로 종목별 시간 차등 기준 적용" },
