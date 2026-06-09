@@ -53,6 +53,10 @@ export const metadata: Metadata = {
     // Google AdSense — 사이트 소유 확인 + 광고 게재용
     "google-adsense-account": "ca-pub-8524743081350160",
   },
+  // Google Search Console 도메인 소유권 확인
+  verification: {
+    google: "-fpqD0AlGWoW59CpUniYl1w8epGJNB7729iZt7NRL9M",
+  },
 };
 
 export default function RootLayout({
