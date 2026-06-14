@@ -6,8 +6,9 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/crm/reservations?date=YYYY-MM-DD
- * 해당 날짜의 예약 목록 (KST 기준).
+ *   또는 ?from=YYYY-MM-DD&to=YYYY-MM-DD (반열린 구간 [from, to])
  *
+ * KST 기준. from 만 있고 to 없으면 1일 범위, to 만 있으면 today부터.
  * trainer/manager 는 본인 컬럼만.
  */
 export async function GET(request: Request) {
@@ -15,11 +16,24 @@ export async function GET(request: Request) {
   if (isCrmError(ctx)) return ctx;
 
   const url = new URL(request.url);
-  const date = url.searchParams.get("date") || new Date().toISOString().slice(0, 10);
+  const date = url.searchParams.get("date");
+  const from = url.searchParams.get("from");
+  const to = url.searchParams.get("to");
 
-  // KST 0시 ~ 다음날 0시 (UTC 로 변환: KST = UTC+9)
-  const startUtc = new Date(`${date}T00:00:00+09:00`);
-  const endUtc = new Date(startUtc.getTime() + 24 * 3600 * 1000);
+  let startUtc: Date;
+  let endUtc: Date;
+  if (from || to) {
+    const f = from || new Date().toISOString().slice(0, 10);
+    const t = to || f;
+    startUtc = new Date(`${f}T00:00:00+09:00`);
+    endUtc = new Date(`${t}T00:00:00+09:00`);
+    // to 가 inclusive 가 되도록 24시간 추가
+    endUtc = new Date(endUtc.getTime() + 24 * 3600 * 1000);
+  } else {
+    const d = date || new Date().toISOString().slice(0, 10);
+    startUtc = new Date(`${d}T00:00:00+09:00`);
+    endUtc = new Date(startUtc.getTime() + 24 * 3600 * 1000);
+  }
 
   let query = supabase
     .from("crm_reservations")
