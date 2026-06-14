@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 
 type Mode = "solo" | "center";
-type Step = "mode" | "center-action" | "center-register" | "center-search";
+type Step = "mode" | "center-search" | "center-register";
 
 interface CenterSearchResult {
   id: number;
@@ -35,40 +35,50 @@ export default function CrmOnboardingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // 디바운스 검색 (입력 후 300ms)
-  useEffect(() => {
-    if (step !== "center-search") return;
+  // 검색은 명시적 트리거 (버튼 클릭 또는 Enter). 자동 디바운스 안 함.
+  const runSearch = async () => {
     const q = query.trim();
+    setError("");
     if (!q) {
       setResults([]);
       setSearched(false);
       return;
     }
-    const timer = setTimeout(async () => {
-      try {
-        const token = await getIdToken();
-        if (!token) return;
-        setSearching(true);
-        const res = await fetch(`/api/crm/centers/search?q=${encodeURIComponent(q)}`, {
-          headers: { authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setResults(data.centers ?? []);
-          setSearched(true);
-        }
-      } finally {
-        setSearching(false);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      setSearching(true);
+      const res = await fetch(`/api/crm/centers/search?q=${encodeURIComponent(q)}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || "검색에 실패했습니다");
       }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [query, step, getIdToken]);
+      setResults(data.centers ?? []);
+      setSearched(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+      setResults([]);
+      setSearched(true);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  // 검색 페이지 진입 시 입력 초기화
+  useEffect(() => {
+    if (step !== "center-search") {
+      setSearched(false);
+      setResults([]);
+    }
+  }, [step]);
 
   const submitMode = async () => {
     if (mode === "solo") {
       await submitSolo();
     } else {
-      setStep("center-action");
+      setStep("center-search");
     }
   };
 
@@ -148,11 +158,14 @@ export default function CrmOnboardingPage() {
 
   return (
     <div className="max-w-xl mx-auto px-5 py-8 md:py-12">
-      <Header step={step} onBack={() => {
-        setError("");
-        if (step === "center-action") setStep("mode");
-        else if (step === "center-register" || step === "center-search") setStep("center-action");
-      }} />
+      <Header
+        step={step}
+        onBack={() => {
+          setError("");
+          if (step === "center-search") setStep("mode");
+          else if (step === "center-register") setStep("center-search");
+        }}
+      />
 
       {step === "mode" && (
         <>
@@ -170,8 +183,8 @@ export default function CrmOnboardingPage() {
             <ModeCard
               selected={mode === "center"}
               onClick={() => setMode("center")}
-              title="센터 운영자 · 소속 트레이너"
-              desc="센터를 운영하거나 센터에 소속된 트레이너예요. 다음 단계에서 센터를 등록하거나 검색할 수 있어요."
+              title="센터 선택하기"
+              desc="센터에 소속됐거나 직접 운영해요. 검색해서 가입하거나 새로 등록할 수 있어요."
             />
           </div>
           <PrimaryButton onClick={submitMode} disabled={submitting}>
@@ -180,27 +193,81 @@ export default function CrmOnboardingPage() {
         </>
       )}
 
-      {step === "center-action" && (
+      {step === "center-search" && (
         <>
           <Title
-            title="센터를 어떻게 시작할까요?"
-            desc="대표이신 분은 새 센터를 등록하시고, 소속 트레이너이신 분은 이미 등록된 센터를 검색해 주세요."
+            title="센터 검색"
+            desc="가입하실 센터를 검색해 주세요."
           />
-          <div className="space-y-3">
-            <ActionCard
-              onClick={() => setStep("center-register")}
-              title="센터 등록하기"
-              desc="대표·관리자라면 여기로. 새 센터를 만들고 트레이너·회원을 관리해요."
+
+          {/* 검색 입력 + 버튼 */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") runSearch();
+              }}
+              placeholder="센터명을 입력하세요"
+              className={`${inputClass} flex-1`}
+              autoFocus
             />
-            <ActionCard
-              onClick={() => setStep("center-search")}
-              title="센터 검색하기"
-              desc="소속 트레이너라면 여기로. 대표님이 등록해둔 센터를 찾아 가입해요."
-            />
+            <button
+              onClick={runSearch}
+              disabled={searching || !query.trim()}
+              className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[14px] font-semibold hover:bg-[#5a6932] transition-colors whitespace-nowrap"
+            >
+              {searching ? "검색 중…" : "검색"}
+            </button>
           </div>
-          <Notice>
-            대표님께서 먼저 센터를 등록해두셔야 소속 트레이너가 검색·가입할 수 있어요.
-          </Notice>
+
+          {/* 검색 결과 */}
+          <div className="mt-5">
+            {searched && results.length > 0 && (
+              <ul className="space-y-2">
+                {results.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      onClick={() => joinCenter(c.id)}
+                      disabled={submitting}
+                      className="w-full text-left px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors disabled:opacity-60"
+                    >
+                      <div className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                        {c.name}
+                      </div>
+                      <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500">
+                        {[c.region_sido, c.region_sigungu].filter(Boolean).join(" ") || "지역 정보 없음"}
+                        {c.phone && <span> · {c.phone}</span>}
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {searched && results.length === 0 && (
+              <div className="px-4 py-5 text-center text-[13px] text-[#8C8270] dark:text-zinc-500 border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+                일치하는 센터가 없습니다.
+              </div>
+            )}
+          </div>
+
+          {/* 등록 안내 (항상 표시) */}
+          <div className="mt-6 px-4 py-4 rounded-2xl bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800">
+            <div className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+              찾으시는 센터가 없나요?
+            </div>
+            <div className="mt-1 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
+              센터 등록은 대표자나 관리자만 할 수 있어요.
+            </div>
+            <button
+              onClick={() => setStep("center-register")}
+              className="mt-3 w-full px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] bg-transparent hover:bg-[#6B7B3A]/5 text-[14px] font-semibold transition-colors"
+            >
+              센터 등록하기
+            </button>
+          </div>
         </>
       )}
 
@@ -208,7 +275,7 @@ export default function CrmOnboardingPage() {
         <>
           <Title
             title="센터 정보 입력"
-            desc="새 센터를 만들어요. 대표(센터 운영자) 권한으로 등록됩니다."
+            desc="새 센터를 만들어요. 등록하시는 분이 대표자가 됩니다."
           />
           <div className="space-y-3">
             <Field label="센터명" required>
@@ -233,56 +300,6 @@ export default function CrmOnboardingPage() {
           <PrimaryButton onClick={submitRegister} disabled={submitting}>
             {submitting ? "등록 중…" : "센터 등록하기"}
           </PrimaryButton>
-        </>
-      )}
-
-      {step === "center-search" && (
-        <>
-          <Title
-            title="센터 검색"
-            desc="대표님이 등록해둔 센터를 찾아 가입해요. 가입 후 대표님께서 권한을 부여하시기 전까지는 데이터가 보이지 않을 수 있어요."
-          />
-          <Field label="센터 이름">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="센터 이름을 입력해 주세요"
-              className={inputClass}
-              autoFocus
-            />
-          </Field>
-
-          <div className="mt-4 min-h-[120px]">
-            {searching && <ListMessage>검색 중…</ListMessage>}
-            {!searching && !searched && (
-              <ListMessage>센터 이름을 입력하면 결과가 표시됩니다.</ListMessage>
-            )}
-            {!searching && searched && results.length === 0 && (
-              <ListMessage>일치하는 센터가 없습니다. 대표님께 센터 등록을 요청해 주세요.</ListMessage>
-            )}
-            {!searching && results.length > 0 && (
-              <ul className="space-y-2">
-                {results.map((c) => (
-                  <li key={c.id}>
-                    <button
-                      onClick={() => joinCenter(c.id)}
-                      disabled={submitting}
-                      className="w-full text-left px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors disabled:opacity-60"
-                    >
-                      <div className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
-                        {c.name}
-                      </div>
-                      <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500">
-                        {[c.region_sido, c.region_sigungu].filter(Boolean).join(" ") || "지역 정보 없음"}
-                        {c.phone && <span> · {c.phone}</span>}
-                      </div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
         </>
       )}
 
@@ -365,35 +382,6 @@ function ModeCard({
   );
 }
 
-function ActionCard({
-  onClick,
-  title,
-  desc,
-}: {
-  onClick: () => void;
-  title: string;
-  desc: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="w-full text-left px-4 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">{title}</div>
-          <div className="mt-1 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-snug">
-            {desc}
-          </div>
-        </div>
-        <svg className="w-5 h-5 shrink-0 text-[#A89B80] dark:text-zinc-500 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-      </div>
-    </button>
-  );
-}
-
 function Field({
   label,
   required,
@@ -431,23 +419,5 @@ function PrimaryButton({
     >
       {children}
     </button>
-  );
-}
-
-function Notice({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mt-5 px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
-      <strong className="font-semibold text-[#3A342A] dark:text-zinc-300">안내</strong>
-      <span className="mx-1.5">·</span>
-      {children}
-    </div>
-  );
-}
-
-function ListMessage({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="px-4 py-6 text-center text-[13px] text-[#8C8270] dark:text-zinc-500 border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-      {children}
-    </div>
   );
 }
