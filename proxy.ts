@@ -32,6 +32,8 @@ const LIMITS: Array<{ match: RegExp; limit: number }> = [
   { match: /^\/api\/reports/, limit: 20 },
   { match: /^\/api\/inquiries\//, limit: 20 },
   { match: /^\/api\/notifications\//, limit: 60 },
+  // CRM 쓰기 (수강권 발급/예약 생성·취소 등): 1분에 40회
+  { match: /^\/api\/crm\//, limit: 40 },
   // 기본 API 폴백
   { match: /^\/api\//, limit: 60 },
 ];

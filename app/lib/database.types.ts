@@ -1164,6 +1164,443 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_centers: {
+        Row: {
+          id: number
+          owner_uid: string
+          name: string
+          kind: string
+          region_sido: string | null
+          region_sigungu: string | null
+          phone: string | null
+          business_no: string | null
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          owner_uid: string
+          name: string
+          kind: string
+          region_sido?: string | null
+          region_sigungu?: string | null
+          phone?: string | null
+          business_no?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          owner_uid?: string
+          name?: string
+          kind?: string
+          region_sido?: string | null
+          region_sigungu?: string | null
+          phone?: string | null
+          business_no?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_center_members: {
+        Row: {
+          id: number
+          center_id: number
+          firebase_uid: string
+          role: string
+          display_name: string
+          phone: string | null
+          email: string | null
+          access_level: string
+          is_solo_owner: boolean
+          status: string
+          joined_at: string
+          left_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          firebase_uid: string
+          role: string
+          display_name: string
+          phone?: string | null
+          email?: string | null
+          access_level?: string
+          is_solo_owner?: boolean
+          status?: string
+          joined_at?: string
+          left_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          firebase_uid?: string
+          role?: string
+          display_name?: string
+          phone?: string | null
+          email?: string | null
+          access_level?: string
+          is_solo_owner?: boolean
+          status?: string
+          joined_at?: string
+          left_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_center_members_center_id_fkey"
+            columns: ["center_id"]
+            isOneToOne: false
+            referencedRelation: "crm_centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_trainer_permissions: {
+        Row: {
+          center_member_id: number
+          can_create_reservation: boolean
+          can_modify_reservation: boolean
+          can_cancel_reservation: boolean
+          attendance_mode: string
+          can_cancel_attendance: boolean
+          can_issue_pass: boolean
+          updated_at: string
+        }
+        Insert: {
+          center_member_id: number
+          can_create_reservation?: boolean
+          can_modify_reservation?: boolean
+          can_cancel_reservation?: boolean
+          attendance_mode?: string
+          can_cancel_attendance?: boolean
+          can_issue_pass?: boolean
+          updated_at?: string
+        }
+        Update: {
+          center_member_id?: number
+          can_create_reservation?: boolean
+          can_modify_reservation?: boolean
+          can_cancel_reservation?: boolean
+          attendance_mode?: string
+          can_cancel_attendance?: boolean
+          can_issue_pass?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_members: {
+        Row: {
+          id: number
+          center_id: number
+          member_type: string
+          name: string
+          phone: string
+          email: string | null
+          birth: string | null
+          gender: string | null
+          linked_firebase_uid: string | null
+          memo: string | null
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          member_type: string
+          name: string
+          phone: string
+          email?: string | null
+          birth?: string | null
+          gender?: string | null
+          linked_firebase_uid?: string | null
+          memo?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          member_type?: string
+          name?: string
+          phone?: string
+          email?: string | null
+          birth?: string | null
+          gender?: string | null
+          linked_firebase_uid?: string | null
+          memo?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_passes: {
+        Row: {
+          id: number
+          center_id: number
+          member_id: number
+          trainer_member_id: number
+          seller_member_id: number
+          issue_type: string
+          lesson_kind: string
+          total_sessions: number
+          remaining_sessions: number
+          session_minutes: number
+          price_won: number
+          vat_included: boolean
+          payment_method: string
+          payment_method_custom: string | null
+          issued_at: string
+          expires_at: string
+          status: string
+          memo: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          member_id: number
+          trainer_member_id: number
+          seller_member_id: number
+          issue_type: string
+          lesson_kind: string
+          total_sessions: number
+          remaining_sessions: number
+          session_minutes: number
+          price_won?: number
+          vat_included?: boolean
+          payment_method?: string
+          payment_method_custom?: string | null
+          issued_at: string
+          expires_at: string
+          status?: string
+          memo?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          member_id?: number
+          trainer_member_id?: number
+          seller_member_id?: number
+          issue_type?: string
+          lesson_kind?: string
+          total_sessions?: number
+          remaining_sessions?: number
+          session_minutes?: number
+          price_won?: number
+          vat_included?: boolean
+          payment_method?: string
+          payment_method_custom?: string | null
+          issued_at?: string
+          expires_at?: string
+          status?: string
+          memo?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_reservations: {
+        Row: {
+          id: number
+          center_id: number
+          pass_id: number
+          member_id: number
+          trainer_member_id: number
+          starts_at: string
+          ends_at: string
+          status: string
+          consumed: boolean
+          cancelled_reason: string | null
+          cancelled_by_uid: string | null
+          cancelled_at: string | null
+          attended_at: string | null
+          created_by_uid: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          pass_id: number
+          member_id: number
+          trainer_member_id: number
+          starts_at: string
+          ends_at: string
+          status?: string
+          consumed?: boolean
+          cancelled_reason?: string | null
+          cancelled_by_uid?: string | null
+          cancelled_at?: string | null
+          attended_at?: string | null
+          created_by_uid: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          pass_id?: number
+          member_id?: number
+          trainer_member_id?: number
+          starts_at?: string
+          ends_at?: string
+          status?: string
+          consumed?: boolean
+          cancelled_reason?: string | null
+          cancelled_by_uid?: string | null
+          cancelled_at?: string | null
+          attended_at?: string | null
+          created_by_uid?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_payout_rules: {
+        Row: {
+          id: number
+          center_id: number
+          target_member_id: number | null
+          mode: string
+          tier_index: number
+          min_pass_price_won: number
+          max_pass_price_won: number | null
+          new_member_value: number
+          renewal_value: number
+          trial_value: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          target_member_id?: number | null
+          mode: string
+          tier_index: number
+          min_pass_price_won?: number
+          max_pass_price_won?: number | null
+          new_member_value?: number
+          renewal_value?: number
+          trial_value?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          target_member_id?: number | null
+          mode?: string
+          tier_index?: number
+          min_pass_price_won?: number
+          max_pass_price_won?: number | null
+          new_member_value?: number
+          renewal_value?: number
+          trial_value?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_center_settings: {
+        Row: {
+          center_id: number
+          cancel_hours: number
+          member_can_self_cancel_consumed: boolean
+          booking_unit_min: number
+          booking_horizon_days: number
+          notify_cancel: boolean
+          notify_change: boolean
+          notify_attend: boolean
+          notify_register: boolean
+          notify_pass_issue: boolean
+          working_hours_start: string
+          working_hours_end: string
+          default_columns: number
+          updated_at: string
+        }
+        Insert: {
+          center_id: number
+          cancel_hours?: number
+          member_can_self_cancel_consumed?: boolean
+          booking_unit_min?: number
+          booking_horizon_days?: number
+          notify_cancel?: boolean
+          notify_change?: boolean
+          notify_attend?: boolean
+          notify_register?: boolean
+          notify_pass_issue?: boolean
+          working_hours_start?: string
+          working_hours_end?: string
+          default_columns?: number
+          updated_at?: string
+        }
+        Update: {
+          center_id?: number
+          cancel_hours?: number
+          member_can_self_cancel_consumed?: boolean
+          booking_unit_min?: number
+          booking_horizon_days?: number
+          notify_cancel?: boolean
+          notify_change?: boolean
+          notify_attend?: boolean
+          notify_register?: boolean
+          notify_pass_issue?: boolean
+          working_hours_start?: string
+          working_hours_end?: string
+          default_columns?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_audit_logs: {
+        Row: {
+          id: number
+          center_id: number
+          actor_uid: string
+          action: string
+          entity_type: string
+          entity_id: number | null
+          payload: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          actor_uid: string
+          action: string
+          entity_type: string
+          entity_id?: number | null
+          payload?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          actor_uid?: string
+          action?: string
+          entity_type?: string
+          entity_id?: number | null
+          payload?: Json | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
