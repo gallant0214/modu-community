@@ -6,21 +6,31 @@ import { supabase } from "./supabase";
 /**
  * CRM 컨텍스트 — 한 사용자가 한 번에 한 센터에서 작업한다는 가정.
  *
- * - role: 'center_owner' | 'trainer'
- *   center_owner = 센터 전체 데이터 접근
- *   trainer = 본인 담당 회원/예약/수강권만 접근
+ * - role 4단계 ([[feedback-crm-data-isolation]]):
+ *   owner    — 대표자, 무조건 전체. accessLevel 자동 admin.
+ *   admin    — 관리자, 디폴트 전체 (사장이 토글로 제한 가능)
+ *   manager  — 팀장, 본인 팀 + 본인
+ *   trainer  — 강사, 본인 데이터만
  *
  * - access_level: 'admin' | 'schedule' | 'none' (PDF 2-1)
- *   center_owner 는 항상 'admin' 으로 간주
+ *   owner 는 항상 'admin' 으로 간주
  *
- * - permissions: trainer 만 row 존재 (crm_trainer_permissions)
- *   center_owner 는 권한표 통과
+ * - crm_trainer_permissions row: owner 외에 모두 존재 (1차 v1 에선 trainer 만 사용)
  */
+export type CrmRole = "owner" | "admin" | "manager" | "trainer";
+
+const ROLE_ORDER: Record<CrmRole, number> = {
+  trainer: 0,
+  manager: 1,
+  admin: 2,
+  owner: 3,
+};
+
 export interface CrmContext {
   uid: string;
   centerId: number;
   centerMemberId: number;
-  role: "center_owner" | "trainer";
+  role: CrmRole;
   accessLevel: "admin" | "schedule" | "none";
   isSoloOwner: boolean;
   centerKind: "solo" | "center";
@@ -28,7 +38,9 @@ export interface CrmContext {
 }
 
 export interface RequireCrmOptions {
-  needRole?: "center_owner";        // center_owner 만 통과 (settings, staff)
+  /** 이 등급 이상만 통과 (hierarchy: owner > admin > manager > trainer) */
+  needRole?: CrmRole;
+  /** access_level 게이트 (none < schedule < admin) */
   needAccessLevel?: "admin" | "schedule";
 }
 
@@ -37,7 +49,7 @@ export interface RequireCrmOptions {
  *
  * 멤버십이 여러 개일 경우 우선순위:
  *  1) is_solo_owner = true (본인 솔로 센터)
- *  2) role = 'center_owner'
+ *  2) role 등급 높은 순 (owner > admin > manager > trainer)
  *  3) 최신 joined_at
  *
  * v1 에서는 멀티 센터 UI 가 없으니 단순히 우선순위로 단일 선택.
@@ -71,13 +83,13 @@ export async function requireCrmContext(
     return NextResponse.json({ error: "CRM_NOT_ONBOARDED" }, { status: 409 });
   }
 
-  const role = membership.role as "center_owner" | "trainer";
+  const role = membership.role as CrmRole;
   const accessLevel = (
-    role === "center_owner" ? "admin" : membership.access_level
+    role === "owner" ? "admin" : membership.access_level
   ) as "admin" | "schedule" | "none";
 
   // 권한 게이트
-  if (options.needRole === "center_owner" && role !== "center_owner") {
+  if (options.needRole && ROLE_ORDER[role] < ROLE_ORDER[options.needRole]) {
     return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
   }
   if (options.needAccessLevel) {
@@ -130,9 +142,9 @@ export async function loadCrmContextForUid(
   const membership = rows?.[0];
   if (!membership) return null;
 
-  const role = membership.role as "center_owner" | "trainer";
+  const role = membership.role as CrmRole;
   const accessLevel = (
-    role === "center_owner" ? "admin" : membership.access_level
+    role === "owner" ? "admin" : membership.access_level
   ) as "admin" | "schedule" | "none";
 
   const centerInfo = Array.isArray(membership.crm_centers)

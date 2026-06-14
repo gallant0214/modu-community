@@ -4,23 +4,24 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-type Role = "center_owner" | "trainer";
+type Role = "owner" | "admin" | "manager" | "trainer";
 
 interface MenuItem {
   href: string;
   label: string;
-  ownerOnly?: boolean;       // center_owner 만 보임
+  /** owner / admin 만 보임 (직원관리·설정). manager/trainer 숨김. */
+  staffOnly?: boolean;
   icon: (props: { className?: string }) => React.ReactElement;
 }
 
 const MENU: MenuItem[] = [
   { href: "/crm/dashboard", label: "대시보드", icon: IconDashboard },
-  { href: "/crm/staff",     label: "직원 관리",   ownerOnly: true, icon: IconStaff },
+  { href: "/crm/staff",     label: "직원 관리",   staffOnly: true, icon: IconStaff },
   { href: "/crm/members",   label: "회원 관리",   icon: IconMembers },
   { href: "/crm/passes",    label: "수강권 관리", icon: IconPass },
   { href: "/crm/schedule",  label: "스케줄 관리", icon: IconCalendar },
   { href: "/crm/stats",     label: "기간별 통계", icon: IconStats },
-  { href: "/crm/settings",  label: "설정",        ownerOnly: true, icon: IconSettings },
+  { href: "/crm/settings",  label: "설정",        staffOnly: true, icon: IconSettings },
 ];
 
 interface Props {
@@ -29,11 +30,21 @@ interface Props {
   isSoloOwner: boolean;
 }
 
+const ROLE_LABEL: Record<Role, string> = {
+  owner: "대표자",
+  admin: "관리자",
+  manager: "팀장",
+  trainer: "강사",
+};
+
 export function CrmSidebar({ role, centerName, isSoloOwner }: Props) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const visible = MENU.filter((m) => !m.ownerOnly || role === "center_owner");
+  // 직원관리·설정 메뉴는 owner/admin 만 노출. manager/trainer 는 숨김.
+  const isStaffLevel = role === "owner" || role === "admin";
+  const visible = MENU.filter((m) => !m.staffOnly || isStaffLevel);
+  const roleLabel = isSoloOwner ? "개인 트레이너" : ROLE_LABEL[role];
 
   const links = (
     <>
@@ -79,7 +90,7 @@ export function CrmSidebar({ role, centerName, isSoloOwner }: Props) {
 
       {/* 데스크탑 사이드바 */}
       <aside className="hidden md:flex flex-col w-60 shrink-0 border-r border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40">
-        <SidebarHeader centerName={centerName} isSoloOwner={isSoloOwner} />
+        <SidebarHeader centerName={centerName} roleLabel={roleLabel} />
         <nav className="flex-1 px-3 py-2 space-y-1">{links}</nav>
         <SidebarFooter />
       </aside>
@@ -92,7 +103,7 @@ export function CrmSidebar({ role, centerName, isSoloOwner }: Props) {
             onClick={() => setMobileOpen(false)}
           />
           <aside className="absolute left-0 top-0 bottom-0 w-72 flex flex-col bg-[#FEFCF7] dark:bg-zinc-950 border-r border-[#E8E0D0] dark:border-zinc-800 shadow-xl">
-            <SidebarHeader centerName={centerName} isSoloOwner={isSoloOwner} />
+            <SidebarHeader centerName={centerName} roleLabel={roleLabel} />
             <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">{links}</nav>
             <SidebarFooter />
           </aside>
@@ -102,11 +113,11 @@ export function CrmSidebar({ role, centerName, isSoloOwner }: Props) {
   );
 }
 
-function SidebarHeader({ centerName, isSoloOwner }: { centerName: string; isSoloOwner: boolean }) {
+function SidebarHeader({ centerName, roleLabel }: { centerName: string; roleLabel: string }) {
   return (
     <div className="px-4 py-4 border-b border-[#E8E0D0] dark:border-zinc-800">
       <div className="text-[11px] text-[#A89B80] dark:text-zinc-500 font-medium">
-        {isSoloOwner ? "개인 트레이너" : "센터"}
+        {roleLabel}
       </div>
       <div className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate mt-0.5">
         {centerName || "CRM"}

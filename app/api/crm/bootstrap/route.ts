@@ -116,9 +116,9 @@ export async function POST(request: Request) {
   }
 
   // 2) 본인 멤버십 생성
-  //    solo: trainer role + is_solo_owner=true + admin 권한
-  //    center: center_owner role + admin 권한
-  const role = mode === "solo" ? "trainer" : "center_owner";
+  //    solo: trainer role + is_solo_owner=true + admin 권한 (1인 트레이너는 본인이 대표)
+  //    center: owner role + admin 권한 (등록한 사람이 대표자)
+  const role = mode === "solo" ? "trainer" : "owner";
   const { data: member, error: memberErr } = await supabase
     .from("crm_center_members")
     .insert({

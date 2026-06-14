@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmSidebar } from "./_components/crm-sidebar";
 
-type Role = "center_owner" | "trainer";
+type Role = "owner" | "admin" | "manager" | "trainer";
 
 interface BootstrapResp {
   onboarded: boolean;
