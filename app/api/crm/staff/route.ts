@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
-import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
 
 export const dynamic = "force-dynamic";
+
+const ALLOWED_ROLES: CrmRole[] = ["owner", "admin", "manager", "trainer"];
+const ALLOWED_ACCESS_LEVELS = ["none", "schedule", "admin"] as const;
 
 /**
  * GET /api/crm/staff
@@ -27,4 +30,155 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({ staff: data ?? [] });
+}
+
+/**
+ * POST /api/crm/staff — 직원 추가 (사장님이 직접 등록)
+ *
+ * body: { firebase_uid, display_name, role, access_level, email?, phone? }
+ *
+ * 이미 멤버십이 있는 사용자:
+ *   - status='inactive' (퇴사) 였으면 → 재활성화 (role/access_level 갱신)
+ *   - status='active'   였으면 → 409 (이미 직원입니다)
+ *
+ * 신규: 멤버십 INSERT + (trainer/manager 면) 권한 row INSERT
+ */
+export async function POST(request: Request) {
+  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  if (isCrmError(ctx)) return ctx;
+
+  let body: {
+    firebase_uid?: string;
+    display_name?: string;
+    role?: string;
+    access_level?: string;
+    email?: string;
+    phone?: string;
+  };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  }
+
+  const uid = body.firebase_uid?.trim();
+  if (!uid) return NextResponse.json({ error: "사용자를 선택해주세요" }, { status: 400 });
+
+  const role = body.role as CrmRole | undefined;
+  if (!role || !ALLOWED_ROLES.includes(role)) {
+    return NextResponse.json({ error: "등급 값이 잘못됨" }, { status: 400 });
+  }
+
+  const accessLevel = body.access_level as (typeof ALLOWED_ACCESS_LEVELS)[number] | undefined;
+  if (!accessLevel || !ALLOWED_ACCESS_LEVELS.includes(accessLevel)) {
+    return NextResponse.json({ error: "권한 레벨이 잘못됨" }, { status: 400 });
+  }
+
+  const displayName = body.display_name?.trim();
+  if (!displayName) return NextResponse.json({ error: "표시명을 입력해주세요" }, { status: 400 });
+
+  // 닉네임이 실제 존재하는지 확인 (안전망)
+  const { data: nick } = await supabase
+    .from("nicknames")
+    .select("name")
+    .eq("firebase_uid", uid)
+    .maybeSingle();
+  if (!nick) {
+    return NextResponse.json({ error: "사용자를 찾을 수 없습니다" }, { status: 404 });
+  }
+
+  // 기존 멤버십 확인
+  const { data: existing } = await supabase
+    .from("crm_center_members")
+    .select("id, status, role")
+    .eq("center_id", ctx.centerId)
+    .eq("firebase_uid", uid)
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.status === "active") {
+      return NextResponse.json({ error: "이미 등록된 직원입니다" }, { status: 409 });
+    }
+    // 퇴사 상태 → 재활성화 + 새 등급으로 갱신
+    const { error: upErr } = await supabase
+      .from("crm_center_members")
+      .update({
+        status: "active",
+        role,
+        access_level: accessLevel,
+        display_name: displayName,
+        email: body.email?.trim() || null,
+        phone: body.phone?.trim() || null,
+        left_at: null,
+      } as never)
+      .eq("id", existing.id);
+
+    if (upErr) {
+      return NextResponse.json({ error: "재등록 실패", detail: upErr.message }, { status: 500 });
+    }
+
+    // 권한 row 보장
+    if (role === "trainer" || role === "manager") {
+      await supabase.from("crm_trainer_permissions").upsert(
+        { center_member_id: existing.id } as never,
+        { onConflict: "center_member_id" }
+      );
+    }
+
+    await supabase.from("crm_audit_logs").insert({
+      center_id: ctx.centerId,
+      actor_uid: ctx.uid,
+      action: "staff.reactivate",
+      entity_type: "center_member",
+      entity_id: existing.id,
+      payload: { role, access_level: accessLevel } as never,
+    });
+
+    return NextResponse.json({ ok: true, memberId: existing.id, reactivated: true });
+  }
+
+  // 신규 멤버십 생성
+  const { data: created, error: insErr } = await supabase
+    .from("crm_center_members")
+    .insert({
+      center_id: ctx.centerId,
+      firebase_uid: uid,
+      role,
+      display_name: displayName,
+      email: body.email?.trim() || null,
+      phone: body.phone?.trim() || null,
+      access_level: accessLevel,
+      is_solo_owner: false,
+      status: "active",
+    })
+    .select("id")
+    .single();
+
+  if (insErr || !created) {
+    return NextResponse.json({ error: "추가 실패", detail: insErr?.message }, { status: 500 });
+  }
+
+  // trainer/manager 면 권한 row 디폴트 (전부 true)
+  if (role === "trainer" || role === "manager") {
+    await supabase.from("crm_trainer_permissions").insert({
+      center_member_id: created.id,
+      can_create_reservation: true,
+      can_modify_reservation: true,
+      can_cancel_reservation: true,
+      attendance_mode: "trainer",
+      can_cancel_attendance: true,
+      can_issue_pass: true,
+    });
+  }
+
+  await supabase.from("crm_audit_logs").insert({
+    center_id: ctx.centerId,
+    actor_uid: ctx.uid,
+    action: "staff.add",
+    entity_type: "center_member",
+    entity_id: created.id,
+    payload: { role, access_level: accessLevel, display_name: displayName } as never,
+  });
+
+  return NextResponse.json({ ok: true, memberId: created.id });
 }
