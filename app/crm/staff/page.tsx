@@ -300,12 +300,16 @@ function AddStaffModal({
           </div>
 
           <div className="space-y-3">
-            <CrmField label="표시명" required>
+            <CrmField label="센터 표시명 (실명)" required>
               <input
                 className={crmInputClass}
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="실명을 입력해 주세요"
               />
+              <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
+                센터 안에서만 보이는 이름이에요. 모두의 지도사 커뮤니티 닉네임은 그대로 유지돼요. 닉네임만으로는 누가 누군지 알기 어려우니 실명으로 입력하세요.
+              </p>
             </CrmField>
 
             <div className="grid grid-cols-2 gap-3">

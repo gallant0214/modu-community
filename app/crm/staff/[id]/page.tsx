@@ -9,6 +9,7 @@ import {
   ACCESS_LEVEL_LABEL,
   ATTENDANCE_MODE_LABEL,
 } from "../../_components/crm-labels";
+import { crmInputClass } from "../../_components/crm-modal";
 
 interface StaffMember {
   id: number;
@@ -154,6 +155,12 @@ export default function CrmStaffDetailPage() {
           {error}
         </div>
       )}
+
+      <DisplayNameSection
+        currentName={member.display_name}
+        saving={saving}
+        onSave={(name) => patchMember({ display_name: name })}
+      />
 
       <Section title="등급">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
@@ -342,6 +349,50 @@ function ToggleRow({
         />
       </button>
     </label>
+  );
+}
+
+function DisplayNameSection({
+  currentName,
+  saving,
+  onSave,
+}: {
+  currentName: string;
+  saving: boolean;
+  onSave: (name: string) => void;
+}) {
+  const [name, setName] = useState(currentName);
+
+  useEffect(() => {
+    setName(currentName);
+  }, [currentName]);
+
+  const changed = name.trim() !== currentName && name.trim().length > 0;
+
+  return (
+    <section className="mb-6 px-4 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+      <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-1">
+        센터 표시명
+      </h2>
+      <p className="text-[12px] text-[#A89B80] mb-3 leading-relaxed">
+        센터 안에서만 보이는 이름이에요. 모두의 지도사 커뮤니티 닉네임은 그대로 유지돼요.
+      </p>
+      <div className="flex gap-2">
+        <input
+          className={`${crmInputClass} flex-1`}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="실명을 입력해 주세요"
+        />
+        <button
+          onClick={() => onSave(name.trim())}
+          disabled={saving || !changed}
+          className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-40 text-white text-[13px] font-semibold hover:bg-[#5a6932] whitespace-nowrap"
+        >
+          {saving ? "저장 중…" : "저장"}
+        </button>
+      </div>
+    </section>
   );
 }
 

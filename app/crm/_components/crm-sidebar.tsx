@@ -30,21 +30,13 @@ interface Props {
   isSoloOwner: boolean;
 }
 
-const ROLE_LABEL: Record<Role, string> = {
-  owner: "대표자",
-  admin: "관리자",
-  manager: "팀장",
-  trainer: "강사",
-};
-
-export function CrmSidebar({ role, centerName, isSoloOwner }: Props) {
+export function CrmSidebar({ role, centerName, isSoloOwner: _isSoloOwner }: Props) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // 직원관리·설정 메뉴는 owner/admin 만 노출. manager/trainer 는 숨김.
   const isStaffLevel = role === "owner" || role === "admin";
   const visible = MENU.filter((m) => !m.staffOnly || isStaffLevel);
-  const roleLabel = isSoloOwner ? "개인 트레이너" : ROLE_LABEL[role];
 
   const links = (
     <>
@@ -90,7 +82,7 @@ export function CrmSidebar({ role, centerName, isSoloOwner }: Props) {
 
       {/* 데스크탑 사이드바 */}
       <aside className="hidden md:flex flex-col w-60 shrink-0 border-r border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40">
-        <SidebarHeader centerName={centerName} roleLabel={roleLabel} />
+        <SidebarHeader centerName={centerName} />
         <nav className="flex-1 px-3 py-2 space-y-1">{links}</nav>
         <SidebarFooter />
       </aside>
@@ -103,7 +95,7 @@ export function CrmSidebar({ role, centerName, isSoloOwner }: Props) {
             onClick={() => setMobileOpen(false)}
           />
           <aside className="absolute left-0 top-0 bottom-0 w-72 flex flex-col bg-[#FEFCF7] dark:bg-zinc-950 border-r border-[#E8E0D0] dark:border-zinc-800 shadow-xl">
-            <SidebarHeader centerName={centerName} roleLabel={roleLabel} />
+            <SidebarHeader centerName={centerName} />
             <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">{links}</nav>
             <SidebarFooter />
           </aside>
@@ -113,11 +105,11 @@ export function CrmSidebar({ role, centerName, isSoloOwner }: Props) {
   );
 }
 
-function SidebarHeader({ centerName, roleLabel }: { centerName: string; roleLabel: string }) {
+function SidebarHeader({ centerName }: { centerName: string }) {
   return (
     <div className="px-4 py-4 border-b border-[#E8E0D0] dark:border-zinc-800">
       <div className="text-[11px] text-[#A89B80] dark:text-zinc-500 font-medium">
-        {roleLabel}
+        센터명
       </div>
       <div className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate mt-0.5">
         {centerName || "CRM"}
