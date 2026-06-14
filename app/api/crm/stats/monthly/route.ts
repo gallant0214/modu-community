@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
  *   - 등록 회원수 (해당 월에 created 된 crm_members)
  *   - PT매출 (해당 월에 issued_at 인 crm_passes 합계)
  *   - 결제수단 분포
- *   - 트레이너별 신규/재등록/체험 카운트 + 매출
- *   - 트레이너별 출석완료/취소 카운트
+ *   - 강사별 신규/재등록/체험 카운트 + 매출
+ *   - 강사별 출석완료/취소 카운트
  *
  * trainer/manager 는 본인 데이터만.
  */
@@ -70,7 +70,7 @@ export async function GET(request: Request) {
     resQuery,
   ]);
 
-  // 트레이너별 집계
+  // 강사별 집계
   const trainerStats = new Map<
     number,
     {

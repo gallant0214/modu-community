@@ -112,7 +112,7 @@ export async function POST(request: Request) {
   const trainerMemberId = Number(body.trainer_member_id);
   const sellerMemberId = Number(body.seller_member_id) || trainerMemberId;
   if (!memberId || !trainerMemberId) {
-    return NextResponse.json({ error: "회원과 담당 트레이너가 필요합니다" }, { status: 400 });
+    return NextResponse.json({ error: "회원과 담당 강사가 필요합니다" }, { status: 400 });
   }
   const issueType = body.issue_type;
   if (!issueType || !ISSUE_TYPES.includes(issueType as (typeof ISSUE_TYPES)[number])) {
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "필수 항목이 비어있습니다" }, { status: 400 });
   }
 
-  // 회원·트레이너가 본 센터 소속인지 확인
+  // 회원·강사가 본 센터 소속인지 확인
   const [{ data: m }, { data: t }] = await Promise.all([
     supabase
       .from("crm_members")
@@ -149,7 +149,7 @@ export async function POST(request: Request) {
       .maybeSingle(),
   ]);
   if (!m || !t) {
-    return NextResponse.json({ error: "회원 또는 트레이너를 찾을 수 없습니다" }, { status: 404 });
+    return NextResponse.json({ error: "회원 또는 강사를 찾을 수 없습니다" }, { status: 404 });
   }
 
   const totalSessions = Number(body.total_sessions);

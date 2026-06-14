@@ -8,7 +8,7 @@ const ATTENDANCE_MODES = ["trainer", "owner_only"] as const;
 
 /**
  * PATCH /api/crm/staff/[id]/permissions
- * 트레이너 권한 토글 (PDF 2-3). owner/admin 만 진입.
+ * 강사 권한 토글 (PDF 2-3). owner/admin 만 진입.
  *
  * body: { can_create_reservation?, can_modify_reservation?, can_cancel_reservation?,
  *         attendance_mode?, can_cancel_attendance?, can_issue_pass? }

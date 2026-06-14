@@ -35,7 +35,7 @@ export async function GET(request: Request) {
  * POST /api/crm/bootstrap
  *
  * body:
- *   { mode: 'solo' }                                 → 1인 트레이너: 가상 센터 자동 생성
+ *   { mode: 'solo' }                                 → 1인 강사: 가상 센터 자동 생성
  *   { mode: 'center', name, phone?, region_sido?, region_sigungu? } → 센터 사장님
  *
  * 멱등성: 이미 멤버십 있으면 그 컨텍스트 그대로 반환 (중복 호출 안전).
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
   }
 
   // 2) 본인 멤버십 생성
-  //    solo: trainer role + is_solo_owner=true + admin 권한 (1인 트레이너는 본인이 대표)
+  //    solo: trainer role + is_solo_owner=true + admin 권한 (1인 강사는 본인이 대표)
   //    center: owner role + admin 권한 (등록한 사람이 대표자)
   const role = mode === "solo" ? "trainer" : "owner";
   const { data: member, error: memberErr } = await supabase
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // 3) solo 모드는 본인이 트레이너이기도 하니 권한표도 한 줄 (전부 true 기본)
+  // 3) solo 모드는 본인이 강사이기도 하니 권한표도 한 줄 (전부 true 기본)
   if (mode === "solo") {
     await supabase.from("crm_trainer_permissions").insert({
       center_member_id: member.id,

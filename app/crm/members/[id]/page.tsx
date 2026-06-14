@@ -390,7 +390,7 @@ function PassIssueModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // 직원 목록 로드 (트레이너 선택용)
+  // 직원 목록 로드 (강사 선택용)
   useEffect(() => {
     if (!open) return;
     (async () => {
@@ -415,7 +415,7 @@ function PassIssueModal({
   const submit = async () => {
     setError("");
     if (!lessonKind.trim()) return setError("수업 종류를 입력해주세요");
-    if (!trainerId) return setError("담당 트레이너를 선택해주세요");
+    if (!trainerId) return setError("담당 강사를 선택해주세요");
     if (totalSessions < 1) return setError("총 세션 수는 1 이상이어야 합니다");
     setSubmitting(true);
     try {
@@ -460,7 +460,7 @@ function PassIssueModal({
             placeholder="예) 개인PT, 그룹PT"
           />
         </CrmField>
-        <CrmField label="담당 트레이너" required>
+        <CrmField label="담당 강사" required>
           <select
             className={crmInputClass}
             value={trainerId}

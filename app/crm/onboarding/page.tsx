@@ -177,7 +177,7 @@ export default function CrmOnboardingPage() {
             <ModeCard
               selected={mode === "solo"}
               onClick={() => setMode("solo")}
-              title="개인 트레이너"
+              title="개인 강사"
               desc="혼자 회원을 받아 수업해요. 별도 설정 없이 바로 시작할 수 있어요."
             />
             <ModeCard

@@ -57,7 +57,7 @@ export const RESERVATION_STATUS_LABEL: Record<string, string> = {
 };
 
 export const ATTENDANCE_MODE_LABEL: Record<string, string> = {
-  trainer: "트레이너 직접",
+  trainer: "강사 직접",
   owner_only: "관리자만",
 };
 

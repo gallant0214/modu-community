@@ -60,7 +60,7 @@ export default function CrmStatsPage() {
             기간별 통계
           </h1>
           <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-            트레이너별 매출과 수업 현황을 한 달 단위로 확인해요.
+            강사별 매출과 수업 현황을 한 달 단위로 확인해요.
           </p>
         </div>
         <input
@@ -86,7 +86,7 @@ export default function CrmStatsPage() {
             <Kpi label="PT매출" value={`${data.summary.totalRevenue.toLocaleString()}원`} accent />
             <Kpi label="수강권" value={`${data.summary.totalPassCount}건`} />
             <Kpi
-              label="활동 트레이너"
+              label="활동 강사"
               value={`${data.trainers.filter((t) => t.passes.total > 0 || t.reservations.attended > 0).length}명`}
             />
           </section>
@@ -95,7 +95,7 @@ export default function CrmStatsPage() {
             <table className="w-full text-[13px]">
               <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
                 <tr>
-                  <Th>트레이너</Th>
+                  <Th>강사</Th>
                   <Th>등급</Th>
                   <Th>신규</Th>
                   <Th>재등록</Th>

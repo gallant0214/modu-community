@@ -94,7 +94,7 @@ export default function CrmDashboardPage() {
               <KpiCard label="이번달 PT매출" value={`${monthly.summary.totalRevenue.toLocaleString()}원`} accent />
               <KpiCard label="발급 수강권" value={`${monthly.summary.totalPassCount}건`} />
               <KpiCard
-                label="활동 트레이너"
+                label="활동 강사"
                 value={`${monthly.trainers.filter((t) => t.passes.total > 0 || t.reservations.attended > 0).length}명`}
               />
             </section>

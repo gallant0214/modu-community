@@ -202,7 +202,7 @@ export default function CrmSchedulePage() {
   );
 }
 
-/* ─── Day View (트레이너 × 시간 그리드) ────────────────────────────── */
+/* ─── Day View (강사 × 시간 그리드) ────────────────────────────── */
 
 function DayView({
   trainers,
@@ -234,7 +234,7 @@ function DayView({
   if (trainers.length === 0) {
     return (
       <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] rounded-xl">
-        가입된 트레이너가 없습니다.
+        가입된 강사가 없습니다.
       </div>
     );
   }

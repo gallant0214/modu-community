@@ -118,7 +118,7 @@ export default function CrmPassesPage() {
           value={trainerFilter}
           onChange={(e) => setTrainerFilter(e.target.value)}
         >
-          <option value="">모든 트레이너</option>
+          <option value="">모든 강사</option>
           {staff.map((s) => (
             <option key={s.id} value={s.id}>
               {s.display_name}
@@ -159,7 +159,7 @@ export default function CrmPassesPage() {
                 <Th>잔여</Th>
                 <Th>금액</Th>
                 <Th>결제</Th>
-                <Th>트레이너</Th>
+                <Th>강사</Th>
                 <Th>발급</Th>
                 <Th>만료</Th>
                 <Th>상태</Th>

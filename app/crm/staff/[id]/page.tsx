@@ -177,7 +177,7 @@ export default function CrmStaffDetailPage() {
         </div>
         {member.is_solo_owner && (
           <p className="mt-2 text-[12px] text-[#A89B80]">
-            본인(개인 트레이너) 등급은 변경할 수 없어요.
+            본인(개인 강사) 등급은 변경할 수 없어요.
           </p>
         )}
       </Section>
