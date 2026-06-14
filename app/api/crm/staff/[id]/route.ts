@@ -1,0 +1,164 @@
+import { NextResponse } from "next/server";
+import { supabase } from "@/app/lib/supabase";
+import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
+
+export const dynamic = "force-dynamic";
+
+const ALLOWED_ROLES: CrmRole[] = ["owner", "admin", "manager", "trainer"];
+const ALLOWED_ACCESS_LEVELS = ["none", "schedule", "admin"] as const;
+
+/**
+ * GET /api/crm/staff/[id] — 직원 상세 + 권한 row
+ */
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  if (isCrmError(ctx)) return ctx;
+
+  const { id } = await params;
+  const memberId = Number(id);
+  if (!memberId) {
+    return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  }
+
+  const { data: member, error } = await supabase
+    .from("crm_center_members")
+    .select(
+      "id, firebase_uid, role, display_name, phone, email, access_level, is_solo_owner, status, joined_at, left_at"
+    )
+    .eq("id", memberId)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+  }
+  if (!member) {
+    return NextResponse.json({ error: "직원을 찾을 수 없습니다" }, { status: 404 });
+  }
+
+  const { data: perms } = await supabase
+    .from("crm_trainer_permissions")
+    .select(
+      "center_member_id, can_create_reservation, can_modify_reservation, can_cancel_reservation, attendance_mode, can_cancel_attendance, can_issue_pass"
+    )
+    .eq("center_member_id", memberId)
+    .maybeSingle();
+
+  return NextResponse.json({ member, permissions: perms ?? null });
+}
+
+/**
+ * PATCH /api/crm/staff/[id] — 등급/access_level/status/표시명 변경
+ *
+ * 본인(센터의 마지막 owner) 등급을 trainer 로 내려서 센터가 owner 없는 상태가 되는 것 방지.
+ */
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  if (isCrmError(ctx)) return ctx;
+
+  const { id } = await params;
+  const memberId = Number(id);
+  if (!memberId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+
+  let body: {
+    role?: string;
+    access_level?: string;
+    status?: string;
+    display_name?: string;
+  };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  }
+
+  const patch: Record<string, unknown> = {};
+  if (body.role !== undefined) {
+    if (!ALLOWED_ROLES.includes(body.role as CrmRole)) {
+      return NextResponse.json({ error: "등급 값이 잘못됨" }, { status: 400 });
+    }
+    patch.role = body.role;
+  }
+  if (body.access_level !== undefined) {
+    if (!ALLOWED_ACCESS_LEVELS.includes(body.access_level as "none" | "schedule" | "admin")) {
+      return NextResponse.json({ error: "권한 레벨 값이 잘못됨" }, { status: 400 });
+    }
+    patch.access_level = body.access_level;
+  }
+  if (body.status !== undefined) {
+    if (body.status !== "active" && body.status !== "inactive") {
+      return NextResponse.json({ error: "상태 값이 잘못됨" }, { status: 400 });
+    }
+    patch.status = body.status;
+    if (body.status === "inactive") patch.left_at = new Date().toISOString();
+    else patch.left_at = null;
+  }
+  if (body.display_name !== undefined) {
+    const dn = body.display_name.trim();
+    if (!dn) return NextResponse.json({ error: "표시명을 입력해주세요" }, { status: 400 });
+    patch.display_name = dn;
+  }
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
+  }
+
+  // 본인 자신을 trainer 로 낮추는 거 방지 (CRM 진입 자체가 막힘)
+  if ((patch.role === "trainer" || patch.role === "manager") && ctx.centerMemberId === memberId) {
+    return NextResponse.json(
+      { error: "본인 등급은 직접 낮출 수 없습니다. 다른 관리자에게 요청하세요." },
+      { status: 400 }
+    );
+  }
+
+  // 마지막 owner 보호: 이 직원이 유일한 owner 인데 role 을 owner 가 아닌 값으로 바꾸려는 경우
+  if (patch.role && patch.role !== "owner") {
+    const { data: cur } = await supabase
+      .from("crm_center_members")
+      .select("role")
+      .eq("id", memberId)
+      .maybeSingle();
+
+    if (cur?.role === "owner") {
+      const { count } = await supabase
+        .from("crm_center_members")
+        .select("id", { count: "exact", head: true })
+        .eq("center_id", ctx.centerId)
+        .eq("role", "owner")
+        .eq("status", "active");
+
+      if ((count ?? 0) <= 1) {
+        return NextResponse.json(
+          { error: "센터에 대표자가 한 명도 없게 됩니다. 다른 직원을 먼저 대표자로 지정하세요." },
+          { status: 400 }
+        );
+      }
+    }
+  }
+
+  const { error: updErr } = await supabase
+    .from("crm_center_members")
+    .update(patch as never)
+    .eq("id", memberId)
+    .eq("center_id", ctx.centerId);
+
+  if (updErr) {
+    return NextResponse.json({ error: "수정 실패", detail: updErr.message }, { status: 500 });
+  }
+
+  await supabase.from("crm_audit_logs").insert({
+    center_id: ctx.centerId,
+    actor_uid: ctx.uid,
+    action: "staff.update",
+    entity_type: "center_member",
+    entity_id: memberId,
+    payload: patch as never,
+  });
+
+  return NextResponse.json({ ok: true });
+}
