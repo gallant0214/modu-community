@@ -168,8 +168,6 @@ function RegisterModal({
   const [gender, setGender] = useState<"" | "M" | "F" | "N">("");
   const [linkedUid, setLinkedUid] = useState("");
   const [linkedNickname, setLinkedNickname] = useState("");
-  const [nameAutoFilled, setNameAutoFilled] = useState(false);
-  const [emailAutoFilled, setEmailAutoFilled] = useState(false);
   const [nickQuery, setNickQuery] = useState("");
   const [nickResults, setNickResults] = useState<
     { firebase_uid: string; name: string; email: string | null }[]
@@ -190,8 +188,6 @@ function RegisterModal({
       setGender("");
       setLinkedUid("");
       setLinkedNickname("");
-      setNameAutoFilled(false);
-      setEmailAutoFilled(false);
       setNickQuery("");
       setNickResults([]);
       setNickSearched(false);
@@ -205,20 +201,11 @@ function RegisterModal({
     if (memberType === "provisional") {
       setLinkedUid("");
       setLinkedNickname("");
-      // 자동 입력된 이름/이메일이면 같이 비움
-      if (nameAutoFilled) {
-        setName("");
-        setNameAutoFilled(false);
-      }
-      if (emailAutoFilled) {
-        setEmail("");
-        setEmailAutoFilled(false);
-      }
       setNickQuery("");
       setNickResults([]);
       setNickSearched(false);
     }
-  }, [memberType, nameAutoFilled, emailAutoFilled]);
+  }, [memberType]);
 
   const searchNickname = async () => {
     const q = nickQuery.trim();
@@ -249,33 +236,24 @@ function RegisterModal({
   const pickUser = (u: { firebase_uid: string; name: string; email: string | null }) => {
     setLinkedUid(u.firebase_uid);
     setLinkedNickname(u.name);
-    // 이름이 비어있으면 닉네임을 기본값으로 자동 입력 (자동 입력임을 표시)
-    if (!name.trim()) {
-      setName(u.name);
-      setNameAutoFilled(true);
-    }
-    // 이메일이 비어있으면 가입자의 이메일을 자동 입력 (자동 입력임을 표시)
-    if (!email.trim() && u.email) {
-      setEmail(u.email);
-      setEmailAutoFilled(true);
-    }
+    // 이름·이메일이 비어있으면 닉네임/가입자 이메일 자동 입력
+    if (!name.trim()) setName(u.name);
+    if (!email.trim() && u.email) setEmail(u.email);
     setNickResults([]);
     setNickSearched(false);
     setNickQuery("");
   };
 
+  // "다시 선택" → 회원 정보 전부 리셋. 회원 유형만 유지.
   const clearLinked = () => {
     setLinkedUid("");
     setLinkedNickname("");
-    // 자동 입력된 이름/이메일만 공백으로. 사용자가 직접 입력/수정한 값은 보존.
-    if (nameAutoFilled) {
-      setName("");
-      setNameAutoFilled(false);
-    }
-    if (emailAutoFilled) {
-      setEmail("");
-      setEmailAutoFilled(false);
-    }
+    setName("");
+    setPhone("");
+    setEmail("");
+    setBirth("");
+    setGender("");
+    setMemo("");
   };
 
   const submit = async () => {
@@ -339,14 +317,7 @@ function RegisterModal({
         </CrmField>
 
         <CrmField label="이름" required>
-          <input
-            className={crmInputClass}
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              if (nameAutoFilled) setNameAutoFilled(false);
-            }}
-          />
+          <input className={crmInputClass} value={name} onChange={(e) => setName(e.target.value)} />
         </CrmField>
         <CrmField label="연락처" required>
           <input
@@ -384,11 +355,7 @@ function RegisterModal({
             className={crmInputClass}
             type="email"
             value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              // 사용자가 직접 수정 → 자동 입력 표식 해제 (다시 선택 시 보존)
-              if (emailAutoFilled) setEmailAutoFilled(false);
-            }}
+            onChange={(e) => setEmail(e.target.value)}
           />
         </CrmField>
 
