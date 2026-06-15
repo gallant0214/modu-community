@@ -60,6 +60,7 @@ export default function CrmSettingsPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -306,24 +307,32 @@ export default function CrmSettingsPage() {
       {tab === "danger" && (
         <section className="px-4 py-4 rounded-2xl border-2 border-red-200 dark:border-red-900/60 bg-red-50/40 dark:bg-red-950/20">
           <h2 className="text-[14.5px] font-bold text-red-700 dark:text-red-300 mb-1.5">
-            센터 탈퇴
+            센터 탈퇴 / 양도
           </h2>
           <p className="text-[12.5px] text-red-700/80 dark:text-red-300/80 leading-relaxed">
-            센터를 탈퇴하면 <strong>모든 회원, 수강권, 예약, 직원, 설정 정보가 영구 삭제</strong>되고 되돌릴 수 없어요.
+            <strong>센터 탈퇴</strong>는 모든 회원·수강권·예약·직원·설정 정보를 영구 삭제하고 되돌릴 수 없어요.
             <br />
-            다른 분이 운영하는 센터에 강사로 가입돼 있다면, 그 정보도 함께 사라집니다.
+            <strong>센터 양도</strong>는 다른 분께 운영권을 넘기는 거예요. 양도하면 본인은 관리자로 강등됩니다.
           </p>
 
           {info?.role === "owner" ? (
-            <button
-              onClick={() => setWithdrawOpen(true)}
-              className="mt-3.5 px-4 py-2.5 rounded-lg bg-red-600 text-white text-[13.5px] font-semibold hover:bg-red-700 transition-colors"
-            >
-              센터 탈퇴
-            </button>
+            <div className="mt-3.5 flex flex-wrap gap-2">
+              <button
+                onClick={() => setWithdrawOpen(true)}
+                className="px-4 py-2.5 rounded-lg bg-red-600 text-white text-[13.5px] font-semibold hover:bg-red-700 transition-colors"
+              >
+                센터 탈퇴
+              </button>
+              <button
+                onClick={() => setTransferOpen(true)}
+                className="px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932] transition-colors"
+              >
+                센터 양도
+              </button>
+            </div>
           ) : (
             <div className="mt-3.5 px-3 py-2.5 rounded-lg bg-white/60 dark:bg-zinc-900/60 border border-red-200/60 dark:border-red-900/40 text-[12.5px] text-red-700/80 dark:text-red-300/80">
-              대표자만 센터를 탈퇴할 수 있어요.
+              대표자만 센터를 탈퇴·양도할 수 있어요.
             </div>
           )}
         </section>
@@ -348,11 +357,221 @@ export default function CrmSettingsPage() {
             alert(data?.error || "탈퇴 실패");
             return;
           }
-          // 센터가 없어졌으므로 /crm 으로 이동 → layout 이 onboarding 으로 redirect
           router.replace("/crm");
         }}
       />
+
+      <TransferModal
+        open={transferOpen}
+        centerName={info?.centerName ?? ""}
+        onClose={() => setTransferOpen(false)}
+        onTransferred={(newOwnerName) => {
+          setTransferOpen(false);
+          alert(`${newOwnerName} 님께 센터 운영권을 양도했습니다. 본인은 관리자로 강등되었어요.`);
+          router.replace("/crm/dashboard");
+        }}
+      />
     </div>
+  );
+}
+
+function TransferModal({
+  open,
+  centerName,
+  onClose,
+  onTransferred,
+}: {
+  open: boolean;
+  centerName: string;
+  onClose: () => void;
+  onTransferred: (newOwnerName: string) => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<
+    { firebase_uid: string; name: string; email: string | null }[]
+  >([]);
+  const [picked, setPicked] = useState<{
+    firebase_uid: string;
+    name: string;
+    email: string | null;
+  } | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      setResults([]);
+      setPicked(null);
+      setSearched(false);
+      setError("");
+      setSubmitting(false);
+    }
+  }, [open]);
+
+  const search = async () => {
+    const q = query.trim();
+    setError("");
+    if (!q) {
+      setResults([]);
+      setSearched(false);
+      return;
+    }
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      setSearching(true);
+      const res = await fetch(`/api/crm/users/lookup?q=${encodeURIComponent(q)}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "검색 실패");
+      setResults(data.users ?? []);
+      setSearched(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const confirm = async () => {
+    if (!picked || submitting) return;
+    if (!window.confirm(`${picked.name} 님께 센터 운영권을 양도하시겠어요?\n양도 후 본인은 관리자로 강등됩니다.`)) {
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/centers/me/transfer", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ firebase_uid: picked.firebase_uid }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "양도 실패");
+      onTransferred(data.newOwnerName ?? picked.name);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <CrmModal open={open} onClose={submitting ? () => {} : onClose} title="센터 양도" size="lg">
+      <div className="space-y-3.5">
+        <div className="px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
+          <strong className="text-[#3A342A] dark:text-zinc-200">{centerName || "센터"}</strong>의 운영권을 다른 분께 넘깁니다. 양도 후 본인은 자동으로 관리자로 강등되며, 데이터 접근은 계속 가능해요.
+        </div>
+
+        {picked ? (
+          <div className="px-4 py-3 rounded-xl border border-[#6B7B3A]/50 bg-[#6B7B3A]/5 dark:bg-[#6B7B3A]/15 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                {picked.name}
+              </div>
+              {picked.email && (
+                <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 mt-0.5">
+                  {picked.email}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setPicked(null)}
+              disabled={submitting}
+              className="text-[12.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline shrink-0"
+            >
+              다시 선택
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-2">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    search();
+                  }
+                }}
+                placeholder="닉네임 또는 이메일"
+                className={`${crmInputClass} flex-1`}
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={search}
+                disabled={searching || !query.trim()}
+                className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932] whitespace-nowrap"
+              >
+                {searching ? "검색 중…" : "검색"}
+              </button>
+            </div>
+            <p className="text-[11.5px] text-[#A89B80] leading-relaxed">
+              닉네임은 일부만 입력해도 검색되고, 이메일은 정확히 입력하면 바로 찾을 수 있어요.
+            </p>
+
+            {searched && results.length === 0 && (
+              <div className="px-4 py-5 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-lg">
+                일치하는 사용자가 없습니다.
+              </div>
+            )}
+            {results.length > 0 && (
+              <ul className="space-y-1.5 max-h-[260px] overflow-y-auto">
+                {results.map((u) => (
+                  <li key={u.firebase_uid}>
+                    <button
+                      type="button"
+                      onClick={() => setPicked(u)}
+                      className="w-full text-left px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50"
+                    >
+                      <div className="text-[13.5px] font-medium text-[#2A251D] dark:text-zinc-100">
+                        {u.name}
+                      </div>
+                      {u.email && (
+                        <div className="text-[11.5px] text-[#A89B80] truncate">
+                          {u.email}
+                        </div>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            onClick={confirm}
+            disabled={!picked || submitting}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:bg-[#A8B87A]/40 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+          >
+            {submitting ? "양도 중…" : "센터 양도"}
+          </button>
+        </div>
+      </div>
+    </CrmModal>
   );
 }
 
