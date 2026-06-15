@@ -110,6 +110,7 @@ export default function CrmStaffPage() {
 interface LookupUser {
   firebase_uid: string;
   name: string;
+  email: string | null;
   existing: { status: string; role: string } | null;
 }
 
@@ -186,6 +187,8 @@ function AddStaffModal({
     }
     setPicked(u);
     setDisplayName(u.name);
+    // 이메일 입력란이 비어있으면 가입자의 이메일을 자동 입력
+    if (!email.trim() && u.email) setEmail(u.email);
     setError("");
   };
 
@@ -222,7 +225,7 @@ function AddStaffModal({
     <CrmModal open={open} onClose={onClose} title="직원 추가" size="lg">
       {!picked ? (
         <>
-          <CrmField label="닉네임으로 사용자 검색">
+          <CrmField label="사용자 검색">
             <div className="flex gap-2">
               <input
                 className={`${crmInputClass} flex-1`}
@@ -231,7 +234,7 @@ function AddStaffModal({
                 onKeyDown={(e) => {
                   if (e.key === "Enter") search();
                 }}
-                placeholder="모두의 지도사 가입자의 닉네임"
+                placeholder="닉네임 또는 이메일"
                 autoFocus
               />
               <button
@@ -242,11 +245,14 @@ function AddStaffModal({
                 {searching ? "검색 중…" : "검색"}
               </button>
             </div>
+            <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
+              닉네임은 일부만 입력해도 검색되고, 이메일은 정확히 입력하면 바로 찾을 수 있어요.
+            </p>
           </CrmField>
 
           <div className="mt-4">
             {searched && results.length === 0 && (
-              <ListMsg>일치하는 사용자가 없습니다. 닉네임을 확인해 주세요.</ListMsg>
+              <ListMsg>일치하는 사용자가 없습니다. 닉네임이나 이메일을 확인해 주세요.</ListMsg>
             )}
             {results.length > 0 && (
               <ul className="space-y-1.5 max-h-[280px] overflow-y-auto">
@@ -257,20 +263,27 @@ function AddStaffModal({
                       <button
                         onClick={() => pick(u)}
                         disabled={!!blocked}
-                        className={`w-full text-left px-3 py-2.5 rounded-xl border text-[13.5px] flex items-center justify-between gap-3
+                        className={`w-full text-left px-3 py-2.5 rounded-xl border text-[13.5px] flex items-start justify-between gap-3
                           ${blocked
                             ? "border-[#E8E0D0]/40 bg-[#F5F0E5] dark:bg-zinc-800/30 text-[#A89B80] cursor-not-allowed"
                             : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50"
                           }`}
                       >
-                        <span className="font-medium text-[#2A251D] dark:text-zinc-100">
-                          {u.name}
-                        </span>
-                        <span className="text-[11.5px] text-[#A89B80] truncate">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium text-[#2A251D] dark:text-zinc-100 truncate">
+                            {u.name}
+                          </div>
+                          {u.email && (
+                            <div className="text-[11.5px] text-[#A89B80] truncate mt-0.5">
+                              {u.email}
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-[11.5px] text-[#A89B80] truncate shrink-0 mt-0.5">
                           {blocked
                             ? `이미 ${ROLE_LABEL[u.existing!.role] ?? u.existing!.role}으로 등록됨`
                             : u.existing?.status === "inactive"
-                            ? "퇴사 처리됨 — 다시 추가하면 재등록"
+                            ? "퇴사 처리됨 — 재등록 가능"
                             : "추가 가능"}
                         </span>
                       </button>
