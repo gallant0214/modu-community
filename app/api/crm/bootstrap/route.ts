@@ -162,6 +162,27 @@ export async function POST(request: Request) {
     // 기본값은 스키마 DEFAULT로 채워짐
   });
 
+  // 5) 기본 4개 시스템 등급 시드
+  const seedGrades: { center_id: number; base_role: string; label: string; is_system: boolean; sort_order: number }[] = [
+    { center_id: center.id, base_role: "owner",   label: "대표자", is_system: true, sort_order: 0 },
+    { center_id: center.id, base_role: "admin",   label: "관리자", is_system: true, sort_order: 1 },
+    { center_id: center.id, base_role: "manager", label: "팀장",   is_system: true, sort_order: 2 },
+    { center_id: center.id, base_role: "trainer", label: "강사",   is_system: true, sort_order: 3 },
+  ];
+  const { data: insertedGrades } = await supabase
+    .from("crm_grades")
+    .insert(seedGrades)
+    .select("id, base_role");
+
+  // 본인 멤버의 grade_id 도 설정
+  const myGrade = insertedGrades?.find((g) => g.base_role === role);
+  if (myGrade) {
+    await supabase
+      .from("crm_center_members")
+      .update({ grade_id: myGrade.id } as never)
+      .eq("id", member.id);
+  }
+
   return NextResponse.json({
     onboarded: true,
     centerId: center.id,

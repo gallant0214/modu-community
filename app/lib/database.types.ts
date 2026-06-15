@@ -1220,6 +1220,7 @@ export type Database = {
           status: string
           joined_at: string
           left_at: string | null
+          grade_id: number | null
           created_at: string
           updated_at: string
         }
@@ -1236,6 +1237,7 @@ export type Database = {
           status?: string
           joined_at?: string
           left_at?: string | null
+          grade_id?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -1252,12 +1254,54 @@ export type Database = {
           status?: string
           joined_at?: string
           left_at?: string | null
+          grade_id?: number | null
           created_at?: string
           updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "crm_center_members_center_id_fkey"
+            columns: ["center_id"]
+            isOneToOne: false
+            referencedRelation: "crm_centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_grades: {
+        Row: {
+          id: number
+          center_id: number
+          base_role: string
+          label: string
+          is_system: boolean
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          base_role: string
+          label: string
+          is_system?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          base_role?: string
+          label?: string
+          is_system?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_grades_center_id_fkey"
             columns: ["center_id"]
             isOneToOne: false
             referencedRelation: "crm_centers"
