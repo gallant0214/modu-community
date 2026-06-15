@@ -13,7 +13,7 @@ export const ROLE_LABEL: Record<string, string> = {
 export const ACCESS_LEVEL_LABEL: Record<string, string> = {
   admin: "관리자",
   schedule: "스케줄",
-  none: "권한없음",
+  none: "강사",
 };
 
 export const STATUS_LABEL: Record<string, string> = {

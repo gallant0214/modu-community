@@ -196,7 +196,7 @@ export default function CrmStaffDetailPage() {
           ))}
         </div>
         <p className="mt-2 text-[12px] text-[#A89B80] leading-relaxed">
-          대표자는 항상 관리자 권한이에요. 강사는 가입 직후 권한없음이라 데이터가 보이지 않아요. 스케줄/관리자로 올려야 본인 담당 범위가 보여요.
+          대표자는 항상 관리자 권한이에요. 새로 가입한 강사는 기본 "강사" 권한이라 본인 데이터 위주로 보여요. 스케줄/관리자로 올리면 권한 범위가 확장돼요.
         </p>
       </Section>
 

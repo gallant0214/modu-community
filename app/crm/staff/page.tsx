@@ -345,7 +345,7 @@ function AddStaffModal({
                   onChange={(e) => setAccessLevel(e.target.value as typeof accessLevel)}
                   disabled={role === "owner"}
                 >
-                  <option value="none">권한없음</option>
+                  <option value="none">강사</option>
                   <option value="schedule">스케줄</option>
                   <option value="admin">관리자</option>
                 </select>
@@ -353,8 +353,8 @@ function AddStaffModal({
             </div>
             <p className="text-[11.5px] text-[#A89B80] leading-relaxed">
               {role === "owner" && "대표자는 자동으로 관리자 권한을 가져요."}
-              {role === "admin" && "관리자는 디폴트로 모든 데이터를 볼 수 있어요. 권한없음으로 두면 보기 전용으로만 사용 가능합니다."}
-              {role === "manager" && "팀장은 본인 팀의 매출과 회원을 볼 수 있어요. 권한없음으로 두면 데이터가 보이지 않아요."}
+              {role === "admin" && "관리자는 디폴트로 모든 데이터를 볼 수 있어요. 강사 권한으로 두면 본인 데이터 위주로만 보입니다."}
+              {role === "manager" && "팀장은 본인 팀의 매출과 회원을 볼 수 있어요. 강사 권한으로 두면 본인 것만 보여요."}
               {role === "trainer" && "강사는 본인 데이터만 볼 수 있어요. 스케줄을 선택하면 본인 수업 일정만 조회·관리할 수 있어요."}
             </p>
 
