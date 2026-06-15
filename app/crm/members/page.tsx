@@ -168,6 +168,7 @@ function RegisterModal({
   const [gender, setGender] = useState<"" | "M" | "F" | "N">("");
   const [linkedUid, setLinkedUid] = useState("");
   const [linkedNickname, setLinkedNickname] = useState("");
+  const [emailAutoFilled, setEmailAutoFilled] = useState(false);
   const [nickQuery, setNickQuery] = useState("");
   const [nickResults, setNickResults] = useState<
     { firebase_uid: string; name: string; email: string | null }[]
@@ -188,6 +189,7 @@ function RegisterModal({
       setGender("");
       setLinkedUid("");
       setLinkedNickname("");
+      setEmailAutoFilled(false);
       setNickQuery("");
       setNickResults([]);
       setNickSearched(false);
@@ -201,11 +203,16 @@ function RegisterModal({
     if (memberType === "provisional") {
       setLinkedUid("");
       setLinkedNickname("");
+      // 자동 입력된 이메일이면 같이 비움
+      if (emailAutoFilled) {
+        setEmail("");
+        setEmailAutoFilled(false);
+      }
       setNickQuery("");
       setNickResults([]);
       setNickSearched(false);
     }
-  }, [memberType]);
+  }, [memberType, emailAutoFilled]);
 
   const searchNickname = async () => {
     const q = nickQuery.trim();
@@ -238,8 +245,11 @@ function RegisterModal({
     setLinkedNickname(u.name);
     // 이름이 비어있으면 닉네임을 기본값으로 자동 입력
     if (!name.trim()) setName(u.name);
-    // 이메일이 비어있으면 가입자의 이메일을 자동 입력
-    if (!email.trim() && u.email) setEmail(u.email);
+    // 이메일이 비어있으면 가입자의 이메일을 자동 입력 (자동 입력임을 표시)
+    if (!email.trim() && u.email) {
+      setEmail(u.email);
+      setEmailAutoFilled(true);
+    }
     setNickResults([]);
     setNickSearched(false);
     setNickQuery("");
@@ -248,6 +258,11 @@ function RegisterModal({
   const clearLinked = () => {
     setLinkedUid("");
     setLinkedNickname("");
+    // 자동 입력된 이메일만 공백으로. 사용자가 직접 입력/수정한 값은 보존.
+    if (emailAutoFilled) {
+      setEmail("");
+      setEmailAutoFilled(false);
+    }
   };
 
   const submit = async () => {
@@ -349,7 +364,11 @@ function RegisterModal({
             className={crmInputClass}
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              // 사용자가 직접 수정 → 자동 입력 표식 해제 (다시 선택 시 보존)
+              if (emailAutoFilled) setEmailAutoFilled(false);
+            }}
           />
         </CrmField>
 
