@@ -53,10 +53,14 @@ export default function CrmMemberDetailPage() {
 
   const [member, setMember] = useState<Member | null>(null);
   const [passes, setPasses] = useState<Pass[]>([]);
+  const [staffList, setStaffList] = useState<
+    { id: number; display_name: string; role: string; status: string }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [passOpen, setPassOpen] = useState(false);
+  const [detailPassId, setDetailPassId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setError("");
@@ -81,6 +85,23 @@ export default function CrmMemberDetailPage() {
   useEffect(() => {
     if (memberId) load();
   }, [memberId, load]);
+
+  // 직원 목록 1회 로드 (수강권 발급 모달 + 상세 모달 공용)
+  useEffect(() => {
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/staff", {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStaffList(
+          (data.staff ?? []).filter((s: { status: string }) => s.status === "active")
+        );
+      }
+    })();
+  }, [getIdToken]);
 
   const remove = async () => {
     if (!confirm("이 회원을 삭제할까요? 수강권은 그대로 남아있어요.")) return;
@@ -179,24 +200,29 @@ export default function CrmMemberDetailPage() {
         ) : (
           <ul className="space-y-2">
             {passes.map((p) => (
-              <li key={p.id} className="px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
-                    {p.lesson_kind}
-                  </span>
-                  <PassStatusChip status={p.status} />
-                </div>
-                <div className="mt-1 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-                  {ISSUE_TYPE_LABEL[p.issue_type] ?? p.issue_type} ·{" "}
-                  잔여 {p.remaining_sessions}/{p.total_sessions}회 ·{" "}
-                  {p.session_minutes}분 · {formatWon(p.price_won)}원 ·{" "}
-                  {p.payment_method === "custom" && p.payment_method_custom
-                    ? p.payment_method_custom
-                    : PAYMENT_METHOD_LABEL[p.payment_method] ?? p.payment_method}
-                </div>
-                <div className="mt-0.5 text-[11.5px] text-[#A89B80]">
-                  발급 {p.issued_at} · 만료 {p.expires_at}
-                </div>
+              <li key={p.id}>
+                <button
+                  onClick={() => setDetailPassId(p.id)}
+                  className="w-full text-left px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors"
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                      {p.lesson_kind}
+                    </span>
+                    <PassStatusChip status={p.status} />
+                  </div>
+                  <div className="mt-1 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+                    {ISSUE_TYPE_LABEL[p.issue_type] ?? p.issue_type} ·{" "}
+                    잔여 {p.remaining_sessions}/{p.total_sessions}회 ·{" "}
+                    {p.session_minutes}분 · {formatWon(p.price_won)}원 ·{" "}
+                    {p.payment_method === "custom" && p.payment_method_custom
+                      ? p.payment_method_custom
+                      : PAYMENT_METHOD_LABEL[p.payment_method] ?? p.payment_method}
+                  </div>
+                  <div className="mt-0.5 text-[11.5px] text-[#A89B80]">
+                    발급 {p.issued_at} · 만료 {p.expires_at}
+                  </div>
+                </button>
               </li>
             ))}
           </ul>
@@ -216,8 +242,19 @@ export default function CrmMemberDetailPage() {
         open={passOpen}
         onClose={() => setPassOpen(false)}
         memberId={member.id}
+        staffList={staffList}
         onSuccess={() => {
           setPassOpen(false);
+          load();
+        }}
+      />
+
+      <PassDetailModal
+        passId={detailPassId}
+        staffList={staffList}
+        onClose={() => setDetailPassId(null)}
+        onRefunded={() => {
+          setDetailPassId(null);
           load();
         }}
       />
@@ -365,11 +402,13 @@ function PassIssueModal({
   open,
   onClose,
   memberId,
+  staffList,
   onSuccess,
 }: {
   open: boolean;
   onClose: () => void;
   memberId: number;
+  staffList: { id: number; display_name: string; role: string; status: string }[];
   onSuccess: () => void;
 }) {
   const { getIdToken } = useAuth();
@@ -388,31 +427,16 @@ function PassIssueModal({
   });
   const [memo, setMemo] = useState("");
   const [trainerId, setTrainerId] = useState<number | "">("");
-  const [staffList, setStaffList] = useState<{ id: number; display_name: string; role: string }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // 직원 목록 로드 (강사 선택용)
+  // 첫 직원을 기본 강사로 (오픈 시점에 staffList 가 채워져 있다면)
   useEffect(() => {
-    if (!open) return;
-    (async () => {
-      const token = await getIdToken();
-      if (!token) return;
-      const res = await fetch("/api/crm/staff", {
-        headers: { authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const active = (data.staff ?? []).filter(
-          (s: { status: string }) => s.status === "active"
-        );
-        setStaffList(active);
-        if (active.length > 0 && trainerId === "") setTrainerId(active[0].id);
-      }
-    })();
-  // trainerId 가 ""일 때만 자동 선택, 무한 루프 방지
+    if (open && staffList.length > 0 && trainerId === "") {
+      setTrainerId(staffList[0].id);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, getIdToken]);
+  }, [open, staffList]);
 
   const submit = async () => {
     setError("");
@@ -589,6 +613,242 @@ function PassIssueModal({
       </div>
     </CrmModal>
   );
+}
+
+function PassDetailModal({
+  passId,
+  staffList,
+  onClose,
+  onRefunded,
+}: {
+  passId: number | null;
+  staffList: { id: number; display_name: string; role: string; status: string }[];
+  onClose: () => void;
+  onRefunded: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [detail, setDetail] = useState<{
+    pass: Pass & {
+      seller_member_id: number;
+      vat_included: boolean;
+      memo: string | null;
+      created_at: string;
+    };
+    member: { id: number; name: string; phone: string } | null;
+    reservations: {
+      id: number;
+      starts_at: string;
+      ends_at: string;
+      status: string;
+      consumed: boolean;
+    }[];
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [refunding, setRefunding] = useState(false);
+
+  useEffect(() => {
+    if (passId === null) {
+      setDetail(null);
+      setError("");
+      return;
+    }
+    (async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const token = await getIdToken();
+        if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+        const res = await fetch(`/api/crm/passes/${passId}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "조회 실패");
+        setDetail(data);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "네트워크 오류");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [passId, getIdToken]);
+
+  const refund = async () => {
+    if (!detail || refunding) return;
+    if (!window.confirm("이 수강권을 환불 처리할까요? 잔여 세션은 자동 정리되지 않으니 필요하면 따로 예약을 정리해 주세요.")) {
+      return;
+    }
+    setRefunding(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/passes/${detail.pass.id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "환불 실패");
+      onRefunded();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setRefunding(false);
+    }
+  };
+
+  const open = passId !== null;
+  const staffMap = new Map(staffList.map((s) => [s.id, s.display_name]));
+  const pass = detail?.pass;
+  const trainerName = pass ? staffMap.get(pass.trainer_member_id) ?? "—" : "—";
+  const sellerName = pass ? staffMap.get(pass.seller_member_id) ?? "—" : "—";
+  const paymentLabel = pass
+    ? pass.payment_method === "custom" && pass.payment_method_custom
+      ? pass.payment_method_custom
+      : PAYMENT_METHOD_LABEL[pass.payment_method] ?? pass.payment_method
+    : "";
+
+  return (
+    <CrmModal open={open} onClose={onClose} title="수강권 상세" size="lg">
+      {loading ? (
+        <div className="text-[13px] text-[#8C8270] py-6 text-center">불러오는 중…</div>
+      ) : !detail || !pass ? (
+        <div className="text-[13px] text-red-700 py-6 text-center">{error || "정보를 불러올 수 없습니다."}</div>
+      ) : (
+        <div className="space-y-4">
+          <div className="px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">
+                {pass.lesson_kind}
+              </span>
+              <PassStatusChip status={pass.status} />
+            </div>
+            <div className="mt-1.5 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+              {ISSUE_TYPE_LABEL[pass.issue_type] ?? pass.issue_type} ·{" "}
+              잔여 <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{pass.remaining_sessions}</strong>/{pass.total_sessions}회 ·{" "}
+              {pass.session_minutes}분 수업
+            </div>
+          </div>
+
+          <DetailGrid
+            rows={[
+              ["회원", detail.member?.name ?? "—"],
+              ["담당 강사", trainerName],
+              ["판매 직원", sellerName],
+              ["발급일", pass.issued_at],
+              ["만료일", pass.expires_at],
+              ["결제 금액", `${formatWon(pass.price_won)}원${pass.vat_included ? " (부가세 포함)" : ""}`],
+              ["결제 수단", paymentLabel],
+            ]}
+          />
+
+          {pass.memo && (
+            <div className="px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
+              <strong className="text-[#3A342A] dark:text-zinc-300">메모 ·</strong> {pass.memo}
+            </div>
+          )}
+
+          <section>
+            <h3 className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
+              수업 내역 ({detail.reservations.length})
+            </h3>
+            {detail.reservations.length === 0 ? (
+              <div className="px-4 py-6 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-lg">
+                아직 예약·수업 기록이 없습니다.
+              </div>
+            ) : (
+              <ul className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                {detail.reservations.map((r) => (
+                  <li
+                    key={r.id}
+                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-[#E8E0D0]/60 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 text-[12.5px]"
+                  >
+                    <span className="text-[#3A342A] dark:text-zinc-300">
+                      {formatDateRange(r.starts_at, r.ends_at)}
+                    </span>
+                    <span className="flex items-center gap-1.5 text-[#8C8270] dark:text-zinc-500">
+                      <PassReservationChip status={r.status} />
+                      <span className={r.consumed ? "text-[#B47B2A]" : "text-[#A89B80]"}>
+                        {r.consumed ? "차감" : "미차감"}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {error && (
+            <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={onClose}
+              disabled={refunding}
+              className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-50"
+            >
+              닫기
+            </button>
+            {pass.status === "valid" && (
+              <button
+                onClick={refund}
+                disabled={refunding}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-[13.5px] font-semibold hover:bg-red-50 disabled:opacity-60"
+              >
+                {refunding ? "처리 중…" : "환불 처리"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </CrmModal>
+  );
+}
+
+function DetailGrid({ rows }: { rows: [string, React.ReactNode][] }) {
+  return (
+    <dl className="grid grid-cols-[88px_1fr] gap-x-3 gap-y-1.5 text-[13px]">
+      {rows.map(([k, v], i) => (
+        <div key={i} className="contents">
+          <dt className="text-[#A89B80] dark:text-zinc-500">{k}</dt>
+          <dd className="text-[#2A251D] dark:text-zinc-100 font-medium">{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function PassReservationChip({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    booked: { label: "예약완료", cls: "bg-[#F5E4C8] text-[#B47B2A]" },
+    attended: { label: "출석완료", cls: "bg-[#EFE7D5] text-[#6B7B3A]" },
+    cancelled: { label: "예약취소", cls: "bg-[#F5F0E5] text-[#A89B80]" },
+    noshow: { label: "노쇼", cls: "bg-red-50 text-red-700" },
+  };
+  const v = map[status] ?? { label: status, cls: "bg-[#F5F0E5] text-[#A89B80]" };
+  return (
+    <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${v.cls}`}>
+      {v.label}
+    </span>
+  );
+}
+
+function formatDateRange(startIso: string, endIso: string) {
+  try {
+    const s = new Date(startIso);
+    const e = new Date(endIso);
+    const sk = new Date(s.getTime() + 9 * 3600 * 1000);
+    const ek = new Date(e.getTime() + 9 * 3600 * 1000);
+    const date = `${sk.getUTCFullYear()}-${String(sk.getUTCMonth() + 1).padStart(2, "0")}-${String(sk.getUTCDate()).padStart(2, "0")}`;
+    const st = `${String(sk.getUTCHours()).padStart(2, "0")}:${String(sk.getUTCMinutes()).padStart(2, "0")}`;
+    const et = `${String(ek.getUTCHours()).padStart(2, "0")}:${String(ek.getUTCMinutes()).padStart(2, "0")}`;
+    return `${date} ${st}~${et}`;
+  } catch {
+    return startIso;
+  }
 }
 
 function BackLink() {
