@@ -63,6 +63,7 @@ export async function POST(request: Request) {
     mode?: "solo" | "center";
     name?: string;
     phone?: string;
+    business_no?: string;
     region_sido?: string;
     region_sigungu?: string;
   };
@@ -101,9 +102,10 @@ export async function POST(request: Request) {
       owner_uid: user.uid,
       name: centerName,
       kind: mode,
-      phone: body.phone ?? null,
-      region_sido: body.region_sido ?? null,
-      region_sigungu: body.region_sigungu ?? null,
+      phone: body.phone?.trim() || null,
+      business_no: body.business_no?.trim() || null,
+      region_sido: body.region_sido?.trim() || null,
+      region_sigungu: body.region_sigungu?.trim() || null,
     })
     .select("id")
     .single();

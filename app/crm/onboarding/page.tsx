@@ -25,6 +25,7 @@ export default function CrmOnboardingPage() {
   // 센터 등록 폼
   const [centerName, setCenterName] = useState("");
   const [phone, setPhone] = useState("");
+  const [businessNo, setBusinessNo] = useState("");
 
   // 센터 검색
   const [query, setQuery] = useState("");
@@ -122,6 +123,7 @@ export default function CrmOnboardingPage() {
           mode: "center",
           name: centerName.trim(),
           phone: phone.trim() || undefined,
+          business_no: businessNo.trim() || undefined,
         }),
       });
       const data = await res.json();
@@ -293,6 +295,16 @@ export default function CrmOnboardingPage() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="010-1234-5678"
+                className={inputClass}
+              />
+            </Field>
+            <Field label="사업자 등록번호">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={businessNo}
+                onChange={(e) => setBusinessNo(e.target.value)}
+                placeholder="000-00-00000"
                 className={inputClass}
               />
             </Field>
