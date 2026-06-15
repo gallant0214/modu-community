@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
+import { CrmModal } from "../_components/crm-modal";
 import { crmInputClass } from "../_components/crm-modal";
 
 interface Settings {
@@ -42,27 +44,45 @@ const ACTION_LABEL: Record<string, string> = {
   "settings.update": "설정 변경",
 };
 
+interface BootstrapInfo {
+  role: "owner" | "admin" | "manager" | "trainer";
+  centerName: string;
+}
+
 export default function CrmSettingsPage() {
+  const router = useRouter();
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<"reservation" | "alerts" | "logs">("reservation");
+  const [tab, setTab] = useState<"reservation" | "alerts" | "logs" | "danger">("reservation");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [info, setInfo] = useState<BootstrapInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch("/api/crm/settings", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      const [a, b] = await Promise.all([
+        fetch("/api/crm/settings", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }),
+        fetch("/api/crm/bootstrap", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }),
+      ]);
+      const data = await a.json();
+      if (!a.ok) throw new Error(data?.error || "조회 실패");
       setSettings(data.settings);
+      if (b.ok) {
+        const bi = await b.json();
+        setInfo({ role: bi.role, centerName: bi.centerName });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -121,7 +141,7 @@ export default function CrmSettingsPage() {
         </p>
       </header>
 
-      <div className="mb-5 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800">
+      <div className="mb-5 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800 overflow-x-auto">
         <TabBtn active={tab === "reservation"} onClick={() => setTab("reservation")}>
           예약 정책
         </TabBtn>
@@ -130,6 +150,9 @@ export default function CrmSettingsPage() {
         </TabBtn>
         <TabBtn active={tab === "logs"} onClick={() => setTab("logs")}>
           활동 로그
+        </TabBtn>
+        <TabBtn active={tab === "danger"} onClick={() => setTab("danger")} danger>
+          센터 탈퇴
         </TabBtn>
       </div>
 
@@ -279,7 +302,150 @@ export default function CrmSettingsPage() {
           )}
         </Card>
       )}
+
+      {tab === "danger" && (
+        <section className="px-4 py-4 rounded-2xl border-2 border-red-200 dark:border-red-900/60 bg-red-50/40 dark:bg-red-950/20">
+          <h2 className="text-[14.5px] font-bold text-red-700 dark:text-red-300 mb-1.5">
+            센터 탈퇴
+          </h2>
+          <p className="text-[12.5px] text-red-700/80 dark:text-red-300/80 leading-relaxed">
+            센터를 탈퇴하면 <strong>모든 회원, 수강권, 예약, 직원, 설정 정보가 영구 삭제</strong>되고 되돌릴 수 없어요.
+            <br />
+            다른 분이 운영하는 센터에 강사로 가입돼 있다면, 그 정보도 함께 사라집니다.
+          </p>
+
+          {info?.role === "owner" ? (
+            <button
+              onClick={() => setWithdrawOpen(true)}
+              className="mt-3.5 px-4 py-2.5 rounded-lg bg-red-600 text-white text-[13.5px] font-semibold hover:bg-red-700 transition-colors"
+            >
+              센터 탈퇴
+            </button>
+          ) : (
+            <div className="mt-3.5 px-3 py-2.5 rounded-lg bg-white/60 dark:bg-zinc-900/60 border border-red-200/60 dark:border-red-900/40 text-[12.5px] text-red-700/80 dark:text-red-300/80">
+              대표자만 센터를 탈퇴할 수 있어요.
+            </div>
+          )}
+        </section>
+      )}
+
+      <WithdrawModal
+        open={withdrawOpen}
+        centerName={info?.centerName ?? ""}
+        onClose={() => setWithdrawOpen(false)}
+        onConfirm={async () => {
+          const token = await getIdToken();
+          if (!token) {
+            alert("로그인 정보를 확인할 수 없습니다");
+            return;
+          }
+          const res = await fetch("/api/crm/centers/me", {
+            method: "DELETE",
+            headers: { authorization: `Bearer ${token}` },
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            alert(data?.error || "탈퇴 실패");
+            return;
+          }
+          // 센터가 없어졌으므로 /crm 으로 이동 → layout 이 onboarding 으로 redirect
+          router.replace("/crm");
+        }}
+      />
     </div>
+  );
+}
+
+function WithdrawModal({
+  open,
+  centerName,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  centerName: string;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [typed, setTyped] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setTyped("");
+      setSubmitting(false);
+    }
+  }, [open]);
+
+  const expected = (centerName || "").trim();
+  const matches = expected.length > 0 && typed.trim() === expected;
+
+  const handleConfirm = async () => {
+    if (!matches || submitting) return;
+    setSubmitting(true);
+    try {
+      await onConfirm();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <CrmModal open={open} onClose={submitting ? () => {} : onClose} title="정말 센터를 탈퇴하시겠어요?">
+      <div className="space-y-3.5">
+        <div className="px-3.5 py-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200/60 dark:border-red-900/40">
+          <p className="text-[13px] font-semibold text-red-700 dark:text-red-300">
+            탈퇴하면 아래 정보가 모두 영구 삭제됩니다.
+          </p>
+          <ul className="mt-2 space-y-0.5 text-[12.5px] text-red-700/80 dark:text-red-300/80 list-disc list-inside">
+            <li>회원 명단과 메모</li>
+            <li>발급한 모든 수강권 내역</li>
+            <li>예약·출석·노쇼 기록</li>
+            <li>가입한 강사·직원 정보</li>
+            <li>센터 설정과 정산 규칙</li>
+            <li>활동 로그</li>
+          </ul>
+          <p className="mt-2 text-[12.5px] text-red-700 dark:text-red-300 font-semibold">
+            이 작업은 되돌릴 수 없어요.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-[12.5px] text-[#3A342A] dark:text-zinc-300 mb-1.5">
+            확인을 위해 센터 이름{" "}
+            <span className="font-semibold text-red-700 dark:text-red-300">
+              &ldquo;{expected}&rdquo;
+            </span>{" "}
+            을(를) 입력해 주세요.
+          </label>
+          <input
+            type="text"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            placeholder={expected}
+            className={crmInputClass}
+            autoFocus
+          />
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={!matches || submitting}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 disabled:bg-red-300 dark:disabled:bg-red-900/40 text-white text-[13.5px] font-semibold hover:bg-red-700"
+          >
+            {submitting ? "탈퇴 중…" : "센터 탈퇴"}
+          </button>
+        </div>
+      </div>
+    </CrmModal>
   );
 }
 
@@ -287,19 +453,23 @@ function TabBtn({
   active,
   onClick,
   children,
+  danger,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  danger?: boolean;
 }) {
+  const activeColor = danger
+    ? "border-red-500 text-red-600 dark:text-red-400"
+    : "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A]";
+  const inactiveColor = danger
+    ? "border-transparent text-red-500/70 hover:text-red-600 dark:text-red-400/70 dark:hover:text-red-300"
+    : "border-transparent text-[#8C8270] dark:text-zinc-500 hover:text-[#3A342A] dark:hover:text-zinc-300";
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-2 -mb-px text-[13px] font-medium border-b-2 transition-colors
-        ${active
-          ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A]"
-          : "border-transparent text-[#8C8270] dark:text-zinc-500 hover:text-[#3A342A] dark:hover:text-zinc-300"
-        }`}
+      className={`px-3 py-2 -mb-px text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap ${active ? activeColor : inactiveColor}`}
     >
       {children}
     </button>
