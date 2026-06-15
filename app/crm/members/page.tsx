@@ -168,6 +168,7 @@ function RegisterModal({
   const [gender, setGender] = useState<"" | "M" | "F" | "N">("");
   const [linkedUid, setLinkedUid] = useState("");
   const [linkedNickname, setLinkedNickname] = useState("");
+  const [nameAutoFilled, setNameAutoFilled] = useState(false);
   const [emailAutoFilled, setEmailAutoFilled] = useState(false);
   const [nickQuery, setNickQuery] = useState("");
   const [nickResults, setNickResults] = useState<
@@ -189,6 +190,7 @@ function RegisterModal({
       setGender("");
       setLinkedUid("");
       setLinkedNickname("");
+      setNameAutoFilled(false);
       setEmailAutoFilled(false);
       setNickQuery("");
       setNickResults([]);
@@ -203,7 +205,11 @@ function RegisterModal({
     if (memberType === "provisional") {
       setLinkedUid("");
       setLinkedNickname("");
-      // 자동 입력된 이메일이면 같이 비움
+      // 자동 입력된 이름/이메일이면 같이 비움
+      if (nameAutoFilled) {
+        setName("");
+        setNameAutoFilled(false);
+      }
       if (emailAutoFilled) {
         setEmail("");
         setEmailAutoFilled(false);
@@ -212,7 +218,7 @@ function RegisterModal({
       setNickResults([]);
       setNickSearched(false);
     }
-  }, [memberType, emailAutoFilled]);
+  }, [memberType, nameAutoFilled, emailAutoFilled]);
 
   const searchNickname = async () => {
     const q = nickQuery.trim();
@@ -243,8 +249,11 @@ function RegisterModal({
   const pickUser = (u: { firebase_uid: string; name: string; email: string | null }) => {
     setLinkedUid(u.firebase_uid);
     setLinkedNickname(u.name);
-    // 이름이 비어있으면 닉네임을 기본값으로 자동 입력
-    if (!name.trim()) setName(u.name);
+    // 이름이 비어있으면 닉네임을 기본값으로 자동 입력 (자동 입력임을 표시)
+    if (!name.trim()) {
+      setName(u.name);
+      setNameAutoFilled(true);
+    }
     // 이메일이 비어있으면 가입자의 이메일을 자동 입력 (자동 입력임을 표시)
     if (!email.trim() && u.email) {
       setEmail(u.email);
@@ -258,7 +267,11 @@ function RegisterModal({
   const clearLinked = () => {
     setLinkedUid("");
     setLinkedNickname("");
-    // 자동 입력된 이메일만 공백으로. 사용자가 직접 입력/수정한 값은 보존.
+    // 자동 입력된 이름/이메일만 공백으로. 사용자가 직접 입력/수정한 값은 보존.
+    if (nameAutoFilled) {
+      setName("");
+      setNameAutoFilled(false);
+    }
     if (emailAutoFilled) {
       setEmail("");
       setEmailAutoFilled(false);
@@ -326,7 +339,14 @@ function RegisterModal({
         </CrmField>
 
         <CrmField label="이름" required>
-          <input className={crmInputClass} value={name} onChange={(e) => setName(e.target.value)} />
+          <input
+            className={crmInputClass}
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              if (nameAutoFilled) setNameAutoFilled(false);
+            }}
+          />
         </CrmField>
         <CrmField label="연락처" required>
           <input
