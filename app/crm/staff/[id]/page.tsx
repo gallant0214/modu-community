@@ -15,6 +15,7 @@ interface StaffMember {
   id: number;
   firebase_uid: string;
   role: string;
+  grade_id: number | null;
   display_name: string;
   phone: string | null;
   email: string | null;
@@ -23,6 +24,13 @@ interface StaffMember {
   status: string;
   joined_at: string;
   left_at: string | null;
+}
+
+interface Grade {
+  id: number;
+  base_role: string;
+  label: string;
+  is_system: boolean;
 }
 
 interface Permissions {
@@ -43,6 +51,7 @@ export default function CrmStaffDetailPage() {
 
   const [member, setMember] = useState<StaffMember | null>(null);
   const [perms, setPerms] = useState<Permissions | null>(null);
+  const [grades, setGrades] = useState<Grade[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -70,6 +79,21 @@ export default function CrmStaffDetailPage() {
   useEffect(() => {
     if (memberId) load();
   }, [memberId, load]);
+
+  // 등급 목록 1회 로드
+  useEffect(() => {
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/grades", {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setGrades(data.grades ?? []);
+      }
+    })();
+  }, [getIdToken]);
 
   const patchMember = async (body: Record<string, unknown>) => {
     if (saving) return;
@@ -163,20 +187,32 @@ export default function CrmStaffDetailPage() {
       />
 
       <Section title="등급">
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          {(["owner", "admin", "manager", "trainer"] as const).map((r) => (
-            <SegBtn
-              key={r}
-              selected={member.role === r}
-              disabled={saving || member.is_solo_owner}
-              onClick={() => patchMember({ role: r })}
-            >
-              {ROLE_LABEL[r]}
-            </SegBtn>
+        <select
+          className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A] disabled:opacity-60"
+          value={member.grade_id ?? ""}
+          disabled={saving || member.is_solo_owner}
+          onChange={(e) => {
+            const id = e.target.value ? Number(e.target.value) : null;
+            if (id) patchMember({ grade_id: id });
+          }}
+        >
+          <option value="">선택해 주세요</option>
+          {grades.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.label} {g.is_system ? "" : "· 커스텀"}
+            </option>
           ))}
-        </div>
+        </select>
+        <p className="mt-2 text-[12px] text-[#A89B80] leading-relaxed">
+          현재 등급:{" "}
+          <strong className="text-[#3A342A] dark:text-zinc-200">
+            {grades.find((g) => g.id === member.grade_id)?.label ?? ROLE_LABEL[member.role] ?? member.role}
+          </strong>
+          {" "}(권한 분류: {ROLE_LABEL[member.role] ?? member.role}).{" "}
+          새 등급을 만들려면 설정 → 등급 관리에서 추가하세요.
+        </p>
         {member.is_solo_owner && (
-          <p className="mt-2 text-[12px] text-[#A89B80]">
+          <p className="mt-1 text-[12px] text-[#A89B80]">
             본인(개인 강사) 등급은 변경할 수 없어요.
           </p>
         )}

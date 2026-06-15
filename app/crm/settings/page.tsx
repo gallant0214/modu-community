@@ -33,8 +33,10 @@ interface AuditLog {
 }
 
 const ACTION_LABEL: Record<string, string> = {
+  "staff.add": "직원 추가",
   "staff.update": "직원 정보 수정",
   "staff.permissions.update": "직원 권한 수정",
+  "staff.reactivate": "직원 재등록",
   "member.create": "회원 등록",
   "member.delete": "회원 삭제",
   "pass.issue": "수강권 발급",
@@ -42,6 +44,17 @@ const ACTION_LABEL: Record<string, string> = {
   "reservation.cancelled": "예약 취소",
   "reservation.noshow": "노쇼 처리",
   "settings.update": "설정 변경",
+  "grade.create": "등급 추가",
+  "grade.update": "등급 수정",
+  "grade.delete": "등급 삭제",
+  "center.transfer": "센터 양도",
+};
+
+const BASE_ROLE_LABEL: Record<string, string> = {
+  owner: "대표자",
+  admin: "관리자",
+  manager: "팀장",
+  trainer: "강사",
 };
 
 interface BootstrapInfo {
@@ -52,7 +65,7 @@ interface BootstrapInfo {
 export default function CrmSettingsPage() {
   const router = useRouter();
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<"reservation" | "alerts" | "logs" | "danger">("reservation");
+  const [tab, setTab] = useState<"reservation" | "alerts" | "grades" | "logs" | "danger">("reservation");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [info, setInfo] = useState<BootstrapInfo | null>(null);
@@ -148,6 +161,9 @@ export default function CrmSettingsPage() {
         </TabBtn>
         <TabBtn active={tab === "alerts"} onClick={() => setTab("alerts")}>
           알림
+        </TabBtn>
+        <TabBtn active={tab === "grades"} onClick={() => setTab("grades")}>
+          등급 관리
         </TabBtn>
         <TabBtn active={tab === "logs"} onClick={() => setTab("logs")}>
           활동 로그
@@ -278,6 +294,8 @@ export default function CrmSettingsPage() {
         </Card>
       )}
 
+      {tab === "grades" && <GradesPanel />}
+
       {tab === "logs" && (
         <Card title="최근 활동 (최대 80건)">
           {logs.length === 0 ? (
@@ -372,6 +390,253 @@ export default function CrmSettingsPage() {
         }}
       />
     </div>
+  );
+}
+
+interface Grade {
+  id: number;
+  base_role: string;
+  label: string;
+  is_system: boolean;
+  sort_order: number;
+}
+
+function GradesPanel() {
+  const { getIdToken } = useAuth();
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // 신규 등급 폼
+  const [newLabel, setNewLabel] = useState("");
+  const [newBase, setNewBase] = useState<"owner" | "admin" | "manager" | "trainer">("trainer");
+  const [adding, setAdding] = useState(false);
+
+  // 라벨 인라인 편집
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingLabel, setEditingLabel] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch("/api/crm/grades", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setGrades(data.grades ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const addGrade = async () => {
+    if (adding) return;
+    if (!newLabel.trim()) {
+      setError("등급 이름을 입력해 주세요");
+      return;
+    }
+    setAdding(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/grades", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ label: newLabel.trim(), base_role: newBase }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "추가 실패");
+      setNewLabel("");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const saveLabel = async (id: number) => {
+    const v = editingLabel.trim();
+    if (!v) return;
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/grades/${id}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ label: v }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "수정 실패");
+      setEditingId(null);
+      setEditingLabel("");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    }
+  };
+
+  const deleteGrade = async (g: Grade) => {
+    if (!window.confirm(`"${g.label}" 등급을 삭제할까요?`)) return;
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/grades/${g.id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "삭제 실패");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    }
+  };
+
+  return (
+    <Card title="직원 등급">
+      <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed -mt-1 mb-3">
+        센터에서 사용하는 직원 등급을 관리해요. 기본 4개 등급은 이름을 바꿀 수는 있지만 삭제할 수 없어요. 권한 게이트는 등급의 <strong>기본 분류</strong>(대표자/관리자/팀장/강사)에 따라 동작합니다.
+      </p>
+
+      {loading ? (
+        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : (
+        <ul className="space-y-1.5">
+          {grades.map((g) => (
+            <li
+              key={g.id}
+              className="flex items-center justify-between gap-2 py-1.5 border-b border-[#E8E0D0]/40 dark:border-zinc-800/40 last:border-0"
+            >
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                {editingId === g.id ? (
+                  <>
+                    <input
+                      className={`${crmInputClass} flex-1`}
+                      value={editingLabel}
+                      onChange={(e) => setEditingLabel(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveLabel(g.id);
+                        if (e.key === "Escape") {
+                          setEditingId(null);
+                          setEditingLabel("");
+                        }
+                      }}
+                      autoFocus
+                    />
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[13.5px] font-medium text-[#2A251D] dark:text-zinc-100 truncate">
+                      {g.label}
+                    </span>
+                    <span className="text-[11px] text-[#A89B80] shrink-0">
+                      {BASE_ROLE_LABEL[g.base_role] ?? g.base_role} 기반
+                      {g.is_system && <span className="ml-1 text-[#6B7B3A]">· 기본</span>}
+                    </span>
+                  </>
+                )}
+              </div>
+              <div className="flex gap-1.5 shrink-0">
+                {editingId === g.id ? (
+                  <>
+                    <button
+                      onClick={() => saveLabel(g.id)}
+                      className="px-2.5 py-1 rounded-md bg-[#6B7B3A] text-white text-[12px] font-semibold"
+                    >
+                      저장
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingId(null);
+                        setEditingLabel("");
+                      }}
+                      className="px-2.5 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#6B5D47] dark:text-zinc-400"
+                    >
+                      취소
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => {
+                        setEditingId(g.id);
+                        setEditingLabel(g.label);
+                      }}
+                      className="px-2.5 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                    >
+                      이름 변경
+                    </button>
+                    {!g.is_system && (
+                      <button
+                        onClick={() => deleteGrade(g)}
+                        className="px-2.5 py-1 rounded-md border border-red-200 dark:border-red-900 text-[12px] text-red-700 dark:text-red-300 hover:bg-red-50"
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-4 pt-3 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+        <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
+          새 등급 추가
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <input
+            className={`${crmInputClass} flex-1 min-w-[140px]`}
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            placeholder="예) 수석강사, 부원장"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addGrade();
+            }}
+          />
+          <select
+            className={crmInputClass}
+            style={{ maxWidth: 140 }}
+            value={newBase}
+            onChange={(e) => setNewBase(e.target.value as typeof newBase)}
+          >
+            <option value="owner">대표자 기반</option>
+            <option value="admin">관리자 기반</option>
+            <option value="manager">팀장 기반</option>
+            <option value="trainer">강사 기반</option>
+          </select>
+          <button
+            onClick={addGrade}
+            disabled={adding || !newLabel.trim()}
+            className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932] whitespace-nowrap"
+          >
+            {adding ? "추가 중…" : "추가"}
+          </button>
+        </div>
+        <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
+          기반 등급에 따라 권한이 결정돼요. 이름은 자유롭게 지을 수 있고, 같은 이름은 중복으로 추가할 수 없어요.
+        </p>
+      </div>
+
+      {error && (
+        <div className="mt-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+    </Card>
   );
 }
 

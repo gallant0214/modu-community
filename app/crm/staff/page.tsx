@@ -131,13 +131,35 @@ function AddStaffModal({
 
   const [picked, setPicked] = useState<LookupUser | null>(null);
   const [displayName, setDisplayName] = useState("");
-  const [role, setRole] = useState<"owner" | "admin" | "manager" | "trainer">("trainer");
+  const [gradeId, setGradeId] = useState<number | "">("");
   const [accessLevel, setAccessLevel] = useState<"none" | "schedule" | "admin">("schedule");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
 
+  const [grades, setGrades] = useState<{ id: number; base_role: string; label: string }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // 등급 목록 로드
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/grades", {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const list = data.grades ?? [];
+        setGrades(list);
+        // 기본 선택: '강사' 기반 첫 등급
+        const trainerGrade = list.find((g: { base_role: string }) => g.base_role === "trainer");
+        if (trainerGrade && gradeId === "") setGradeId(trainerGrade.id);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, getIdToken]);
 
   useEffect(() => {
     if (!open) {
@@ -146,13 +168,16 @@ function AddStaffModal({
       setSearched(false);
       setPicked(null);
       setDisplayName("");
-      setRole("trainer");
+      setGradeId("");
       setAccessLevel("schedule");
       setEmail("");
       setPhone("");
       setError("");
     }
   }, [open]);
+
+  const selectedGrade = grades.find((g) => g.id === gradeId);
+  const role = (selectedGrade?.base_role ?? "trainer") as "owner" | "admin" | "manager" | "trainer";
 
   const search = async () => {
     const q = query.trim();
@@ -196,6 +221,7 @@ function AddStaffModal({
     if (!picked) return;
     setError("");
     if (!displayName.trim()) return setError("표시명을 입력해주세요");
+    if (!gradeId) return setError("등급을 선택해주세요");
     setSubmitting(true);
     try {
       const token = await getIdToken();
@@ -205,7 +231,7 @@ function AddStaffModal({
         body: JSON.stringify({
           firebase_uid: picked.firebase_uid,
           display_name: displayName.trim(),
-          role,
+          grade_id: gradeId,
           access_level: accessLevel,
           email: email.trim() || undefined,
           phone: phone.trim() || undefined,
@@ -329,13 +355,15 @@ function AddStaffModal({
               <CrmField label="등급" required>
                 <select
                   className={crmInputClass}
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as typeof role)}
+                  value={gradeId}
+                  onChange={(e) => setGradeId(e.target.value ? Number(e.target.value) : "")}
                 >
-                  <option value="owner">대표자</option>
-                  <option value="admin">관리자</option>
-                  <option value="manager">팀장</option>
-                  <option value="trainer">강사</option>
+                  <option value="">선택해 주세요</option>
+                  {grades.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.label}
+                    </option>
+                  ))}
                 </select>
               </CrmField>
               <CrmField label="접근 권한" required>
