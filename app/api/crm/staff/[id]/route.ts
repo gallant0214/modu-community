@@ -26,7 +26,7 @@ export async function GET(
   const { data: member, error } = await supabase
     .from("crm_center_members")
     .select(
-      "id, firebase_uid, role, display_name, phone, email, access_level, is_solo_owner, status, joined_at, left_at"
+      "id, firebase_uid, role, grade_id, display_name, phone, email, access_level, is_solo_owner, status, joined_at, left_at"
     )
     .eq("id", memberId)
     .eq("center_id", ctx.centerId)
@@ -68,6 +68,7 @@ export async function PATCH(
 
   let body: {
     role?: string;
+    grade_id?: number | null;
     access_level?: string;
     status?: string;
     display_name?: string;
@@ -79,7 +80,21 @@ export async function PATCH(
   }
 
   const patch: Record<string, unknown> = {};
-  if (body.role !== undefined) {
+
+  // grade_id 변경: 해당 등급의 base_role 로 role 자동 sync
+  if (body.grade_id !== undefined && body.grade_id !== null) {
+    const { data: g } = await supabase
+      .from("crm_grades")
+      .select("id, base_role")
+      .eq("id", body.grade_id)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    if (!g) {
+      return NextResponse.json({ error: "등급을 찾을 수 없습니다" }, { status: 400 });
+    }
+    patch.grade_id = g.id;
+    patch.role = g.base_role;
+  } else if (body.role !== undefined) {
     if (!ALLOWED_ROLES.includes(body.role as CrmRole)) {
       return NextResponse.json({ error: "등급 값이 잘못됨" }, { status: 400 });
     }

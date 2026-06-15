@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("crm_center_members")
     .select(
-      "id, firebase_uid, role, display_name, phone, email, access_level, is_solo_owner, status, joined_at, left_at"
+      "id, firebase_uid, role, grade_id, display_name, phone, email, access_level, is_solo_owner, status, joined_at, left_at"
     )
     .eq("center_id", ctx.centerId)
     .order("status", { ascending: true })   // active 먼저
@@ -51,6 +51,7 @@ export async function POST(request: Request) {
     firebase_uid?: string;
     display_name?: string;
     role?: string;
+    grade_id?: number;
     access_level?: string;
     email?: string;
     phone?: string;
@@ -64,7 +65,22 @@ export async function POST(request: Request) {
   const uid = body.firebase_uid?.trim();
   if (!uid) return NextResponse.json({ error: "사용자를 선택해주세요" }, { status: 400 });
 
-  const role = body.role as CrmRole | undefined;
+  // grade_id 가 있으면 role 을 grade.base_role 로 sync. 없으면 role 직접 사용.
+  let role = body.role as CrmRole | undefined;
+  let gradeId: number | null = body.grade_id ?? null;
+  if (gradeId) {
+    const { data: g } = await supabase
+      .from("crm_grades")
+      .select("id, base_role")
+      .eq("id", gradeId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    if (!g) {
+      return NextResponse.json({ error: "등급을 찾을 수 없습니다" }, { status: 400 });
+    }
+    role = g.base_role as CrmRole;
+    gradeId = g.id;
+  }
   if (!role || !ALLOWED_ROLES.includes(role)) {
     return NextResponse.json({ error: "등급 값이 잘못됨" }, { status: 400 });
   }
@@ -105,6 +121,7 @@ export async function POST(request: Request) {
       .update({
         status: "active",
         role,
+        grade_id: gradeId,
         access_level: accessLevel,
         display_name: displayName,
         email: body.email?.trim() || null,
@@ -144,6 +161,7 @@ export async function POST(request: Request) {
       center_id: ctx.centerId,
       firebase_uid: uid,
       role,
+      grade_id: gradeId,
       display_name: displayName,
       email: body.email?.trim() || null,
       phone: body.phone?.trim() || null,
