@@ -164,8 +164,8 @@ function RegisterModal({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [birth, setBirth] = useState("");
-  const [gender, setGender] = useState<"" | "M" | "F" | "N">("");
+  const [birth, setBirth] = useState("1990-01-01");
+  const [gender, setGender] = useState<"" | "M" | "F">("");
   const [linkedUid, setLinkedUid] = useState("");
   const [linkedNickname, setLinkedNickname] = useState("");
   const [nickQuery, setNickQuery] = useState("");
@@ -184,7 +184,7 @@ function RegisterModal({
       setName("");
       setPhone("");
       setEmail("");
-      setBirth("");
+      setBirth("1990-01-01");
       setGender("");
       setLinkedUid("");
       setLinkedNickname("");
@@ -251,7 +251,7 @@ function RegisterModal({
     setName("");
     setPhone("");
     setEmail("");
-    setBirth("");
+    setBirth("1990-01-01");
     setGender("");
     setMemo("");
   };
@@ -333,12 +333,11 @@ function RegisterModal({
             <select
               className={crmInputClass}
               value={gender}
-              onChange={(e) => setGender(e.target.value as "" | "M" | "F" | "N")}
+              onChange={(e) => setGender(e.target.value as "" | "M" | "F")}
             >
               <option value="">선택 안 함</option>
               <option value="M">남</option>
               <option value="F">여</option>
-              <option value="N">기타</option>
             </select>
           </CrmField>
           <CrmField label="생년월일">
