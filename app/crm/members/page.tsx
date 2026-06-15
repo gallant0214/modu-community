@@ -167,6 +167,13 @@ function RegisterModal({
   const [birth, setBirth] = useState("");
   const [gender, setGender] = useState<"" | "M" | "F" | "N">("");
   const [linkedUid, setLinkedUid] = useState("");
+  const [linkedNickname, setLinkedNickname] = useState("");
+  const [nickQuery, setNickQuery] = useState("");
+  const [nickResults, setNickResults] = useState<
+    { firebase_uid: string; name: string; email: string | null }[]
+  >([]);
+  const [nickSearching, setNickSearching] = useState(false);
+  const [nickSearched, setNickSearched] = useState(false);
   const [memo, setMemo] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -180,17 +187,75 @@ function RegisterModal({
       setBirth("");
       setGender("");
       setLinkedUid("");
+      setLinkedNickname("");
+      setNickQuery("");
+      setNickResults([]);
+      setNickSearched(false);
       setMemo("");
       setError("");
     }
   }, [open]);
+
+  // 회원 유형이 가회원으로 바뀌면 연결 정보 초기화
+  useEffect(() => {
+    if (memberType === "provisional") {
+      setLinkedUid("");
+      setLinkedNickname("");
+      setNickQuery("");
+      setNickResults([]);
+      setNickSearched(false);
+    }
+  }, [memberType]);
+
+  const searchNickname = async () => {
+    const q = nickQuery.trim();
+    setError("");
+    if (!q) {
+      setNickResults([]);
+      setNickSearched(false);
+      return;
+    }
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      setNickSearching(true);
+      const res = await fetch(`/api/crm/users/lookup?q=${encodeURIComponent(q)}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "검색 실패");
+      setNickResults(data.users ?? []);
+      setNickSearched(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setNickSearching(false);
+    }
+  };
+
+  const pickUser = (u: { firebase_uid: string; name: string; email: string | null }) => {
+    setLinkedUid(u.firebase_uid);
+    setLinkedNickname(u.name);
+    // 이름이 비어있으면 닉네임을 기본값으로 자동 입력
+    if (!name.trim()) setName(u.name);
+    // 이메일이 비어있으면 가입자의 이메일을 자동 입력
+    if (!email.trim() && u.email) setEmail(u.email);
+    setNickResults([]);
+    setNickSearched(false);
+    setNickQuery("");
+  };
+
+  const clearLinked = () => {
+    setLinkedUid("");
+    setLinkedNickname("");
+  };
 
   const submit = async () => {
     setError("");
     if (!name.trim()) return setError("이름을 입력해주세요");
     if (!phone.trim()) return setError("연락처를 입력해주세요");
     if ((memberType === "matched" || memberType === "full") && !linkedUid.trim()) {
-      return setError("사용자 식별자(uid)가 필요합니다");
+      return setError("모두의 지도사 사용자를 닉네임으로 검색해 선택해 주세요");
     }
     setSubmitting(true);
     try {
@@ -289,13 +354,75 @@ function RegisterModal({
         </CrmField>
 
         {(memberType === "matched" || memberType === "full") && (
-          <CrmField label="사용자 식별자 (firebase uid)" required>
-            <input
-              className={crmInputClass}
-              value={linkedUid}
-              onChange={(e) => setLinkedUid(e.target.value)}
-              placeholder="회원의 firebase_uid"
-            />
+          <CrmField label="모두의 지도사 사용자 연결" required>
+            {linkedUid ? (
+              <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-[#6B7B3A]/40 bg-[#6B7B3A]/5 dark:bg-[#6B7B3A]/15">
+                <span className="text-[13.5px] text-[#3A342A] dark:text-zinc-200">
+                  연결됨: <strong className="font-semibold">{linkedNickname}</strong>
+                </span>
+                <button
+                  onClick={clearLinked}
+                  className="text-[12.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+                >
+                  다시 선택
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <input
+                    className={`${crmInputClass} flex-1`}
+                    value={nickQuery}
+                    onChange={(e) => setNickQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        searchNickname();
+                      }
+                    }}
+                    placeholder="닉네임 또는 이메일"
+                  />
+                  <button
+                    type="button"
+                    onClick={searchNickname}
+                    disabled={nickSearching || !nickQuery.trim()}
+                    className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932] whitespace-nowrap"
+                  >
+                    {nickSearching ? "검색 중…" : "검색"}
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
+                  닉네임은 일부만 입력해도 검색되고, 이메일은 정확히 입력하면 바로 찾을 수 있어요.
+                </p>
+                {nickSearched && nickResults.length === 0 && (
+                  <div className="mt-2 px-3 py-2 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-lg">
+                    일치하는 사용자가 없습니다.
+                  </div>
+                )}
+                {nickResults.length > 0 && (
+                  <ul className="mt-2 space-y-1.5 max-h-[200px] overflow-y-auto">
+                    {nickResults.map((u) => (
+                      <li key={u.firebase_uid}>
+                        <button
+                          type="button"
+                          onClick={() => pickUser(u)}
+                          className="w-full text-left px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50"
+                        >
+                          <div className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">
+                            {u.name}
+                          </div>
+                          {u.email && (
+                            <div className="text-[11.5px] text-[#A89B80] truncate">
+                              {u.email}
+                            </div>
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
           </CrmField>
         )}
         <CrmField label="메모">

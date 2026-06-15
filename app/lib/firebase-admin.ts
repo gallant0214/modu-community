@@ -3,7 +3,7 @@ import { getAuth } from "firebase-admin/auth";
 
 let app: App;
 
-function getFirebaseAdmin() {
+export function getFirebaseAdmin() {
   if (getApps().length === 0) {
     // 서비스 계정 JSON이 환경변수에 있으면 사용, 없으면 projectId만으로 초기화
     const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
