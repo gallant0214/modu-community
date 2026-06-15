@@ -20,6 +20,11 @@ export async function GET(request: Request) {
   if (!ctx) {
     return NextResponse.json({ onboarded: false });
   }
+  const { data: centerInfo } = await supabase
+    .from("crm_centers")
+    .select("business_no")
+    .eq("id", ctx.centerId)
+    .maybeSingle();
   return NextResponse.json({
     onboarded: true,
     centerId: ctx.centerId,
@@ -28,6 +33,7 @@ export async function GET(request: Request) {
     role: ctx.role,
     accessLevel: ctx.accessLevel,
     isSoloOwner: ctx.isSoloOwner,
+    businessNo: centerInfo?.business_no ?? null,
   });
 }
 

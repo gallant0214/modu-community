@@ -60,6 +60,7 @@ const BASE_ROLE_LABEL: Record<string, string> = {
 interface BootstrapInfo {
   role: "owner" | "admin" | "manager" | "trainer";
   centerName: string;
+  businessNo: string | null;
 }
 
 export default function CrmSettingsPage() {
@@ -95,7 +96,7 @@ export default function CrmSettingsPage() {
       setSettings(data.settings);
       if (b.ok) {
         const bi = await b.json();
-        setInfo({ role: bi.role, centerName: bi.centerName });
+        setInfo({ role: bi.role, centerName: bi.centerName, businessNo: bi.businessNo ?? null });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
@@ -359,8 +360,9 @@ export default function CrmSettingsPage() {
       <WithdrawModal
         open={withdrawOpen}
         centerName={info?.centerName ?? ""}
+        businessNo={info?.businessNo ?? null}
         onClose={() => setWithdrawOpen(false)}
-        onConfirm={async () => {
+        onConfirm={async (typedBusinessNo) => {
           const token = await getIdToken();
           if (!token) {
             alert("로그인 정보를 확인할 수 없습니다");
@@ -368,7 +370,10 @@ export default function CrmSettingsPage() {
           }
           const res = await fetch("/api/crm/centers/me", {
             method: "DELETE",
-            headers: { authorization: `Bearer ${token}` },
+            headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+            body: JSON.stringify(
+              typedBusinessNo !== null ? { business_no: typedBusinessNo } : {}
+            ),
           });
           const data = await res.json();
           if (!res.ok) {
@@ -843,32 +848,42 @@ function TransferModal({
 function WithdrawModal({
   open,
   centerName,
+  businessNo,
   onClose,
   onConfirm,
 }: {
   open: boolean;
   centerName: string;
+  businessNo: string | null;
   onClose: () => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: (typedBusinessNo: string | null) => Promise<void>;
 }) {
-  const [typed, setTyped] = useState("");
+  const [typedName, setTypedName] = useState("");
+  const [typedBiz, setTypedBiz] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) {
-      setTyped("");
+      setTypedName("");
+      setTypedBiz("");
       setSubmitting(false);
     }
   }, [open]);
 
-  const expected = (centerName || "").trim();
-  const matches = expected.length > 0 && typed.trim() === expected;
+  const expectedName = (centerName || "").trim();
+  const expectedBiz = (businessNo || "").replace(/[\s-]/g, "");
+  const requireBiz = expectedBiz.length > 0;
+
+  const nameMatches = expectedName.length > 0 && typedName.trim() === expectedName;
+  const bizMatches =
+    !requireBiz || typedBiz.replace(/[\s-]/g, "") === expectedBiz;
+  const matches = nameMatches && bizMatches;
 
   const handleConfirm = async () => {
     if (!matches || submitting) return;
     setSubmitting(true);
     try {
-      await onConfirm();
+      await onConfirm(requireBiz ? typedBiz.trim() : null);
     } finally {
       setSubmitting(false);
     }
@@ -898,19 +913,38 @@ function WithdrawModal({
           <label className="block text-[12.5px] text-[#3A342A] dark:text-zinc-300 mb-1.5">
             확인을 위해 센터 이름{" "}
             <span className="font-semibold text-red-700 dark:text-red-300">
-              &ldquo;{expected}&rdquo;
+              &ldquo;{expectedName}&rdquo;
             </span>{" "}
             을(를) 입력해 주세요.
           </label>
           <input
             type="text"
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            placeholder={expected}
+            value={typedName}
+            onChange={(e) => setTypedName(e.target.value)}
+            placeholder={expectedName}
             className={crmInputClass}
             autoFocus
           />
         </div>
+
+        {requireBiz && (
+          <div>
+            <label className="block text-[12.5px] text-[#3A342A] dark:text-zinc-300 mb-1.5">
+              사업자 등록번호도 정확히 입력해 주세요.
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={typedBiz}
+              onChange={(e) => setTypedBiz(e.target.value)}
+              placeholder="000-00-00000"
+              className={crmInputClass}
+            />
+            <p className="mt-1 text-[11.5px] text-[#A89B80]">
+              하이픈은 있어도 없어도 OK. 등록된 번호와 일치해야 탈퇴됩니다.
+            </p>
+          </div>
+        )}
 
         <div className="flex gap-2 pt-1">
           <button

@@ -35,7 +35,7 @@ export async function DELETE(request: Request) {
   // 원조 대표자(owner_uid) 본인이 맞는지 확인
   const { data: center } = await supabase
     .from("crm_centers")
-    .select("id, owner_uid")
+    .select("id, owner_uid, business_no")
     .eq("id", ctx.centerId)
     .maybeSingle();
 
@@ -47,6 +47,24 @@ export async function DELETE(request: Request) {
       { error: "센터를 처음 등록한 대표자만 탈퇴할 수 있습니다" },
       { status: 403 }
     );
+  }
+
+  // 사업자 등록번호 확인 (등록돼 있는 센터만)
+  if (center.business_no) {
+    let body: { business_no?: string } = {};
+    try {
+      body = await request.json();
+    } catch {
+      // body 없음 — 아래에서 차단
+    }
+    const provided = (body.business_no ?? "").replace(/[\s-]/g, "");
+    const stored = center.business_no.replace(/[\s-]/g, "");
+    if (!provided || provided !== stored) {
+      return NextResponse.json(
+        { error: "사업자 등록번호가 일치하지 않습니다" },
+        { status: 400 }
+      );
+    }
   }
 
   const { error } = await supabase
