@@ -3,6 +3,20 @@
  * DB enum 키는 영문 유지, 사용자 노출 텍스트는 항상 한글로 변환.
  */
 
+/** 천 단위 콤마 포맷 (예: 1234567 → "1,234,567") */
+export function formatWon(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "";
+  const n = typeof value === "string" ? Number(value.replace(/[^0-9]/g, "")) : value;
+  if (!Number.isFinite(n)) return "";
+  return n.toLocaleString("ko-KR");
+}
+
+/** 콤마/공백/문자 제거 후 정수. 비어있으면 0. */
+export function parseWon(value: string): number {
+  const cleaned = value.replace(/[^0-9]/g, "");
+  return cleaned ? Number(cleaned) : 0;
+}
+
 export const ROLE_LABEL: Record<string, string> = {
   owner: "대표자",
   admin: "관리자",

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmLineChart } from "../_components/crm-line-chart";
 import { CrmDonutChart } from "../_components/crm-donut-chart";
-import { PAYMENT_METHOD_LABEL } from "../_components/crm-labels";
+import { PAYMENT_METHOD_LABEL, formatWon } from "../_components/crm-labels";
 
 interface TrendPoint {
   ym: string;
@@ -91,7 +91,7 @@ export default function CrmDashboardPage() {
           {monthly && (
             <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <KpiCard label="이번달 등록 회원" value={`${monthly.summary.newMembers}명`} />
-              <KpiCard label="이번달 PT매출" value={`${monthly.summary.totalRevenue.toLocaleString()}원`} accent />
+              <KpiCard label="이번달 PT매출" value={`${formatWon(monthly.summary.totalRevenue)}원`} accent />
               <KpiCard label="발급 수강권" value={`${monthly.summary.totalPassCount}건`} />
               <KpiCard
                 label="활동 강사"
@@ -133,7 +133,7 @@ export default function CrmDashboardPage() {
                 rows={[...monthly.trainers]
                   .sort((a, b) => b.passes.revenue - a.passes.revenue)
                   .slice(0, 5)
-                  .map((t) => ({ label: t.name, value: `${t.passes.revenue.toLocaleString()}원` }))}
+                  .map((t) => ({ label: t.name, value: `${formatWon(t.passes.revenue)}원` }))}
               />
               <RankBox
                 title="이번달 수업완료 랭킹"

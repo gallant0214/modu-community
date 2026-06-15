@@ -7,6 +7,7 @@ import {
   ISSUE_TYPE_LABEL,
   PAYMENT_METHOD_LABEL,
   PASS_STATUS_LABEL,
+  formatWon,
 } from "../_components/crm-labels";
 import { crmInputClass } from "../_components/crm-modal";
 
@@ -188,7 +189,7 @@ export default function CrmPassesPage() {
                     </span>
                     <span className="text-[#A89B80]"> / {p.total_sessions}</span>
                   </Td>
-                  <Td>{p.price_won.toLocaleString()}원</Td>
+                  <Td>{formatWon(p.price_won)}원</Td>
                   <Td>
                     {p.payment_method === "custom" && p.payment_method_custom
                       ? p.payment_method_custom

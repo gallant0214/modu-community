@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
-import { ROLE_LABEL } from "../_components/crm-labels";
+import { ROLE_LABEL, formatWon } from "../_components/crm-labels";
 
 interface MonthlyResp {
   ym: string;
@@ -83,7 +83,7 @@ export default function CrmStatsPage() {
         <>
           <section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
             <Kpi label="등록 회원수" value={`${data.summary.newMembers}명`} />
-            <Kpi label="PT매출" value={`${data.summary.totalRevenue.toLocaleString()}원`} accent />
+            <Kpi label="PT매출" value={`${formatWon(data.summary.totalRevenue)}원`} accent />
             <Kpi label="수강권" value={`${data.summary.totalPassCount}건`} />
             <Kpi
               label="활동 강사"
@@ -123,7 +123,7 @@ export default function CrmStatsPage() {
                       <Td>{t.passes.new}건</Td>
                       <Td>{t.passes.renewal}건</Td>
                       <Td>{t.passes.trial}건</Td>
-                      <Td className="font-semibold">{t.passes.revenue.toLocaleString()}원</Td>
+                      <Td className="font-semibold">{formatWon(t.passes.revenue)}원</Td>
                       <Td>{t.reservations.attended}회</Td>
                       <Td className="text-[#A89B80]">{t.reservations.cancelled}회</Td>
                       <Td className="text-red-600 dark:text-red-400">{t.reservations.noshow}회</Td>

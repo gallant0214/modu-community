@@ -10,6 +10,8 @@ import {
   ISSUE_TYPE_LABEL,
   PAYMENT_METHOD_LABEL,
   PASS_STATUS_LABEL,
+  formatWon,
+  parseWon,
 } from "../../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../../_components/crm-modal";
 
@@ -187,7 +189,7 @@ export default function CrmMemberDetailPage() {
                 <div className="mt-1 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
                   {ISSUE_TYPE_LABEL[p.issue_type] ?? p.issue_type} ·{" "}
                   잔여 {p.remaining_sessions}/{p.total_sessions}회 ·{" "}
-                  {p.session_minutes}분 · {p.price_won.toLocaleString()}원 ·{" "}
+                  {p.session_minutes}분 · {formatWon(p.price_won)}원 ·{" "}
                   {p.payment_method === "custom" && p.payment_method_custom
                     ? p.payment_method_custom
                     : PAYMENT_METHOD_LABEL[p.payment_method] ?? p.payment_method}
@@ -514,12 +516,12 @@ function PassIssueModal({
         </div>
         <CrmField label="결제 금액 (원)">
           <input
-            type="number"
-            min={0}
-            step={10000}
+            type="text"
+            inputMode="numeric"
             className={crmInputClass}
-            value={priceWon}
-            onChange={(e) => setPriceWon(Number(e.target.value) || 0)}
+            value={priceWon ? formatWon(priceWon) : ""}
+            onChange={(e) => setPriceWon(parseWon(e.target.value))}
+            placeholder="0"
           />
         </CrmField>
         <CrmField label="결제 수단">
