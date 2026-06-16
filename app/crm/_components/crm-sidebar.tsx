@@ -15,13 +15,16 @@ interface MenuItem {
 }
 
 const MENU: MenuItem[] = [
-  { href: "/crm/dashboard", label: "대시보드", icon: IconDashboard },
-  { href: "/crm/staff",     label: "직원 관리",   staffOnly: true, icon: IconStaff },
-  { href: "/crm/members",   label: "회원 관리",   icon: IconMembers },
-  { href: "/crm/passes",    label: "수강권 관리", icon: IconPass },
-  { href: "/crm/schedule",  label: "스케줄 관리", icon: IconCalendar },
-  { href: "/crm/stats",     label: "기간별 통계", icon: IconStats },
-  { href: "/crm/settings",  label: "설정",        staffOnly: true, icon: IconSettings },
+  { href: "/crm/dashboard",   label: "대시보드",     icon: IconDashboard },
+  { href: "/crm/staff",       label: "직원 관리",     staffOnly: true, icon: IconStaff },
+  { href: "/crm/members",     label: "회원 관리",     icon: IconMembers },
+  { href: "/crm/lockers",     label: "락커",          icon: IconLocker },
+  { href: "/crm/passes",      label: "수강권 관리",   icon: IconPass },
+  { href: "/crm/memberships", label: "회원권 관리",   icon: IconMembership },
+  { href: "/crm/schedule",    label: "스케줄 관리",   icon: IconCalendar },
+  { href: "/crm/stats",       label: "기간별 통계",   icon: IconStats },
+  { href: "/crm/contracts",   label: "계약서",        icon: IconContract },
+  { href: "/crm/settings",    label: "설정",          staffOnly: true, icon: IconSettings },
 ];
 
 interface Props {
@@ -182,6 +185,30 @@ function IconSettings({ className }: { className?: string }) {
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+function IconLocker({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 4h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5a1 1 0 011-1z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16M9 9h.5M9 13h.5M15 9h-.5M15 13h-.5" />
+    </svg>
+  );
+}
+function IconMembership({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h4" />
+    </svg>
+  );
+}
+function IconContract({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h6l5 5v11a2 2 0 01-2 2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13 3v5h5" />
     </svg>
   );
 }
