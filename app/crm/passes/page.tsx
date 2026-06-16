@@ -191,7 +191,7 @@ export default function CrmPassesPage() {
                   </Td>
                   <Td>{formatWon(p.price_won)}원</Td>
                   <Td>
-                    {p.payment_method === "custom" && p.payment_method_custom
+                    {p.payment_method === "etc" && p.payment_method_custom
                       ? p.payment_method_custom
                       : PAYMENT_METHOD_LABEL[p.payment_method] ?? p.payment_method}
                   </Td>

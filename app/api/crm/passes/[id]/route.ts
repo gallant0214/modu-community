@@ -91,7 +91,7 @@ export async function PATCH(
   if (body.price_won !== undefined && body.price_won >= 0) patch.price_won = body.price_won;
   if (body.payment_method) {
     patch.payment_method = body.payment_method;
-    if (body.payment_method === "custom") {
+    if (body.payment_method === "etc") {
       patch.payment_method_custom = body.payment_method_custom?.trim() || null;
     } else {
       patch.payment_method_custom = null;

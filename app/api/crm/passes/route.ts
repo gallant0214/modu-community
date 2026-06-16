@@ -5,7 +5,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 export const dynamic = "force-dynamic";
 
 const ISSUE_TYPES = ["new", "renewal", "trial", "service"] as const;
-const PAYMENT_METHODS = ["cash", "card", "transfer", "custom", "etc"] as const;
+const PAYMENT_METHODS = ["cash", "card", "transfer", "etc"] as const;
 
 /**
  * GET /api/crm/passes?status=&trainer_id=&payment_method=&q=
@@ -168,7 +168,7 @@ export async function POST(request: Request) {
       session_minutes: Number(body.session_minutes),
       price_won: Number(body.price_won) || 0,
       payment_method: paymentMethod,
-      payment_method_custom: paymentMethod === "custom" ? body.payment_method_custom?.trim() ?? null : null,
+      payment_method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
       vat_included: !!body.vat_included,
       issued_at: body.issued_at,
       expires_at: body.expires_at,

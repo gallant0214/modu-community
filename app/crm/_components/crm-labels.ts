@@ -52,7 +52,6 @@ export const PAYMENT_METHOD_LABEL: Record<string, string> = {
   cash: "현금",
   card: "카드",
   transfer: "계좌",
-  custom: "직접입력",
   etc: "기타",
 };
 

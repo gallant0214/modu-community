@@ -215,7 +215,7 @@ export default function CrmMemberDetailPage() {
                     {ISSUE_TYPE_LABEL[p.issue_type] ?? p.issue_type} ·{" "}
                     잔여 {p.remaining_sessions}/{p.total_sessions}회 ·{" "}
                     {p.session_minutes}분 · {formatWon(p.price_won)}원 ·{" "}
-                    {p.payment_method === "custom" && p.payment_method_custom
+                    {p.payment_method === "etc" && p.payment_method_custom
                       ? p.payment_method_custom
                       : PAYMENT_METHOD_LABEL[p.payment_method] ?? p.payment_method}
                   </div>
@@ -417,7 +417,7 @@ function PassIssueModal({
   const [totalSessions, setTotalSessions] = useState(10);
   const [sessionMinutes, setSessionMinutes] = useState(50);
   const [priceWon, setPriceWon] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "custom" | "etc">("card");
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "etc">("card");
   const [paymentCustom, setPaymentCustom] = useState("");
   const [issuedAt, setIssuedAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [expiresAt, setExpiresAt] = useState(() => {
@@ -459,7 +459,7 @@ function PassIssueModal({
           session_minutes: sessionMinutes,
           price_won: priceWon,
           payment_method: paymentMethod,
-          payment_method_custom: paymentMethod === "custom" ? paymentCustom : undefined,
+          payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
           issued_at: issuedAt,
           expires_at: expiresAt,
           memo: memo || undefined,
@@ -549,8 +549,8 @@ function PassIssueModal({
           />
         </CrmField>
         <CrmField label="결제 수단">
-          <div className="grid grid-cols-5 gap-1.5">
-            {(["cash", "card", "transfer", "custom", "etc"] as const).map((m) => (
+          <div className="grid grid-cols-4 gap-1.5">
+            {(["cash", "card", "transfer", "etc"] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => setPaymentMethod(m)}
@@ -564,7 +564,7 @@ function PassIssueModal({
               </button>
             ))}
           </div>
-          {paymentMethod === "custom" && (
+          {paymentMethod === "etc" && (
             <input
               className={`${crmInputClass} mt-2`}
               value={paymentCustom}
@@ -703,8 +703,8 @@ function PassDetailModal({
   const trainerName = pass ? staffMap.get(pass.trainer_member_id) ?? "—" : "—";
   const sellerName = pass ? staffMap.get(pass.seller_member_id) ?? "—" : "—";
   const paymentLabel = pass
-    ? pass.payment_method === "custom" && pass.payment_method_custom
-      ? pass.payment_method_custom
+    ? pass.payment_method === "etc" && pass.payment_method_custom
+      ? `${pass.payment_method_custom} (기타)`
       : PAYMENT_METHOD_LABEL[pass.payment_method] ?? pass.payment_method
     : "";
 
