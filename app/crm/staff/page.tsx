@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
-import { ROLE_LABEL, ACCESS_LEVEL_LABEL } from "../_components/crm-labels";
+import { ROLE_LABEL, ACCESS_LEVEL_LABEL, formatPhone } from "../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 
 interface StaffRow {
@@ -398,9 +398,10 @@ function AddStaffModal({
               <CrmField label="연락처">
                 <input
                   type="tel"
+                  inputMode="numeric"
                   className={crmInputClass}
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => setPhone(formatPhone(e.target.value))}
                   placeholder="010-1234-5678"
                 />
               </CrmField>

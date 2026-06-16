@@ -17,6 +17,22 @@ export function parseWon(value: string): number {
   return cleaned ? Number(cleaned) : 0;
 }
 
+/**
+ * 한국 휴대폰 번호 하이픈 자동 포맷.
+ *  - 3자리 이하: "010"
+ *  - 4~6자리: "010-1234"
+ *  - 7~10자리 (옛날 010-XXX-XXXX): "010-123-4567"
+ *  - 11자리: "010-1234-5678"
+ *  - 11자리 초과 입력은 잘림
+ */
+export function formatPhone(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 11);
+  if (d.length < 4) return d;
+  if (d.length < 7) return `${d.slice(0, 3)}-${d.slice(3)}`;
+  if (d.length < 11) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+  return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+}
+
 export const ROLE_LABEL: Record<string, string> = {
   owner: "대표자",
   admin: "관리자",

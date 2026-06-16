@@ -162,17 +162,39 @@ export default function CrmStaffDetailPage() {
     <div className="px-5 md:px-8 py-6 md:py-8 max-w-3xl mx-auto">
       <BackLink />
 
-      <header className="mt-3 mb-6">
+      <header className="mt-3 mb-5">
         <h1 className="text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
           {member.display_name}
           {isSelfNotOwner && (
             <span className="ml-2 text-[12px] text-[#A89B80]">· 본인</span>
           )}
         </h1>
-        <div className="mt-1.5 text-[12.5px] text-[#8C8270] dark:text-zinc-500">
-          {member.email || "이메일 없음"} {member.phone && ` · ${member.phone}`}
-        </div>
       </header>
+
+      <Section title="연락처 / 이메일">
+        <dl className="grid grid-cols-[64px_1fr] gap-x-3 gap-y-2 text-[13px]">
+          <dt className="text-[#A89B80] dark:text-zinc-500">연락처</dt>
+          <dd className="text-[#2A251D] dark:text-zinc-100 font-medium">
+            {member.phone ? (
+              <a href={`tel:${member.phone.replace(/\D/g, "")}`} className="hover:text-[#6B7B3A]">
+                {member.phone}
+              </a>
+            ) : (
+              <span className="text-[#A89B80]">미등록</span>
+            )}
+          </dd>
+          <dt className="text-[#A89B80] dark:text-zinc-500">이메일</dt>
+          <dd className="text-[#2A251D] dark:text-zinc-100 font-medium break-all">
+            {member.email ? (
+              <a href={`mailto:${member.email}`} className="hover:text-[#6B7B3A]">
+                {member.email}
+              </a>
+            ) : (
+              <span className="text-[#A89B80]">미등록</span>
+            )}
+          </dd>
+        </dl>
+      </Section>
 
       {error && (
         <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
