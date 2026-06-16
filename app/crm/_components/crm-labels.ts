@@ -60,6 +60,7 @@ export const EMPLOYMENT_STATUS_LABEL: Record<string, string> = {
 export const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
   regular: "정규직",
   freelance: "프리랜서",
+  part_time: "아르바이트",
 };
 
 export const MEMBER_TYPE_LABEL: Record<string, string> = {

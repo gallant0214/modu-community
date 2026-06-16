@@ -134,7 +134,7 @@ export async function PATCH(
     patch.employment_status = body.employment_status;
   }
   if (body.employment_type !== undefined) {
-    if (body.employment_type && !["regular", "freelance"].includes(body.employment_type)) {
+    if (body.employment_type && !["regular", "freelance", "part_time"].includes(body.employment_type)) {
       return NextResponse.json({ error: "근무형태 값이 잘못됨" }, { status: 400 });
     }
     patch.employment_type = body.employment_type || null;

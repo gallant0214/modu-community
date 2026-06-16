@@ -146,7 +146,7 @@ function AddStaffModal({
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [employmentStatus, setEmploymentStatus] = useState<"working" | "on_leave" | "resigned">("working");
-  const [employmentType, setEmploymentType] = useState<"" | "regular" | "freelance">("");
+  const [employmentType, setEmploymentType] = useState<"" | "regular" | "freelance" | "part_time">("");
 
   const [grades, setGrades] = useState<{ id: number; base_role: string; label: string }[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -456,6 +456,7 @@ function AddStaffModal({
                   <option value="">선택 안 함</option>
                   <option value="regular">정규직</option>
                   <option value="freelance">프리랜서</option>
+                  <option value="part_time">아르바이트</option>
                 </select>
               </CrmField>
             </div>
