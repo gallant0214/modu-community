@@ -22,7 +22,7 @@ const MENU: MenuItem[] = [
   { href: "/crm/passes",      label: "수강권 관리",   icon: IconPass },
   { href: "/crm/memberships", label: "회원권 관리",   icon: IconMembership },
   { href: "/crm/schedule",    label: "스케줄 관리",   icon: IconCalendar },
-  { href: "/crm/stats",       label: "기간별 통계",   icon: IconStats },
+  { href: "/crm/stats",       label: "통계",          icon: IconStats },
   { href: "/crm/contracts",   label: "계약서",        icon: IconContract },
   { href: "/crm/settings",    label: "설정",          staffOnly: true, icon: IconSettings },
 ];

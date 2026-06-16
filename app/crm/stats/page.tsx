@@ -57,7 +57,7 @@ export default function CrmStatsPage() {
       <header className="mb-5 flex flex-wrap items-center gap-3">
         <div>
           <h1 className="text-[18px] md:text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
-            기간별 통계
+            통계
           </h1>
           <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
             강사별 매출과 수업 현황을 한 달 단위로 확인해요.
