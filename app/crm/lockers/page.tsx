@@ -105,23 +105,74 @@ export default function CrmLockersPage() {
       {tab === "unassigned" && (
         <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
           <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-            락커 미배정자 (0명)
+            미배정자 목록 (0명)
           </h2>
-          <input
-            type="text"
-            placeholder="회원 이름으로 검색"
-            className={`${crmInputClass} mb-3`}
-          />
-          <EmptyState>락커가 배정되지 않은 회원이 없어요</EmptyState>
+
+          <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
+            <table className="w-full text-[13px]">
+              <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+                <tr>
+                  <Th>이름</Th>
+                  <Th>회원 유형</Th>
+                  <Th>연락처</Th>
+                  <Th>구매 상품</Th>
+                  <Th>결제 일시</Th>
+                  <Th>락커 시작일</Th>
+                  <Th>락커 만료일</Th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colSpan={7} className="px-3 py-12 text-center">
+                    <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">
+                      데이터가 없어요
+                    </div>
+                    <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
+                      미배정자가 없어요.
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <Pagination page={1} totalPages={1} />
         </section>
       )}
 
       {tab === "returns" && (
         <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
           <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-            회수 기록
+            회수 처리 (0건)
           </h2>
-          <EmptyState>회수 기록이 없어요</EmptyState>
+
+          <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
+            <table className="w-full text-[13px]">
+              <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+                <tr>
+                  <Th>이름</Th>
+                  <Th>락커 구역</Th>
+                  <Th>회수 전 락커 번호</Th>
+                  <Th>비밀번호</Th>
+                  <Th>회수일</Th>
+                  <Th>처리자</Th>
+                  <Th>비고</Th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colSpan={7} className="px-3 py-12 text-center">
+                    <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">
+                      데이터가 없어요
+                    </div>
+                    <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
+                      회수 기록이 없어요.
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 
@@ -279,6 +330,48 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       </span>
       {children}
     </label>
+  );
+}
+
+function Th({ children }: { children: React.ReactNode }) {
+  return <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">{children}</th>;
+}
+
+function Pagination({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange?: (next: number) => void;
+}) {
+  const canPrev = page > 1;
+  const canNext = page < totalPages;
+  return (
+    <div className="mt-4 flex items-center justify-center gap-3 text-[12.5px]">
+      <button
+        type="button"
+        disabled={!canPrev}
+        onClick={() => onChange?.(page - 1)}
+        className="px-2 py-1 rounded text-[#6B5D47] dark:text-zinc-400 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+        aria-label="이전 페이지"
+      >
+        ‹
+      </button>
+      <span className="text-[#3A342A] dark:text-zinc-300 font-medium">
+        {page}
+      </span>
+      <button
+        type="button"
+        disabled={!canNext}
+        onClick={() => onChange?.(page + 1)}
+        className="px-2 py-1 rounded text-[#6B5D47] dark:text-zinc-400 disabled:opacity-40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+        aria-label="다음 페이지"
+      >
+        ›
+      </button>
+    </div>
   );
 }
 
