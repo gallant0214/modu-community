@@ -78,6 +78,14 @@ export const PASS_STATUS_LABEL: Record<string, string> = {
   deleted: "삭제",
 };
 
+export const CONTRACT_CATEGORY_LABEL: Record<string, string> = {
+  purchase: "구매 계약서",
+  transfer: "양도 계약서",
+  refund: "환불 계약서",
+  employment: "근로 계약서",
+  etc: "기타 계약서",
+};
+
 export const RESERVATION_STATUS_LABEL: Record<string, string> = {
   booked: "예약완료",
   attended: "출석완료",

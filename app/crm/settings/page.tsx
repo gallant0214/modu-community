@@ -44,6 +44,8 @@ const ACTION_LABEL: Record<string, string> = {
   "reservation.cancelled": "예약 취소",
   "reservation.noshow": "노쇼 처리",
   "settings.update": "설정 변경",
+  "contract.create": "계약서 추가",
+  "contract.delete": "계약서 삭제",
   "grade.create": "등급 추가",
   "grade.update": "등급 수정",
   "grade.delete": "등급 삭제",

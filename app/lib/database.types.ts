@@ -1268,6 +1268,42 @@ export type Database = {
           },
         ]
       }
+      crm_contract_templates: {
+        Row: {
+          id: number
+          center_id: number
+          category: string
+          title: string
+          body: string
+          created_by_uid: string
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          category: string
+          title: string
+          body?: string
+          created_by_uid: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          category?: string
+          title?: string
+          body?: string
+          created_by_uid?: string
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_grades: {
         Row: {
           id: number
