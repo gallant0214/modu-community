@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { ROLE_LABEL, formatWon } from "../_components/crm-labels";
 
@@ -142,9 +143,17 @@ function TrainerTab({ data }: { data: MonthlyResp | null }) {
               </tr>
             ) : (
               data.trainers.map((t) => (
-                <tr key={t.trainerMemberId} className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+                <tr
+                  key={t.trainerMemberId}
+                  className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#FBF7EB] dark:hover:bg-zinc-900/60"
+                >
                   <Td>
-                    <span className="font-semibold text-[#2A251D] dark:text-zinc-100">{t.name}</span>
+                    <Link
+                      href={`/crm/stats/${t.trainerMemberId}`}
+                      className="font-semibold text-[#2A251D] dark:text-zinc-100 hover:text-[#6B7B3A]"
+                    >
+                      {t.name}
+                    </Link>
                   </Td>
                   <Td className="text-[#8C8270]">{ROLE_LABEL[t.role] ?? t.role}</Td>
                   <Td>{t.passes.new}건</Td>

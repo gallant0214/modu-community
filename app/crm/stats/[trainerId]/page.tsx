@@ -1,0 +1,430 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useAuth } from "@/app/components/auth-provider";
+import { ROLE_LABEL, formatWon, formatPhone } from "../../_components/crm-labels";
+import { crmInputClass } from "../../_components/crm-modal";
+
+type Tab = "revenue" | "members" | "sessions";
+type Period = "this_month" | "last_month" | "this_year" | "custom";
+
+interface StaffMember {
+  id: number;
+  display_name: string;
+  role: string;
+  email: string | null;
+  phone: string | null;
+}
+
+export default function TrainerStatsDetailPage() {
+  const params = useParams();
+  const trainerId = Number(params.trainerId);
+  const { getIdToken } = useAuth();
+  const [tab, setTab] = useState<Tab>("revenue");
+  const [member, setMember] = useState<StaffMember | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch(`/api/crm/staff/${trainerId}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setMember(data.member);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken, trainerId]);
+
+  useEffect(() => {
+    if (trainerId) load();
+  }, [trainerId, load]);
+
+  return (
+    <div className="px-5 md:px-8 py-6 md:py-8 max-w-6xl mx-auto">
+      <Link
+        href="/crm/stats"
+        className="inline-flex items-center gap-1 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:text-[#3A342A]"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+        통계 목록
+      </Link>
+
+      <header className="mt-3 mb-5">
+        {loading ? (
+          <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+        ) : !member ? (
+          <div className="text-[13px] text-red-700">{error || "강사 정보를 찾을 수 없습니다."}</div>
+        ) : (
+          <>
+            <h1 className="text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
+              {member.display_name}
+              <span className="ml-2 text-[12px] text-[#A89B80]">
+                · {ROLE_LABEL[member.role] ?? member.role}
+              </span>
+            </h1>
+            <div className="mt-1 text-[12.5px] text-[#8C8270] dark:text-zinc-500">
+              {member.phone ? formatPhone(member.phone) : ""}
+              {member.email && (
+                <>
+                  {member.phone && " · "}
+                  {member.email}
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </header>
+
+      <div className="mb-5 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800 overflow-x-auto">
+        <TabBtn active={tab === "revenue"} onClick={() => setTab("revenue")}>
+          매출
+        </TabBtn>
+        <TabBtn active={tab === "members"} onClick={() => setTab("members")}>
+          담당 회원
+        </TabBtn>
+        <TabBtn active={tab === "sessions"} onClick={() => setTab("sessions")}>
+          수업 내역
+        </TabBtn>
+      </div>
+
+      {tab === "revenue" && <RevenueTab />}
+      {tab === "members" && <MembersTab />}
+      {tab === "sessions" && <SessionsTab />}
+    </div>
+  );
+}
+
+/* ─── 매출 탭 ────────────────────────────── */
+
+function RevenueTab() {
+  const [period, setPeriod] = useState<Period>("this_month");
+
+  return (
+    <>
+      {/* 전체 매출 */}
+      <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5 mb-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-3 mb-3">
+          <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            전체 매출 <span className="text-[11.5px] text-[#A89B80] font-normal">(매출 적용 금액)</span>
+          </h2>
+          <div className="flex items-center gap-2">
+            <span className="text-[12px] text-[#A89B80]">조회 기간</span>
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value as Period)}
+              className={crmInputClass}
+              style={{ width: 120 }}
+            >
+              <option value="this_month">이번 달</option>
+              <option value="last_month">지난 달</option>
+              <option value="this_year">올해</option>
+              <option value="custom">직접 선택</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <RevenueKpi label="매출 적용 금액" value={0} />
+          <RevenueKpi label="잔여 미수금" value={0} muted />
+        </div>
+      </section>
+
+      {/* 카테고리별 매출 5종 */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+        {CATEGORIES.map((c) => (
+          <div
+            key={c.key}
+            className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5"
+          >
+            <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
+              {c.label}
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <RevenueKpi label="매출 적용 금액" value={0} small />
+              <RevenueKpi label="잔여 미수금" value={0} small muted />
+            </div>
+          </div>
+        ))}
+      </section>
+
+      {/* 매출 내역 */}
+      <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            매출 내역 (0건)
+          </h2>
+          <select className={`${crmInputClass} ml-auto`} style={{ maxWidth: 160 }}>
+            <option>전체 상품</option>
+            <option>회원권</option>
+            <option>그룹 수업</option>
+            <option>개인 레슨</option>
+            <option>락커</option>
+            <option>운동 용품</option>
+          </select>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
+          <table className="w-full text-[13px]">
+            <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+              <tr>
+                <Th>결제일</Th>
+                <Th>회원명</Th>
+                <Th>연락처</Th>
+                <Th>결제 상품</Th>
+                <Th>결제 금액</Th>
+                <Th>비고</Th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colSpan={6} className="px-3 py-12 text-center">
+                  <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">
+                    데이터가 없어요
+                  </div>
+                  <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
+                    보여드릴 매출 내역이 없어요.
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </>
+  );
+}
+
+const CATEGORIES = [
+  { key: "membership", label: "회원권 매출" },
+  { key: "group", label: "그룹 수업 매출" },
+  { key: "personal", label: "개인 레슨 매출" },
+  { key: "locker", label: "락커 매출" },
+  { key: "goods", label: "운동 용품 매출" },
+];
+
+function RevenueKpi({
+  label,
+  value,
+  small,
+  muted,
+}: {
+  label: string;
+  value: number;
+  small?: boolean;
+  muted?: boolean;
+}) {
+  return (
+    <div className="px-3.5 py-2.5 rounded-xl border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40">
+      <div className="text-[11.5px] text-[#A89B80] dark:text-zinc-500">{label}</div>
+      <div
+        className={`mt-0.5 font-bold ${small ? "text-[15px]" : "text-[18px]"} ${muted ? "text-[#A89B80] dark:text-zinc-400" : "text-[#2A251D] dark:text-zinc-100"}`}
+      >
+        {formatWon(value)} 원
+      </div>
+    </div>
+  );
+}
+
+/* ─── 담당 회원 탭 ────────────────────────────── */
+
+function MembersTab() {
+  return (
+    <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
+      <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
+        총 0명
+      </h2>
+
+      <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-2 mb-3">
+        <div>
+          <div className="text-[11.5px] text-[#A89B80] mb-1">필터</div>
+          <select className={crmInputClass}>
+            <option>회원 전체</option>
+            <option>활성</option>
+            <option>휴면</option>
+          </select>
+        </div>
+        <div>
+          <div className="text-[11.5px] text-[#A89B80] mb-1">검색</div>
+          <input
+            type="text"
+            className={crmInputClass}
+            placeholder="이름 및 연락처로 검색"
+          />
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
+        <table className="w-full text-[13px]">
+          <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+            <tr>
+              <Th>번호</Th>
+              <Th>이름</Th>
+              <Th>PT 여부</Th>
+              <Th>앱 사용</Th>
+              <Th>개인 레슨 경험</Th>
+              <Th>나이</Th>
+              <Th>성별</Th>
+              <Th>연락처</Th>
+              <Th>가입일</Th>
+              <Th>만기일</Th>
+              <Th>최근 구매 상품</Th>
+              <Th>총 결제 금액</Th>
+              <Th>총 미수금</Th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colSpan={13} className="px-3 py-12 text-center">
+                <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">
+                  데이터가 없어요
+                </div>
+                <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
+                  아직 담당 회원이 없어요.
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+/* ─── 수업 내역 탭 ────────────────────────────── */
+
+type SessionKind = "personal" | "group";
+
+function SessionsTab() {
+  const [kind, setKind] = useState<SessionKind>("personal");
+  const [period, setPeriod] = useState<Period>("this_month");
+
+  return (
+    <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
+      <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
+        수업 내역
+      </h2>
+
+      <div className="flex gap-1.5 mb-4 border-b border-[#E8E0D0]/60 dark:border-zinc-800">
+        {[
+          { key: "personal" as const, label: "개인 레슨" },
+          { key: "group" as const, label: "그룹 수업" },
+        ].map((k) => (
+          <button
+            key={k.key}
+            onClick={() => setKind(k.key)}
+            className={`px-3 py-1.5 -mb-px text-[12.5px] font-medium border-b-2 transition-colors
+              ${kind === k.key
+                ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A]"
+                : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
+              }`}
+          >
+            {k.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 mb-3">
+        <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+          총 수업 횟수 (0회)
+        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-[11.5px] text-[#A89B80]">필터</span>
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value as Period)}
+            className={crmInputClass}
+            style={{ width: 120 }}
+          >
+            <option value="this_month">이번 달</option>
+            <option value="last_month">지난 달</option>
+            <option value="this_year">올해</option>
+            <option value="custom">직접 선택</option>
+          </select>
+          <select className={crmInputClass} style={{ width: 130 }}>
+            <option>{kind === "personal" ? "개인 레슨 전체" : "그룹 수업 전체"}</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
+        <table className="w-full text-[13px]">
+          <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+            <tr>
+              <Th>번호</Th>
+              <Th>이름</Th>
+              <Th>나이</Th>
+              <Th>성별</Th>
+              <Th>연락처</Th>
+              <Th>상품명</Th>
+              <Th>계약 수 + 서비스 수 (총 계약)</Th>
+              <Th>사용 완료</Th>
+              <Th>잔여</Th>
+              <Th>수업 횟수</Th>
+              <Th>세부사항</Th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colSpan={11} className="px-3 py-12 text-center">
+                <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">
+                  데이터가 없어요
+                </div>
+                <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
+                  수업 내역이 존재하지 않아요.
+                  <br />
+                  필터를 다시 설정해 보세요.
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-4 flex items-center justify-center gap-3 text-[12.5px] text-[#3A342A] dark:text-zinc-300">
+        <span className="font-medium">1</span>
+      </div>
+    </section>
+  );
+}
+
+/* ─── 공통 ────────────────────────────── */
+
+function TabBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-2 -mb-px text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap
+        ${active
+          ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A]"
+          : "border-transparent text-[#8C8270] dark:text-zinc-500 hover:text-[#3A342A] dark:hover:text-zinc-300"
+        }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Th({ children }: { children: React.ReactNode }) {
+  return <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">{children}</th>;
+}
