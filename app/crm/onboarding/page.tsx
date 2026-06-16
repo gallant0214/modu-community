@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
+import { formatPhone } from "../_components/crm-labels";
 
 type Mode = "solo" | "center";
 type Step = "mode" | "center-search" | "center-register";
@@ -240,7 +241,7 @@ export default function CrmOnboardingPage() {
                       </div>
                       <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500">
                         {[c.region_sido, c.region_sigungu].filter(Boolean).join(" ") || "지역 정보 없음"}
-                        {c.phone && <span> · {c.phone}</span>}
+                        {c.phone && <span> · {formatPhone(c.phone)}</span>}
                       </div>
                     </button>
                   </li>
@@ -292,8 +293,9 @@ export default function CrmOnboardingPage() {
             <Field label="연락처">
               <input
                 type="tel"
+                inputMode="numeric"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(formatPhone(e.target.value))}
                 placeholder="010-1234-5678"
                 className={inputClass}
               />

@@ -12,6 +12,7 @@ import {
   PASS_STATUS_LABEL,
   formatWon,
   parseWon,
+  formatPhone,
 } from "../../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../../_components/crm-modal";
 
@@ -145,7 +146,7 @@ export default function CrmMemberDetailPage() {
             </span>
           </h1>
           <div className="mt-1 text-[12.5px] text-[#8C8270] dark:text-zinc-500">
-            {member.phone}
+            {formatPhone(member.phone)}
             {member.gender && ` · ${GENDER_LABEL[member.gender]}`}
             {member.birth && ` · ${member.birth}`}
           </div>
@@ -346,7 +347,14 @@ function EditModal({
           <input className={crmInputClass} value={name} onChange={(e) => setName(e.target.value)} />
         </CrmField>
         <CrmField label="연락처" required>
-          <input className={crmInputClass} value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <input
+            className={crmInputClass}
+            type="tel"
+            inputMode="numeric"
+            value={phone}
+            onChange={(e) => setPhone(formatPhone(e.target.value))}
+            placeholder="010-1234-5678"
+          />
         </CrmField>
         <div className="grid grid-cols-2 gap-2">
           <CrmField label="성별">

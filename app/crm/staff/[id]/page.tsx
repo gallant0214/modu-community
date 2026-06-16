@@ -10,6 +10,7 @@ import {
   ATTENDANCE_MODE_LABEL,
   EMPLOYMENT_STATUS_LABEL,
   EMPLOYMENT_TYPE_LABEL,
+  formatPhone,
 } from "../../_components/crm-labels";
 import { crmInputClass } from "../../_components/crm-modal";
 
@@ -176,34 +177,13 @@ export default function CrmStaffDetailPage() {
         </h1>
       </header>
 
-      <Section title="연락처 / 이메일">
-        <dl className="grid grid-cols-[64px_1fr] gap-x-3 gap-y-2 text-[13px]">
-          <dt className="text-[#A89B80] dark:text-zinc-500">연락처</dt>
-          <dd className="text-[#2A251D] dark:text-zinc-100 font-medium">
-            {member.phone ? (
-              <a href={`tel:${member.phone.replace(/\D/g, "")}`} className="hover:text-[#6B7B3A]">
-                {member.phone}
-              </a>
-            ) : (
-              <span className="text-[#A89B80]">미등록</span>
-            )}
-          </dd>
-          <dt className="text-[#A89B80] dark:text-zinc-500">이메일</dt>
-          <dd className="text-[#2A251D] dark:text-zinc-100 font-medium break-all">
-            {member.email ? (
-              <a href={`mailto:${member.email}`} className="hover:text-[#6B7B3A]">
-                {member.email}
-              </a>
-            ) : (
-              <span className="text-[#A89B80]">미등록</span>
-            )}
-          </dd>
-          <dt className="text-[#A89B80] dark:text-zinc-500">주소</dt>
-          <dd className="text-[#2A251D] dark:text-zinc-100 font-medium">
-            {member.address || <span className="text-[#A89B80]">미등록</span>}
-          </dd>
-        </dl>
-      </Section>
+      <ContactSection
+        phone={member.phone}
+        email={member.email}
+        address={member.address}
+        saving={saving}
+        onSave={(p) => patchMember(p)}
+      />
 
       <Section title="인사 정보">
         <div className="grid grid-cols-2 gap-3">
@@ -487,6 +467,91 @@ function DisplayNameSection({
           onClick={() => onSave(name.trim())}
           disabled={saving || !changed}
           className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-40 text-white text-[13px] font-semibold hover:bg-[#5a6932] whitespace-nowrap"
+        >
+          {saving ? "저장 중…" : "저장"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ContactSection({
+  phone,
+  email,
+  address,
+  saving,
+  onSave,
+}: {
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  saving: boolean;
+  onSave: (patch: { phone?: string | null; email?: string | null; address?: string | null }) => void;
+}) {
+  const [p, setP] = useState(phone ?? "");
+  const [e, setE] = useState(email ?? "");
+  const [a, setA] = useState(address ?? "");
+
+  useEffect(() => {
+    setP(phone ?? "");
+    setE(email ?? "");
+    setA(address ?? "");
+  }, [phone, email, address]);
+
+  const dirtyPhone = p !== (phone ?? "");
+  const dirtyEmail = e !== (email ?? "");
+  const dirtyAddress = a !== (address ?? "");
+  const dirty = dirtyPhone || dirtyEmail || dirtyAddress;
+
+  const save = () => {
+    const patch: { phone?: string | null; email?: string | null; address?: string | null } = {};
+    if (dirtyPhone) patch.phone = p.trim() || null;
+    if (dirtyEmail) patch.email = e.trim() || null;
+    if (dirtyAddress) patch.address = a.trim() || null;
+    onSave(patch);
+  };
+
+  return (
+    <section className="mb-6 px-4 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+      <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
+        연락처 / 이메일 / 주소
+      </h2>
+      <div className="space-y-3">
+        <div>
+          <div className="text-[12.5px] text-[#A89B80] mb-1.5">연락처</div>
+          <input
+            type="tel"
+            inputMode="numeric"
+            className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A]"
+            value={p}
+            onChange={(ev) => setP(formatPhone(ev.target.value))}
+            placeholder="010-1234-5678"
+          />
+        </div>
+        <div>
+          <div className="text-[12.5px] text-[#A89B80] mb-1.5">이메일</div>
+          <input
+            type="email"
+            className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A]"
+            value={e}
+            onChange={(ev) => setE(ev.target.value)}
+            placeholder="example@email.com"
+          />
+        </div>
+        <div>
+          <div className="text-[12.5px] text-[#A89B80] mb-1.5">주소</div>
+          <input
+            type="text"
+            className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A]"
+            value={a}
+            onChange={(ev) => setA(ev.target.value)}
+            placeholder="예) 대구광역시 수성구 동대구로59길 8-12"
+          />
+        </div>
+        <button
+          onClick={save}
+          disabled={!dirty || saving}
+          className="w-full px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-40 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
         >
           {saving ? "저장 중…" : "저장"}
         </button>

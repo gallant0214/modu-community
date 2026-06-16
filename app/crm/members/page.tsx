@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
-import { MEMBER_TYPE_LABEL, GENDER_LABEL } from "../_components/crm-labels";
+import { MEMBER_TYPE_LABEL, GENDER_LABEL, formatPhone } from "../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 
 interface MemberRow {
@@ -129,7 +129,7 @@ function MembersTable({ rows }: { rows: MemberRow[] }) {
                 <span className="font-semibold text-[#2A251D] dark:text-zinc-100">{m.name}</span>
               </Td>
               <Td>{MEMBER_TYPE_LABEL[m.member_type] ?? m.member_type}</Td>
-              <Td className="text-[#6B5D47] dark:text-zinc-400">{m.phone}</Td>
+              <Td className="text-[#6B5D47] dark:text-zinc-400">{m.phone ? formatPhone(m.phone) : "—"}</Td>
               <Td className="text-[#8C8270] dark:text-zinc-500">
                 {[m.gender ? GENDER_LABEL[m.gender] : null, m.birth].filter(Boolean).join(" / ") || "—"}
               </Td>
@@ -323,8 +323,9 @@ function RegisterModal({
           <input
             className={crmInputClass}
             type="tel"
+            inputMode="numeric"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => setPhone(formatPhone(e.target.value))}
             placeholder="010-1234-5678"
           />
         </CrmField>

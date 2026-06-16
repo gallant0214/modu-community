@@ -524,7 +524,7 @@ function StaffTable({ rows, label, muted }: { rows: StaffRow[]; label: string; m
                 </Td>
                 <Td>{ROLE_LABEL[s.role] ?? s.role}</Td>
                 <Td>{ACCESS_LEVEL_LABEL[s.access_level] ?? s.access_level}</Td>
-                <Td className="text-[#6B5D47] dark:text-zinc-400">{s.phone || "—"}</Td>
+                <Td className="text-[#6B5D47] dark:text-zinc-400">{s.phone ? formatPhone(s.phone) : "—"}</Td>
                 <Td className="text-[#6B5D47] dark:text-zinc-400">
                   <span className="block max-w-[220px] truncate" title={s.address || ""}>
                     {s.address || "—"}
