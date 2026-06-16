@@ -8,6 +8,8 @@ import {
   ROLE_LABEL,
   ACCESS_LEVEL_LABEL,
   ATTENDANCE_MODE_LABEL,
+  EMPLOYMENT_STATUS_LABEL,
+  EMPLOYMENT_TYPE_LABEL,
 } from "../../_components/crm-labels";
 import { crmInputClass } from "../../_components/crm-modal";
 
@@ -19,6 +21,9 @@ interface StaffMember {
   display_name: string;
   phone: string | null;
   email: string | null;
+  address: string | null;
+  employment_status: string;
+  employment_type: string | null;
   access_level: string;
   is_solo_owner: boolean;
   status: string;
@@ -193,7 +198,43 @@ export default function CrmStaffDetailPage() {
               <span className="text-[#A89B80]">미등록</span>
             )}
           </dd>
+          <dt className="text-[#A89B80] dark:text-zinc-500">주소</dt>
+          <dd className="text-[#2A251D] dark:text-zinc-100 font-medium">
+            {member.address || <span className="text-[#A89B80]">미등록</span>}
+          </dd>
         </dl>
+      </Section>
+
+      <Section title="인사 정보">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <div className="text-[12.5px] text-[#A89B80] mb-1.5">재직상태</div>
+            <select
+              className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 disabled:opacity-60"
+              value={member.employment_status}
+              disabled={saving}
+              onChange={(e) => patchMember({ employment_status: e.target.value })}
+            >
+              {Object.entries(EMPLOYMENT_STATUS_LABEL).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div className="text-[12.5px] text-[#A89B80] mb-1.5">근무형태</div>
+            <select
+              className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 disabled:opacity-60"
+              value={member.employment_type ?? ""}
+              disabled={saving}
+              onChange={(e) => patchMember({ employment_type: e.target.value || null })}
+            >
+              <option value="">선택 안 함</option>
+              {Object.entries(EMPLOYMENT_TYPE_LABEL).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
+        </div>
       </Section>
 
       {error && (

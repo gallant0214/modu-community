@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("crm_center_members")
     .select(
-      "id, firebase_uid, role, grade_id, display_name, phone, email, access_level, is_solo_owner, status, joined_at, left_at"
+      "id, firebase_uid, role, grade_id, display_name, phone, email, address, employment_status, employment_type, access_level, is_solo_owner, status, joined_at, left_at"
     )
     .eq("center_id", ctx.centerId)
     .order("status", { ascending: true })   // active 먼저
@@ -55,6 +55,9 @@ export async function POST(request: Request) {
     access_level?: string;
     email?: string;
     phone?: string;
+    address?: string;
+    employment_status?: string;
+    employment_type?: string;
   };
   try {
     body = await request.json();
@@ -126,6 +129,9 @@ export async function POST(request: Request) {
         display_name: displayName,
         email: body.email?.trim() || null,
         phone: body.phone?.trim() || null,
+        address: body.address?.trim() || null,
+        employment_status: body.employment_status || "working",
+        employment_type: body.employment_type || null,
         left_at: null,
       } as never)
       .eq("id", existing.id);
@@ -165,6 +171,9 @@ export async function POST(request: Request) {
       display_name: displayName,
       email: body.email?.trim() || null,
       phone: body.phone?.trim() || null,
+      address: body.address?.trim() || null,
+      employment_status: body.employment_status || "working",
+      employment_type: body.employment_type || null,
       access_level: accessLevel,
       is_solo_owner: false,
       status: "active",

@@ -1215,6 +1215,9 @@ export type Database = {
           display_name: string
           phone: string | null
           email: string | null
+          address: string | null
+          employment_status: string
+          employment_type: string | null
           access_level: string
           is_solo_owner: boolean
           status: string
@@ -1232,6 +1235,9 @@ export type Database = {
           display_name: string
           phone?: string | null
           email?: string | null
+          address?: string | null
+          employment_status?: string
+          employment_type?: string | null
           access_level?: string
           is_solo_owner?: boolean
           status?: string
@@ -1249,6 +1255,9 @@ export type Database = {
           display_name?: string
           phone?: string | null
           email?: string | null
+          address?: string | null
+          employment_status?: string
+          employment_type?: string | null
           access_level?: string
           is_solo_owner?: boolean
           status?: string

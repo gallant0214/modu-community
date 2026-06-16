@@ -51,6 +51,17 @@ export const STATUS_LABEL: Record<string, string> = {
   inactive: "퇴사",
 };
 
+export const EMPLOYMENT_STATUS_LABEL: Record<string, string> = {
+  working: "재직중",
+  on_leave: "휴직",
+  resigned: "퇴사",
+};
+
+export const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
+  regular: "정규직",
+  freelance: "프리랜서",
+};
+
 export const MEMBER_TYPE_LABEL: Record<string, string> = {
   provisional: "가회원",
   full: "정회원",

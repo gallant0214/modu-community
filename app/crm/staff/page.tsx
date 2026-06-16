@@ -3,7 +3,13 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
-import { ROLE_LABEL, ACCESS_LEVEL_LABEL, formatPhone } from "../_components/crm-labels";
+import {
+  ROLE_LABEL,
+  ACCESS_LEVEL_LABEL,
+  EMPLOYMENT_STATUS_LABEL,
+  EMPLOYMENT_TYPE_LABEL,
+  formatPhone,
+} from "../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 
 interface StaffRow {
@@ -13,6 +19,9 @@ interface StaffRow {
   display_name: string;
   phone: string | null;
   email: string | null;
+  address: string | null;
+  employment_status: string;
+  employment_type: string | null;
   access_level: string;
   is_solo_owner: boolean;
   status: string;
@@ -135,6 +144,9 @@ function AddStaffModal({
   const [accessLevel, setAccessLevel] = useState<"none" | "schedule" | "admin">("schedule");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [employmentStatus, setEmploymentStatus] = useState<"working" | "on_leave" | "resigned">("working");
+  const [employmentType, setEmploymentType] = useState<"" | "regular" | "freelance">("");
 
   const [grades, setGrades] = useState<{ id: number; base_role: string; label: string }[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -172,6 +184,9 @@ function AddStaffModal({
       setAccessLevel("schedule");
       setEmail("");
       setPhone("");
+      setAddress("");
+      setEmploymentStatus("working");
+      setEmploymentType("");
       setError("");
     }
   }, [open]);
@@ -235,6 +250,9 @@ function AddStaffModal({
           access_level: accessLevel,
           email: email.trim() || undefined,
           phone: phone.trim() || undefined,
+          address: address.trim() || undefined,
+          employment_status: employmentStatus,
+          employment_type: employmentType || undefined,
         }),
       });
       const data = await res.json();
@@ -407,6 +425,41 @@ function AddStaffModal({
               </CrmField>
             </div>
 
+            <CrmField label="주소">
+              <input
+                type="text"
+                className={crmInputClass}
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="예) 대구광역시 수성구 동대구로59길 8-12"
+              />
+            </CrmField>
+
+            <div className="grid grid-cols-2 gap-3">
+              <CrmField label="재직상태">
+                <select
+                  className={crmInputClass}
+                  value={employmentStatus}
+                  onChange={(e) => setEmploymentStatus(e.target.value as typeof employmentStatus)}
+                >
+                  <option value="working">재직중</option>
+                  <option value="on_leave">휴직</option>
+                  <option value="resigned">퇴사</option>
+                </select>
+              </CrmField>
+              <CrmField label="근무형태">
+                <select
+                  className={crmInputClass}
+                  value={employmentType}
+                  onChange={(e) => setEmploymentType(e.target.value as typeof employmentType)}
+                >
+                  <option value="">선택 안 함</option>
+                  <option value="regular">정규직</option>
+                  <option value="freelance">프리랜서</option>
+                </select>
+              </CrmField>
+            </div>
+
             {error && (
               <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
                 {error}
@@ -451,6 +504,10 @@ function StaffTable({ rows, label, muted }: { rows: StaffRow[]; label: string; m
               <Th>이름</Th>
               <Th>등급</Th>
               <Th>권한</Th>
+              <Th>연락처</Th>
+              <Th>주소</Th>
+              <Th>재직상태</Th>
+              <Th>근무형태</Th>
               <Th>이메일</Th>
               <Th>가입일</Th>
               <Th className="text-right pr-4">관리</Th>
@@ -467,6 +524,18 @@ function StaffTable({ rows, label, muted }: { rows: StaffRow[]; label: string; m
                 </Td>
                 <Td>{ROLE_LABEL[s.role] ?? s.role}</Td>
                 <Td>{ACCESS_LEVEL_LABEL[s.access_level] ?? s.access_level}</Td>
+                <Td className="text-[#6B5D47] dark:text-zinc-400">{s.phone || "—"}</Td>
+                <Td className="text-[#6B5D47] dark:text-zinc-400">
+                  <span className="block max-w-[220px] truncate" title={s.address || ""}>
+                    {s.address || "—"}
+                  </span>
+                </Td>
+                <Td>
+                  <EmploymentStatusChip status={s.employment_status} />
+                </Td>
+                <Td className="text-[#6B5D47] dark:text-zinc-400">
+                  {s.employment_type ? EMPLOYMENT_TYPE_LABEL[s.employment_type] ?? s.employment_type : "—"}
+                </Td>
                 <Td className="text-[#8C8270] dark:text-zinc-500">{s.email || "—"}</Td>
                 <Td className="text-[#8C8270] dark:text-zinc-500">{formatDate(s.joined_at)}</Td>
                 <Td className="text-right pr-4">
@@ -510,6 +579,21 @@ function Hint({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+function EmploymentStatusChip({ status }: { status: string }) {
+  const label = EMPLOYMENT_STATUS_LABEL[status] ?? status;
+  const cls =
+    status === "working"
+      ? "bg-[#EFE7D5] text-[#6B7B3A] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A]"
+      : status === "on_leave"
+      ? "bg-[#F5E4C8] text-[#B47B2A] dark:bg-amber-950/40 dark:text-amber-300"
+      : "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500";
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
 function formatDate(iso: string) {
   try {
     const d = new Date(iso);

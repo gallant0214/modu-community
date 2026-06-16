@@ -170,6 +170,7 @@ function CenterTab() {
   // 매출 추적 기능 미구현 — 현재는 0원 표시 + 안내
   const items: { label: string; href?: string }[] = [
     { label: "회원권 매출", href: "/crm/memberships" },
+    { label: "수강권 매출", href: "/crm/passes" },
     { label: "운동복 매출" },
     { label: "락커 매출", href: "/crm/lockers" },
     { label: "기타 판매 매출" },

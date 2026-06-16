@@ -26,7 +26,7 @@ export async function GET(
   const { data: member, error } = await supabase
     .from("crm_center_members")
     .select(
-      "id, firebase_uid, role, grade_id, display_name, phone, email, access_level, is_solo_owner, status, joined_at, left_at"
+      "id, firebase_uid, role, grade_id, display_name, phone, email, address, employment_status, employment_type, access_level, is_solo_owner, status, joined_at, left_at"
     )
     .eq("id", memberId)
     .eq("center_id", ctx.centerId)
@@ -72,6 +72,11 @@ export async function PATCH(
     access_level?: string;
     status?: string;
     display_name?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    employment_status?: string;
+    employment_type?: string | null;
   };
   try {
     body = await request.json();
@@ -118,6 +123,21 @@ export async function PATCH(
     const dn = body.display_name.trim();
     if (!dn) return NextResponse.json({ error: "표시명을 입력해주세요" }, { status: 400 });
     patch.display_name = dn;
+  }
+  if (body.phone !== undefined) patch.phone = body.phone.trim() || null;
+  if (body.email !== undefined) patch.email = body.email.trim() || null;
+  if (body.address !== undefined) patch.address = body.address.trim() || null;
+  if (body.employment_status !== undefined) {
+    if (!["working", "on_leave", "resigned"].includes(body.employment_status)) {
+      return NextResponse.json({ error: "재직상태 값이 잘못됨" }, { status: 400 });
+    }
+    patch.employment_status = body.employment_status;
+  }
+  if (body.employment_type !== undefined) {
+    if (body.employment_type && !["regular", "freelance"].includes(body.employment_type)) {
+      return NextResponse.json({ error: "근무형태 값이 잘못됨" }, { status: 400 });
+    }
+    patch.employment_type = body.employment_type || null;
   }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
