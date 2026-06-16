@@ -17,6 +17,7 @@ interface MenuItem {
 const MENU: MenuItem[] = [
   { href: "/crm/dashboard",   label: "대시보드",     icon: IconDashboard },
   { href: "/crm/staff",       label: "직원 관리",     staffOnly: true, icon: IconStaff },
+  { href: "/crm/payroll",     label: "직원 급여",     staffOnly: true, icon: IconPayroll },
   { href: "/crm/members",     label: "회원 관리",     icon: IconMembers },
   { href: "/crm/lockers",     label: "락커",          icon: IconLocker },
   { href: "/crm/passes",      label: "수강권 관리",   icon: IconPass },
@@ -209,6 +210,13 @@ function IconContract({ className }: { className?: string }) {
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h6l5 5v11a2 2 0 01-2 2z" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M13 3v5h5" />
+    </svg>
+  );
+}
+function IconPayroll({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   );
 }
