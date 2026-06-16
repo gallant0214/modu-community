@@ -230,26 +230,7 @@ export default function CrmLockersPage() {
               락커 배치도
             </h2>
 
-            <div className="px-4 py-10 text-center border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-              <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">
-                데이터가 없어요
-              </div>
-              <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500 leading-relaxed">
-                아직 락커 사진을 올리지 않았어요.
-                <br />
-                &lsquo;사진 업로드&rsquo;를 눌러 등록할 수 있어요.
-              </div>
-              <button
-                type="button"
-                onClick={() => alert("사진 업로드 기능은 곧 추가됩니다.")}
-                className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] bg-transparent hover:bg-[#6B7B3A]/5 text-[12.5px] font-semibold"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 12V4m0 0l-4 4m4-4l4 4" />
-                </svg>
-                사진 업로드
-              </button>
-            </div>
+            <EmptyState>데이터가 없어요</EmptyState>
           </section>
 
           <button
