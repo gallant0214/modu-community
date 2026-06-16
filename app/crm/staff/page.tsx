@@ -431,7 +431,7 @@ function AddStaffModal({
                 className={crmInputClass}
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="예) 대구광역시 수성구 동대구로59길 8-12"
+                placeholder="예: 강남구 강남대로 1길 1-11"
               />
             </CrmField>
 

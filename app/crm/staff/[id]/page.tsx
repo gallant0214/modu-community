@@ -545,7 +545,7 @@ function ContactSection({
             className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A]"
             value={a}
             onChange={(ev) => setA(ev.target.value)}
-            placeholder="예) 대구광역시 수성구 동대구로59길 8-12"
+            placeholder="예: 강남구 강남대로 1길 1-11"
           />
         </div>
         <button
