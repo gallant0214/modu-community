@@ -77,6 +77,54 @@ export async function PATCH(
     return NextResponse.json({ error: "저장 실패", detail: error.message }, { status: 500 });
   }
 
+  // 저장된 zone 가져오기
+  const { data: zoneRow } = await supabase
+    .from("crm_locker_zones")
+    .select("id, locker_count, start_number")
+    .eq("center_id", ctx.centerId)
+    .eq("zone_number", zoneNumber)
+    .maybeSingle();
+
+  if (zoneRow) {
+    // 락커 갯수에 맞춰 crm_lockers row 동기화
+    const targetCount = zoneRow.locker_count;
+    const startNumber = zoneRow.start_number;
+
+    const { data: lockers } = await supabase
+      .from("crm_lockers")
+      .select("id, number, state")
+      .eq("zone_id", zoneRow.id)
+      .order("number", { ascending: true });
+
+    const existing = lockers ?? [];
+
+    // 새로 추가할 락커
+    const existingNumbers = new Set(existing.map((l) => l.number));
+    const needed: { center_id: number; zone_id: number; number: number }[] = [];
+    for (let i = 0; i < targetCount; i++) {
+      const num = startNumber + i;
+      if (!existingNumbers.has(num)) {
+        needed.push({ center_id: ctx.centerId, zone_id: zoneRow.id, number: num });
+      }
+    }
+    if (needed.length > 0) {
+      await supabase.from("crm_lockers").insert(needed);
+    }
+
+    // 범위 밖 락커 중 미배정만 삭제 (배정/고장은 보호)
+    const validRange = new Set<number>();
+    for (let i = 0; i < targetCount; i++) validRange.add(startNumber + i);
+    const removable = existing.filter(
+      (l) => !validRange.has(l.number) && l.state === "unassigned"
+    );
+    if (removable.length > 0) {
+      await supabase
+        .from("crm_lockers")
+        .delete()
+        .in("id", removable.map((l) => l.id));
+    }
+  }
+
   await supabase.from("crm_audit_logs").insert({
     center_id: ctx.centerId,
     actor_uid: ctx.uid,

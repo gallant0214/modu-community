@@ -1277,6 +1277,99 @@ export type Database = {
           },
         ]
       }
+      crm_lockers: {
+        Row: {
+          id: number
+          center_id: number
+          zone_id: number
+          number: number
+          state: string
+          assigned_member_id: number | null
+          start_date: string | null
+          expires_at: string | null
+          password: string | null
+          memo: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          zone_id: number
+          number: number
+          state?: string
+          assigned_member_id?: number | null
+          start_date?: string | null
+          expires_at?: string | null
+          password?: string | null
+          memo?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          zone_id?: number
+          number?: number
+          state?: string
+          assigned_member_id?: number | null
+          start_date?: string | null
+          expires_at?: string | null
+          password?: string | null
+          memo?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_locker_history: {
+        Row: {
+          id: number
+          center_id: number
+          locker_id: number | null
+          zone_id: number
+          number: number
+          action: string
+          member_id: number | null
+          member_name: string | null
+          start_date: string | null
+          expires_at: string | null
+          note: string | null
+          actor_uid: string
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          locker_id?: number | null
+          zone_id: number
+          number: number
+          action: string
+          member_id?: number | null
+          member_name?: string | null
+          start_date?: string | null
+          expires_at?: string | null
+          note?: string | null
+          actor_uid: string
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          locker_id?: number | null
+          zone_id?: number
+          number?: number
+          action?: string
+          member_id?: number | null
+          member_name?: string | null
+          start_date?: string | null
+          expires_at?: string | null
+          note?: string | null
+          actor_uid?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       crm_locker_zones: {
         Row: {
           id: number
