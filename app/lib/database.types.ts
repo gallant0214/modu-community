@@ -1277,6 +1277,39 @@ export type Database = {
           },
         ]
       }
+      crm_locker_zones: {
+        Row: {
+          id: number
+          center_id: number
+          zone_number: number
+          name: string
+          locker_count: number
+          start_number: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          zone_number: number
+          name: string
+          locker_count?: number
+          start_number?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          zone_number?: number
+          name?: string
+          locker_count?: number
+          start_number?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_contract_templates: {
         Row: {
           id: number

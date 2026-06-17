@@ -46,6 +46,7 @@ const ACTION_LABEL: Record<string, string> = {
   "settings.update": "설정 변경",
   "contract.create": "계약서 추가",
   "contract.delete": "계약서 삭제",
+  "locker_zone.update": "락커 구역 설정 변경",
   "grade.create": "등급 추가",
   "grade.update": "등급 수정",
   "grade.delete": "등급 삭제",

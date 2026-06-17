@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../_components/crm-modal";
 
 type Tab = "assigned" | "unassigned" | "returns" | "settings";
@@ -8,26 +9,137 @@ type Tab = "assigned" | "unassigned" | "returns" | "settings";
 const ZONE_COUNT = 8;
 const ZONE_NAME_MAX = 6;
 
+interface Zone {
+  zone_number: number;
+  name: string;
+  locker_count: number;
+  start_number: number;
+}
+
 export default function CrmLockersPage() {
+  const { getIdToken } = useAuth();
   const [tab, setTab] = useState<Tab>("assigned");
   const [zone, setZone] = useState<number>(1);
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [loadingZones, setLoadingZones] = useState(true);
+  const [error, setError] = useState("");
 
   // 배정 현황 필터
   const [status, setStatus] = useState<string>("");
   const [expireFilter, setExpireFilter] = useState<string>("");
   const [query, setQuery] = useState("");
 
-  // 락커 설정 폼 (구역별)
-  const [zoneName, setZoneName] = useState<string>(`구역 ${zone}`);
-  const [lockerCount, setLockerCount] = useState<string>("");
-  const [startNumber, setStartNumber] = useState<string>("");
+  // 설정 폼 편집값
+  const [zoneName, setZoneName] = useState("");
+  const [lockerCount, setLockerCount] = useState("");
+  const [startNumber, setStartNumber] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState("");
 
-  // 구역 변경 시 폼 기본값 재설정 (실제 데이터 fetch 는 추후 추가)
+  const loadZones = useCallback(async () => {
+    setError("");
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch("/api/crm/lockers/zones", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setZones(data.zones ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoadingZones(false);
+    }
+  }, [getIdToken]);
+
   useEffect(() => {
-    setZoneName(`구역 ${zone}`);
-    setLockerCount("");
-    setStartNumber("");
-  }, [zone]);
+    loadZones();
+  }, [loadZones]);
+
+  // 현재 선택된 구역
+  const currentZone = useMemo(
+    () => zones.find((z) => z.zone_number === zone),
+    [zones, zone]
+  );
+
+  // 구역 바뀌거나 데이터 새로 로드되면 폼 값 동기화
+  useEffect(() => {
+    if (currentZone) {
+      setZoneName(currentZone.name);
+      setLockerCount(String(currentZone.locker_count));
+      setStartNumber(String(currentZone.start_number));
+    } else {
+      setZoneName(`구역 ${zone}`);
+      setLockerCount("");
+      setStartNumber("");
+    }
+    setSavedMsg("");
+  }, [currentZone, zone]);
+
+  // 칩 라벨은 저장된 name 우선
+  const zoneLabel = useCallback(
+    (n: number) => zones.find((z) => z.zone_number === n)?.name ?? `구역 ${n}`,
+    [zones]
+  );
+
+  const dirty = useMemo(() => {
+    if (!currentZone) return true;
+    return (
+      zoneName.trim() !== currentZone.name ||
+      Number(lockerCount || 0) !== currentZone.locker_count ||
+      Number(startNumber || 1) !== currentZone.start_number
+    );
+  }, [currentZone, zoneName, lockerCount, startNumber]);
+
+  const save = async () => {
+    if (saving) return;
+    setError("");
+    setSavedMsg("");
+    const nameTrim = zoneName.trim();
+    if (!nameTrim) {
+      setError("구역명을 입력해 주세요");
+      return;
+    }
+    if (nameTrim.length > ZONE_NAME_MAX) {
+      setError(`구역명은 ${ZONE_NAME_MAX}자 이내로 입력해 주세요`);
+      return;
+    }
+    const count = Number(lockerCount || 0);
+    if (!Number.isInteger(count) || count < 0) {
+      setError("락커 갯수는 0 이상의 정수여야 해요");
+      return;
+    }
+    const start = Number(startNumber || 1);
+    if (!Number.isInteger(start) || start < 1) {
+      setError("시작 번호는 1 이상의 정수여야 해요");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/lockers/zones/${zone}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          name: nameTrim,
+          locker_count: count,
+          start_number: start,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "저장 실패");
+      setSavedMsg("저장되었습니다");
+      await loadZones();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="px-5 md:px-8 py-6 md:py-8 max-w-6xl mx-auto">
@@ -61,7 +173,7 @@ export default function CrmLockersPage() {
             만료 시, 자동으로 락커가 회수되지 않아요. 락커 현황을 확인해 락커 관리를 해 주세요.
           </Notice>
 
-          <ZoneChips zone={zone} onChange={setZone} />
+          <ZoneChips zone={zone} onChange={setZone} zoneLabel={zoneLabel} />
 
           <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
             <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -178,51 +290,55 @@ export default function CrmLockersPage() {
 
       {tab === "settings" && (
         <>
-          <ZoneChips zone={zone} onChange={setZone} />
+          <ZoneChips zone={zone} onChange={setZone} zoneLabel={zoneLabel} />
 
           <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5 mb-3">
             <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
               기본 설정
             </h2>
 
-            <div className="space-y-3.5">
-              <Field label="구역명">
-                <div className="relative">
+            {loadingZones ? (
+              <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+            ) : (
+              <div className="space-y-3.5">
+                <Field label="구역명">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={zoneName}
+                      onChange={(e) => setZoneName(e.target.value.slice(0, ZONE_NAME_MAX))}
+                      maxLength={ZONE_NAME_MAX}
+                      className={`${crmInputClass} pr-12`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#A89B80] dark:text-zinc-500 pointer-events-none">
+                      {zoneName.length}/{ZONE_NAME_MAX}
+                    </span>
+                  </div>
+                </Field>
+
+                <Field label="락커 갯수">
                   <input
                     type="text"
-                    value={zoneName}
-                    onChange={(e) => setZoneName(e.target.value.slice(0, ZONE_NAME_MAX))}
-                    maxLength={ZONE_NAME_MAX}
-                    className={`${crmInputClass} pr-12`}
+                    inputMode="numeric"
+                    value={lockerCount}
+                    onChange={(e) => setLockerCount(e.target.value.replace(/\D/g, ""))}
+                    placeholder="락커 갯수를 입력해 주세요."
+                    className={crmInputClass}
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#A89B80] dark:text-zinc-500 pointer-events-none">
-                    {zoneName.length}/{ZONE_NAME_MAX}
-                  </span>
-                </div>
-              </Field>
+                </Field>
 
-              <Field label="락커 갯수">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={lockerCount}
-                  onChange={(e) => setLockerCount(e.target.value.replace(/\D/g, ""))}
-                  placeholder="락커 갯수를 입력해 주세요."
-                  className={crmInputClass}
-                />
-              </Field>
-
-              <Field label="시작 번호">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={startNumber}
-                  onChange={(e) => setStartNumber(e.target.value.replace(/\D/g, ""))}
-                  placeholder="시작 번호를 입력해 주세요."
-                  className={crmInputClass}
-                />
-              </Field>
-            </div>
+                <Field label="시작 번호">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={startNumber}
+                    onChange={(e) => setStartNumber(e.target.value.replace(/\D/g, ""))}
+                    placeholder="시작 번호를 입력해 주세요."
+                    className={crmInputClass}
+                  />
+                </Field>
+              </div>
+            )}
           </section>
 
           <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5 mb-4">
@@ -233,11 +349,23 @@ export default function CrmLockersPage() {
             <EmptyState>데이터가 없어요</EmptyState>
           </section>
 
+          {error && (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+              {error}
+            </div>
+          )}
+          {savedMsg && (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-[#6B7B3A]/10 text-[13px] text-[#6B7B3A] dark:text-[#A8B87A]">
+              {savedMsg}
+            </div>
+          )}
+
           <button
-            onClick={() => alert("락커 설정 저장 기능은 곧 추가됩니다.")}
-            className="w-full px-4 py-3 rounded-lg bg-[#6B7B3A] text-white text-[14.5px] font-semibold hover:bg-[#5a6932] transition-colors"
+            onClick={save}
+            disabled={saving || !dirty}
+            className="w-full px-4 py-3 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[14.5px] font-semibold hover:bg-[#5a6932] transition-colors"
           >
-            저장
+            {saving ? "저장 중…" : "저장"}
           </button>
         </>
       )}
@@ -245,7 +373,15 @@ export default function CrmLockersPage() {
   );
 }
 
-function ZoneChips({ zone, onChange }: { zone: number; onChange: (n: number) => void }) {
+function ZoneChips({
+  zone,
+  onChange,
+  zoneLabel,
+}: {
+  zone: number;
+  onChange: (n: number) => void;
+  zoneLabel: (n: number) => string;
+}) {
   return (
     <div className="flex gap-1.5 mt-5 mb-4 overflow-x-auto -mx-1 px-1">
       {Array.from({ length: ZONE_COUNT }).map((_, i) => {
@@ -261,7 +397,7 @@ function ZoneChips({ zone, onChange }: { zone: number; onChange: (n: number) => 
                 : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
               }`}
           >
-            구역 {n}
+            {zoneLabel(n)}
           </button>
         );
       })}
@@ -340,9 +476,7 @@ function Pagination({
       >
         ‹
       </button>
-      <span className="text-[#3A342A] dark:text-zinc-300 font-medium">
-        {page}
-      </span>
+      <span className="text-[#3A342A] dark:text-zinc-300 font-medium">{page}</span>
       <button
         type="button"
         disabled={!canNext}
