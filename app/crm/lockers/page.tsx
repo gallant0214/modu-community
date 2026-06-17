@@ -247,7 +247,7 @@ export default function CrmLockersPage() {
 
 function ZoneChips({ zone, onChange }: { zone: number; onChange: (n: number) => void }) {
   return (
-    <div className="flex gap-1.5 mb-4 overflow-x-auto -mx-1 px-1">
+    <div className="flex gap-1.5 mt-5 mb-4 overflow-x-auto -mx-1 px-1">
       {Array.from({ length: ZONE_COUNT }).map((_, i) => {
         const n = i + 1;
         const active = zone === n;
