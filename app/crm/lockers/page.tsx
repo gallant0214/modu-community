@@ -737,6 +737,23 @@ function UnassignedTab({ onAssigned }: { zone: number; zoneLabel: (n: number) =>
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [pickedForAssign, setPickedForAssign] = useState<UnassignedMember | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const allChecked = list.length > 0 && list.every((m) => selectedIds.has(m.id));
+  const toggleAll = () => {
+    if (allChecked) setSelectedIds(new Set());
+    else setSelectedIds(new Set(list.map((m) => m.id)));
+  };
+  const selectedMembers = list.filter((m) => selectedIds.has(m.id));
 
   const load = useCallback(async () => {
     setError("");
@@ -766,9 +783,32 @@ function UnassignedTab({ onAssigned }: { zone: number; zoneLabel: (n: number) =>
 
   return (
     <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
-      <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-        미배정자 목록 ({list.length}명)
-      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+          미배정자 목록 ({list.length}명)
+          {selectedIds.size > 0 && (
+            <span className="ml-2 text-[12px] text-[#6B7B3A] font-normal">
+              · {selectedIds.size}명 선택됨
+            </span>
+          )}
+        </h2>
+        {selectedIds.size > 0 && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] text-[12.5px] text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+            >
+              선택 해제
+            </button>
+            <button
+              onClick={() => setBulkOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]"
+            >
+              일괄 락커 배정
+            </button>
+          </div>
+        )}
+      </div>
 
       <input
         type="text"
@@ -795,6 +835,14 @@ function UnassignedTab({ onAssigned }: { zone: number; zoneLabel: (n: number) =>
           <table className="w-full text-[13px]">
             <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
               <tr>
+                <Th className="w-8">
+                  <input
+                    type="checkbox"
+                    checked={allChecked}
+                    onChange={toggleAll}
+                    aria-label="전체 선택"
+                  />
+                </Th>
                 <Th>이름</Th>
                 <Th>회원 유형</Th>
                 <Th>연락처</Th>
@@ -808,6 +856,14 @@ function UnassignedTab({ onAssigned }: { zone: number; zoneLabel: (n: number) =>
             <tbody>
               {list.map((m) => (
                 <tr key={m.id} className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+                  <Td className="w-8">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(m.id)}
+                      onChange={() => toggleSelect(m.id)}
+                      aria-label={`${m.name} 선택`}
+                    />
+                  </Td>
                   <Td><span className="font-semibold text-[#2A251D] dark:text-zinc-100">{m.name}</span></Td>
                   <Td className="text-[#6B5D47] dark:text-zinc-400">
                     {MEMBER_TYPE_KO[m.member_type] ?? m.member_type}
@@ -847,7 +903,197 @@ function UnassignedTab({ onAssigned }: { zone: number; zoneLabel: (n: number) =>
           onAssigned?.();
         }}
       />
+
+      <BulkAssignModal
+        members={bulkOpen ? selectedMembers : []}
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onDone={() => {
+          setBulkOpen(false);
+          setSelectedIds(new Set());
+          load();
+          onAssigned?.();
+        }}
+      />
     </section>
+  );
+}
+
+/* ─── 일괄 락커 배정 모달 ────────────────────────────── */
+
+function BulkAssignModal({
+  members,
+  open,
+  onClose,
+  onDone,
+}: {
+  members: UnassignedMember[];
+  open: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [vacant, setVacant] = useState<
+    { id: number; zone_id: number; zone_name: string; number: number }[]
+  >([]);
+  const [zoneFilter, setZoneFilter] = useState<number | "all">("all");
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [expiresAt, setExpiresAt] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setError("");
+      setProgress(null);
+      return;
+    }
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/lockers/vacant", {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setVacant(data.lockers ?? []);
+      }
+    })();
+  }, [open, getIdToken]);
+
+  const candidates = zoneFilter === "all" ? vacant : vacant.filter((v) => v.zone_id === zoneFilter);
+  const enough = candidates.length >= members.length;
+
+  const submit = async () => {
+    if (submitting) return;
+    setError("");
+    if (members.length === 0) return setError("선택된 회원이 없습니다");
+    if (!startDate || !expiresAt) return setError("시작일과 만료일을 입력해 주세요");
+    if (!enough) return setError(`빈 락커가 ${members.length - candidates.length}개 부족해요`);
+
+    setSubmitting(true);
+    setProgress({ done: 0, total: members.length });
+    try {
+      const token = await getIdToken();
+      // 회원 i → 빈 락커 i 매핑 (vacant 순서대로)
+      for (let i = 0; i < members.length; i++) {
+        const m = members[i];
+        const locker = candidates[i];
+        const res = await fetch(`/api/crm/lockers/${locker.id}`, {
+          method: "PATCH",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "assign",
+            member_id: m.id,
+            start_date: startDate,
+            expires_at: expiresAt,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(`${m.name}: ${data?.error || "배정 실패"}`);
+        }
+        setProgress({ done: i + 1, total: members.length });
+      }
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // 락커룸 목록 만들기
+  const zoneMap = new Map<number, { id: number; name: string }>();
+  for (const v of vacant) {
+    if (!zoneMap.has(v.zone_id)) zoneMap.set(v.zone_id, { id: v.zone_id, name: v.zone_name });
+  }
+  const zoneList = Array.from(zoneMap.values());
+
+  return (
+    <CrmModal open={open} onClose={onClose} title={`일괄 락커 배정 (${members.length}명)`} size="lg">
+      <div className="space-y-3.5">
+        <div className="px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#3A342A] dark:text-zinc-300 max-h-[120px] overflow-y-auto">
+          <strong>대상 회원:</strong>{" "}
+          {members.map((m) => m.name).join(", ")}
+        </div>
+
+        <CrmField label="락커룸 선택">
+          <select
+            className={crmInputClass}
+            value={zoneFilter}
+            onChange={(e) => setZoneFilter(e.target.value === "all" ? "all" : Number(e.target.value))}
+          >
+            <option value="all">전체 락커룸 (빈 락커 {vacant.length}개)</option>
+            {zoneList.map((z) => {
+              const n = vacant.filter((v) => v.zone_id === z.id).length;
+              return (
+                <option key={z.id} value={z.id}>
+                  {z.name} (빈 락커 {n}개)
+                </option>
+              );
+            })}
+          </select>
+        </CrmField>
+
+        <div className={`px-3 py-2 rounded-lg text-[12.5px] ${enough ? "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]" : "bg-red-50 text-red-700"}`}>
+          {enough
+            ? `${members.length}명 → 빈 락커 ${members.length}개 자동 매핑`
+            : `빈 락커가 ${members.length - candidates.length}개 부족해요. 다른 락커룸을 선택하거나 락커 갯수를 늘리세요.`}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <CrmField label="시작일" required>
+            <input
+              type="date"
+              className={crmInputClass}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </CrmField>
+          <CrmField label="만료일" required>
+            <input
+              type="date"
+              className={crmInputClass}
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+            />
+          </CrmField>
+        </div>
+
+        {progress && (
+          <div className="px-3 py-2 rounded-lg bg-[#FBF7EB] text-[12.5px] text-[#6B5D47]">
+            진행 중… {progress.done}/{progress.total}
+          </div>
+        )}
+
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 text-[13px] text-red-700">{error}</div>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] text-[13.5px] font-semibold hover:bg-[#F5F0E5]"
+          >
+            취소
+          </button>
+          <button
+            onClick={submit}
+            disabled={submitting || !enough || members.length === 0}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+          >
+            {submitting ? `배정 중… (${progress?.done ?? 0}/${members.length})` : `${members.length}명 일괄 배정`}
+          </button>
+        </div>
+      </div>
+    </CrmModal>
   );
 }
 
