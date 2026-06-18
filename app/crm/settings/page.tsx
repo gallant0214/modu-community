@@ -50,6 +50,8 @@ const ACTION_LABEL: Record<string, string> = {
   "membership.issue": "회원권 발급",
   "membership.refund": "회원권 환불",
   "payout_rule.create": "정산 규칙 추가",
+  "attendance.check_in": "출석 체크인",
+  "measurement.create": "신체 측정 기록",
   "assign": "락커 배정",
   "return": "락커 회수",
   "move": "락커 이동",

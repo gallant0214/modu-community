@@ -1277,6 +1277,33 @@ export type Database = {
           },
         ]
       }
+      crm_attendances: {
+        Row: {
+          id: number
+          center_id: number
+          member_id: number
+          checked_in_at: string
+          source: string
+          note: string | null
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          member_id: number
+          checked_in_at?: string
+          source?: string
+          note?: string | null
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          member_id?: number
+          checked_in_at?: string
+          source?: string
+          note?: string | null
+        }
+        Relationships: []
+      }
       crm_body_measurements: {
         Row: {
           id: number
@@ -1640,6 +1667,7 @@ export type Database = {
           linked_firebase_uid: string | null
           memo: string | null
           status: string
+          checkin_token: string | null
           created_at: string
           updated_at: string
         }
