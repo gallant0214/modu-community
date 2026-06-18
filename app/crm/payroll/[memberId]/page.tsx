@@ -100,7 +100,7 @@ export default function PayrollDetailPage() {
         </TabBtn>
       </div>
 
-      {tab === "revenue" && <RevenueTab />}
+      {tab === "revenue" && <RevenueTab memberId={memberId} />}
       {tab === "members" && <MembersTab />}
       {tab === "sessions" && <SessionsTab />}
     </div>
@@ -109,8 +109,34 @@ export default function PayrollDetailPage() {
 
 /* ─── 매출 탭 ────────────────────────────── */
 
-function RevenueTab() {
+function RevenueTab({ memberId }: { memberId: number }) {
+  const { getIdToken } = useAuth();
   const [period, setPeriod] = useState<Period>("this_month");
+  const [data, setData] = useState<{
+    breakdown: { new: number; renewal: number; trial: number; service: number; total: number };
+    payout: { new: number; renewal: number; trial: number; total: number };
+    sessionCount: number;
+    has_override: boolean;
+  } | null>(null);
+
+  const ymForPeriod = (p: Period): string => {
+    const now = new Date();
+    if (p === "last_month") now.setMonth(now.getMonth() - 1);
+    return now.toISOString().slice(0, 7);
+  };
+  const ym = ymForPeriod(period);
+
+  useEffect(() => {
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/crm/payroll/${memberId}?ym=${ym}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) setData(await res.json());
+    })();
+  }, [memberId, ym, getIdToken]);
 
   return (
     <>
@@ -136,9 +162,41 @@ function RevenueTab() {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <RevenueKpi label="매출 적용 금액" value={0} />
+          <RevenueKpi label="매출 적용 금액" value={data?.breakdown.total ?? 0} />
           <RevenueKpi label="잔여 미수금" value={0} muted />
         </div>
+      </section>
+
+      {/* 이달 지급액 카드 */}
+      <section className="rounded-2xl border-2 border-[#6B7B3A]/40 bg-[#6B7B3A]/5 dark:bg-[#6B7B3A]/10 p-4 md:p-5 mb-4">
+        <div className="flex items-baseline justify-between gap-2 mb-3">
+          <h2 className="text-[14.5px] font-bold text-[#3A342A] dark:text-zinc-100">
+            이달 지급액 (정산)
+          </h2>
+          <a
+            href={`/crm/settings`}
+            className="text-[11.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+          >
+            정산 규칙 편집 →
+          </a>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <RevenueKpi label="지급 합계" value={data?.payout.total ?? 0} />
+          <RevenueKpi label="신규" value={data?.payout.new ?? 0} small />
+          <RevenueKpi label="재등록" value={data?.payout.renewal ?? 0} small />
+          <RevenueKpi label="체험" value={data?.payout.trial ?? 0} small />
+        </div>
+        <p className="mt-3 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+          {data?.has_override
+            ? "이 강사 전용 정산 규칙이 적용 중이에요."
+            : "센터 기본 정산 규칙이 적용 중이에요. 강사별 규칙은 설정 → 정산 규칙에서 설정할 수 있어요."}
+          {data && data.payout.total === 0 && data.breakdown.total > 0 && (
+            <>
+              <br />
+              매출은 있지만 정산 규칙이 없거나 가격 구간 외라 지급액이 0원이에요. 설정에서 규칙을 추가해 주세요.
+            </>
+          )}
+        </p>
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">

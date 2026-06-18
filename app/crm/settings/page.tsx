@@ -49,6 +49,7 @@ const ACTION_LABEL: Record<string, string> = {
   "locker_zone.update": "락커 구역 설정 변경",
   "membership.issue": "회원권 발급",
   "membership.refund": "회원권 환불",
+  "payout_rule.create": "정산 규칙 추가",
   "assign": "락커 배정",
   "return": "락커 회수",
   "move": "락커 이동",
@@ -76,7 +77,7 @@ interface BootstrapInfo {
 export default function CrmSettingsPage() {
   const router = useRouter();
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<"reservation" | "alerts" | "grades" | "logs" | "danger">("reservation");
+  const [tab, setTab] = useState<"reservation" | "alerts" | "grades" | "payout" | "logs" | "danger">("reservation");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [info, setInfo] = useState<BootstrapInfo | null>(null);
@@ -175,6 +176,9 @@ export default function CrmSettingsPage() {
         </TabBtn>
         <TabBtn active={tab === "grades"} onClick={() => setTab("grades")}>
           등급 관리
+        </TabBtn>
+        <TabBtn active={tab === "payout"} onClick={() => setTab("payout")}>
+          정산 규칙
         </TabBtn>
         <TabBtn active={tab === "logs"} onClick={() => setTab("logs")}>
           활동 로그
@@ -306,6 +310,8 @@ export default function CrmSettingsPage() {
       )}
 
       {tab === "grades" && <GradesPanel />}
+
+      {tab === "payout" && <PayoutRulesPanel />}
 
       {tab === "logs" && (
         <Card title="최근 활동 (최대 80건)">
@@ -650,6 +656,227 @@ function GradesPanel() {
         <div className="mt-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
           {error}
         </div>
+      )}
+    </Card>
+  );
+}
+
+interface PayoutRule {
+  id: number;
+  target_member_id: number | null;
+  mode: "rate" | "flat";
+  tier_index: number;
+  min_pass_price_won: number;
+  max_pass_price_won: number | null;
+  new_member_value: number;
+  renewal_value: number;
+  trial_value: number;
+}
+
+function PayoutRulesPanel() {
+  const { getIdToken } = useAuth();
+  const [rules, setRules] = useState<PayoutRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // 새 룰 폼
+  const [mode, setMode] = useState<"rate" | "flat">("rate");
+  const [minPrice, setMinPrice] = useState("0");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [newVal, setNewVal] = useState("50");
+  const [renewalVal, setRenewalVal] = useState("50");
+  const [trialVal, setTrialVal] = useState("50");
+  const [adding, setAdding] = useState(false);
+
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch("/api/crm/payout-rules", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setRules(data.rules ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const add = async () => {
+    if (adding) return;
+    setAdding(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/payout-rules", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          target_member_id: null,
+          mode,
+          tier_index: rules.length,
+          min_pass_price_won: Number(minPrice) || 0,
+          max_pass_price_won: maxPrice ? Number(maxPrice) : null,
+          new_member_value: Number(newVal) || 0,
+          renewal_value: Number(renewalVal) || 0,
+          trial_value: Number(trialVal) || 0,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "추가 실패");
+      setMinPrice("0");
+      setMaxPrice("");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const remove = async (id: number) => {
+    if (!window.confirm("이 룰을 삭제할까요?")) return;
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/payout-rules/${id}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (res.ok) load();
+  };
+
+  const fmtMoney = (n: number) => n.toLocaleString("ko-KR");
+
+  return (
+    <Card title="센터 기본 정산 규칙">
+      <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed -mt-1 mb-3">
+        강사 수강권 매출에서 지급할 금액을 가격 구간별로 정의해요. <strong>정률제</strong>는 백분율(%), <strong>정액제</strong>는 세션당 고정 금액(원). 강사별 별도 규칙은 추후 강사 상세 페이지에서 설정.
+      </p>
+
+      {loading ? (
+        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : rules.length === 0 ? (
+        <div className="px-3 py-4 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] rounded-lg mb-3">
+          등록된 정산 규칙이 없어요. 아래 폼에서 추가해 주세요.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800 mb-3">
+          <table className="w-full text-[12.5px]">
+            <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium">방식</th>
+                <th className="text-left px-3 py-2 font-medium">가격 구간 (원)</th>
+                <th className="text-left px-3 py-2 font-medium">신규</th>
+                <th className="text-left px-3 py-2 font-medium">재등록</th>
+                <th className="text-left px-3 py-2 font-medium">체험</th>
+                <th className="text-right px-3 py-2 font-medium">관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rules.map((r) => (
+                <tr key={r.id} className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+                  <td className="px-3 py-2 font-semibold">
+                    {r.mode === "rate" ? "정률제" : "정액제"}
+                  </td>
+                  <td className="px-3 py-2 text-[#6B5D47] dark:text-zinc-400">
+                    {fmtMoney(r.min_pass_price_won)} ~{" "}
+                    {r.max_pass_price_won ? fmtMoney(r.max_pass_price_won) : "∞"}
+                  </td>
+                  <td className="px-3 py-2">
+                    {r.new_member_value}
+                    {r.mode === "rate" ? "%" : "원"}
+                  </td>
+                  <td className="px-3 py-2">
+                    {r.renewal_value}
+                    {r.mode === "rate" ? "%" : "원"}
+                  </td>
+                  <td className="px-3 py-2">
+                    {r.trial_value}
+                    {r.mode === "rate" ? "%" : "원"}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      onClick={() => remove(r.id)}
+                      className="px-2 py-0.5 rounded text-[11.5px] border border-red-200 text-red-700 hover:bg-red-50"
+                    >
+                      삭제
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="pt-3 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+        <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
+          새 규칙 추가
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+          <select
+            className={crmInputClass}
+            value={mode}
+            onChange={(e) => setMode(e.target.value as "rate" | "flat")}
+          >
+            <option value="rate">정률제 (%)</option>
+            <option value="flat">정액제 (원)</option>
+          </select>
+          <input
+            className={crmInputClass}
+            placeholder="최소 가격"
+            inputMode="numeric"
+            value={minPrice}
+            onChange={(e) => setMinPrice(e.target.value.replace(/\D/g, ""))}
+          />
+          <input
+            className={crmInputClass}
+            placeholder="최대 가격 (빈칸=무한)"
+            inputMode="numeric"
+            value={maxPrice}
+            onChange={(e) => setMaxPrice(e.target.value.replace(/\D/g, ""))}
+          />
+          <input
+            className={crmInputClass}
+            placeholder="신규"
+            inputMode="numeric"
+            value={newVal}
+            onChange={(e) => setNewVal(e.target.value.replace(/\D/g, ""))}
+          />
+          <input
+            className={crmInputClass}
+            placeholder="재등록"
+            inputMode="numeric"
+            value={renewalVal}
+            onChange={(e) => setRenewalVal(e.target.value.replace(/\D/g, ""))}
+          />
+          <input
+            className={crmInputClass}
+            placeholder="체험"
+            inputMode="numeric"
+            value={trialVal}
+            onChange={(e) => setTrialVal(e.target.value.replace(/\D/g, ""))}
+          />
+        </div>
+        <button
+          onClick={add}
+          disabled={adding}
+          className="mt-2 px-4 py-2 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932]"
+        >
+          {adding ? "추가 중…" : "규칙 추가"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="mt-3 px-3 py-2 rounded-lg bg-red-50 text-[13px] text-red-700">{error}</div>
       )}
     </Card>
   );
