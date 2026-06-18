@@ -1277,6 +1277,63 @@ export type Database = {
           },
         ]
       }
+      crm_body_measurements: {
+        Row: {
+          id: number
+          center_id: number
+          member_id: number
+          measured_at: string
+          height_cm: number | null
+          weight_kg: number | null
+          muscle_kg: number | null
+          body_fat_kg: number | null
+          body_fat_pct: number | null
+          bmi: number | null
+          visceral_fat: number | null
+          basal_metabolism: number | null
+          memo: string | null
+          recorded_by_uid: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          member_id: number
+          measured_at: string
+          height_cm?: number | null
+          weight_kg?: number | null
+          muscle_kg?: number | null
+          body_fat_kg?: number | null
+          body_fat_pct?: number | null
+          bmi?: number | null
+          visceral_fat?: number | null
+          basal_metabolism?: number | null
+          memo?: string | null
+          recorded_by_uid: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          member_id?: number
+          measured_at?: string
+          height_cm?: number | null
+          weight_kg?: number | null
+          muscle_kg?: number | null
+          body_fat_kg?: number | null
+          body_fat_pct?: number | null
+          bmi?: number | null
+          visceral_fat?: number | null
+          basal_metabolism?: number | null
+          memo?: string | null
+          recorded_by_uid?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_memberships: {
         Row: {
           id: number

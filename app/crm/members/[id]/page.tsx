@@ -15,6 +15,7 @@ import {
   formatPhone,
 } from "../../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../../_components/crm-modal";
+import { CrmLineChart } from "../../_components/crm-line-chart";
 
 interface Member {
   id: number;
@@ -62,6 +63,7 @@ export default function CrmMemberDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [passOpen, setPassOpen] = useState(false);
   const [detailPassId, setDetailPassId] = useState<number | null>(null);
+  const [bodyOpen, setBodyOpen] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -229,6 +231,15 @@ export default function CrmMemberDetailPage() {
           </ul>
         )}
       </section>
+
+      <BodyMeasurementSection memberId={member.id} onOpen={() => setBodyOpen(true)} />
+
+      <BodyMeasurementModal
+        memberId={member.id}
+        open={bodyOpen}
+        onClose={() => setBodyOpen(false)}
+        onDone={() => setBodyOpen(false)}
+      />
 
       <EditModal
         open={editOpen}
@@ -857,6 +868,294 @@ function formatDateRange(startIso: string, endIso: string) {
   } catch {
     return startIso;
   }
+}
+
+/* ─── 신체 측정 (인바디) 섹션 ────────────────────────────── */
+
+interface Measurement {
+  id: number;
+  measured_at: string;
+  weight_kg: number | null;
+  muscle_kg: number | null;
+  body_fat_kg: number | null;
+  body_fat_pct: number | null;
+  bmi: number | null;
+  height_cm: number | null;
+  memo: string | null;
+}
+
+function BodyMeasurementSection({ memberId, onOpen }: { memberId: number; onOpen: () => void }) {
+  const { getIdToken } = useAuth();
+  const [list, setList] = useState<Measurement[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/crm/members/${memberId}/measurements`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setList(data.measurements ?? []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken, memberId]);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  // 최신 → 오래된 순. 차트는 오래된 → 최신 순.
+  const chronological = [...list].reverse();
+  const latest = list[0];
+
+  const weightPoints = chronological
+    .filter((m) => m.weight_kg !== null)
+    .map((m) => ({ label: m.measured_at.slice(5), value: Number(m.weight_kg) }));
+  const fatPctPoints = chronological
+    .filter((m) => m.body_fat_pct !== null)
+    .map((m) => ({ label: m.measured_at.slice(5), value: Number(m.body_fat_pct) }));
+  const musclePoints = chronological
+    .filter((m) => m.muscle_kg !== null)
+    .map((m) => ({ label: m.measured_at.slice(5), value: Number(m.muscle_kg) }));
+
+  return (
+    <section className="mt-6">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+          신체 측정 (인바디) {list.length > 0 && <span className="ml-1 text-[12px] text-[#A89B80] font-normal">{list.length}건</span>}
+        </h2>
+        <button
+          onClick={onOpen}
+          className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]"
+        >
+          + 측정 기록
+        </button>
+      </div>
+
+      {loading && list.length === 0 ? (
+        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : list.length === 0 ? (
+        <div className="px-4 py-8 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          신체 측정 기록이 없어요. "+ 측정 기록"으로 추가해 주세요.
+        </div>
+      ) : (
+        <>
+          {/* 최신 KPI */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+            {latest.weight_kg !== null && (
+              <BodyKpi label="체중" value={`${latest.weight_kg} kg`} />
+            )}
+            {latest.muscle_kg !== null && (
+              <BodyKpi label="골격근량" value={`${latest.muscle_kg} kg`} />
+            )}
+            {latest.body_fat_kg !== null && (
+              <BodyKpi label="체지방량" value={`${latest.body_fat_kg} kg`} />
+            )}
+            {latest.body_fat_pct !== null && (
+              <BodyKpi label="체지방률" value={`${latest.body_fat_pct} %`} />
+            )}
+          </div>
+
+          {/* 차트 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+            {weightPoints.length > 1 && (
+              <div className="px-4 py-3 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+                <h3 className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200 mb-1.5">체중 추이</h3>
+                <CrmLineChart points={weightPoints} unit="kg" height={140} />
+              </div>
+            )}
+            {fatPctPoints.length > 1 && (
+              <div className="px-4 py-3 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+                <h3 className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200 mb-1.5">체지방률 추이</h3>
+                <CrmLineChart points={fatPctPoints} unit="%" color="#B47B2A" height={140} />
+              </div>
+            )}
+            {musclePoints.length > 1 && (
+              <div className="px-4 py-3 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+                <h3 className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200 mb-1.5">골격근량 추이</h3>
+                <CrmLineChart points={musclePoints} unit="kg" color="#6B7B3A" height={140} />
+              </div>
+            )}
+          </div>
+
+          {/* 측정 기록 테이블 */}
+          <div className="overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800">
+            <table className="w-full text-[13px]">
+              <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+                <tr>
+                  <Th>측정일</Th>
+                  <Th>체중(kg)</Th>
+                  <Th>골격근(kg)</Th>
+                  <Th>체지방(kg)</Th>
+                  <Th>체지방률(%)</Th>
+                  <Th>BMI</Th>
+                  <Th>메모</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((m) => (
+                  <tr key={m.id} className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+                    <Td className="font-medium">{m.measured_at}</Td>
+                    <Td>{m.weight_kg ?? "—"}</Td>
+                    <Td>{m.muscle_kg ?? "—"}</Td>
+                    <Td>{m.body_fat_kg ?? "—"}</Td>
+                    <Td>{m.body_fat_pct ?? "—"}</Td>
+                    <Td>{m.bmi ?? "—"}</Td>
+                    <Td className="text-[#8C8270] max-w-[200px] truncate" title={m.memo || ""}>
+                      <span className="block truncate" title={m.memo || ""}>{m.memo || "—"}</span>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function BodyKpi({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="px-3 py-2 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+      <div className="text-[11.5px] text-[#A89B80] dark:text-zinc-500">{label}</div>
+      <div className="mt-0.5 text-[16px] font-bold text-[#2A251D] dark:text-zinc-100">{value}</div>
+    </div>
+  );
+}
+
+function Th({ children }: { children: React.ReactNode }) {
+  return <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">{children}</th>;
+}
+function Td({ children, className, title }: { children: React.ReactNode; className?: string; title?: string }) {
+  return <td className={`px-3 py-2 whitespace-nowrap ${className || ""}`} title={title}>{children}</td>;
+}
+
+function BodyMeasurementModal({
+  memberId,
+  open,
+  onClose,
+  onDone,
+}: {
+  memberId: number;
+  open: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [measuredAt, setMeasuredAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [weight, setWeight] = useState("");
+  const [muscle, setMuscle] = useState("");
+  const [fatKg, setFatKg] = useState("");
+  const [fatPct, setFatPct] = useState("");
+  const [bmi, setBmi] = useState("");
+  const [height, setHeight] = useState("");
+  const [memo, setMemo] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setMeasuredAt(new Date().toISOString().slice(0, 10));
+      setWeight("");
+      setMuscle("");
+      setFatKg("");
+      setFatPct("");
+      setBmi("");
+      setHeight("");
+      setMemo("");
+      setError("");
+    }
+  }, [open]);
+
+  const submit = async () => {
+    setError("");
+    if (!measuredAt) return setError("측정일을 입력해 주세요");
+    setSubmitting(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members/${memberId}/measurements`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          measured_at: measuredAt,
+          weight_kg: weight ? Number(weight) : undefined,
+          muscle_kg: muscle ? Number(muscle) : undefined,
+          body_fat_kg: fatKg ? Number(fatKg) : undefined,
+          body_fat_pct: fatPct ? Number(fatPct) : undefined,
+          bmi: bmi ? Number(bmi) : undefined,
+          height_cm: height ? Number(height) : undefined,
+          memo: memo || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "저장 실패");
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <CrmModal open={open} onClose={onClose} title="신체 측정 기록" size="lg">
+      <div className="space-y-3">
+        <CrmField label="측정일" required>
+          <input
+            type="date"
+            className={crmInputClass}
+            value={measuredAt}
+            onChange={(e) => setMeasuredAt(e.target.value)}
+          />
+        </CrmField>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <CrmField label="체중 (kg)">
+            <input className={crmInputClass} inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} />
+          </CrmField>
+          <CrmField label="골격근량 (kg)">
+            <input className={crmInputClass} inputMode="decimal" value={muscle} onChange={(e) => setMuscle(e.target.value)} />
+          </CrmField>
+          <CrmField label="체지방량 (kg)">
+            <input className={crmInputClass} inputMode="decimal" value={fatKg} onChange={(e) => setFatKg(e.target.value)} />
+          </CrmField>
+          <CrmField label="체지방률 (%)">
+            <input className={crmInputClass} inputMode="decimal" value={fatPct} onChange={(e) => setFatPct(e.target.value)} />
+          </CrmField>
+          <CrmField label="BMI">
+            <input className={crmInputClass} inputMode="decimal" value={bmi} onChange={(e) => setBmi(e.target.value)} />
+          </CrmField>
+          <CrmField label="키 (cm)">
+            <input className={crmInputClass} inputMode="decimal" value={height} onChange={(e) => setHeight(e.target.value)} />
+          </CrmField>
+        </div>
+        <CrmField label="메모">
+          <textarea className={`${crmInputClass} min-h-[60px]`} value={memo} onChange={(e) => setMemo(e.target.value)} />
+        </CrmField>
+
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 text-[13px] text-red-700">{error}</div>
+        )}
+
+        <button
+          onClick={submit}
+          disabled={submitting}
+          className="w-full px-4 py-3 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[14.5px] font-semibold hover:bg-[#5a6932] mt-2"
+        >
+          {submitting ? "저장 중…" : "저장"}
+        </button>
+      </div>
+    </CrmModal>
+  );
 }
 
 function BackLink() {
