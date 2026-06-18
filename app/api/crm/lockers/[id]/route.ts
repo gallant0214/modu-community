@@ -27,13 +27,14 @@ export async function PATCH(
   if (!lockerId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
   let body: {
-    action?: "assign" | "return" | "update" | "broken" | "repaired";
+    action?: "assign" | "return" | "update" | "broken" | "repaired" | "move";
     member_id?: number;
     start_date?: string;
     expires_at?: string;
     password?: string;
     memo?: string;
     note?: string;
+    to_locker_id?: number;
   };
   try {
     body = await request.json();
@@ -130,6 +131,73 @@ export async function PATCH(
     }
     history.action = "update";
     history.note = body.note ?? null;
+  } else if (action === "move") {
+    if (locker.state !== "assigned") {
+      return NextResponse.json({ error: "배정된 락커만 이동할 수 있습니다" }, { status: 400 });
+    }
+    const toId = Number(body.to_locker_id);
+    if (!toId) return NextResponse.json({ error: "이동할 락커를 선택해 주세요" }, { status: 400 });
+
+    const { data: target } = await supabase
+      .from("crm_lockers")
+      .select("id, state")
+      .eq("id", toId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    if (!target) return NextResponse.json({ error: "대상 락커를 찾을 수 없습니다" }, { status: 404 });
+    if (target.state !== "unassigned") {
+      return NextResponse.json({ error: "대상 락커가 비어있지 않습니다" }, { status: 400 });
+    }
+
+    // 대상 락커에 정보 복사
+    const { data: fullSource } = await supabase
+      .from("crm_lockers")
+      .select("assigned_member_id, start_date, expires_at, password, memo")
+      .eq("id", lockerId)
+      .maybeSingle();
+    if (!fullSource) {
+      return NextResponse.json({ error: "원본 락커를 찾을 수 없습니다" }, { status: 500 });
+    }
+
+    const { error: moveErr } = await supabase
+      .from("crm_lockers")
+      .update({
+        state: "assigned",
+        assigned_member_id: fullSource.assigned_member_id,
+        start_date: fullSource.start_date,
+        expires_at: fullSource.expires_at,
+        password: fullSource.password,
+        memo: fullSource.memo,
+      } as never)
+      .eq("id", toId);
+    if (moveErr) {
+      return NextResponse.json({ error: "이동 실패", detail: moveErr.message }, { status: 500 });
+    }
+
+    // 원본 락커 비우기
+    updates.state = "unassigned";
+    updates.assigned_member_id = null;
+    updates.start_date = null;
+    updates.expires_at = null;
+    updates.password = null;
+    updates.memo = null;
+
+    // history: move 1건 (원본 락커 기준)
+    let memberName: string | null = null;
+    if (fullSource.assigned_member_id) {
+      const { data: m } = await supabase
+        .from("crm_members")
+        .select("name")
+        .eq("id", fullSource.assigned_member_id)
+        .maybeSingle();
+      memberName = m?.name ?? null;
+    }
+    history.action = "move";
+    history.member_id = fullSource.assigned_member_id;
+    history.member_name = memberName;
+    history.start_date = fullSource.start_date;
+    history.expires_at = fullSource.expires_at;
+    history.note = body.note ?? `→ 락커 #${toId}`;
   } else if (action === "broken") {
     updates.state = "broken";
     history.action = "broken";

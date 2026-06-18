@@ -6,6 +6,7 @@ import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 import { formatPhone } from "../_components/crm-labels";
 
 type Tab = "assigned" | "unassigned" | "returns" | "settings";
+type ViewMode = "compact" | "box" | "list";
 
 const ZONE_COUNT = 8;
 const ZONE_NAME_MAX = 6;
@@ -90,7 +91,9 @@ export default function CrmLockersPage() {
   // 필터
   const [filter, setFilter] = useState<"all" | DisplayState>("all");
   const [query, setQuery] = useState("");
+  const [view, setView] = useState<ViewMode>("box");
   const [pickedLocker, setPickedLocker] = useState<Locker | null>(null);
+  const [moveSource, setMoveSource] = useState<Locker | null>(null);
 
   // 설정 폼
   const [zoneName, setZoneName] = useState("");
@@ -278,6 +281,25 @@ export default function CrmLockersPage() {
 
           <ZoneChips zone={zone} onChange={setZone} zoneLabel={zoneLabel} />
 
+          {/* 뷰 모드 토글 */}
+          <div className="flex items-center gap-2 mb-3">
+            <div className="inline-flex border border-[#E8E0D0] dark:border-zinc-700 rounded-lg overflow-hidden">
+              {(["compact", "box", "list"] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={`px-3 py-1.5 text-[12px] font-medium
+                    ${view === v
+                      ? "bg-[#6B7B3A] text-white"
+                      : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                    }`}
+                >
+                  {v === "compact" ? "축소" : v === "box" ? "박스" : "리스트"}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* 상태 카운트 칩 + 검색 */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
             {STATE_FILTERS.map((s) => (
@@ -304,7 +326,7 @@ export default function CrmLockersPage() {
             />
           </div>
 
-          {/* 락커 그리드 */}
+          {/* 락커 그리드 / 리스트 */}
           {loadingLockers ? (
             <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
           ) : filtered.length === 0 ? (
@@ -313,6 +335,73 @@ export default function CrmLockersPage() {
                 ? "락커가 없어요. 락커 설정에서 갯수를 입력해 주세요."
                 : "조건에 맞는 락커가 없어요."}
             </EmptyState>
+          ) : view === "list" ? (
+            <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
+              <table className="w-full text-[13px]">
+                <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+                  <tr>
+                    <Th>번호</Th>
+                    <Th>상태</Th>
+                    <Th>회원</Th>
+                    <Th>시작일</Th>
+                    <Th>만료일</Th>
+                    <Th>남은 일수</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((l) => {
+                    const ds = getDisplayState(l, today);
+                    return (
+                      <tr
+                        key={l.id}
+                        onClick={() => setPickedLocker(l)}
+                        className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#FBF7EB] dark:hover:bg-zinc-900/60 cursor-pointer"
+                      >
+                        <Td><span className="font-semibold text-[#2A251D] dark:text-zinc-100">{l.number}</span></Td>
+                        <Td>
+                          <span className={`px-1.5 py-0.5 rounded text-[10.5px] font-semibold ${STATE_CHIP_CLS[ds]}`}>
+                            {STATE_LABEL[ds]}
+                          </span>
+                        </Td>
+                        <Td>{l.member?.name ?? "—"}</Td>
+                        <Td className="text-[#8C8270]">{l.start_date ?? "—"}</Td>
+                        <Td className="text-[#8C8270]">{l.expires_at ?? "—"}</Td>
+                        <Td className="text-[#6B5D47]">
+                          {l.expires_at ? expireSubtitle(l.expires_at, today) : "—"}
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : view === "compact" ? (
+            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-1.5">
+              {filtered.map((l) => {
+                const ds = getDisplayState(l, today);
+                return (
+                  <button
+                    key={l.id}
+                    onClick={() => setPickedLocker(l)}
+                    className={`aspect-square rounded-lg border text-[13.5px] font-bold flex items-center justify-center transition-colors
+                      ${ds === "unassigned"
+                        ? "border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[#A89B80] hover:border-[#6B7B3A]/40"
+                        : ds === "active"
+                        ? "border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#3A342A] dark:text-zinc-100 hover:bg-[#6B7B3A]/20"
+                        : ds === "expiring"
+                        ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300"
+                        : ds === "expired"
+                        ? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
+                        : ds === "broken"
+                        ? "border-zinc-500 bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"
+                        : "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                      }`}
+                  >
+                    {l.number}
+                  </button>
+                );
+              })}
+            </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
               {filtered.map((l) => (
@@ -424,8 +513,127 @@ export default function CrmLockersPage() {
           setPickedLocker(null);
           loadLockers();
         }}
+        onMove={(l) => {
+          setPickedLocker(null);
+          setMoveSource(l);
+        }}
+      />
+
+      <MoveLockerModal
+        source={moveSource}
+        candidates={lockers.filter((l) => l.state === "unassigned" && l.id !== moveSource?.id)}
+        zoneName={currentZone?.name ?? ""}
+        onClose={() => setMoveSource(null)}
+        onDone={() => {
+          setMoveSource(null);
+          loadLockers();
+        }}
       />
     </div>
+  );
+}
+
+/* ─── 락커 이동 모달 ────────────────────────────── */
+
+function MoveLockerModal({
+  source,
+  candidates,
+  zoneName,
+  onClose,
+  onDone,
+}: {
+  source: Locker | null;
+  candidates: Locker[];
+  zoneName: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [targetId, setTargetId] = useState<number | "">("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!source) {
+      setTargetId("");
+      setError("");
+    }
+  }, [source]);
+
+  if (!source) return null;
+
+  const submit = async () => {
+    if (!targetId) return setError("이동할 락커를 선택해 주세요");
+    setSubmitting(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/lockers/${source.id}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ action: "move", to_locker_id: Number(targetId) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "이동 실패");
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <CrmModal open={source !== null} onClose={onClose} title={`락커 ${source.number}번 이동`} size="md">
+      <div className="space-y-3.5">
+        <div className="px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[13px] text-[#3A342A] dark:text-zinc-300">
+          <strong>{source.member?.name ?? "회원"}</strong>의 정보를{" "}
+          <strong>{zoneName}</strong>의 다른 락커로 옮깁니다.
+        </div>
+
+        <CrmField label="이동할 락커 번호" required>
+          {candidates.length === 0 ? (
+            <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#8C8270] text-center">
+              현재 락커룸에 비어있는 락커가 없어요. 다른 락커룸으로의 이동은 곧 추가됩니다.
+            </div>
+          ) : (
+            <select
+              className={crmInputClass}
+              value={targetId}
+              onChange={(e) => setTargetId(e.target.value ? Number(e.target.value) : "")}
+            >
+              <option value="">선택해 주세요</option>
+              {candidates.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.number}번 (미배정)
+                </option>
+              ))}
+            </select>
+          )}
+        </CrmField>
+
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 text-[13px] text-red-700">{error}</div>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] text-[13.5px] font-semibold hover:bg-[#F5F0E5]"
+          >
+            취소
+          </button>
+          <button
+            onClick={submit}
+            disabled={submitting || !targetId || candidates.length === 0}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+          >
+            {submitting ? "이동 중…" : "이동"}
+          </button>
+        </div>
+      </div>
+    </CrmModal>
   );
 }
 
@@ -759,11 +967,13 @@ function LockerActionModal({
   today,
   onClose,
   onDone,
+  onMove,
 }: {
   locker: Locker | null;
   today: string;
   onClose: () => void;
   onDone: () => void;
+  onMove?: (locker: Locker) => void;
 }) {
   const { getIdToken } = useAuth();
   const open = locker !== null;
@@ -1069,17 +1279,28 @@ function LockerActionModal({
               )}
 
               {locker.state === "assigned" && (
-                <button
-                  onClick={() => {
-                    if (window.confirm("락커를 회수할까요? 회원 정보가 비워집니다.")) {
-                      callAction("return");
-                    }
-                  }}
-                  disabled={submitting}
-                  className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-red-200 text-red-700 text-[13.5px] font-semibold hover:bg-red-50"
-                >
-                  회수
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      if (window.confirm("락커를 회수할까요? 회원 정보가 비워집니다.")) {
+                        callAction("return");
+                      }
+                    }}
+                    disabled={submitting}
+                    className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-red-200 text-red-700 text-[13.5px] font-semibold hover:bg-red-50"
+                  >
+                    회수
+                  </button>
+                  {onMove && (
+                    <button
+                      onClick={() => onMove(locker)}
+                      disabled={submitting}
+                      className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-[#B47B2A] text-[#B47B2A] dark:text-amber-300 dark:border-amber-300 text-[13.5px] font-semibold hover:bg-amber-50"
+                    >
+                      이동
+                    </button>
+                  )}
+                </>
               )}
 
               {locker.state !== "broken" ? (
