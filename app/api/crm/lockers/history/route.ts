@@ -17,6 +17,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const action = url.searchParams.get("action") || "return";
   const zoneParam = url.searchParams.get("zone");
+  const lockerId = url.searchParams.get("locker_id");
 
   let query = supabase
     .from("crm_locker_history")
@@ -38,6 +39,10 @@ export async function GET(request: Request) {
       .eq("zone_number", zoneNumber)
       .maybeSingle();
     if (zoneRow) query = query.eq("zone_id", zoneRow.id);
+  }
+
+  if (lockerId) {
+    query = query.eq("locker_id", Number(lockerId));
   }
 
   const { data, error } = await query;

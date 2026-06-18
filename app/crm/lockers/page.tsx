@@ -279,7 +279,19 @@ export default function CrmLockersPage() {
             만료 시, 자동으로 락커가 회수되지 않아요. 락커 현황을 확인해 락커 관리를 해 주세요.
           </Notice>
 
-          <ZoneChips zone={zone} onChange={setZone} zoneLabel={zoneLabel} />
+          <ZoneChips
+            zone={zone}
+            onChange={setZone}
+            zoneLabel={zoneLabel}
+            zones={zones}
+            showOnlyActive
+            onAddRoom={() => {
+              // 비어있는 첫 zone 으로 전환 + 설정 탭 이동
+              const free = zones.find((z) => z.locker_count === 0);
+              if (free) setZone(free.zone_number);
+              setTab("settings");
+            }}
+          />
 
           {/* 뷰 모드 토글 */}
           <div className="flex items-center gap-2 mb-3">
@@ -423,7 +435,7 @@ export default function CrmLockersPage() {
         </>
       )}
 
-      {tab === "unassigned" && <UnassignedTab zone={zone} zoneLabel={zoneLabel} onZoneChange={setZone} />}
+      {tab === "unassigned" && <UnassignedTab zone={zone} zoneLabel={zoneLabel} onZoneChange={setZone} onAssigned={loadLockers} />}
 
       {tab === "returns" && <ReturnsTab zone={zone} zoneLabel={zoneLabel} onZoneChange={setZone} />}
 
@@ -718,12 +730,13 @@ const MEMBER_TYPE_KO: Record<string, string> = {
   matched: "매칭회원",
 };
 
-function UnassignedTab(_props: { zone: number; zoneLabel: (n: number) => string; onZoneChange: (n: number) => void }) {
+function UnassignedTab({ onAssigned }: { zone: number; zoneLabel: (n: number) => string; onZoneChange: (n: number) => void; onAssigned?: () => void }) {
   const { getIdToken } = useAuth();
   const [list, setList] = useState<UnassignedMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
+  const [pickedForAssign, setPickedForAssign] = useState<UnassignedMember | null>(null);
 
   const load = useCallback(async () => {
     setError("");
@@ -789,6 +802,7 @@ function UnassignedTab(_props: { zone: number; zoneLabel: (n: number) => string;
                 <Th>결제 일시</Th>
                 <Th>락커 시작일</Th>
                 <Th>락커 만료일</Th>
+                <Th className="text-right pr-3">관리</Th>
               </tr>
             </thead>
             <tbody>
@@ -809,13 +823,204 @@ function UnassignedTab(_props: { zone: number; zoneLabel: (n: number) => string;
                   </Td>
                   <Td className="text-[#A89B80]">—</Td>
                   <Td className="text-[#A89B80]">—</Td>
+                  <Td className="text-right pr-3">
+                    <button
+                      onClick={() => setPickedForAssign(m)}
+                      className="px-2.5 py-1 rounded-md bg-[#6B7B3A] text-white text-[12px] font-semibold hover:bg-[#5a6932]"
+                    >
+                      락커 배정
+                    </button>
+                  </Td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      <AssignLockerForMemberModal
+        member={pickedForAssign}
+        onClose={() => setPickedForAssign(null)}
+        onDone={() => {
+          setPickedForAssign(null);
+          load();
+          onAssigned?.();
+        }}
+      />
     </section>
+  );
+}
+
+/* ─── 회원 → 락커 배정 모달 ────────────────────────────── */
+
+function AssignLockerForMemberModal({
+  member,
+  onClose,
+  onDone,
+}: {
+  member: UnassignedMember | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [vacant, setVacant] = useState<
+    { id: number; zone_id: number; zone_name: string; number: number }[]
+  >([]);
+  const [lockerId, setLockerId] = useState<number | "">("");
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [expiresAt, setExpiresAt] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [password, setPassword] = useState("");
+  const [memo, setMemo] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!member) {
+      setLockerId("");
+      setPassword("");
+      setMemo("");
+      setError("");
+      return;
+    }
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/lockers/vacant", {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setVacant(data.lockers ?? []);
+      }
+    })();
+  }, [member, getIdToken]);
+
+  if (!member) return null;
+
+  const submit = async () => {
+    if (!lockerId) return setError("락커를 선택해 주세요");
+    if (!startDate || !expiresAt) return setError("시작일과 만료일을 입력해 주세요");
+    setSubmitting(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/lockers/${lockerId}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "assign",
+          member_id: member.id,
+          start_date: startDate,
+          expires_at: expiresAt,
+          password: password || undefined,
+          memo: memo || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "배정 실패");
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <CrmModal open={member !== null} onClose={onClose} title="락커 배정" size="md">
+      <div className="space-y-3.5">
+        <div className="px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[13px] text-[#3A342A] dark:text-zinc-300">
+          <strong>{member.name}</strong>
+          {member.phone && (
+            <span className="ml-2 text-[12px] text-[#8C8270]">{formatPhone(member.phone)}</span>
+          )}
+        </div>
+
+        <CrmField label="락커 선택" required>
+          {vacant.length === 0 ? (
+            <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] text-center text-[12.5px] text-[#8C8270]">
+              비어있는 락커가 없어요. 락커 설정에서 갯수를 늘려주세요.
+            </div>
+          ) : (
+            <select
+              className={crmInputClass}
+              value={lockerId}
+              onChange={(e) => setLockerId(e.target.value ? Number(e.target.value) : "")}
+            >
+              <option value="">선택해 주세요</option>
+              {vacant.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.zone_name} · {v.number}번
+                </option>
+              ))}
+            </select>
+          )}
+        </CrmField>
+
+        <div className="grid grid-cols-2 gap-2">
+          <CrmField label="시작일" required>
+            <input
+              type="date"
+              className={crmInputClass}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </CrmField>
+          <CrmField label="만료일" required>
+            <input
+              type="date"
+              className={crmInputClass}
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+            />
+          </CrmField>
+        </div>
+
+        <CrmField label="비밀번호">
+          <input
+            type="text"
+            inputMode="numeric"
+            className={crmInputClass}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="0000"
+          />
+        </CrmField>
+
+        <CrmField label="메모">
+          <textarea
+            className={`${crmInputClass} min-h-[60px]`}
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+          />
+        </CrmField>
+
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 text-[13px] text-red-700">{error}</div>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] text-[13.5px] font-semibold hover:bg-[#F5F0E5]"
+          >
+            취소
+          </button>
+          <button
+            onClick={submit}
+            disabled={submitting || !lockerId || vacant.length === 0}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+          >
+            {submitting ? "배정 중…" : "배정"}
+          </button>
+        </div>
+      </div>
+    </CrmModal>
   );
 }
 
@@ -980,7 +1185,11 @@ function LockerActionModal({
   const ds = locker ? getDisplayState(locker, today) : "unassigned";
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [mode, setMode] = useState<"view" | "assign">("view");
+  const [mode, setMode] = useState<"view" | "assign" | "history">("view");
+  const [history, setHistory] = useState<
+    { id: number; action: string; member_name: string | null; created_at: string; note: string | null }[]
+  >([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // 배정 폼
   const [memberQuery, setMemberQuery] = useState("");
@@ -1005,6 +1214,7 @@ function LockerActionModal({
       setPickedMember(null);
       setPassword("");
       setMemo("");
+      setHistory([]);
       return;
     }
     if (locker) {
@@ -1012,6 +1222,28 @@ function LockerActionModal({
       setMemo(locker.memo ?? "");
     }
   }, [open, locker]);
+
+  // 기록 모드 진입 시 history 로드
+  useEffect(() => {
+    if (mode !== "history" || !locker) return;
+    (async () => {
+      setLoadingHistory(true);
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(
+          `/api/crm/lockers/history?action=all&locker_id=${locker.id}`,
+          { headers: { authorization: `Bearer ${token}` }, cache: "no-store" }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setHistory(data.history ?? []);
+        }
+      } finally {
+        setLoadingHistory(false);
+      }
+    })();
+  }, [mode, locker, getIdToken]);
 
   const searchMember = async () => {
     const q = memberQuery.trim();
@@ -1090,6 +1322,72 @@ function LockerActionModal({
             </span>
           )}
         </div>
+
+        {/* 상세 / 기록 탭 */}
+        {mode !== "assign" && (
+          <div className="flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800 -mt-1">
+            <button
+              onClick={() => setMode("view")}
+              className={`px-3 py-1.5 -mb-px text-[12.5px] font-medium border-b-2 transition-colors
+                ${mode === "view"
+                  ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A]"
+                  : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
+                }`}
+            >
+              상세
+            </button>
+            <button
+              onClick={() => setMode("history")}
+              className={`px-3 py-1.5 -mb-px text-[12.5px] font-medium border-b-2 transition-colors
+                ${mode === "history"
+                  ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A]"
+                  : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
+                }`}
+            >
+              기록
+            </button>
+          </div>
+        )}
+
+        {mode === "history" ? (
+          <div>
+            {loadingHistory ? (
+              <div className="text-[13px] text-[#8C8270] py-3 text-center">불러오는 중…</div>
+            ) : history.length === 0 ? (
+              <div className="px-4 py-6 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-lg">
+                이 락커의 기록이 없어요.
+              </div>
+            ) : (
+              <ul className="space-y-1.5 max-h-[260px] overflow-y-auto">
+                {history.map((h) => (
+                  <li
+                    key={h.id}
+                    className="px-3 py-2 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40"
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                        {ACTION_KO[h.action] ?? h.action}
+                        {h.member_name && (
+                          <span className="ml-2 text-[12px] text-[#6B5D47] dark:text-zinc-400 font-normal">
+                            {h.member_name}
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[11px] text-[#A89B80] shrink-0">
+                        {formatDateTimeKST(h.created_at)}
+                      </span>
+                    </div>
+                    {h.note && (
+                      <div className="mt-1 text-[11.5px] text-[#8C8270] dark:text-zinc-500 truncate">
+                        {h.note}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
 
         {/* 배정 모드 */}
         {mode === "assign" ? (
@@ -1210,7 +1508,7 @@ function LockerActionModal({
               </button>
             </div>
           </>
-        ) : (
+        ) : mode === "view" ? (
           <>
             {/* 정보 (배정된 경우) */}
             {locker.state === "assigned" && (
@@ -1324,11 +1622,20 @@ function LockerActionModal({
               )}
             </div>
           </>
-        )}
+        ) : null}
       </div>
     </CrmModal>
   );
 }
+
+const ACTION_KO: Record<string, string> = {
+  assign: "배정",
+  return: "회수",
+  update: "정보 수정",
+  move: "이동",
+  broken: "고장 처리",
+  repaired: "수리 완료",
+};
 
 /* ─── 공통 ────────────────────────────── */
 
@@ -1336,15 +1643,29 @@ function ZoneChips({
   zone,
   onChange,
   zoneLabel,
+  zones,
+  showOnlyActive,
+  onAddRoom,
 }: {
   zone: number;
   onChange: (n: number) => void;
   zoneLabel: (n: number) => string;
+  zones?: Zone[];
+  showOnlyActive?: boolean;
+  onAddRoom?: () => void;
 }) {
+  // showOnlyActive=true → locker_count>0 인 락커룸만 표시
+  let numbers = Array.from({ length: ZONE_COUNT }, (_, i) => i + 1);
+  if (showOnlyActive && zones) {
+    const activeNums = zones
+      .filter((z) => z.locker_count > 0)
+      .map((z) => z.zone_number);
+    numbers = activeNums.length > 0 ? activeNums : [zone];
+  }
+
   return (
-    <div className="flex gap-1.5 mt-5 mb-4 overflow-x-auto -mx-1 px-1">
-      {Array.from({ length: ZONE_COUNT }).map((_, i) => {
-        const n = i + 1;
+    <div className="flex items-center gap-1.5 mt-5 mb-4 overflow-x-auto -mx-1 px-1">
+      {numbers.map((n) => {
         const active = zone === n;
         return (
           <button
@@ -1360,6 +1681,14 @@ function ZoneChips({
           </button>
         );
       })}
+      {onAddRoom && (
+        <button
+          onClick={onAddRoom}
+          className="px-3 py-1.5 rounded-full text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5 whitespace-nowrap"
+        >
+          + 새 락커룸
+        </button>
+      )}
     </div>
   );
 }
@@ -1409,8 +1738,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">{children}</th>;
+function Th({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <th className={`text-left font-medium px-3 py-2.5 whitespace-nowrap ${className || ""}`}>{children}</th>;
 }
 
 function Td({ children, className }: { children: React.ReactNode; className?: string }) {
