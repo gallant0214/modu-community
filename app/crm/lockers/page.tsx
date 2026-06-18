@@ -334,23 +334,9 @@ export default function CrmLockersPage() {
         </>
       )}
 
-      {tab === "unassigned" && (
-        <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
-          <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-            미배정자 목록 (0명)
-          </h2>
-          <EmptyState>미배정자가 없어요.</EmptyState>
-        </section>
-      )}
+      {tab === "unassigned" && <UnassignedTab zone={zone} zoneLabel={zoneLabel} onZoneChange={setZone} />}
 
-      {tab === "returns" && (
-        <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
-          <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-            회수 처리 (0건)
-          </h2>
-          <EmptyState>회수 기록이 없어요.</EmptyState>
-        </section>
-      )}
+      {tab === "returns" && <ReturnsTab zone={zone} zoneLabel={zoneLabel} onZoneChange={setZone} />}
 
       {tab === "settings" && (
         <>
@@ -502,6 +488,268 @@ function expireSubtitle(expires: string, today: string): string {
   if (d > 0) return `${d}일후 만료`;
   if (d === 0) return "오늘 만료";
   return `${-d}일째 만료`;
+}
+
+/* ─── 미배정자 탭 ────────────────────────────── */
+
+interface UnassignedMember {
+  id: number;
+  name: string;
+  phone: string | null;
+  birth: string | null;
+  gender: string | null;
+  member_type: string;
+  created_at: string;
+  linked_firebase_uid: string | null;
+  last_pass: { lesson_kind: string; issued_at: string; paid_at: string } | null;
+}
+
+const MEMBER_TYPE_KO: Record<string, string> = {
+  provisional: "가회원",
+  full: "정회원",
+  matched: "매칭회원",
+};
+
+function UnassignedTab(_props: { zone: number; zoneLabel: (n: number) => string; onZoneChange: (n: number) => void }) {
+  const { getIdToken } = useAuth();
+  const [list, setList] = useState<UnassignedMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const url = `/api/crm/lockers/unassigned-members${query.trim() ? `?q=${encodeURIComponent(query.trim())}` : ""}`;
+      const res = await fetch(url, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setList(data.members ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken, query]);
+
+  useEffect(() => {
+    const t = setTimeout(load, 200);
+    return () => clearTimeout(t);
+  }, [load]);
+
+  return (
+    <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
+      <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
+        미배정자 목록 ({list.length}명)
+      </h2>
+
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="이름 또는 연락처로 검색"
+        className={`${crmInputClass} mb-3`}
+      />
+
+      {error && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : list.length === 0 ? (
+        <EmptyState>
+          {query ? "일치하는 미배정자가 없어요." : "미배정자가 없어요."}
+        </EmptyState>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
+          <table className="w-full text-[13px]">
+            <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+              <tr>
+                <Th>이름</Th>
+                <Th>회원 유형</Th>
+                <Th>연락처</Th>
+                <Th>구매 상품</Th>
+                <Th>결제 일시</Th>
+                <Th>락커 시작일</Th>
+                <Th>락커 만료일</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((m) => (
+                <tr key={m.id} className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+                  <Td><span className="font-semibold text-[#2A251D] dark:text-zinc-100">{m.name}</span></Td>
+                  <Td className="text-[#6B5D47] dark:text-zinc-400">
+                    {MEMBER_TYPE_KO[m.member_type] ?? m.member_type}
+                  </Td>
+                  <Td className="text-[#6B5D47] dark:text-zinc-400">
+                    {m.phone ? formatPhone(m.phone) : "—"}
+                  </Td>
+                  <Td className="text-[#6B5D47] dark:text-zinc-400">
+                    {m.last_pass?.lesson_kind ?? "—"}
+                  </Td>
+                  <Td className="text-[#8C8270] dark:text-zinc-500">
+                    {m.last_pass ? formatDateTimeKST(m.last_pass.paid_at) : "—"}
+                  </Td>
+                  <Td className="text-[#A89B80]">—</Td>
+                  <Td className="text-[#A89B80]">—</Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ─── 회수 기록 탭 ────────────────────────────── */
+
+interface ReturnHistory {
+  id: number;
+  locker_id: number | null;
+  zone_id: number;
+  zone_name: string;
+  number: number;
+  member_id: number | null;
+  member_name: string | null;
+  start_date: string | null;
+  expires_at: string | null;
+  note: string | null;
+  actor_uid: string;
+  actor_name: string;
+  created_at: string;
+}
+
+function ReturnsTab({ zone, onZoneChange, zoneLabel }: { zone: number; zoneLabel: (n: number) => string; onZoneChange: (n: number) => void }) {
+  const { getIdToken } = useAuth();
+  const [scope, setScope] = useState<"current" | "all">("all");
+  const [list, setList] = useState<ReturnHistory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const url = `/api/crm/lockers/history?action=return${scope === "current" ? `&zone=${zone}` : ""}`;
+      const res = await fetch(url, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setList(data.history ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken, scope, zone]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return (
+    <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+          회수 처리 ({list.length}건)
+        </h2>
+        <div className="flex gap-1.5">
+          <button
+            onClick={() => setScope("all")}
+            className={`px-3 py-1.5 rounded-full text-[12px] font-medium border whitespace-nowrap
+              ${scope === "all"
+                ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                : "border-[#E8E0D0] bg-[#FEFCF7] text-[#3A342A] hover:border-[#6B7B3A]/40"
+              }`}
+          >
+            전체 락커룸
+          </button>
+          <button
+            onClick={() => setScope("current")}
+            className={`px-3 py-1.5 rounded-full text-[12px] font-medium border whitespace-nowrap
+              ${scope === "current"
+                ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                : "border-[#E8E0D0] bg-[#FEFCF7] text-[#3A342A] hover:border-[#6B7B3A]/40"
+              }`}
+          >
+            {zoneLabel(zone)}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : list.length === 0 ? (
+        <EmptyState>회수 기록이 없어요.</EmptyState>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
+          <table className="w-full text-[13px]">
+            <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+              <tr>
+                <Th>이름</Th>
+                <Th>락커 구역</Th>
+                <Th>회수 전 락커 번호</Th>
+                <Th>회수일</Th>
+                <Th>처리자</Th>
+                <Th>비고</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((h) => (
+                <tr key={h.id} className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+                  <Td><span className="font-semibold text-[#2A251D] dark:text-zinc-100">{h.member_name || "—"}</span></Td>
+                  <Td className="text-[#6B5D47] dark:text-zinc-400">{h.zone_name}</Td>
+                  <Td className="font-medium">{h.number}</Td>
+                  <Td className="text-[#8C8270] dark:text-zinc-500">{formatDateTimeKST(h.created_at)}</Td>
+                  <Td className="text-[#6B5D47] dark:text-zinc-400">{h.actor_name}</Td>
+                  <Td className="text-[#6B5D47] dark:text-zinc-400 max-w-[260px]">
+                    <span className="block truncate" title={h.note || ""}>
+                      {h.note || "—"}
+                    </span>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function formatDateTimeKST(iso: string) {
+  try {
+    const d = new Date(iso);
+    const k = new Date(d.getTime() + 9 * 3600 * 1000);
+    const yyyy = k.getUTCFullYear();
+    const mm = String(k.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(k.getUTCDate()).padStart(2, "0");
+    const hh = String(k.getUTCHours()).padStart(2, "0");
+    const mi = String(k.getUTCMinutes()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+  } catch {
+    return iso;
+  }
 }
 
 /* ─── 락커 액션 모달 ────────────────────────────── */
@@ -938,6 +1186,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </label>
   );
+}
+
+function Th({ children }: { children: React.ReactNode }) {
+  return <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">{children}</th>;
+}
+
+function Td({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <td className={`px-3 py-3 whitespace-nowrap ${className || ""}`}>{children}</td>;
 }
 
 function EmptyState({ children }: { children: React.ReactNode }) {
