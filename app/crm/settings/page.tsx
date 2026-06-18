@@ -47,6 +47,8 @@ const ACTION_LABEL: Record<string, string> = {
   "contract.create": "계약서 추가",
   "contract.delete": "계약서 삭제",
   "locker_zone.update": "락커 구역 설정 변경",
+  "membership.issue": "회원권 발급",
+  "membership.refund": "회원권 환불",
   "assign": "락커 배정",
   "return": "락커 회수",
   "move": "락커 이동",

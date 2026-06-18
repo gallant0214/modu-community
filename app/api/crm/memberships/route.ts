@@ -1,0 +1,149 @@
+import { NextResponse } from "next/server";
+import { supabase } from "@/app/lib/supabase";
+import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+
+export const dynamic = "force-dynamic";
+
+const PAYMENT_METHODS = ["cash", "card", "transfer", "etc"] as const;
+
+/**
+ * GET /api/crm/memberships?status=&q=&member_id=
+ * 회원권 목록.
+ */
+export async function GET(request: Request) {
+  const ctx = await requireCrmContext(request);
+  if (isCrmError(ctx)) return ctx;
+
+  const url = new URL(request.url);
+  const status = url.searchParams.get("status");
+  const memberId = url.searchParams.get("member_id");
+  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 100), 1), 500);
+
+  let query = supabase
+    .from("crm_memberships")
+    .select(
+      "id, member_id, seller_member_id, plan_name, duration_days, price_won, vat_included, payment_method, payment_method_custom, start_date, expires_at, status, memo, created_at"
+    )
+    .eq("center_id", ctx.centerId)
+    .neq("status", "deleted")
+    .order("start_date", { ascending: false })
+    .limit(limit);
+
+  if (status) query = query.eq("status", status);
+  if (memberId) query = query.eq("member_id", Number(memberId));
+
+  const { data, error } = await query;
+  if (error) {
+    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+  }
+
+  // 회원 이름 join
+  const memberIds = Array.from(new Set((data ?? []).map((p) => p.member_id)));
+  const { data: members } = memberIds.length
+    ? await supabase.from("crm_members").select("id, name").in("id", memberIds)
+    : { data: [] };
+  const memberMap = new Map((members ?? []).map((m) => [m.id, m.name]));
+
+  return NextResponse.json({
+    memberships: (data ?? []).map((p) => ({
+      ...p,
+      member_name: memberMap.get(p.member_id) ?? "",
+    })),
+  });
+}
+
+/**
+ * POST /api/crm/memberships — 회원권 발급
+ *
+ * owner/admin/manager 디폴트 허용. trainer 는 제한 없음 (회원권은 모두 발급 가능 정책).
+ */
+export async function POST(request: Request) {
+  const ctx = await requireCrmContext(request);
+  if (isCrmError(ctx)) return ctx;
+
+  let body: {
+    member_id?: number;
+    seller_member_id?: number;
+    plan_name?: string;
+    duration_days?: number;
+    price_won?: number;
+    payment_method?: string;
+    payment_method_custom?: string;
+    start_date?: string;
+    expires_at?: string;
+    vat_included?: boolean;
+    memo?: string;
+  };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  }
+
+  const memberId = Number(body.member_id);
+  if (!memberId) return NextResponse.json({ error: "회원을 선택해 주세요" }, { status: 400 });
+
+  const paymentMethod = body.payment_method;
+  if (!paymentMethod || !PAYMENT_METHODS.includes(paymentMethod as (typeof PAYMENT_METHODS)[number])) {
+    return NextResponse.json({ error: "결제 수단이 잘못됨" }, { status: 400 });
+  }
+
+  const plan = body.plan_name?.trim();
+  const duration = Number(body.duration_days);
+  if (!plan || !duration || duration < 1) {
+    return NextResponse.json({ error: "플랜명과 기간을 입력해 주세요" }, { status: 400 });
+  }
+  if (!body.start_date || !body.expires_at) {
+    return NextResponse.json({ error: "시작일과 만료일을 입력해 주세요" }, { status: 400 });
+  }
+
+  const { data: m } = await supabase
+    .from("crm_members")
+    .select("id")
+    .eq("id", memberId)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+  if (!m) return NextResponse.json({ error: "회원을 찾을 수 없습니다" }, { status: 404 });
+
+  const sellerId = Number(body.seller_member_id) || ctx.centerMemberId;
+
+  const { data: created, error } = await supabase
+    .from("crm_memberships")
+    .insert({
+      center_id: ctx.centerId,
+      member_id: memberId,
+      seller_member_id: sellerId,
+      plan_name: plan,
+      duration_days: duration,
+      price_won: Number(body.price_won) || 0,
+      vat_included: !!body.vat_included,
+      payment_method: paymentMethod,
+      payment_method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
+      start_date: body.start_date,
+      expires_at: body.expires_at,
+      status: "valid",
+      memo: body.memo?.trim() || null,
+    })
+    .select("id")
+    .single();
+
+  if (error || !created) {
+    return NextResponse.json({ error: "발급 실패", detail: error?.message }, { status: 500 });
+  }
+
+  await supabase.from("crm_audit_logs").insert({
+    center_id: ctx.centerId,
+    actor_uid: ctx.uid,
+    action: "membership.issue",
+    entity_type: "crm_memberships",
+    entity_id: created.id,
+    payload: {
+      member_id: memberId,
+      plan_name: plan,
+      duration_days: duration,
+      price_won: Number(body.price_won) || 0,
+    } as never,
+  });
+
+  return NextResponse.json({ ok: true, membershipId: created.id });
+}

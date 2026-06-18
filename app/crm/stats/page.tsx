@@ -97,7 +97,7 @@ export default function CrmStatsPage() {
       ) : tab === "trainer" ? (
         <TrainerTab data={data} />
       ) : (
-        <CenterTab />
+        <CenterTab ym={ym} />
       )}
     </div>
   );
@@ -175,48 +175,109 @@ function TrainerTab({ data }: { data: MonthlyResp | null }) {
 
 /* ─── 센터 매출 탭 ────────────────────────────── */
 
-function CenterTab() {
-  // 매출 추적 기능 미구현 — 현재는 0원 표시 + 안내
-  const items: { label: string; href?: string }[] = [
-    { label: "회원권 매출", href: "/crm/memberships" },
-    { label: "수강권 매출", href: "/crm/passes" },
-    { label: "운동복 매출" },
-    { label: "락커 매출", href: "/crm/lockers" },
-    { label: "기타 판매 매출" },
+interface CenterRevenueResp {
+  ym: string;
+  total: number;
+  counts: { memberships: number; passes: number };
+  categories: {
+    membership: number;
+    pass: number;
+    locker: number;
+    goods: number;
+    etc: number;
+  };
+}
+
+function CenterTab({ ym }: { ym: string }) {
+  const { getIdToken } = useAuth();
+  const [data, setData] = useState<CenterRevenueResp | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/crm/stats/center-revenue?ym=${ym}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) setData(await res.json());
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken, ym]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const cats: { key: keyof CenterRevenueResp["categories"]; label: string; href?: string }[] = [
+    { key: "membership", label: "회원권 매출", href: "/crm/memberships" },
+    { key: "pass", label: "수강권 매출", href: "/crm/passes" },
+    { key: "goods", label: "운동 용품 매출" },
+    { key: "locker", label: "락커 매출", href: "/crm/lockers" },
+    { key: "etc", label: "기타 판매 매출" },
   ];
 
-  const total = 0;
+  if (loading) {
+    return <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>;
+  }
 
   return (
     <>
       <section className="grid grid-cols-2 md:grid-cols-2 gap-3 mb-5">
-        <Kpi label="센터 매출 합계" value={`${formatWon(total)}원`} accent />
-        <Kpi label="이번달 활동" value={"0건"} />
+        <Kpi label="센터 매출 합계" value={`${formatWon(data?.total ?? 0)}원`} accent />
+        <Kpi
+          label="이번달 활동"
+          value={`${(data?.counts.memberships ?? 0) + (data?.counts.passes ?? 0)}건`}
+        />
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {items.map((it) => (
-          <div
-            key={it.label}
-            className="px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900"
-          >
-            <div className="text-[12.5px] text-[#A89B80] dark:text-zinc-500">{it.label}</div>
-            <div className="mt-1 text-[18px] font-bold text-[#2A251D] dark:text-zinc-100">
-              {formatWon(0)}원
+        {cats.map((c) => {
+          const v = data?.categories[c.key] ?? 0;
+          const tracked = c.key === "membership" || c.key === "pass";
+          return (
+            <div
+              key={c.key}
+              className="px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900"
+            >
+              <div className="text-[12.5px] text-[#A89B80] dark:text-zinc-500">{c.label}</div>
+              <div
+                className={`mt-1 text-[18px] font-bold ${tracked ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#2A251D] dark:text-zinc-100"}`}
+              >
+                {formatWon(v)}원
+              </div>
+              <div className="mt-2 text-[11.5px] text-[#A89B80] dark:text-zinc-500">
+                {tracked ? (
+                  <>
+                    이번달 발급 기준
+                    {c.href && (
+                      <>
+                        {" "}
+                        <a href={c.href} className="text-[#6B7B3A] dark:text-[#A8B87A] hover:underline">
+                          상세 보기
+                        </a>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    매출 데이터 수집 기능을 준비 중이에요.
+                    {c.href && (
+                      <>
+                        {" "}
+                        <a href={c.href} className="text-[#6B7B3A] dark:text-[#A8B87A] hover:underline">
+                          관련 페이지로 이동
+                        </a>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-            <div className="mt-2 text-[11.5px] text-[#A89B80] dark:text-zinc-500">
-              매출 데이터 수집 기능을 준비 중이에요.
-              {it.href && (
-                <>
-                  {" "}
-                  <a href={it.href} className="text-[#6B7B3A] dark:text-[#A8B87A] hover:underline">
-                    관련 페이지로 이동
-                  </a>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </section>
     </>
   );
