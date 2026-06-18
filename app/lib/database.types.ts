@@ -1361,6 +1361,78 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_products: {
+        Row: {
+          id: number
+          center_id: number
+          type: string
+          billing_mode: string
+          category: string | null
+          name: string
+          description: string | null
+          open_time: string | null
+          close_time: string | null
+          operating_days: number[]
+          duration_value: number | null
+          duration_unit: string | null
+          service_days: number
+          total_sessions: number | null
+          pause_enabled: boolean
+          pause_days: number
+          price_won: number
+          vat_included: boolean
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          type: string
+          billing_mode?: string
+          category?: string | null
+          name: string
+          description?: string | null
+          open_time?: string | null
+          close_time?: string | null
+          operating_days?: number[]
+          duration_value?: number | null
+          duration_unit?: string | null
+          service_days?: number
+          total_sessions?: number | null
+          pause_enabled?: boolean
+          pause_days?: number
+          price_won?: number
+          vat_included?: boolean
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          type?: string
+          billing_mode?: string
+          category?: string | null
+          name?: string
+          description?: string | null
+          open_time?: string | null
+          close_time?: string | null
+          operating_days?: number[]
+          duration_value?: number | null
+          duration_unit?: string | null
+          service_days?: number
+          total_sessions?: number | null
+          pause_enabled?: boolean
+          pause_days?: number
+          price_won?: number
+          vat_included?: boolean
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_memberships: {
         Row: {
           id: number
