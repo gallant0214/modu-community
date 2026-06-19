@@ -4,7 +4,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 
 export const dynamic = "force-dynamic";
 
-const TYPES = ["membership", "group", "personal", "locker", "goods"] as const;
+const TYPES = ["membership", "group", "personal", "locker", "apparel", "goods"] as const;
 const BILLING = ["period", "count"] as const;
 const UNITS = ["day", "month", "year"] as const;
 

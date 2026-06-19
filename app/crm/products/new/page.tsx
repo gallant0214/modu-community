@@ -7,7 +7,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../../_components/crm-modal";
 import { formatWon, parseWon } from "../../_components/crm-labels";
 
-type ProductType = "membership" | "group" | "personal" | "locker" | "goods";
+type ProductType = "membership" | "group" | "personal" | "locker" | "apparel" | "goods";
 type BillingMode = "period" | "count";
 type DurationUnit = "day" | "month" | "year";
 
@@ -16,6 +16,7 @@ const TYPE_OPTIONS: { value: ProductType; label: string }[] = [
   { value: "group", label: "그룹 수업" },
   { value: "personal", label: "개인 레슨" },
   { value: "locker", label: "락커" },
+  { value: "apparel", label: "운동복" },
   { value: "goods", label: "운동 용품" },
 ];
 

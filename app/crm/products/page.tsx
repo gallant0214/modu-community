@@ -6,13 +6,14 @@ import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../_components/crm-modal";
 import { formatWon } from "../_components/crm-labels";
 
-type ProductType = "membership" | "group" | "personal" | "locker" | "goods";
+type ProductType = "membership" | "group" | "personal" | "locker" | "apparel" | "goods";
 
 const TYPE_LABEL: Record<ProductType, string> = {
   membership: "회원권",
   group: "그룹 수업",
   personal: "개인 레슨",
   locker: "락커",
+  apparel: "운동복",
   goods: "운동 용품",
 };
 
@@ -95,7 +96,7 @@ export default function CrmProductsPage() {
 
       {/* 유형 필터 */}
       <div className="flex flex-wrap gap-1.5 mb-3">
-        {(["", "membership", "group", "personal", "locker", "goods"] as const).map((t) => (
+        {(["", "membership", "group", "personal", "locker", "apparel", "goods"] as const).map((t) => (
           <button
             key={t || "all"}
             onClick={() => setType(t as typeof type)}
