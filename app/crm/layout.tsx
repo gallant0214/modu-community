@@ -112,8 +112,9 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
 }
 
 function CrmShell({ children }: { children: React.ReactNode }) {
+  // body 에 이미 NavBar(56px) 만큼 padding-top 이 들어가 있어 여기선 추가하지 않는다.
   return (
-    <div className="pt-14 bg-[#FEFCF7] dark:bg-zinc-950 min-h-dvh text-[#2A251D] dark:text-zinc-100">
+    <div className="bg-[#FEFCF7] dark:bg-zinc-950 min-h-dvh text-[#2A251D] dark:text-zinc-100">
       {children}
     </div>
   );
