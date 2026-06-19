@@ -146,7 +146,7 @@ export default function CrmLockersPage() {
   }, [loadZones]);
 
   useEffect(() => {
-    if (tab === "assigned") loadLockers();
+    if (tab === "assigned" || tab === "settings") loadLockers();
   }, [tab, zone, loadLockers]);
 
   const currentZone = useMemo(
@@ -490,10 +490,65 @@ export default function CrmLockersPage() {
           </section>
 
           <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5 mb-4">
-            <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-              락커 배치도
-            </h2>
-            <EmptyState>데이터가 없어요</EmptyState>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                락커 배치도
+              </h2>
+              {lockers.length > 0 && (
+                <span className="text-[11.5px] text-[#A89B80] dark:text-zinc-500">
+                  총 {lockers.length}개 · 배정 {lockers.filter((l) => l.state === "assigned").length}개
+                </span>
+              )}
+            </div>
+            {loadingLockers ? (
+              <div className="text-[13px] text-[#8C8270] py-6 text-center">불러오는 중…</div>
+            ) : lockers.length === 0 ? (
+              <EmptyState>
+                아직 락커가 없어요. 위에서 락커 개수와 시작 번호를 입력하고 저장하면 배치도가 나타나요.
+              </EmptyState>
+            ) : (
+              <>
+                <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1">
+                  {[...lockers]
+                    .sort((a, b) => a.number - b.number)
+                    .map((l) => {
+                      const ds = getDisplayState(l, today);
+                      return (
+                        <div
+                          key={l.id}
+                          className={`aspect-square rounded-md border text-[11.5px] font-semibold flex items-center justify-center
+                            ${ds === "unassigned"
+                              ? "border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[#A89B80]"
+                              : ds === "active"
+                              ? "border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#3A342A] dark:text-zinc-100"
+                              : ds === "expiring"
+                              ? "border-red-300 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                              : ds === "expired"
+                              ? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
+                              : ds === "broken"
+                              ? "border-zinc-500 bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"
+                              : "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                            }`}
+                          title={
+                            l.member
+                              ? `${l.number}번 · ${l.member.name}`
+                              : `${l.number}번 · 미배정`
+                          }
+                        >
+                          {l.number}
+                        </div>
+                      );
+                    })}
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+                  <LegendChip className="border-dashed border-[#E8E0D0] bg-[#FBF7EB]/40 text-[#A89B80]" label="미배정" />
+                  <LegendChip className="border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#3A342A] dark:text-zinc-100" label="활성" />
+                  <LegendChip className="border-red-300 bg-red-50 text-red-700" label="임박" />
+                  <LegendChip className="border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]" label="만료" />
+                  <LegendChip className="border-zinc-500 bg-zinc-200 text-zinc-700" label="고장" />
+                </div>
+              </>
+            )}
           </section>
 
           {error && (
@@ -697,7 +752,9 @@ function LockerCard({
           )}
         </>
       ) : (
-        <div className="mt-auto mx-auto text-[#A89B80] dark:text-zinc-500 text-[22px]">+</div>
+        <div className="flex-1 flex items-center justify-center text-[#A89B80] dark:text-zinc-500 text-[26px] leading-none">
+          +
+        </div>
       )}
     </button>
   );
@@ -1801,9 +1858,9 @@ function LockerActionModal({
                 <button
                   onClick={() => setMode("assign")}
                   disabled={submitting}
-                  className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold"
+                  className="flex-1 min-w-[120px] px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
                 >
-                  배정하기
+                  회원 지정하기
                 </button>
               )}
 
@@ -1997,6 +2054,15 @@ function EmptyState({ children }: { children: React.ReactNode }) {
     <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] dark:text-zinc-500 border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
       {children}
     </div>
+  );
+}
+
+function LegendChip({ className, label }: { className: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`w-3 h-3 rounded border ${className}`} />
+      <span>{label}</span>
+    </span>
   );
 }
 
