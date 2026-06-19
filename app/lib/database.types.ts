@@ -1382,6 +1382,7 @@ export type Database = {
           price_won: number
           vat_included: boolean
           capacity: number
+          session_minutes: number
           status: string
           created_at: string
           updated_at: string
@@ -1406,6 +1407,7 @@ export type Database = {
           price_won?: number
           vat_included?: boolean
           capacity?: number
+          session_minutes?: number
           status?: string
           created_at?: string
           updated_at?: string
@@ -1430,6 +1432,7 @@ export type Database = {
           price_won?: number
           vat_included?: boolean
           capacity?: number
+          session_minutes?: number
           status?: string
           created_at?: string
           updated_at?: string
