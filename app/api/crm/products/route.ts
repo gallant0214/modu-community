@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_products")
     .select(
-      "id, type, billing_mode, category, name, description, open_time, close_time, operating_days, duration_value, duration_unit, service_days, total_sessions, pause_enabled, pause_days, price_won, vat_included, status, created_at"
+      "id, type, billing_mode, category, name, description, open_time, close_time, operating_days, duration_value, duration_unit, service_days, total_sessions, pause_enabled, pause_days, price_won, vat_included, capacity, status, created_at"
     )
     .eq("center_id", ctx.centerId)
     .eq("status", "active")
@@ -66,6 +66,7 @@ export async function POST(request: Request) {
     pause_days?: number;
     price_won?: number;
     vat_included?: boolean;
+    capacity?: number;
   };
   try {
     body = await request.json();
@@ -113,6 +114,7 @@ export async function POST(request: Request) {
       pause_days: body.pause_days ?? 0,
       price_won: Number(body.price_won) || 0,
       vat_included: !!body.vat_included,
+      capacity: body.type === "group" ? Math.max(0, Number(body.capacity) || 0) : 0,
       status: "active",
     })
     .select("id")

@@ -1381,6 +1381,7 @@ export type Database = {
           pause_days: number
           price_won: number
           vat_included: boolean
+          capacity: number
           status: string
           created_at: string
           updated_at: string
@@ -1404,6 +1405,7 @@ export type Database = {
           pause_days?: number
           price_won?: number
           vat_included?: boolean
+          capacity?: number
           status?: string
           created_at?: string
           updated_at?: string
@@ -1427,6 +1429,7 @@ export type Database = {
           pause_days?: number
           price_won?: number
           vat_included?: boolean
+          capacity?: number
           status?: string
           created_at?: string
           updated_at?: string

@@ -26,6 +26,7 @@ interface Product {
   duration_unit: string | null;
   total_sessions: number | null;
   price_won: number;
+  capacity: number;
 }
 
 export default function CrmProductsPage() {
@@ -157,6 +158,9 @@ export default function CrmProductsPage() {
                 {p.billing_mode === "period"
                   ? `기간제 · ${p.duration_value}${unitKo(p.duration_unit)}`
                   : `횟수제 · ${p.total_sessions ?? 0}회`}
+                {p.type === "group" && p.capacity > 0 && (
+                  <span className="ml-1.5 text-[#8C8270]">· 정원 {p.capacity}명</span>
+                )}
               </div>
               <div className="mt-1.5 text-[16px] font-bold text-[#6B7B3A] dark:text-[#A8B87A]">
                 {formatWon(p.price_won)}원

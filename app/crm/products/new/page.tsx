@@ -48,6 +48,7 @@ export default function CrmProductNewPage() {
   const [pauseDays, setPauseDays] = useState(0);
   const [priceText, setPriceText] = useState("");
   const [vatIncluded, setVatIncluded] = useState(false);
+  const [capacity, setCapacity] = useState(10);
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -81,6 +82,10 @@ export default function CrmProductNewPage() {
       setError("금액을 확인해 주세요");
       return;
     }
+    if (type === "group" && capacity <= 0) {
+      setError("그룹 수업 정원을 1명 이상으로 입력해 주세요");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -110,6 +115,7 @@ export default function CrmProductNewPage() {
           pause_days: pauseEnabled ? pauseDays : 0,
           price_won: priceWon,
           vat_included: vatIncluded,
+          capacity: type === "group" ? capacity : 0,
         }),
       });
       const data = await res.json();
@@ -183,6 +189,41 @@ export default function CrmProductNewPage() {
           maxLength={40}
         />
       </Section>
+
+      {/* 그룹 수업 정원 */}
+      {type === "group" && (
+        <Section title="그룹 정원" required>
+          <FieldLabel>한 클래스 최대 인원</FieldLabel>
+          <div className="relative">
+            <input
+              type="number"
+              min={1}
+              value={capacity}
+              onChange={(e) => setCapacity(Math.max(0, Number(e.target.value) || 0))}
+              className={`${crmInputClass} pr-9`}
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+              명
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {[5, 8, 10, 12, 15, 20].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setCapacity(n)}
+                className={`px-2.5 py-1 rounded-full text-[12px] font-medium border whitespace-nowrap
+                  ${capacity === n
+                    ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                    : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                  }`}
+              >
+                {n}명
+              </button>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* 기본 정보 */}
       <Section title="기본 정보">
