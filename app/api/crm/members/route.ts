@@ -57,7 +57,95 @@ export async function GET(request: Request) {
   if (error) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
-  return NextResponse.json({ members: data ?? [] });
+
+  const members = data ?? [];
+  const wantDetail = url.searchParams.get("detail") === "1";
+  if (!wantDetail || members.length === 0) {
+    return NextResponse.json({ members });
+  }
+
+  const ids = members.map((m) => m.id);
+
+  // 활성 수강권 + 활성 회원권 + 락커 배정 + 최근 출석
+  const [passesRes, mbRes, lockersRes, attRes] = await Promise.all([
+    supabase
+      .from("crm_passes")
+      .select("member_id, lesson_kind, remaining_sessions, total_sessions, expires_at")
+      .eq("center_id", ctx.centerId)
+      .in("member_id", ids)
+      .eq("status", "valid"),
+    supabase
+      .from("crm_memberships")
+      .select("member_id, plan_name, expires_at")
+      .eq("center_id", ctx.centerId)
+      .in("member_id", ids)
+      .eq("status", "valid"),
+    supabase
+      .from("crm_lockers")
+      .select("assigned_member_id, number, zone_id, crm_locker_zones(name)")
+      .eq("center_id", ctx.centerId)
+      .in("assigned_member_id", ids),
+    supabase
+      .from("crm_attendances")
+      .select("member_id, checked_in_at")
+      .eq("center_id", ctx.centerId)
+      .in("member_id", ids)
+      .order("checked_in_at", { ascending: false })
+      .limit(2000),
+  ]);
+
+  const passMap = new Map<number, { kind: string; type: "lesson" | "membership"; remaining: number | null; expires: string }[]>();
+  for (const p of passesRes.data ?? []) {
+    const arr = passMap.get(p.member_id) ?? [];
+    arr.push({
+      kind: p.lesson_kind,
+      type: "lesson",
+      remaining: p.remaining_sessions ?? null,
+      expires: p.expires_at,
+    });
+    passMap.set(p.member_id, arr);
+  }
+  for (const m of mbRes.data ?? []) {
+    const arr = passMap.get(m.member_id) ?? [];
+    arr.push({
+      kind: m.plan_name,
+      type: "membership",
+      remaining: null,
+      expires: m.expires_at,
+    });
+    passMap.set(m.member_id, arr);
+  }
+
+  const lockerMap = new Map<number, string>();
+  for (const l of lockersRes.data ?? []) {
+    if (l.assigned_member_id) {
+      const zone = (l.crm_locker_zones as { name?: string } | { name?: string }[] | null);
+      const zoneName = Array.isArray(zone) ? zone[0]?.name : zone?.name;
+      lockerMap.set(l.assigned_member_id, `${zoneName ?? "락커"} ${l.number}번`);
+    }
+  }
+
+  const lastVisitMap = new Map<number, string>();
+  for (const a of attRes.data ?? []) {
+    if (!lastVisitMap.has(a.member_id)) lastVisitMap.set(a.member_id, a.checked_in_at);
+  }
+
+  const enriched = members.map((m) => {
+    const items = passMap.get(m.id) ?? [];
+    const maxExpires = items.reduce<string | null>(
+      (acc, x) => (!acc || x.expires > acc ? x.expires : acc),
+      null
+    );
+    return {
+      ...m,
+      items,
+      locker_label: lockerMap.get(m.id) ?? null,
+      last_visit_at: lastVisitMap.get(m.id) ?? null,
+      max_expires_at: maxExpires,
+    };
+  });
+
+  return NextResponse.json({ members: enriched });
 }
 
 /**
