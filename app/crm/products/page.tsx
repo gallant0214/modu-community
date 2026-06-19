@@ -87,7 +87,7 @@ export default function CrmProductsPage() {
           </p>
         </div>
         <Link
-          href="/crm/products/new"
+          href={type ? `/crm/products/new?type=${type}` : "/crm/products/new"}
           className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] whitespace-nowrap"
         >
           + 상품 추가

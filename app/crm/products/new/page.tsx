@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../../_components/crm-modal";
 import { formatWon, parseWon } from "../../_components/crm-labels";
@@ -30,11 +30,26 @@ const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 const DESC_MAX = 1000;
 
+const VALID_TYPES: ProductType[] = [
+  "membership",
+  "group",
+  "personal",
+  "locker",
+  "apparel",
+  "goods",
+];
+
 export default function CrmProductNewPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { getIdToken } = useAuth();
 
-  const [type, setType] = useState<ProductType>("membership");
+  const initialType = (() => {
+    const t = searchParams.get("type") as ProductType | null;
+    return t && VALID_TYPES.includes(t) ? t : "membership";
+  })();
+
+  const [type, setType] = useState<ProductType>(initialType);
   const [billingMode, setBillingMode] = useState<BillingMode>("period");
   const [category, setCategory] = useState("");
   const [name, setName] = useState("");
