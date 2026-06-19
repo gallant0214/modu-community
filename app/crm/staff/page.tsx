@@ -63,7 +63,7 @@ export default function CrmStaffPage() {
   const inactive = list.filter((s) => s.status !== "active");
 
   return (
-    <div className="px-5 md:px-8 py-6 md:py-8 max-w-6xl mx-auto">
+    <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-6xl mx-auto">
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-[18px] md:text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">

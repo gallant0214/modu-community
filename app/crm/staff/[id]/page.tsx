@@ -165,7 +165,7 @@ export default function CrmStaffDetailPage() {
   const isSelfNotOwner = member.is_solo_owner;
 
   return (
-    <div className="px-5 md:px-8 py-6 md:py-8 max-w-3xl mx-auto">
+    <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-3xl mx-auto">
       <BackLink />
 
       <header className="mt-3 mb-5">

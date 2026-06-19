@@ -98,7 +98,7 @@ export default function CrmSchedulePage() {
   };
 
   return (
-    <div className="px-3 md:px-5 py-5 md:py-6 max-w-[1400px] mx-auto">
+    <div className="px-3 md:px-5 pt-2 pb-5 md:pt-3 md:pb-6 max-w-[1400px] mx-auto">
       <header className="mb-4 flex flex-wrap items-center gap-3">
         <h1 className="text-[18px] md:text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
           스케줄 관리
