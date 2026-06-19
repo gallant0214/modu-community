@@ -1452,6 +1452,8 @@ export type Database = {
           expires_at: string
           status: string
           memo: string | null
+          outstanding_won: number
+          payment_status: string
           created_at: string
           updated_at: string
         }
@@ -1470,6 +1472,8 @@ export type Database = {
           expires_at: string
           status?: string
           memo?: string | null
+          outstanding_won?: number
+          payment_status?: string
           created_at?: string
           updated_at?: string
         }
@@ -1488,6 +1492,59 @@ export type Database = {
           expires_at?: string
           status?: string
           memo?: string | null
+          outstanding_won?: number
+          payment_status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_payments: {
+        Row: {
+          id: number
+          center_id: number
+          member_id: number
+          pass_id: number | null
+          membership_id: number | null
+          amount_won: number
+          method: string
+          method_custom: string | null
+          paid_at: string
+          recorded_by_uid: string | null
+          note: string | null
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          member_id: number
+          pass_id?: number | null
+          membership_id?: number | null
+          amount_won: number
+          method?: string
+          method_custom?: string | null
+          paid_at?: string
+          recorded_by_uid?: string | null
+          note?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          member_id?: number
+          pass_id?: number | null
+          membership_id?: number | null
+          amount_won?: number
+          method?: string
+          method_custom?: string | null
+          paid_at?: string
+          recorded_by_uid?: string | null
+          note?: string | null
+          status?: string
           created_at?: string
           updated_at?: string
         }
@@ -1798,6 +1855,8 @@ export type Database = {
           expires_at: string
           status: string
           memo: string | null
+          outstanding_won: number
+          payment_status: string
           created_at: string
           updated_at: string
         }
@@ -1820,6 +1879,8 @@ export type Database = {
           expires_at: string
           status?: string
           memo?: string | null
+          outstanding_won?: number
+          payment_status?: string
           created_at?: string
           updated_at?: string
         }
@@ -1842,6 +1903,8 @@ export type Database = {
           expires_at?: string
           status?: string
           memo?: string | null
+          outstanding_won?: number
+          payment_status?: string
           created_at?: string
           updated_at?: string
         }

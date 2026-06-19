@@ -101,6 +101,8 @@ export async function POST(request: Request) {
     expires_at?: string;
     vat_included?: boolean;
     memo?: string;
+    /** 발급 시점에 받은 금액. 미입력 시 price_won 전액(=완납) 으로 간주. */
+    paid_amount_won?: number;
   };
   try {
     body = await request.json();
@@ -153,6 +155,13 @@ export async function POST(request: Request) {
   }
 
   const totalSessions = Number(body.total_sessions);
+  const priceWon = Number(body.price_won) || 0;
+  const paidAmount =
+    body.paid_amount_won === undefined
+      ? priceWon
+      : Math.max(0, Math.min(Math.floor(Number(body.paid_amount_won) || 0), priceWon));
+  const outstanding = priceWon - paidAmount;
+  const paymentStatus = outstanding <= 0 ? "paid" : paidAmount > 0 ? "partial" : "unpaid";
 
   const { data: created, error } = await supabase
     .from("crm_passes")
@@ -166,7 +175,7 @@ export async function POST(request: Request) {
       total_sessions: totalSessions,
       remaining_sessions: totalSessions,
       session_minutes: Number(body.session_minutes),
-      price_won: Number(body.price_won) || 0,
+      price_won: priceWon,
       payment_method: paymentMethod,
       payment_method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
       vat_included: !!body.vat_included,
@@ -174,12 +183,29 @@ export async function POST(request: Request) {
       expires_at: body.expires_at,
       status: "valid",
       memo: body.memo?.trim() || null,
+      outstanding_won: outstanding,
+      payment_status: paymentStatus,
     })
     .select("id")
     .single();
 
   if (error || !created) {
     return NextResponse.json({ error: "발급 실패", detail: error?.message }, { status: 500 });
+  }
+
+  // 초기 결제 금액이 있으면 payment 기록 추가
+  if (paidAmount > 0) {
+    await supabase.from("crm_payments").insert({
+      center_id: ctx.centerId,
+      member_id: memberId,
+      pass_id: created.id,
+      amount_won: paidAmount,
+      method: paymentMethod,
+      method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
+      paid_at: new Date().toISOString(),
+      recorded_by_uid: ctx.uid,
+      status: "completed",
+    });
   }
 
   await supabase.from("crm_audit_logs").insert({
