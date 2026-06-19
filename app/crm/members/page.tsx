@@ -32,7 +32,7 @@ interface MemberRow {
 }
 
 type StatusFilter = "all" | "valid" | "expired";
-type SignupFilter = "all" | "this_week" | "this_month" | "this_year";
+type SignupFilter = "all" | "this_week" | "this_month" | "this_year" | "custom";
 type AbsenceFilter = "all" | "30d" | "60d" | "90d";
 type ExpireFilter = "all" | "this_week" | "this_month" | "expired";
 type LockerFilter = "all" | "has" | "none";
@@ -59,6 +59,8 @@ export default function CrmMembersPage() {
   // 필터
   const [fStatus, setFStatus] = useState<StatusFilter>("all");
   const [fSignup, setFSignup] = useState<SignupFilter>("all");
+  const [fSignupFrom, setFSignupFrom] = useState("");
+  const [fSignupTo, setFSignupTo] = useState("");
   const [fAbsence, setFAbsence] = useState<AbsenceFilter>("all");
   const [fExpire, setFExpire] = useState<ExpireFilter>("all");
   const [fLocker, setFLocker] = useState<LockerFilter>("all");
@@ -129,6 +131,11 @@ export default function CrmMembersPage() {
         if (fSignup === "this_week" && (created < startOfWeek || created >= endOfWeek)) return false;
         if (fSignup === "this_month" && (created < startOfMonth || created >= endOfMonth)) return false;
         if (fSignup === "this_year" && created < startOfYear) return false;
+        if (fSignup === "custom") {
+          const createdYmd = m.created_at.slice(0, 10);
+          if (fSignupFrom && createdYmd < fSignupFrom) return false;
+          if (fSignupTo && createdYmd > fSignupTo) return false;
+        }
       }
 
       // 미방문 기간
@@ -166,7 +173,7 @@ export default function CrmMembersPage() {
 
       return true;
     });
-  }, [list, query, fStatus, fSignup, fAbsence, fExpire, fLocker, fGoods]);
+  }, [list, query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fLocker, fGoods]);
 
   const totals = useMemo(() => {
     const todayStr = today().toISOString().slice(0, 10);
@@ -184,12 +191,14 @@ export default function CrmMembersPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [query, fStatus, fSignup, fAbsence, fExpire, fLocker, fGoods]);
+  }, [query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fLocker, fGoods]);
 
   const resetFilters = () => {
     setQuery("");
     setFStatus("all");
     setFSignup("all");
+    setFSignupFrom("");
+    setFSignupTo("");
     setFAbsence("all");
     setFExpire("all");
     setFLocker("all");
@@ -358,17 +367,37 @@ export default function CrmMembersPage() {
             { value: "expired", label: "만료" },
           ]}
         />
-        <FilterChip
-          label="가입일"
-          value={fSignup}
-          onChange={(v) => setFSignup(v as SignupFilter)}
-          options={[
-            { value: "all", label: "전체" },
-            { value: "this_week", label: "이번 주" },
-            { value: "this_month", label: "이번 달" },
-            { value: "this_year", label: "올해" },
-          ]}
-        />
+        <div className="inline-flex items-center gap-1.5 flex-wrap">
+          <FilterChip
+            label="가입일"
+            value={fSignup}
+            onChange={(v) => setFSignup(v as SignupFilter)}
+            options={[
+              { value: "all", label: "전체" },
+              { value: "this_week", label: "이번 주" },
+              { value: "this_month", label: "이번 달" },
+              { value: "this_year", label: "올해" },
+              { value: "custom", label: "직접 선택" },
+            ]}
+          />
+          {fSignup === "custom" && (
+            <div className="inline-flex items-center gap-1">
+              <input
+                type="date"
+                value={fSignupFrom}
+                onChange={(e) => setFSignupFrom(e.target.value)}
+                className="px-2 py-1 rounded-full text-[12px] border border-[#6B7B3A]/40 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 focus:outline-none focus:border-[#6B7B3A]"
+              />
+              <span className="text-[12px] text-[#A89B80]">~</span>
+              <input
+                type="date"
+                value={fSignupTo}
+                onChange={(e) => setFSignupTo(e.target.value)}
+                className="px-2 py-1 rounded-full text-[12px] border border-[#6B7B3A]/40 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 focus:outline-none focus:border-[#6B7B3A]"
+              />
+            </div>
+          )}
+        </div>
         <FilterChip
           label="미방문 기간"
           value={fAbsence}
