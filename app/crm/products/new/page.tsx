@@ -206,7 +206,7 @@ export default function CrmProductNewPage() {
           type="text"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          placeholder="예: 헬스, 필라테스, 요가, GX"
+          placeholder="예: 헬스, PT, 필라테스, 요가, GX"
           className={crmInputClass}
           maxLength={40}
         />
