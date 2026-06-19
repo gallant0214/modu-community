@@ -17,6 +17,22 @@ const TYPE_LABEL: Record<ProductType, string> = {
   goods: "운동 용품",
 };
 
+/** 상품 유형별 배지 색상 — 베이지 톤과 어울리는 채도 낮은 팔레트 */
+const TYPE_BADGE: Record<ProductType, string> = {
+  membership:
+    "bg-[#6B7B3A]/15 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A] border border-[#6B7B3A]/30",
+  group:
+    "bg-[#D17B5A]/15 text-[#B66442] dark:bg-[#D17B5A]/25 dark:text-[#E9A685] border border-[#D17B5A]/30",
+  personal:
+    "bg-[#8B6BAA]/15 text-[#7A5C99] dark:bg-[#8B6BAA]/25 dark:text-[#BFA3D6] border border-[#8B6BAA]/30",
+  locker:
+    "bg-[#5A8BB0]/15 text-[#487596] dark:bg-[#5A8BB0]/25 dark:text-[#8FB7D4] border border-[#5A8BB0]/30",
+  apparel:
+    "bg-[#C76C8E]/15 text-[#A8557A] dark:bg-[#C76C8E]/25 dark:text-[#E2A0BA] border border-[#C76C8E]/30",
+  goods:
+    "bg-[#A68654]/15 text-[#8B6F42] dark:bg-[#A68654]/25 dark:text-[#D4B584] border border-[#A68654]/30",
+};
+
 interface Product {
   id: number;
   type: ProductType;
@@ -140,14 +156,22 @@ export default function CrmProductsPage() {
               key={p.id}
               className="px-4 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900"
             >
-              <div className="flex items-baseline justify-between gap-2 mb-1">
-                <span className="text-[11px] text-[#A89B80] font-semibold">
-                  {TYPE_LABEL[p.type]}
-                  {p.category && <span className="ml-1.5 text-[#8C8270]">· {p.category}</span>}
-                </span>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${TYPE_BADGE[p.type]}`}
+                  >
+                    {TYPE_LABEL[p.type]}
+                  </span>
+                  {p.category && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#F5F0E5] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-300 border border-[#E8E0D0] dark:border-zinc-700">
+                      {p.category}
+                    </span>
+                  )}
+                </div>
                 <button
                   onClick={() => remove(p.id)}
-                  className="text-[11px] text-red-600 hover:underline"
+                  className="text-[11px] text-red-600 hover:underline shrink-0"
                 >
                   삭제
                 </button>
