@@ -593,7 +593,7 @@ function FilterChip({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`px-2.5 py-1 rounded-full text-[12px] font-medium border whitespace-nowrap appearance-none pr-6 bg-[length:10px] bg-no-repeat bg-[right_8px_center]
+        className={`py-1 pl-6 pr-6 rounded-full text-[12px] font-medium border whitespace-nowrap appearance-none text-center bg-[length:10px] bg-no-repeat bg-[right_8px_center]
           bg-[url("data:image/svg+xml;utf8,<svg fill='none' stroke='%236B5D47' stroke-width='2' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/></svg>")]
           ${isAll
             ? "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
