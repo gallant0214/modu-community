@@ -33,7 +33,7 @@ interface MemberRow {
 
 type StatusFilter = "all" | "valid" | "expired";
 type SignupFilter = "all" | "this_week" | "this_month" | "this_year" | "custom";
-type AbsenceFilter = "all" | "30d" | "60d" | "90d";
+type AbsenceFilter = "all" | "10d" | "20d" | "30d" | "60d" | "90d";
 type ExpireFilter = "all" | "this_week" | "this_month" | "expired";
 type LockerFilter = "all" | "has" | "none";
 type GoodsFilter = "all" | "has" | "none";
@@ -142,9 +142,14 @@ export default function CrmMembersPage() {
       if (fAbsence !== "all") {
         const last = m.last_visit_at ? new Date(m.last_visit_at) : null;
         const days = last ? daysBetween(t0, last) : Infinity;
-        if (fAbsence === "30d" && days < 30) return false;
-        if (fAbsence === "60d" && days < 60) return false;
-        if (fAbsence === "90d" && days < 90) return false;
+        const threshold: Record<Exclude<AbsenceFilter, "all">, number> = {
+          "10d": 10,
+          "20d": 20,
+          "30d": 30,
+          "60d": 60,
+          "90d": 90,
+        };
+        if (days < threshold[fAbsence]) return false;
       }
 
       // 최종 만료일
@@ -404,6 +409,8 @@ export default function CrmMembersPage() {
           onChange={(v) => setFAbsence(v as AbsenceFilter)}
           options={[
             { value: "all", label: "전체" },
+            { value: "10d", label: "10일 이상" },
+            { value: "20d", label: "20일 이상" },
             { value: "30d", label: "30일 이상" },
             { value: "60d", label: "60일 이상" },
             { value: "90d", label: "90일 이상" },
