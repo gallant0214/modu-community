@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 import {
@@ -32,6 +34,12 @@ export default function CrmMembershipsPage() {
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [issueOpen, setIssueOpen] = useState(false);
+
+  // 발급 → 계약서 선택 흐름
+  const [pending, setPending] = useState<{ membershipId: number; memberId: number } | null>(null);
+  const [choiceOpen, setChoiceOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [purchaseDone, setPurchaseDone] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -146,11 +154,194 @@ export default function CrmMembershipsPage() {
       <IssueModal
         open={issueOpen}
         onClose={() => setIssueOpen(false)}
-        onSuccess={() => {
+        onSuccess={(membershipId, memberId) => {
           setIssueOpen(false);
+          setPending({ membershipId, memberId });
+          setChoiceOpen(true);
           load();
         }}
       />
+
+      <PostIssueChoiceModal
+        open={choiceOpen}
+        onClose={() => {
+          setChoiceOpen(false);
+          setPending(null);
+        }}
+        onSign={() => {
+          setChoiceOpen(false);
+          setPickerOpen(true);
+        }}
+        onSkip={() => {
+          setChoiceOpen(false);
+          setPending(null);
+          setPurchaseDone(true);
+        }}
+      />
+
+      <TemplatePickerModal
+        open={pickerOpen}
+        onClose={() => {
+          setPickerOpen(false);
+          setPending(null);
+        }}
+        memberId={pending?.memberId ?? null}
+        membershipId={pending?.membershipId ?? null}
+      />
+
+      <PurchaseDoneBanner open={purchaseDone} onClose={() => setPurchaseDone(false)} />
+    </div>
+  );
+}
+
+function PostIssueChoiceModal({
+  open,
+  onClose,
+  onSign,
+  onSkip,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSign: () => void;
+  onSkip: () => void;
+}) {
+  return (
+    <CrmModal open={open} onClose={onClose} title="결제 완료">
+      <p className="text-[13.5px] text-[#3A342A] dark:text-zinc-300 mb-1">
+        결제가 완료되었어요. 전자 계약서를 작성할까요?
+      </p>
+      <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 mb-4">
+        지금 작성하지 않아도 추후 회원 상세에서 발급한 회원권을 통해 작성할 수 있어요.
+      </p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onSkip}
+          className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+        >
+          계약서 미작성
+        </button>
+        <button
+          type="button"
+          onClick={onSign}
+          className="flex-1 px-4 py-2.5 rounded-lg bg-[#B47B2A] hover:bg-[#9c6722] text-white text-[13.5px] font-semibold"
+        >
+          계약서 작성
+        </button>
+      </div>
+    </CrmModal>
+  );
+}
+
+function TemplatePickerModal({
+  open,
+  onClose,
+  memberId,
+  membershipId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  memberId: number | null;
+  membershipId: number | null;
+}) {
+  const router = useRouter();
+  const { getIdToken } = useAuth();
+  const [list, setList] = useState<{ id: number; category: string; title: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setError("");
+    (async () => {
+      setLoading(true);
+      try {
+        const token = await getIdToken();
+        const res = await fetch("/api/crm/contracts?sort=name_asc", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "조회 실패");
+        setList(data.contracts ?? []);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "네트워크 오류");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [open, getIdToken]);
+
+  const pick = (templateId: number) => {
+    if (!memberId) return;
+    const params = new URLSearchParams();
+    params.set("member_id", String(memberId));
+    if (membershipId) params.set("membership_id", String(membershipId));
+    params.set("template_id", String(templateId));
+    router.push(`/crm/contracts/sign/new?${params}`);
+  };
+
+  return (
+    <CrmModal open={open} onClose={onClose} title="계약서 양식 선택">
+      <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 mb-3">
+        상품에 맞는 계약서 양식을 선택해 주세요.
+      </p>
+      {error && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+      {loading ? (
+        <div className="px-4 py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : list.length === 0 ? (
+        <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl space-y-3">
+          <div>등록된 계약서 양식이 없어요.</div>
+          <Link
+            href="/crm/contracts"
+            className="inline-block px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#6B7B3A] text-white hover:bg-[#5a6932]"
+          >
+            계약서 페이지로 이동해 양식 만들기
+          </Link>
+        </div>
+      ) : (
+        <ul className="space-y-1.5 max-h-[300px] overflow-y-auto">
+          {list.map((t) => (
+            <li key={t.id}>
+              <button
+                onClick={() => pick(t.id)}
+                className="w-full text-left px-3.5 py-3 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50"
+              >
+                <div className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                  {t.title}
+                </div>
+                <div className="mt-0.5 text-[11.5px] text-[#A89B80]">카테고리: {t.category}</div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </CrmModal>
+  );
+}
+
+function PurchaseDoneBanner({ open, onClose }: { open: boolean; onClose: () => void }) {
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(onClose, 4000);
+    return () => clearTimeout(t);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-x-0 top-20 z-40 flex justify-center px-4 pointer-events-none">
+      <div className="pointer-events-auto px-5 py-3 rounded-2xl bg-[#6B7B3A] text-white shadow-lg text-[13.5px] font-semibold flex items-center gap-3">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+        상품 구매가 완료되었습니다.
+        <button onClick={onClose} className="ml-2 text-white/70 hover:text-white">
+          ✕
+        </button>
+      </div>
     </div>
   );
 }
@@ -162,7 +353,7 @@ function IssueModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (membershipId: number, memberId: number) => void;
 }) {
   const { getIdToken } = useAuth();
   const [memberQuery, setMemberQuery] = useState("");
@@ -244,7 +435,7 @@ function IssueModal({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "발급 실패");
-      onSuccess();
+      onSuccess(data.membershipId, picked.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {

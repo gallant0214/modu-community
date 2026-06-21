@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
+import { DEFAULT_PT_CONTRACT_TERMS } from "../_components/pt-contract-terms";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 import { CONTRACT_CATEGORY_LABEL } from "../_components/crm-labels";
 
@@ -348,6 +349,38 @@ function CreateModal({
             onChange={(e) => setBody(e.target.value)}
             placeholder="계약 조항을 입력해 주세요."
           />
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() =>
+                setBody(
+                  DEFAULT_PT_CONTRACT_TERMS.map(
+                    (t) => `[${t.title}]\n\n${t.body}`
+                  ).join("\n\n\n")
+                )
+              }
+              className="px-2.5 py-1 rounded-full text-[11.5px] font-medium border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 hover:bg-amber-50/60"
+            >
+              + PT 기본 약관 5종 가져오기
+            </button>
+            {DEFAULT_PT_CONTRACT_TERMS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() =>
+                  setBody((prev) =>
+                    (prev ? prev + "\n\n\n" : "") + `[${t.title}]\n\n${t.body}`
+                  )
+                }
+                className="px-2.5 py-1 rounded-full text-[11.5px] font-medium border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-400 hover:border-[#6B7B3A]/40"
+              >
+                + {t.title}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
+            가져온 뒤 센터에 맞게 자유롭게 편집하세요.
+          </p>
         </CrmField>
 
         {error && (

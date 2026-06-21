@@ -249,6 +249,8 @@ export default function CrmMemberDetailPage() {
         )}
       </section>
 
+      <SignedContractsSection memberId={member.id} />
+
       <BodyMeasurementSection memberId={member.id} onOpen={() => setBodyOpen(true)} />
 
       <BodyMeasurementModal
@@ -1239,6 +1241,84 @@ function BodyMeasurementModal({
         </button>
       </div>
     </CrmModal>
+  );
+}
+
+interface SignedContractRow {
+  id: number;
+  title: string;
+  signed_at: string;
+  status: string;
+}
+
+function SignedContractsSection({ memberId }: { memberId: number }) {
+  const { getIdToken } = useAuth();
+  const [list, setList] = useState<SignedContractRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`/api/crm/contracts/sign?member_id=${memberId}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (res.ok) setList(data.contracts ?? []);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [memberId, getIdToken]);
+
+  return (
+    <section className="mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-[15px] md:text-[16px] font-bold text-[#2A251D] dark:text-zinc-100">
+          체결 계약서 ({list.length})
+        </h2>
+        <Link
+          href={`/crm/contracts/sign/new?member_id=${memberId}`}
+          className="px-3 py-1.5 rounded-lg border border-[#B47B2A] text-[12.5px] font-semibold text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 hover:bg-amber-50/60"
+        >
+          + 전자 계약서 작성
+        </Link>
+      </div>
+      {loading ? (
+        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : list.length === 0 ? (
+        <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          이 회원의 체결된 계약서가 없어요.
+        </div>
+      ) : (
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {list.map((c) => (
+            <li key={c.id}>
+              <Link
+                href={`/crm/contracts/signed/${c.id}`}
+                className="block px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
+                    {c.title}
+                  </span>
+                  {c.status === "voided" && (
+                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-red-50 text-red-700">
+                      무효
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 text-[11.5px] text-[#A89B80]">
+                  서명일: {new Date(c.signed_at).toISOString().slice(0, 10)}
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

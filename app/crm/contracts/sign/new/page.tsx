@@ -43,11 +43,22 @@ export default function CrmContractSignNewPage() {
   const params = useSearchParams();
   const memberId = params.get("member_id") ? Number(params.get("member_id")) : null;
   const passId = params.get("pass_id") ? Number(params.get("pass_id")) : null;
+  const membershipId = params.get("membership_id") ? Number(params.get("membership_id")) : null;
   const templateId = params.get("template_id") ? Number(params.get("template_id")) : null;
   const { getIdToken } = useAuth();
 
   const [member, setMember] = useState<MemberInfo | null>(null);
   const [pass, setPass] = useState<PassInfo | null>(null);
+  const [membership, setMembership] = useState<{
+    id: number;
+    plan_name: string;
+    duration_days: number;
+    price_won: number;
+    payment_method: string;
+    payment_method_custom: string | null;
+    start_date: string;
+    expires_at: string;
+  } | null>(null);
   const [template, setTemplate] = useState<Template | null>(null);
 
   // 고객 기본 정보
@@ -110,6 +121,19 @@ export default function CrmContractSignNewPage() {
           const data = await res.json();
           if (res.ok && data?.pass) setPass(data.pass);
         }
+        if (membershipId) {
+          const res = await fetch(`/api/crm/memberships?member_id=${memberId}`, {
+            headers: { authorization: `Bearer ${token}` },
+            cache: "no-store",
+          });
+          const data = await res.json();
+          if (res.ok && Array.isArray(data?.memberships)) {
+            const found = data.memberships.find(
+              (m: { id: number }) => m.id === membershipId
+            );
+            if (found) setMembership(found);
+          }
+        }
         if (templateId) {
           const res = await fetch(`/api/crm/contracts/${templateId}`, {
             headers: { authorization: `Bearer ${token}` },
@@ -122,7 +146,7 @@ export default function CrmContractSignNewPage() {
         // ignore
       }
     })();
-  }, [memberId, passId, templateId, getIdToken, name, phone, birth, gender]);
+  }, [memberId, passId, membershipId, templateId, getIdToken, name, phone, birth, gender]);
 
   // 서명 캔버스 설정
   useEffect(() => {
@@ -206,6 +230,7 @@ export default function CrmContractSignNewPage() {
           title: template?.title || "피티 회원가입 계약서",
           member_id: memberId,
           pass_id: passId,
+          membership_id: membershipId,
           customer_info: {
             name: name.trim(),
             phone: phone.trim(),
@@ -224,14 +249,27 @@ export default function CrmContractSignNewPage() {
                 issued_at: pass.issued_at,
                 expires_at: pass.expires_at,
               }
-            : null,
+            : membership
+              ? {
+                  plan_name: membership.plan_name,
+                  duration_days: membership.duration_days,
+                  start_date: membership.start_date,
+                  expires_at: membership.expires_at,
+                }
+              : null,
           payment_info: pass
             ? {
                 price_won: pass.price_won,
                 payment_method: pass.payment_method,
                 payment_method_custom: pass.payment_method_custom,
               }
-            : null,
+            : membership
+              ? {
+                  price_won: membership.price_won,
+                  payment_method: membership.payment_method,
+                  payment_method_custom: membership.payment_method_custom,
+                }
+              : null,
           terms_accepted: agreed,
           terms_snapshot: template
             ? [
@@ -356,9 +394,17 @@ export default function CrmContractSignNewPage() {
               ["발급일 ~ 만료일", `${pass.issued_at} ~ ${pass.expires_at}`],
             ]}
           />
+        ) : membership ? (
+          <KvList
+            rows={[
+              ["상품(회원권)", membership.plan_name],
+              ["기간", `${membership.duration_days}일`],
+              ["시작 ~ 만료", `${membership.start_date} ~ ${membership.expires_at}`],
+            ]}
+          />
         ) : (
           <Hint>
-            수강권 정보가 자동입력되지 않았어요. 수강권을 발급한 뒤 진입하면
+            수강권/회원권 정보가 자동입력되지 않았어요. 발급 후 진입하면
             상품/결제 정보가 자동 채워져요.
           </Hint>
         )}
@@ -378,8 +424,20 @@ export default function CrmContractSignNewPage() {
               ],
             ]}
           />
+        ) : membership ? (
+          <KvList
+            rows={[
+              ["결제 금액", `${formatWon(membership.price_won)}원`],
+              [
+                "결제 수단",
+                membership.payment_method === "etc"
+                  ? membership.payment_method_custom || "기타"
+                  : membership.payment_method,
+              ],
+            ]}
+          />
         ) : (
-          <Hint>수강권 정보가 없으면 결제 정보도 비어 있어요.</Hint>
+          <Hint>수강권/회원권 정보가 없으면 결제 정보도 비어 있어요.</Hint>
         )}
       </Section>
 
