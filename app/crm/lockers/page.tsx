@@ -752,7 +752,7 @@ function LockerCard({
           )}
         </>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-[#A89B80] dark:text-zinc-500 text-[26px] leading-none">
+        <div className="flex-1 flex items-center justify-center pb-3 text-[#A89B80] dark:text-zinc-500 text-[26px] leading-none">
           +
         </div>
       )}
