@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
-import { CrmModal } from "../_components/crm-modal";
+import { CrmModal, CrmField } from "../_components/crm-modal";
 import { crmInputClass } from "../_components/crm-modal";
+import { CONTRACT_CATEGORY_LABEL } from "../_components/crm-labels";
+import { DEFAULT_PT_CONTRACT_TERMS } from "../_components/pt-contract-terms";
 
 interface Settings {
   center_id: number;
@@ -79,7 +81,7 @@ interface BootstrapInfo {
 export default function CrmSettingsPage() {
   const router = useRouter();
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<"reservation" | "alerts" | "grades" | "payout" | "logs" | "danger">("reservation");
+  const [tab, setTab] = useState<"reservation" | "alerts" | "grades" | "payout" | "contracts" | "logs" | "danger">("reservation");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [info, setInfo] = useState<BootstrapInfo | null>(null);
@@ -181,6 +183,9 @@ export default function CrmSettingsPage() {
         </TabBtn>
         <TabBtn active={tab === "payout"} onClick={() => setTab("payout")}>
           정산 규칙
+        </TabBtn>
+        <TabBtn active={tab === "contracts"} onClick={() => setTab("contracts")}>
+          계약서 관리
         </TabBtn>
         <TabBtn active={tab === "logs"} onClick={() => setTab("logs")}>
           활동 로그
@@ -314,6 +319,8 @@ export default function CrmSettingsPage() {
       {tab === "grades" && <GradesPanel />}
 
       {tab === "payout" && <PayoutRulesPanel />}
+
+      {tab === "contracts" && <ContractTemplatesPanel />}
 
       {tab === "logs" && (
         <Card title="최근 활동 (최대 80건)">
@@ -1202,6 +1209,335 @@ function WithdrawModal({
           </button>
         </div>
       </div>
+    </CrmModal>
+  );
+}
+
+/* ─── 계약서 양식 관리 패널 ──────────────────────── */
+
+type ContractCategory = "purchase" | "transfer" | "refund" | "employment" | "etc";
+
+interface ContractTemplate {
+  id: number;
+  category: ContractCategory;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function ContractTemplatesPanel() {
+  const { getIdToken } = useAuth();
+  const [list, setList] = useState<ContractTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch("/api/crm/contracts?sort=name_asc", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setList(data.contracts ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
+          회원·직원과 체결할 계약서 양식을 작성하고 관리해요.
+        </p>
+        <button
+          onClick={() => setCreateOpen(true)}
+          className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] whitespace-nowrap"
+        >
+          + 새 양식 작성
+        </button>
+      </div>
+
+      {error && (
+        <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : list.length === 0 ? (
+        <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          등록된 양식이 없어요. + 새 양식 작성 으로 시작해 보세요.
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {list.map((t) => (
+            <li key={t.id}>
+              <button
+                onClick={() => setEditId(t.id)}
+                className="w-full text-left px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                    {t.title}
+                  </span>
+                  <span className="shrink-0 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#F5F0E5] text-[#6B5D47]">
+                    {CONTRACT_CATEGORY_LABEL[t.category] ?? t.category}
+                  </span>
+                </div>
+                <div className="mt-1 text-[11.5px] text-[#A89B80]">
+                  수정 {t.updated_at?.slice(0, 10)}
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <ContractTemplateEditModal
+        mode="create"
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSaved={() => {
+          setCreateOpen(false);
+          load();
+        }}
+      />
+
+      <ContractTemplateEditModal
+        mode="edit"
+        templateId={editId}
+        open={editId !== null}
+        onClose={() => setEditId(null)}
+        onSaved={() => {
+          setEditId(null);
+          load();
+        }}
+        onDeleted={() => {
+          setEditId(null);
+          load();
+        }}
+      />
+    </div>
+  );
+}
+
+function ContractTemplateEditModal({
+  mode,
+  open,
+  templateId,
+  onClose,
+  onSaved,
+  onDeleted,
+}: {
+  mode: "create" | "edit";
+  open: boolean;
+  templateId?: number | null;
+  onClose: () => void;
+  onSaved: () => void;
+  onDeleted?: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState<ContractCategory>("purchase");
+  const [body, setBody] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setTitle("");
+      setCategory("purchase");
+      setBody("");
+      setError("");
+      return;
+    }
+    if (mode === "edit" && templateId) {
+      (async () => {
+        setLoading(true);
+        try {
+          const token = await getIdToken();
+          const res = await fetch(`/api/crm/contracts/${templateId}`, {
+            headers: { authorization: `Bearer ${token}` },
+            cache: "no-store",
+          });
+          const data = await res.json();
+          if (res.ok && data.contract) {
+            setTitle(data.contract.title);
+            setCategory(data.contract.category);
+            setBody(data.contract.body);
+          } else {
+            setError(data?.error || "조회 실패");
+          }
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "네트워크 오류");
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }
+  }, [open, mode, templateId, getIdToken]);
+
+  const submit = async () => {
+    setError("");
+    if (!title.trim()) return setError("제목을 입력해주세요");
+    setSubmitting(true);
+    try {
+      const token = await getIdToken();
+      const path =
+        mode === "edit" && templateId
+          ? `/api/crm/contracts/${templateId}`
+          : "/api/crm/contracts";
+      const method = mode === "edit" ? "PATCH" : "POST";
+      const res = await fetch(path, {
+        method,
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), category, body }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "저장 실패");
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!templateId) return;
+    if (!window.confirm("이 양식을 삭제할까요?")) return;
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/contracts/${templateId}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (res.ok) onDeleted?.();
+  };
+
+  return (
+    <CrmModal
+      open={open}
+      onClose={onClose}
+      title={mode === "edit" ? "양식 수정" : "새 양식 작성"}
+      size="lg"
+    >
+      {loading ? (
+        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : (
+        <div className="space-y-3">
+          <CrmField label="카테고리" required>
+            <select
+              className={crmInputClass}
+              value={category}
+              onChange={(e) => setCategory(e.target.value as ContractCategory)}
+            >
+              {(["purchase", "transfer", "refund", "employment", "etc"] as const).map((k) => (
+                <option key={k} value={k}>
+                  {CONTRACT_CATEGORY_LABEL[k]}
+                </option>
+              ))}
+            </select>
+          </CrmField>
+          <CrmField label="제목" required>
+            <input
+              className={crmInputClass}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="예) 피티 회원가입 계약서"
+              autoFocus
+            />
+          </CrmField>
+          <CrmField label="내용">
+            <textarea
+              className={`${crmInputClass} min-h-[260px] font-mono text-[13px]`}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="계약 조항을 입력해 주세요."
+            />
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  setBody(
+                    DEFAULT_PT_CONTRACT_TERMS.map(
+                      (t) => `[${t.title}]\n\n${t.body}`
+                    ).join("\n\n\n")
+                  )
+                }
+                className="px-2.5 py-1 rounded-full text-[11.5px] font-medium border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 hover:bg-amber-50/60"
+              >
+                + PT 기본 약관 5종 가져오기
+              </button>
+              {DEFAULT_PT_CONTRACT_TERMS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() =>
+                    setBody((prev) =>
+                      (prev ? prev + "\n\n\n" : "") + `[${t.title}]\n\n${t.body}`
+                    )
+                  }
+                  className="px-2.5 py-1 rounded-full text-[11.5px] font-medium border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-400 hover:border-[#6B7B3A]/40"
+                >
+                  + {t.title}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
+              가져온 뒤 센터에 맞게 자유롭게 편집하세요.
+            </p>
+          </CrmField>
+
+          {error && (
+            <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            {mode === "edit" && (
+              <button
+                type="button"
+                onClick={remove}
+                className="px-4 py-2.5 rounded-lg border border-red-200 text-red-700 text-[13px] font-semibold hover:bg-red-50"
+              >
+                삭제
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={submitting}
+              className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+            >
+              {submitting ? "저장 중…" : "저장"}
+            </button>
+          </div>
+        </div>
+      )}
     </CrmModal>
   );
 }
