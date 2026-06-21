@@ -1610,6 +1610,66 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_signed_contracts: {
+        Row: {
+          id: number
+          center_id: number
+          member_id: number | null
+          pass_id: number | null
+          membership_id: number | null
+          title: string
+          customer_info: unknown
+          product_info: unknown
+          payment_info: unknown
+          terms_accepted: unknown
+          terms_snapshot: unknown
+          signature_data_url: string | null
+          signed_at: string
+          signed_by_uid: string | null
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          member_id?: number | null
+          pass_id?: number | null
+          membership_id?: number | null
+          title?: string
+          customer_info?: unknown
+          product_info?: unknown
+          payment_info?: unknown
+          terms_accepted?: unknown
+          terms_snapshot?: unknown
+          signature_data_url?: string | null
+          signed_at?: string
+          signed_by_uid?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          member_id?: number | null
+          pass_id?: number | null
+          membership_id?: number | null
+          title?: string
+          customer_info?: unknown
+          product_info?: unknown
+          payment_info?: unknown
+          terms_accepted?: unknown
+          terms_snapshot?: unknown
+          signature_data_url?: string | null
+          signed_at?: string
+          signed_by_uid?: string | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_lockers: {
         Row: {
           id: number

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 import { CONTRACT_CATEGORY_LABEL } from "../_components/crm-labels";
@@ -83,12 +84,20 @@ export default function CrmContractsPage() {
             회원·직원과 체결하는 계약서 양식을 카테고리별로 관리해요.
           </p>
         </div>
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] transition-colors whitespace-nowrap"
-        >
-          + 새 계약서
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href="/crm/contracts/sign/new"
+            className="px-3 py-2 rounded-lg bg-[#B47B2A] text-white text-[13px] font-semibold hover:bg-[#9c6722] transition-colors whitespace-nowrap"
+          >
+            전자 계약서 생성
+          </Link>
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] transition-colors whitespace-nowrap"
+          >
+            + 새 양식
+          </button>
+        </div>
       </header>
 
       {/* 카테고리 필터 */}
