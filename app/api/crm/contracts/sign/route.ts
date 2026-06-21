@@ -5,6 +5,48 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 export const dynamic = "force-dynamic";
 
 /**
+ * GET /api/crm/contracts/sign?member_id=&q=
+ * 서명된 계약서 목록 (signature_data_url 은 제외해 크기 줄임).
+ */
+export async function GET(request: Request) {
+  const ctx = await requireCrmContext(request);
+  if (isCrmError(ctx)) return ctx;
+
+  const url = new URL(request.url);
+  const memberId = url.searchParams.get("member_id");
+  const q = (url.searchParams.get("q") || "").trim();
+
+  let query = supabase
+    .from("crm_signed_contracts")
+    .select(
+      "id, member_id, pass_id, membership_id, title, customer_info, signed_at, status, created_at"
+    )
+    .eq("center_id", ctx.centerId)
+    .neq("status", "voided")
+    .order("signed_at", { ascending: false })
+    .limit(200);
+  if (memberId) query = query.eq("member_id", Number(memberId));
+
+  const { data, error } = await query;
+  if (error) {
+    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+  }
+
+  let rows = data ?? [];
+  if (q) {
+    const needle = q.toLowerCase();
+    rows = rows.filter((r) => {
+      const info = (r.customer_info ?? {}) as { name?: string; phone?: string };
+      return (
+        (info.name || "").toLowerCase().includes(needle) ||
+        (info.phone || "").replace(/-/g, "").includes(needle.replace(/-/g, ""))
+      );
+    });
+  }
+  return NextResponse.json({ contracts: rows });
+}
+
+/**
  * POST /api/crm/contracts/sign
  * 새 서명 계약서를 저장. 회원/수강권/회원권은 모두 옵션.
  */

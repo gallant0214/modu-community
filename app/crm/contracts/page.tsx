@@ -8,6 +8,7 @@ import { CONTRACT_CATEGORY_LABEL } from "../_components/crm-labels";
 
 type Category = "purchase" | "transfer" | "refund" | "employment" | "etc";
 type Sort = "newest" | "oldest" | "name_asc" | "name_desc";
+type Tab = "templates" | "signed";
 
 interface Contract {
   id: number;
@@ -16,6 +17,13 @@ interface Contract {
   created_by_uid: string;
   created_at: string;
   updated_at: string;
+}
+
+interface SignedContract {
+  id: number;
+  title: string;
+  signed_at: string;
+  customer_info: { name?: string; phone?: string } | null;
 }
 
 const CATEGORY_OPTIONS: { key: Category | ""; label: string }[] = [
@@ -36,10 +44,12 @@ const SORT_OPTIONS: { key: Sort; label: string }[] = [
 
 export default function CrmContractsPage() {
   const { getIdToken } = useAuth();
+  const [tab, setTab] = useState<Tab>("signed");
   const [category, setCategory] = useState<Category | "">("");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("name_asc");
   const [list, setList] = useState<Contract[]>([]);
+  const [signedList, setSignedList] = useState<SignedContract[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -50,23 +60,35 @@ export default function CrmContractsPage() {
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const params = new URLSearchParams();
-      if (category) params.set("category", category);
-      if (query.trim()) params.set("q", query.trim());
-      params.set("sort", sort);
-      const res = await fetch(`/api/crm/contracts?${params}`, {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "조회 실패");
-      setList(data.contracts ?? []);
+      if (tab === "templates") {
+        const params = new URLSearchParams();
+        if (category) params.set("category", category);
+        if (query.trim()) params.set("q", query.trim());
+        params.set("sort", sort);
+        const res = await fetch(`/api/crm/contracts?${params}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "조회 실패");
+        setList(data.contracts ?? []);
+      } else {
+        const params = new URLSearchParams();
+        if (query.trim()) params.set("q", query.trim());
+        const res = await fetch(`/api/crm/contracts/sign?${params}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "조회 실패");
+        setSignedList(data.contracts ?? []);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
       setLoading(false);
     }
-  }, [getIdToken, category, query, sort]);
+  }, [getIdToken, tab, category, query, sort]);
 
   useEffect(() => {
     const t = setTimeout(load, 200);
@@ -100,7 +122,18 @@ export default function CrmContractsPage() {
         </div>
       </header>
 
-      {/* 카테고리 필터 */}
+      {/* 탭 */}
+      <div className="flex gap-1.5 mb-3">
+        <TabBtn active={tab === "signed"} onClick={() => setTab("signed")}>
+          체결 계약서
+        </TabBtn>
+        <TabBtn active={tab === "templates"} onClick={() => setTab("templates")}>
+          약관 양식
+        </TabBtn>
+      </div>
+
+      {/* 카테고리 필터 (양식 탭 전용) */}
+      {tab === "templates" && (
       <div className="flex gap-1.5 mb-3 overflow-x-auto -mx-1 px-1">
         {CATEGORY_OPTIONS.map((c) => (
           <button
@@ -116,6 +149,7 @@ export default function CrmContractsPage() {
           </button>
         ))}
       </div>
+      )}
 
       {/* 검색 + 정렬 */}
       <div className="flex flex-wrap items-center gap-2 mb-5">
@@ -123,25 +157,27 @@ export default function CrmContractsPage() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="템플릿명 검색"
+          placeholder={tab === "templates" ? "양식명 검색" : "고객 이름·연락처 검색"}
           className={`${crmInputClass} flex-1 min-w-[160px]`}
         />
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as Sort)}
-          className={crmInputClass}
-          style={{ maxWidth: 160 }}
-        >
-          {SORT_OPTIONS.map((s) => (
-            <option key={s.key} value={s.key}>
-              {s.label}
-            </option>
-          ))}
-        </select>
+        {tab === "templates" && (
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as Sort)}
+            className={crmInputClass}
+            style={{ maxWidth: 160 }}
+          >
+            {SORT_OPTIONS.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="mb-3 text-[12.5px] text-[#8C8270]">
-        조회된 목록 {list.length}개
+        조회된 목록 {(tab === "templates" ? list : signedList).length}개
       </div>
 
       {error && (
@@ -152,28 +188,60 @@ export default function CrmContractsPage() {
 
       {loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
-      ) : list.length === 0 ? (
+      ) : tab === "templates" ? (
+        list.length === 0 ? (
+          <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+            {query || category ? "일치하는 양식이 없습니다." : "등록된 양식이 없습니다. 새 양식을 추가해 주세요."}
+          </div>
+        ) : (
+          <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {list.map((c) => (
+              <li key={c.id}>
+                <button
+                  onClick={() => setDetailId(c.id)}
+                  className="w-full text-left px-4 py-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors h-full"
+                >
+                  <div className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 break-keep">
+                    {c.title}
+                  </div>
+                  <div className="mt-2 text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                    카테고리 : <strong className="text-[#3A342A] dark:text-zinc-300">{CONTRACT_CATEGORY_LABEL[c.category] ?? c.category}</strong>
+                  </div>
+                  <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500">
+                    생성일 : {formatDateTime(c.created_at)}
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : signedList.length === 0 ? (
         <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-          {query || category ? "일치하는 계약서가 없습니다." : "등록된 계약서가 없습니다. 새 계약서를 추가해 주세요."}
+          {query ? "일치하는 계약서가 없습니다." : "체결된 전자 계약서가 없습니다. 위 '전자 계약서 생성' 을 눌러 작성하세요."}
         </div>
       ) : (
         <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {list.map((c) => (
+          {signedList.map((c) => (
             <li key={c.id}>
-              <button
-                onClick={() => setDetailId(c.id)}
-                className="w-full text-left px-4 py-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors h-full"
+              <Link
+                href={`/crm/contracts/signed/${c.id}`}
+                className="block w-full text-left px-4 py-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors h-full"
               >
                 <div className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 break-keep">
+                  {c.customer_info?.name || "(이름 없음)"}
+                </div>
+                <div className="mt-1 text-[12px] text-[#6B5D47] dark:text-zinc-400">
                   {c.title}
                 </div>
-                <div className="mt-2 text-[12px] text-[#6B5D47] dark:text-zinc-400">
-                  카테고리 : <strong className="text-[#3A342A] dark:text-zinc-300">{CONTRACT_CATEGORY_LABEL[c.category] ?? c.category}</strong>
+                {c.customer_info?.phone && (
+                  <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500">
+                    {c.customer_info.phone}
+                  </div>
+                )}
+                <div className="mt-1 text-[11.5px] text-[#A89B80]">
+                  서명일 : {formatDateTime(c.signed_at)}
                 </div>
-                <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500">
-                  생성일 : {formatDateTime(c.created_at)}
-                </div>
-              </button>
+              </Link>
             </li>
           ))}
         </ul>
@@ -528,4 +596,27 @@ function formatDateTime(iso: string) {
   } catch {
     return iso;
   }
+}
+
+function TabBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-medium border whitespace-nowrap transition-colors
+        ${active
+          ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+          : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
+        }`}
+    >
+      {children}
+    </button>
+  );
 }

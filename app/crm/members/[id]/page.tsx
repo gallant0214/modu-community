@@ -813,6 +813,14 @@ function PassDetailModal({
             >
               닫기
             </button>
+            {pass.status === "valid" && detail.member && (
+              <Link
+                href={`/crm/contracts/sign/new?member_id=${detail.member.id}&pass_id=${pass.id}`}
+                className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 text-[13.5px] font-semibold text-center hover:bg-amber-50/60"
+              >
+                전자 계약서
+              </Link>
+            )}
             {pass.status === "valid" && (
               <button
                 onClick={() => setHoldOpen(true)}
