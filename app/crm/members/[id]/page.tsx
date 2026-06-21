@@ -45,6 +45,7 @@ interface Pass {
   expires_at: string;
   status: string;
   trainer_member_id: number;
+  is_paused?: boolean;
 }
 
 export default function CrmMemberDetailPage() {
@@ -665,6 +666,7 @@ function PassDetailModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [refunding, setRefunding] = useState(false);
+  const [holdOpen, setHoldOpen] = useState(false);
 
   useEffect(() => {
     if (passId === null) {
@@ -803,19 +805,32 @@ function PassDetailModal({
             </div>
           )}
 
-          <div className="flex gap-2 pt-1">
+          <div className="flex flex-wrap gap-2 pt-1">
             <button
               onClick={onClose}
               disabled={refunding}
-              className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-50"
+              className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-50"
             >
               닫기
             </button>
             {pass.status === "valid" && (
               <button
+                onClick={() => setHoldOpen(true)}
+                disabled={refunding}
+                className={`flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border text-[13.5px] font-semibold disabled:opacity-60
+                  ${(pass as Pass).is_paused
+                    ? "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                    : "border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 hover:bg-amber-50/60"
+                  }`}
+              >
+                {(pass as Pass).is_paused ? "홀딩중" : "홀딩"}
+              </button>
+            )}
+            {pass.status === "valid" && (
+              <button
                 onClick={refund}
                 disabled={refunding}
-                className="flex-1 px-4 py-2.5 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-[13.5px] font-semibold hover:bg-red-50 disabled:opacity-60"
+                className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-[13.5px] font-semibold hover:bg-red-50 disabled:opacity-60"
               >
                 {refunding ? "처리 중…" : "환불 처리"}
               </button>
@@ -823,6 +838,17 @@ function PassDetailModal({
           </div>
         </div>
       )}
+
+      <HoldModal
+        open={holdOpen}
+        passId={pass?.id ?? null}
+        membershipId={null}
+        onClose={() => setHoldOpen(false)}
+        onDone={() => {
+          setHoldOpen(false);
+          onRefunded(); // 모달 닫고 부모 갱신 (이름은 refund지만 그냥 reload 트리거)
+        }}
+      />
     </CrmModal>
   );
 }
@@ -1169,5 +1195,152 @@ function BackLink() {
       </svg>
       회원 목록
     </Link>
+  );
+}
+
+function HoldModal({
+  open,
+  passId,
+  membershipId,
+  onClose,
+  onDone,
+}: {
+  open: boolean;
+  passId: number | null;
+  membershipId: number | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [startDate, setStartDate] = useState(todayStr);
+  const [endDate, setEndDate] = useState(todayStr);
+  const [reason, setReason] = useState("");
+  const [requestedBy, setRequestedBy] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setStartDate(todayStr);
+      setEndDate(todayStr);
+      setReason("");
+      setRequestedBy("");
+      setError("");
+    }
+  }, [open, todayStr]);
+
+  const days = (() => {
+    if (!startDate || !endDate || endDate < startDate) return 0;
+    const a = new Date(`${startDate}T00:00:00Z`).getTime();
+    const b = new Date(`${endDate}T00:00:00Z`).getTime();
+    return Math.round((b - a) / (24 * 3600 * 1000)) + 1;
+  })();
+
+  const submit = async () => {
+    setError("");
+    if (!passId && !membershipId) return setError("대상이 없습니다");
+    if (!startDate || !endDate) return setError("시작일과 종료일을 입력해 주세요");
+    if (endDate < startDate) return setError("종료일이 시작일보다 빠를 수 없어요");
+    if (!requestedBy.trim()) return setError("홀딩 요청자(이름)을 입력해 주세요");
+    setSubmitting(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/pauses", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          pass_id: passId,
+          membership_id: membershipId,
+          start_date: startDate,
+          end_date: endDate,
+          reason: reason.trim() || undefined,
+          requested_by: requestedBy.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "홀딩 실패");
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <CrmModal open={open} onClose={onClose} title="회원 홀딩">
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <CrmField label="시작일" required>
+            <input
+              type="date"
+              className={crmInputClass}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </CrmField>
+          <CrmField label="종료일" required>
+            <input
+              type="date"
+              className={crmInputClass}
+              value={endDate}
+              min={startDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </CrmField>
+        </div>
+        {days > 0 && (
+          <div className="px-3 py-2 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+            홀딩 기간 <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{days}일</strong> ·
+            만료일이 자동으로 {days}일 늘어납니다.
+          </div>
+        )}
+        <CrmField label="홀딩 요청자" required>
+          <input
+            type="text"
+            className={crmInputClass}
+            value={requestedBy}
+            onChange={(e) => setRequestedBy(e.target.value)}
+            placeholder="이름 (예: 본인, 가족)"
+            maxLength={40}
+          />
+        </CrmField>
+        <CrmField label="홀딩 사유">
+          <textarea
+            className={`${crmInputClass} min-h-[72px]`}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="예: 부상, 해외 출장, 개인 사정 등"
+            maxLength={300}
+          />
+        </CrmField>
+
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={submitting}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-[#B47B2A] disabled:opacity-60 text-white text-[13.5px] font-semibold hover:bg-[#9c6722]"
+          >
+            {submitting ? "처리 중…" : "홀딩 적용"}
+          </button>
+        </div>
+      </div>
+    </CrmModal>
   );
 }

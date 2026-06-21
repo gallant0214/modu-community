@@ -1457,6 +1457,7 @@ export type Database = {
           memo: string | null
           outstanding_won: number
           payment_status: string
+          is_paused: boolean
           created_at: string
           updated_at: string
         }
@@ -1477,6 +1478,7 @@ export type Database = {
           memo?: string | null
           outstanding_won?: number
           payment_status?: string
+          is_paused?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -1497,6 +1499,7 @@ export type Database = {
           memo?: string | null
           outstanding_won?: number
           payment_status?: string
+          is_paused?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -1550,6 +1553,60 @@ export type Database = {
           status?: string
           created_at?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_pauses: {
+        Row: {
+          id: number
+          center_id: number
+          member_id: number
+          pass_id: number | null
+          membership_id: number | null
+          start_date: string
+          end_date: string
+          reason: string | null
+          requested_by: string | null
+          status: string
+          extended_days: number
+          created_at: string
+          created_by_uid: string | null
+          cancelled_at: string | null
+          cancelled_by_uid: string | null
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          member_id: number
+          pass_id?: number | null
+          membership_id?: number | null
+          start_date: string
+          end_date: string
+          reason?: string | null
+          requested_by?: string | null
+          status?: string
+          extended_days?: number
+          created_at?: string
+          created_by_uid?: string | null
+          cancelled_at?: string | null
+          cancelled_by_uid?: string | null
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          member_id?: number
+          pass_id?: number | null
+          membership_id?: number | null
+          start_date?: string
+          end_date?: string
+          reason?: string | null
+          requested_by?: string | null
+          status?: string
+          extended_days?: number
+          created_at?: string
+          created_by_uid?: string | null
+          cancelled_at?: string | null
+          cancelled_by_uid?: string | null
         }
         Relationships: []
       }
@@ -1860,6 +1917,7 @@ export type Database = {
           memo: string | null
           outstanding_won: number
           payment_status: string
+          is_paused: boolean
           created_at: string
           updated_at: string
         }
@@ -1884,6 +1942,7 @@ export type Database = {
           memo?: string | null
           outstanding_won?: number
           payment_status?: string
+          is_paused?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -1908,6 +1967,7 @@ export type Database = {
           memo?: string | null
           outstanding_won?: number
           payment_status?: string
+          is_paused?: boolean
           created_at?: string
           updated_at?: string
         }
