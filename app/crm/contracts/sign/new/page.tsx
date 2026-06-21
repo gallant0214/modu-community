@@ -8,6 +8,13 @@ import { crmInputClass } from "../../../_components/crm-modal";
 import { formatPhone, formatWon } from "../../../_components/crm-labels";
 import { DEFAULT_PT_CONTRACT_TERMS } from "../../../_components/pt-contract-terms";
 
+interface Template {
+  id: number;
+  category: string;
+  title: string;
+  body: string;
+}
+
 interface PassInfo {
   id: number;
   lesson_kind: string;
@@ -36,10 +43,12 @@ export default function CrmContractSignNewPage() {
   const params = useSearchParams();
   const memberId = params.get("member_id") ? Number(params.get("member_id")) : null;
   const passId = params.get("pass_id") ? Number(params.get("pass_id")) : null;
+  const templateId = params.get("template_id") ? Number(params.get("template_id")) : null;
   const { getIdToken } = useAuth();
 
   const [member, setMember] = useState<MemberInfo | null>(null);
   const [pass, setPass] = useState<PassInfo | null>(null);
+  const [template, setTemplate] = useState<Template | null>(null);
 
   // 고객 기본 정보
   const [name, setName] = useState("");
@@ -101,11 +110,19 @@ export default function CrmContractSignNewPage() {
           const data = await res.json();
           if (res.ok && data?.pass) setPass(data.pass);
         }
+        if (templateId) {
+          const res = await fetch(`/api/crm/contracts/${templateId}`, {
+            headers: { authorization: `Bearer ${token}` },
+            cache: "no-store",
+          });
+          const data = await res.json();
+          if (res.ok && data?.contract) setTemplate(data.contract);
+        }
       } catch {
         // ignore
       }
     })();
-  }, [memberId, passId, getIdToken, name, phone, birth, gender]);
+  }, [memberId, passId, templateId, getIdToken, name, phone, birth, gender]);
 
   // 서명 캔버스 설정
   useEffect(() => {
@@ -167,9 +184,9 @@ export default function CrmContractSignNewPage() {
   const toggleAgree = (key: string) =>
     setAgreed((prev) => ({ ...prev, [key]: !prev[key] }));
 
-  const requiredOk = DEFAULT_PT_CONTRACT_TERMS.filter((t) => t.required).every(
-    (t) => agreed[t.key]
-  );
+  const requiredOk = template
+    ? !!agreed[`template_${template.id}`]
+    : DEFAULT_PT_CONTRACT_TERMS.filter((t) => t.required).every((t) => agreed[t.key]);
 
   const submit = async () => {
     setError("");
@@ -186,7 +203,7 @@ export default function CrmContractSignNewPage() {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify({
-          title: "피티 회원가입 계약서",
+          title: template?.title || "피티 회원가입 계약서",
           member_id: memberId,
           pass_id: passId,
           customer_info: {
@@ -216,13 +233,23 @@ export default function CrmContractSignNewPage() {
               }
             : null,
           terms_accepted: agreed,
-          terms_snapshot: DEFAULT_PT_CONTRACT_TERMS,
+          terms_snapshot: template
+            ? [
+                {
+                  key: `template_${template.id}`,
+                  title: template.title,
+                  body: template.body,
+                  required: true,
+                },
+              ]
+            : DEFAULT_PT_CONTRACT_TERMS,
           signature_data_url: signatureDataUrl,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "저장 실패");
-      router.push(`/crm/contracts`);
+      if (memberId) router.push(`/crm/members/${memberId}?purchase=done`);
+      else router.push(`/crm/contracts`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
       setSubmitting(false);
@@ -356,30 +383,53 @@ export default function CrmContractSignNewPage() {
         )}
       </Section>
 
-      {/* 약관 5종 */}
-      {DEFAULT_PT_CONTRACT_TERMS.map((t) => (
+      {/* 약관 (템플릿 선택 시 단일 본문, 아니면 기본 5종) */}
+      {template ? (
         <Section
-          key={t.key}
-          title={`[${t.title}]`}
-          headerNote={t.required ? "필수" : "선택"}
-          noteColor={t.required ? "warn" : "info"}
+          title={`[${template.title}]`}
+          headerNote="필수"
+          noteColor="warn"
         >
-          <pre className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-300 font-sans max-h-[260px] overflow-y-auto px-3 py-3 border border-[#E8E0D0]/70 dark:border-zinc-800 rounded-lg bg-[#FBF7EB]/40 dark:bg-zinc-900/40">
-            {t.body}
+          <pre className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-300 font-sans max-h-[420px] overflow-y-auto px-3 py-3 border border-[#E8E0D0]/70 dark:border-zinc-800 rounded-lg bg-[#FBF7EB]/40 dark:bg-zinc-900/40">
+            {template.body || "(본문이 비어 있습니다)"}
           </pre>
           <label className="mt-3 flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
-              checked={!!agreed[t.key]}
-              onChange={() => toggleAgree(t.key)}
+              checked={!!agreed[`template_${template.id}`]}
+              onChange={() => toggleAgree(`template_${template.id}`)}
               className="w-4 h-4 accent-[#6B7B3A]"
             />
             <span className="text-[13px] text-[#3A342A] dark:text-zinc-300">
-              ({t.required ? "필수" : "선택"}) 위의 약관을 확인하였으며 동의합니다.
+              (필수) 위의 약관을 확인하였으며 동의합니다.
             </span>
           </label>
         </Section>
-      ))}
+      ) : (
+        DEFAULT_PT_CONTRACT_TERMS.map((t) => (
+          <Section
+            key={t.key}
+            title={`[${t.title}]`}
+            headerNote={t.required ? "필수" : "선택"}
+            noteColor={t.required ? "warn" : "info"}
+          >
+            <pre className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-300 font-sans max-h-[260px] overflow-y-auto px-3 py-3 border border-[#E8E0D0]/70 dark:border-zinc-800 rounded-lg bg-[#FBF7EB]/40 dark:bg-zinc-900/40">
+              {t.body}
+            </pre>
+            <label className="mt-3 flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!agreed[t.key]}
+                onChange={() => toggleAgree(t.key)}
+                className="w-4 h-4 accent-[#6B7B3A]"
+              />
+              <span className="text-[13px] text-[#3A342A] dark:text-zinc-300">
+                ({t.required ? "필수" : "선택"}) 위의 약관을 확인하였으며 동의합니다.
+              </span>
+            </label>
+          </Section>
+        ))
+      )}
 
       {/* 날짜 + 서명 */}
       <Section title="서명">

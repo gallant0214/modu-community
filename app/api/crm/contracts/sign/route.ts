@@ -79,8 +79,12 @@ export async function POST(request: Request) {
   if (!body.signature_data_url || !body.signature_data_url.startsWith("data:image/")) {
     return NextResponse.json({ error: "서명이 필요합니다" }, { status: 400 });
   }
-  const required = ["usage", "refund", "special", "privacy"] as const;
-  for (const k of required) {
+  // 필수 약관 검증: terms_snapshot 의 required:true 항목 모두 accepted 여야 함
+  const snapshot = Array.isArray(body.terms_snapshot)
+    ? (body.terms_snapshot as { key: string; required: boolean }[])
+    : [];
+  const requiredKeys = snapshot.filter((t) => t?.required).map((t) => t.key);
+  for (const k of requiredKeys) {
     if (!body.terms_accepted?.[k]) {
       return NextResponse.json({ error: `필수 약관(${k}) 에 동의해 주세요` }, { status: 400 });
     }
