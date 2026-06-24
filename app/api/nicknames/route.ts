@@ -78,8 +78,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "닉네임은 2글자 이상이어야 합니다" }, { status: 400 });
   }
 
-  if (rawName.length > 8) {
-    return NextResponse.json({ success: false, error: "닉네임은 8글자 이하여야 합니다" }, { status: 400 });
+  if (rawName.length > 12) {
+    return NextResponse.json({ success: false, error: "닉네임은 12글자 이하여야 합니다" }, { status: 400 });
   }
 
   const name = sanitize(validateLength(rawName, 50));

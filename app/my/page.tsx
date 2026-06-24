@@ -34,17 +34,20 @@ function formatDateTime(dateStr: string) {
   return `${y}. ${m}. ${day}. ${h}:${min}`;
 }
 
-const adjectives = ["행��한","졸린","용감한","배고픈","신나는","깜찍한","수줍은","엉뚱한","느긋한","씩씩한","귀여���","당당한","활발한","조용한","멋진","반짝이는","소심한","든든한","장난친","심심한"];
+const adjectives = ["행복한","졸린","용감한","배고픈","신나는","깜찍한","수줍은","엉뚱한","느긋한","씩씩한","귀여운","당당한","활발한","조용한","멋진","반짝이는","소심한","든든한","장난친","심심한"];
 const nouns = ["수달","판다","고양이","강아지","토끼","펭귄","다람쥐","해달","코알라","여우","오리","곰돌이","부엉이","햄스터","거북이","미어캣","알파카","치타","수박","감자"];
 
+// 형용사 + 명사 + 4자리 랜덤 숫자 (예: 당당한여우4321) — 중복 충돌 최소화
 function generateRandomNickname() {
   for (let i = 0; i < 20; i++) {
     const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
     const noun = nouns[Math.floor(Math.random() * nouns.length)];
-    const nick = adj + noun;
-    if (nick.length >= 2 && nick.length <= 8) return nick;
+    const num = Math.floor(Math.random() * 9000) + 1000; // 1000~9999
+    const nick = `${adj}${noun}${num}`;
+    if (nick.length >= 2 && nick.length <= 12) return nick;
   }
-  return nouns[Math.floor(Math.random() * nouns.length)] + Math.floor(Math.random() * 99 + 1);
+  const num = Math.floor(Math.random() * 9000) + 1000;
+  return nouns[Math.floor(Math.random() * nouns.length)] + num;
 }
 
 /* ── 타입 ── */
@@ -849,7 +852,7 @@ function MyPageContent() {
   const handleSaveNickname = async () => {
     const trimmed = nicknameInput.trim();
     if (!trimmed) { setNicknameError("닉네임을 입력해주세요."); return; }
-    if (trimmed.length < 2 || trimmed.length > 8) { setNicknameError("닉네임은 2~8글자여야 합니다."); return; }
+    if (trimmed.length < 2 || trimmed.length > 12) { setNicknameError("닉네임은 2~12글자여야 합니다."); return; }
     setNicknameLoading(true);
     setNicknameError("");
     try {
@@ -2681,8 +2684,8 @@ function MyPageContent() {
               value={nicknameInput}
               onChange={(e) => { setNicknameInput(e.target.value); if (nicknameError) setNicknameError(""); }}
               onKeyDown={(e) => e.key === "Enter" && handleSaveNickname()}
-              placeholder="2~8글자"
-              maxLength={8}
+              placeholder="2~12글자"
+              maxLength={12}
               autoFocus
               className={`w-full px-3 py-2.5 bg-[#F5F0E5] dark:bg-zinc-800 border rounded-xl text-sm text-[#333] dark:text-zinc-100 placeholder-[#CCC] focus:outline-none focus:ring-2 transition-colors mb-2 ${
                 nicknameError

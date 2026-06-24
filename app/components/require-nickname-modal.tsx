@@ -49,8 +49,8 @@ export default function RequireNicknameModal() {
 
   const handleSubmit = async () => {
     const trimmed = input.trim();
-    if (trimmed.length < 2 || trimmed.length > 8) {
-      setError("닉네임은 2~8자여야 합니다.");
+    if (trimmed.length < 2 || trimmed.length > 12) {
+      setError("닉네임은 2~12자여야 합니다.");
       return;
     }
     if (!/^[가-힣a-zA-Z0-9_]+$/.test(trimmed)) {
@@ -116,7 +116,7 @@ export default function RequireNicknameModal() {
           value={input}
           onChange={(e) => { setInput(e.target.value); setError(""); }}
           onKeyDown={(e) => { if (e.key === "Enter" && !submitting) handleSubmit(); }}
-          placeholder="2~8자 (한글·영문·숫자·언더바)"
+          placeholder="2~12자 (한글·영문·숫자·언더바)"
           maxLength={16}
           autoFocus
           className={`w-full px-4 py-3 rounded-xl border-[1.5px] bg-white dark:bg-zinc-900 text-[15px] text-[#2A251D] dark:text-zinc-100 focus:outline-none ${

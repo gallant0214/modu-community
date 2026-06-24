@@ -39,8 +39,8 @@ export function SendMessageModal({ open, onClose, receiverNickname, parentId, on
     const trimmedReceiver = receiver.trim();
     if (allowEditReceiver) {
       if (!trimmedReceiver) { setError("받는 사람을 입력해주세요."); return; }
-      if (trimmedReceiver.length < 2 || trimmedReceiver.length > 8) {
-        setError("닉네임은 2~8자여야 합니다.");
+      if (trimmedReceiver.length < 2 || trimmedReceiver.length > 12) {
+        setError("닉네임은 2~12자여야 합니다.");
         return;
       }
     }
@@ -112,7 +112,7 @@ export function SendMessageModal({ open, onClose, receiverNickname, parentId, on
                     type="text"
                     value={receiver}
                     onChange={(e) => { setReceiver(e.target.value); setError(""); }}
-                    placeholder="닉네임 (2~8자)"
+                    placeholder="닉네임 (2~12자)"
                     maxLength={16}
                     autoFocus
                     autoCapitalize="off"
