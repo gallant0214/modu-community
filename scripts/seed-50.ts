@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 config({ path: resolve(process.cwd(), ".env.local") });
 
-import { newPosts, pickRegion, PREV_AUTHOR_POOLS } from "../app/api/admin/seed-community-reviews/data";
+import { newPosts, pickRegion, PREV_AUTHOR_POOLS } from "../app/api/admin/seed-community-reviews-50/data";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 
@@ -20,24 +20,42 @@ function check1_NoDuplicate() {
 }
 
 function check2_CategoryMatch() {
-  // 47차는 전부 cat 5 (수영)
-  const SWIM_KEYWORDS = [
-    "수영","IM","글라이딩","발차기","평영","배영","자유형","접영","수영장","수영복",
-    "스타트","돌핀","잠영","실기","구술","응시","시험","고사장","수험번호","물속",
-    "터치","장체","노인","유소년","지도자","지도사","다이빙","킥","호흡","수심",
-    "해수풀","락스풀","스트로크","근육","렛지","개인혼영","혼계영","계영","심판",
-    "도핑","저항","유선형","부력","바다수영","슈트","연수","경기복","규정","올림픽",
+  const BB_KEYWORDS = [
+    "보디빌딩","보디빌더","피지크","사프","사피","사이드피지크","사이드프지크",
+    "쿼터턴","규정포즈","포징","포즈","무대","컨벤셔널","데드","데드리프트","벤치","스쿼트",
+    "사이드","트라이","프론트","랫","어브도미널","근비대","ATP","ATP-PC","글리코겐",
+    "BMI","체질량","체지방","피하지방","내장지방","글루카곤","인슐린",
+    "에피네프린","아드레날린","교감신경","WADA","KADA","도핑","TUE","마스킹","이뇨제","흥분제",
+    "IFBB","시상면","관상면","횡단면","시상축","관상축","비타민","수평면","수직축",
+    "흉쇄유돌근","SCM","카르보넨","워밍업","좌심실","HDL","LDL","CPR","AED","PRICE","PRICES",
+    "ACL","PCL","MCL","LCL","반월상","무릎 인대","BCAA","아미노산","단백질","크레아틴",
+    "그렐린","멜라토닌","성장호르몬","근육","체급","비키니","클래식보디빌딩","보드피트",
+    "여자비키니","여자피지크","여자보디빌딩","보드피트니스","유산소","무산소","해당","젖산","에너지",
+    "선수 심장","청심환","발살바","락아웃","흡기","호기","트레이닝","FITT",
+    "Rep","Set","워밍업","쿨다운","Rest","휴식","관절","가동성","ROM",
+    "광배근","대원근","장요근","장골근","대요근","카테콜아민","도파민","에피네프린",
+    "노르에피네프린","SITS","회전근개","극상근","극하근","소원근","견갑하근",
+    "외전","내전","외회전","내회전","흉추","견갑","후인하강","신전",
+    "GX","PT","트레이너","인스트럭터","자비스트","페이퍼커스","핏니스",
+    "한약","홍삼","인삼","마황","에페드린","한정수량","헬스장","1인 헬스장",
+    "응시번호","시험관","사이드체스트","사이드 트라이","측면 삼각근","삼각근",
+    "노인스포츠지도사","유소년","장애인","척추","근막","발차기","컴파운드","슈퍼세트","트라이세트",
+    "ADO","DCO","TUEC","WADC","ADRV","코르티솔","부신","부신피질","부신수질",
+    "알파세포","베타세포","Epley","Brzycki","구술","리스트컬","해머컬","쉬러그","런지",
+    "스티프","루마니안","힙힌지","햄스트링","반건양근","반막양근","대퇴이두","극상근",
+    "탄","브론저","인권","성폭력","화상","지근","속근","적근","백근","마이오글로빈",
+    "체형","내배엽","중배엽","외배엽","수험표","공고문","연수","면제","추가취득",
   ];
   for (const p of newPosts) {
-    if (p.categoryId !== 5) {
-      throw new Error(`체크2 실패 - 수영(cat=5)이 아님: ${p.title}`);
+    if (p.categoryId !== 1) {
+      throw new Error(`체크2 실패 - 보디빌딩(cat=1)이 아님: ${p.title}`);
     }
-    const text = p.title + " " + p.content;
-    if (!SWIM_KEYWORDS.some((k) => text.includes(k))) {
-      console.warn(`⚠️ 체크2 경고 - 수영 키워드 없음: ${p.title}`);
+    const text = p.title + p.content + p.comments.map((c) => c.content).join(" ");
+    if (!BB_KEYWORDS.some((k) => text.includes(k))) {
+      console.warn(`⚠️ 체크2 경고 - 보디빌딩 키워드 없음: ${p.title}`);
     }
   }
-  console.log(`✅ 체크2 통과 — 모든 글 cat=5, 수영 키워드 검증`);
+  console.log(`✅ 체크2 통과 — 모든 글 cat=1, 보디빌딩 키워드 검증`);
 }
 
 function check3_AuthorPoolSeparation() {
@@ -47,14 +65,12 @@ function check3_AuthorPoolSeparation() {
     for (const c of p.comments) allCommentAuthors.add(c.author);
   }
 
-  // 작성자 ≠ 댓글자
   for (const a of allAuthors) {
     if (allCommentAuthors.has(a)) {
       throw new Error(`체크3 실패 - 작성자 ${a}가 댓글자 풀에도 있음`);
     }
   }
 
-  // 한 글 내에서 작성자 ≠ 댓글자 + 댓글자끼리 중복 X
   for (const p of newPosts) {
     const seen = new Set<string>([p.author]);
     for (const c of p.comments) {
@@ -65,7 +81,6 @@ function check3_AuthorPoolSeparation() {
     }
   }
 
-  // PREV 풀과 겹치지 않는지
   for (const prevPool of PREV_AUTHOR_POOLS) {
     const prevSet = new Set(prevPool);
     for (const a of allAuthors) {
@@ -86,9 +101,8 @@ function check6_RegionFormat() {
   console.log(`✅ 체크6 통과 — pickRegion() 형식 "광역시도 - 시군구"`);
 }
 
-// ============= 메인 =============
 async function main() {
-  console.log(`\n=== 47차 시드 ${DRY_RUN ? "[DRY RUN]" : "[PROD INSERT]"} ===\n`);
+  console.log(`\n=== 50차 시드 ${DRY_RUN ? "[DRY RUN]" : "[PROD INSERT]"} ===\n`);
   console.log(`게시글: ${newPosts.length}개, 댓글: ${newPosts.reduce((s, p) => s + p.comments.length, 0)}개\n`);
 
   check1_NoDuplicate();
@@ -108,9 +122,7 @@ async function main() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 누락");
   }
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  });
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
   let postsInserted = 0;
   let commentsInserted = 0;
@@ -165,7 +177,7 @@ async function main() {
     await supabase.from("posts").update({ comments_count: count ?? 0 }).eq("id", postId);
   }
 
-  console.log(`\n=== 47차 시드 완료 ===`);
+  console.log(`\n=== 50차 시드 완료 ===`);
   console.log(`postsInserted: ${postsInserted}, commentsInserted: ${commentsInserted}`);
   console.log(`insertedIds: ${insertedIds[0]} ~ ${insertedIds[insertedIds.length - 1]}`);
 }

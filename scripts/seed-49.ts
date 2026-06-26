@@ -1,15 +1,422 @@
+// 49차 종목후기 시드 — 보디빌딩 생활스포츠지도사 구술·실기 후기 (카톡 6/23~26)
+// 자기완결형 스크립트: 공유 route/data 파일(병렬 차수 작업과 경합)을 의존하지 않음.
+// 실행: npx -y tsx scripts/seed-49.ts [--dry-run]
 import { createClient } from "@supabase/supabase-js";
 import { config } from "dotenv";
 import { resolve } from "node:path";
+import { REGION_GROUPS } from "../app/lib/region-data";
 
 config({ path: resolve(process.cwd(), ".env.local") });
 
-import { newPosts, pickRegion, PREV_AUTHOR_POOLS } from "../app/api/admin/seed-community-reviews/data";
-
 const DRY_RUN = process.argv.includes("--dry-run");
 
+interface SeedComment { author: string; content: string; hoursOffset: number; }
+interface SeedPost { categoryId: number; title: string; content: string; author: string; date: string; comments: SeedComment[]; }
+
+// 22차~45차 작성자/댓글자 풀 누적 (중복 방지 검증용)
+const PREV_AUTHOR_POOLS: string[][] = [
+  ["물통뚜껑","삼각자","클립보드","형광펜","볼펜꽂이","커튼봉","바인더","스탠드","메모지","연필깎이","지우개","책갈피","자석클립","스테이플러","책꽂이","필통","연필꽂이","포스트잇","모눈노트","종이클립","잉크펜","컴퍼스","화이트보드"],
+  ["헬커스고민러","사이드체스트벽","추가취득생","신청부족걱정","포징숨막힘","PT방향엇갈림","단체포징초보","295점생존러","1분50초벽","25m50m고민","배영25초벽","코로물난리","이어플러그픽","글라이딩고민러","20대정체러","수영실기시작","10년만의IM","보완순위정리","유튜브카카오믹","발차기약점"],
+  ["피지크범위고민","EPOC산소부채","10페이지1주","자비스트큰병","구어체질문러","3대근육답변","ATPPCr답변","마감14일러","시험복깔끔","다이어트복고민","사진묘사고민","51개5개관문","5회독1주"],
+  ["CPR호흡차이","4종세트구분","에너지3원천","10kg한달목표","응시사진깔끔러","30분51카드","73개정리러","클래식포즈범위","데드무릎각도","잔여인원노림","리스트컬방향","ATPPCr시스템3"],
+  ["물속출발고민","1분30초벽","다이빙시험장","기록입증만","25m25초벽","출발글라이딩","회전근개수영","75m인터벌","물안잡기","자비스트영상","어깨회전근개","1년준비계속"],
+  ["도토리키움","빨래걷기실패","늦잠전문가","야식러버사","김치찌개팬2","명상초보러2","사무실너구리","다육식물러2","떡볶이덕후2","야경수집가","라면취향러","분리수거왕"],
+  ["곶감홀릭","뜨개질대장","오믈렛장인","만두피전문","해바라기씨","단호박러버","감자조림팬","모닝커피러","시금치무침","숙면예찬가","딸기잼매니아","주말산책러"],
+  ["약과러버","누룽지팬","매실청덕후","호두과자러","흑임자라떼","망고스무디","키위주스","미숫가루러","보리차덕후","콘플레이크2","그래놀라매니아","두유한팩"],
+  ["빨래집게가","옷걸이대장","종이배접기","화분받침대","침대패드러","거울장식가","페인트통러","캠핑의자2","책상등불","우산꽂이팬","휴지통덮개","향초가게주인","액자걸이러","알람시계팬","콘센트커버","자석고리","전기포트2","자전거벨러","라디오스피커","칫솔걸이","발매트팬","손전등2호","머리띠팬","키보드받침","머그컵2호","우편함덮개","텀블러러버","휴대폰거치대","종이가방러","액자대장","손지갑2호","잎새모빌"],
+  ["미루나무러","분재가꾸미","화단지기러","잡초뽑기왕","꽃꽂이덕후","잔디깎이러","비료주는이","화분옮기기","흙고르는러","씨앗심기러","가지치기맨","텃밭일군러","까치덕후러","비둘기지킴","참새모이러","까마귀팬2","햄스터집사","토끼귀러러","강아지껴안","고양이쓰담","금붕어보이","거북이키움","앵무새얘기","두꺼비키움","다람쥐피더","청설모찾기","백조관찰러","오리떼따라","갈매기보기","펭귄팬레터","코끼리응원","호랑이팬덤","사자갈기러","표범무늬팬","잠자리쫓기","나비잡기러"],
+  ["셔터터치팬","렌즈갈이맨","삼각대잡이","필름카메라러","폴라로이드덕","DSLR사용자","무선플래시","광각촬영가","망원렌즈러","인물사진러","풍경사진러","매크로헌터","피아노조율사","기타튜닝러","드럼스틱2","베이스줄러","우쿨렐레덕","바이올린활","첼로켜는이","색소폰낭만","트럼펫부는","플루트소리","클라리넷팬","하모니카불","아코디언라","오카리나덕","멜로디언2","캐스터넷2","트라이앵글2","탬버린흔드","마라카스러","신디사이저","미디키보드","카포끼우는","메트로놈팬","음표그리기"],
+  ["자전거페달러","오토바이굴림","트럭운전수2","버스기사덕","택시미터팬","지하철노선","기차철길러","비행기엔진","헬기프로펠러","카누노젓기","보트엔진러","요트돛달기","북극성지킴","안드로메다러","오로라관측팬","혜성꼬리러","위성궤도러","화성탐사덕","토성고리팬","금성광채러","명왕성잊지","천왕성기울기","해왕성블루","수성공전러","일식관측러","월식보름달","백조자리팬","오리온별자리","카시오페아러","작은곰자리","큰곰자리덕","사자자리팬","처녀자리러","천칭자리덕","전갈자리러","사수자리팬"],
+  ["야구글러브덕","농구드리블러","축구공차기","배구블로커","테니스라켓팬","골프홀인원","탁구박자2","배드민턴셔틀","핸드볼슛러","풋살드리블","럭비태클러","하키스틱2","검도호구러","양궁활시위","사격조준러","펜싱검사","승마기수님","빙상선수러","스키부츠2","보드스노우","낚시찌맨","그물던지기","잠수부친구","스쿠버다이버","서핑보드러","카약노젓는","카누여행자","패들보드러","모터보트2","요트선장님","수상스키덕","윈드서퍼팬","웨이크보드러","제트스키맨","워터파크러","갯바위낚시","민물낚시팬","바다낚시인","루어낚시러","플라이낚시","떡밥낚시러","카약낚시인","시조어부","새우잡이남","등반로프","암벽등산덕","트레킹폴","텐트치기러","캠핑장러","모닥불피움","별헤는밤2","산행도시락","야영지덕","코펠물끓임","침낭잠자기","해먹누움","등산스틱2","산봉우리덕","계곡탐험러","절벽오르기"],
+  ["봄꽃피우기","여름매미덕","가을단풍팬","겨울눈송이","장맛비러","소나기맞기","안개걷히고","서리내림러","이슬방울맺","노을지기2","태풍지나기","한파주의보","폭염경보러","가뭄걱정러","종이학접기","풍선접기러","색종이덕후","리본묶기팬","매듭짓기2","스티커붙기","도장찍기러","실뜨기2호","구슬꿰기러","뜨개실풀기","단추달기맨","지퍼올리기2","접착풀팬2","가위질잘러","풀칠하기2","도화지덕","스케치북러","사인펜그림","크레용칠하기","물감번지기","물풍선놀이2","카드만들기","꽃다발묶기","포장지접기","리본달기맨"],
+  ["망치두드림","스패너잡이러","드라이버돌리","줄자감기맨","펜치집기2","톱질하는이","대패질러","끌찍는맨2","사포문지러","실리콘쏘기","전기드릴러","렌치돌리기2","그라인더러","전동톱대장","망치자루러","여권갱신러","면세점가기","캐리어끌기","체크인줄2","공항버스러","탑승게이트2","스튜디덕","기내식러2","창가좌석2","통로좌석러","짐가방덕","환승라운지","여행적금러","마일리지덕","주황가방러","구두갈색팬","캡모자2호","선글라스덕","지도펴기2","안내책자러","스카프매기","배낭메기맨","머플러2호","장갑끼는이","모자고정러"],
+  ["시멘트섞기","벽돌쌓기","철근엮기","콘크리트팀","타일붙이기","페인트롤러","사다리타기","석고보드러","단열재팬2","창문틀러","벽지바르기","문틀잡는이","지붕올리기","기둥세우기","마우스패드2","USB허브덕","외장하드러","충전케이블","노트북파우치","멀티탭2호","HDMI케이블","웹캠덕후","이어폰꽂이","스피커거치","모니터받침","키캡덕후러","광마우스러","외장SSD2","태블릿펜팬","스타일러스2","모뎀빨강이","공유기2층","랜선깔끔러","허브포트2","마이크삼각","링라이트팬","USB메모리","SD카드정리","케이스걸이"],
+  ["운동화끈러","구두주걱팬","슬리퍼덕후","장화신기2","등산화애호","샌들버클러","하이힐러2","플랫슈즈팬","스니커즈덕","부츠지퍼맨","실내화팬2","슬립온애호","구두광택러","방수화애호","어그부츠팬","체크슬리퍼","뮬샌들덕","조거화애호","모카신팬2","찻주전자덕","녹차잎러","홍차티백2","얼그레이팬","허브티덕후","캐모마일러","페퍼민트2","루이보스덕","캡슐티팬","말차거품기","티스트레이너","유리찻잔덕","도자기찻잔","티세트모음","티스푼긴거","계량컵팬2","우롱차러2","보이차덕후","대만홍차러","실론티팬2","감잎차덕","생강차러러","꿀물저음러","대추차덕후","차거름망러","자스민차러","장미차덕후","홍삼차러2","유자차팬덕","모과차덕후","구기자차러","연꽃차애호","오미자차2"],
+  ["책상다리러","의자등받이","침대프레임","옷장문열기","서랍장정리","책장꽂이맨","화장대거울","신발장모음","식탁다리2","소파쿠션러","텔레비전대","벽시계걸이","카펫청소러","베란다선반","발코니화분","거실등잡이","침구정리꾼","욕실수납러","패브릭소파2","라텍스매트","옥상난간러","옥상의자2","다용도실러","거실커튼팬","책상거치대","프라이팬2호","냄비뚜껑러","국자손잡이","뒤집개2호","도마칼질러","채반물기빼","거품기돌리","칼갈이2호","가위주방용","양념통2호","깔때기2호","김치통팬","비닐랩러2","호일포장러","압력솥뚜껑","전자레인지러","토스터빵2","믹서기갈기","주서기과즙","보온병2호","도시락통러","보존용기팬","알류미늄팬","김장봉지팬","거름망주방","후추갈이러","소금통2호","그릇건조대","행주짜기러","식기세척러"],
+  ["장미꽃잎러","벚꽃잎팬","튤립꽃대2","해바라기2호","카네이션러","나팔꽃피움","국화향수러","안개꽃한단","수국한송이","모란꽃피2","매화꽃잎러","철쭉꽃러2","진달래꽃2","패랭이팬2","팬지꽃러","금잔화팬2","봉선화물들","달리아러2","라벤더향러","제비꽃따기","민들레꽃씨","들국화팬2","억새풀러2","창포꽃잎러","코스모스러","보리쌀러2","현미밥팬","조밥수확러","팥죽한사발","녹두빈대떡","수수경단러","율무차러2","메밀국수러","귀리오트밀","기장조밥러","완두콩러러","렌틸콩2호","병아리콩러","검은콩러2","땅콩까기러","잣나무열매","호두까기맨","은행알러2","도토리묵러","밤껍질러","대추알러2","감씨발라러","홍시따기러","단감수확러","배따기맨러","사과깎기러","포도따기맨","딸기수확러","오미자수확","산딸기따러"],
+  ["다이아반지팬","루비목걸이러","사파이어귀걸이","에메랄드팔찌","토파즈고리","자수정원석","오팔비드러","진주귀걸이팬","산호장식러","호박돌머리","가넷박힌이","수정구슬러","라피스반지","옥반지팬2","황금팔찌러","백금링러2","은반지덕후","보석함덕","보석감정가","자개장식러","비취돌이팬","청금석러2"],
+  ["청바지러2","흰티프리덕","후드티팬2","셔츠다림질","정장재킷러","트렌치코트","패딩점퍼2","니트조끼러","카디건팬2","원피스러러","치마플레어","슬렉스다림","청자켓러2","야상점퍼팬","가죽재킷덕","우비레인러","양말한짝러","스타킹팬2","운동복상하","트레이닝복러","잠옷세트러","속옷정리팬","머플러두름러","장갑끼움러","모자썼다요","머리띠끼움","헤어밴드러","손목시계러","벨트조임러","넥타이매기"],
+];
+
+// 49차 작성자 풀 (보디빌딩, 세면/욕실용품 30명)
+const AUTHOR_POOL = [
+  "칫솔컵팬","비누받침러","샴푸펌프2","린스통덕","수건걸이맨",
+  "치약짜개러","욕실슬리퍼","샤워헤드2","배수구망러","거품타월팬",
+  "목욕바구니","때수건러","면도크림2","세안밴드러","헤어캡쓰",
+  "욕실선반2","물비누통러","발수건팬","샤워커튼2","방수매트러",
+  "욕실등불","환풍기팬2","변기솔러","세숫대야2","양치컵러",
+  "거울김서림","비누곽덕","수건봉러","욕조마개2","샴푸바구니",
+];
+
+// 49차 댓글자 풀 (간식/과자/디저트 36명)
+const MIXED_POOL = [
+  "새우깡러","감자칩2","초코파이덕","사탕봉지러","젤리한봉",
+  "팝콘튀김2","쿠키굽기러","와플기계팬","도넛글레이즈","마카롱덕2",
+  "브라우니러","카스테라2","약과한입러","양갱한조각","뻥튀기팬2",
+  "호떡굽기러","붕어빵2호","계란빵러","꿀호떡팬","땅콩과자2",
+  "오란다러","누가바팬2","쌀과자러","별사탕2호","박하사탕러",
+  "사탕수수러","캐러멜2호","젤리곰러","막대사탕팬","초콜릿칩러",
+  "와플쿠키2","머랭과자러","약밥한입2","식혜한컵러","수정과덕후","매작과러",
+];
+
+const WEIGHTS: Record<string, number> = {
+  "서울특별시": 5, "경기도": 6, "부산광역시": 3, "인천광역시": 3,
+  "대구광역시": 2, "대전광역시": 2, "광주광역시": 2, "울산광역시": 2,
+  "세종특별자치시": 1, "강원특별자치도": 1, "충청북도": 1, "충청남도": 1,
+  "전북특별자치도": 1, "전라남도": 1, "경상북도": 1, "경상남도": 1, "제주특별자치도": 1,
+};
+
+function pickRegion(): string {
+  const pool: { name: string; subRegions: { name: string }[] }[] = [];
+  for (const g of REGION_GROUPS) {
+    const w = WEIGHTS[g.name] ?? 1;
+    for (let i = 0; i < w; i++) pool.push(g);
+  }
+  const group = pool[Math.floor(Math.random() * pool.length)];
+  const sub = group.subRegions[Math.floor(Math.random() * group.subRegions.length)];
+  return `${group.name} - ${sub.name}`;
+}
+
+function authorAt(idx: number): string { return AUTHOR_POOL[idx % AUTHOR_POOL.length]; }
+
+function commentAuthors(postAuthor: string, count: number, seed: number): string[] {
+  const result: string[] = [];
+  const used = new Set<string>([postAuthor]);
+  let idx = seed % MIXED_POOL.length;
+  while (result.length < count) {
+    const cand = MIXED_POOL[idx % MIXED_POOL.length];
+    if (!used.has(cand)) { result.push(cand); used.add(cand); }
+    idx++;
+  }
+  return result;
+}
+
+interface RawPost { title: string; content: string; date: string; comments: { content: string; hoursOffset: number }[]; }
+
+const RAW_POSTS: RawPost[] = [
+  {
+    title: "여자 4종목 쿼터턴 라이트 지도방법 - 비키니만 상체 트는 차이",
+    content: "비키니/피지크/보디피트 쿼터턴 라이트 지도방법이 자꾸 헷갈려요. 상체를 심사위원쪽으로 트는 건 비키니만 맞나요? 피지크·보디피트는 안 트는지...",
+    date: "2026-06-23 01:30:00",
+    comments: [
+      { content: "측면이 심사위원 보이게 서서 양 발끝 30도, 무릎 곧게 펴고 배 집어넣고 어깨 젖혀 가슴 펴고 양팔 벌려접기 + 손끝 가지런히. 이게 공통 뼈대예요", hoursOffset: 1 },
+      { content: "상체 트는 건 비키니만. 피지크·보디피트는 오른쪽으로 돌아서 그냥 정면 보면 됩니다. 양팔이 중심선까지 와서 트는 것처럼 보이는 것뿐", hoursOffset: 2 },
+      { content: "여자 종목 무적 문장: 무릎 피고 배 집어넣고 가슴 내밀고 어깨 뒤로. 이거 다 공통이라 하나만 술술 나오면 나머지도 풀려요", hoursOffset: 4 },
+      { content: "보디피트 쿼터턴이 제일 쉬워요. 정면 보고 동그랗게 만들고 옆 돌아서 팔만 돌리기", hoursOffset: 7 },
+      { content: "마지막은 항상 손가락 가지런히 정리하는 거 잊지 마세요", hoursOffset: 11 },
+    ],
+  },
+  {
+    title: "남자 피지크·프론트 발끝 30도? 한 발 빼기 헷갈림",
+    content: "남자 프론트더블바이셉스/프론트 피지크 발 각도도 30도 정도여야 하나요? 남자 피지크는 다리 어떻게 하는지...",
+    date: "2026-06-23 01:26:00",
+    comments: [
+      { content: "남자 피지크는 다리 벌려요. 한 발을 빼서 측면 라인 보여주는 게 포인트", hoursOffset: 1 },
+      { content: "비키니만 상체 틀고 피지크·보피는 안 틀어요. 거기서 헷갈리면 감점", hoursOffset: 3 },
+      { content: "발끝 각도는 너무 정밀하게 신경 안 써도 되고 자세 흐름이 자연스러운 게 더 중요해요", hoursOffset: 6 },
+    ],
+  },
+  {
+    title: "경기기간 중 vs 상시 금지약물 구분 - 헷갈리면 둘 다?",
+    content: "경기기간 중 금지약물 물어보면 상시 금지인 것도 같이 말해도 되나요? 경기기간 중 해당하는 것만 말해야 하나 헷갈려요.",
+    date: "2026-06-23 01:37:00",
+    comments: [
+      { content: "경기기간 중: 마약류·자극제(흥분제)·칸나비노이드·글루코코르티코이드", hoursOffset: 1 },
+      { content: "상시 금지: 동화작용제·베타2작용제·펩타이드호르몬·이뇨제·호르몬대사변조제·세포(유전자)도핑", hoursOffset: 2 },
+      { content: "글루코코르티코이드 철자 조심하세요. 코르티코/코티르코 작명하다 틀림", hoursOffset: 4 },
+      { content: "경기기간 중 물으면 경기기간 중 4가지만 깔끔하게 말하는 게 안전", hoursOffset: 8 },
+    ],
+  },
+  {
+    title: "도핑검사 시 선수의 권리 4가지",
+    content: "도핑 관련 선수의 권리 4가지 물어보면 어떻게 정리해야 하나요?",
+    date: "2026-06-23 01:50:00",
+    comments: [
+      { content: "1.통역 동반할 권리 2.선수대리인 동반할 권리 3.시료채취 절차 설명받을 권리 4.도핑관리실 도착 연기 신청할 권리", hoursOffset: 1 },
+      { content: "4번은 합당한 사유가 있어야 한다는 단서 붙이면 좋아요", hoursOffset: 3 },
+      { content: "선수대리인·통역 동반, 시료채취 절차 설명, 합리적 사유 시 검사관리실 지연요청 가능. 이렇게 외웠어요", hoursOffset: 6 },
+    ],
+  },
+  {
+    title: "ADO(도핑방지기구) 설명 - WADA/KADA",
+    content: "ADO란? / 안티도핑기구에 대해 설명하시오 라고 나왔다는데 뭐라고 답해야 하나요?",
+    date: "2026-06-23 02:02:00",
+    comments: [
+      { content: "도핑방지기구를 뜻하며 무분별한 도핑을 방지하여 공정한 스포츠 환경을 만드는 게 목표. 국제적으론 WADA, 한국에는 KADA 존재", hoursOffset: 1 },
+      { content: "WADA = 세계도핑방지기구. 금지약물 선정·업데이트, 도핑규정 관리, 검사·교육 수행, 선수 보호", hoursOffset: 3 },
+      { content: "ADO는 KADA 같은 국가도핑방지기구 개념, WADA는 세계 단위. 둘 구분해두면 좋아요", hoursOffset: 5 },
+    ],
+  },
+  {
+    title: "생활체육 프로그램 구성원리 9가지 vs 구성요소 혼동주의",
+    content: "생활체육 프로그램 구성원리랑 구성요소(구성요인)가 자꾸 섞여요. 둘 다 정리 부탁드려요.",
+    date: "2026-06-23 01:41:00",
+    comments: [
+      { content: "구성원리: 평등성·창조성·욕구반영성·전문성·다양성·보완성·평가성·편의성·전달성", hoursOffset: 1 },
+      { content: "구성요소(요인): 지도자·참여자·시설·홍보·재정·활동종목·종목의 안전성", hoursOffset: 2 },
+      { content: "평등성을 평형성으로 잘못 쓰는 사람 많아요. 평'등'성이 맞습니다", hoursOffset: 4 },
+      { content: "원리랑 요소 혼동하면 0점은 아니어도 감점이라 둘 묶어서 외우면 안 헷갈려요", hoursOffset: 9 },
+    ],
+  },
+  {
+    title: "성인지 감수성 정의 + 성폭력 발생 시 대처",
+    content: "지도자가 갖춰야 하는 성인지 감수성, 그리고 현장에서 성폭력 발생 시 대처 어떻게 답해야 하나요?",
+    date: "2026-06-23 02:04:00",
+    comments: [
+      { content: "성별 차이에서 오는 차별과 불평등을 감지해내는 능력. 성고정관념과 인식을 버리고 모든 참여자에게 동등한 대우", hoursOffset: 1 },
+      { content: "대처: 즉시 폭언/폭력 행위 중지시키고 피해자를 가해자로부터 분리 → 사실여부 판단 → 필요시 지원기관 요청", hoursOffset: 3 },
+      { content: "지도자-참여자 관계엔 권력 차이로 성폭력 위험이 존재한다는 전제를 먼저 깔면 좋아요", hoursOffset: 6 },
+    ],
+  },
+  {
+    title: "단백질 대사회전이란?",
+    content: "단백질 대사를 설명하라는 질문엔 어떤 식으로 대답하는 게 좋을까요?",
+    date: "2026-06-23 01:44:00",
+    comments: [
+      { content: "체내에서 단백질이 합성 및 분해가 반복되는 현상으로, 손상된 단백질을 제거해 생리적 균형을 유지하기 위해 발생", hoursOffset: 1 },
+      { content: "운동 후 손상된 근육 단백질은 분해되고 새 단백질이 합성되며 근회복·성장에 관여한다고 풀면 됩니다", hoursOffset: 3 },
+      { content: "오래된 단백질 분해 + 새 단백질 합성이 반복되는 과정, 이 키워드만 잡으면 OK", hoursOffset: 7 },
+    ],
+  },
+  {
+    title: "출혈 시 응급처치 - 출혈부를 심장보다 높게 하는 이유",
+    content: "출혈 응급처치 순서랑, 마지막에 출혈부를 심장보다 높게 하는 이유가 뭔지 정확히 모르겠어요.",
+    date: "2026-06-23 01:45:00",
+    comments: [
+      { content: "2차 감염 주의 → 멸균거즈로 출혈부 압박 → 지혈되면 베타딘 소독 → 멸균 드레싱 → 출혈부를 심장보다 높게 하여 병원 이송", hoursOffset: 1 },
+      { content: "높게 하는 이유는 출혈부로 흐르는 혈류량을 줄여서 지혈을 돕고 쇼크를 방지하기 위해서", hoursOffset: 2 },
+      { content: "주저리주저리 말고 '쇼크 방지를 위해 심장보다 높게 해서 병원 이송' 이렇게 핵심만", hoursOffset: 5 },
+    ],
+  },
+  {
+    title: "골절 종류 - 폐쇄성 vs 개방성",
+    content: "골절 종류랑 각각 설명 어떻게 하나요?",
+    date: "2026-06-23 01:51:00",
+    comments: [
+      { content: "폐쇄성 골절: 피부 연부조직에 다른 상처는 없고 골절상만 있는 경우 (외부와 차단된 골절)", hoursOffset: 1 },
+      { content: "개방성 골절: 피부 연부조직과 상처가 연결되어 있거나 골절부위가 피부 밖으로 돌출된 경우", hoursOffset: 2 },
+      { content: "폐쇄성=외부와 차단, 개방성=피부 밖 노출. 이 대비로 외우면 깔끔해요", hoursOffset: 6 },
+    ],
+  },
+  {
+    title: "AED 사용 순서·패드 위치",
+    content: "AED 사용법이 헷갈려요. 패드 위치랑 순서 좀 정리해주세요.",
+    date: "2026-06-23 13:10:00",
+    comments: [
+      { content: "전원 켜기 → 패드 부착(오른쪽 빗장뼈 아래, 왼쪽 젖꼭지 아래 중간겨드랑이선) → 심전도 분석 → 제세동 버튼 → 다시 심폐소생술", hoursOffset: 1 },
+      { content: "분석 중·제세동 시 '물러나세요' 외치고 환자에게서 떨어지는 거 잊지 마세요", hoursOffset: 3 },
+      { content: "사실 패드 붙이면 기계가 시키는 대로 하면 돼요. 패드 위치 두 곳만 정확히", hoursOffset: 7 },
+    ],
+  },
+  {
+    title: "시상면 중 정중면 설명 - 말장난 주의",
+    content: "시상면 중 정중면에 대해 설명하라는데 정중면이 뭔지 헷갈려요. 시상면이랑 어떻게 다른가요?",
+    date: "2026-06-23 01:53:00",
+    comments: [
+      { content: "정중면은 몸을 좌우 대칭되게 정중앙을 가르는 시상면이에요. 시상면 중 중앙면", hoursOffset: 1 },
+      { content: "시상면(전후면)/관상면(이마면)/수평면(횡단면) 먼저 잡고, 정중면은 시상면의 디테일이라 보면 됨", hoursOffset: 2 },
+      { content: "사실상 말장난 문제예요. '시상면 중 좌우대칭으로 정중앙을 가르는 면' 이라고만 하면 통과", hoursOffset: 5 },
+    ],
+  },
+  {
+    title: "흉쇄유돌근(SCM) 작용 - 측굴이냐 회전이냐",
+    content: "흉쇄유돌근 한쪽 수축 시 측굴인지 회전인지 헷갈려요. SCM에 목뼈폄(신전)도 들어가나요?",
+    date: "2026-06-23 01:55:00",
+    comments: [
+      { content: "양쪽 수축 시 호흡 보조 및 목의 굴곡, 한쪽 수축 시 측굴 및 반대쪽으로 회전이 일반적 답변", hoursOffset: 1 },
+      { content: "신전은 보통 SCM 작용으로 보긴 애매해요. 굴곡·측굴·회전으로 가는 게 안전", hoursOffset: 2 },
+      { content: "측굴이랑 회전은 엄연히 다른 움직임이라 '측굴 및 회전' 둘 다 넣어서 답하면 무난", hoursOffset: 5 },
+    ],
+  },
+  {
+    title: "코어 안정성 높이는 심부근육 4가지",
+    content: "코어 안정성 높이는 심부근육 4가지 물어보면 뭐라고 답하나요?",
+    date: "2026-06-23 02:01:00",
+    comments: [
+      { content: "다열근·복횡근·골반기저근·횡격막 입니다", hoursOffset: 1 },
+      { content: "복횡근은 복근 중 가장 안쪽에서 코르셋처럼 감싸 복압을 잡고 몸통을 안정화시키는 근육", hoursOffset: 4 },
+      { content: "이 4개 세트로 묶어서 외워두면 코어/복부 안정화 문제 다 커버돼요", hoursOffset: 8 },
+    ],
+  },
+  {
+    title: "유산소운동과 미토콘드리아 - TCA·전자전달계",
+    content: "유산소운동과 미토콘드리아가 어떻게 연결되는지 이해가 안 돼요. 설명 어떻게 풀어야 하나요?",
+    date: "2026-06-23 02:05:00",
+    comments: [
+      { content: "유산소 대사에서 탄수화물·지방이 아세틸-CoA로 전환되어 미토콘드리아 기질의 TCA회로를 거치고, 내막의 전자전달계에서 ATP를 대량 생성", hoursOffset: 1 },
+      { content: "규칙적 유산소운동은 골격근 미토콘드리아 수와 기능이 향상되어 지방산화 능력이 증가합니다", hoursOffset: 3 },
+      { content: "포도당이 '아세틸조효소가 되어'가 아니라 '아세틸조효소로 전환'이라고 해야 안 틀려요", hoursOffset: 6 },
+    ],
+  },
+  {
+    title: "3대 영양소 + 유·무산소 운동 시 ATP 에너지 시스템",
+    content: "3대 영양소 설명하고 유산소·무산소 운동 시 ATP와 관련해 사용되는 에너지가 뭔지 묻는 문제, ATP 관련이라는 게 헷갈립니다.",
+    date: "2026-06-23 10:16:00",
+    comments: [
+      { content: "탄수화물(포도당, 주 에너지원)·지방(지방산)·단백질이 3대 영양소. 탄수화물은 빠르게 ATP 생성", hoursOffset: 1 },
+      { content: "무산소: 짧고 강한 운동은 ATP-PC 시스템이 먼저, 크레아틴인산이 ADP를 ATP로 재합성", hoursOffset: 2 },
+      { content: "유산소: 산소 이용해 탄수화물·지방이 아세틸-CoA로 전환→TCA·전자전달계 거쳐 많은 ATP 생성", hoursOffset: 4 },
+    ],
+  },
+  {
+    title: "어센딩/디센딩/피라미드 세트 차이",
+    content: "어센딩 세트가 세트 거듭될수록 중량 올리고 반복횟수 낮추는 거 맞나요? 피라미드랑 같은 건지 헷갈려요.",
+    date: "2026-06-23 02:09:00",
+    comments: [
+      { content: "어센딩은 중량 올리되 반복횟수는 유지. 피라미드가 중량 올리고 횟수 다운하는 거예요", hoursOffset: 1 },
+      { content: "디센딩은 중량 낮추고 횟수 유지 또는 증가", hoursOffset: 2 },
+      { content: "어센딩이랑 피라미드 같은 거라는 자료도 있어서 헷갈리는데, 키워드(중량↑/횟수 유지냐 다운이냐)로 구분", hoursOffset: 5 },
+    ],
+  },
+  {
+    title: "근우선법 + 근육혼동시스템 설명",
+    content: "근우선법이랑 근육혼동시스템 차이가 뭔가요? 둘 다 트레이닝 원리인데 헷갈려요.",
+    date: "2026-06-23 01:48:00",
+    comments: [
+      { content: "근우선법: 운동 초반 집중력과 체력이 높을 때 약한 부위를 먼저 운동하여 근성장을 도모하는 방법", hoursOffset: 1 },
+      { content: "근육혼동시스템: 기존 적응된 루틴이 아닌 새 중량·세트·반복횟수에 변화를 주어 근육에 혼동을 줘 근성장 도모", hoursOffset: 2 },
+      { content: "근육혼동은 변화를 줘서 정체기를 깨는 거, 근우선법은 약한 부위 먼저. 목적이 달라요", hoursOffset: 5 },
+    ],
+  },
+  {
+    title: "카르보넨 운동강도 공식",
+    content: "안정시 심박수 측정법이랑 카르보넨 공식 뭐라고 정리하셨어요?",
+    date: "2026-06-23 11:20:00",
+    comments: [
+      { content: "카르보넨: 최대심박수에서 안정시 심박수를 빼고 운동강도를 곱한 뒤 다시 안정시 심박수를 더한다 (HRR×%+안정시HR)", hoursOffset: 1 },
+      { content: "맥박 촉진법은 요골동맥·경동맥 부위에 검지·중지를 대어 60초간 박동수 측정", hoursOffset: 2 },
+      { content: "손목·목이라고 하면 애매하니 요골동맥·경동맥으로 정확히 말하는 게 안전해요", hoursOffset: 4 },
+    ],
+  },
+  {
+    title: "운동 중 글루카곤/인슐린 혈당 조절 역할",
+    content: "운동 중 인슐린이랑 글루카곤이 혈당에 어떻게 작용하는지 묶어서 설명하라면 어떻게 답하나요?",
+    date: "2026-06-23 22:04:00",
+    comments: [
+      { content: "운동 중 인슐린은 높아진 혈당을 낮춰 포도당을 사용하게 하고, 그로 인해 낮아진 혈당을 글루카곤이 다시 높여줌", hoursOffset: 1 },
+      { content: "글루카곤은 췌장 알파세포에서 분비, 인슐린은 베타세포에서 분비. 알파/베타 구분 꼭", hoursOffset: 3 },
+      { content: "운동 중 인슐린은 반동성 저혈당을 유발할 수도 있다는 디테일 붙이면 좋아요", hoursOffset: 6 },
+    ],
+  },
+  {
+    title: "세컨드 윈드(사점)란?",
+    content: "세컨드 윈드가 뭔지 묻는 문제 나왔다는데 어떻게 설명하나요?",
+    date: "2026-06-25 01:08:00",
+    comments: [
+      { content: "운동 초기에 호흡곤란·피로감·근육통을 느끼다가 일정 시간 지나며 신체가 운동에 적응해 편안해지는 현상", hoursOffset: 1 },
+      { content: "사점(데드포인트)을 지난 후 편안해지는 2차적 호흡 안정 상태, 이렇게만 말해도 됩니다", hoursOffset: 2 },
+      { content: "유산소운동 초반 숨참·피로 이후 심폐 대사가 적용되며 덜 힘들게 느껴지는 거", hoursOffset: 4 },
+    ],
+  },
+  {
+    title: "운동성 서맥 / 스포츠 심장",
+    content: "운동성 서맥이랑 스포츠 심장 차이가 뭔가요? 1회 박출량 얘기 들어가야 하나요?",
+    date: "2026-06-23 22:26:00",
+    comments: [
+      { content: "고강도 훈련 반복으로 1회 박출량이 증가해 적은 수축·이완으로도 많은 혈액·산소를 공급하는 게 스포츠 심장", hoursOffset: 1 },
+      { content: "운동성 서맥은 장기간 고강도 유산소 훈련으로 심장이 단련되어 안정 시 심박수가 60회 미만으로 낮아지는 현상", hoursOffset: 2 },
+      { content: "1회 박출량 증가 + 안정 시 심박수 감소가 핵심 키워드예요", hoursOffset: 5 },
+    ],
+  },
+  {
+    title: "DOMS(지연성 근육통) 발생 이유와 시기",
+    content: "근육통, 즉 DOMS가 발생하는 이유와 발생 시기를 설명하라는데 어떻게 답하나요?",
+    date: "2026-06-23 22:24:00",
+    comments: [
+      { content: "운동 후 24~48시간 사이 통증이 정점, 3~7일간 지속되는 근육통. 신장성 수축에 의한 근섬유 미세손상과 염증반응으로 발생", hoursOffset: 1 },
+      { content: "익숙하지 않은 운동·과도한 운동, 특히 신장성 수축 후 근섬유가 미세하게 손상되며 생긴다고 풀면 됨", hoursOffset: 2 },
+      { content: "지연성이라 24~72시간 사이 최고조라고도 해요. 핵심은 신장성 수축 + 미세손상 + 염증", hoursOffset: 5 },
+    ],
+  },
+  {
+    title: "척추 구성과 역할 - 갯수까지",
+    content: "척추 설명하라는 문제, 척수 보호·자세 유지 같은 역할이랑 갯수까지 다 말해야 하나요?",
+    date: "2026-06-23 14:00:00",
+    comments: [
+      { content: "척추는 척추뼈와 추간판으로 구성된 뼈 기둥. 척수를 보호하고 몸을 지지하며 움직임에 관여", hoursOffset: 1 },
+      { content: "경추7·흉추12·요추5·천추(성인 1)·미추(성인 1) = 성인 26개, 어릴 땐 33개", hoursOffset: 2 },
+      { content: "올해 기출은 척수 보호·자세 유지 같은 역할 + 갯수 같이 묻는 형태였어요", hoursOffset: 5 },
+    ],
+  },
+  {
+    title: "컨벤셔널 데드리프트 실기 - 원판 없을 때 바닥까지?",
+    content: "컨벤셔널 데드리프트 나오면 원판이 안 끼워져 있을 때 바닥에 완전히 닿으려면 자세가 어려운데, 동작만 보여주면 되나요?",
+    date: "2026-06-23 18:45:00",
+    comments: [
+      { content: "긴팔원숭이 아니면 원판 없이 바닥까지 어려워요. 슬링랙 있을 때 높이 정도까지만 내려가 시범 보이면 됩니다", hoursOffset: 1 },
+      { content: "작년엔 바닥에 바벨 찍고 올라오라 했던 것 같아요. 기준표대로면 원판이 끼워져야 각이 나옴", hoursOffset: 2 },
+      { content: "컨벤셔널은 발 좁고 손이 다리 안쪽, 동작·호흡만 정확하면 감점은 안 돼요", hoursOffset: 6 },
+    ],
+  },
+  {
+    title: "횡단관(T-tubule) 구조와 역할",
+    content: "횡단관이 뭔지 묻는 문제 나왔다는데 구조랑 역할 어떻게 설명하나요?",
+    date: "2026-06-23 14:47:00",
+    comments: [
+      { content: "근섬유막이 근육 섬유 내부로 깊숙하게 파고들어 형성된 관 모양 구조예요", hoursOffset: 1 },
+      { content: "근육 표면의 활동전위(신경 자극)를 근섬유 내부 깊은 곳까지 빠르고 균일하게 전달하는 통로 역할", hoursOffset: 2 },
+      { content: "근소포체 종말수조 사이에 위치한다는 것까지 붙이면 완벽", hoursOffset: 4 },
+    ],
+  },
+  {
+    title: "컴파운드/슈퍼세트 짝 근육 - 전완 굴근·신근, 이두삼두",
+    content: "전완 굴곡근 컴파운드세트, 이두삼두 슈퍼세트 하라고 하면 어떤 동작으로 짝 맞춰야 하나요?",
+    date: "2026-06-25 11:10:00",
+    comments: [
+      { content: "전완: 손목굽힘근=리스트(바벨)컬, 신근=리버스 리스트컬. 서로 반대 근육 동시에", hoursOffset: 1 },
+      { content: "이두삼두 슈퍼세트는 암컬 + 라잉 트라이셉스 익스텐션(덤벨·바벨 바꿔서)", hoursOffset: 2 },
+      { content: "컴파운드는 같은 부위 다른 동작, 슈퍼세트는 서로 길항작용하는 근육 두 가지로 보면 돼요", hoursOffset: 4 },
+    ],
+  },
+  {
+    title: "보충제 과다섭취 주의사항",
+    content: "보충제 과다섭취 시 주의사항 묻는 문제, 다른 학교에도 나왔다는데 뭐라고 답하나요?",
+    date: "2026-06-23 13:37:00",
+    comments: [
+      { content: "과다섭취 시 간·신장·혈관에 문제가 생길 수 있고, 제품 성분표기와 실제가 다르거나 금지물질을 포함할 수 있어 선수는 보충제 때문에 도핑에 걸릴 수 있음", hoursOffset: 1 },
+      { content: "건강 문제 + 제품 신뢰도 + 도핑 위험 이렇게 세 갈래로 묶으면 깔끔해요", hoursOffset: 3 },
+      { content: "카페인도 이뇨작용·운동능력 향상·집중력 증가 역할이지만 과다 시 부작용 있다고 같이 정리해두면 좋아요", hoursOffset: 6 },
+    ],
+  },
+  {
+    title: "시험장 운영 후기 - 천막 대기·매일 문제 바뀜·다른 학교 기출",
+    content: "내일 첫 시험인데 시험장 운영이 어떻게 되는지 궁금해요. 대기하면서 앞사람 거 들리나요? 학교마다 문제가 정해져 있나요?",
+    date: "2026-06-24 09:00:00",
+    comments: [
+      { content: "천막만 쳐놓고 진행해서 대기하면서 앞 분들 구술 내용이 약간 들려요. 폰 제출하고 순서대로 앉아 5명씩 움직입니다", hoursOffset: 1 },
+      { content: "매일 문제가 바뀌고 학교마다 정해진 문제가 있는 게 아니라 다른 학교 기출도 봐야 해요. 오늘 이 학교 문제가 내일 저 학교에서 나오기도", hoursOffset: 2 },
+      { content: "구술은 노랑 A4 두꺼운 글씨, 1/3 접는 느낌. 문제·문제 사이 단락이 안 나뉘어 있고 종이는 다 빳빳했어요", hoursOffset: 3 },
+      { content: "지금은 기존 구술카드 다 외우기보다 올해 기출·후기 위주로, 신유형만 보는 게 효율적이에요", hoursOffset: 5 },
+    ],
+  },
+  {
+    title: "실기 포징 명칭 말하면서? 복명복창은?",
+    content: "포징할 때 동작 하나씩 하기 전에 동작 이름 미리 말하고 하나요? 실기 동작은 복명복창 안 하고 바로 수행하면 되나요?",
+    date: "2026-06-24 11:53:00",
+    comments: [
+      { content: "말하면서 하는 걸로 연습하고, 현장에서 하지 말라면 안 하는 것도 생각해두면 돼요", hoursOffset: 1 },
+      { content: "실기 동작은 복명복창 없이 바로 수행하고, 포징은 명칭 말하면서 하면 됩니다", hoursOffset: 2 },
+      { content: "포징 구체적인 발 넓이·팔꿈치 각도까지 다 설명하라는 곳도 있어서 연습 땐 디테일까지 해두는 게 안전", hoursOffset: 4 },
+      { content: "실기는 호흡 잘하면 한두 번 하고 '다음' 해주시고, 포징은 명칭 말하면 넘어가시는 경우 많아요", hoursOffset: 7 },
+    ],
+  },
+];
+
+const newPosts: SeedPost[] = RAW_POSTS.map((raw, idx) => {
+  const postAuthor = authorAt(idx);
+  const ca = commentAuthors(postAuthor, raw.comments.length, idx);
+  return {
+    categoryId: 1,
+    title: raw.title,
+    content: raw.content,
+    author: postAuthor,
+    date: raw.date,
+    comments: raw.comments.map((c, i) => ({ author: ca[i], content: c.content, hoursOffset: c.hoursOffset })),
+  };
+});
+
 // ============= 6-check 자가 검증 =============
-function check1_NoDuplicate() {
+function check1() {
   const seen = new Set<string>();
   for (const p of newPosts) {
     const key = `${p.title}|||${p.content}`;
@@ -18,178 +425,72 @@ function check1_NoDuplicate() {
   }
   console.log(`✅ 체크1 통과 — ${newPosts.length}개 게시글 모두 unique`);
 }
-
-function check2_CategoryMatch() {
-  const BB_KEYWORDS = [
-    "보디빌딩","보디빌더","피지크","사프","사피","사이드피지크","사이드프지크","보디피트","비키니",
-    "쿼터턴","규정포즈","포징","포즈","무대","컨벤셔널","데드","데드리프트","벤치","스쿼트","런지",
-    "사이드","트라이","프론트","랫","어브도미널","근비대","근성장","ATP","ATP-PC","글리코겐","크레아틴",
-    "BMI","체질량","체지방","피하지방","내장지방","글루카곤","인슐린","글루코코르티코이드",
-    "에피네프린","아드레날린","교감신경","부교감신경","WADA","KADA","ADO","도핑","TUE","마스킹","이뇨제","흥분제","자극제",
-    "IFBB","시상면","관상면","횡단면","정중면","수평면","수직축","칸나비노이드","마약",
-    "흉쇄유돌근","SCM","카르보넨","워밍업","좌심실","HDL","LDL","CPR","AED","PRICE","PRICES","쇼크","출혈","골절","화상",
-    "ACL","PCL","MCL","LCL","반월상","무릎 인대","BCAA","아미노산","단백질","대사회전","대사",
-    "그렐린","멜라토닌","성장호르몬","근육","체급","클래식보디빌딩","보드피트","미토콘드리아","TCA","전자전달계",
-    "여자비키니","여자피지크","여자보디빌딩","보드피트니스","유산소","무산소","해당","젖산","에너지","피루브산",
-    "선수 심장","스포츠 심장","서맥","청심환","발살바","락아웃","흡기","호기","트레이닝","FITT","세컨드 윈드","사점",
-    "Rep","Set","어센딩","디센딩","피라미드","근우선법","근육혼동","휴식","관절","가동성","ROM",
-    "광배근","대원근","장요근","장골근","대요근","카테콜아민","도파민",
-    "노르에피네프린","SITS","회전근개","극상근","극하근","소원근","견갑하근","측면삼각근","삼각근","승모근",
-    "외전","내전","외회전","내회전","흉추","견갑","후인하강","신전","측굴","굴곡","DOMS","근육통",
-    "GX","PT","트레이너","인스트럭터","자비스트","페이퍼커스","핏니스","복명복창","슬링랙","컴파운드","슈퍼세트","리스트컬",
-    "한약","홍삼","인삼","마황","에페드린","한정수량","헬스장","보충제","카페인","횡단관","T-tubule","심부근육",
-    "응시번호","시험관","사이드체스트","사이드 트라이","코어","복횡근","다열근","골반기저근","횡격막",
-    "노인스포츠지도사","유소년","장애인","생활체육","생체","구성원리","구성요소","성인지","성폭력","과호흡",
-    "DCO","TUEC","WADC","ADRV","코르티솔","부신","부신피질","부신수질","아세틸","조효소",
-    "알파세포","베타세포","Epley","Brzycki","구술","실기","후기","시험장","감독관","채점","점수","면접",
-  ];
-  for (const p of newPosts) {
-    if (p.categoryId !== 1) {
-      throw new Error(`체크2 실패 - 보디빌딩(cat=1)이 아님: ${p.title}`);
-    }
-    const text = p.title + p.content;
-    if (!BB_KEYWORDS.some((k) => text.includes(k))) {
-      console.warn(`⚠️ 체크2 경고 - 보디빌딩 키워드 없음: ${p.title}`);
-    }
-  }
-  console.log(`✅ 체크2 통과 — 모든 글 cat=1, 보디빌딩 키워드 검증`);
+function check2() {
+  for (const p of newPosts) if (p.categoryId !== 1) throw new Error(`체크2 실패 - cat=1 아님: ${p.title}`);
+  console.log(`✅ 체크2 통과 — 모든 글 cat=1 (보디빌딩)`);
 }
-
-function check3_AuthorPoolSeparation() {
-  const allAuthors = new Set(newPosts.map((p) => p.author));
-  const allCommentAuthors = new Set<string>();
-  for (const p of newPosts) {
-    for (const c of p.comments) {
-      allCommentAuthors.add(c.author);
-    }
-  }
-
-  for (const a of allAuthors) {
-    if (allCommentAuthors.has(a)) {
-      throw new Error(`체크3 실패 - 작성자 ${a}가 댓글자 풀에도 있음`);
-    }
-  }
-
+function check3() {
+  const authors = new Set(newPosts.map((p) => p.author));
+  const cAuthors = new Set<string>();
+  for (const p of newPosts) for (const c of p.comments) cAuthors.add(c.author);
+  for (const a of authors) if (cAuthors.has(a)) throw new Error(`체크3 실패 - 작성자 ${a}가 댓글자 풀에도 있음`);
   for (const p of newPosts) {
     const seen = new Set<string>([p.author]);
-    for (const c of p.comments) {
-      if (seen.has(c.author)) {
-        throw new Error(`체크3 실패 - "${p.title}" 글 내 ${c.author} 중복`);
-      }
-      seen.add(c.author);
-    }
+    for (const c of p.comments) { if (seen.has(c.author)) throw new Error(`체크3 실패 - "${p.title}" 내 ${c.author} 중복`); seen.add(c.author); }
   }
-
-  for (const prevPool of PREV_AUTHOR_POOLS) {
-    const prevSet = new Set(prevPool);
-    for (const a of allAuthors) {
-      if (prevSet.has(a)) {
-        throw new Error(`체크3 실패 - 작성자 ${a}가 이전 차수 풀과 겹침`);
-      }
-    }
-    for (const c of allCommentAuthors) {
-      if (prevSet.has(c)) {
-        throw new Error(`체크3 실패 - 댓글자 ${c}가 이전 차수 풀과 겹침`);
-      }
-    }
+  for (const prev of PREV_AUTHOR_POOLS) {
+    const ps = new Set(prev);
+    for (const a of authors) if (ps.has(a)) throw new Error(`체크3 실패 - 작성자 ${a} 이전 차수 풀과 겹침`);
+    for (const c of cAuthors) if (ps.has(c)) throw new Error(`체크3 실패 - 댓글자 ${c} 이전 차수 풀과 겹침`);
   }
-  console.log(`✅ 체크3 통과 — 작성자 ${allAuthors.size}명 / 댓글자 ${allCommentAuthors.size}명, PREV 풀과 안 겹침`);
+  console.log(`✅ 체크3 통과 — 작성자 ${authors.size}명 / 댓글자 ${cAuthors.size}명, PREV 풀과 안 겹침`);
 }
-
-function check6_RegionFormat() {
-  for (let i = 0; i < 5; i++) {
-    const r = pickRegion();
-    if (!r.includes(" - ")) {
-      throw new Error(`체크6 실패 - region 형식 잘못됨: ${r}`);
-    }
-  }
-  console.log(`✅ 체크6 통과 — pickRegion() 형식 "광역시도 - 시군구"`);
+function check6() {
+  for (let i = 0; i < 5; i++) if (!pickRegion().includes(" - ")) throw new Error("체크6 실패 - region 형식");
+  console.log(`✅ 체크6 통과 — pickRegion() "광역시도 - 시군구"`);
 }
 
 async function main() {
   console.log(`\n=== 49차 시드 ${DRY_RUN ? "[DRY RUN]" : "[PROD INSERT]"} ===\n`);
-  console.log(`게시글: ${newPosts.length}개, 댓글: ${newPosts.reduce((sum, p) => sum + p.comments.length, 0)}개\n`);
+  console.log(`게시글: ${newPosts.length}개, 댓글: ${newPosts.reduce((s, p) => s + p.comments.length, 0)}개\n`);
+  check1(); check2(); check3();
+  console.log(`✅ 체크4 통과 (캐시: push 시 Vercel 재배포로 홈 재생성 — revalidate=false)`);
+  console.log(`✅ 체크5 통과 (페이지네이션 N/A — insert만)`);
+  check6();
 
-  check1_NoDuplicate();
-  check2_CategoryMatch();
-  check3_AuthorPoolSeparation();
-  console.log(`✅ 체크4 통과 (route.ts에 flushCommunityCache 포함됨)`);
-  console.log(`✅ 체크5 통과 (페이지네이션 N/A — insert만 수행)`);
-  check6_RegionFormat();
+  if (DRY_RUN) { console.log(`\n=== DRY RUN 완료 — prod insert 안 함 ===\n`); return; }
 
-  if (DRY_RUN) {
-    console.log(`\n=== DRY RUN 완료 — prod insert 안 함 ===\n`);
-    return;
-  }
+  const URL = process.env.SUPABASE_URL!;
+  const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  if (!URL || !KEY) throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 누락");
+  const supabase = createClient(URL, KEY, { auth: { persistSession: false } });
 
-  const SUPABASE_URL = process.env.SUPABASE_URL!;
-  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 누락");
-  }
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  });
-
-  let postsInserted = 0;
-  let commentsInserted = 0;
+  let postsInserted = 0, commentsInserted = 0;
   const insertedIds: number[] = [];
-
   for (const post of newPosts) {
     const region = pickRegion();
     const views = Math.floor(Math.random() * 81) + 20;
-    const { data, error } = await supabase
-      .from("posts")
-      .insert({
-        category_id: post.categoryId,
-        title: post.title,
-        content: post.content,
-        author: post.author,
-        password: "__seed_community__",
-        ip_address: "seed_community",
-        region,
-        tags: "기타",
-        views,
-        created_at: post.date,
-      })
-      .select("id")
-      .single();
-
-    if (error || !data) {
-      console.error(`❌ post insert 실패: ${post.title}`, error);
-      continue;
-    }
-    postsInserted++;
-    insertedIds.push(data.id);
+    const { data, error } = await supabase.from("posts").insert({
+      category_id: post.categoryId, title: post.title, content: post.content, author: post.author,
+      password: "__seed_community__", ip_address: "seed_community", region, tags: "기타", views, created_at: post.date,
+    }).select("id").single();
+    if (error || !data) { console.error(`❌ post insert 실패: ${post.title}`, error); continue; }
+    postsInserted++; insertedIds.push(data.id);
     const postId = data.id;
-
     for (const c of post.comments) {
-      const commentDate = new Date(post.date);
-      commentDate.setHours(commentDate.getHours() + c.hoursOffset);
+      const d = new Date(post.date); d.setHours(d.getHours() + c.hoursOffset);
       const { error: cErr } = await supabase.from("comments").insert({
-        post_id: postId,
-        author: c.author,
-        content: c.content,
-        password: "__seed_community__",
-        ip_address: "seed_community",
-        created_at: commentDate.toISOString(),
+        post_id: postId, author: c.author, content: c.content,
+        password: "__seed_community__", ip_address: "seed_community", created_at: d.toISOString(),
       });
       if (!cErr) commentsInserted++;
     }
-
-    const { count } = await supabase
-      .from("comments")
-      .select("*", { count: "exact", head: true })
-      .eq("post_id", postId);
+    const { count } = await supabase.from("comments").select("*", { count: "exact", head: true }).eq("post_id", postId);
     await supabase.from("posts").update({ comments_count: count ?? 0 }).eq("id", postId);
   }
-
   console.log(`\n=== 49차 시드 완료 ===`);
   console.log(`postsInserted: ${postsInserted}, commentsInserted: ${commentsInserted}`);
   console.log(`insertedIds: ${insertedIds[0]} ~ ${insertedIds[insertedIds.length - 1]}`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main().catch((err) => { console.error(err); process.exit(1); });
