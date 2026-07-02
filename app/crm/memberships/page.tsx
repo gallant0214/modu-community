@@ -359,6 +359,18 @@ function IssueModal({
   const [memberQuery, setMemberQuery] = useState("");
   const [memberResults, setMemberResults] = useState<{ id: number; name: string; phone: string | null }[]>([]);
   const [picked, setPicked] = useState<{ id: number; name: string; phone: string | null } | null>(null);
+  const [products, setProducts] = useState<
+    {
+      id: number;
+      name: string;
+      billing_mode: "period" | "count";
+      duration_value: number | null;
+      duration_unit: string | null;
+      service_days: number;
+      price_won: number;
+    }[]
+  >([]);
+  const [pickedProductId, setPickedProductId] = useState<number | "">("");
   const [planName, setPlanName] = useState("1개월 헬스 이용권");
   const [duration, setDuration] = useState(30);
   const [priceWon, setPriceWon] = useState(0);
@@ -379,6 +391,7 @@ function IssueModal({
       setMemberQuery("");
       setMemberResults([]);
       setPicked(null);
+      setPickedProductId("");
       setPlanName("1개월 헬스 이용권");
       setDuration(30);
       setPriceWon(0);
@@ -386,8 +399,43 @@ function IssueModal({
       setPaymentCustom("");
       setMemo("");
       setError("");
+      return;
     }
-  }, [open]);
+    // 회원권 상품 목록 로드
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/products?type=membership", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (res.ok) setProducts(data.products ?? []);
+      } catch {
+        // ignore
+      }
+    })();
+  }, [open, getIdToken]);
+
+  const applyProduct = (id: number) => {
+    setPickedProductId(id);
+    const p = products.find((x) => x.id === id);
+    if (!p) return;
+    // 상품 이름 + 발급 유형 (신규) 표기
+    setPlanName(`${p.name} (신규)`);
+    setPriceWon(p.price_won);
+    if (p.billing_mode === "period") {
+      const v = p.duration_value ?? 0;
+      const base =
+        p.duration_unit === "month"
+          ? v * 30
+          : p.duration_unit === "year"
+            ? v * 365
+            : v;
+      setDuration(Math.max(1, base + (p.service_days || 0)));
+    }
+  };
 
   // duration 변경 시 expires_at 자동 계산
   useEffect(() => {
@@ -497,6 +545,42 @@ function IssueModal({
                 </ul>
               )}
             </>
+          )}
+        </CrmField>
+
+        <CrmField label="상품에서 선택">
+          {products.length === 0 ? (
+            <div className="text-[12px] text-[#8C8270] dark:text-zinc-500 px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40">
+              등록된 회원권 상품이 없어요.{" "}
+              <Link href="/crm/products/new?type=membership" className="text-[#6B7B3A] hover:underline font-medium">
+                상품 추가하러 가기 →
+              </Link>
+            </div>
+          ) : (
+            <select
+              className={crmInputClass}
+              value={pickedProductId}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) {
+                  setPickedProductId("");
+                } else {
+                  applyProduct(Number(v));
+                }
+              }}
+            >
+              <option value="">— 직접 입력 —</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {formatWon(p.price_won)}원
+                </option>
+              ))}
+            </select>
+          )}
+          {pickedProductId && (
+            <p className="mt-1.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+              상품 정보로 아래 항목이 자동 채워졌어요. 필요시 수정할 수 있어요.
+            </p>
           )}
         </CrmField>
 
