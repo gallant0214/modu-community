@@ -25,12 +25,13 @@ interface MonthlyResp {
 
 type Tab = "trainer" | "center";
 
-type DateMode = "month" | "range";
+type DateMode = "year" | "month" | "range";
 
 export default function CrmStatsPage() {
   const { getIdToken } = useAuth();
   const [tab, setTab] = useState<Tab>("trainer");
   const [dateMode, setDateMode] = useState<DateMode>("month");
+  const [year, setYear] = useState(() => new Date().getFullYear());
   const [ym, setYm] = useState(() => new Date().toISOString().slice(0, 7));
   const [from, setFrom] = useState(() => {
     const d = new Date();
@@ -43,8 +44,20 @@ export default function CrmStatsPage() {
   const [error, setError] = useState("");
 
   // API 쿼리 문자열 (탭 공용)
-  const rangeQs =
-    dateMode === "range" && from && to && to >= from ? `from=${from}&to=${to}` : `ym=${ym}`;
+  const rangeQs = (() => {
+    if (dateMode === "year") {
+      return `from=${year}-01-01&to=${year}-12-31`;
+    }
+    if (dateMode === "range" && from && to && to >= from) {
+      return `from=${from}&to=${to}`;
+    }
+    return `ym=${ym}`;
+  })();
+
+  // 연도 선택지 (현재 연도 기준 -5 ~ +1)
+  const currentYear = new Date().getFullYear();
+  const yearOptions = [] as number[];
+  for (let y = currentYear + 1; y >= currentYear - 5; y -= 1) yearOptions.push(y);
 
   const load = useCallback(async () => {
     setError("");
@@ -78,12 +91,15 @@ export default function CrmStatsPage() {
           </h1>
           <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
             {tab === "trainer"
-              ? "강사별 매출과 수업 현황을 확인해요."
-              : "센터 매출(회원권·운동복·락커·기타)을 확인해요."}
+              ? `강사별 매출과 수업 현황을 ${dateMode === "year" ? "연 단위" : dateMode === "month" ? "월 단위" : "지정 기간"}로 확인해요.`
+              : `센터 매출(회원권·운동복·락커·기타)을 ${dateMode === "year" ? "연 단위" : dateMode === "month" ? "월 단위" : "지정 기간"}로 확인해요.`}
           </p>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
+            <ModeBtn active={dateMode === "year"} onClick={() => setDateMode("year")}>
+              년도
+            </ModeBtn>
             <ModeBtn active={dateMode === "month"} onClick={() => setDateMode("month")}>
               월별
             </ModeBtn>
@@ -91,7 +107,19 @@ export default function CrmStatsPage() {
               직접 선택
             </ModeBtn>
           </div>
-          {dateMode === "month" ? (
+          {dateMode === "year" ? (
+            <select
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+              className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+            >
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y}년
+                </option>
+              ))}
+            </select>
+          ) : dateMode === "month" ? (
             <input
               type="month"
               value={ym}
