@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   const { data: lockers, error } = await supabase
     .from("crm_lockers")
     .select(
-      "id, number, state, assigned_member_id, start_date, expires_at, password, memo, updated_at"
+      "id, number, state, assigned_member_id, start_date, expires_at, password, memo, layout_row, layout_col, updated_at"
     )
     .eq("zone_id", zoneRow.id)
     .order("number", { ascending: true });

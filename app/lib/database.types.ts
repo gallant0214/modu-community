@@ -1682,6 +1682,8 @@ export type Database = {
           expires_at: string | null
           password: string | null
           memo: string | null
+          layout_row: number | null
+          layout_col: number | null
           created_at: string
           updated_at: string
         }
@@ -1696,6 +1698,8 @@ export type Database = {
           expires_at?: string | null
           password?: string | null
           memo?: string | null
+          layout_row?: number | null
+          layout_col?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -1710,6 +1714,8 @@ export type Database = {
           expires_at?: string | null
           password?: string | null
           memo?: string | null
+          layout_row?: number | null
+          layout_col?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -1771,6 +1777,8 @@ export type Database = {
           name: string
           locker_count: number
           start_number: number
+          layout_rows: number
+          layout_cols: number
           created_at: string
           updated_at: string
         }
@@ -1781,6 +1789,8 @@ export type Database = {
           name: string
           locker_count?: number
           start_number?: number
+          layout_rows?: number
+          layout_cols?: number
           created_at?: string
           updated_at?: string
         }
@@ -1791,6 +1801,8 @@ export type Database = {
           name?: string
           locker_count?: number
           start_number?: number
+          layout_rows?: number
+          layout_cols?: number
           created_at?: string
           updated_at?: string
         }

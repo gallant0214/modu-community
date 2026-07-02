@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("crm_locker_zones")
-    .select("zone_number, name, locker_count, start_number")
+    .select("zone_number, name, locker_count, start_number, layout_rows, layout_cols")
     .eq("center_id", ctx.centerId)
     .order("zone_number", { ascending: true });
 
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     const { data: created, error: insErr } = await supabase
       .from("crm_locker_zones")
       .insert(seeds)
-      .select("zone_number, name, locker_count, start_number")
+      .select("zone_number, name, locker_count, start_number, layout_rows, layout_cols")
       .order("zone_number", { ascending: true });
     if (insErr) {
       return NextResponse.json({ error: "초기화 실패", detail: insErr.message }, { status: 500 });

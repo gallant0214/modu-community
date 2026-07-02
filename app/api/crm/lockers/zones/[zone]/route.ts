@@ -26,7 +26,13 @@ export async function PATCH(
     return NextResponse.json({ error: "잘못된 구역 번호" }, { status: 400 });
   }
 
-  let body: { name?: string; locker_count?: number; start_number?: number };
+  let body: {
+    name?: string;
+    locker_count?: number;
+    start_number?: number;
+    layout_rows?: number;
+    layout_cols?: number;
+  };
   try {
     body = await request.json();
   } catch {
@@ -56,6 +62,20 @@ export async function PATCH(
     }
     patch.start_number = n;
   }
+  if (body.layout_rows !== undefined) {
+    const n = Number(body.layout_rows);
+    if (!Number.isInteger(n) || n < 0 || n > 40) {
+      return NextResponse.json({ error: "행 수는 0~40 사이 정수" }, { status: 400 });
+    }
+    patch.layout_rows = n;
+  }
+  if (body.layout_cols !== undefined) {
+    const n = Number(body.layout_cols);
+    if (!Number.isInteger(n) || n < 0 || n > 40) {
+      return NextResponse.json({ error: "열 수는 0~40 사이 정수" }, { status: 400 });
+    }
+    patch.layout_cols = n;
+  }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
   }
@@ -67,6 +87,8 @@ export async function PATCH(
     name: `구역 ${zoneNumber}`,
     locker_count: 0,
     start_number: 1,
+    layout_rows: 0,
+    layout_cols: 0,
     ...patch,
   };
   const { error } = await supabase

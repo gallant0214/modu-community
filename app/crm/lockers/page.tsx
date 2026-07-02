@@ -20,6 +20,8 @@ interface Zone {
   name: string;
   locker_count: number;
   start_number: number;
+  layout_rows?: number;
+  layout_cols?: number;
 }
 interface Locker {
   id: number;
@@ -30,6 +32,8 @@ interface Locker {
   expires_at: string | null;
   password: string | null;
   memo: string | null;
+  layout_row: number | null;
+  layout_col: number | null;
   member: { id: number; name: string; phone: string | null } | null;
 }
 
@@ -102,6 +106,16 @@ export default function CrmLockersPage() {
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
 
+  // 배치도 편집 상태
+  const [layoutEditMode, setLayoutEditMode] = useState(false);
+  const [layoutRows, setLayoutRows] = useState(0);
+  const [layoutCols, setLayoutCols] = useState(0);
+  const [layoutMap, setLayoutMap] = useState<Record<number, { row: number; col: number } | null>>(
+    {}
+  );
+  const [pickedForPlace, setPickedForPlace] = useState<number | null>(null);
+  const [savingLayout, setSavingLayout] = useState(false);
+
   const loadZones = useCallback(async () => {
     setError("");
     try {
@@ -159,13 +173,32 @@ export default function CrmLockersPage() {
       setZoneName(currentZone.name);
       setLockerCount(String(currentZone.locker_count));
       setStartNumber(String(currentZone.start_number));
+      setLayoutRows(currentZone.layout_rows ?? 0);
+      setLayoutCols(currentZone.layout_cols ?? 0);
     } else {
       setZoneName(`구역 ${zone}`);
       setLockerCount("");
       setStartNumber("");
+      setLayoutRows(0);
+      setLayoutCols(0);
     }
     setSavedMsg("");
+    setLayoutEditMode(false);
+    setPickedForPlace(null);
   }, [currentZone, zone]);
+
+  // 락커 로드 시 layoutMap 동기화
+  useEffect(() => {
+    const map: Record<number, { row: number; col: number } | null> = {};
+    for (const l of lockers) {
+      if (l.layout_row !== null && l.layout_col !== null) {
+        map[l.id] = { row: l.layout_row, col: l.layout_col };
+      } else {
+        map[l.id] = null;
+      }
+    }
+    setLayoutMap(map);
+  }, [lockers]);
 
   const zoneLabel = useCallback(
     (n: number) => zones.find((z) => z.zone_number === n)?.name ?? `구역 ${n}`,
@@ -253,6 +286,84 @@ export default function CrmLockersPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveLayout = async () => {
+    if (savingLayout) return;
+    setError("");
+    setSavedMsg("");
+    setSavingLayout(true);
+    try {
+      const token = await getIdToken();
+      // 1) rows/cols 저장
+      const zoneRes = await fetch(`/api/crm/lockers/zones/${zone}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          layout_rows: layoutRows,
+          layout_cols: layoutCols,
+        }),
+      });
+      const zoneData = await zoneRes.json();
+      if (!zoneRes.ok) throw new Error(zoneData?.error || "그리드 저장 실패");
+
+      // 2) 각 락커 위치 저장
+      const positions = lockers.map((l) => ({
+        id: l.id,
+        row: layoutMap[l.id]?.row ?? null,
+        col: layoutMap[l.id]?.col ?? null,
+      }));
+      if (positions.length > 0) {
+        const layoutRes = await fetch("/api/crm/lockers/layout", {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ zone, positions }),
+        });
+        const layoutData = await layoutRes.json();
+        if (!layoutRes.ok) throw new Error(layoutData?.error || "배치 저장 실패");
+      }
+      setSavedMsg("배치도가 저장되었습니다");
+      setLayoutEditMode(false);
+      await loadZones();
+      await loadLockers();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSavingLayout(false);
+    }
+  };
+
+  const cancelLayoutEdit = () => {
+    setLayoutEditMode(false);
+    setPickedForPlace(null);
+    // 원본 되돌리기
+    if (currentZone) {
+      setLayoutRows(currentZone.layout_rows ?? 0);
+      setLayoutCols(currentZone.layout_cols ?? 0);
+    }
+    const map: Record<number, { row: number; col: number } | null> = {};
+    for (const l of lockers) {
+      map[l.id] =
+        l.layout_row !== null && l.layout_col !== null
+          ? { row: l.layout_row, col: l.layout_col }
+          : null;
+    }
+    setLayoutMap(map);
+  };
+
+  const placeAt = (lockerId: number, row: number, col: number) => {
+    setLayoutMap((prev) => ({
+      ...prev,
+      [lockerId]: { row, col },
+    }));
+    setPickedForPlace(null);
+  };
+
+  const removeFromLayout = (lockerId: number) => {
+    setLayoutMap((prev) => ({
+      ...prev,
+      [lockerId]: null,
+    }));
   };
 
   return (
@@ -500,64 +611,70 @@ export default function CrmLockersPage() {
           </section>
 
           <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5 mb-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
               <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
                 락커 배치도
               </h2>
-              {lockers.length > 0 && (
-                <span className="text-[11.5px] text-[#A89B80] dark:text-zinc-500">
-                  총 {lockers.length}개 · 배정 {lockers.filter((l) => l.state === "assigned").length}개
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {lockers.length > 0 && !layoutEditMode && (
+                  <span className="text-[11.5px] text-[#A89B80] dark:text-zinc-500">
+                    총 {lockers.length}개 · 배정 {lockers.filter((l) => l.state === "assigned").length}개
+                  </span>
+                )}
+                {lockers.length > 0 && !layoutEditMode && (
+                  <button
+                    type="button"
+                    onClick={() => setLayoutEditMode(true)}
+                    className="px-2.5 py-1 rounded-full text-[11.5px] font-medium border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
+                  >
+                    배치 편집
+                  </button>
+                )}
+                {layoutEditMode && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={cancelLayoutEdit}
+                      disabled={savingLayout}
+                      className="px-2.5 py-1 rounded-full text-[11.5px] font-medium border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5]"
+                    >
+                      취소
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveLayout}
+                      disabled={savingLayout}
+                      className="px-3 py-1 rounded-full text-[11.5px] font-semibold bg-[#6B7B3A] text-white hover:bg-[#5a6932] disabled:opacity-60"
+                    >
+                      {savingLayout ? "저장 중…" : "배치 저장"}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
+
             {loadingLockers ? (
               <div className="text-[13px] text-[#8C8270] py-6 text-center">불러오는 중…</div>
             ) : lockers.length === 0 ? (
               <EmptyState>
                 아직 락커가 없어요. 위에서 락커 개수와 시작 번호를 입력하고 저장하면 배치도가 나타나요.
               </EmptyState>
+            ) : layoutEditMode ? (
+              <LayoutEditor
+                rows={layoutRows}
+                cols={layoutCols}
+                onRowsChange={setLayoutRows}
+                onColsChange={setLayoutCols}
+                lockers={lockers}
+                today={today}
+                layoutMap={layoutMap}
+                pickedForPlace={pickedForPlace}
+                onPick={setPickedForPlace}
+                onPlace={placeAt}
+                onRemove={removeFromLayout}
+              />
             ) : (
-              <>
-                <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1">
-                  {[...lockers]
-                    .sort((a, b) => a.number - b.number)
-                    .map((l) => {
-                      const ds = getDisplayState(l, today);
-                      return (
-                        <div
-                          key={l.id}
-                          className={`aspect-square rounded-md border text-[11.5px] font-semibold flex items-center justify-center
-                            ${ds === "unassigned"
-                              ? "border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[#A89B80]"
-                              : ds === "active"
-                              ? "border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#3A342A] dark:text-zinc-100"
-                              : ds === "expiring"
-                              ? "border-red-300 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
-                              : ds === "expired"
-                              ? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
-                              : ds === "broken"
-                              ? "border-zinc-500 bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"
-                              : "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
-                            }`}
-                          title={
-                            l.member
-                              ? `${l.number}번 · ${l.member.name}`
-                              : `${l.number}번 · 미배정`
-                          }
-                        >
-                          {l.number}
-                        </div>
-                      );
-                    })}
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
-                  <LegendChip className="border-dashed border-[#E8E0D0] bg-[#FBF7EB]/40 text-[#A89B80]" label="미배정" />
-                  <LegendChip className="border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#3A342A] dark:text-zinc-100" label="활성" />
-                  <LegendChip className="border-red-300 bg-red-50 text-red-700" label="임박" />
-                  <LegendChip className="border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]" label="만료" />
-                  <LegendChip className="border-zinc-500 bg-zinc-200 text-zinc-700" label="고장" />
-                </div>
-              </>
+              <LayoutView lockers={lockers} today={today} rows={layoutRows} cols={layoutCols} />
             )}
           </section>
 
@@ -2065,6 +2182,289 @@ function EmptyState({ children }: { children: React.ReactNode }) {
   return (
     <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] dark:text-zinc-500 border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
       {children}
+    </div>
+  );
+}
+
+/* ─── 배치도 뷰 (읽기 전용) ─── */
+function LayoutView({
+  lockers,
+  today,
+  rows,
+  cols,
+}: {
+  lockers: Locker[];
+  today: string;
+  rows: number;
+  cols: number;
+}) {
+  const hasGrid = rows > 0 && cols > 0;
+  const placed = lockers.filter((l) => l.layout_row !== null && l.layout_col !== null);
+  const useGrid = hasGrid && placed.length > 0;
+
+  if (!useGrid) {
+    return (
+      <>
+        <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1">
+          {[...lockers]
+            .sort((a, b) => a.number - b.number)
+            .map((l) => (
+              <LockerTile key={l.id} locker={l} today={today} />
+            ))}
+        </div>
+        <LayoutLegend />
+      </>
+    );
+  }
+
+  const lockerAt = new Map<string, Locker>();
+  for (const l of placed) {
+    lockerAt.set(`${l.layout_row}-${l.layout_col}`, l);
+  }
+
+  return (
+    <>
+      <div
+        className="grid gap-1"
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+      >
+        {Array.from({ length: rows * cols }, (_, i) => {
+          const r = Math.floor(i / cols);
+          const c = i % cols;
+          const l = lockerAt.get(`${r}-${c}`);
+          if (l) return <LockerTile key={l.id} locker={l} today={today} />;
+          return (
+            <div
+              key={`${r}-${c}`}
+              className="aspect-square rounded-md border border-dashed border-[#E8E0D0]/60 dark:border-zinc-800 bg-transparent"
+            />
+          );
+        })}
+      </div>
+      <LayoutLegend />
+      {lockers.some((l) => l.layout_row === null || l.layout_col === null) && (
+        <div className="mt-3 text-[11.5px] text-[#B47B2A] dark:text-amber-300">
+          배치도에 아직 놓지 않은 락커가 있어요. 배치 편집으로 위치를 지정해 주세요.
+        </div>
+      )}
+    </>
+  );
+}
+
+function LayoutLegend() {
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+      <LegendChip className="border-dashed border-[#E8E0D0] bg-[#FBF7EB]/40 text-[#A89B80]" label="미배정" />
+      <LegendChip className="border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#3A342A] dark:text-zinc-100" label="활성" />
+      <LegendChip className="border-red-300 bg-red-50 text-red-700" label="임박" />
+      <LegendChip className="border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]" label="만료" />
+      <LegendChip className="border-zinc-500 bg-zinc-200 text-zinc-700" label="고장" />
+    </div>
+  );
+}
+
+function LockerTile({ locker, today }: { locker: Locker; today: string }) {
+  const ds = getDisplayState(locker, today);
+  const cls =
+    ds === "unassigned"
+      ? "border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[#A89B80]"
+      : ds === "active"
+      ? "border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#3A342A] dark:text-zinc-100"
+      : ds === "expiring"
+      ? "border-red-300 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+      : ds === "expired"
+      ? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
+      : ds === "broken"
+      ? "border-zinc-500 bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"
+      : "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300";
+  return (
+    <div
+      className={`aspect-square rounded-md border text-[11.5px] font-semibold flex items-center justify-center ${cls}`}
+      title={locker.member ? `${locker.number}번 · ${locker.member.name}` : `${locker.number}번 · 미배정`}
+    >
+      {locker.number}
+    </div>
+  );
+}
+
+/* ─── 배치도 편집기 ─── */
+function LayoutEditor({
+  rows,
+  cols,
+  onRowsChange,
+  onColsChange,
+  lockers,
+  today,
+  layoutMap,
+  pickedForPlace,
+  onPick,
+  onPlace,
+  onRemove,
+}: {
+  rows: number;
+  cols: number;
+  onRowsChange: (n: number) => void;
+  onColsChange: (n: number) => void;
+  lockers: Locker[];
+  today: string;
+  layoutMap: Record<number, { row: number; col: number } | null>;
+  pickedForPlace: number | null;
+  onPick: (id: number | null) => void;
+  onPlace: (id: number, row: number, col: number) => void;
+  onRemove: (id: number) => void;
+}) {
+  const hasGrid = rows > 0 && cols > 0;
+  const placedIds = new Set<number>();
+  const lockerAt = new Map<string, Locker>();
+  for (const l of lockers) {
+    const pos = layoutMap[l.id];
+    if (pos) {
+      placedIds.add(l.id);
+      lockerAt.set(`${pos.row}-${pos.col}`, l);
+    }
+  }
+  const pool = lockers
+    .filter((l) => !placedIds.has(l.id))
+    .sort((a, b) => a.number - b.number);
+
+  const cellClick = (r: number, c: number) => {
+    const existing = lockerAt.get(`${r}-${c}`);
+    if (existing) {
+      // 이미 있는 락커 클릭 → 미배치로 이동
+      onRemove(existing.id);
+      return;
+    }
+    if (pickedForPlace !== null) {
+      onPlace(pickedForPlace, r, c);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+          <span className="block mb-1">행 (세로)</span>
+          <input
+            type="number"
+            min={0}
+            max={40}
+            value={rows}
+            onChange={(e) =>
+              onRowsChange(Math.max(0, Math.min(40, Number(e.target.value) || 0)))
+            }
+            className="w-20 px-2 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px]"
+          />
+        </label>
+        <label className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+          <span className="block mb-1">열 (가로)</span>
+          <input
+            type="number"
+            min={0}
+            max={40}
+            value={cols}
+            onChange={(e) =>
+              onColsChange(Math.max(0, Math.min(40, Number(e.target.value) || 0)))
+            }
+            className="w-20 px-2 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px]"
+          />
+        </label>
+        <div className="ml-auto text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+          <span className="text-[#B47B2A] dark:text-amber-300">
+            배치 안 된 락커 {pool.length}개
+          </span>{" "}
+          / 그리드 {rows}×{cols}
+        </div>
+      </div>
+
+      {/* 미배치 락커 풀 */}
+      {pool.length > 0 && (
+        <div className="px-3 py-2.5 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40">
+          <div className="text-[11.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+            락커 선택 후 아래 그리드 셀 클릭
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {pool.map((l) => {
+              const picked = pickedForPlace === l.id;
+              return (
+                <button
+                  key={l.id}
+                  type="button"
+                  onClick={() => onPick(picked ? null : l.id)}
+                  className={`min-w-[36px] px-2 py-1 rounded-md border text-[11.5px] font-semibold transition-colors
+                    ${picked
+                      ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                      : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-200 hover:border-[#6B7B3A]/40"
+                    }`}
+                >
+                  {l.number}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 그리드 */}
+      {!hasGrid ? (
+        <EmptyState>
+          위에서 행·열 갯수를 1 이상으로 입력하면 그리드가 나타나요.
+        </EmptyState>
+      ) : (
+        <div
+          className="grid gap-1 max-w-full"
+          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        >
+          {Array.from({ length: rows * cols }, (_, i) => {
+            const r = Math.floor(i / cols);
+            const c = i % cols;
+            const l = lockerAt.get(`${r}-${c}`);
+            if (l) {
+              const ds = getDisplayState(l, today);
+              const tileCls =
+                ds === "unassigned"
+                  ? "border-dashed border-[#E8E0D0] bg-[#FBF7EB]/40 text-[#A89B80]"
+                  : ds === "active"
+                  ? "border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#3A342A]"
+                  : ds === "expiring"
+                  ? "border-red-300 bg-red-50 text-red-700"
+                  : ds === "expired"
+                  ? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
+                  : ds === "broken"
+                  ? "border-zinc-500 bg-zinc-200 text-zinc-700"
+                  : "border-amber-300 bg-amber-50 text-amber-800";
+              return (
+                <button
+                  key={l.id}
+                  type="button"
+                  onClick={() => cellClick(r, c)}
+                  title={`클릭하면 ${l.number}번 락커를 미배치로 되돌립니다`}
+                  className={`aspect-square rounded-md border-2 text-[11.5px] font-bold flex items-center justify-center hover:border-red-400 ${tileCls}`}
+                >
+                  {l.number}
+                </button>
+              );
+            }
+            const isTarget = pickedForPlace !== null;
+            return (
+              <button
+                key={`${r}-${c}`}
+                type="button"
+                onClick={() => cellClick(r, c)}
+                disabled={!isTarget}
+                className={`aspect-square rounded-md border transition-colors
+                  ${isTarget
+                    ? "border-dashed border-[#6B7B3A] bg-[#6B7B3A]/5 hover:bg-[#6B7B3A]/15 cursor-pointer"
+                    : "border-dashed border-[#E8E0D0]/60 dark:border-zinc-800 bg-transparent"
+                  }`}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      <p className="text-[11.5px] text-[#A89B80]">
+        미배치 락커를 클릭해 선택한 뒤 빈 셀을 클릭하면 그곳에 배치됩니다. 이미 놓인 락커를 클릭하면 다시 미배치로 돌아가요.
+      </p>
     </div>
   );
 }
