@@ -6,9 +6,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../_components/crm-modal";
 import { formatWon } from "../_components/crm-labels";
 
-type ProductType = "membership" | "group" | "personal" | "locker" | "apparel" | "goods";
-
-const TYPE_LABEL: Record<ProductType, string> = {
+const BUILT_IN_TYPE_LABEL: Record<string, string> = {
   membership: "회원권",
   group: "그룹 수업",
   personal: "개인 레슨",
@@ -17,8 +15,8 @@ const TYPE_LABEL: Record<ProductType, string> = {
   goods: "운동 용품",
 };
 
-/** 상품 유형별 배지 색상 — 베이지 톤과 어울리는 채도 낮은 팔레트 */
-const TYPE_BADGE: Record<ProductType, string> = {
+/** 상품 유형별 배지 색상 — 기본 6종 */
+const BUILT_IN_BADGE: Record<string, string> = {
   membership:
     "bg-[#6B7B3A]/15 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A] border border-[#6B7B3A]/30",
   group:
@@ -33,9 +31,12 @@ const TYPE_BADGE: Record<ProductType, string> = {
     "bg-[#A68654]/15 text-[#8B6F42] dark:bg-[#A68654]/25 dark:text-[#D4B584] border border-[#A68654]/30",
 };
 
+const CUSTOM_BADGE =
+  "bg-[#6B5D47]/10 text-[#6B5D47] dark:bg-zinc-700 dark:text-zinc-300 border border-[#6B5D47]/30";
+
 interface Product {
   id: number;
-  type: ProductType;
+  type: string;
   billing_mode: "period" | "count";
   category: string | null;
   name: string;
@@ -46,10 +47,17 @@ interface Product {
   capacity: number;
 }
 
+interface CustomType {
+  id: number;
+  key: string;
+  label: string;
+}
+
 export default function CrmProductsPage() {
   const { getIdToken } = useAuth();
   const [list, setList] = useState<Product[]>([]);
-  const [type, setType] = useState<"" | ProductType>("");
+  const [customTypes, setCustomTypes] = useState<CustomType[]>([]);
+  const [type, setType] = useState<string>("");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -80,6 +88,27 @@ export default function CrmProductsPage() {
     const t = setTimeout(load, 200);
     return () => clearTimeout(t);
   }, [load]);
+
+  // 커스텀 유형 로드
+  useEffect(() => {
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/product-types", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCustomTypes(data.types ?? []);
+      }
+    })();
+  }, [getIdToken]);
+
+  const typeLabelOf = (key: string): string =>
+    BUILT_IN_TYPE_LABEL[key] ?? customTypes.find((t) => t.key === key)?.label ?? key;
+  const typeBadgeClsOf = (key: string): string =>
+    BUILT_IN_BADGE[key] ?? CUSTOM_BADGE;
 
   const remove = async (id: number) => {
     if (!window.confirm("이 상품을 삭제할까요?")) return;
@@ -112,17 +141,17 @@ export default function CrmProductsPage() {
 
       {/* 유형 필터 */}
       <div className="flex flex-wrap gap-1.5 mb-3">
-        {(["", "membership", "group", "personal", "locker", "apparel", "goods"] as const).map((t) => (
+        {["", "membership", "group", "personal", "locker", "apparel", "goods", ...customTypes.map((t) => t.key)].map((t) => (
           <button
             key={t || "all"}
-            onClick={() => setType(t as typeof type)}
+            onClick={() => setType(t)}
             className={`px-3 py-1.5 rounded-full text-[12.5px] font-medium border whitespace-nowrap
               ${type === t
                 ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
                 : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
               }`}
           >
-            {t ? TYPE_LABEL[t as ProductType] : "전체"}
+            {t ? typeLabelOf(t) : "전체"}
           </button>
         ))}
       </div>
@@ -159,9 +188,9 @@ export default function CrmProductsPage() {
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${TYPE_BADGE[p.type]}`}
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${typeBadgeClsOf(p.type)}`}
                   >
-                    {TYPE_LABEL[p.type]}
+                    {typeLabelOf(p.type)}
                   </span>
                   {p.category && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#F5F0E5] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-300 border border-[#E8E0D0] dark:border-zinc-700">

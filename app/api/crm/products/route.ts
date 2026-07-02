@@ -28,7 +28,8 @@ export async function GET(request: Request) {
     .eq("status", "active")
     .order("created_at", { ascending: false });
 
-  if (type && TYPES.includes(type as (typeof TYPES)[number])) {
+  // 필터 시엔 커스텀 유형도 허용 (센터별로 다르니 문자열 매칭)
+  if (type) {
     query = query.eq("type", type);
   }
   if (q) {
@@ -75,8 +76,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
-  if (!body.type || !TYPES.includes(body.type as (typeof TYPES)[number])) {
-    return NextResponse.json({ error: "상품 유형이 잘못됨" }, { status: 400 });
+  if (!body.type) {
+    return NextResponse.json({ error: "상품 유형을 선택해 주세요" }, { status: 400 });
+  }
+  const isBuiltIn = TYPES.includes(body.type as (typeof TYPES)[number]);
+  if (!isBuiltIn) {
+    // 센터에 등록된 커스텀 유형인지 확인
+    const { data: custom } = await supabase
+      .from("crm_product_types")
+      .select("key")
+      .eq("center_id", ctx.centerId)
+      .eq("key", body.type)
+      .eq("status", "active")
+      .maybeSingle();
+    if (!custom) {
+      return NextResponse.json({ error: "등록되지 않은 상품 유형이에요" }, { status: 400 });
+    }
   }
   const billingMode =
     body.billing_mode && BILLING.includes(body.billing_mode as (typeof BILLING)[number])

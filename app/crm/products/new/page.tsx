@@ -1,17 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../../_components/crm-modal";
 import { formatWon, parseWon } from "../../_components/crm-labels";
 
-type ProductType = "membership" | "group" | "personal" | "locker" | "apparel" | "goods";
 type BillingMode = "period" | "count";
 type DurationUnit = "day" | "month" | "year";
 
-const TYPE_OPTIONS: { value: ProductType; label: string }[] = [
+interface TypeOption {
+  value: string;
+  label: string;
+  custom?: boolean;
+  id?: number;
+}
+
+const BUILT_IN_TYPES: TypeOption[] = [
   { value: "membership", label: "회원권" },
   { value: "group", label: "그룹 수업" },
   { value: "personal", label: "개인 레슨" },
@@ -30,26 +36,96 @@ const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 const DESC_MAX = 1000;
 
-const VALID_TYPES: ProductType[] = [
-  "membership",
-  "group",
-  "personal",
-  "locker",
-  "apparel",
-  "goods",
-];
-
 export default function CrmProductNewPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { getIdToken } = useAuth();
 
-  const initialType = (() => {
-    const t = searchParams.get("type") as ProductType | null;
-    return t && VALID_TYPES.includes(t) ? t : "membership";
-  })();
+  const initialType = searchParams.get("type") || "membership";
 
-  const [type, setType] = useState<ProductType>(initialType);
+  const [customTypes, setCustomTypes] = useState<TypeOption[]>([]);
+  const [type, setType] = useState<string>(initialType);
+  const [showAddType, setShowAddType] = useState(false);
+  const [newTypeLabel, setNewTypeLabel] = useState("");
+  const [addingType, setAddingType] = useState(false);
+  const [addTypeError, setAddTypeError] = useState("");
+
+  const typeOptions: TypeOption[] = useMemo(
+    () => [...BUILT_IN_TYPES, ...customTypes],
+    [customTypes]
+  );
+
+  // 커스텀 유형 로드
+  useEffect(() => {
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/product-types", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCustomTypes(
+          (data.types ?? []).map((t: { id: number; key: string; label: string }) => ({
+            value: t.key,
+            label: t.label,
+            custom: true,
+            id: t.id,
+          }))
+        );
+      }
+    })();
+  }, [getIdToken]);
+
+  const addCustomType = async () => {
+    setAddTypeError("");
+    const label = newTypeLabel.trim();
+    if (!label) return setAddTypeError("유형 이름을 입력해 주세요");
+    setAddingType(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/product-types", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ label }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "추가 실패");
+      const t: TypeOption = {
+        value: data.type.key,
+        label: data.type.label,
+        custom: true,
+        id: data.type.id,
+      };
+      setCustomTypes((prev) => [...prev, t]);
+      setType(t.value);
+      setNewTypeLabel("");
+      setShowAddType(false);
+    } catch (e) {
+      setAddTypeError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setAddingType(false);
+    }
+  };
+
+  const removeCustomType = async (id: number) => {
+    if (!window.confirm("이 유형을 목록에서 삭제할까요?")) return;
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/product-types/${id}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      window.alert(data?.error || "삭제 실패");
+      return;
+    }
+    setCustomTypes((prev) => prev.filter((t) => t.id !== id));
+    if (type && customTypes.find((t) => t.id === id)?.value === type) {
+      setType("membership");
+    }
+  };
   const [billingMode, setBillingMode] = useState<BillingMode>("period");
   const [category, setCategory] = useState("");
   const [name, setName] = useState("");
@@ -162,22 +238,95 @@ export default function CrmProductNewPage() {
 
       {/* 상품 유형 */}
       <Section title="상품 유형" required>
-        <div className="flex flex-wrap gap-1.5">
-          {TYPE_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setType(opt.value)}
-              className={`px-3.5 py-1.5 rounded-full text-[13px] font-medium border whitespace-nowrap
-                ${type === opt.value
-                  ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
-                  : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
-                }`}
-            >
-              {opt.label}
-            </button>
+        <div className="flex flex-wrap gap-1.5 items-center">
+          {typeOptions.map((opt) => (
+            <span key={opt.value} className="inline-flex items-center">
+              <button
+                type="button"
+                onClick={() => setType(opt.value)}
+                className={`px-3.5 py-1.5 text-[13px] font-medium border whitespace-nowrap
+                  ${opt.custom ? "rounded-l-full" : "rounded-full"}
+                  ${type === opt.value
+                    ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                    : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
+                  }`}
+              >
+                {opt.label}
+              </button>
+              {opt.custom && opt.id !== undefined && (
+                <button
+                  type="button"
+                  onClick={() => removeCustomType(opt.id!)}
+                  title="이 유형 삭제"
+                  className={`px-2 py-1.5 rounded-r-full text-[13px] border border-l-0 whitespace-nowrap
+                    ${type === opt.value
+                      ? "border-[#6B7B3A] bg-[#6B7B3A] text-white hover:bg-[#5a6932]"
+                      : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#A89B80] hover:text-red-600"
+                    }`}
+                >
+                  ×
+                </button>
+              )}
+            </span>
           ))}
+          {!showAddType ? (
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddType(true);
+                setAddTypeError("");
+              }}
+              className="px-3 py-1.5 rounded-full text-[13px] font-medium border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
+            >
+              + 유형 추가
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1">
+              <input
+                autoFocus
+                type="text"
+                value={newTypeLabel}
+                onChange={(e) => setNewTypeLabel(e.target.value.slice(0, 20))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addCustomType();
+                  }
+                  if (e.key === "Escape") {
+                    setShowAddType(false);
+                    setNewTypeLabel("");
+                  }
+                }}
+                placeholder="예: 사우나"
+                maxLength={20}
+                className="px-3 py-1.5 rounded-full text-[13px] border border-[#6B7B3A] bg-white dark:bg-zinc-900 text-[#2A251D] dark:text-zinc-100 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={addCustomType}
+                disabled={addingType || !newTypeLabel.trim()}
+                className="px-3 py-1.5 rounded-full text-[13px] font-semibold bg-[#6B7B3A] text-white disabled:opacity-60 hover:bg-[#5a6932]"
+              >
+                {addingType ? "…" : "확인"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddType(false);
+                  setNewTypeLabel("");
+                }}
+                className="px-2 py-1.5 rounded-full text-[13px] text-[#6B5D47] hover:text-[#3A342A]"
+              >
+                취소
+              </button>
+            </span>
+          )}
         </div>
+        {addTypeError && (
+          <div className="mt-2 px-2.5 py-1.5 rounded text-[12px] text-red-700 bg-red-50">
+            {addTypeError}
+          </div>
+        )}
       </Section>
 
       {/* 이용 방식 */}

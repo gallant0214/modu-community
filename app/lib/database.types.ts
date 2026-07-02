@@ -1361,6 +1361,42 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_product_types: {
+        Row: {
+          id: number
+          center_id: number
+          key: string
+          label: string
+          color: string | null
+          sort_order: number
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          key: string
+          label: string
+          color?: string | null
+          sort_order?: number
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          key?: string
+          label?: string
+          color?: string | null
+          sort_order?: number
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_products: {
         Row: {
           id: number
