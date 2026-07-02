@@ -441,7 +441,17 @@ export default function CrmLockersPage() {
 
       {tab === "settings" && (
         <>
-          <ZoneChips zone={zone} onChange={setZone} zoneLabel={zoneLabel} />
+          <ZoneChips
+            zone={zone}
+            onChange={setZone}
+            zoneLabel={zoneLabel}
+            zones={zones}
+            showOnlyActive
+            onAddRoom={() => {
+              const free = zones.find((z) => z.locker_count === 0);
+              if (free) setZone(free.zone_number);
+            }}
+          />
 
           <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5 mb-3">
             <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
@@ -1957,17 +1967,19 @@ function ZoneChips({
   showOnlyActive?: boolean;
   onAddRoom?: () => void;
 }) {
-  // showOnlyActive=true → locker_count>0 인 락커룸만 표시
+  // showOnlyActive=true → locker_count>0 인 락커룸만 표시. 없으면 칩 없이 + 새 락커룸 버튼만.
   let numbers = Array.from({ length: ZONE_COUNT }, (_, i) => i + 1);
   if (showOnlyActive && zones) {
-    const activeNums = zones
-      .filter((z) => z.locker_count > 0)
-      .map((z) => z.zone_number);
-    numbers = activeNums.length > 0 ? activeNums : [zone];
+    numbers = zones.filter((z) => z.locker_count > 0).map((z) => z.zone_number);
   }
 
   return (
     <div className="flex items-center gap-1.5 mt-5 mb-4 overflow-x-auto -mx-1 px-1">
+      {showOnlyActive && numbers.length === 0 && (
+        <span className="text-[12px] text-[#8C8270] dark:text-zinc-500 mr-1">
+          설정된 락커룸이 없어요.
+        </span>
+      )}
       {numbers.map((n) => {
         const active = zone === n;
         return (
