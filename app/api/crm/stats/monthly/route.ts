@@ -21,13 +21,31 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const ymRaw = url.searchParams.get("ym");
+  const fromRaw = url.searchParams.get("from");
+  const toRaw = url.searchParams.get("to");
+  const ymd = /^\d{4}-\d{2}-\d{2}$/;
+
+  // 직접 선택 (from/to) 이 유효하면 그 범위 사용, 아니면 ym 기반 월단위
+  const isRange =
+    ymd.test(fromRaw || "") && ymd.test(toRaw || "") && (toRaw as string) >= (fromRaw as string);
+
   const ym = /^\d{4}-\d{2}$/.test(ymRaw || "")
     ? (ymRaw as string)
     : new Date().toISOString().slice(0, 7);
 
-  const [y, m] = ym.split("-").map(Number);
-  const startDate = `${ym}-01`;
-  const nextMonth = new Date(y, m, 1).toISOString().slice(0, 10);
+  let startDate: string;
+  let endExclusive: string; // exclusive upper bound (YYYY-MM-DD)
+  if (isRange) {
+    startDate = fromRaw as string;
+    const to = new Date(`${toRaw}T00:00:00Z`);
+    to.setUTCDate(to.getUTCDate() + 1);
+    endExclusive = to.toISOString().slice(0, 10);
+  } else {
+    const [y, m] = ym.split("-").map(Number);
+    startDate = `${ym}-01`;
+    endExclusive = new Date(y, m, 1).toISOString().slice(0, 10);
+  }
+  const nextMonth = endExclusive; // 기존 변수명 유지 (하위 쿼리 참조)
 
   // 회원 수
   let memberQuery = supabase
@@ -127,6 +145,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     ym,
+    range: isRange ? { from: startDate, to: toRaw } : null,
     summary: {
       newMembers: (members ?? []).filter((m) => m.member_type !== "matched").length,
       memberCount: memberCount ?? 0,

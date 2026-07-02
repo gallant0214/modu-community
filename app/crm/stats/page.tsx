@@ -25,20 +25,33 @@ interface MonthlyResp {
 
 type Tab = "trainer" | "center";
 
+type DateMode = "month" | "range";
+
 export default function CrmStatsPage() {
   const { getIdToken } = useAuth();
   const [tab, setTab] = useState<Tab>("trainer");
+  const [dateMode, setDateMode] = useState<DateMode>("month");
   const [ym, setYm] = useState(() => new Date().toISOString().slice(0, 7));
+  const [from, setFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [data, setData] = useState<MonthlyResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // API 쿼리 문자열 (탭 공용)
+  const rangeQs =
+    dateMode === "range" && from && to && to >= from ? `from=${from}&to=${to}` : `ym=${ym}`;
 
   const load = useCallback(async () => {
     setError("");
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch(`/api/crm/stats/monthly?ym=${ym}`, {
+      const res = await fetch(`/api/crm/stats/monthly?${rangeQs}`, {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
@@ -50,7 +63,7 @@ export default function CrmStatsPage() {
     } finally {
       setLoading(false);
     }
-  }, [getIdToken, ym]);
+  }, [getIdToken, rangeQs]);
 
   useEffect(() => {
     load();
@@ -59,22 +72,52 @@ export default function CrmStatsPage() {
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-6xl mx-auto">
       <header className="mb-4 flex flex-wrap items-center gap-3">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-[18px] md:text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
             통계
           </h1>
           <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
             {tab === "trainer"
-              ? "강사별 매출과 수업 현황을 한 달 단위로 확인해요."
-              : "센터 매출(회원권·운동복·락커·기타)을 한 달 단위로 확인해요."}
+              ? "강사별 매출과 수업 현황을 확인해요."
+              : "센터 매출(회원권·운동복·락커·기타)을 확인해요."}
           </p>
         </div>
-        <input
-          type="month"
-          value={ym}
-          onChange={(e) => setYm(e.target.value)}
-          className="ml-auto px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
-        />
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
+            <ModeBtn active={dateMode === "month"} onClick={() => setDateMode("month")}>
+              월별
+            </ModeBtn>
+            <ModeBtn active={dateMode === "range"} onClick={() => setDateMode("range")}>
+              직접 선택
+            </ModeBtn>
+          </div>
+          {dateMode === "month" ? (
+            <input
+              type="month"
+              value={ym}
+              onChange={(e) => setYm(e.target.value)}
+              className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+            />
+          ) : (
+            <div className="inline-flex items-center gap-1">
+              <input
+                type="date"
+                value={from}
+                max={to}
+                onChange={(e) => setFrom(e.target.value)}
+                className="px-2 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+              />
+              <span className="text-[12px] text-[#A89B80]">~</span>
+              <input
+                type="date"
+                value={to}
+                min={from}
+                onChange={(e) => setTo(e.target.value)}
+                className="px-2 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+              />
+            </div>
+          )}
+        </div>
       </header>
 
       <div className="mb-5 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800">
@@ -97,7 +140,7 @@ export default function CrmStatsPage() {
       ) : tab === "trainer" ? (
         <TrainerTab data={data} />
       ) : (
-        <CenterTab ym={ym} />
+        <CenterTab rangeQs={rangeQs} />
       )}
     </div>
   );
@@ -188,7 +231,7 @@ interface CenterRevenueResp {
   };
 }
 
-function CenterTab({ ym }: { ym: string }) {
+function CenterTab({ rangeQs }: { rangeQs: string }) {
   const { getIdToken } = useAuth();
   const [data, setData] = useState<CenterRevenueResp | null>(null);
   const [loading, setLoading] = useState(true);
@@ -197,7 +240,7 @@ function CenterTab({ ym }: { ym: string }) {
     try {
       const token = await getIdToken();
       if (!token) return;
-      const res = await fetch(`/api/crm/stats/center-revenue?ym=${ym}`, {
+      const res = await fetch(`/api/crm/stats/center-revenue?${rangeQs}`, {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
@@ -205,7 +248,7 @@ function CenterTab({ ym }: { ym: string }) {
     } finally {
       setLoading(false);
     }
-  }, [getIdToken, ym]);
+  }, [getIdToken, rangeQs]);
 
   useEffect(() => {
     load();
@@ -284,6 +327,29 @@ function CenterTab({ ym }: { ym: string }) {
 }
 
 /* ─── 공통 ────────────────────────────── */
+
+function ModeBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 text-[12.5px] font-medium
+        ${active
+          ? "bg-[#6B7B3A] text-white"
+          : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+        }`}
+    >
+      {children}
+    </button>
+  );
+}
 
 function TabBtn({
   active,

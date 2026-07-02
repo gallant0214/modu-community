@@ -18,12 +18,28 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const ymRaw = url.searchParams.get("ym");
+  const fromRaw = url.searchParams.get("from");
+  const toRaw = url.searchParams.get("to");
+  const ymd = /^\d{4}-\d{2}-\d{2}$/;
+  const isRange =
+    ymd.test(fromRaw || "") && ymd.test(toRaw || "") && (toRaw as string) >= (fromRaw as string);
+
   const ym = /^\d{4}-\d{2}$/.test(ymRaw || "")
     ? (ymRaw as string)
     : new Date().toISOString().slice(0, 7);
-  const [y, m] = ym.split("-").map(Number);
-  const startDate = `${ym}-01`;
-  const nextMonth = new Date(y, m, 1).toISOString().slice(0, 10);
+
+  let startDate: string;
+  let nextMonth: string;
+  if (isRange) {
+    startDate = fromRaw as string;
+    const to = new Date(`${toRaw}T00:00:00Z`);
+    to.setUTCDate(to.getUTCDate() + 1);
+    nextMonth = to.toISOString().slice(0, 10);
+  } else {
+    const [y, m] = ym.split("-").map(Number);
+    startDate = `${ym}-01`;
+    nextMonth = new Date(y, m, 1).toISOString().slice(0, 10);
+  }
 
   const [membership, pass] = await Promise.all([
     supabase
