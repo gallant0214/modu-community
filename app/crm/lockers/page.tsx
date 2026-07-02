@@ -1659,6 +1659,8 @@ function LockerActionModal({
     if (locker) {
       setPassword(locker.password ?? "");
       setMemo(locker.memo ?? "");
+      if (locker.start_date) setStartDate(locker.start_date);
+      if (locker.expires_at) setExpiresAt(locker.expires_at);
     }
   }, [open, locker]);
 
@@ -1957,21 +1959,33 @@ function LockerActionModal({
           </>
         ) : mode === "view" ? (
           <>
-            {/* 정보 (배정된 경우) */}
+            {/* 기간 수정 (배정된 경우) */}
             {locker.state === "assigned" && (
-              <dl className="grid grid-cols-[80px_1fr] gap-y-1.5 text-[13px]">
-                <dt className="text-[#A89B80]">시작일</dt>
-                <dd className="font-medium">{locker.start_date || "—"}</dd>
-                <dt className="text-[#A89B80]">만료일</dt>
-                <dd className="font-medium">
-                  {locker.expires_at || "—"}
-                  {locker.expires_at && (
-                    <span className="ml-2 text-[11.5px] text-[#8C8270]">
-                      ({expireSubtitle(locker.expires_at, today)})
-                    </span>
-                  )}
-                </dd>
-              </dl>
+              <div className="grid grid-cols-2 gap-2">
+                <CrmField label="시작일">
+                  <input
+                    type="date"
+                    className={crmInputClass}
+                    value={startDate}
+                    max={expiresAt || undefined}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
+                </CrmField>
+                <CrmField label="만료일">
+                  <input
+                    type="date"
+                    className={crmInputClass}
+                    value={expiresAt}
+                    min={startDate || undefined}
+                    onChange={(e) => setExpiresAt(e.target.value)}
+                  />
+                </CrmField>
+                {locker.expires_at && (
+                  <div className="col-span-2 -mt-2 text-[11.5px] text-[#8C8270]">
+                    현재 만료 상태: {expireSubtitle(locker.expires_at, today)}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* 비밀번호·메모 */}
@@ -2010,16 +2024,21 @@ function LockerActionModal({
 
               {(locker.state === "assigned" || locker.state === "unassigned") && (
                 <button
-                  onClick={() =>
-                    callAction("update", {
+                  onClick={() => {
+                    const payload: Record<string, unknown> = {
                       password: password || null,
                       memo: memo || null,
-                    })
-                  }
+                    };
+                    if (locker.state === "assigned") {
+                      payload.start_date = startDate || null;
+                      payload.expires_at = expiresAt || null;
+                    }
+                    callAction("update", payload);
+                  }}
                   disabled={submitting}
                   className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] text-[13.5px] font-semibold hover:bg-[#6B7B3A]/5"
                 >
-                  비밀번호·메모 저장
+                  {locker.state === "assigned" ? "정보 저장" : "비밀번호·메모 저장"}
                 </button>
               )}
 
