@@ -42,11 +42,11 @@ export async function PATCH(
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
-  // 락커 조회
+  // 락커 조회 (password/memo 포함 — 수정 diff 용)
   const { data: locker } = await supabase
     .from("crm_lockers")
     .select(
-      "id, center_id, zone_id, number, state, assigned_member_id, start_date, expires_at"
+      "id, center_id, zone_id, number, state, assigned_member_id, start_date, expires_at, password, memo"
     )
     .eq("id", lockerId)
     .eq("center_id", ctx.centerId)
@@ -123,14 +123,41 @@ export async function PATCH(
     history.member_name = memberName;
     history.note = body.note ?? null;
   } else if (action === "update") {
-    if (body.password !== undefined) updates.password = body.password || null;
-    if (body.memo !== undefined) updates.memo = body.memo || null;
-    if (body.expires_at !== undefined) updates.expires_at = body.expires_at || null;
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    if (body.password !== undefined) {
+      const nextPw = body.password || null;
+      if ((locker.password ?? null) !== nextPw) {
+        changes.password = { from: locker.password ?? null, to: nextPw };
+        updates.password = nextPw;
+      }
+    }
+    if (body.memo !== undefined) {
+      const nextMemo = body.memo || null;
+      if ((locker.memo ?? null) !== nextMemo) {
+        changes.memo = { from: locker.memo ?? null, to: nextMemo };
+        updates.memo = nextMemo;
+      }
+    }
+    if (body.expires_at !== undefined) {
+      const nextExp = body.expires_at || null;
+      if ((locker.expires_at ?? null) !== nextExp) {
+        changes.expires_at = { from: locker.expires_at ?? null, to: nextExp };
+        updates.expires_at = nextExp;
+      }
+    }
+    if (body.start_date !== undefined) {
+      const nextStart = body.start_date || null;
+      if ((locker.start_date ?? null) !== nextStart) {
+        changes.start_date = { from: locker.start_date ?? null, to: nextStart };
+        updates.start_date = nextStart;
+      }
+    }
     if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
+      return NextResponse.json({ error: "변경할 항목이 없어요" }, { status: 400 });
     }
     history.action = "update";
     history.note = body.note ?? null;
+    history.changes = changes;
   } else if (action === "move") {
     if (locker.state !== "assigned") {
       return NextResponse.json({ error: "배정된 락커만 이동할 수 있습니다" }, { status: 400 });

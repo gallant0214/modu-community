@@ -1734,6 +1734,7 @@ export type Database = {
           start_date: string | null
           expires_at: string | null
           note: string | null
+          changes: unknown
           actor_uid: string
           created_at: string
         }
@@ -1749,6 +1750,7 @@ export type Database = {
           start_date?: string | null
           expires_at?: string | null
           note?: string | null
+          changes?: unknown
           actor_uid: string
           created_at?: string
         }
@@ -1764,6 +1766,7 @@ export type Database = {
           start_date?: string | null
           expires_at?: string | null
           note?: string | null
+          changes?: unknown
           actor_uid?: string
           created_at?: string
         }

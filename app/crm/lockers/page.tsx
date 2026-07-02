@@ -1617,7 +1617,16 @@ function LockerActionModal({
   const [submitting, setSubmitting] = useState(false);
   const [mode, setMode] = useState<"view" | "assign" | "history">("view");
   const [history, setHistory] = useState<
-    { id: number; action: string; member_name: string | null; created_at: string; note: string | null }[]
+    {
+      id: number;
+      action: string;
+      member_name: string | null;
+      created_at: string;
+      note: string | null;
+      changes?: Record<string, { from: unknown; to: unknown }> | null;
+      start_date?: string | null;
+      expires_at?: string | null;
+    }[]
   >([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
@@ -1788,13 +1797,13 @@ function LockerActionModal({
                 이 락커의 기록이 없어요.
               </div>
             ) : (
-              <ul className="space-y-1.5 max-h-[260px] overflow-y-auto">
+              <ul className="space-y-1.5 max-h-[360px] overflow-y-auto">
                 {history.map((h) => (
                   <li
                     key={h.id}
                     className="px-3 py-2 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40"
                   >
-                    <div className="flex items-baseline justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
                         {ACTION_KO[h.action] ?? h.action}
                         {h.member_name && (
@@ -1807,8 +1816,16 @@ function LockerActionModal({
                         {formatDateTimeKST(h.created_at)}
                       </span>
                     </div>
+                    {h.action === "assign" && (h.start_date || h.expires_at) && (
+                      <div className="mt-1 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+                        {h.start_date ?? "—"} ~ {h.expires_at ?? "—"}
+                      </div>
+                    )}
+                    {h.changes && Object.keys(h.changes).length > 0 && (
+                      <HistoryChanges changes={h.changes} />
+                    )}
                     {h.note && (
-                      <div className="mt-1 text-[11.5px] text-[#8C8270] dark:text-zinc-500 truncate">
+                      <div className="mt-1 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
                         {h.note}
                       </div>
                     )}
@@ -2066,6 +2083,47 @@ const ACTION_KO: Record<string, string> = {
   broken: "고장 처리",
   repaired: "수리 완료",
 };
+
+const CHANGE_FIELD_KO: Record<string, string> = {
+  password: "비밀번호",
+  memo: "메모",
+  expires_at: "만료일",
+  start_date: "시작일",
+};
+
+function formatChangeValue(key: string, v: unknown): string {
+  if (v === null || v === undefined || v === "") return "없음";
+  if (key === "memo" && typeof v === "string" && v.length > 20) {
+    return `"${v.slice(0, 20)}…"`;
+  }
+  if (typeof v === "string") return key === "memo" ? `"${v}"` : v;
+  return String(v);
+}
+
+function HistoryChanges({
+  changes,
+}: {
+  changes: Record<string, { from: unknown; to: unknown }>;
+}) {
+  const entries = Object.entries(changes);
+  if (entries.length === 0) return null;
+  return (
+    <ul className="mt-1.5 space-y-0.5 text-[11.5px]">
+      {entries.map(([key, val]) => (
+        <li key={key} className="flex items-baseline gap-1.5 text-[#3A342A] dark:text-zinc-300">
+          <span className="shrink-0 px-1.5 py-0.5 rounded bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A] font-medium">
+            {CHANGE_FIELD_KO[key] ?? key}
+          </span>
+          <span className="text-[#8C8270]">{formatChangeValue(key, val.from)}</span>
+          <span className="text-[#B47B2A] dark:text-amber-300">→</span>
+          <span className="text-[#2A251D] dark:text-zinc-100 font-medium">
+            {formatChangeValue(key, val.to)}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /* ─── 공통 ────────────────────────────── */
 

@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_locker_history")
     .select(
-      "id, locker_id, zone_id, number, action, member_id, member_name, start_date, expires_at, note, actor_uid, created_at"
+      "id, locker_id, zone_id, number, action, member_id, member_name, start_date, expires_at, note, changes, actor_uid, created_at"
     )
     .eq("center_id", ctx.centerId)
     .order("created_at", { ascending: false })
