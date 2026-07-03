@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_signed_contracts")
     .select(
-      "id, member_id, pass_id, membership_id, title, customer_info, signed_at, status, created_at"
+      "id, member_id, pass_id, membership_id, title, customer_info, signed_at, status, signing_token, requested_at, created_at"
     )
     .eq("center_id", ctx.centerId)
     .neq("status", "voided")

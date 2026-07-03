@@ -1249,6 +1249,8 @@ interface SignedContractRow {
   title: string;
   signed_at: string;
   status: string;
+  signing_token: string | null;
+  requested_at: string | null;
 }
 
 function SignedContractsSection({ memberId }: { memberId: number }) {
@@ -1256,6 +1258,7 @@ function SignedContractsSection({ memberId }: { memberId: number }) {
   const [list, setList] = useState<SignedContractRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [requestOpen, setRequestOpen] = useState(false);
+  const [managePending, setManagePending] = useState<SignedContractRow | null>(null);
 
   const reload = async () => {
     try {
@@ -1317,37 +1320,191 @@ function SignedContractsSection({ memberId }: { memberId: number }) {
         </div>
       ) : (
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {list.map((c) => (
-            <li key={c.id}>
-              <Link
-                href={`/crm/contracts/signed/${c.id}`}
-                className="block px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors"
-              >
+          {list.map((c) => {
+            const isPending = c.status === "pending_signature";
+            const badgeAndSub = isPending ? (
+              <>
+                <span className="shrink-0 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-[#F5E4C8]/70 text-[#B47B2A] dark:bg-amber-950/40 dark:text-amber-300">
+                  요청됨
+                </span>
+              </>
+            ) : c.status === "voided" ? (
+              <span className="shrink-0 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-red-50 text-red-700">
+                무효
+              </span>
+            ) : null;
+            const inner = (
+              <>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
                     {c.title}
                   </span>
-                  {c.status === "voided" ? (
-                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-red-50 text-red-700">
-                      무효
-                    </span>
-                  ) : c.status === "pending_signature" ? (
-                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-[#F5E4C8]/70 text-[#B47B2A] dark:bg-amber-950/40 dark:text-amber-300">
-                      요청됨
-                    </span>
-                  ) : null}
+                  {badgeAndSub}
                 </div>
                 <div className="mt-1 text-[11.5px] text-[#A89B80]">
-                  {c.status === "pending_signature"
-                    ? "회원 서명 대기 중"
+                  {isPending
+                    ? "회원 서명 대기 중 · 클릭해 링크 다시 보기 / 취소"
                     : `서명일: ${new Date(c.signed_at).toISOString().slice(0, 10)}`}
                 </div>
-              </Link>
-            </li>
-          ))}
+              </>
+            );
+            const cls =
+              "block px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors w-full text-left";
+            return (
+              <li key={c.id}>
+                {isPending ? (
+                  <button
+                    type="button"
+                    onClick={() => setManagePending(c)}
+                    className={cls}
+                  >
+                    {inner}
+                  </button>
+                ) : (
+                  <Link href={`/crm/contracts/signed/${c.id}`} className={cls}>
+                    {inner}
+                  </Link>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
+
+      <ManagePendingModal
+        pending={managePending}
+        onClose={() => setManagePending(null)}
+        onCancelled={() => {
+          setManagePending(null);
+          reload();
+        }}
+      />
     </section>
+  );
+}
+
+function ManagePendingModal({
+  pending,
+  onClose,
+  onCancelled,
+}: {
+  pending: SignedContractRow | null;
+  onClose: () => void;
+  onCancelled: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [copied, setCopied] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!pending) {
+      setCopied(false);
+      setError("");
+    }
+  }, [pending]);
+
+  if (!pending) return null;
+
+  const link = pending.signing_token
+    ? `${window.location.origin}/contract/sign/${pending.signing_token}`
+    : null;
+
+  const copy = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
+  const cancel = async () => {
+    if (!window.confirm("이 요청을 취소할까요? 링크는 즉시 무효화됩니다.")) return;
+    setCancelling(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/contracts/sign/${pending.id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "취소 실패");
+      onCancelled();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  return (
+    <CrmModal open={true} onClose={onClose} title="요청 관리">
+      <div className="space-y-3">
+        <div>
+          <div className="text-[12px] text-[#A89B80] mb-1">계약서</div>
+          <div className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            {pending.title}
+          </div>
+          {pending.requested_at && (
+            <div className="mt-0.5 text-[11.5px] text-[#8C8270]">
+              요청일: {new Date(pending.requested_at).toISOString().slice(0, 10)}
+            </div>
+          )}
+        </div>
+
+        {link ? (
+          <>
+            <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+              아래 링크를 회원에게 다시 전달하거나 요청을 취소할 수 있어요.
+            </p>
+            <div className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-900 break-all text-[12.5px] text-[#3A342A] dark:text-zinc-200 font-mono">
+              {link}
+            </div>
+          </>
+        ) : (
+          <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 text-[12.5px] text-[#8C8270]">
+            링크 정보가 없어요. 취소하고 다시 요청해 주세요.
+          </div>
+        )}
+
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+            {error}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+          >
+            닫기
+          </button>
+          {link && (
+            <button
+              type="button"
+              onClick={copy}
+              className="flex-1 min-w-[120px] px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+            >
+              {copied ? "복사됨!" : "링크 복사"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={cancel}
+            disabled={cancelling}
+            className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-red-200 text-red-700 text-[13.5px] font-semibold hover:bg-red-50 disabled:opacity-60"
+          >
+            {cancelling ? "취소 중…" : "요청 취소"}
+          </button>
+        </div>
+      </div>
+    </CrmModal>
   );
 }
 
