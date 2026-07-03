@@ -1255,37 +1255,60 @@ function SignedContractsSection({ memberId }: { memberId: number }) {
   const { getIdToken } = useAuth();
   const [list, setList] = useState<SignedContractRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [requestOpen, setRequestOpen] = useState(false);
+
+  const reload = async () => {
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/crm/contracts/sign?member_id=${memberId}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (res.ok) setList(data.contracts ?? []);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    (async () => {
-      try {
-        const token = await getIdToken();
-        if (!token) return;
-        const res = await fetch(`/api/crm/contracts/sign?member_id=${memberId}`, {
-          headers: { authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        const data = await res.json();
-        if (res.ok) setList(data.contracts ?? []);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [memberId, getIdToken]);
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memberId]);
 
   return (
     <section className="mb-8">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
         <h2 className="text-[15px] md:text-[16px] font-bold text-[#2A251D] dark:text-zinc-100">
           체결 계약서 ({list.length})
         </h2>
-        <Link
-          href={`/crm/contracts/sign/new?member_id=${memberId}`}
-          className="px-3 py-1.5 rounded-lg border border-[#B47B2A] text-[12.5px] font-semibold text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 hover:bg-amber-50/60"
-        >
-          + 전자 계약서 작성
-        </Link>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setRequestOpen(true)}
+            className="px-3 py-1.5 rounded-lg border border-[#6B7B3A] text-[12.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/5"
+          >
+            요청 링크 생성
+          </button>
+          <Link
+            href={`/crm/contracts/sign/new?member_id=${memberId}`}
+            className="px-3 py-1.5 rounded-lg border border-[#B47B2A] text-[12.5px] font-semibold text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 hover:bg-amber-50/60"
+          >
+            + 전자 계약서 작성
+          </Link>
+        </div>
       </div>
+
+      <RequestLinkModal
+        open={requestOpen}
+        memberId={memberId}
+        onClose={() => setRequestOpen(false)}
+        onCreated={() => {
+          setRequestOpen(false);
+          reload();
+        }}
+      />
       {loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : list.length === 0 ? (
@@ -1304,14 +1327,20 @@ function SignedContractsSection({ memberId }: { memberId: number }) {
                   <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
                     {c.title}
                   </span>
-                  {c.status === "voided" && (
+                  {c.status === "voided" ? (
                     <span className="shrink-0 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-red-50 text-red-700">
                       무효
                     </span>
-                  )}
+                  ) : c.status === "pending_signature" ? (
+                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-[#F5E4C8]/70 text-[#B47B2A] dark:bg-amber-950/40 dark:text-amber-300">
+                      요청됨
+                    </span>
+                  ) : null}
                 </div>
                 <div className="mt-1 text-[11.5px] text-[#A89B80]">
-                  서명일: {new Date(c.signed_at).toISOString().slice(0, 10)}
+                  {c.status === "pending_signature"
+                    ? "회원 서명 대기 중"
+                    : `서명일: ${new Date(c.signed_at).toISOString().slice(0, 10)}`}
                 </div>
               </Link>
             </li>
@@ -1319,6 +1348,185 @@ function SignedContractsSection({ memberId }: { memberId: number }) {
         </ul>
       )}
     </section>
+  );
+}
+
+function RequestLinkModal({
+  open,
+  memberId,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  memberId: number;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [templates, setTemplates] = useState<
+    { id: number; title: string; category: string }[]
+  >([]);
+  const [templateId, setTemplateId] = useState<number | "">("");
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [link, setLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setTemplateId("");
+      setLink(null);
+      setCopied(false);
+      setError("");
+      return;
+    }
+    (async () => {
+      setLoading(true);
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/contracts?sort=name_asc", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setTemplates(data.contracts ?? []);
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [open, getIdToken]);
+
+  const generate = async () => {
+    setError("");
+    setCreating(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/contracts/sign/request", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          member_id: memberId,
+          template_id: templateId || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "요청 생성 실패");
+      setLink(data.url);
+      onCreated();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const copy = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // 클립보드 실패 시 사용자가 직접 선택 복사
+    }
+  };
+
+  return (
+    <CrmModal open={open} onClose={onClose} title="전자 계약서 요청 링크 생성">
+      <div className="space-y-3">
+        {link ? (
+          <>
+            <p className="text-[13px] text-[#3A342A] dark:text-zinc-300">
+              아래 링크를 회원에게 전달해 주세요. 회원이 링크로 접속해 서명하면 자동으로 체결됩니다.
+            </p>
+            <div className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-900 break-all text-[12.5px] text-[#3A342A] dark:text-zinc-200 font-mono">
+              {link}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={copy}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+              >
+                {copied ? "복사됨!" : "링크 복사"}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+              >
+                닫기
+              </button>
+            </div>
+            <p className="text-[11.5px] text-[#A89B80]">
+              추후 회원 전용 앱이 출시되면 이 링크는 앱 푸시/인앱 메시지로 자동 전송됩니다.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+              계약서 양식을 선택하고 요청 링크를 생성하세요. 양식을 선택하지 않으면 회원이 링크에서 직접 정보를 채우게 됩니다.
+            </p>
+
+            <CrmField label="계약서 양식">
+              {loading ? (
+                <div className="text-[12.5px] text-[#8C8270]">불러오는 중…</div>
+              ) : templates.length === 0 ? (
+                <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[12.5px] text-[#8C8270]">
+                  등록된 양식이 없어요. {" "}
+                  <Link href="/crm/contracts" className="text-[#6B7B3A] hover:underline font-medium">
+                    양식 만들러 가기 →
+                  </Link>
+                </div>
+              ) : (
+                <select
+                  className={crmInputClass}
+                  value={templateId}
+                  onChange={(e) =>
+                    setTemplateId(e.target.value ? Number(e.target.value) : "")
+                  }
+                >
+                  <option value="">양식 없이 요청</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.title}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </CrmField>
+
+            {error && (
+              <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={generate}
+                disabled={creating}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+              >
+                {creating ? "생성 중…" : "요청 링크 생성"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </CrmModal>
   );
 }
 

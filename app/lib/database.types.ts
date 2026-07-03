@@ -1663,6 +1663,8 @@ export type Database = {
           signed_at: string
           signed_by_uid: string | null
           status: string
+          signing_token: string | null
+          requested_at: string | null
           created_at: string
           updated_at: string
         }
@@ -1682,6 +1684,8 @@ export type Database = {
           signed_at?: string
           signed_by_uid?: string | null
           status?: string
+          signing_token?: string | null
+          requested_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1701,6 +1705,8 @@ export type Database = {
           signed_at?: string
           signed_by_uid?: string | null
           status?: string
+          signing_token?: string | null
+          requested_at?: string | null
           created_at?: string
           updated_at?: string
         }
