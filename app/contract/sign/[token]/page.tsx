@@ -174,12 +174,22 @@ export default function ContractSignPublicPage() {
   const toggleAgree = (k: string) =>
     setAgreed((prev) => ({ ...prev, [k]: !prev[k] }));
 
-  const requiredOk = (contract?.terms_snapshot ?? [])
-    .filter((s) => s?.required)
-    .every((s) => agreed[s.key]);
+  const sections = contract?.terms_snapshot ?? [];
+  const hasTermsContent = sections.length > 0 && sections.some((s) => (s?.body ?? "").trim().length > 0);
+  const requiredSections = sections.filter((s) => s?.required);
+  const requiredOk =
+    requiredSections.length > 0 && requiredSections.every((s) => agreed[s.key]);
 
   const submit = async () => {
     setSubmitError("");
+    if (!hasTermsContent) {
+      return setSubmitError(
+        "계약서 본문이 비어 있어요. 센터에 다시 링크를 요청해 주세요."
+      );
+    }
+    if (requiredSections.length === 0) {
+      return setSubmitError("필수 약관이 없어요. 센터에 문의해 주세요.");
+    }
     if (!name.trim()) return setSubmitError("이름을 입력해 주세요");
     if (!requiredOk) return setSubmitError("필수 약관에 모두 동의해 주세요");
     if (signatureEmpty) return setSubmitError("서명을 입력해 주세요");
@@ -263,9 +273,16 @@ export default function ContractSignPublicPage() {
         <header>
           <h1 className="text-[20px] md:text-[22px] font-bold">{c.title}</h1>
           <p className="mt-1 text-[13px] text-[#6B5D47]">
-            아래 정보를 확인하고 서명해 주세요.
+            아래 계약서 내용을 반드시 읽고, 필수 약관에 모두 동의한 뒤 서명해 주세요.
           </p>
         </header>
+
+        {!hasTermsContent && (
+          <div className="px-4 py-3 rounded-xl border border-red-200 bg-red-50 text-[13px] text-red-700">
+            이 링크는 계약서 본문이 비어 있어요. 서명이 불가능하니 센터에 다시
+            링크를 요청해 주세요.
+          </div>
+        )}
 
         <Section title="고객 기본 정보">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -395,11 +412,21 @@ export default function ContractSignPublicPage() {
           </div>
         )}
 
+        <div className="text-[12px] text-[#8C8270]">
+          {!hasTermsContent
+            ? "계약서 본문이 없어 서명할 수 없어요."
+            : !requiredOk
+              ? `필수 약관 ${requiredSections.length}개 중 ${requiredSections.filter((s) => agreed[s.key]).length}개 동의 완료`
+              : signatureEmpty
+                ? "필수 약관 동의 완료 — 위 서명란에 서명해 주세요."
+                : "모두 준비됐어요. 아래 버튼으로 서명을 확정해 주세요."}
+        </div>
+
         <button
           type="button"
           onClick={submit}
-          disabled={submitting}
-          className="w-full px-5 py-3 rounded-lg bg-[#6B7B3A] text-white text-[14.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+          disabled={submitting || !hasTermsContent || !requiredOk || signatureEmpty}
+          className="w-full px-5 py-3 rounded-lg bg-[#6B7B3A] text-white text-[14.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {submitting ? "저장 중…" : "서명 완료하기"}
         </button>

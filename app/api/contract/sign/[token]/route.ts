@@ -81,12 +81,32 @@ export async function POST(
 
   // 필수 약관 검증
   const snapshot = Array.isArray(existing.terms_snapshot)
-    ? (existing.terms_snapshot as { key: string; required: boolean }[])
+    ? (existing.terms_snapshot as { key: string; title?: string; body?: string; required: boolean }[])
     : [];
+  if (snapshot.length === 0) {
+    return NextResponse.json(
+      { error: "계약서 본문이 없어요. 센터에 다시 링크를 요청해 주세요." },
+      { status: 400 }
+    );
+  }
+  const hasContent = snapshot.some((s) => (s?.body ?? "").trim().length > 0);
+  if (!hasContent) {
+    return NextResponse.json(
+      { error: "계약서 본문이 비어 있어요. 센터에 다시 링크를 요청해 주세요." },
+      { status: 400 }
+    );
+  }
   const requiredKeys = snapshot.filter((s) => s?.required).map((s) => s.key);
-  for (const k of requiredKeys) {
-    if (!body.terms_accepted?.[k]) {
-      return NextResponse.json({ error: `필수 약관(${k})에 동의해 주세요` }, { status: 400 });
+  if (requiredKeys.length === 0) {
+    return NextResponse.json(
+      { error: "필수 약관이 지정되지 않았어요. 센터에 문의해 주세요." },
+      { status: 400 }
+    );
+  }
+  for (const s of snapshot.filter((x) => x?.required)) {
+    if (!body.terms_accepted?.[s.key]) {
+      const label = s.title ? `필수 약관(${s.title})` : "필수 약관";
+      return NextResponse.json({ error: `${label}에 동의해 주세요` }, { status: 400 });
     }
   }
 

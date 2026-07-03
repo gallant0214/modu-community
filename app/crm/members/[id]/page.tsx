@@ -1559,6 +1559,9 @@ function RequestLinkModal({
 
   const generate = async () => {
     setError("");
+    if (!templateId) {
+      return setError("계약서 양식을 선택해 주세요");
+    }
     setCreating(true);
     try {
       const token = await getIdToken();
@@ -1567,7 +1570,7 @@ function RequestLinkModal({
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify({
           member_id: memberId,
-          template_id: templateId || undefined,
+          template_id: templateId,
         }),
       });
       const data = await res.json();
@@ -1626,15 +1629,15 @@ function RequestLinkModal({
         ) : (
           <>
             <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-              계약서 양식을 선택하고 요청 링크를 생성하세요. 양식을 선택하지 않으면 회원이 링크에서 직접 정보를 채우게 됩니다.
+              회원이 서명 화면에서 계약서 내용을 반드시 볼 수 있어야 하므로 양식은 필수입니다.
             </p>
 
-            <CrmField label="계약서 양식">
+            <CrmField label="계약서 양식" required>
               {loading ? (
                 <div className="text-[12.5px] text-[#8C8270]">불러오는 중…</div>
               ) : templates.length === 0 ? (
                 <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[12.5px] text-[#8C8270]">
-                  등록된 양식이 없어요. {" "}
+                  등록된 양식이 없어요.{" "}
                   <Link href="/crm/contracts" className="text-[#6B7B3A] hover:underline font-medium">
                     양식 만들러 가기 →
                   </Link>
@@ -1647,7 +1650,7 @@ function RequestLinkModal({
                     setTemplateId(e.target.value ? Number(e.target.value) : "")
                   }
                 >
-                  <option value="">양식 없이 요청</option>
+                  <option value="">— 양식을 선택해 주세요 —</option>
                   {templates.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.title}

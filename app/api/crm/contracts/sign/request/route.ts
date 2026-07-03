@@ -44,25 +44,41 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "회원을 찾을 수 없어요" }, { status: 404 });
   }
 
-  // 템플릿 (선택)
-  let title = "피티 회원가입 계약서";
-  let termsSnapshot: unknown = [];
-  if (body.template_id) {
-    const { data: tpl } = await supabase
-      .from("crm_contract_templates")
-      .select("id, title, body, sections")
-      .eq("id", body.template_id)
-      .eq("center_id", ctx.centerId)
-      .eq("status", "active")
-      .maybeSingle();
-    if (!tpl) {
-      return NextResponse.json({ error: "계약서 양식을 찾을 수 없어요" }, { status: 404 });
-    }
-    title = tpl.title;
-    termsSnapshot =
-      Array.isArray(tpl.sections) && tpl.sections.length > 0
-        ? tpl.sections
-        : [{ key: "default", title: tpl.title, body: tpl.body, required: true }];
+  // 템플릿 필수 — 회원이 서명 화면에서 계약서 내용을 볼 수 있어야 하므로
+  if (!body.template_id) {
+    return NextResponse.json(
+      { error: "계약서 양식을 선택해 주세요" },
+      { status: 400 }
+    );
+  }
+  const { data: tpl } = await supabase
+    .from("crm_contract_templates")
+    .select("id, title, body, sections")
+    .eq("id", body.template_id)
+    .eq("center_id", ctx.centerId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (!tpl) {
+    return NextResponse.json({ error: "계약서 양식을 찾을 수 없어요" }, { status: 404 });
+  }
+  const title = tpl.title;
+  const termsSnapshot: { key: string; title: string; body: string; required: boolean }[] =
+    Array.isArray(tpl.sections) && tpl.sections.length > 0
+      ? (tpl.sections as { key: string; title: string; body: string; required: boolean }[])
+      : [
+          {
+            key: "default",
+            title: tpl.title,
+            body: tpl.body ?? "",
+            required: true,
+          },
+        ];
+  const hasContent = termsSnapshot.some((s) => (s.body ?? "").trim().length > 0);
+  if (!hasContent) {
+    return NextResponse.json(
+      { error: "선택한 양식에 본문이 비어 있어요. 양식을 편집한 뒤 다시 요청해 주세요." },
+      { status: 400 }
+    );
   }
 
   // 수강권/회원권 스냅샷
