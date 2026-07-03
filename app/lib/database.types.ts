@@ -1847,6 +1847,39 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_contract_categories: {
+        Row: {
+          id: number
+          center_id: number
+          key: string
+          label: string
+          sort_order: number
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          key: string
+          label: string
+          sort_order?: number
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          key?: string
+          label?: string
+          sort_order?: number
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_contract_templates: {
         Row: {
           id: number
@@ -1854,6 +1887,7 @@ export type Database = {
           category: string
           title: string
           body: string
+          sections: unknown
           created_by_uid: string
           status: string
           created_at: string
@@ -1865,6 +1899,7 @@ export type Database = {
           category: string
           title: string
           body?: string
+          sections?: unknown
           created_by_uid: string
           status?: string
           created_at?: string
@@ -1876,6 +1911,7 @@ export type Database = {
           category?: string
           title?: string
           body?: string
+          sections?: unknown
           created_by_uid?: string
           status?: string
           created_at?: string

@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
-import { DEFAULT_PT_CONTRACT_TERMS } from "../_components/pt-contract-terms";
+import {
+  ContractSectionsEditor,
+  ContractSection,
+} from "../_components/contract-sections-editor";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 import { CONTRACT_CATEGORY_LABEL } from "../_components/crm-labels";
 
@@ -13,7 +16,7 @@ type Tab = "templates" | "signed";
 
 interface Contract {
   id: number;
-  category: Category;
+  category: string;
   title: string;
   created_by_uid: string;
   created_at: string;
@@ -51,6 +54,7 @@ export default function CrmContractsPage() {
   const [sort, setSort] = useState<Sort>("name_asc");
   const [list, setList] = useState<Contract[]>([]);
   const [signedList, setSignedList] = useState<SignedContract[]>([]);
+  const [customCats, setCustomCats] = useState<{ id: number; key: string; label: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -95,6 +99,27 @@ export default function CrmContractsPage() {
     const t = setTimeout(load, 200);
     return () => clearTimeout(t);
   }, [load]);
+
+  // 커스텀 카테고리 로드 (라벨 매핑용)
+  useEffect(() => {
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/contract-categories", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCustomCats(data.categories ?? []);
+      }
+    })();
+  }, [getIdToken]);
+
+  const categoryLabel = (key: string): string =>
+    CONTRACT_CATEGORY_LABEL[key] ??
+    customCats.find((c) => c.key === key)?.label ??
+    key;
 
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-6xl mx-auto">
@@ -206,7 +231,7 @@ export default function CrmContractsPage() {
                     {c.title}
                   </div>
                   <div className="mt-2 text-[12px] text-[#6B5D47] dark:text-zinc-400">
-                    카테고리 : <strong className="text-[#3A342A] dark:text-zinc-300">{CONTRACT_CATEGORY_LABEL[c.category] ?? c.category}</strong>
+                    카테고리 : <strong className="text-[#3A342A] dark:text-zinc-300">{categoryLabel(c.category)}</strong>
                   </div>
                   <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500">
                     생성일 : {formatDateTime(c.created_at)}
@@ -282,8 +307,12 @@ function CreateModal({
 }) {
   const { getIdToken } = useAuth();
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<Category>("purchase");
-  const [body, setBody] = useState("");
+  const [category, setCategory] = useState<string>("purchase");
+  const [customCats, setCustomCats] = useState<{ id: number; key: string; label: string }[]>([]);
+  const [newCatOpen, setNewCatOpen] = useState(false);
+  const [newCatLabel, setNewCatLabel] = useState("");
+  const [addingCat, setAddingCat] = useState(false);
+  const [sections, setSections] = useState<ContractSection[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -291,10 +320,51 @@ function CreateModal({
     if (!open) {
       setTitle("");
       setCategory("purchase");
-      setBody("");
+      setSections([]);
+      setNewCatOpen(false);
+      setNewCatLabel("");
       setError("");
+      return;
     }
-  }, [open]);
+    // 커스텀 카테고리 로드
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/contract-categories", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCustomCats(data.categories ?? []);
+      }
+    })();
+  }, [open, getIdToken]);
+
+  const addCategory = async () => {
+    setError("");
+    const label = newCatLabel.trim();
+    if (!label) return setError("카테고리 이름을 입력해 주세요");
+    setAddingCat(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/contract-categories", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ label }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "추가 실패");
+      setCustomCats((prev) => [...prev, data.category]);
+      setCategory(data.category.key);
+      setNewCatLabel("");
+      setNewCatOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setAddingCat(false);
+    }
+  };
 
   const submit = async () => {
     setError("");
@@ -305,7 +375,7 @@ function CreateModal({
       const res = await fetch("/api/crm/contracts", {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), category, body }),
+        body: JSON.stringify({ title: title.trim(), category, sections }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "작성 실패");
@@ -321,17 +391,70 @@ function CreateModal({
     <CrmModal open={open} onClose={onClose} title="새 계약서" size="lg">
       <div className="space-y-3">
         <CrmField label="카테고리" required>
-          <select
-            className={crmInputClass}
-            value={category}
-            onChange={(e) => setCategory(e.target.value as Category)}
-          >
-            {(["purchase", "transfer", "refund", "employment", "etc"] as const).map((k) => (
-              <option key={k} value={k}>
-                {CONTRACT_CATEGORY_LABEL[k]}
-              </option>
-            ))}
-          </select>
+          {newCatOpen ? (
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                type="text"
+                value={newCatLabel}
+                onChange={(e) => setNewCatLabel(e.target.value.slice(0, 20))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addCategory();
+                  }
+                  if (e.key === "Escape") {
+                    setNewCatOpen(false);
+                    setNewCatLabel("");
+                  }
+                }}
+                placeholder="새 카테고리 이름"
+                className={`${crmInputClass} flex-1`}
+              />
+              <button
+                type="button"
+                onClick={addCategory}
+                disabled={addingCat || !newCatLabel.trim()}
+                className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold disabled:opacity-60"
+              >
+                {addingCat ? "…" : "추가"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewCatOpen(false);
+                  setNewCatLabel("");
+                }}
+                className="px-2 py-2 rounded-lg text-[13px] text-[#6B5D47]"
+              >
+                취소
+              </button>
+            </div>
+          ) : (
+            <select
+              className={crmInputClass}
+              value={category}
+              onChange={(e) => {
+                if (e.target.value === "__add__") {
+                  setNewCatOpen(true);
+                } else {
+                  setCategory(e.target.value);
+                }
+              }}
+            >
+              {(["purchase", "transfer", "refund", "employment", "etc"] as const).map((k) => (
+                <option key={k} value={k}>
+                  {CONTRACT_CATEGORY_LABEL[k]}
+                </option>
+              ))}
+              {customCats.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+              <option value="__add__">+ 생성하기</option>
+            </select>
+          )}
         </CrmField>
         <CrmField label="제목" required>
           <input
@@ -342,45 +465,8 @@ function CreateModal({
             autoFocus
           />
         </CrmField>
-        <CrmField label="내용">
-          <textarea
-            className={`${crmInputClass} min-h-[240px] font-mono text-[13px]`}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="계약 조항을 입력해 주세요."
-          />
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={() =>
-                setBody(
-                  DEFAULT_PT_CONTRACT_TERMS.map(
-                    (t) => `[${t.title}]\n\n${t.body}`
-                  ).join("\n\n\n")
-                )
-              }
-              className="px-2.5 py-1 rounded-full text-[11.5px] font-medium border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 hover:bg-amber-50/60"
-            >
-              + PT 기본 약관 5종 가져오기
-            </button>
-            {DEFAULT_PT_CONTRACT_TERMS.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() =>
-                  setBody((prev) =>
-                    (prev ? prev + "\n\n\n" : "") + `[${t.title}]\n\n${t.body}`
-                  )
-                }
-                className="px-2.5 py-1 rounded-full text-[11.5px] font-medium border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-400 hover:border-[#6B7B3A]/40"
-              >
-                + {t.title}
-              </button>
-            ))}
-          </div>
-          <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
-            가져온 뒤 센터에 맞게 자유롭게 편집하세요.
-          </p>
+        <CrmField label="내용 (섹션별)">
+          <ContractSectionsEditor sections={sections} onChange={setSections} />
         </CrmField>
 
         {error && (
@@ -418,17 +504,20 @@ function DetailModal({
   const [error, setError] = useState("");
   const [data, setData] = useState<{
     id: number;
-    category: Category;
+    category: string;
     title: string;
     body: string;
+    sections: unknown;
     created_at: string;
     updated_at: string;
   } | null>(null);
 
   // 편집 폼 state
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<Category>("purchase");
+  const [category, setCategory] = useState<string>("purchase");
   const [body, setBody] = useState("");
+  const [sections, setSections] = useState<ContractSection[]>([]);
+  const [customCats, setCustomCats] = useState<{ id: number; key: string; label: string }[]>([]);
 
   useEffect(() => {
     if (contractId === null) {
@@ -443,16 +532,35 @@ function DetailModal({
       try {
         const token = await getIdToken();
         if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-        const res = await fetch(`/api/crm/contracts/${contractId}`, {
-          headers: { authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json?.error || "조회 실패");
+        const [detailRes, catRes] = await Promise.all([
+          fetch(`/api/crm/contracts/${contractId}`, {
+            headers: { authorization: `Bearer ${token}` },
+            cache: "no-store",
+          }),
+          fetch("/api/crm/contract-categories", {
+            headers: { authorization: `Bearer ${token}` },
+            cache: "no-store",
+          }),
+        ]);
+        const json = await detailRes.json();
+        if (!detailRes.ok) throw new Error(json?.error || "조회 실패");
         setData(json.contract);
         setTitle(json.contract.title);
         setCategory(json.contract.category);
         setBody(json.contract.body);
+        const secs = Array.isArray(json.contract.sections) ? json.contract.sections : [];
+        setSections(
+          secs.map((s: { key?: string; title?: string; body?: string; required?: boolean }, i: number) => ({
+            key: s.key || `s${i + 1}`,
+            title: s.title || "",
+            body: s.body || "",
+            required: s.required !== false,
+          }))
+        );
+        if (catRes.ok) {
+          const c = await catRes.json();
+          setCustomCats(c.categories ?? []);
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "네트워크 오류");
       } finally {
@@ -467,10 +575,14 @@ function DetailModal({
     if (!title.trim()) return setError("제목을 입력해주세요");
     try {
       const token = await getIdToken();
+      const bodyPayload =
+        sections.length > 0
+          ? { title: title.trim(), category, sections }
+          : { title: title.trim(), category, body };
       const res = await fetch(`/api/crm/contracts/${data.id}`, {
         method: "PATCH",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), category, body }),
+        body: JSON.stringify(bodyPayload),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "저장 실패");
@@ -514,11 +626,16 @@ function DetailModal({
             <select
               className={crmInputClass}
               value={category}
-              onChange={(e) => setCategory(e.target.value as Category)}
+              onChange={(e) => setCategory(e.target.value)}
             >
               {(["purchase", "transfer", "refund", "employment", "etc"] as const).map((k) => (
                 <option key={k} value={k}>
                   {CONTRACT_CATEGORY_LABEL[k]}
+                </option>
+              ))}
+              {customCats.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
                 </option>
               ))}
             </select>
@@ -530,12 +647,8 @@ function DetailModal({
               onChange={(e) => setTitle(e.target.value)}
             />
           </CrmField>
-          <CrmField label="내용">
-            <textarea
-              className={`${crmInputClass} min-h-[240px] font-mono text-[13px]`}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-            />
+          <CrmField label="내용 (섹션별)">
+            <ContractSectionsEditor sections={sections} onChange={setSections} />
           </CrmField>
 
           {error && (
@@ -567,7 +680,11 @@ function DetailModal({
       ) : (
         <div className="space-y-3">
           <div>
-            <div className="text-[11.5px] text-[#A89B80]">{CONTRACT_CATEGORY_LABEL[data.category] ?? data.category}</div>
+            <div className="text-[11.5px] text-[#A89B80]">
+              {CONTRACT_CATEGORY_LABEL[data.category] ??
+                customCats.find((c) => c.key === data.category)?.label ??
+                data.category}
+            </div>
             <h2 className="mt-0.5 text-[18px] font-bold text-[#2A251D] dark:text-zinc-100">
               {data.title}
             </h2>

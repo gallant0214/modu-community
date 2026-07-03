@@ -8,11 +8,19 @@ import { crmInputClass } from "../../../_components/crm-modal";
 import { formatPhone, formatWon } from "../../../_components/crm-labels";
 import { DEFAULT_PT_CONTRACT_TERMS } from "../../../_components/pt-contract-terms";
 
+interface TemplateSection {
+  key: string;
+  title: string;
+  body: string;
+  required: boolean;
+}
+
 interface Template {
   id: number;
   category: string;
   title: string;
   body: string;
+  sections?: TemplateSection[];
 }
 
 interface PassInfo {
@@ -208,9 +216,17 @@ export default function CrmContractSignNewPage() {
   const toggleAgree = (key: string) =>
     setAgreed((prev) => ({ ...prev, [key]: !prev[key] }));
 
-  const requiredOk = template
-    ? !!agreed[`template_${template.id}`]
-    : DEFAULT_PT_CONTRACT_TERMS.filter((t) => t.required).every((t) => agreed[t.key]);
+  const requiredOk = (() => {
+    if (template && Array.isArray(template.sections) && template.sections.length > 0) {
+      return template.sections
+        .filter((s) => s.required)
+        .every((s, i) => agreed[`sec_${s.key || i}`]);
+    }
+    if (template) {
+      return !!agreed[`template_${template.id}`];
+    }
+    return DEFAULT_PT_CONTRACT_TERMS.filter((t) => t.required).every((t) => agreed[t.key]);
+  })();
 
   const submit = async () => {
     setError("");
@@ -271,16 +287,24 @@ export default function CrmContractSignNewPage() {
                 }
               : null,
           terms_accepted: agreed,
-          terms_snapshot: template
-            ? [
-                {
-                  key: `template_${template.id}`,
-                  title: template.title,
-                  body: template.body,
-                  required: true,
-                },
-              ]
-            : DEFAULT_PT_CONTRACT_TERMS,
+          terms_snapshot:
+            template && Array.isArray(template.sections) && template.sections.length > 0
+              ? template.sections.map((s, i) => ({
+                  key: `sec_${s.key || i}`,
+                  title: s.title,
+                  body: s.body,
+                  required: !!s.required,
+                }))
+              : template
+                ? [
+                    {
+                      key: `template_${template.id}`,
+                      title: template.title,
+                      body: template.body,
+                      required: true,
+                    },
+                  ]
+                : DEFAULT_PT_CONTRACT_TERMS,
           signature_data_url: signatureDataUrl,
         }),
       });
@@ -441,8 +465,32 @@ export default function CrmContractSignNewPage() {
         )}
       </Section>
 
-      {/* 약관 (템플릿 선택 시 단일 본문, 아니면 기본 5종) */}
-      {template ? (
+      {/* 약관: 템플릿 sections > body > 기본 5종 순서로 폴백 */}
+      {template && Array.isArray(template.sections) && template.sections.length > 0 ? (
+        template.sections.map((s, i) => (
+          <Section
+            key={s.key || i}
+            title={`[${s.title || `섹션 ${i + 1}`}]`}
+            headerNote={s.required ? "필수" : "선택"}
+            noteColor={s.required ? "warn" : "info"}
+          >
+            <pre className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-300 font-sans max-h-[320px] overflow-y-auto px-3 py-3 border border-[#E8E0D0]/70 dark:border-zinc-800 rounded-lg bg-[#FBF7EB]/40 dark:bg-zinc-900/40">
+              {s.body || "(본문이 비어 있습니다)"}
+            </pre>
+            <label className="mt-3 flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!agreed[`sec_${s.key || i}`]}
+                onChange={() => toggleAgree(`sec_${s.key || i}`)}
+                className="w-4 h-4 accent-[#6B7B3A]"
+              />
+              <span className="text-[13px] text-[#3A342A] dark:text-zinc-300">
+                ({s.required ? "필수" : "선택"}) 위의 약관을 확인하였으며 동의합니다.
+              </span>
+            </label>
+          </Section>
+        ))
+      ) : template ? (
         <Section
           title={`[${template.title}]`}
           headerNote="필수"

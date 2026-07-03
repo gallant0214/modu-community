@@ -6,7 +6,10 @@ import { useAuth } from "@/app/components/auth-provider";
 import { CrmModal, CrmField } from "../_components/crm-modal";
 import { crmInputClass } from "../_components/crm-modal";
 import { CONTRACT_CATEGORY_LABEL } from "../_components/crm-labels";
-import { DEFAULT_PT_CONTRACT_TERMS } from "../_components/pt-contract-terms";
+import {
+  ContractSectionsEditor,
+  ContractSection,
+} from "../_components/contract-sections-editor";
 
 interface Settings {
   center_id: number;
@@ -1353,8 +1356,12 @@ function ContractTemplateEditModal({
 }) {
   const { getIdToken } = useAuth();
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<ContractCategory>("purchase");
-  const [body, setBody] = useState("");
+  const [category, setCategory] = useState<string>("purchase");
+  const [customCats, setCustomCats] = useState<{ id: number; key: string; label: string }[]>([]);
+  const [newCatOpen, setNewCatOpen] = useState(false);
+  const [newCatLabel, setNewCatLabel] = useState("");
+  const [addingCat, setAddingCat] = useState(false);
+  const [sections, setSections] = useState<ContractSection[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -1363,10 +1370,25 @@ function ContractTemplateEditModal({
     if (!open) {
       setTitle("");
       setCategory("purchase");
-      setBody("");
+      setSections([]);
+      setNewCatOpen(false);
+      setNewCatLabel("");
       setError("");
       return;
     }
+    // 카테고리 로드
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/contract-categories", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCustomCats(data.categories ?? []);
+      }
+    })();
     if (mode === "edit" && templateId) {
       (async () => {
         setLoading(true);
@@ -1380,7 +1402,20 @@ function ContractTemplateEditModal({
           if (res.ok && data.contract) {
             setTitle(data.contract.title);
             setCategory(data.contract.category);
-            setBody(data.contract.body);
+            const secs = Array.isArray(data.contract.sections) ? data.contract.sections : [];
+            setSections(
+              secs.map(
+                (
+                  s: { key?: string; title?: string; body?: string; required?: boolean },
+                  i: number
+                ) => ({
+                  key: s.key || `s${i + 1}`,
+                  title: s.title || "",
+                  body: s.body || "",
+                  required: s.required !== false,
+                })
+              )
+            );
           } else {
             setError(data?.error || "조회 실패");
           }
@@ -1392,6 +1427,31 @@ function ContractTemplateEditModal({
       })();
     }
   }, [open, mode, templateId, getIdToken]);
+
+  const addCategory = async () => {
+    setError("");
+    const label = newCatLabel.trim();
+    if (!label) return setError("카테고리 이름을 입력해 주세요");
+    setAddingCat(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/contract-categories", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ label }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "추가 실패");
+      setCustomCats((prev) => [...prev, data.category]);
+      setCategory(data.category.key);
+      setNewCatLabel("");
+      setNewCatOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setAddingCat(false);
+    }
+  };
 
   const submit = async () => {
     setError("");
@@ -1407,7 +1467,7 @@ function ContractTemplateEditModal({
       const res = await fetch(path, {
         method,
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), category, body }),
+        body: JSON.stringify({ title: title.trim(), category, sections }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "저장 실패");
@@ -1442,17 +1502,70 @@ function ContractTemplateEditModal({
       ) : (
         <div className="space-y-3">
           <CrmField label="카테고리" required>
-            <select
-              className={crmInputClass}
-              value={category}
-              onChange={(e) => setCategory(e.target.value as ContractCategory)}
-            >
-              {(["purchase", "transfer", "refund", "employment", "etc"] as const).map((k) => (
-                <option key={k} value={k}>
-                  {CONTRACT_CATEGORY_LABEL[k]}
-                </option>
-              ))}
-            </select>
+            {newCatOpen ? (
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  type="text"
+                  value={newCatLabel}
+                  onChange={(e) => setNewCatLabel(e.target.value.slice(0, 20))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addCategory();
+                    }
+                    if (e.key === "Escape") {
+                      setNewCatOpen(false);
+                      setNewCatLabel("");
+                    }
+                  }}
+                  placeholder="새 카테고리 이름"
+                  className={`${crmInputClass} flex-1`}
+                />
+                <button
+                  type="button"
+                  onClick={addCategory}
+                  disabled={addingCat || !newCatLabel.trim()}
+                  className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold disabled:opacity-60"
+                >
+                  {addingCat ? "…" : "추가"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewCatOpen(false);
+                    setNewCatLabel("");
+                  }}
+                  className="px-2 py-2 rounded-lg text-[13px] text-[#6B5D47]"
+                >
+                  취소
+                </button>
+              </div>
+            ) : (
+              <select
+                className={crmInputClass}
+                value={category}
+                onChange={(e) => {
+                  if (e.target.value === "__add__") {
+                    setNewCatOpen(true);
+                  } else {
+                    setCategory(e.target.value);
+                  }
+                }}
+              >
+                {(["purchase", "transfer", "refund", "employment", "etc"] as const).map((k) => (
+                  <option key={k} value={k}>
+                    {CONTRACT_CATEGORY_LABEL[k]}
+                  </option>
+                ))}
+                {customCats.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                  </option>
+                ))}
+                <option value="__add__">+ 생성하기</option>
+              </select>
+            )}
           </CrmField>
           <CrmField label="제목" required>
             <input
@@ -1463,45 +1576,8 @@ function ContractTemplateEditModal({
               autoFocus
             />
           </CrmField>
-          <CrmField label="내용">
-            <textarea
-              className={`${crmInputClass} min-h-[260px] font-mono text-[13px]`}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="계약 조항을 입력해 주세요."
-            />
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                onClick={() =>
-                  setBody(
-                    DEFAULT_PT_CONTRACT_TERMS.map(
-                      (t) => `[${t.title}]\n\n${t.body}`
-                    ).join("\n\n\n")
-                  )
-                }
-                className="px-2.5 py-1 rounded-full text-[11.5px] font-medium border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 hover:bg-amber-50/60"
-              >
-                + PT 기본 약관 5종 가져오기
-              </button>
-              {DEFAULT_PT_CONTRACT_TERMS.map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() =>
-                    setBody((prev) =>
-                      (prev ? prev + "\n\n\n" : "") + `[${t.title}]\n\n${t.body}`
-                    )
-                  }
-                  className="px-2.5 py-1 rounded-full text-[11.5px] font-medium border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-400 hover:border-[#6B7B3A]/40"
-                >
-                  + {t.title}
-                </button>
-              ))}
-            </div>
-            <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
-              가져온 뒤 센터에 맞게 자유롭게 편집하세요.
-            </p>
+          <CrmField label="내용 (섹션별)">
+            <ContractSectionsEditor sections={sections} onChange={setSections} />
           </CrmField>
 
           {error && (

@@ -48,15 +48,46 @@ export async function GET(request: Request) {
   return NextResponse.json({ contracts: data ?? [] });
 }
 
+interface SectionInput {
+  key?: string;
+  title?: string;
+  body?: string;
+  required?: boolean;
+}
+
+function normalizeSections(sections: unknown): {
+  key: string;
+  title: string;
+  body: string;
+  required: boolean;
+}[] {
+  if (!Array.isArray(sections)) return [];
+  return sections
+    .map((s: SectionInput, i: number) => ({
+      key: (s.key || `s${i + 1}`).trim(),
+      title: (s.title || "").trim(),
+      body: (s.body || "").toString(),
+      required: !!s.required,
+    }))
+    .filter((s) => s.title || s.body);
+}
+
+/** sections → 하위호환용 body 문자열 (기존 렌더 폴백에 사용) */
+function sectionsToBody(
+  sections: { title: string; body: string }[]
+): string {
+  return sections.map((s) => `[${s.title}]\n\n${s.body}`).join("\n\n\n");
+}
+
 /**
  * POST /api/crm/contracts — 새 계약서 템플릿 작성. owner/admin 만.
- * body: { title, category, body? }
+ * body: { title, category, body?, sections? }
  */
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request, { needRole: "admin" });
   if (isCrmError(ctx)) return ctx;
 
-  let body: { title?: string; category?: string; body?: string };
+  let body: { title?: string; category?: string; body?: string; sections?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -67,9 +98,25 @@ export async function POST(request: Request) {
   if (!title) return NextResponse.json({ error: "계약서 제목을 입력해주세요" }, { status: 400 });
 
   const category = body.category;
-  if (!category || !CATEGORIES.includes(category as Category)) {
-    return NextResponse.json({ error: "카테고리 값이 잘못됨" }, { status: 400 });
+  if (!category) {
+    return NextResponse.json({ error: "카테고리를 선택해 주세요" }, { status: 400 });
   }
+  const isBuiltIn = CATEGORIES.includes(category as Category);
+  if (!isBuiltIn) {
+    const { data: custom } = await supabase
+      .from("crm_contract_categories")
+      .select("key")
+      .eq("center_id", ctx.centerId)
+      .eq("key", category)
+      .eq("status", "active")
+      .maybeSingle();
+    if (!custom) {
+      return NextResponse.json({ error: "등록되지 않은 카테고리에요" }, { status: 400 });
+    }
+  }
+
+  const sections = normalizeSections(body.sections);
+  const bodyText = sections.length > 0 ? sectionsToBody(sections) : (body.body ?? "");
 
   const { data, error } = await supabase
     .from("crm_contract_templates")
@@ -77,7 +124,8 @@ export async function POST(request: Request) {
       center_id: ctx.centerId,
       category,
       title,
-      body: body.body ?? "",
+      body: bodyText,
+      sections: sections as never,
       created_by_uid: ctx.uid,
     })
     .select("id")

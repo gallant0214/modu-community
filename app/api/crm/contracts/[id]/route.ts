@@ -22,7 +22,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("crm_contract_templates")
-    .select("id, category, title, body, created_by_uid, created_at, updated_at, status")
+    .select("id, category, title, body, sections, created_by_uid, created_at, updated_at, status")
     .eq("id", contractId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -50,7 +50,12 @@ export async function PATCH(
   const contractId = Number(id);
   if (!contractId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
-  let body: { title?: string; category?: string; body?: string };
+  let body: {
+    title?: string;
+    category?: string;
+    body?: string;
+    sections?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -64,12 +69,39 @@ export async function PATCH(
     patch.title = v;
   }
   if (body.category !== undefined) {
-    if (!CATEGORIES.includes(body.category as (typeof CATEGORIES)[number])) {
-      return NextResponse.json({ error: "카테고리 값이 잘못됨" }, { status: 400 });
+    const cat = body.category;
+    const isBuiltIn = CATEGORIES.includes(cat as (typeof CATEGORIES)[number]);
+    if (!isBuiltIn) {
+      const { data: custom } = await supabase
+        .from("crm_contract_categories")
+        .select("key")
+        .eq("center_id", ctx.centerId)
+        .eq("key", cat)
+        .eq("status", "active")
+        .maybeSingle();
+      if (!custom) {
+        return NextResponse.json({ error: "등록되지 않은 카테고리에요" }, { status: 400 });
+      }
     }
-    patch.category = body.category;
+    patch.category = cat;
   }
-  if (body.body !== undefined) patch.body = body.body;
+  if (body.sections !== undefined) {
+    const normalized = Array.isArray(body.sections)
+      ? (body.sections as { key?: string; title?: string; body?: string; required?: boolean }[])
+          .map((s, i) => ({
+            key: (s.key || `s${i + 1}`).trim(),
+            title: (s.title || "").trim(),
+            body: (s.body || "").toString(),
+            required: !!s.required,
+          }))
+          .filter((s) => s.title || s.body)
+      : [];
+    patch.sections = normalized;
+    // 하위호환 body 도 함께 갱신
+    patch.body = normalized.map((s) => `[${s.title}]\n\n${s.body}`).join("\n\n\n");
+  } else if (body.body !== undefined) {
+    patch.body = body.body;
+  }
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
