@@ -62,17 +62,60 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "계약서 양식을 찾을 수 없어요" }, { status: 404 });
   }
   const title = tpl.title;
-  const termsSnapshot: { key: string; title: string; body: string; required: boolean }[] =
+
+  // 1) sections 컬럼이 있으면 그대로 사용
+  // 2) 없으면 body 안의 [제목] 헤더로 자동 분리 (구버전 단일 body 템플릿 호환)
+  // 3) 그것도 실패하면 body 전체를 단일 섹션으로
+  const parseSectionsFromBody = (rawBody: string) => {
+    if (!rawBody) return [];
+    const lines = rawBody.split("\n");
+    const parsed: { key: string; title: string; body: string; required: boolean }[] = [];
+    let currentTitle = "";
+    let currentBody: string[] = [];
+    let index = 0;
+    const push = () => {
+      const bodyText = currentBody.join("\n").trim();
+      if (currentTitle || bodyText) {
+        // 광고성 관련은 선택, 나머지는 필수 (일반적인 관행)
+        const isOptional = /광고/.test(currentTitle);
+        parsed.push({
+          key: `s${index + 1}`,
+          title: currentTitle || `섹션 ${index + 1}`,
+          body: bodyText,
+          required: !isOptional,
+        });
+        index += 1;
+      }
+    };
+    for (const line of lines) {
+      const m = line.match(/^\s*\[(.+?)\]\s*$/);
+      if (m) {
+        push();
+        currentTitle = m[1].trim();
+        currentBody = [];
+      } else {
+        currentBody.push(line);
+      }
+    }
+    push();
+    return parsed;
+  };
+
+  let termsSnapshot: { key: string; title: string; body: string; required: boolean }[] =
     Array.isArray(tpl.sections) && tpl.sections.length > 0
       ? (tpl.sections as { key: string; title: string; body: string; required: boolean }[])
-      : [
-          {
-            key: "default",
-            title: tpl.title,
-            body: tpl.body ?? "",
-            required: true,
-          },
-        ];
+      : parseSectionsFromBody(tpl.body ?? "");
+
+  if (termsSnapshot.length === 0) {
+    termsSnapshot = [
+      {
+        key: "default",
+        title: tpl.title,
+        body: tpl.body ?? "",
+        required: true,
+      },
+    ];
+  }
   const hasContent = termsSnapshot.some((s) => (s.body ?? "").trim().length > 0);
   if (!hasContent) {
     return NextResponse.json(
