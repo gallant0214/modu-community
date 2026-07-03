@@ -4,6 +4,72 @@ import { supabase } from "@/app/lib/supabase";
 export const dynamic = "force-dynamic";
 
 /**
+ * 단일 body 안에 "^\[제목\]$" 헤더가 여러 개 있으면 섹션 배열로 분리.
+ * 구버전 템플릿 호환용.
+ */
+function parseSectionsFromBody(rawBody: string) {
+  if (!rawBody) return [];
+  const lines = rawBody.split("\n");
+  const parsed: { key: string; title: string; body: string; required: boolean }[] = [];
+  let currentTitle = "";
+  let currentBody: string[] = [];
+  let idx = 0;
+  const push = () => {
+    const bodyText = currentBody.join("\n").trim();
+    if (currentTitle || bodyText) {
+      const isOptional = /광고/.test(currentTitle);
+      parsed.push({
+        key: `s${idx + 1}`,
+        title: currentTitle || `섹션 ${idx + 1}`,
+        body: bodyText,
+        required: !isOptional,
+      });
+      idx += 1;
+    }
+  };
+  for (const line of lines) {
+    const m = line.match(/^\s*\[(.+?)\]\s*$/);
+    if (m) {
+      push();
+      currentTitle = m[1].trim();
+      currentBody = [];
+    } else {
+      currentBody.push(line);
+    }
+  }
+  push();
+  return parsed;
+}
+
+/**
+ * 이미 저장된 terms_snapshot 을 표시용으로 보정.
+ * 단일 섹션에 [제목] 헤더가 여러 개 들어있는 구버전 스냅샷을 자동 분리.
+ */
+function normalizeSnapshot(snapshot: unknown): {
+  key: string;
+  title: string;
+  body: string;
+  required: boolean;
+}[] {
+  if (!Array.isArray(snapshot)) return [];
+  const arr = snapshot as { key?: string; title?: string; body?: string; required?: boolean }[];
+  // 단일 항목이고 body 안에 [헤더] 라인이 2개 이상이면 자동 분리
+  if (arr.length === 1 && (arr[0]?.body ?? "").length > 0) {
+    const headerCount = (arr[0].body!.match(/^\s*\[.+?\]\s*$/gm) ?? []).length;
+    if (headerCount >= 2) {
+      const parsed = parseSectionsFromBody(arr[0].body!);
+      if (parsed.length >= 2) return parsed;
+    }
+  }
+  return arr.map((s, i) => ({
+    key: s.key || `s${i + 1}`,
+    title: s.title || `섹션 ${i + 1}`,
+    body: s.body ?? "",
+    required: s.required !== false,
+  }));
+}
+
+/**
  * 회원 서명용 공개 엔드포인트 (인증 없이 token 만으로 접근).
  * signing_token 이 발급된 pending_signature 계약서에만 유효.
  */
@@ -34,7 +100,11 @@ export async function GET(
   if (data.status === "voided") {
     return NextResponse.json({ error: "무효 처리된 계약서에요" }, { status: 410 });
   }
-  return NextResponse.json({ contract: data });
+
+  const normalized = normalizeSnapshot(data.terms_snapshot);
+  return NextResponse.json({
+    contract: { ...data, terms_snapshot: normalized },
+  });
 }
 
 /**
@@ -79,10 +149,8 @@ export async function POST(
     return NextResponse.json({ error: "서명이 필요해요" }, { status: 400 });
   }
 
-  // 필수 약관 검증
-  const snapshot = Array.isArray(existing.terms_snapshot)
-    ? (existing.terms_snapshot as { key: string; title?: string; body?: string; required: boolean }[])
-    : [];
+  // 필수 약관 검증 (GET 과 동일하게 자동 분리한 스냅샷 기준)
+  const snapshot = normalizeSnapshot(existing.terms_snapshot);
   if (snapshot.length === 0) {
     return NextResponse.json(
       { error: "계약서 본문이 없어요. 센터에 다시 링크를 요청해 주세요." },
@@ -120,6 +188,8 @@ export async function POST(
     .update({
       customer_info: mergedCustomer as never,
       terms_accepted: (body.terms_accepted ?? {}) as never,
+      // 자동 분리된 최종 스냅샷을 저장해 상세 페이지에서도 동일하게 보이도록
+      terms_snapshot: snapshot as never,
       signature_data_url: body.signature_data_url,
       signed_at: new Date().toISOString(),
       status: "signed",
