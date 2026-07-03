@@ -80,23 +80,38 @@ export async function PATCH(
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
   }
 
-  // upsert (시드 없는 케이스 안전망)
-  const baseValues = {
-    center_id: ctx.centerId,
-    zone_number: zoneNumber,
-    name: `구역 ${zoneNumber}`,
-    locker_count: 0,
-    start_number: 1,
-    layout_rows: 0,
-    layout_cols: 0,
-    ...patch,
-  };
-  const { error } = await supabase
+  // 존재 여부 확인 후 UPDATE / INSERT 분기.
+  // upsert 는 body 에 없는 컬럼을 기본값으로 덮어씌우기 때문에 사용하지 않음.
+  const { data: existingZone } = await supabase
     .from("crm_locker_zones")
-    .upsert(baseValues as never, { onConflict: "center_id,zone_number" });
+    .select("id")
+    .eq("center_id", ctx.centerId)
+    .eq("zone_number", zoneNumber)
+    .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ error: "저장 실패", detail: error.message }, { status: 500 });
+  if (existingZone) {
+    const { error } = await supabase
+      .from("crm_locker_zones")
+      .update(patch as never)
+      .eq("id", existingZone.id);
+    if (error) {
+      return NextResponse.json({ error: "저장 실패", detail: error.message }, { status: 500 });
+    }
+  } else {
+    const insertRow = {
+      center_id: ctx.centerId,
+      zone_number: zoneNumber,
+      name: `구역 ${zoneNumber}`,
+      locker_count: 0,
+      start_number: 1,
+      layout_rows: 0,
+      layout_cols: 0,
+      ...patch,
+    };
+    const { error } = await supabase.from("crm_locker_zones").insert(insertRow as never);
+    if (error) {
+      return NextResponse.json({ error: "저장 실패", detail: error.message }, { status: 500 });
+    }
   }
 
   // 저장된 zone 가져오기
