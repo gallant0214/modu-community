@@ -485,10 +485,12 @@ function PassIssueModal({
 }) {
   const { getIdToken } = useAuth();
   const [issueType, setIssueType] = useState<"new" | "renewal" | "trial" | "service">("new");
-  const [lessonKind, setLessonKind] = useState("개인PT");
+  const [lessonKind, setLessonKind] = useState("");
+  const [lessonKinds, setLessonKinds] = useState<{ id: number; label: string }[]>([]);
   const [totalSessions, setTotalSessions] = useState(10);
   const [sessionMinutes, setSessionMinutes] = useState(50);
   const [priceWon, setPriceWon] = useState(0);
+  const [vatIncluded, setVatIncluded] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "etc">("card");
   const [paymentCustom, setPaymentCustom] = useState("");
   const [issuedAt, setIssuedAt] = useState(() => new Date().toISOString().slice(0, 10));
@@ -510,6 +512,26 @@ function PassIssueModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, staffList]);
 
+  // 열릴 때 수업 종류 목록 로드
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/lesson-kinds", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const kinds = data.kinds ?? [];
+        setLessonKinds(kinds);
+        if (!lessonKind && kinds.length > 0) setLessonKind(kinds[0].label);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   const submit = async () => {
     setError("");
     if (!lessonKind.trim()) return setError("수업 종류를 입력해주세요");
@@ -530,6 +552,7 @@ function PassIssueModal({
           total_sessions: totalSessions,
           session_minutes: sessionMinutes,
           price_won: priceWon,
+          vat_included: vatIncluded,
           payment_method: paymentMethod,
           payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
           issued_at: issuedAt,
@@ -551,12 +574,30 @@ function PassIssueModal({
     <CrmModal open={open} onClose={onClose} title="수강권 발급" size="lg">
       <div className="space-y-3">
         <CrmField label="수업 종류" required>
-          <input
-            className={crmInputClass}
-            value={lessonKind}
-            onChange={(e) => setLessonKind(e.target.value)}
-            placeholder="예) 개인PT, 그룹PT"
-          />
+          {lessonKinds.length === 0 ? (
+            <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[12.5px] text-[#8C8270]">
+              등록된 수업 종류가 없어요.{" "}
+              <Link
+                href="/crm/settings"
+                className="text-[#6B7B3A] hover:underline font-medium"
+              >
+                설정 → 수강권 종류 에서 추가하러 가기 →
+              </Link>
+            </div>
+          ) : (
+            <select
+              className={crmInputClass}
+              value={lessonKind}
+              onChange={(e) => setLessonKind(e.target.value)}
+            >
+              <option value="">선택해 주세요</option>
+              {lessonKinds.map((k) => (
+                <option key={k.id} value={k.label}>
+                  {k.label}
+                </option>
+              ))}
+            </select>
+          )}
         </CrmField>
         <CrmField label="담당 강사" required>
           <select
@@ -619,6 +660,17 @@ function PassIssueModal({
             onChange={(e) => setPriceWon(parseWon(e.target.value))}
             placeholder="0"
           />
+          <label className="mt-2 flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={vatIncluded}
+              onChange={(e) => setVatIncluded(e.target.checked)}
+              className="w-4 h-4 accent-[#6B7B3A]"
+            />
+            <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+              부가세 포함 금액
+            </span>
+          </label>
         </CrmField>
         <CrmField label="결제 수단">
           <div className="grid grid-cols-4 gap-1.5">

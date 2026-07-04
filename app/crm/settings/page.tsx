@@ -84,7 +84,7 @@ interface BootstrapInfo {
 export default function CrmSettingsPage() {
   const router = useRouter();
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<"reservation" | "alerts" | "grades" | "payout" | "contracts" | "logs" | "danger">("reservation");
+  const [tab, setTab] = useState<"reservation" | "alerts" | "grades" | "payout" | "contracts" | "lessons" | "logs" | "danger">("reservation");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [info, setInfo] = useState<BootstrapInfo | null>(null);
@@ -189,6 +189,9 @@ export default function CrmSettingsPage() {
         </TabBtn>
         <TabBtn active={tab === "contracts"} onClick={() => setTab("contracts")}>
           계약서 관리
+        </TabBtn>
+        <TabBtn active={tab === "lessons"} onClick={() => setTab("lessons")}>
+          수강권 종류
         </TabBtn>
         <TabBtn active={tab === "logs"} onClick={() => setTab("logs")}>
           활동 로그
@@ -324,6 +327,8 @@ export default function CrmSettingsPage() {
       {tab === "payout" && <PayoutRulesPanel />}
 
       {tab === "contracts" && <ContractTemplatesPanel />}
+
+      {tab === "lessons" && <LessonKindsPanel />}
 
       {tab === "logs" && (
         <Card title="최근 활동 (최대 80건)">
@@ -1213,6 +1218,211 @@ function WithdrawModal({
         </div>
       </div>
     </CrmModal>
+  );
+}
+
+/* ─── 수강권 레슨 종류 패널 ──────────────────────── */
+
+interface LessonKind {
+  id: number;
+  label: string;
+  sort_order: number;
+}
+
+function LessonKindsPanel() {
+  const { getIdToken } = useAuth();
+  const [list, setList] = useState<LessonKind[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newLabel, setNewLabel] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch("/api/crm/lesson-kinds", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setList(data.kinds ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const add = async () => {
+    setError("");
+    const label = newLabel.trim();
+    if (!label) return setError("이름을 입력해 주세요");
+    setAdding(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/lesson-kinds", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ label }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "추가 실패");
+      setNewLabel("");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const remove = async (id: number) => {
+    if (!window.confirm("이 종류를 삭제할까요?")) return;
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/lesson-kinds/${id}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (res.ok) load();
+  };
+
+  const startEdit = (k: LessonKind) => {
+    setEditingId(k.id);
+    setEditLabel(k.label);
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditLabel("");
+  };
+  const saveEdit = async () => {
+    if (!editingId) return;
+    const label = editLabel.trim();
+    if (!label) return setError("이름을 입력해 주세요");
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/lesson-kinds/${editingId}`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ label }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data?.error || "수정 실패");
+      return;
+    }
+    cancelEdit();
+    load();
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
+        수강권 발급 시 "수업 종류" 드롭다운에 노출될 항목이에요. 예: 개인 PT / 그룹 PT / 재활 등.
+      </p>
+
+      <div className="flex gap-2">
+        <input
+          className={crmInputClass}
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value.slice(0, 30))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder="예: 개인 PT"
+          maxLength={30}
+        />
+        <button
+          onClick={add}
+          disabled={adding || !newLabel.trim()}
+          className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-60 whitespace-nowrap"
+        >
+          {adding ? "…" : "+ 추가"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : list.length === 0 ? (
+        <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          등록된 수강권 종류가 없어요. 위 입력창에서 추가해 주세요.
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {list.map((k) => (
+            <li
+              key={k.id}
+              className="flex items-center gap-2 px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900"
+            >
+              {editingId === k.id ? (
+                <>
+                  <input
+                    className={`${crmInputClass} flex-1`}
+                    value={editLabel}
+                    onChange={(e) => setEditLabel(e.target.value.slice(0, 30))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        saveEdit();
+                      }
+                      if (e.key === "Escape") cancelEdit();
+                    }}
+                    autoFocus
+                  />
+                  <button
+                    onClick={saveEdit}
+                    className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12px] font-semibold"
+                  >
+                    저장
+                  </button>
+                  <button
+                    onClick={cancelEdit}
+                    className="px-2 py-1.5 text-[12px] text-[#6B5D47]"
+                  >
+                    취소
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="flex-1 text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                    {k.label}
+                  </span>
+                  <button
+                    onClick={() => startEdit(k)}
+                    className="px-2.5 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+                  >
+                    수정
+                  </button>
+                  <button
+                    onClick={() => remove(k.id)}
+                    className="px-2.5 py-1 rounded-md border border-red-200 text-red-700 text-[12px] hover:bg-red-50"
+                  >
+                    삭제
+                  </button>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
