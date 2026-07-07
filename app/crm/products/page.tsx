@@ -192,11 +192,6 @@ export default function CrmProductsPage() {
                   >
                     {typeLabelOf(p.type)}
                   </span>
-                  {p.category && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#F5F0E5] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-300 border border-[#E8E0D0] dark:border-zinc-700">
-                      {p.category}
-                    </span>
-                  )}
                 </div>
                 <button
                   onClick={() => remove(p.id)}

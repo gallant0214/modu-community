@@ -78,47 +78,6 @@ export default function CrmProductNewPage() {
     })();
   }, [getIdToken]);
 
-  // 종류(카테고리) 목록 로드
-  useEffect(() => {
-    (async () => {
-      const token = await getIdToken();
-      if (!token) return;
-      const res = await fetch("/api/crm/product-categories", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setCategoryList(data.categories ?? []);
-      }
-    })();
-  }, [getIdToken]);
-
-  const addCategory = async () => {
-    setCategoryError("");
-    const label = newCategoryLabel.trim();
-    if (!label) return setCategoryError("이름을 입력해 주세요");
-    setSavingCategory(true);
-    try {
-      const token = await getIdToken();
-      const res = await fetch("/api/crm/product-categories", {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ label }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "추가 실패");
-      setCategoryList((prev) => [...prev, data.category]);
-      setCategory(data.category.label);
-      setNewCategoryLabel("");
-      setAddingCategory(false);
-    } catch (e) {
-      setCategoryError(e instanceof Error ? e.message : "네트워크 오류");
-    } finally {
-      setSavingCategory(false);
-    }
-  };
-
   const addCustomType = async () => {
     setAddTypeError("");
     const label = newTypeLabel.trim();
@@ -168,7 +127,6 @@ export default function CrmProductNewPage() {
     }
   };
   const [billingMode, setBillingMode] = useState<BillingMode>("period");
-  const [category, setCategory] = useState("");
   const [name, setName] = useState("");
   const [openTime, setOpenTime] = useState("00:00");
   const [closeTime, setCloseTime] = useState("23:59");
@@ -184,13 +142,6 @@ export default function CrmProductNewPage() {
   const [capacity, setCapacity] = useState(10);
   const [sessionMinutes, setSessionMinutes] = useState(60);
   const [description, setDescription] = useState("");
-  const [categoryList, setCategoryList] = useState<
-    { id: number; label: string }[]
-  >([]);
-  const [addingCategory, setAddingCategory] = useState(false);
-  const [newCategoryLabel, setNewCategoryLabel] = useState("");
-  const [savingCategory, setSavingCategory] = useState(false);
-  const [categoryError, setCategoryError] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -246,7 +197,6 @@ export default function CrmProductNewPage() {
         body: JSON.stringify({
           type,
           billing_mode: billingMode,
-          category: category.trim() || null,
           name: name.trim(),
           description: description.trim() || null,
           open_time: openTime,
@@ -395,78 +345,6 @@ export default function CrmProductNewPage() {
             </button>
           ))}
         </div>
-      </Section>
-
-      {/* 종류 (카테고리) */}
-      <Section title="종류">
-        {addingCategory ? (
-          <div className="flex items-center gap-2">
-            <input
-              autoFocus
-              type="text"
-              value={newCategoryLabel}
-              onChange={(e) => setNewCategoryLabel(e.target.value.slice(0, 40))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addCategory();
-                }
-                if (e.key === "Escape") {
-                  setAddingCategory(false);
-                  setNewCategoryLabel("");
-                  setCategoryError("");
-                }
-              }}
-              placeholder="예: 헬스, PT, 필라테스"
-              maxLength={40}
-              className={`${crmInputClass} flex-1`}
-            />
-            <button
-              type="button"
-              onClick={addCategory}
-              disabled={savingCategory || !newCategoryLabel.trim()}
-              className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold disabled:opacity-60"
-            >
-              {savingCategory ? "…" : "추가"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAddingCategory(false);
-                setNewCategoryLabel("");
-                setCategoryError("");
-              }}
-              className="px-2 py-2 text-[13px] text-[#6B5D47]"
-            >
-              취소
-            </button>
-          </div>
-        ) : (
-          <select
-            className={crmInputClass}
-            value={category}
-            onChange={(e) => {
-              if (e.target.value === "__add__") {
-                setAddingCategory(true);
-              } else {
-                setCategory(e.target.value);
-              }
-            }}
-          >
-            <option value="">— 선택 (선택 안 함) —</option>
-            {categoryList.map((c) => (
-              <option key={c.id} value={c.label}>
-                {c.label}
-              </option>
-            ))}
-            <option value="__add__">+ 새 종류 추가하기</option>
-          </select>
-        )}
-        {categoryError && (
-          <div className="mt-2 px-2.5 py-1.5 rounded text-[12px] text-red-700 bg-red-50">
-            {categoryError}
-          </div>
-        )}
       </Section>
 
       {/* 그룹 수업 정원 */}
