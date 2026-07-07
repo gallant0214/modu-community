@@ -15,6 +15,7 @@ interface Settings {
   center_id: number;
   cancel_hours: number;
   member_can_self_cancel_consumed: boolean;
+  booking_enabled: boolean;
   booking_unit_min: number;
   booking_horizon_days: number;
   notify_cancel: boolean;
@@ -236,30 +237,40 @@ export default function CrmSettingsPage() {
           </Card>
 
           <Card title="예약 요청">
-            <Field label="예약 시간 단위">
-              <div className="flex gap-2">
-                {[30, 60].map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => save({ booking_unit_min: n })}
-                    className={segCls(settings.booking_unit_min === n)}
-                  >
-                    {n}분
-                  </button>
-                ))}
-              </div>
-            </Field>
-            <Field label="예약 가능 기간" hint="오늘부터 N일 이후까지 회원이 예약 가능">
-              <input
-                type="number"
-                min={1}
-                max={365}
-                value={settings.booking_horizon_days}
-                onChange={(e) => save({ booking_horizon_days: Number(e.target.value) })}
-                className={`${crmInputClass} max-w-[140px]`}
-              />
-              <span className="ml-2 text-[12.5px] text-[#A89B80]">일</span>
-            </Field>
+            <Toggle
+              label="예약 요청 기능 사용"
+              on={settings.booking_enabled}
+              onChange={(v) => save({ booking_enabled: v })}
+            />
+            <p className="mt-1 mb-2 text-[11.5px] text-[#A89B80]">
+              끄면 회원이 예약 요청을 보낼 수 없어요. 관리자가 직접 예약을 등록해야 합니다.
+            </p>
+            <div className={settings.booking_enabled ? "" : "opacity-50 pointer-events-none"}>
+              <Field label="예약 시간 단위">
+                <div className="flex gap-2">
+                  {[30, 60].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => save({ booking_unit_min: n })}
+                      className={segCls(settings.booking_unit_min === n)}
+                    >
+                      {n}분
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="예약 가능 기간" hint="오늘부터 N일 이후까지 회원이 예약 가능">
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={settings.booking_horizon_days}
+                  onChange={(e) => save({ booking_horizon_days: Number(e.target.value) })}
+                  className={`${crmInputClass} max-w-[140px]`}
+                />
+                <span className="ml-2 text-[12.5px] text-[#A89B80]">일</span>
+              </Field>
+            </div>
           </Card>
 
           <Card title="스케줄 표시">
