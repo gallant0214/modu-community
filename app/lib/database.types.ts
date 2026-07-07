@@ -1853,6 +1853,36 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_product_categories: {
+        Row: {
+          id: number
+          center_id: number
+          label: string
+          sort_order: number
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          label: string
+          sort_order?: number
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          label?: string
+          sort_order?: number
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_lesson_kinds: {
         Row: {
           id: number
