@@ -240,7 +240,8 @@ export default function CrmMemberDetailPage() {
                       : PAYMENT_METHOD_LABEL[p.payment_method] ?? p.payment_method}
                   </div>
                   <div className="mt-0.5 text-[11.5px] text-[#A89B80]">
-                    발급 {p.issued_at} · 만료 {p.expires_at}
+                    발급 {p.issued_at} · 만료{" "}
+                    {p.expires_at === "9999-12-31" ? "무기한" : p.expires_at}
                   </div>
                 </button>
               </li>
@@ -494,11 +495,16 @@ function PassIssueModal({
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "etc">("card");
   const [paymentCustom, setPaymentCustom] = useState("");
   const [issuedAt, setIssuedAt] = useState(() => new Date().toISOString().slice(0, 10));
-  const [expiresAt, setExpiresAt] = useState(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + 3);
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [durationDays, setDurationDays] = useState(40);
+  const [unlimited, setUnlimited] = useState(false);
+  const expiresAt = (() => {
+    if (unlimited) return "9999-12-31";
+    if (!startDate) return "";
+    const d = new Date(`${startDate}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + Math.max(0, durationDays));
     return d.toISOString().slice(0, 10);
-  });
+  })();
   const [memo, setMemo] = useState("");
   const [trainerId, setTrainerId] = useState<number | "">("");
   const [submitting, setSubmitting] = useState(false);
@@ -556,6 +562,7 @@ function PassIssueModal({
           payment_method: paymentMethod,
           payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
           issued_at: issuedAt,
+          start_date: startDate,
           expires_at: expiresAt,
           memo: memo || undefined,
         }),
@@ -706,15 +713,61 @@ function PassIssueModal({
               onChange={(e) => setIssuedAt(e.target.value)}
             />
           </CrmField>
-          <CrmField label="만료일" required>
+          <CrmField label="시작일" required>
             <input
               type="date"
               className={crmInputClass}
-              value={expiresAt}
-              onChange={(e) => setExpiresAt(e.target.value)}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
             />
           </CrmField>
         </div>
+
+        <CrmField label="유효 기간" required>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                type="number"
+                min={0}
+                disabled={unlimited}
+                className={`${crmInputClass} pr-9 disabled:opacity-50`}
+                value={durationDays}
+                onChange={(e) =>
+                  setDurationDays(Math.max(0, Number(e.target.value) || 0))
+                }
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] text-[#A89B80]">
+                일
+              </span>
+            </div>
+            <label className="inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={unlimited}
+                onChange={(e) => setUnlimited(e.target.checked)}
+                className="w-4 h-4 accent-[#6B7B3A]"
+              />
+              <span className="text-[12.5px] text-[#3A342A] dark:text-zinc-300">
+                무기한
+              </span>
+            </label>
+          </div>
+          <div className="mt-1.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+            {unlimited ? (
+              <>
+                만료일: <strong className="text-[#B47B2A] dark:text-amber-300">무기한</strong>
+              </>
+            ) : (
+              <>
+                만료일:{" "}
+                <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">
+                  {expiresAt || "—"}
+                </strong>{" "}
+                (시작일 {startDate || "—"} + {durationDays}일)
+              </>
+            )}
+          </div>
+        </CrmField>
         <CrmField label="메모">
           <textarea
             className={`${crmInputClass} min-h-[60px]`}
@@ -861,7 +914,11 @@ function PassDetailModal({
               ["담당 강사", trainerName],
               ["판매 직원", sellerName],
               ["발급일", pass.issued_at],
-              ["만료일", pass.expires_at],
+              [
+                "시작일",
+                (pass as Pass & { start_date?: string }).start_date ?? pass.issued_at,
+              ],
+              ["만료일", pass.expires_at === "9999-12-31" ? "무기한" : pass.expires_at],
               ["결제 금액", `${formatWon(pass.price_won)}원${pass.vat_included ? " (부가세 포함)" : ""}`],
               ["결제 수단", paymentLabel],
             ]}

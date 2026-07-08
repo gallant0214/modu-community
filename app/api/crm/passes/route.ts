@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_passes")
     .select(
-      "id, member_id, trainer_member_id, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, payment_method, payment_method_custom, issued_at, expires_at, status, created_at"
+      "id, member_id, trainer_member_id, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, payment_method, payment_method_custom, issued_at, start_date, expires_at, status, created_at"
     )
     .eq("center_id", ctx.centerId)
     .order("issued_at", { ascending: false })
@@ -98,6 +98,7 @@ export async function POST(request: Request) {
     payment_method?: string;
     payment_method_custom?: string;
     issued_at?: string;
+    start_date?: string;
     expires_at?: string;
     vat_included?: boolean;
     memo?: string;
@@ -180,6 +181,7 @@ export async function POST(request: Request) {
       payment_method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
       vat_included: !!body.vat_included,
       issued_at: body.issued_at,
+      start_date: body.start_date || body.issued_at,
       expires_at: body.expires_at,
       status: "valid",
       memo: body.memo?.trim() || null,

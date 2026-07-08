@@ -2095,6 +2095,7 @@ export type Database = {
           payment_method: string
           payment_method_custom: string | null
           issued_at: string
+          start_date: string
           expires_at: string
           status: string
           memo: string | null
@@ -2120,6 +2121,7 @@ export type Database = {
           payment_method?: string
           payment_method_custom?: string | null
           issued_at: string
+          start_date: string
           expires_at: string
           status?: string
           memo?: string | null
@@ -2145,6 +2147,7 @@ export type Database = {
           payment_method?: string
           payment_method_custom?: string | null
           issued_at?: string
+          start_date?: string
           expires_at?: string
           status?: string
           memo?: string | null
