@@ -43,6 +43,12 @@ export default function CrmSchedulePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [picked, setPicked] = useState<Reservation | null>(null);
+  const [newSlot, setNewSlot] = useState<{
+    trainerId: number;
+    trainerName: string;
+    startsAt: string;
+    endsAt: string;
+  } | null>(null);
 
   const range = useMemo(() => computeRange(viewMode, anchor), [viewMode, anchor]);
   const rangeLabel = useMemo(() => formatRangeLabel(viewMode, anchor, range), [viewMode, anchor, range]);
@@ -163,7 +169,22 @@ export default function CrmSchedulePage() {
       {loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : viewMode === "day" ? (
-        <DayView trainers={trainers} reservations={reservations} onPick={setPicked} />
+        <DayView
+          trainers={trainers}
+          reservations={reservations}
+          anchorDate={anchor}
+          onPick={setPicked}
+          onSlotClick={(trainer, h, m) => {
+            const startISO = kstDateToUTCISO(anchor, h, m, 0);
+            const endISO = kstDateToUTCISO(anchor, h, m + 60, 0); // 기본 60분
+            setNewSlot({
+              trainerId: trainer.id,
+              trainerName: trainer.display_name,
+              startsAt: startISO,
+              endsAt: endISO,
+            });
+          }}
+        />
       ) : viewMode === "week" ? (
         <WeekView anchor={anchor} reservations={reservations} onPick={setPicked} />
       ) : (
@@ -173,6 +194,17 @@ export default function CrmSchedulePage() {
           onPickDate={(d) => {
             setAnchor(d);
             setViewMode("day");
+          }}
+        />
+      )}
+
+      {newSlot && (
+        <NewReservationModal
+          slot={newSlot}
+          onClose={() => setNewSlot(null)}
+          onCreated={() => {
+            setNewSlot(null);
+            load();
           }}
         />
       )}
@@ -207,12 +239,17 @@ export default function CrmSchedulePage() {
 function DayView({
   trainers,
   reservations,
+  anchorDate,
   onPick,
+  onSlotClick,
 }: {
   trainers: StaffOption[];
   reservations: Reservation[];
+  anchorDate: string;
   onPick: (r: Reservation) => void;
+  onSlotClick: (trainer: StaffOption, h: number, m: number) => void;
 }) {
+  void anchorDate;
   const slots = useMemo(() => {
     const arr: { h: number; m: number; label: string }[] = [];
     for (let h = WORK_START_HOUR; h < WORK_END_HOUR; h++) {
@@ -280,10 +317,13 @@ function DayView({
             const list = reservations.filter((r) => r.trainer_member_id === t.id);
             return (
               <div key={t.id} className="relative border-l border-[#E8E0D0]/70 dark:border-zinc-800">
-                {slots.map((_, i) => (
-                  <div
+                {slots.map((s, i) => (
+                  <button
                     key={i}
-                    className="border-b border-[#E8E0D0]/30 dark:border-zinc-800/30"
+                    type="button"
+                    onClick={() => onSlotClick(t, s.h, s.m)}
+                    title={`${t.display_name} · ${s.label} 예약 만들기`}
+                    className="w-full block border-b border-[#E8E0D0]/30 dark:border-zinc-800/30 hover:bg-[#6B7B3A]/5 cursor-pointer"
                     style={{ height: `${SLOT_HEIGHT_PX}px` }}
                   />
                 ))}
@@ -693,6 +733,372 @@ function kstParts(iso: string) {
   const d = new Date(iso);
   const k = new Date(d.getTime() + 9 * 3600 * 1000);
   return { h: k.getUTCHours(), m: k.getUTCMinutes() };
+}
+
+/** KST 기준 날짜/시분 → UTC ISO 문자열 (예약 저장용) */
+function kstDateToUTCISO(ymd: string, h: number, m: number, s = 0): string {
+  const d = new Date(`${ymd}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}+09:00`);
+  return d.toISOString();
+}
+
+function fmtKstHm(iso: string): string {
+  const { h, m } = kstParts(iso);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/* ─── 새 예약 모달 ────────────────────────────── */
+
+function NewReservationModal({
+  slot,
+  onClose,
+  onCreated,
+}: {
+  slot: {
+    trainerId: number;
+    trainerName: string;
+    startsAt: string;
+    endsAt: string;
+  };
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [duration, setDuration] = useState(60);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<
+    { id: number; name: string; phone: string | null }[]
+  >([]);
+  const [picked, setPicked] = useState<{ id: number; name: string; phone: string | null } | null>(
+    null
+  );
+  const [passes, setPasses] = useState<
+    {
+      id: number;
+      lesson_kind: string;
+      remaining_sessions: number;
+      total_sessions: number;
+      session_minutes: number;
+      trainer_member_id: number;
+      status: string;
+    }[]
+  >([]);
+  const [passId, setPassId] = useState<number | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [loadingPasses, setLoadingPasses] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    // ESC 로 닫기
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+
+  const startsAt = slot.startsAt;
+  const endsAt = useMemo(() => {
+    const s = new Date(startsAt);
+    s.setMinutes(s.getMinutes() + duration);
+    return s.toISOString();
+  }, [startsAt, duration]);
+
+  const search = async () => {
+    const q = query.trim();
+    if (!q) return;
+    setError("");
+    setSearching(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members?q=${encodeURIComponent(q)}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "검색 실패");
+      setResults(data.members ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const loadPassesForMember = async (memberId: number) => {
+    setError("");
+    setLoadingPasses(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members/${memberId}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      const activePasses = (data.passes ?? []).filter(
+        (p: { status: string; remaining_sessions: number }) =>
+          p.status === "valid" && p.remaining_sessions > 0
+      );
+      setPasses(activePasses);
+      // 담당 강사와 일치하는 수강권을 우선 선택
+      const preferred = activePasses.find(
+        (p: { trainer_member_id: number }) => p.trainer_member_id === slot.trainerId
+      );
+      if (preferred) {
+        setPassId(preferred.id);
+        if (preferred.session_minutes) setDuration(preferred.session_minutes);
+      } else if (activePasses[0]) {
+        setPassId(activePasses[0].id);
+        if (activePasses[0].session_minutes) setDuration(activePasses[0].session_minutes);
+      } else {
+        setPassId(null);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoadingPasses(false);
+    }
+  };
+
+  const pickMember = (m: { id: number; name: string; phone: string | null }) => {
+    setPicked(m);
+    setResults([]);
+    setQuery("");
+    loadPassesForMember(m.id);
+  };
+
+  const submit = async () => {
+    setError("");
+    if (!picked) return setError("회원을 선택해 주세요");
+    if (!passId) return setError("사용할 수강권을 선택해 주세요");
+    setSubmitting(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/reservations", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          pass_id: passId,
+          starts_at: startsAt,
+          ends_at: endsAt,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "예약 실패");
+      onCreated();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const selectedPass = passes.find((p) => p.id === passId);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-md max-h-[88vh] flex flex-col rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-xl">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#E8E0D0]/70 dark:border-zinc-800">
+          <h2 className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            새 예약
+          </h2>
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            className="p-1 -m-1 text-[#A89B80] hover:text-[#3A342A]"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+          <div className="px-3 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+            <div>
+              강사:{" "}
+              <strong className="text-[#2A251D] dark:text-zinc-100">
+                {slot.trainerName}
+              </strong>
+            </div>
+            <div className="mt-0.5">
+              시간:{" "}
+              <strong className="text-[#2A251D] dark:text-zinc-100">
+                {fmtKstHm(startsAt)} ~ {fmtKstHm(endsAt)}
+              </strong>{" "}
+              ({duration}분)
+            </div>
+          </div>
+
+          {/* 수업 길이 */}
+          <div>
+            <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+              수업 시간(분)
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {[30, 45, 50, 60, 75, 90].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setDuration(n)}
+                  className={`px-2.5 py-1 rounded-full text-[12px] font-medium border
+                    ${duration === n
+                      ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                      : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                    }`}
+                >
+                  {n}분
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 회원 선택 */}
+          <div>
+            <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+              회원 <span className="text-[#B47B2A]">*</span>
+            </div>
+            {picked ? (
+              <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-[#6B7B3A]/40 bg-[#6B7B3A]/5">
+                <span className="text-[13.5px] text-[#3A342A] dark:text-zinc-200">
+                  <strong>{picked.name}</strong>
+                  {picked.phone && (
+                    <span className="ml-2 text-[12px] text-[#8C8270]">{picked.phone}</span>
+                  )}
+                </span>
+                <button
+                  onClick={() => {
+                    setPicked(null);
+                    setPasses([]);
+                    setPassId(null);
+                  }}
+                  className="text-[12px] text-[#6B7B3A] hover:underline"
+                >
+                  다시 선택
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <input
+                    className="flex-1 px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px]"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        search();
+                      }
+                    }}
+                    placeholder="이름 또는 연락처"
+                  />
+                  <button
+                    onClick={search}
+                    disabled={searching || !query.trim()}
+                    className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932]"
+                  >
+                    {searching ? "…" : "검색"}
+                  </button>
+                </div>
+                {results.length > 0 && (
+                  <ul className="mt-2 space-y-1.5 max-h-[180px] overflow-y-auto">
+                    {results.map((m) => (
+                      <li key={m.id}>
+                        <button
+                          onClick={() => pickMember(m)}
+                          className="w-full text-left px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50"
+                        >
+                          <div className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">
+                            {m.name}
+                          </div>
+                          {m.phone && (
+                            <div className="text-[11.5px] text-[#A89B80]">{m.phone}</div>
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* 수강권 선택 (회원 선택 후) */}
+          {picked && (
+            <div>
+              <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+                사용할 수강권 <span className="text-[#B47B2A]">*</span>
+              </div>
+              {loadingPasses ? (
+                <div className="text-[12.5px] text-[#8C8270]">불러오는 중…</div>
+              ) : passes.length === 0 ? (
+                <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 text-[12.5px] text-[#8C8270]">
+                  잔여가 있는 유효 수강권이 없어요.
+                </div>
+              ) : (
+                <ul className="space-y-1.5">
+                  {passes.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPassId(p.id);
+                          if (p.session_minutes) setDuration(p.session_minutes);
+                        }}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors
+                          ${passId === p.id
+                            ? "border-[#6B7B3A] bg-[#6B7B3A]/10"
+                            : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
+                          }`}
+                      >
+                        <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                          {p.lesson_kind}
+                        </div>
+                        <div className="mt-0.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+                          잔여 {p.remaining_sessions}/{p.total_sessions}회 · {p.session_minutes}분
+                          {p.trainer_member_id !== slot.trainerId && (
+                            <span className="ml-2 text-[#B47B2A]">다른 강사 수강권</span>
+                          )}
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {error && (
+            <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 px-5 py-3.5 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+          >
+            취소
+          </button>
+          <button
+            onClick={submit}
+            disabled={submitting || !picked || !passId || !selectedPass}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+          >
+            {submitting ? "저장 중…" : "예약 만들기"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function kstDateKey(iso: string) {
