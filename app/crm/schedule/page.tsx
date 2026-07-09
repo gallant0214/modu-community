@@ -781,8 +781,8 @@ function fmtKstHm(iso: string): string {
 function formatExpiry(ymd: string): { text: string; tone: "normal" | "warn" | "expired" | "infinite" } {
   if (!ymd) return { text: "-", tone: "normal" };
   if (ymd === "9999-12-31") return { text: "무기한", tone: "infinite" };
-  const [y, m, d] = ymd.split("-").map(Number);
-  const dateStr = `${y}년${String(m).padStart(2, "0")}월${String(d).padStart(2, "0")}일까지`;
+  const [, m, d] = ymd.split("-").map(Number);
+  const dateStr = `${String(m).padStart(2, "0")}월${String(d).padStart(2, "0")}일까지`;
   const target = new Date(`${ymd}T00:00:00+09:00`);
   const now = new Date();
   const nowKstMidnight = new Date(now.getTime() + 9 * 3600_000);
@@ -1161,23 +1161,29 @@ function NewReservationModal({
                                 잔여 {p.remaining_sessions}회
                               </span>
                             </div>
-                            <div className="mt-0.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400 truncate">
-                              {p.lesson_kind} · {p.session_minutes}분
+                            <div className="mt-0.5 flex items-end justify-between gap-2">
+                              <span className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 truncate">
+                                {p.lesson_kind} · {p.session_minutes}분
+                              </span>
+                              {(() => {
+                                const exp = formatExpiry(p.expires_at);
+                                const cls =
+                                  exp.tone === "expired"
+                                    ? "text-red-600"
+                                    : exp.tone === "warn"
+                                      ? "text-[#B47B2A] dark:text-amber-300"
+                                      : exp.tone === "infinite"
+                                        ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+                                        : "text-[#8C8270] dark:text-zinc-500";
+                                return (
+                                  <span
+                                    className={`shrink-0 text-right text-[10.5px] leading-tight ${cls}`}
+                                  >
+                                    {exp.text}
+                                  </span>
+                                );
+                              })()}
                             </div>
-                            {(() => {
-                              const exp = formatExpiry(p.expires_at);
-                              const cls =
-                                exp.tone === "expired"
-                                  ? "text-red-600"
-                                  : exp.tone === "warn"
-                                    ? "text-[#B47B2A] dark:text-amber-300"
-                                    : exp.tone === "infinite"
-                                      ? "text-[#6B7B3A] dark:text-[#A8B87A]"
-                                      : "text-[#8C8270] dark:text-zinc-500";
-                              return (
-                                <div className={`mt-0.5 text-[11px] ${cls}`}>{exp.text}</div>
-                              );
-                            })()}
                           </button>
                         </li>
                       );
@@ -1235,26 +1241,32 @@ function NewReservationModal({
                               <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">
                                 {p.lesson_kind}
                               </div>
-                              <div className="mt-0.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
-                                잔여 {p.remaining_sessions}/{p.total_sessions}회 · {p.session_minutes}분
-                                {p.trainer_member_id !== slot.trainerId && (
-                                  <span className="ml-2 text-[#B47B2A]">다른 강사 수강권</span>
-                                )}
+                              <div className="mt-0.5 flex items-end justify-between gap-2">
+                                <span className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 truncate">
+                                  잔여 {p.remaining_sessions}/{p.total_sessions}회 · {p.session_minutes}분
+                                  {p.trainer_member_id !== slot.trainerId && (
+                                    <span className="ml-2 text-[#B47B2A]">다른 강사 수강권</span>
+                                  )}
+                                </span>
+                                {(() => {
+                                  const exp = formatExpiry(p.expires_at);
+                                  const cls =
+                                    exp.tone === "expired"
+                                      ? "text-red-600"
+                                      : exp.tone === "warn"
+                                        ? "text-[#B47B2A] dark:text-amber-300"
+                                        : exp.tone === "infinite"
+                                          ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+                                          : "text-[#8C8270] dark:text-zinc-500";
+                                  return (
+                                    <span
+                                      className={`shrink-0 text-right text-[10.5px] leading-tight ${cls}`}
+                                    >
+                                      {exp.text}
+                                    </span>
+                                  );
+                                })()}
                               </div>
-                              {(() => {
-                                const exp = formatExpiry(p.expires_at);
-                                const cls =
-                                  exp.tone === "expired"
-                                    ? "text-red-600"
-                                    : exp.tone === "warn"
-                                      ? "text-[#B47B2A] dark:text-amber-300"
-                                      : exp.tone === "infinite"
-                                        ? "text-[#6B7B3A] dark:text-[#A8B87A]"
-                                        : "text-[#8C8270] dark:text-zinc-500";
-                                return (
-                                  <div className={`mt-0.5 text-[11px] ${cls}`}>{exp.text}</div>
-                                );
-                              })()}
                             </button>
                           </li>
                         ))}
