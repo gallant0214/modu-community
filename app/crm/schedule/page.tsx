@@ -186,7 +186,21 @@ export default function CrmSchedulePage() {
           }}
         />
       ) : viewMode === "week" ? (
-        <WeekView anchor={anchor} reservations={reservations} onPick={setPicked} />
+        <WeekView
+          anchor={anchor}
+          reservations={reservations}
+          trainers={trainers}
+          onPick={setPicked}
+          onSlotClick={(ymd, h, m, defaultTrainer) => {
+            if (!defaultTrainer) return;
+            setNewSlot({
+              trainerId: defaultTrainer.id,
+              trainerName: defaultTrainer.display_name,
+              startsAt: kstDateToUTCISO(ymd, h, m),
+              endsAt: kstDateToUTCISO(ymd, h, m + 60),
+            });
+          }}
+        />
       ) : (
         <MonthView
           anchor={anchor}
@@ -201,6 +215,12 @@ export default function CrmSchedulePage() {
       {newSlot && (
         <NewReservationModal
           slot={newSlot}
+          trainers={trainers}
+          onChangeTrainer={(t) =>
+            setNewSlot((prev) =>
+              prev ? { ...prev, trainerId: t.id, trainerName: t.display_name } : prev
+            )
+          }
           onClose={() => setNewSlot(null)}
           onCreated={() => {
             setNewSlot(null);
@@ -360,12 +380,17 @@ function DayView({
 function WeekView({
   anchor,
   reservations,
+  trainers,
   onPick,
+  onSlotClick,
 }: {
   anchor: string;
   reservations: Reservation[];
+  trainers: StaffOption[];
   onPick: (r: Reservation) => void;
+  onSlotClick: (ymd: string, h: number, m: number, trainer: StaffOption | null) => void;
 }) {
+  void anchor;
   const days = useMemo(() => {
     const start = startOfWeek(anchor);
     return Array.from({ length: 7 }, (_, i) => {
@@ -438,12 +463,16 @@ function WeekView({
           {days.map((d, di) => {
             const key = dayKey(d);
             const list = reservations.filter((r) => kstDateKey(r.starts_at) === key);
+            const defaultTrainer = trainers[0] ?? null;
             return (
               <div key={di} className="relative border-l border-[#E8E0D0]/70 dark:border-zinc-800">
-                {slots.map((_, i) => (
-                  <div
+                {slots.map((s, i) => (
+                  <button
                     key={i}
-                    className="border-b border-[#E8E0D0]/30 dark:border-zinc-800/30"
+                    type="button"
+                    onClick={() => onSlotClick(key, s.h, s.m, defaultTrainer)}
+                    title={`${key} ${s.label} 예약 만들기`}
+                    className="w-full block border-b border-[#E8E0D0]/30 dark:border-zinc-800/30 hover:bg-[#6B7B3A]/5 cursor-pointer"
                     style={{ height: `${SLOT_HEIGHT_PX}px` }}
                   />
                 ))}
@@ -735,10 +764,12 @@ function kstParts(iso: string) {
   return { h: k.getUTCHours(), m: k.getUTCMinutes() };
 }
 
-/** KST 기준 날짜/시분 → UTC ISO 문자열 (예약 저장용) */
+/** KST 기준 날짜/시분 → UTC ISO 문자열 (m/h 오버플로우 허용, 예: m=90 → 다음 시각) */
 function kstDateToUTCISO(ymd: string, h: number, m: number, s = 0): string {
-  const d = new Date(`${ymd}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}+09:00`);
-  return d.toISOString();
+  const kstMidnight = new Date(`${ymd}T00:00:00+09:00`);
+  return new Date(
+    kstMidnight.getTime() + h * 3600_000 + m * 60_000 + s * 1000
+  ).toISOString();
 }
 
 function fmtKstHm(iso: string): string {
@@ -750,6 +781,8 @@ function fmtKstHm(iso: string): string {
 
 function NewReservationModal({
   slot,
+  trainers,
+  onChangeTrainer,
   onClose,
   onCreated,
 }: {
@@ -759,6 +792,8 @@ function NewReservationModal({
     startsAt: string;
     endsAt: string;
   };
+  trainers: StaffOption[];
+  onChangeTrainer: (t: StaffOption) => void;
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -920,14 +955,25 @@ function NewReservationModal({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-3">
-          <div className="px-3 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+          <div className="px-3 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 space-y-1.5">
+            <label className="flex items-center gap-2">
+              <span className="shrink-0">강사:</span>
+              <select
+                value={slot.trainerId}
+                onChange={(e) => {
+                  const t = trainers.find((x) => x.id === Number(e.target.value));
+                  if (t) onChangeTrainer(t);
+                }}
+                className="flex-1 px-2 py-1 rounded border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-[#2A251D] dark:text-zinc-100"
+              >
+                {trainers.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.display_name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div>
-              강사:{" "}
-              <strong className="text-[#2A251D] dark:text-zinc-100">
-                {slot.trainerName}
-              </strong>
-            </div>
-            <div className="mt-0.5">
               시간:{" "}
               <strong className="text-[#2A251D] dark:text-zinc-100">
                 {fmtKstHm(startsAt)} ~ {fmtKstHm(endsAt)}
