@@ -47,6 +47,7 @@ interface Permissions {
   attendance_mode: string;
   can_cancel_attendance: boolean;
   can_issue_pass: boolean;
+  can_manage_all_schedules: boolean;
 }
 
 export default function CrmStaffDetailPage() {
@@ -321,12 +322,17 @@ function PermsGrid({
   onToggle: (body: Record<string, unknown>) => void;
   disabled: boolean;
 }) {
-  const items: { key: keyof Permissions; label: string }[] = [
+  const items: { key: keyof Permissions; label: string; hint?: string }[] = [
     { key: "can_create_reservation", label: "예약 생성" },
     { key: "can_modify_reservation", label: "예약 변경" },
     { key: "can_cancel_reservation", label: "예약 취소" },
     { key: "can_cancel_attendance", label: "출석 취소" },
     { key: "can_issue_pass", label: "수강권 발급" },
+    {
+      key: "can_manage_all_schedules",
+      label: "타 강사 스케줄 관리",
+      hint: "본인 외 강사의 예약·개인일정도 만들고 수정·삭제 가능",
+    },
   ];
   return (
     <div className="space-y-2">
@@ -334,6 +340,7 @@ function PermsGrid({
         <ToggleRow
           key={String(it.key)}
           label={it.label}
+          hint={it.hint}
           on={!!perms?.[it.key]}
           disabled={disabled}
           onChange={(v) => onToggle({ [it.key]: v })}
@@ -403,23 +410,32 @@ function SegBtn({
 
 function ToggleRow({
   label,
+  hint,
   on,
   disabled,
   onChange,
 }: {
   label: string;
+  hint?: string;
   on: boolean;
   disabled?: boolean;
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex items-center justify-between py-1.5">
-      <span className="text-[13.5px] text-[#3A342A] dark:text-zinc-300">{label}</span>
+    <label className="flex items-start justify-between py-1.5 gap-3">
+      <div className="min-w-0">
+        <span className="text-[13.5px] text-[#3A342A] dark:text-zinc-300">{label}</span>
+        {hint && (
+          <p className="mt-0.5 text-[11.5px] text-[#A89B80] dark:text-zinc-500 leading-tight">
+            {hint}
+          </p>
+        )}
+      </div>
       <button
         type="button"
         onClick={() => onChange(!on)}
         disabled={disabled}
-        className={`relative inline-flex w-10 h-6 rounded-full transition-colors disabled:opacity-50
+        className={`shrink-0 relative inline-flex w-10 h-6 rounded-full transition-colors disabled:opacity-50 mt-0.5
           ${on ? "bg-[#6B7B3A]" : "bg-[#E8E0D0] dark:bg-zinc-700"}`}
       >
         <span

@@ -42,7 +42,7 @@ export async function GET(
   const { data: perms } = await supabase
     .from("crm_trainer_permissions")
     .select(
-      "center_member_id, can_create_reservation, can_modify_reservation, can_cancel_reservation, attendance_mode, can_cancel_attendance, can_issue_pass"
+      "center_member_id, can_create_reservation, can_modify_reservation, can_cancel_reservation, attendance_mode, can_cancel_attendance, can_issue_pass, can_manage_all_schedules"
     )
     .eq("center_member_id", memberId)
     .maybeSingle();

@@ -45,6 +45,7 @@ export async function PATCH(
     attendance_mode?: string;
     can_cancel_attendance?: boolean;
     can_issue_pass?: boolean;
+    can_manage_all_schedules?: boolean;
   };
   try {
     body = await request.json();
@@ -63,6 +64,8 @@ export async function PATCH(
     patch.can_cancel_attendance = body.can_cancel_attendance;
   if (typeof body.can_issue_pass === "boolean")
     patch.can_issue_pass = body.can_issue_pass;
+  if (typeof body.can_manage_all_schedules === "boolean")
+    patch.can_manage_all_schedules = body.can_manage_all_schedules;
   if (body.attendance_mode !== undefined) {
     if (!ATTENDANCE_MODES.includes(body.attendance_mode as "trainer" | "owner_only")) {
       return NextResponse.json({ error: "출석 권한 값이 잘못됨" }, { status: 400 });

@@ -83,16 +83,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "시작·종료 시각이 필요해요" }, { status: 400 });
   }
 
-  // 센터 일정: owner/admin/manager 만
-  if (type === "center" && ctx.role === "trainer") {
+  // 권한 확인
+  let canManageAll = ctx.role === "owner" || ctx.role === "admin";
+  if (!canManageAll) {
+    const { data: perm } = await supabase
+      .from("crm_trainer_permissions")
+      .select("can_manage_all_schedules")
+      .eq("center_member_id", ctx.centerMemberId)
+      .maybeSingle();
+    if (perm?.can_manage_all_schedules) canManageAll = true;
+  }
+
+  // 센터 일정: 관리자 또는 can_manage_all_schedules 있는 경우만
+  if (type === "center" && !canManageAll) {
     return NextResponse.json({ error: "센터 일정은 관리자만 등록할 수 있어요" }, { status: 403 });
   }
 
   let trainerMemberId: number | null = null;
   if (type === "personal") {
     trainerMemberId = Number(body.trainer_member_id) || ctx.centerMemberId;
-    // 강사는 본인 일정만
-    if (ctx.role === "trainer" && trainerMemberId !== ctx.centerMemberId) {
+    // 본인 일정만 등록 가능 (단 can_manage_all_schedules 는 예외)
+    if (!canManageAll && trainerMemberId !== ctx.centerMemberId) {
       return NextResponse.json({ error: "본인 일정만 등록할 수 있어요" }, { status: 403 });
     }
   }

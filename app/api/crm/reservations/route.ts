@@ -88,15 +88,17 @@ export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  if (ctx.role === "trainer") {
+  let canManageAll = ctx.role === "owner" || ctx.role === "admin";
+  if (ctx.role === "trainer" || ctx.role === "manager") {
     const { data: perm } = await supabase
       .from("crm_trainer_permissions")
-      .select("can_create_reservation")
+      .select("can_create_reservation, can_manage_all_schedules")
       .eq("center_member_id", ctx.centerMemberId)
       .maybeSingle();
-    if (!perm?.can_create_reservation) {
+    if (ctx.role === "trainer" && !perm?.can_create_reservation) {
       return NextResponse.json({ error: "예약 생성 권한이 없습니다" }, { status: 403 });
     }
+    if (perm?.can_manage_all_schedules) canManageAll = true;
   }
 
   let body: { pass_id?: number; starts_at?: string; ends_at?: string };
@@ -125,8 +127,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "잔여 세션이 없습니다" }, { status: 400 });
   }
 
-  // trainer 는 본인 담당 수강권만
+  // trainer/manager 는 본인 담당 수강권만 (단 can_manage_all_schedules 있으면 예외)
   if (
+    !canManageAll &&
     (ctx.role === "trainer" || ctx.role === "manager") &&
     pass.trainer_member_id !== ctx.centerMemberId
   ) {

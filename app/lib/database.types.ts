@@ -2050,6 +2050,7 @@ export type Database = {
           attendance_mode: string
           can_cancel_attendance: boolean
           can_issue_pass: boolean
+          can_manage_all_schedules: boolean
           updated_at: string
         }
         Insert: {
@@ -2060,6 +2061,7 @@ export type Database = {
           attendance_mode?: string
           can_cancel_attendance?: boolean
           can_issue_pass?: boolean
+          can_manage_all_schedules?: boolean
           updated_at?: string
         }
         Update: {
@@ -2070,6 +2072,7 @@ export type Database = {
           attendance_mode?: string
           can_cancel_attendance?: boolean
           can_issue_pass?: boolean
+          can_manage_all_schedules?: boolean
           updated_at?: string
         }
         Relationships: []

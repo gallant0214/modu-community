@@ -30,7 +30,16 @@ export async function DELETE(
 
   const isAdmin = ctx.role === "owner" || ctx.role === "admin";
   const isOwnerOfEvent = ev.created_by_uid === ctx.uid;
+  let hasManageAll = false;
   if (!isAdmin && !isOwnerOfEvent) {
+    const { data: perm } = await supabase
+      .from("crm_trainer_permissions")
+      .select("can_manage_all_schedules")
+      .eq("center_member_id", ctx.centerMemberId)
+      .maybeSingle();
+    hasManageAll = !!perm?.can_manage_all_schedules;
+  }
+  if (!isAdmin && !isOwnerOfEvent && !hasManageAll) {
     return NextResponse.json({ error: "삭제 권한이 없어요" }, { status: 403 });
   }
 

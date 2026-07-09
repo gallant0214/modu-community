@@ -42,6 +42,15 @@ type ViewMode = "day" | "week" | "month";
 const SLOT_MINUTES = 30;
 const SLOT_HEIGHT_PX = 28;
 const WORK_START_HOUR = 8;
+
+/** 현재 KST 시각을 { ymd, minutesFromMidnight } 로 반환 */
+function nowKst() {
+  const d = new Date();
+  const k = new Date(d.getTime() + 9 * 3600 * 1000);
+  const ymd = `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")}`;
+  const minutes = k.getUTCHours() * 60 + k.getUTCMinutes();
+  return { ymd, minutes };
+}
 const WORK_END_HOUR = 23;
 
 export default function CrmSchedulePage() {
@@ -362,20 +371,37 @@ function DayView({
   return (
     <div className="overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
       <div className="min-w-[640px]">
-        <div
-          className="grid border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/80 sticky top-0 z-10"
-          style={{ gridTemplateColumns: `64px repeat(${trainers.length}, minmax(120px, 1fr))` }}
-        >
-          <div className="px-2 py-2 text-[11px] font-medium text-[#A89B80]">시간</div>
-          {trainers.map((t) => (
+        {(() => {
+          const now = nowKst();
+          const anchorIsToday = anchorDate === now.ymd;
+          return (
             <div
-              key={t.id}
-              className="px-3 py-2 text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100 border-l border-[#E8E0D0]/70 dark:border-zinc-800 truncate"
+              className={`grid border-b border-[#E8E0D0] dark:border-zinc-800 sticky top-0 z-10
+                ${anchorIsToday
+                  ? "bg-[#6B7B3A]/10 dark:bg-[#6B7B3A]/20"
+                  : "bg-[#FBF7EB] dark:bg-zinc-900/80"
+                }`}
+              style={{ gridTemplateColumns: `64px repeat(${trainers.length}, minmax(120px, 1fr))` }}
             >
-              {t.display_name}
+              <div className="px-2 py-2 text-[11px] font-medium text-[#A89B80] flex items-center gap-1">
+                시간
+                {anchorIsToday && (
+                  <span className="px-1 py-0.5 rounded text-[9.5px] font-bold bg-[#6B7B3A] text-white leading-none">
+                    TODAY
+                  </span>
+                )}
+              </div>
+              {trainers.map((t) => (
+                <div
+                  key={t.id}
+                  className="px-3 py-2 text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100 border-l border-[#E8E0D0]/70 dark:border-zinc-800 truncate"
+                >
+                  {t.display_name}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          );
+        })()}
 
         <div
           className="relative grid"
@@ -384,6 +410,27 @@ function DayView({
             height: `${gridHeightPx}px`,
           }}
         >
+          {(() => {
+            const now = nowKst();
+            if (now.ymd !== anchorDate) return null;
+            const min = now.minutes - WORK_START_HOUR * 60;
+            if (min < 0 || min > (WORK_END_HOUR - WORK_START_HOUR) * 60) return null;
+            const top = (min / SLOT_MINUTES) * SLOT_HEIGHT_PX;
+            return (
+              <div
+                className="absolute left-0 right-0 z-20 pointer-events-none"
+                style={{ top: `${top}px` }}
+              >
+                <div className="relative h-0.5 bg-[#4A8BE3] shadow-[0_0_4px_rgba(74,139,227,0.6)]">
+                  <span className="absolute -top-1.5 -left-1 w-3 h-3 rounded-full bg-[#4A8BE3] shadow-md" />
+                  <span className="absolute -top-4 left-3 text-[10.5px] font-semibold text-[#4A8BE3] bg-[#FEFCF7] dark:bg-zinc-900 px-1 rounded">
+                    지금 {String(Math.floor(now.minutes / 60)).padStart(2, "0")}:
+                    {String(now.minutes % 60).padStart(2, "0")}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
           <div className="relative border-r border-[#E8E0D0] dark:border-zinc-800">
             {slots.map((s, i) => (
               <div
@@ -517,17 +564,31 @@ function WeekView({
           style={{ gridTemplateColumns: `56px repeat(7, minmax(100px, 1fr))` }}
         >
           <div className="px-2 py-2 text-[11px] font-medium text-[#A89B80]">시간</div>
-          {days.map((d, i) => (
-            <div
-              key={i}
-              className={`px-3 py-2 text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100 border-l border-[#E8E0D0]/70 dark:border-zinc-800 ${isToday(d) ? "text-[#6B7B3A] dark:text-[#A8B87A]" : ""}`}
-            >
-              <div>{["일", "월", "화", "수", "목", "금", "토"][d.getDay()]}</div>
-              <div className="text-[11px] font-normal text-[#A89B80]">
-                {d.getMonth() + 1}/{d.getDate()}
+          {days.map((d, i) => {
+            const today = isToday(d);
+            return (
+              <div
+                key={i}
+                className={`px-3 py-2 text-[12.5px] font-semibold border-l border-[#E8E0D0]/70 dark:border-zinc-800
+                  ${today
+                    ? "bg-[#6B7B3A]/12 dark:bg-[#6B7B3A]/25 text-[#6B7B3A] dark:text-[#A8B87A]"
+                    : "text-[#2A251D] dark:text-zinc-100"
+                  }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  {["일", "월", "화", "수", "목", "금", "토"][d.getDay()]}
+                  {today && (
+                    <span className="px-1 py-0.5 rounded text-[9.5px] font-bold bg-[#6B7B3A] text-white leading-none">
+                      TODAY
+                    </span>
+                  )}
+                </div>
+                <div className={`text-[11px] font-normal ${today ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#A89B80]"}`}>
+                  {d.getMonth() + 1}/{d.getDate()}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div
@@ -554,8 +615,17 @@ function WeekView({
             const list = reservations.filter((r) => kstDateKey(r.starts_at) === key);
             const evList = events.filter((e) => kstDateKey(e.starts_at) === key);
             const defaultTrainer = trainers[0] ?? null;
+            const now = nowKst();
+            const isTodayCol = now.ymd === key;
+            const nowMin = now.minutes - WORK_START_HOUR * 60;
+            const showNowLine =
+              isTodayCol && nowMin >= 0 && nowMin <= (WORK_END_HOUR - WORK_START_HOUR) * 60;
+            const nowTop = (nowMin / SLOT_MINUTES) * SLOT_HEIGHT_PX;
             return (
-              <div key={di} className="relative border-l border-[#E8E0D0]/70 dark:border-zinc-800">
+              <div
+                key={di}
+                className={`relative border-l border-[#E8E0D0]/70 dark:border-zinc-800 ${isTodayCol ? "bg-[#6B7B3A]/5" : ""}`}
+              >
                 {slots.map((s, i) => (
                   <button
                     key={i}
@@ -566,6 +636,16 @@ function WeekView({
                     style={{ height: `${SLOT_HEIGHT_PX}px` }}
                   />
                 ))}
+                {showNowLine && (
+                  <div
+                    className="absolute left-0 right-0 z-20 pointer-events-none"
+                    style={{ top: `${nowTop}px` }}
+                  >
+                    <div className="relative h-0.5 bg-[#4A8BE3] shadow-[0_0_4px_rgba(74,139,227,0.6)]">
+                      <span className="absolute -top-1.5 -left-1 w-3 h-3 rounded-full bg-[#4A8BE3] shadow-md" />
+                    </div>
+                  </div>
+                )}
                 {evList.map((e) => {
                   const top = offsetPx(e.starts_at);
                   const bottom = offsetPx(e.ends_at);
