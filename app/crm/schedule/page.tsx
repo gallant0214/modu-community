@@ -1131,11 +1131,14 @@ function NewReservationModal({
                                 : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
                               }`}
                           >
-                            <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-start justify-between gap-2">
                               <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
                                 {p.member_name || "(이름 없음)"}
                               </span>
-                              <span className="shrink-0 text-[11px] text-[#B47B2A] dark:text-amber-300 font-medium">
+                              <span className="shrink-0 text-right text-[11px] text-[#B47B2A] dark:text-amber-300 font-medium leading-tight">
+                                <span className="block text-[10.5px] text-[#A89B80] dark:text-zinc-500 font-normal">
+                                  총 {p.total_sessions}회 중
+                                </span>
                                 잔여 {p.remaining_sessions}회
                               </span>
                             </div>
