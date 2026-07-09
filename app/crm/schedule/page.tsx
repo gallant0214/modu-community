@@ -777,6 +777,24 @@ function fmtKstHm(iso: string): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+/** "2026년07월09일까지 (5일 남음)" 형태로 포맷. 무기한/만료 상태도 처리. */
+function formatExpiry(ymd: string): { text: string; tone: "normal" | "warn" | "expired" | "infinite" } {
+  if (!ymd) return { text: "-", tone: "normal" };
+  if (ymd === "9999-12-31") return { text: "무기한", tone: "infinite" };
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dateStr = `${y}년${String(m).padStart(2, "0")}월${String(d).padStart(2, "0")}일까지`;
+  const target = new Date(`${ymd}T00:00:00+09:00`);
+  const now = new Date();
+  const nowKstMidnight = new Date(now.getTime() + 9 * 3600_000);
+  nowKstMidnight.setUTCHours(0, 0, 0, 0);
+  const kstNow = new Date(nowKstMidnight.getTime() - 9 * 3600_000);
+  const diffDays = Math.round((target.getTime() - kstNow.getTime()) / (24 * 3600_000));
+  if (diffDays < 0) return { text: `${dateStr} (만료됨)`, tone: "expired" };
+  if (diffDays === 0) return { text: `${dateStr} (오늘 만료)`, tone: "warn" };
+  const tone = diffDays <= 7 ? "warn" : "normal";
+  return { text: `${dateStr} (${diffDays}일 남음)`, tone };
+}
+
 /* ─── 새 예약 모달 ────────────────────────────── */
 
 function NewReservationModal({
@@ -809,6 +827,7 @@ function NewReservationModal({
     session_minutes: number;
     trainer_member_id: number;
     status: string;
+    expires_at: string;
     member_id: number;
     member_name: string;
   }
@@ -1145,6 +1164,20 @@ function NewReservationModal({
                             <div className="mt-0.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400 truncate">
                               {p.lesson_kind} · {p.session_minutes}분
                             </div>
+                            {(() => {
+                              const exp = formatExpiry(p.expires_at);
+                              const cls =
+                                exp.tone === "expired"
+                                  ? "text-red-600"
+                                  : exp.tone === "warn"
+                                    ? "text-[#B47B2A] dark:text-amber-300"
+                                    : exp.tone === "infinite"
+                                      ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+                                      : "text-[#8C8270] dark:text-zinc-500";
+                              return (
+                                <div className={`mt-0.5 text-[11px] ${cls}`}>{exp.text}</div>
+                              );
+                            })()}
                           </button>
                         </li>
                       );
@@ -1208,6 +1241,20 @@ function NewReservationModal({
                                   <span className="ml-2 text-[#B47B2A]">다른 강사 수강권</span>
                                 )}
                               </div>
+                              {(() => {
+                                const exp = formatExpiry(p.expires_at);
+                                const cls =
+                                  exp.tone === "expired"
+                                    ? "text-red-600"
+                                    : exp.tone === "warn"
+                                      ? "text-[#B47B2A] dark:text-amber-300"
+                                      : exp.tone === "infinite"
+                                        ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+                                        : "text-[#8C8270] dark:text-zinc-500";
+                                return (
+                                  <div className={`mt-0.5 text-[11px] ${cls}`}>{exp.text}</div>
+                                );
+                              })()}
                             </button>
                           </li>
                         ))}
