@@ -1853,6 +1853,51 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_schedule_events: {
+        Row: {
+          id: number
+          center_id: number
+          type: string
+          title: string
+          description: string | null
+          trainer_member_id: number | null
+          starts_at: string
+          ends_at: string
+          status: string
+          created_by_uid: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          type: string
+          title: string
+          description?: string | null
+          trainer_member_id?: number | null
+          starts_at: string
+          ends_at: string
+          status?: string
+          created_by_uid: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          type?: string
+          title?: string
+          description?: string | null
+          trainer_member_id?: number | null
+          starts_at?: string
+          ends_at?: string
+          status?: string
+          created_by_uid?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_lesson_kinds: {
         Row: {
           id: number

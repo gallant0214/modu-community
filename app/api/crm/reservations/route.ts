@@ -19,6 +19,7 @@ export async function GET(request: Request) {
   const date = url.searchParams.get("date");
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
+  const trainerParam = url.searchParams.get("trainer_id");
 
   let startUtc: Date;
   let endUtc: Date;
@@ -45,8 +46,13 @@ export async function GET(request: Request) {
     .lt("starts_at", endUtc.toISOString())
     .order("starts_at", { ascending: true });
 
-  if (ctx.role === "trainer" || ctx.role === "manager") {
+  // 권한:
+  //   trainer         → 본인 스케줄만
+  //   manager 이상    → 전체, trainer_id 로 특정 강사만 필터 가능
+  if (ctx.role === "trainer") {
     query = query.eq("trainer_member_id", ctx.centerMemberId);
+  } else if (trainerParam) {
+    query = query.eq("trainer_member_id", Number(trainerParam));
   }
 
   const { data, error } = await query;

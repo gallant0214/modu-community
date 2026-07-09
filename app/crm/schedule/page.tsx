@@ -20,6 +20,16 @@ interface Reservation {
   attended_at: string | null;
 }
 
+interface ScheduleEvent {
+  id: number;
+  type: "center" | "personal";
+  title: string;
+  description: string | null;
+  trainer_member_id: number | null;
+  starts_at: string;
+  ends_at: string;
+}
+
 interface StaffOption {
   id: number;
   display_name: string;
@@ -40,6 +50,9 @@ export default function CrmSchedulePage() {
   const [anchor, setAnchor] = useState(() => new Date().toISOString().slice(0, 10));
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [events, setEvents] = useState<ScheduleEvent[]>([]);
+  const [role, setRole] = useState<"owner" | "admin" | "manager" | "trainer" | null>(null);
+  const [selectedTrainerId, setSelectedTrainerId] = useState<number | "all">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [picked, setPicked] = useState<Reservation | null>(null);
@@ -53,24 +66,40 @@ export default function CrmSchedulePage() {
   const range = useMemo(() => computeRange(viewMode, anchor), [viewMode, anchor]);
   const rangeLabel = useMemo(() => formatRangeLabel(viewMode, anchor, range), [viewMode, anchor, range]);
 
+  const canPickTrainer = role === "owner" || role === "admin" || role === "manager";
+
   const load = useCallback(async () => {
     setError("");
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch(
-        `/api/crm/reservations?from=${range.from}&to=${range.to}`,
-        { headers: { authorization: `Bearer ${token}` }, cache: "no-store" }
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "조회 실패");
-      setReservations(data.reservations ?? []);
+      const trainerQs =
+        canPickTrainer && selectedTrainerId !== "all"
+          ? `&trainer_id=${selectedTrainerId}`
+          : "";
+      const [resR, resE] = await Promise.all([
+        fetch(`/api/crm/reservations?from=${range.from}&to=${range.to}${trainerQs}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }),
+        fetch(`/api/crm/schedule-events?from=${range.from}&to=${range.to}${trainerQs}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }),
+      ]);
+      const dataR = await resR.json();
+      if (!resR.ok) throw new Error(dataR?.error || "예약 조회 실패");
+      setReservations(dataR.reservations ?? []);
+      if (resE.ok) {
+        const dataE = await resE.json();
+        setEvents(dataE.events ?? []);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
       setLoading(false);
     }
-  }, [getIdToken, range.from, range.to]);
+  }, [getIdToken, range.from, range.to, selectedTrainerId, canPickTrainer]);
 
   useEffect(() => {
     load();
@@ -80,12 +109,17 @@ export default function CrmSchedulePage() {
     (async () => {
       const token = await getIdToken();
       if (!token) return;
-      const res = await fetch("/api/crm/staff", {
-        headers: { authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const [resStaff, resBoot] = await Promise.all([
+        fetch("/api/crm/staff", { headers: { authorization: `Bearer ${token}` } }),
+        fetch("/api/crm/bootstrap", { headers: { authorization: `Bearer ${token}` }, cache: "no-store" }),
+      ]);
+      if (resStaff.ok) {
+        const data = await resStaff.json();
         setStaff((data.staff ?? []).filter((s: StaffOption) => s.status === "active"));
+      }
+      if (resBoot.ok) {
+        const data = await resBoot.json();
+        if (data?.role) setRole(data.role);
       }
     })();
   }, [getIdToken]);
@@ -156,8 +190,33 @@ export default function CrmSchedulePage() {
         </div>
       </header>
 
+      {/* 강사 필터 (관리자/팀장 이상만) */}
+      {canPickTrainer && (viewMode === "week" || viewMode === "month") && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+            강사:
+          </span>
+          <select
+            value={selectedTrainerId}
+            onChange={(e) =>
+              setSelectedTrainerId(
+                e.target.value === "all" ? "all" : Number(e.target.value)
+              )
+            }
+            className="px-2.5 py-1 rounded border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+          >
+            <option value="all">전체 강사</option>
+            {trainers.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.display_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="mb-3 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-        {rangeLabel} · 예약 {reservations.length}건
+        {rangeLabel} · 예약 {reservations.length}건 · 일정 {events.length}건
       </div>
 
       {error && (
@@ -172,6 +231,7 @@ export default function CrmSchedulePage() {
         <DayView
           trainers={trainers}
           reservations={reservations}
+          events={events}
           anchorDate={anchor}
           onPick={setPicked}
           onSlotClick={(trainer, h, m) => {
@@ -189,6 +249,7 @@ export default function CrmSchedulePage() {
         <WeekView
           anchor={anchor}
           reservations={reservations}
+          events={events}
           trainers={trainers}
           onPick={setPicked}
           onSlotClick={(ymd, h, m, defaultTrainer) => {
@@ -259,12 +320,14 @@ export default function CrmSchedulePage() {
 function DayView({
   trainers,
   reservations,
+  events,
   anchorDate,
   onPick,
   onSlotClick,
 }: {
   trainers: StaffOption[];
   reservations: Reservation[];
+  events: ScheduleEvent[];
   anchorDate: string;
   onPick: (r: Reservation) => void;
   onSlotClick: (trainer: StaffOption, h: number, m: number) => void;
@@ -335,6 +398,9 @@ function DayView({
 
           {trainers.map((t) => {
             const list = reservations.filter((r) => r.trainer_member_id === t.id);
+            const evList = events.filter(
+              (e) => e.type === "center" || e.trainer_member_id === t.id
+            );
             return (
               <div key={t.id} className="relative border-l border-[#E8E0D0]/70 dark:border-zinc-800">
                 {slots.map((s, i) => (
@@ -347,6 +413,27 @@ function DayView({
                     style={{ height: `${SLOT_HEIGHT_PX}px` }}
                   />
                 ))}
+                {evList.map((e) => {
+                  const top = offsetPx(e.starts_at);
+                  const bottom = offsetPx(e.ends_at);
+                  const height = Math.max(SLOT_HEIGHT_PX * 0.9, bottom - top);
+                  const cls =
+                    e.type === "center"
+                      ? "bg-[#5A8BB0]/15 text-[#487596] border-[#5A8BB0]/40"
+                      : "bg-[#8B6BAA]/15 text-[#7A5C99] border-[#8B6BAA]/40";
+                  return (
+                    <div
+                      key={`ev-${e.id}`}
+                      className={`absolute left-1 right-1 px-2 py-1 rounded-md text-left text-[11.5px] font-medium border ${cls}`}
+                      style={{ top: `${top}px`, height: `${height}px` }}
+                      title={e.description ?? undefined}
+                    >
+                      <div className="truncate font-semibold">
+                        [{e.type === "center" ? "센터" : "개인"}] {e.title}
+                      </div>
+                    </div>
+                  );
+                })}
                 {list.map((r) => {
                   const top = offsetPx(r.starts_at);
                   const bottom = offsetPx(r.ends_at);
@@ -380,12 +467,14 @@ function DayView({
 function WeekView({
   anchor,
   reservations,
+  events,
   trainers,
   onPick,
   onSlotClick,
 }: {
   anchor: string;
   reservations: Reservation[];
+  events: ScheduleEvent[];
   trainers: StaffOption[];
   onPick: (r: Reservation) => void;
   onSlotClick: (ymd: string, h: number, m: number, trainer: StaffOption | null) => void;
@@ -463,6 +552,7 @@ function WeekView({
           {days.map((d, di) => {
             const key = dayKey(d);
             const list = reservations.filter((r) => kstDateKey(r.starts_at) === key);
+            const evList = events.filter((e) => kstDateKey(e.starts_at) === key);
             const defaultTrainer = trainers[0] ?? null;
             return (
               <div key={di} className="relative border-l border-[#E8E0D0]/70 dark:border-zinc-800">
@@ -476,6 +566,28 @@ function WeekView({
                     style={{ height: `${SLOT_HEIGHT_PX}px` }}
                   />
                 ))}
+                {evList.map((e) => {
+                  const top = offsetPx(e.starts_at);
+                  const bottom = offsetPx(e.ends_at);
+                  const height = Math.max(SLOT_HEIGHT_PX * 0.9, bottom - top);
+                  const cls =
+                    e.type === "center"
+                      ? "bg-[#5A8BB0]/15 text-[#487596] border-[#5A8BB0]/40"
+                      : "bg-[#8B6BAA]/15 text-[#7A5C99] border-[#8B6BAA]/40";
+                  return (
+                    <div
+                      key={`ev-${e.id}`}
+                      className={`absolute left-1 right-1 px-1.5 py-0.5 rounded text-left text-[11px] font-medium border ${cls}`}
+                      style={{ top: `${top}px`, height: `${height}px` }}
+                      title={e.description ?? undefined}
+                    >
+                      <div className="truncate font-semibold">
+                        {e.type === "center" ? "센터·" : "개인·"}
+                        {e.title}
+                      </div>
+                    </div>
+                  );
+                })}
                 {list.map((r) => {
                   const top = offsetPx(r.starts_at);
                   const bottom = offsetPx(r.ends_at);
@@ -817,6 +929,9 @@ function NewReservationModal({
 }) {
   const { getIdToken } = useAuth();
   const [duration, setDuration] = useState(60);
+  const [eventType, setEventType] = useState<"lesson" | "center" | "personal">("lesson");
+  const [eventTitle, setEventTitle] = useState("");
+  const [eventDescription, setEventDescription] = useState("");
 
   // 담당 강사의 유효 수강권을 회원별로 묶은 목록
   interface AssignedPass {
@@ -985,22 +1100,42 @@ function NewReservationModal({
 
   const submit = async () => {
     setError("");
-    if (!picked) return setError("회원을 선택해 주세요");
-    if (!passId) return setError("사용할 수강권을 선택해 주세요");
+    if (eventType === "lesson") {
+      if (!picked) return setError("회원을 선택해 주세요");
+      if (!passId) return setError("사용할 수강권을 선택해 주세요");
+    } else {
+      if (!eventTitle.trim()) return setError("제목을 입력해 주세요");
+    }
     setSubmitting(true);
     try {
       const token = await getIdToken();
-      const res = await fetch("/api/crm/reservations", {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          pass_id: passId,
-          starts_at: startsAt,
-          ends_at: endsAt,
-        }),
-      });
+      let res: Response;
+      if (eventType === "lesson") {
+        res = await fetch("/api/crm/reservations", {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({
+            pass_id: passId,
+            starts_at: startsAt,
+            ends_at: endsAt,
+          }),
+        });
+      } else {
+        res = await fetch("/api/crm/schedule-events", {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({
+            type: eventType, // center | personal
+            title: eventTitle.trim(),
+            description: eventDescription.trim() || undefined,
+            trainer_member_id: eventType === "personal" ? slot.trainerId : undefined,
+            starts_at: startsAt,
+            ends_at: endsAt,
+          }),
+        });
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "예약 실패");
+      if (!res.ok) throw new Error(data?.error || "저장 실패");
       onCreated();
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
@@ -1057,6 +1192,30 @@ function NewReservationModal({
             </div>
           </div>
 
+          {/* 유형 선택 */}
+          <div className="inline-flex w-full rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
+            {(
+              [
+                { key: "lesson", label: "수업" },
+                { key: "center", label: "센터일정" },
+                { key: "personal", label: "개인일정" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setEventType(opt.key)}
+                className={`flex-1 px-3 py-2 text-[13px] font-medium
+                  ${eventType === opt.key
+                    ? "bg-[#6B7B3A] text-white"
+                    : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+                  }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
           {/* 수업 길이 */}
           <div>
             <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
@@ -1094,7 +1253,45 @@ function NewReservationModal({
             </div>
           </div>
 
-          {/* 회원 / 수강권 선택 */}
+          {/* 이벤트(센터/개인) 제목·설명 입력 */}
+          {eventType !== "lesson" && (
+            <>
+              <div>
+                <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+                  {eventType === "center" ? "센터 일정 제목" : "개인 일정 제목"}{" "}
+                  <span className="text-[#B47B2A]">*</span>
+                </div>
+                <input
+                  type="text"
+                  value={eventTitle}
+                  onChange={(e) => setEventTitle(e.target.value.slice(0, 60))}
+                  placeholder={
+                    eventType === "center"
+                      ? "예: 전체 청소, 회식"
+                      : "예: 병원 진료, 개인 운동"
+                  }
+                  maxLength={60}
+                  className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px]"
+                />
+              </div>
+              <div>
+                <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+                  상세 내용
+                </div>
+                <textarea
+                  value={eventDescription}
+                  onChange={(e) => setEventDescription(e.target.value.slice(0, 500))}
+                  placeholder="스케줄에 대한 자세한 내용을 적어 주세요."
+                  maxLength={500}
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] resize-none"
+                />
+              </div>
+            </>
+          )}
+
+          {/* 회원 / 수강권 선택 (수업 유형만) */}
+          {eventType === "lesson" && (
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400">
@@ -1318,6 +1515,7 @@ function NewReservationModal({
               </>
             )}
           </div>
+          )}
 
           {error && (
             <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
@@ -1335,10 +1533,21 @@ function NewReservationModal({
           </button>
           <button
             onClick={submit}
-            disabled={submitting || !picked || !passId}
+            disabled={
+              submitting ||
+              (eventType === "lesson"
+                ? !picked || !passId
+                : !eventTitle.trim())
+            }
             className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
           >
-            {submitting ? "저장 중…" : "예약 만들기"}
+            {submitting
+              ? "저장 중…"
+              : eventType === "lesson"
+                ? "예약 만들기"
+                : eventType === "center"
+                  ? "센터 일정 등록"
+                  : "개인 일정 등록"}
           </button>
         </div>
       </div>
