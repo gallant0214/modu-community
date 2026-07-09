@@ -799,27 +799,36 @@ function NewReservationModal({
 }) {
   const { getIdToken } = useAuth();
   const [duration, setDuration] = useState(60);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<
+
+  // 담당 강사의 유효 수강권을 회원별로 묶은 목록
+  interface AssignedPass {
+    id: number;
+    lesson_kind: string;
+    remaining_sessions: number;
+    total_sessions: number;
+    session_minutes: number;
+    trainer_member_id: number;
+    status: string;
+    member_id: number;
+    member_name: string;
+  }
+  const [assigned, setAssigned] = useState<AssignedPass[]>([]);
+  const [loadingAssigned, setLoadingAssigned] = useState(false);
+
+  // 이 강사에게 배정된 회원 이외를 찾을 때 검색
+  const [filterText, setFilterText] = useState("");
+  const [searchMode, setSearchMode] = useState<"assigned" | "search">("assigned");
+  const [otherResults, setOtherResults] = useState<
     { id: number; name: string; phone: string | null }[]
   >([]);
+  const [searching, setSearching] = useState(false);
+  const [loadingOtherPasses, setLoadingOtherPasses] = useState(false);
+  const [otherPasses, setOtherPasses] = useState<AssignedPass[]>([]);
+
   const [picked, setPicked] = useState<{ id: number; name: string; phone: string | null } | null>(
     null
   );
-  const [passes, setPasses] = useState<
-    {
-      id: number;
-      lesson_kind: string;
-      remaining_sessions: number;
-      total_sessions: number;
-      session_minutes: number;
-      trainer_member_id: number;
-      status: string;
-    }[]
-  >([]);
   const [passId, setPassId] = useState<number | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [loadingPasses, setLoadingPasses] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -843,8 +852,41 @@ function NewReservationModal({
     return s.toISOString();
   }, [startsAt, duration]);
 
-  const search = async () => {
-    const q = query.trim();
+  // 강사 변경 시 담당 회원 수강권 자동 로드
+  useEffect(() => {
+    setPicked(null);
+    setPassId(null);
+    setOtherResults([]);
+    setOtherPasses([]);
+    setSearchMode("assigned");
+    setFilterText("");
+    (async () => {
+      setLoadingAssigned(true);
+      setError("");
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(
+          `/api/crm/passes?trainer_id=${slot.trainerId}&status=valid&limit=500`,
+          { headers: { authorization: `Bearer ${token}` }, cache: "no-store" }
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "조회 실패");
+        setAssigned(
+          (data.passes ?? []).filter(
+            (p: { remaining_sessions: number }) => p.remaining_sessions > 0
+          )
+        );
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "네트워크 오류");
+      } finally {
+        setLoadingAssigned(false);
+      }
+    })();
+  }, [slot.trainerId, getIdToken]);
+
+  const searchOther = async () => {
+    const q = filterText.trim();
     if (!q) return;
     setError("");
     setSearching(true);
@@ -856,7 +898,7 @@ function NewReservationModal({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "검색 실패");
-      setResults(data.members ?? []);
+      setOtherResults(data.members ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -866,7 +908,7 @@ function NewReservationModal({
 
   const loadPassesForMember = async (memberId: number) => {
     setError("");
-    setLoadingPasses(true);
+    setLoadingOtherPasses(true);
     try {
       const token = await getIdToken();
       const res = await fetch(`/api/crm/members/${memberId}`, {
@@ -875,37 +917,52 @@ function NewReservationModal({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "조회 실패");
-      const activePasses = (data.passes ?? []).filter(
-        (p: { status: string; remaining_sessions: number }) =>
-          p.status === "valid" && p.remaining_sessions > 0
-      );
-      setPasses(activePasses);
-      // 담당 강사와 일치하는 수강권을 우선 선택
-      const preferred = activePasses.find(
-        (p: { trainer_member_id: number }) => p.trainer_member_id === slot.trainerId
-      );
-      if (preferred) {
-        setPassId(preferred.id);
-        if (preferred.session_minutes) setDuration(preferred.session_minutes);
-      } else if (activePasses[0]) {
-        setPassId(activePasses[0].id);
-        if (activePasses[0].session_minutes) setDuration(activePasses[0].session_minutes);
+      const active: AssignedPass[] = (data.passes ?? [])
+        .filter(
+          (p: { status: string; remaining_sessions: number }) =>
+            p.status === "valid" && p.remaining_sessions > 0
+        )
+        .map((p: AssignedPass) => ({
+          ...p,
+          member_id: memberId,
+          member_name: data.member?.name ?? "",
+        }));
+      setOtherPasses(active);
+      if (active[0]) {
+        setPassId(active[0].id);
+        if (active[0].session_minutes) setDuration(active[0].session_minutes);
       } else {
         setPassId(null);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
-      setLoadingPasses(false);
+      setLoadingOtherPasses(false);
     }
   };
 
-  const pickMember = (m: { id: number; name: string; phone: string | null }) => {
+  const pickAssignedPass = (p: AssignedPass) => {
+    setPicked({ id: p.member_id, name: p.member_name, phone: null });
+    setPassId(p.id);
+    if (p.session_minutes) setDuration(p.session_minutes);
+  };
+
+  const pickOtherMember = (m: { id: number; name: string; phone: string | null }) => {
     setPicked(m);
-    setResults([]);
-    setQuery("");
+    setOtherResults([]);
     loadPassesForMember(m.id);
   };
+
+  // 필터링된 담당 목록
+  const filteredAssigned = (() => {
+    if (!filterText.trim()) return assigned;
+    const q = filterText.trim().toLowerCase();
+    return assigned.filter(
+      (p) =>
+        p.member_name.toLowerCase().includes(q) ||
+        p.lesson_kind.toLowerCase().includes(q)
+    );
+  })();
 
   const submit = async () => {
     setError("");
@@ -933,7 +990,6 @@ function NewReservationModal({
     }
   };
 
-  const selectedPass = passes.find((p) => p.id === passId);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
@@ -987,7 +1043,7 @@ function NewReservationModal({
             <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
               수업 시간(분)
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               {[30, 45, 50, 60, 75, 90].map((n) => (
                 <button
                   key={n}
@@ -1002,123 +1058,206 @@ function NewReservationModal({
                   {n}분
                 </button>
               ))}
+              <div className="inline-flex items-center gap-1 ml-1">
+                <input
+                  type="number"
+                  min={5}
+                  max={480}
+                  value={duration}
+                  onChange={(e) =>
+                    setDuration(Math.max(5, Math.min(480, Number(e.target.value) || 0)))
+                  }
+                  className="w-16 px-2 py-1 rounded-full text-[12px] border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 bg-white dark:bg-zinc-900 text-center focus:outline-none"
+                  aria-label="수업 시간 직접 입력 (분)"
+                />
+                <span className="text-[11.5px] text-[#A89B80]">직접</span>
+              </div>
             </div>
           </div>
 
-          {/* 회원 선택 */}
+          {/* 회원 / 수강권 선택 */}
           <div>
-            <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
-              회원 <span className="text-[#B47B2A]">*</span>
-            </div>
-            {picked ? (
-              <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-[#6B7B3A]/40 bg-[#6B7B3A]/5">
-                <span className="text-[13.5px] text-[#3A342A] dark:text-zinc-200">
-                  <strong>{picked.name}</strong>
-                  {picked.phone && (
-                    <span className="ml-2 text-[12px] text-[#8C8270]">{picked.phone}</span>
-                  )}
-                </span>
-                <button
-                  onClick={() => {
-                    setPicked(null);
-                    setPasses([]);
-                    setPassId(null);
-                  }}
-                  className="text-[12px] text-[#6B7B3A] hover:underline"
-                >
-                  다시 선택
-                </button>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400">
+                {searchMode === "assigned"
+                  ? `${slot.trainerName} 담당 회원`
+                  : "다른 회원 검색"}{" "}
+                <span className="text-[#B47B2A]">*</span>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchMode(searchMode === "assigned" ? "search" : "assigned");
+                  setPicked(null);
+                  setPassId(null);
+                  setOtherResults([]);
+                  setOtherPasses([]);
+                }}
+                className="text-[11.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+              >
+                {searchMode === "assigned" ? "다른 회원 검색" : "담당 회원으로 돌아가기"}
+              </button>
+            </div>
+
+            {searchMode === "assigned" ? (
+              <>
+                <input
+                  type="text"
+                  value={filterText}
+                  onChange={(e) => setFilterText(e.target.value)}
+                  placeholder="이름 · 수업 종류로 필터"
+                  className="mb-2 w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px]"
+                />
+                {loadingAssigned ? (
+                  <div className="px-3 py-4 text-center text-[12.5px] text-[#8C8270]">불러오는 중…</div>
+                ) : filteredAssigned.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-lg">
+                    {assigned.length === 0
+                      ? `${slot.trainerName} 담당 유효 수강권이 없어요.`
+                      : "일치하는 결과가 없어요."}
+                  </div>
+                ) : (
+                  <ul className="space-y-1.5 max-h-[260px] overflow-y-auto">
+                    {filteredAssigned.map((p) => {
+                      const selected = passId === p.id;
+                      return (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            onClick={() => pickAssignedPass(p)}
+                            className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors
+                              ${selected
+                                ? "border-[#6B7B3A] bg-[#6B7B3A]/10"
+                                : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
+                              }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                                {p.member_name || "(이름 없음)"}
+                              </span>
+                              <span className="shrink-0 text-[11px] text-[#B47B2A] dark:text-amber-300 font-medium">
+                                잔여 {p.remaining_sessions}회
+                              </span>
+                            </div>
+                            <div className="mt-0.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400 truncate">
+                              {p.lesson_kind} · {p.session_minutes}분
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </>
             ) : (
               <>
-                <div className="flex gap-2">
-                  <input
-                    className="flex-1 px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px]"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        search();
-                      }
-                    }}
-                    placeholder="이름 또는 연락처"
-                  />
-                  <button
-                    onClick={search}
-                    disabled={searching || !query.trim()}
-                    className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932]"
-                  >
-                    {searching ? "…" : "검색"}
-                  </button>
-                </div>
-                {results.length > 0 && (
-                  <ul className="mt-2 space-y-1.5 max-h-[180px] overflow-y-auto">
-                    {results.map((m) => (
-                      <li key={m.id}>
-                        <button
-                          onClick={() => pickMember(m)}
-                          className="w-full text-left px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50"
-                        >
-                          <div className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">
-                            {m.name}
-                          </div>
-                          {m.phone && (
-                            <div className="text-[11.5px] text-[#A89B80]">{m.phone}</div>
-                          )}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                {picked ? (
+                  <>
+                    <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-[#6B7B3A]/40 bg-[#6B7B3A]/5 mb-2">
+                      <span className="text-[13.5px] text-[#3A342A] dark:text-zinc-200">
+                        <strong>{picked.name}</strong>
+                        {picked.phone && (
+                          <span className="ml-2 text-[12px] text-[#8C8270]">{picked.phone}</span>
+                        )}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setPicked(null);
+                          setOtherPasses([]);
+                          setPassId(null);
+                        }}
+                        className="text-[12px] text-[#6B7B3A] hover:underline"
+                      >
+                        다시 선택
+                      </button>
+                    </div>
+                    <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+                      사용할 수강권
+                    </div>
+                    {loadingOtherPasses ? (
+                      <div className="text-[12.5px] text-[#8C8270]">불러오는 중…</div>
+                    ) : otherPasses.length === 0 ? (
+                      <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 text-[12.5px] text-[#8C8270]">
+                        잔여가 있는 유효 수강권이 없어요.
+                      </div>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {otherPasses.map((p) => (
+                          <li key={p.id}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPassId(p.id);
+                                if (p.session_minutes) setDuration(p.session_minutes);
+                              }}
+                              className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors
+                                ${passId === p.id
+                                  ? "border-[#6B7B3A] bg-[#6B7B3A]/10"
+                                  : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
+                                }`}
+                            >
+                              <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                                {p.lesson_kind}
+                              </div>
+                              <div className="mt-0.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+                                잔여 {p.remaining_sessions}/{p.total_sessions}회 · {p.session_minutes}분
+                                {p.trainer_member_id !== slot.trainerId && (
+                                  <span className="ml-2 text-[#B47B2A]">다른 강사 수강권</span>
+                                )}
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="flex gap-2">
+                      <input
+                        className="flex-1 px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px]"
+                        value={filterText}
+                        onChange={(e) => setFilterText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            searchOther();
+                          }
+                        }}
+                        placeholder="이름 또는 연락처"
+                      />
+                      <button
+                        onClick={searchOther}
+                        disabled={searching || !filterText.trim()}
+                        className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932]"
+                      >
+                        {searching ? "…" : "검색"}
+                      </button>
+                    </div>
+                    {otherResults.length > 0 && (
+                      <ul className="mt-2 space-y-1.5 max-h-[180px] overflow-y-auto">
+                        {otherResults.map((m) => (
+                          <li key={m.id}>
+                            <button
+                              onClick={() => pickOtherMember(m)}
+                              className="w-full text-left px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50"
+                            >
+                              <div className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">
+                                {m.name}
+                              </div>
+                              {m.phone && (
+                                <div className="text-[11.5px] text-[#A89B80]">{m.phone}</div>
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
                 )}
               </>
             )}
           </div>
-
-          {/* 수강권 선택 (회원 선택 후) */}
-          {picked && (
-            <div>
-              <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
-                사용할 수강권 <span className="text-[#B47B2A]">*</span>
-              </div>
-              {loadingPasses ? (
-                <div className="text-[12.5px] text-[#8C8270]">불러오는 중…</div>
-              ) : passes.length === 0 ? (
-                <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 text-[12.5px] text-[#8C8270]">
-                  잔여가 있는 유효 수강권이 없어요.
-                </div>
-              ) : (
-                <ul className="space-y-1.5">
-                  {passes.map((p) => (
-                    <li key={p.id}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPassId(p.id);
-                          if (p.session_minutes) setDuration(p.session_minutes);
-                        }}
-                        className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors
-                          ${passId === p.id
-                            ? "border-[#6B7B3A] bg-[#6B7B3A]/10"
-                            : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
-                          }`}
-                      >
-                        <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">
-                          {p.lesson_kind}
-                        </div>
-                        <div className="mt-0.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
-                          잔여 {p.remaining_sessions}/{p.total_sessions}회 · {p.session_minutes}분
-                          {p.trainer_member_id !== slot.trainerId && (
-                            <span className="ml-2 text-[#B47B2A]">다른 강사 수강권</span>
-                          )}
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
 
           {error && (
             <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
@@ -1136,7 +1275,7 @@ function NewReservationModal({
           </button>
           <button
             onClick={submit}
-            disabled={submitting || !picked || !passId || !selectedPass}
+            disabled={submitting || !picked || !passId}
             className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
           >
             {submitting ? "저장 중…" : "예약 만들기"}
