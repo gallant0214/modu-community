@@ -1150,40 +1150,38 @@ function NewReservationModal({
                                 : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
                               }`}
                           >
-                            <div className="flex items-start justify-between gap-2">
-                              <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
-                                {p.member_name || "(이름 없음)"}
-                              </span>
-                              <span className="shrink-0 text-right text-[11px] text-[#B47B2A] dark:text-amber-300 font-medium leading-tight">
-                                <span className="block text-[10.5px] text-[#A89B80] dark:text-zinc-500 font-normal">
-                                  총 {p.total_sessions}회 중
-                                </span>
-                                잔여 {p.remaining_sessions}회
-                              </span>
-                            </div>
-                            <div className="mt-0.5 flex items-end justify-between gap-2">
-                              <span className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 truncate">
-                                {p.lesson_kind} · {p.session_minutes}분
-                              </span>
-                              {(() => {
-                                const exp = formatExpiry(p.expires_at);
-                                const cls =
-                                  exp.tone === "expired"
-                                    ? "text-red-600"
-                                    : exp.tone === "warn"
-                                      ? "text-[#B47B2A] dark:text-amber-300"
-                                      : exp.tone === "infinite"
-                                        ? "text-[#6B7B3A] dark:text-[#A8B87A]"
-                                        : "text-[#8C8270] dark:text-zinc-500";
-                                return (
-                                  <span
-                                    className={`shrink-0 text-right text-[10.5px] leading-tight ${cls}`}
-                                  >
-                                    {exp.text}
-                                  </span>
-                                );
-                              })()}
-                            </div>
+                            {(() => {
+                              const exp = formatExpiry(p.expires_at);
+                              const expCls =
+                                exp.tone === "expired"
+                                  ? "text-red-600"
+                                  : exp.tone === "warn"
+                                    ? "text-[#B47B2A] dark:text-amber-300"
+                                    : exp.tone === "infinite"
+                                      ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+                                      : "text-[#8C8270] dark:text-zinc-500";
+                              return (
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0 space-y-0.5">
+                                    <div className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
+                                      {p.member_name || "(이름 없음)"}
+                                    </div>
+                                    <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 truncate">
+                                      {p.lesson_kind} · {p.session_minutes}분
+                                    </div>
+                                  </div>
+                                  <div className="shrink-0 text-right space-y-0.5 leading-tight">
+                                    <div className="text-[10.5px] text-[#A89B80] dark:text-zinc-500">
+                                      총 {p.total_sessions}회 중
+                                    </div>
+                                    <div className="text-[11px] font-medium text-[#B47B2A] dark:text-amber-300">
+                                      잔여 {p.remaining_sessions}회
+                                    </div>
+                                    <div className={`text-[10.5px] ${expCls}`}>{exp.text}</div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </button>
                         </li>
                       );
