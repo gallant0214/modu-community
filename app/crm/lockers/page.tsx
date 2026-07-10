@@ -99,6 +99,16 @@ export default function CrmLockersPage() {
   const [pickedLocker, setPickedLocker] = useState<Locker | null>(null);
   const [moveSource, setMoveSource] = useState<Locker | null>(null);
 
+  // 데스크탑 감지 (lg = 1024px). 데스크탑에서는 우측 슬라이드 패널, 모바일에서는 모달.
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const m = window.matchMedia("(min-width: 1024px)");
+    const handler = () => setIsDesktop(m.matches);
+    handler();
+    m.addEventListener("change", handler);
+    return () => m.removeEventListener("change", handler);
+  }, []);
+
   // 설정 폼
   const [zoneName, setZoneName] = useState("");
   const [lockerCount, setLockerCount] = useState("");
@@ -367,7 +377,7 @@ export default function CrmLockersPage() {
   };
 
   return (
-    <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-6xl mx-auto">
+    <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-7xl mx-auto">
       <header className="mb-5">
         <h1 className="text-[18px] md:text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
           락커
@@ -404,6 +414,8 @@ export default function CrmLockersPage() {
             }}
           />
 
+          <div className={pickedLocker && isDesktop ? "lg:flex lg:gap-4 lg:items-start" : ""}>
+          <div className={pickedLocker && isDesktop ? "lg:flex-1 lg:min-w-0" : ""}>
           {/* 뷰 모드 토글 */}
           <div className="flex items-center gap-2 mb-3">
             <div className="inline-flex border border-[#E8E0D0] dark:border-zinc-700 rounded-lg overflow-hidden">
@@ -624,6 +636,26 @@ export default function CrmLockersPage() {
               {error}
             </div>
           )}
+          </div>
+          {pickedLocker && isDesktop && (
+            <div className="lg:w-[360px] lg:shrink-0 mt-4 lg:mt-0">
+              <LockerActionModal
+                locker={pickedLocker}
+                today={today}
+                onClose={() => setPickedLocker(null)}
+                onDone={() => {
+                  setPickedLocker(null);
+                  loadLockers();
+                }}
+                onMove={(l) => {
+                  setPickedLocker(null);
+                  setMoveSource(l);
+                }}
+                variant="panel"
+              />
+            </div>
+          )}
+          </div>
         </>
       )}
 
@@ -784,19 +816,22 @@ export default function CrmLockersPage() {
         </>
       )}
 
-      <LockerActionModal
-        locker={pickedLocker}
-        today={today}
-        onClose={() => setPickedLocker(null)}
-        onDone={() => {
-          setPickedLocker(null);
-          loadLockers();
-        }}
-        onMove={(l) => {
-          setPickedLocker(null);
-          setMoveSource(l);
-        }}
-      />
+      {/* 모바일: 모달. 데스크탑(배정 현황 탭)에서는 위의 우측 패널이 담당. */}
+      {(!isDesktop || tab !== "assigned") && (
+        <LockerActionModal
+          locker={pickedLocker}
+          today={today}
+          onClose={() => setPickedLocker(null)}
+          onDone={() => {
+            setPickedLocker(null);
+            loadLockers();
+          }}
+          onMove={(l) => {
+            setPickedLocker(null);
+            setMoveSource(l);
+          }}
+        />
+      )}
 
       <MoveLockerModal
         source={moveSource}
@@ -1688,12 +1723,14 @@ function LockerActionModal({
   onClose,
   onDone,
   onMove,
+  variant = "modal",
 }: {
   locker: Locker | null;
   today: string;
   onClose: () => void;
   onDone: () => void;
   onMove?: (locker: Locker) => void;
+  variant?: "modal" | "panel";
 }) {
   const { getIdToken } = useAuth();
   const open = locker !== null;
@@ -1825,13 +1862,7 @@ function LockerActionModal({
 
   if (!locker) return null;
 
-  return (
-    <CrmModal
-      open={open}
-      onClose={onClose}
-      title={`락커 ${locker.number}번`}
-      size="md"
-    >
+  const body = (
       <div className="space-y-3.5">
         <div className="flex items-center justify-between">
           <span className={`px-2 py-0.5 rounded text-[11.5px] font-semibold ${STATE_CHIP_CLS[ds]}`}>
@@ -2175,6 +2206,45 @@ function LockerActionModal({
           </>
         ) : null}
       </div>
+  );
+
+  if (variant === "panel") {
+    return (
+      <aside className="flex flex-col rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-sm overflow-hidden max-h-[calc(100vh-140px)] lg:sticky lg:top-3">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#E8E0D0]/70 dark:border-zinc-800">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <h2 className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
+              락커 {locker.number}번
+            </h2>
+            {locker.member && (
+              <span className="text-[12px] text-[#8C8270] truncate">
+                {locker.member.name}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            className="p-1 -m-1 text-[#A89B80] hover:text-[#3A342A] dark:hover:text-zinc-200 shrink-0"
+          >
+            <svg className="w-4.5 h-4.5" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">{body}</div>
+      </aside>
+    );
+  }
+
+  return (
+    <CrmModal
+      open={open}
+      onClose={onClose}
+      title={`락커 ${locker.number}번`}
+      size="md"
+    >
+      {body}
     </CrmModal>
   );
 }
