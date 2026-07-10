@@ -499,43 +499,120 @@ export default function CrmLockersPage() {
               </table>
             </div>
           ) : view === "compact" ? (
-            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-1.5">
-              {filtered.map((l) => {
+            (() => {
+              const gridRows = currentZone?.layout_rows ?? 0;
+              const gridCols = currentZone?.layout_cols ?? 0;
+              const useLayoutGrid = gridRows > 0 && gridCols > 0;
+              const layoutMap = buildLayoutMap(lockers, gridRows, gridCols);
+              const filterSet = new Set(filtered.map((l) => l.id));
+              const cellCls = (l: Locker) => {
                 const ds = getDisplayState(l, today);
+                return ds === "unassigned"
+                  ? "border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[#A89B80] hover:border-[#6B7B3A]/40"
+                  : ds === "active"
+                  ? "border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#3A342A] dark:text-zinc-100 hover:bg-[#6B7B3A]/20"
+                  : ds === "expiring"
+                  ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300"
+                  : ds === "expired"
+                  ? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
+                  : ds === "broken"
+                  ? "border-zinc-500 bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"
+                  : "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300";
+              };
+              if (useLayoutGrid) {
                 return (
-                  <button
-                    key={l.id}
-                    onClick={() => setPickedLocker(l)}
-                    className={`aspect-square rounded-lg border text-[13.5px] font-bold flex items-center justify-center transition-colors
-                      ${ds === "unassigned"
-                        ? "border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[#A89B80] hover:border-[#6B7B3A]/40"
-                        : ds === "active"
-                        ? "border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#3A342A] dark:text-zinc-100 hover:bg-[#6B7B3A]/20"
-                        : ds === "expiring"
-                        ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300"
-                        : ds === "expired"
-                        ? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
-                        : ds === "broken"
-                        ? "border-zinc-500 bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"
-                        : "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
-                      }`}
+                  <div
+                    className="grid gap-1.5"
+                    style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
                   >
-                    {l.number}
-                  </button>
+                    {Array.from({ length: gridRows * gridCols }, (_, i) => {
+                      const r = Math.floor(i / gridCols);
+                      const c = i % gridCols;
+                      const l = layoutMap.get(`${r}-${c}`);
+                      if (!l) {
+                        return (
+                          <div
+                            key={`${r}-${c}`}
+                            className="aspect-square rounded-lg border border-dashed border-[#E8E0D0]/40 dark:border-zinc-800/40"
+                          />
+                        );
+                      }
+                      const dimmed = !filterSet.has(l.id);
+                      return (
+                        <button
+                          key={l.id}
+                          onClick={() => setPickedLocker(l)}
+                          className={`aspect-square rounded-lg border text-[13.5px] font-bold flex items-center justify-center transition-colors ${cellCls(l)} ${dimmed ? "opacity-25" : ""}`}
+                        >
+                          {l.number}
+                        </button>
+                      );
+                    })}
+                  </div>
                 );
-              })}
-            </div>
+              }
+              return (
+                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-1.5">
+                  {filtered.map((l) => (
+                    <button
+                      key={l.id}
+                      onClick={() => setPickedLocker(l)}
+                      className={`aspect-square rounded-lg border text-[13.5px] font-bold flex items-center justify-center transition-colors ${cellCls(l)}`}
+                    >
+                      {l.number}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
-              {filtered.map((l) => (
-                <LockerCard
-                  key={l.id}
-                  locker={l}
-                  today={today}
-                  onClick={() => setPickedLocker(l)}
-                />
-              ))}
-            </div>
+            (() => {
+              const gridRows = currentZone?.layout_rows ?? 0;
+              const gridCols = currentZone?.layout_cols ?? 0;
+              const useLayoutGrid = gridRows > 0 && gridCols > 0;
+              const layoutMap = buildLayoutMap(lockers, gridRows, gridCols);
+              const filterSet = new Set(filtered.map((l) => l.id));
+              if (useLayoutGrid) {
+                return (
+                  <div
+                    className="grid gap-2.5"
+                    style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
+                  >
+                    {Array.from({ length: gridRows * gridCols }, (_, i) => {
+                      const r = Math.floor(i / gridCols);
+                      const c = i % gridCols;
+                      const l = layoutMap.get(`${r}-${c}`);
+                      if (!l) {
+                        return (
+                          <div
+                            key={`${r}-${c}`}
+                            className="rounded-xl border border-dashed border-[#E8E0D0]/40 dark:border-zinc-800/40 min-h-[80px]"
+                          />
+                        );
+                      }
+                      const dimmed = !filterSet.has(l.id);
+                      return (
+                        <div key={l.id} className={dimmed ? "opacity-25" : ""}>
+                          <LockerCard locker={l} today={today} onClick={() => setPickedLocker(l)} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              }
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+                  {filtered.map((l) => (
+                    <LockerCard
+                      key={l.id}
+                      locker={l}
+                      today={today}
+                      onClick={() => setPickedLocker(l)}
+                    />
+                  ))}
+                </div>
+              );
+            })()
           )}
 
           {error && (
@@ -2157,6 +2234,7 @@ function ZoneChips({
   zones,
   showOnlyActive,
   onAddRoom,
+  onRename,
 }: {
   zone: number;
   onChange: (n: number) => void;
@@ -2164,7 +2242,11 @@ function ZoneChips({
   zones?: Zone[];
   showOnlyActive?: boolean;
   onAddRoom?: () => void;
+  onRename?: (zoneNumber: number, next: string) => Promise<void> | void;
 }) {
+  const [editingZone, setEditingZone] = useState<number | null>(null);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
   // showOnlyActive=true → locker_count>0 인 락커룸만 표시. 없으면 칩 없이 + 새 락커룸 버튼만.
   let numbers = Array.from({ length: ZONE_COUNT }, (_, i) => i + 1);
   if (showOnlyActive && zones) {
@@ -2180,10 +2262,61 @@ function ZoneChips({
       )}
       {numbers.map((n) => {
         const active = zone === n;
+        if (editingZone === n && onRename) {
+          return (
+            <div key={n} className="inline-flex items-center gap-1">
+              <input
+                autoFocus
+                type="text"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value.slice(0, ZONE_NAME_MAX))}
+                maxLength={ZONE_NAME_MAX}
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter" && draft.trim()) {
+                    e.preventDefault();
+                    setSaving(true);
+                    await onRename(n, draft.trim());
+                    setSaving(false);
+                    setEditingZone(null);
+                  }
+                  if (e.key === "Escape") setEditingZone(null);
+                }}
+                className="px-2.5 py-1 rounded-full text-[12.5px] border border-[#6B7B3A] bg-white dark:bg-zinc-900 text-[#2A251D] dark:text-zinc-100 focus:outline-none w-24"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!draft.trim()) return;
+                  setSaving(true);
+                  await onRename(n, draft.trim());
+                  setSaving(false);
+                  setEditingZone(null);
+                }}
+                disabled={saving}
+                className="text-[11.5px] text-[#6B7B3A] hover:underline disabled:opacity-50"
+              >
+                저장
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingZone(null)}
+                className="text-[11.5px] text-[#8C8270] hover:underline"
+              >
+                취소
+              </button>
+            </div>
+          );
+        }
         return (
           <button
             key={n}
             onClick={() => onChange(n)}
+            onDoubleClick={() => {
+              if (!onRename) return;
+              setDraft(zoneLabel(n));
+              setEditingZone(n);
+            }}
+            title={onRename ? "더블 클릭하면 구역명을 수정할 수 있어요" : undefined}
             className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-medium border whitespace-nowrap transition-colors
               ${active
                 ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
@@ -2281,9 +2414,9 @@ function LayoutView({
 }) {
   const hasGrid = rows > 0 && cols > 0;
   const placed = lockers.filter((l) => l.layout_row !== null && l.layout_col !== null);
-  const useGrid = hasGrid && placed.length > 0;
 
-  if (!useGrid) {
+  // 그리드 크기만 지정되고 개별 위치가 없는 경우 → 번호순으로 자동 채워서 보여줌
+  if (!hasGrid) {
     return (
       <>
         <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-1">
@@ -2301,6 +2434,20 @@ function LayoutView({
   const lockerAt = new Map<string, Locker>();
   for (const l of placed) {
     lockerAt.set(`${l.layout_row}-${l.layout_col}`, l);
+  }
+  // 배치 안 된 락커도 남은 셀에 번호순으로 자동 배치해 보여줌
+  const usedCells = new Set(lockerAt.keys());
+  const remaining = [...lockers]
+    .filter((l) => l.layout_row === null || l.layout_col === null)
+    .sort((a, b) => a.number - b.number);
+  let ri = 0;
+  for (let r = 0; r < rows && ri < remaining.length; r += 1) {
+    for (let c = 0; c < cols && ri < remaining.length; c += 1) {
+      if (usedCells.has(`${r}-${c}`)) continue;
+      lockerAt.set(`${r}-${c}`, remaining[ri]);
+      usedCells.add(`${r}-${c}`);
+      ri += 1;
+    }
   }
 
   return (
@@ -2323,13 +2470,41 @@ function LayoutView({
         })}
       </div>
       <LayoutLegend />
-      {lockers.some((l) => l.layout_row === null || l.layout_col === null) && (
-        <div className="mt-3 text-[11.5px] text-[#B47B2A] dark:text-amber-300">
-          배치도에 아직 놓지 않은 락커가 있어요. 배치 편집으로 위치를 지정해 주세요.
+      {remaining.length > 0 && (
+        <div className="mt-3 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+          위치를 지정하지 않은 락커 {remaining.length}개를 번호순으로 자동 배치했어요. 원하면 배치 편집으로 위치를 조정할 수 있어요.
         </div>
       )}
     </>
   );
+}
+
+/** rows×cols 그리드에서 (row,col) → locker 매핑. layout_row/col 이 없는 락커는
+ *  남은 셀에 번호순으로 자동 배치. */
+function buildLayoutMap(
+  lockers: Locker[],
+  rows: number,
+  cols: number
+): Map<string, Locker> {
+  const map = new Map<string, Locker>();
+  if (rows <= 0 || cols <= 0) return map;
+  for (const l of lockers) {
+    if (l.layout_row !== null && l.layout_col !== null) {
+      map.set(`${l.layout_row}-${l.layout_col}`, l);
+    }
+  }
+  const remaining = [...lockers]
+    .filter((l) => l.layout_row === null || l.layout_col === null)
+    .sort((a, b) => a.number - b.number);
+  let ri = 0;
+  for (let r = 0; r < rows && ri < remaining.length; r += 1) {
+    for (let c = 0; c < cols && ri < remaining.length; c += 1) {
+      if (map.has(`${r}-${c}`)) continue;
+      map.set(`${r}-${c}`, remaining[ri]);
+      ri += 1;
+    }
+  }
+  return map;
 }
 
 function LayoutLegend() {
