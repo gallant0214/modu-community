@@ -59,6 +59,7 @@ export default function CrmContractsPage() {
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
+  const [initialEditing, setInitialEditing] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -222,12 +223,15 @@ export default function CrmContractsPage() {
         ) : (
           <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {list.map((c) => (
-              <li key={c.id}>
+              <li key={c.id} className="relative group">
                 <button
-                  onClick={() => setDetailId(c.id)}
+                  onClick={() => {
+                    setInitialEditing(false);
+                    setDetailId(c.id);
+                  }}
                   className="w-full text-left px-4 py-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors h-full"
                 >
-                  <div className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 break-keep">
+                  <div className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 break-keep pr-16">
                     {c.title}
                   </div>
                   <div className="mt-2 text-[12px] text-[#6B5D47] dark:text-zinc-400">
@@ -237,6 +241,23 @@ export default function CrmContractsPage() {
                     생성일 : {formatDateTime(c.created_at)}
                   </div>
                 </button>
+                <div className="absolute top-2.5 right-2.5 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInitialEditing(true);
+                      setDetailId(c.id);
+                    }}
+                    title="수정"
+                    aria-label="수정"
+                    className="w-7 h-7 rounded-md flex items-center justify-center text-[#6B7B3A] dark:text-[#A8B87A] bg-[#FBF7EB] dark:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-700 hover:bg-[#6B7B3A]/10"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -284,9 +305,14 @@ export default function CrmContractsPage() {
 
       <DetailModal
         contractId={detailId}
-        onClose={() => setDetailId(null)}
+        initialEditing={initialEditing}
+        onClose={() => {
+          setDetailId(null);
+          setInitialEditing(false);
+        }}
         onChanged={() => {
           setDetailId(null);
+          setInitialEditing(false);
           load();
         }}
       />
@@ -491,10 +517,12 @@ function CreateModal({
 
 function DetailModal({
   contractId,
+  initialEditing,
   onClose,
   onChanged,
 }: {
   contractId: number | null;
+  initialEditing?: boolean;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -526,6 +554,7 @@ function DetailModal({
       setError("");
       return;
     }
+    setEditing(!!initialEditing);
     (async () => {
       setLoading(true);
       setError("");
@@ -567,7 +596,7 @@ function DetailModal({
         setLoading(false);
       }
     })();
-  }, [contractId, getIdToken]);
+  }, [contractId, getIdToken, initialEditing]);
 
   const save = async () => {
     if (!data) return;
