@@ -15,7 +15,6 @@ interface Settings {
   center_id: number;
   cancel_enabled: boolean;
   cancel_hours: number;
-  member_can_self_cancel_consumed: boolean;
   booking_enabled: boolean;
   booking_unit_min: number;
   booking_horizon_days: number;
@@ -239,11 +238,9 @@ export default function CrmSettingsPage() {
                 />
                 <span className="ml-2 text-[12.5px] text-[#A89B80]">시간</span>
               </Field>
-              <Toggle
-                label="가능 시간 이후에도 회원이 직접 차감 취소(노쇼) 가능"
-                on={settings.member_can_self_cancel_consumed}
-                onChange={(v) => save({ member_can_self_cancel_consumed: v })}
-              />
+              <p className="mt-1 text-[11.5px] text-[#A89B80] leading-relaxed">
+                가능 시간이 지난 뒤에는 회원이 직접 취소할 수 없어요. 노쇼·차감 취소 처리는 강사·관리자만 스케줄에서 진행할 수 있습니다.
+              </p>
             </div>
           </Card>
 
