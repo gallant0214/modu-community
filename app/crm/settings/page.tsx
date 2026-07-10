@@ -13,6 +13,7 @@ import {
 
 interface Settings {
   center_id: number;
+  cancel_enabled: boolean;
   cancel_hours: number;
   member_can_self_cancel_consumed: boolean;
   booking_enabled: boolean;
@@ -215,25 +216,35 @@ export default function CrmSettingsPage() {
       {settings && tab === "reservation" && (
         <div className="space-y-4">
           <Card title="예약 취소">
-            <Field
-              label="회원의 예약 취소 가능 시간"
-              hint="수업 시작 N시간 전까지 회원이 직접 예약을 취소할 수 있어요. 0이면 수업 전날까지만 가능."
-            >
-              <input
-                type="number"
-                min={0}
-                max={72}
-                value={settings.cancel_hours}
-                onChange={(e) => save({ cancel_hours: Number(e.target.value) })}
-                className={`${crmInputClass} max-w-[140px]`}
-              />
-              <span className="ml-2 text-[12.5px] text-[#A89B80]">시간</span>
-            </Field>
             <Toggle
-              label="가능 시간 이후에도 회원이 직접 차감 취소(노쇼) 가능"
-              on={settings.member_can_self_cancel_consumed}
-              onChange={(v) => save({ member_can_self_cancel_consumed: v })}
+              label="예약 취소 기능 사용"
+              on={settings.cancel_enabled}
+              onChange={(v) => save({ cancel_enabled: v })}
             />
+            <p className="mt-1 mb-2 text-[11.5px] text-[#A89B80]">
+              끄면 회원이 예약을 직접 취소할 수 없어요. 관리자만 취소 처리할 수 있습니다.
+            </p>
+            <div className={settings.cancel_enabled ? "" : "opacity-50 pointer-events-none"}>
+              <Field
+                label="회원의 예약 취소 가능 시간"
+                hint="수업 시작 N시간 전까지 회원이 직접 예약을 취소할 수 있어요. 0이면 수업 전날까지만 가능."
+              >
+                <input
+                  type="number"
+                  min={0}
+                  max={72}
+                  value={settings.cancel_hours}
+                  onChange={(e) => save({ cancel_hours: Number(e.target.value) })}
+                  className={`${crmInputClass} max-w-[140px]`}
+                />
+                <span className="ml-2 text-[12.5px] text-[#A89B80]">시간</span>
+              </Field>
+              <Toggle
+                label="가능 시간 이후에도 회원이 직접 차감 취소(노쇼) 가능"
+                on={settings.member_can_self_cancel_consumed}
+                onChange={(v) => save({ member_can_self_cancel_consumed: v })}
+              />
+            </div>
           </Card>
 
           <Card title="예약 요청">

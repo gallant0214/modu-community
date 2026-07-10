@@ -54,6 +54,7 @@ export async function PATCH(request: Request) {
   }
 
   const allowed = [
+    "cancel_enabled",
     "cancel_hours",
     "member_can_self_cancel_consumed",
     "booking_enabled",
