@@ -1853,6 +1853,33 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_role_permissions: {
+        Row: {
+          id: number
+          center_id: number
+          role_key: string
+          permission_key: string
+          enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          role_key: string
+          permission_key: string
+          enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          role_key?: string
+          permission_key?: string
+          enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_schedule_events: {
         Row: {
           id: number

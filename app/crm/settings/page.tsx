@@ -10,6 +10,11 @@ import {
   ContractSectionsEditor,
   ContractSection,
 } from "../_components/contract-sections-editor";
+import {
+  ROLE_COLS,
+  PERMISSION_GROUPS,
+  buildPermissionMatrix,
+} from "../_components/role-permissions";
 
 interface Settings {
   center_id: number;
@@ -85,7 +90,7 @@ interface BootstrapInfo {
 export default function CrmSettingsPage() {
   const router = useRouter();
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<"reservation" | "alerts" | "grades" | "payout" | "contracts" | "lessons" | "logs" | "danger">("reservation");
+  const [tab, setTab] = useState<"reservation" | "alerts" | "grades" | "permissions" | "payout" | "contracts" | "lessons" | "logs" | "danger">("reservation");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [info, setInfo] = useState<BootstrapInfo | null>(null);
@@ -184,6 +189,9 @@ export default function CrmSettingsPage() {
         </TabBtn>
         <TabBtn active={tab === "grades"} onClick={() => setTab("grades")}>
           등급 관리
+        </TabBtn>
+        <TabBtn active={tab === "permissions"} onClick={() => setTab("permissions")}>
+          직급 권한
         </TabBtn>
         <TabBtn active={tab === "payout"} onClick={() => setTab("payout")}>
           정산 규칙
@@ -342,6 +350,8 @@ export default function CrmSettingsPage() {
       )}
 
       {tab === "grades" && <GradesPanel />}
+
+      {tab === "permissions" && <RolePermissionsPanel />}
 
       {tab === "payout" && <PayoutRulesPanel />}
 
@@ -1237,6 +1247,163 @@ function WithdrawModal({
         </div>
       </div>
     </CrmModal>
+  );
+}
+
+/* ─── 직급 권한 매트릭스 패널 ──────────────────────── */
+
+function RolePermissionsPanel() {
+  const { getIdToken } = useAuth();
+  const [items, setItems] = useState<
+    { role_key: string; permission_key: string; enabled: boolean }[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch("/api/crm/role-permissions", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setItems(data.items ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const matrix = buildPermissionMatrix(items);
+
+  const toggle = async (roleKey: string, permKey: string, next: boolean) => {
+    if (roleKey === "owner") return; // owner 는 항상 활성
+    const cellId = `${roleKey}:${permKey}`;
+    setSaving(cellId);
+    // 낙관적 업데이트
+    const filtered = items.filter(
+      (i) => !(i.role_key === roleKey && i.permission_key === permKey)
+    );
+    setItems([...filtered, { role_key: roleKey, permission_key: permKey, enabled: next }]);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/role-permissions", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ role_key: roleKey, permission_key: permKey, enabled: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "저장 실패");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+      load();
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
+        각 직급이 CRM 에서 사용할 수 있는 기능을 On/Off 로 설정해요. 대표자는 항상 모든 권한이 활성 상태예요.
+      </p>
+
+      {error && (
+        <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : (
+        <div className="space-y-5">
+          {PERMISSION_GROUPS.map((group) => (
+            <section
+              key={group.key}
+              className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden"
+            >
+              <div className="px-4 py-2.5 bg-[#FBF7EB] dark:bg-zinc-900/80 border-b border-[#E8E0D0] dark:border-zinc-800">
+                <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                  {group.label}
+                </h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13px] min-w-[520px]">
+                  <thead>
+                    <tr className="text-[12px] text-[#A89B80] dark:text-zinc-500 bg-[#FBF7EB]/50 dark:bg-zinc-900/40">
+                      <th className="text-left px-4 py-2 font-medium">권한</th>
+                      {ROLE_COLS.map((r) => (
+                        <th
+                          key={r.key}
+                          className="px-2 py-2 font-medium text-center w-[70px]"
+                        >
+                          {r.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.items.map((it) => (
+                      <tr
+                        key={it.key}
+                        className="border-t border-[#E8E0D0]/60 dark:border-zinc-800/60"
+                      >
+                        <td className="px-4 py-2 text-[13px] text-[#3A342A] dark:text-zinc-300">
+                          {it.label}
+                        </td>
+                        {ROLE_COLS.map((r) => {
+                          const on = matrix[r.key][it.key];
+                          const cellId = `${r.key}:${it.key}`;
+                          const isSaving = saving === cellId;
+                          const locked = r.key === "owner";
+                          return (
+                            <td key={r.key} className="px-2 py-1.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => toggle(r.key, it.key, !on)}
+                                disabled={locked || isSaving}
+                                className={`relative inline-flex w-9 h-5 rounded-full transition-colors disabled:opacity-70
+                                  ${on
+                                    ? "bg-[#6B7B3A]"
+                                    : "bg-[#E8E0D0] dark:bg-zinc-700"
+                                  }
+                                  ${locked ? "cursor-not-allowed" : ""}`}
+                                title={locked ? "대표자는 항상 활성" : undefined}
+                              >
+                                <span
+                                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform
+                                    ${on ? "translate-x-[18px]" : "translate-x-0.5"}`}
+                                />
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+
+      <p className="text-[11.5px] text-[#A89B80] leading-relaxed">
+        기본값은 최소 권한 원칙에 따라 설정되어 있어요. 각 권한 사용 시 실제 API 엔드포인트에서 이 값을 확인하는 로직은 단계별로 확장 중입니다.
+      </p>
+    </div>
   );
 }
 
