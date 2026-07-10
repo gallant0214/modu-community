@@ -672,6 +672,10 @@ export default function CrmLockersPage() {
                 onPick={setPickedForPlace}
                 onPlace={placeAt}
                 onRemove={removeFromLayout}
+                onBulkReplace={(nextMap) => {
+                  setLayoutMap(nextMap);
+                  setPickedForPlace(null);
+                }}
               />
             ) : (
               <LayoutView lockers={lockers} today={today} rows={layoutRows} cols={layoutCols} />
@@ -2377,6 +2381,7 @@ function LayoutEditor({
   onPick,
   onPlace,
   onRemove,
+  onBulkReplace,
 }: {
   rows: number;
   cols: number;
@@ -2389,6 +2394,7 @@ function LayoutEditor({
   onPick: (id: number | null) => void;
   onPlace: (id: number, row: number, col: number) => void;
   onRemove: (id: number) => void;
+  onBulkReplace: (nextMap: Record<number, { row: number; col: number } | null>) => void;
 }) {
   const hasGrid = rows > 0 && cols > 0;
   const placedIds = new Set<number>();
@@ -2414,6 +2420,50 @@ function LayoutEditor({
     if (pickedForPlace !== null) {
       onPlace(pickedForPlace, r, c);
     }
+  };
+
+  // 남은 락커를 빈 셀에 왼쪽 위 → 오른쪽 아래 순으로 자동 채움
+  const autoFillRemaining = () => {
+    if (!hasGrid || pool.length === 0) return;
+    const used = new Set<string>();
+    for (const l of lockers) {
+      const pos = layoutMap[l.id];
+      if (pos) used.add(`${pos.row}-${pos.col}`);
+    }
+    const nextMap = { ...layoutMap };
+    let pi = 0;
+    outer: for (let r = 0; r < rows; r += 1) {
+      for (let c = 0; c < cols; c += 1) {
+        if (used.has(`${r}-${c}`)) continue;
+        if (pi >= pool.length) break outer;
+        nextMap[pool[pi].id] = { row: r, col: c };
+        pi += 1;
+      }
+    }
+    onBulkReplace(nextMap);
+  };
+
+  // 전체 재정렬: 기존 배치 무시하고 번호순으로 왼쪽 위 → 오른쪽 아래
+  const autoArrangeAll = () => {
+    if (!hasGrid) return;
+    if (!window.confirm("현재 배치를 초기화하고 번호순으로 다시 정렬할까요?")) return;
+    const sorted = [...lockers].sort((a, b) => a.number - b.number);
+    const nextMap: Record<number, { row: number; col: number } | null> = {};
+    for (const l of lockers) nextMap[l.id] = null;
+    for (let i = 0; i < sorted.length && i < rows * cols; i += 1) {
+      const r = Math.floor(i / cols);
+      const c = i % cols;
+      nextMap[sorted[i].id] = { row: r, col: c };
+    }
+    onBulkReplace(nextMap);
+  };
+
+  const clearAll = () => {
+    if (Object.values(layoutMap).every((v) => v === null)) return;
+    if (!window.confirm("배치를 모두 비울까요?")) return;
+    const nextMap: Record<number, { row: number; col: number } | null> = {};
+    for (const l of lockers) nextMap[l.id] = null;
+    onBulkReplace(nextMap);
   };
 
   return (
@@ -2452,6 +2502,40 @@ function LayoutEditor({
           / 그리드 {rows}×{cols}
         </div>
       </div>
+
+      {/* 자동 배치 버튼 */}
+      {hasGrid && lockers.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={autoFillRemaining}
+            disabled={pool.length === 0}
+            className="px-2.5 py-1 rounded-full text-[11.5px] font-semibold border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="배치 안 된 락커를 남은 빈 셀에 왼쪽 위부터 자동으로 채워요"
+          >
+            + 남은 락커 자동 채우기
+          </button>
+          <button
+            type="button"
+            onClick={autoArrangeAll}
+            className="px-2.5 py-1 rounded-full text-[11.5px] font-medium border border-[#B47B2A] text-[#B47B2A] dark:text-amber-300 dark:border-amber-300 hover:bg-amber-50/60"
+            title="현재 배치를 지우고 번호순으로 다시 정렬해요"
+          >
+            ↺ 번호순 전체 재정렬
+          </button>
+          <button
+            type="button"
+            onClick={clearAll}
+            className="px-2.5 py-1 rounded-full text-[11.5px] font-medium border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-400 hover:border-red-300 hover:text-red-600"
+            title="현재 배치를 전부 비워요"
+          >
+            × 전부 비우기
+          </button>
+          <span className="text-[11px] text-[#A89B80] ml-1">
+            일부만 원하는 자리에 배치한 뒤 "자동 채우기" 를 누르면 나머지가 자동으로 정렬됩니다.
+          </span>
+        </div>
+      )}
 
       {/* 미배치 락커 풀 */}
       {pool.length > 0 && (
