@@ -245,7 +245,7 @@ export default function CrmSchedulePage() {
           onPick={setPicked}
           onSlotClick={(trainer, h, m) => {
             const startISO = kstDateToUTCISO(anchor, h, m, 0);
-            const endISO = kstDateToUTCISO(anchor, h, m + 60, 0); // 기본 60분
+            const endISO = kstDateToUTCISO(anchor, h, m + 50, 0); // 기본 50분
             setNewSlot({
               trainerId: trainer.id,
               trainerName: trainer.display_name,
@@ -267,7 +267,7 @@ export default function CrmSchedulePage() {
               trainerId: defaultTrainer.id,
               trainerName: defaultTrainer.display_name,
               startsAt: kstDateToUTCISO(ymd, h, m),
-              endsAt: kstDateToUTCISO(ymd, h, m + 60),
+              endsAt: kstDateToUTCISO(ymd, h, m + 50),
             });
           }}
         />
@@ -1008,7 +1008,7 @@ function NewReservationModal({
   onCreated: () => void;
 }) {
   const { getIdToken } = useAuth();
-  const [duration, setDuration] = useState(60);
+  const [duration, setDuration] = useState(50);
   const [eventType, setEventType] = useState<"lesson" | "center" | "personal">("lesson");
   const [eventTitle, setEventTitle] = useState("");
   const [eventDescription, setEventDescription] = useState("");
