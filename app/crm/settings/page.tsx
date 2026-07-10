@@ -1799,19 +1799,21 @@ function ContractTemplateEditModal({
             setTitle(data.contract.title);
             setCategory(data.contract.category);
             const secs = Array.isArray(data.contract.sections) ? data.contract.sections : [];
-            setSections(
-              secs.map(
-                (
-                  s: { key?: string; title?: string; body?: string; required?: boolean },
-                  i: number
-                ) => ({
-                  key: s.key || `s${i + 1}`,
-                  title: s.title || "",
-                  body: s.body || "",
-                  required: s.required !== false,
-                })
-              )
+            let normalized = secs.map(
+              (
+                s: { key?: string; title?: string; body?: string; required?: boolean },
+                i: number
+              ) => ({
+                key: s.key || `s${i + 1}`,
+                title: s.title || "",
+                body: s.body || "",
+                required: s.required !== false,
+              })
             );
+            if (normalized.length === 0 && data.contract.body) {
+              normalized = parseTemplateBodyToSections(data.contract.body);
+            }
+            setSections(normalized);
           } else {
             setError(data?.error || "조회 실패");
           }
@@ -2118,4 +2120,42 @@ function formatDateTime(iso: string) {
   } catch {
     return iso;
   }
+}
+
+/** 구버전 단일 body 안의 "[제목]" 헤더를 기준으로 섹션 배열로 분리 */
+function parseTemplateBodyToSections(raw: string): ContractSection[] {
+  if (!raw) return [];
+  const lines = raw.split("\n");
+  const out: ContractSection[] = [];
+  let curTitle = "";
+  let curBody: string[] = [];
+  let idx = 0;
+  const push = () => {
+    const bodyText = curBody.join("\n").trim();
+    if (curTitle || bodyText) {
+      const isOptional = /광고/.test(curTitle);
+      out.push({
+        key: `s${idx + 1}`,
+        title: curTitle || `섹션 ${idx + 1}`,
+        body: bodyText,
+        required: !isOptional,
+      });
+      idx += 1;
+    }
+  };
+  for (const line of lines) {
+    const m = line.match(/^\s*\[(.+?)\]\s*$/);
+    if (m) {
+      push();
+      curTitle = m[1].trim();
+      curBody = [];
+    } else {
+      curBody.push(line);
+    }
+  }
+  push();
+  if (out.length === 0) {
+    out.push({ key: "s1", title: "약관", body: raw.trim(), required: true });
+  }
+  return out;
 }

@@ -577,15 +577,20 @@ function DetailModal({
         setTitle(json.contract.title);
         setCategory(json.contract.category);
         setBody(json.contract.body);
-        const secs = Array.isArray(json.contract.sections) ? json.contract.sections : [];
-        setSections(
-          secs.map((s: { key?: string; title?: string; body?: string; required?: boolean }, i: number) => ({
+        const rawSecs = Array.isArray(json.contract.sections) ? json.contract.sections : [];
+        let normalized = rawSecs.map(
+          (s: { key?: string; title?: string; body?: string; required?: boolean }, i: number) => ({
             key: s.key || `s${i + 1}`,
             title: s.title || "",
             body: s.body || "",
             required: s.required !== false,
-          }))
+          })
         );
+        // 섹션이 비어있는 구버전 템플릿: body 안의 [제목] 헤더로 자동 분리
+        if (normalized.length === 0 && json.contract.body) {
+          normalized = parseBodyToSections(json.contract.body);
+        }
+        setSections(normalized);
         if (catRes.ok) {
           const c = await catRes.json();
           setCustomCats(c.categories ?? []);
@@ -759,6 +764,45 @@ function DetailModal({
       )}
     </CrmModal>
   );
+}
+
+/** 구버전 단일 body 안의 "[제목]" 헤더를 기준으로 섹션 배열로 분리 */
+function parseBodyToSections(raw: string): ContractSection[] {
+  if (!raw) return [];
+  const lines = raw.split("\n");
+  const out: ContractSection[] = [];
+  let curTitle = "";
+  let curBody: string[] = [];
+  let idx = 0;
+  const push = () => {
+    const bodyText = curBody.join("\n").trim();
+    if (curTitle || bodyText) {
+      const isOptional = /광고/.test(curTitle);
+      out.push({
+        key: `s${idx + 1}`,
+        title: curTitle || `섹션 ${idx + 1}`,
+        body: bodyText,
+        required: !isOptional,
+      });
+      idx += 1;
+    }
+  };
+  for (const line of lines) {
+    const m = line.match(/^\s*\[(.+?)\]\s*$/);
+    if (m) {
+      push();
+      curTitle = m[1].trim();
+      curBody = [];
+    } else {
+      curBody.push(line);
+    }
+  }
+  push();
+  // 헤더가 하나도 없어 통째로 들어간 케이스: 단일 섹션으로
+  if (out.length === 0) {
+    out.push({ key: "s1", title: "약관", body: raw.trim(), required: true });
+  }
+  return out;
 }
 
 function formatDateTime(iso: string) {
