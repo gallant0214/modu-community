@@ -576,7 +576,7 @@ export default function CrmLockersPage() {
                 return (
                   <div
                     className="grid gap-2.5"
-                    style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
+                    style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(90px, 1fr))` }}
                   >
                     {Array.from({ length: gridRows * gridCols }, (_, i) => {
                       const r = Math.floor(i / gridCols);
@@ -586,13 +586,16 @@ export default function CrmLockersPage() {
                         return (
                           <div
                             key={`${r}-${c}`}
-                            className="rounded-xl border border-dashed border-[#E8E0D0]/40 dark:border-zinc-800/40 min-h-[80px]"
+                            className="aspect-square rounded-xl border border-dashed border-[#E8E0D0]/40 dark:border-zinc-800/40"
                           />
                         );
                       }
                       const dimmed = !filterSet.has(l.id);
                       return (
-                        <div key={l.id} className={dimmed ? "opacity-25" : ""}>
+                        <div
+                          key={l.id}
+                          className={`aspect-square min-h-[90px] flex ${dimmed ? "opacity-25" : ""}`}
+                        >
                           <LockerCard locker={l} today={today} onClick={() => setPickedLocker(l)} />
                         </div>
                       );
@@ -603,12 +606,13 @@ export default function CrmLockersPage() {
               return (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
                   {filtered.map((l) => (
-                    <LockerCard
-                      key={l.id}
-                      locker={l}
-                      today={today}
-                      onClick={() => setPickedLocker(l)}
-                    />
+                    <div key={l.id} className="min-h-[110px] flex">
+                      <LockerCard
+                        locker={l}
+                        today={today}
+                        onClick={() => setPickedLocker(l)}
+                      />
+                    </div>
                   ))}
                 </div>
               );
@@ -929,7 +933,7 @@ function LockerCard({
   return (
     <button
       onClick={onClick}
-      className={`text-left p-3 rounded-xl border transition-colors min-h-[110px] flex flex-col
+      className={`text-left p-3 rounded-xl border transition-colors h-full w-full flex flex-col overflow-hidden
         ${isEmpty
           ? "border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 hover:border-[#6B7B3A]/40"
           : "border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
