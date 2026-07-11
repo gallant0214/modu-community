@@ -71,6 +71,14 @@ export default function CrmSchedulePage() {
     startsAt: string;
     endsAt: string;
   } | null>(null);
+  // 드래그 후 확인 대기 상태
+  const [pendingReschedule, setPendingReschedule] = useState<{
+    reservation: Reservation;
+    newStartIso: string;
+    newEndIso: string;
+    newTrainerId?: number;
+    newTrainerName?: string;
+  } | null>(null);
 
   const range = useMemo(() => computeRange(viewMode, anchor), [viewMode, anchor]);
   const rangeLabel = useMemo(() => formatRangeLabel(viewMode, anchor, range), [viewMode, anchor, range]);
@@ -183,6 +191,26 @@ export default function CrmSchedulePage() {
     [getIdToken]
   );
 
+  // 드래그 종료 시 자식 뷰에서 호출 — 실제 변경 전 확인창을 띄운다
+  const proposeReschedule = useCallback(
+    (
+      r: Reservation,
+      newStartIso: string,
+      newEndIso: string,
+      newTrainerId?: number,
+      newTrainerName?: string
+    ) => {
+      setPendingReschedule({
+        reservation: r,
+        newStartIso,
+        newEndIso,
+        newTrainerId,
+        newTrainerName,
+      });
+    },
+    []
+  );
+
   const navigate = (dir: -1 | 1) => {
     const d = new Date(anchor);
     if (viewMode === "day") d.setDate(d.getDate() + dir);
@@ -288,7 +316,7 @@ export default function CrmSchedulePage() {
           events={events}
           anchorDate={anchor}
           onPick={setPicked}
-          onReschedule={reschedule}
+          onReschedule={proposeReschedule}
           onSlotClick={(trainer, h, m) => {
             const startISO = kstDateToUTCISO(anchor, h, m, 0);
             const endISO = kstDateToUTCISO(anchor, h, m + 50, 0); // 기본 50분
@@ -307,7 +335,7 @@ export default function CrmSchedulePage() {
           events={events}
           trainers={trainers}
           onPick={setPicked}
-          onReschedule={reschedule}
+          onReschedule={proposeReschedule}
           onSlotClick={(ymd, h, m, defaultTrainer) => {
             if (!defaultTrainer) return;
             setNewSlot({
@@ -367,6 +395,94 @@ export default function CrmSchedulePage() {
           }}
         />
       )}
+
+      {pendingReschedule && (
+        <RescheduleConfirmDialog
+          pending={pendingReschedule}
+          onCancel={() => setPendingReschedule(null)}
+          onConfirm={async () => {
+            const p = pendingReschedule;
+            setPendingReschedule(null);
+            await reschedule(
+              p.reservation.id,
+              p.newStartIso,
+              p.newEndIso,
+              p.newTrainerId
+            );
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** 드래그 후 예약 변경 확인 다이얼로그 */
+function RescheduleConfirmDialog({
+  pending,
+  onCancel,
+  onConfirm,
+}: {
+  pending: {
+    reservation: Reservation;
+    newStartIso: string;
+    newEndIso: string;
+    newTrainerId?: number;
+    newTrainerName?: string;
+  };
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { reservation, newStartIso, newEndIso, newTrainerName } = pending;
+  const beforeDay = kstDateKey(reservation.starts_at);
+  const afterDay = kstDateKey(newStartIso);
+  const trainerChanged = Boolean(newTrainerName);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
+      <div className="relative w-full max-w-sm rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-xl p-5">
+        <h2 className="text-[16px] font-bold text-[#2A251D] dark:text-zinc-100">
+          예약 변경
+        </h2>
+        <p className="mt-1.5 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+          <span className="font-semibold text-[#3A342A] dark:text-zinc-200">
+            {reservation.member_name || "회원"}
+          </span>{" "}
+          회원의 예약을 아래처럼 변경할까요?
+        </p>
+        <div className="mt-3 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 divide-y divide-[#E8E0D0] dark:divide-zinc-800 text-[13px]">
+          <div className="px-3 py-2 flex justify-between gap-3">
+            <span className="text-[#8C8270] dark:text-zinc-500 shrink-0">변경 전</span>
+            <span className="text-[#3A342A] dark:text-zinc-200 text-right">
+              {beforeDay} {fmtKstHm(reservation.starts_at)}~{fmtKstHm(reservation.ends_at)}
+            </span>
+          </div>
+          <div className="px-3 py-2 flex justify-between gap-3 bg-[#6B7B3A]/5">
+            <span className="text-[#8C8270] dark:text-zinc-500 shrink-0">변경 후</span>
+            <span className="text-[#6B7B3A] dark:text-[#A8B87A] font-semibold text-right">
+              {afterDay} {fmtKstHm(newStartIso)}~{fmtKstHm(newEndIso)}
+              {trainerChanged && (
+                <div className="text-[11.5px] font-normal text-[#B47B2A]">
+                  강사: {newTrainerName}
+                </div>
+              )}
+            </span>
+          </div>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+          >
+            취소
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] hover:bg-[#5a6932] text-white text-[13.5px] font-semibold"
+          >
+            변경
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -375,8 +491,7 @@ export default function CrmSchedulePage() {
 
 type DayDragState = {
   id: number;
-  origStartsAt: string;
-  origEndsAt: string;
+  reservation: Reservation;
   origTrainerId: number;
   startX: number;
   startY: number;
@@ -384,7 +499,14 @@ type DayDragState = {
   dy: number;
   moved: boolean;
   anchorDate: string;
-  columnRects: { trainerId: number; trainerName: string; left: number; right: number }[];
+  columnRects: {
+    trainerId: number;
+    trainerName: string;
+    left: number;
+    right: number;
+    top: number;
+    width: number;
+  }[];
 } | null;
 
 function DayView({
@@ -402,7 +524,13 @@ function DayView({
   anchorDate: string;
   onPick: (r: Reservation) => void;
   onSlotClick: (trainer: StaffOption, h: number, m: number) => void;
-  onReschedule: (id: number, startsAt: string, endsAt: string, trainerMemberId?: number) => Promise<void> | void;
+  onReschedule: (
+    r: Reservation,
+    newStartIso: string,
+    newEndIso: string,
+    newTrainerId?: number,
+    newTrainerName?: string
+  ) => void;
 }) {
   void anchorDate;
   const columnRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
@@ -604,12 +732,25 @@ function startDayDrag(
   trainers: StaffOption[],
   columns: Map<number, HTMLDivElement | null>,
   onPick: (r: Reservation) => void,
-  onReschedule: (id: number, startsAt: string, endsAt: string, trainerMemberId?: number) => Promise<void> | void,
+  onReschedule: (
+    r: Reservation,
+    newStartIso: string,
+    newEndIso: string,
+    newTrainerId?: number,
+    newTrainerName?: string
+  ) => void,
   setDrag: (s: DayDragState) => void
 ) {
   const startX = e.clientX;
   const startY = e.clientY;
-  const columnRects: { trainerId: number; trainerName: string; left: number; right: number }[] = [];
+  const columnRects: {
+    trainerId: number;
+    trainerName: string;
+    left: number;
+    right: number;
+    top: number;
+    width: number;
+  }[] = [];
   columns.forEach((el, trainerId) => {
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -619,14 +760,15 @@ function startDayDrag(
       trainerName: t?.display_name ?? "",
       left: rect.left,
       right: rect.right,
+      top: rect.top,
+      width: rect.width,
     });
   });
   const local = { dx: 0, dy: 0, moved: false };
 
-  setDrag({
+  const base: DayDragState = {
     id: r.id,
-    origStartsAt: r.starts_at,
-    origEndsAt: r.ends_at,
+    reservation: r,
     origTrainerId: r.trainer_member_id,
     startX,
     startY,
@@ -635,24 +777,18 @@ function startDayDrag(
     moved: false,
     anchorDate,
     columnRects,
-  });
+  };
+  setDrag(base);
 
   const onMove = (ev: MouseEvent) => {
     local.dx = ev.clientX - startX;
     local.dy = ev.clientY - startY;
     local.moved = local.moved || Math.hypot(local.dx, local.dy) > 4;
     setDrag({
-      id: r.id,
-      origStartsAt: r.starts_at,
-      origEndsAt: r.ends_at,
-      origTrainerId: r.trainer_member_id,
-      startX,
-      startY,
+      ...base!,
       dx: local.dx,
       dy: local.dy,
       moved: local.moved,
-      anchorDate,
-      columnRects,
     });
   };
 
@@ -677,11 +813,12 @@ function startDayDrag(
     const sameTime = newStartIso === r.starts_at && newEndIso === r.ends_at;
     const sameTrainer = targetCol.trainerId === r.trainer_member_id;
     if (sameTime && sameTrainer) return;
-    void onReschedule(
-      r.id,
+    onReschedule(
+      r,
       newStartIso,
       newEndIso,
-      sameTrainer ? undefined : targetCol.trainerId
+      sameTrainer ? undefined : targetCol.trainerId,
+      sameTrainer ? undefined : targetCol.trainerName
     );
   };
 
@@ -690,8 +827,9 @@ function startDayDrag(
 }
 
 function DayDragGhost({ drag }: { drag: NonNullable<DayDragState> }) {
+  const r = drag.reservation;
   const target = computeDragTarget(
-    { starts_at: drag.origStartsAt, ends_at: drag.origEndsAt },
+    { starts_at: r.starts_at, ends_at: r.ends_at },
     drag.dy
   );
   const targetCol = drag.columnRects.find(
@@ -701,18 +839,53 @@ function DayDragGhost({ drag }: { drag: NonNullable<DayDragState> }) {
     ? `${String(target.h).padStart(2, "0")}:${String(target.m).padStart(2, "0")}`
     : "";
   const ok = Boolean(target && targetCol);
+  const color =
+    RESERVATION_STATUS_COLOR[r.status] ?? RESERVATION_STATUS_COLOR.booked;
+
+  let cardStyle: React.CSSProperties | null = null;
+  if (ok && targetCol && target) {
+    const durationMin = target.durationMs / 60000;
+    const cardHeight = Math.max(
+      SLOT_HEIGHT_PX * 0.9,
+      (durationMin / SLOT_MINUTES) * SLOT_HEIGHT_PX
+    );
+    const withinColMin = (target.h - WORK_START_HOUR) * 60 + target.m;
+    const cardTop = targetCol.top + (withinColMin / SLOT_MINUTES) * SLOT_HEIGHT_PX;
+    cardStyle = {
+      left: targetCol.left + 4,
+      top: cardTop,
+      width: targetCol.width - 8,
+      height: cardHeight,
+    };
+  }
+
   return (
-    <div
-      className={`fixed z-50 pointer-events-none px-2 py-1 rounded-md text-[11.5px] font-semibold shadow-lg ${
-        ok ? "bg-[#6B7B3A] text-white" : "bg-red-500 text-white"
-      }`}
-      style={{
-        left: drag.startX + drag.dx + 12,
-        top: drag.startY + drag.dy + 12,
-      }}
-    >
-      {ok ? `${targetCol!.trainerName} ${timeLabel}` : "이동 불가"}
-    </div>
+    <>
+      {cardStyle && (
+        <div
+          className={`fixed z-40 pointer-events-none px-2 py-1 rounded-md border-2 border-dashed text-left text-[11.5px] font-medium shadow-md ${color.bg} ${color.text} opacity-60 transition-[top,left,width] duration-75 ease-out`}
+          style={cardStyle}
+        >
+          <div className="truncate font-semibold">
+            {r.member_name || "회원"}
+          </div>
+          <div className="truncate text-[10.5px] opacity-80">
+            {RESERVATION_STATUS_LABEL[r.status]}
+          </div>
+        </div>
+      )}
+      <div
+        className={`fixed z-50 pointer-events-none px-2 py-1 rounded-md text-[11.5px] font-semibold shadow-lg ${
+          ok ? "bg-[#6B7B3A] text-white" : "bg-red-500 text-white"
+        }`}
+        style={{
+          left: drag.startX + drag.dx + 14,
+          top: drag.startY + drag.dy + 14,
+        }}
+      >
+        {ok ? `${targetCol!.trainerName} ${timeLabel}` : "이동 불가"}
+      </div>
+    </>
   );
 }
 
@@ -720,8 +893,7 @@ function DayDragGhost({ drag }: { drag: NonNullable<DayDragState> }) {
 
 type WeekDragState = {
   id: number;
-  origStartsAt: string;
-  origEndsAt: string;
+  reservation: Reservation;
   origDayKey: string;
   startX: number;
   startY: number;
@@ -729,7 +901,7 @@ type WeekDragState = {
   dy: number;
   moved: boolean;
   /** startDrag 시점의 컬럼 위치 스냅샷 (getBoundingClientRect 결과) */
-  columnRects: { dayKey: string; left: number; right: number }[];
+  columnRects: { dayKey: string; left: number; right: number; top: number; width: number }[];
 } | null;
 
 
@@ -748,7 +920,13 @@ function WeekView({
   trainers: StaffOption[];
   onPick: (r: Reservation) => void;
   onSlotClick: (ymd: string, h: number, m: number, trainer: StaffOption | null) => void;
-  onReschedule: (id: number, startsAt: string, endsAt: string, trainerMemberId?: number) => Promise<void> | void;
+  onReschedule: (
+    r: Reservation,
+    newStartIso: string,
+    newEndIso: string,
+    newTrainerId?: number,
+    newTrainerName?: string
+  ) => void;
 }) {
   void anchor;
   const columnRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
@@ -942,31 +1120,42 @@ function WeekView({
 /**
  * WeekView 드래그 시작 핸들러.
  * mouseDown 시점의 컬럼 위치를 스냅샷 → mouseMove/Up 리스너 등록 (document 레벨).
- * 이동 거리 4px 이하면 클릭으로 간주 → onPick. 이상이면 스냅 후 onReschedule.
+ * 이동 거리 4px 이하면 클릭으로 간주 → onPick. 이상이면 스냅 후 onReschedule 로 확인 요청.
  */
 function startWeekDrag(
   e: React.MouseEvent,
   r: Reservation,
   columns: Map<string, HTMLDivElement | null>,
   onPick: (r: Reservation) => void,
-  onReschedule: (id: number, startsAt: string, endsAt: string, trainerMemberId?: number) => Promise<void> | void,
+  onReschedule: (
+    r: Reservation,
+    newStartIso: string,
+    newEndIso: string,
+    newTrainerId?: number,
+    newTrainerName?: string
+  ) => void,
   setDrag: (s: WeekDragState) => void
 ) {
   const startX = e.clientX;
   const startY = e.clientY;
-  const columnRects: { dayKey: string; left: number; right: number }[] = [];
+  const columnRects: { dayKey: string; left: number; right: number; top: number; width: number }[] = [];
   columns.forEach((el, dayKey) => {
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    columnRects.push({ dayKey, left: rect.left, right: rect.right });
+    columnRects.push({
+      dayKey,
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      width: rect.width,
+    });
   });
   const origDayKey = kstDateKey(r.starts_at);
   const local = { dx: 0, dy: 0, moved: false };
 
-  setDrag({
+  const base: WeekDragState = {
     id: r.id,
-    origStartsAt: r.starts_at,
-    origEndsAt: r.ends_at,
+    reservation: r,
     origDayKey,
     startX,
     startY,
@@ -974,23 +1163,18 @@ function startWeekDrag(
     dy: 0,
     moved: false,
     columnRects,
-  });
+  };
+  setDrag(base);
 
   const onMove = (ev: MouseEvent) => {
     local.dx = ev.clientX - startX;
     local.dy = ev.clientY - startY;
     local.moved = local.moved || Math.hypot(local.dx, local.dy) > 4;
     setDrag({
-      id: r.id,
-      origStartsAt: r.starts_at,
-      origEndsAt: r.ends_at,
-      origDayKey,
-      startX,
-      startY,
+      ...base!,
       dx: local.dx,
       dy: local.dy,
       moved: local.moved,
-      columnRects,
     });
   };
 
@@ -1013,7 +1197,7 @@ function startWeekDrag(
       new Date(newStartIso).getTime() + target.durationMs
     ).toISOString();
     if (newStartIso === r.starts_at && newEndIso === r.ends_at) return;
-    void onReschedule(r.id, newStartIso, newEndIso);
+    onReschedule(r, newStartIso, newEndIso);
   };
 
   document.addEventListener("mousemove", onMove);
@@ -1045,33 +1229,67 @@ function computeDragTarget(
 }
 
 /**
- * 드래그 중 커서 근처에 "이동 후 시각" 라벨을 fixed 로 띄운다.
+ * 드래그 중: 스냅된 목표 위치에 원본 예약 카드 모양을 반투명으로 그리고,
+ * 커서 옆에 "이동 후 시각" 라벨을 fixed 로 띄운다.
  */
 function WeekDragGhost({ drag }: { drag: NonNullable<WeekDragState> }) {
+  const r = drag.reservation;
   const target = computeDragTarget(
-    { starts_at: drag.origStartsAt, ends_at: drag.origEndsAt },
+    { starts_at: r.starts_at, ends_at: r.ends_at },
     drag.dy
   );
   const targetCol = drag.columnRects.find(
     (c) => drag.startX + drag.dx >= c.left && drag.startX + drag.dx <= c.right
   );
-  const label = target
+  const timeLabel = target
     ? `${String(target.h).padStart(2, "0")}:${String(target.m).padStart(2, "0")}`
     : "";
   const dayLabel = targetCol ? targetCol.dayKey.slice(5).replace("-", "/") : "";
   const ok = Boolean(target && targetCol);
+  const color =
+    RESERVATION_STATUS_COLOR[r.status] ?? RESERVATION_STATUS_COLOR.booked;
+
+  let cardStyle: React.CSSProperties | null = null;
+  if (ok && targetCol && target) {
+    const durationMin = target.durationMs / 60000;
+    const cardHeight = Math.max(
+      SLOT_HEIGHT_PX * 0.9,
+      (durationMin / SLOT_MINUTES) * SLOT_HEIGHT_PX
+    );
+    const withinColMin = (target.h - WORK_START_HOUR) * 60 + target.m;
+    const cardTop = targetCol.top + (withinColMin / SLOT_MINUTES) * SLOT_HEIGHT_PX;
+    cardStyle = {
+      left: targetCol.left + 4,
+      top: cardTop,
+      width: targetCol.width - 8,
+      height: cardHeight,
+    };
+  }
+
   return (
-    <div
-      className={`fixed z-50 pointer-events-none px-2 py-1 rounded-md text-[11.5px] font-semibold shadow-lg ${
-        ok ? "bg-[#6B7B3A] text-white" : "bg-red-500 text-white"
-      }`}
-      style={{
-        left: drag.startX + drag.dx + 12,
-        top: drag.startY + drag.dy + 12,
-      }}
-    >
-      {ok ? `${dayLabel} ${label}` : "이동 불가"}
-    </div>
+    <>
+      {cardStyle && (
+        <div
+          className={`fixed z-40 pointer-events-none px-1.5 py-0.5 rounded border-2 border-dashed text-left text-[11px] font-medium shadow-md ${color.bg} ${color.text} opacity-60 transition-[top,left,width] duration-75 ease-out`}
+          style={cardStyle}
+        >
+          <div className="truncate font-semibold">
+            {r.member_name || "회원"}
+          </div>
+        </div>
+      )}
+      <div
+        className={`fixed z-50 pointer-events-none px-2 py-1 rounded-md text-[11.5px] font-semibold shadow-lg ${
+          ok ? "bg-[#6B7B3A] text-white" : "bg-red-500 text-white"
+        }`}
+        style={{
+          left: drag.startX + drag.dx + 14,
+          top: drag.startY + drag.dy + 14,
+        }}
+      >
+        {ok ? `${dayLabel} ${timeLabel}` : "이동 불가"}
+      </div>
+    </>
   );
 }
 
