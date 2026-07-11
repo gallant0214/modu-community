@@ -16,11 +16,9 @@ interface MenuItem {
 
 const MENU: MenuItem[] = [
   { href: "/crm/dashboard",   label: "대시보드",     icon: IconDashboard },
-  { href: "/crm/staff",       label: "직원 관리",     staffOnly: true, icon: IconStaff },
-  { href: "/crm/payroll",     label: "직원 급여",     staffOnly: true, icon: IconPayroll },
   { href: "/crm/members",     label: "회원 관리",     icon: IconMembers },
-  { href: "/crm/products",    label: "상품",          icon: IconProduct },
-  { href: "/crm/lockers",     label: "락커",          icon: IconLocker },
+  { href: "/crm/products",    label: "상품 관리",     icon: IconProduct },
+  { href: "/crm/lockers",     label: "락커 관리",     icon: IconLocker },
   { href: "/crm/passes",      label: "수강권 관리",   icon: IconPass },
   { href: "/crm/memberships", label: "회원권 관리",   icon: IconMembership },
   { href: "/crm/schedule",    label: "스케줄 관리",   icon: IconCalendar },
@@ -28,6 +26,8 @@ const MENU: MenuItem[] = [
   { href: "/crm/attendances", label: "출석 현황",     icon: IconAttendance },
   { href: "/crm/stats",       label: "통계",          icon: IconStats },
   { href: "/crm/contracts",   label: "계약서",        icon: IconContract },
+  { href: "/crm/staff",       label: "직원 관리",     staffOnly: true, icon: IconStaff },
+  { href: "/crm/payroll",     label: "직원 급여",     staffOnly: true, icon: IconPayroll },
   { href: "/crm/settings",    label: "설정",          staffOnly: true, icon: IconSettings },
 ];
 
