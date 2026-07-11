@@ -48,6 +48,8 @@ interface SignedContract {
   terms_accepted: Record<string, boolean>;
   terms_snapshot: TermSnapshot[];
   signature_data_url: string | null;
+  trainer_signature_data_url: string | null;
+  trainer_info: { center_member_id?: number | null; name?: string | null } | null;
   status: string;
 }
 
@@ -212,18 +214,40 @@ export default function SignedContractDetailPage() {
         ))}
 
         <Section title="서명">
+          <div className="mb-3 text-[12.5px] text-[#6B5D47]">
+            작성일: <span className="font-semibold text-[#2A251D]">{dateStr}</span>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <div className="text-[12.5px] text-[#6B5D47] mb-1">작성일</div>
-              <div className="text-[14px] font-semibold text-[#2A251D]">{dateStr}</div>
+              <div className="text-[12.5px] text-[#6B5D47] mb-1">
+                계약 담당자{" "}
+                <span className="text-[#3A342A] font-semibold">
+                  {contract.trainer_info?.name || "—"}
+                </span>
+              </div>
+              {contract.trainer_signature_data_url ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={contract.trainer_signature_data_url}
+                  alt="계약 담당자 서명"
+                  className="max-h-32 border border-[#E8E0D0] rounded-lg bg-white"
+                />
+              ) : (
+                <div className="text-[12.5px] text-[#A89B80]">서명 없음</div>
+              )}
             </div>
             <div>
-              <div className="text-[12.5px] text-[#6B5D47] mb-1">고객 서명</div>
+              <div className="text-[12.5px] text-[#6B5D47] mb-1">
+                가입 회원{" "}
+                <span className="text-[#3A342A] font-semibold">
+                  {contract.customer_info?.name || "—"}
+                </span>
+              </div>
               {contract.signature_data_url ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={contract.signature_data_url}
-                  alt="고객 서명"
+                  alt="가입 회원 서명"
                   className="max-h-32 border border-[#E8E0D0] rounded-lg bg-white"
                 />
               ) : (

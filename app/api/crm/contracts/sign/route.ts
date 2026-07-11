@@ -65,6 +65,8 @@ export async function POST(request: Request) {
     terms_accepted?: Record<string, boolean>;
     terms_snapshot?: unknown;
     signature_data_url?: string;
+    trainer_signature_data_url?: string;
+    trainer_info?: { center_member_id?: number | null; name?: string | null };
   };
   try {
     body = await request.json();
@@ -90,23 +92,30 @@ export async function POST(request: Request) {
     }
   }
 
+  const insertRow = {
+    center_id: ctx.centerId,
+    member_id: body.member_id ?? null,
+    pass_id: body.pass_id ?? null,
+    membership_id: body.membership_id ?? null,
+    title: body.title?.trim() || "피티 회원가입 계약서",
+    customer_info: body.customer_info ?? {},
+    product_info: body.product_info ?? {},
+    payment_info: body.payment_info ?? {},
+    terms_accepted: body.terms_accepted ?? {},
+    terms_snapshot: body.terms_snapshot ?? {},
+    signature_data_url: body.signature_data_url,
+    trainer_signature_data_url:
+      body.trainer_signature_data_url &&
+      body.trainer_signature_data_url.startsWith("data:image/")
+        ? body.trainer_signature_data_url
+        : null,
+    trainer_info: body.trainer_info ?? null,
+    signed_by_uid: ctx.uid,
+    status: "signed",
+  };
   const { data: created, error } = await supabase
     .from("crm_signed_contracts")
-    .insert({
-      center_id: ctx.centerId,
-      member_id: body.member_id ?? null,
-      pass_id: body.pass_id ?? null,
-      membership_id: body.membership_id ?? null,
-      title: body.title?.trim() || "피티 회원가입 계약서",
-      customer_info: (body.customer_info ?? {}) as never,
-      product_info: (body.product_info ?? {}) as never,
-      payment_info: (body.payment_info ?? {}) as never,
-      terms_accepted: (body.terms_accepted ?? {}) as never,
-      terms_snapshot: (body.terms_snapshot ?? {}) as never,
-      signature_data_url: body.signature_data_url,
-      signed_by_uid: ctx.uid,
-      status: "signed",
-    })
+    .insert(insertRow as never)
     .select("id")
     .single();
   if (error || !created) {

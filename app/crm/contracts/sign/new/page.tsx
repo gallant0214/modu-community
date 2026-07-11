@@ -25,6 +25,7 @@ interface Template {
 
 interface PassInfo {
   id: number;
+  trainer_member_id: number;
   lesson_kind: string;
   total_sessions: number;
   remaining_sessions: number;
@@ -34,6 +35,12 @@ interface PassInfo {
   payment_method_custom: string | null;
   issued_at: string;
   expires_at: string;
+}
+
+interface TrainerOption {
+  id: number;
+  display_name: string;
+  role: string;
 }
 
 interface MemberInfo {
@@ -82,10 +89,17 @@ export default function CrmContractSignNewPage() {
   // 약관 동의
   const [agreed, setAgreed] = useState<Record<string, boolean>>({});
 
-  // 서명
+  // 회원 서명
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [signatureEmpty, setSignatureEmpty] = useState(true);
   const drawingRef = useRef(false);
+
+  // 강사 서명
+  const trainerCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [trainerSignatureEmpty, setTrainerSignatureEmpty] = useState(true);
+  const trainerDrawingRef = useRef(false);
+  const [trainers, setTrainers] = useState<TrainerOption[]>([]);
+  const [selectedTrainerId, setSelectedTrainerId] = useState<number | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -127,7 +141,13 @@ export default function CrmContractSignNewPage() {
             cache: "no-store",
           });
           const data = await res.json();
-          if (res.ok && data?.pass) setPass(data.pass);
+          if (res.ok && data?.pass) {
+            setPass(data.pass);
+            // 수강권에 등록된 강사를 기본 서명자로 자동 선택
+            if (data.pass.trainer_member_id) {
+              setSelectedTrainerId(data.pass.trainer_member_id);
+            }
+          }
         }
         if (membershipId) {
           const res = await fetch(`/api/crm/memberships?member_id=${memberId}`, {
@@ -156,9 +176,31 @@ export default function CrmContractSignNewPage() {
     })();
   }, [memberId, passId, membershipId, templateId, getIdToken, name, phone, birth, gender]);
 
-  // 서명 캔버스 설정
+  // 강사 목록 로드 (활성 trainer/manager)
   useEffect(() => {
-    const canvas = canvasRef.current;
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/staff", {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const list: TrainerOption[] = (data.staff ?? []).filter(
+          (s: { status: string; role: string }) =>
+            s.status === "active" &&
+            (s.role === "trainer" || s.role === "manager" || s.role === "owner" || s.role === "admin")
+        );
+        setTrainers(list);
+      } catch {
+        // ignore
+      }
+    })();
+  }, [getIdToken]);
+
+  // 두 서명 캔버스 공통 설정
+  const setupCanvas = (canvas: HTMLCanvasElement | null) => {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -170,10 +212,13 @@ export default function CrmContractSignNewPage() {
     ctx.lineJoin = "round";
     ctx.lineWidth = 2;
     ctx.strokeStyle = "#2A251D";
+  };
+  useEffect(() => {
+    setupCanvas(canvasRef.current);
+    setupCanvas(trainerCanvasRef.current);
   }, []);
 
-  const getPos = (e: React.MouseEvent | React.TouchEvent) => {
-    const canvas = canvasRef.current;
+  const getPos = (canvas: HTMLCanvasElement | null, e: React.MouseEvent | React.TouchEvent) => {
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     if ("touches" in e) {
@@ -183,35 +228,48 @@ export default function CrmContractSignNewPage() {
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
 
-  const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    drawingRef.current = true;
-    const { x, y } = getPos(e);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-  };
-  const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!drawingRef.current) return;
-    e.preventDefault();
-    const ctx = canvasRef.current?.getContext("2d");
-    if (!ctx) return;
-    const { x, y } = getPos(e);
-    ctx.lineTo(x, y);
-    ctx.stroke();
-    setSignatureEmpty(false);
-  };
-  const endDraw = () => {
-    drawingRef.current = false;
-  };
-  const clearSignature = () => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setSignatureEmpty(true);
-  };
+  const makeSignatureHandlers = (
+    ref: React.RefObject<HTMLCanvasElement | null>,
+    drawing: React.MutableRefObject<boolean>,
+    setEmpty: (v: boolean) => void
+  ) => ({
+    start: (e: React.MouseEvent | React.TouchEvent) => {
+      e.preventDefault();
+      const ctx = ref.current?.getContext("2d");
+      if (!ctx) return;
+      drawing.current = true;
+      const { x, y } = getPos(ref.current, e);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+    },
+    move: (e: React.MouseEvent | React.TouchEvent) => {
+      if (!drawing.current) return;
+      e.preventDefault();
+      const ctx = ref.current?.getContext("2d");
+      if (!ctx) return;
+      const { x, y } = getPos(ref.current, e);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      setEmpty(false);
+    },
+    end: () => {
+      drawing.current = false;
+    },
+    clear: () => {
+      const canvas = ref.current;
+      const ctx = canvas?.getContext("2d");
+      if (!canvas || !ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      setEmpty(true);
+    },
+  });
+
+  const memberSig = makeSignatureHandlers(canvasRef, drawingRef, setSignatureEmpty);
+  const trainerSig = makeSignatureHandlers(
+    trainerCanvasRef,
+    trainerDrawingRef,
+    setTrainerSignatureEmpty
+  );
 
   const toggleAgree = (key: string) =>
     setAgreed((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -233,12 +291,18 @@ export default function CrmContractSignNewPage() {
     if (!name.trim()) return setError("고객 이름을 입력해 주세요");
     if (!requiredOk) return setError("필수 약관에 모두 동의해 주세요");
     const canvas = canvasRef.current;
-    if (!canvas || signatureEmpty) return setError("서명을 입력해 주세요");
+    if (!canvas || signatureEmpty) return setError("가입 회원 서명을 입력해 주세요");
+    const trainerCanvas = trainerCanvasRef.current;
+    if (!trainerCanvas || trainerSignatureEmpty) return setError("계약 담당자 서명을 입력해 주세요");
+    if (!selectedTrainerId) return setError("계약 담당자를 선택해 주세요");
 
     setSubmitting(true);
     try {
       const token = await getIdToken();
       const signatureDataUrl = canvas.toDataURL("image/png");
+      const trainerSignatureDataUrl = trainerCanvas.toDataURL("image/png");
+      const trainerName =
+        trainers.find((t) => t.id === selectedTrainerId)?.display_name ?? null;
       const res = await fetch("/api/crm/contracts/sign", {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
@@ -286,6 +350,11 @@ export default function CrmContractSignNewPage() {
                   payment_method_custom: membership.payment_method_custom,
                 }
               : null,
+          trainer_signature_data_url: trainerSignatureDataUrl,
+          trainer_info: {
+            center_member_id: selectedTrainerId,
+            name: trainerName,
+          },
           terms_accepted: agreed,
           terms_snapshot:
             template && Array.isArray(template.sections) && template.sections.length > 0
@@ -537,35 +606,104 @@ export default function CrmContractSignNewPage() {
         ))
       )}
 
-      {/* 날짜 + 서명 */}
+      {/* 날짜 + 서명 (강사 · 계약자) */}
       <Section title="서명">
         <div className="mb-3 text-[13px] text-[#3A342A] dark:text-zinc-300">
           작성일: <strong className="text-[#2A251D] dark:text-zinc-100">{today}</strong>
         </div>
-        <div className="rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 overflow-hidden">
-          <canvas
-            ref={canvasRef}
-            className="block w-full h-40 touch-none cursor-crosshair"
-            onMouseDown={startDraw}
-            onMouseMove={draw}
-            onMouseUp={endDraw}
-            onMouseLeave={endDraw}
-            onTouchStart={startDraw}
-            onTouchMove={draw}
-            onTouchEnd={endDraw}
-          />
-        </div>
-        <div className="mt-2 flex items-center justify-between">
-          <span className="text-[12px] text-[#A89B80]">
-            {signatureEmpty ? "여기에 서명해 주세요" : "서명 완료"}
-          </span>
-          <button
-            type="button"
-            onClick={clearSignature}
-            className="text-[12px] text-[#6B5D47] dark:text-zinc-400 hover:underline"
-          >
-            서명 지우기
-          </button>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* 계약 담당자 서명 */}
+          <div>
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <label className="text-[12.5px] font-semibold text-[#6B5D47] dark:text-zinc-400">
+                계약 담당자
+              </label>
+              <select
+                value={selectedTrainerId ?? ""}
+                onChange={(e) =>
+                  setSelectedTrainerId(e.target.value ? Number(e.target.value) : null)
+                }
+                className="px-2 py-1 rounded border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-950 text-[12.5px] text-[#2A251D] dark:text-zinc-100 max-w-[160px]"
+              >
+                <option value="">담당자 선택</option>
+                {trainers.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.display_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="relative rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 overflow-hidden">
+              {/* 이름 라벨: "이종식 : " */}
+              <div className="absolute top-2 left-3 pointer-events-none text-[13px] font-semibold text-[#8C8270] dark:text-zinc-500">
+                {(trainers.find((t) => t.id === selectedTrainerId)?.display_name ?? "계약 담당자") + " :"}
+              </div>
+              <canvas
+                ref={trainerCanvasRef}
+                className="block w-full h-40 touch-none cursor-crosshair"
+                onMouseDown={trainerSig.start}
+                onMouseMove={trainerSig.move}
+                onMouseUp={trainerSig.end}
+                onMouseLeave={trainerSig.end}
+                onTouchStart={trainerSig.start}
+                onTouchMove={trainerSig.move}
+                onTouchEnd={trainerSig.end}
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-[12px] text-[#A89B80]">
+                {trainerSignatureEmpty ? "여기에 서명해 주세요" : "서명 완료"}
+              </span>
+              <button
+                type="button"
+                onClick={trainerSig.clear}
+                className="text-[12px] text-[#6B5D47] dark:text-zinc-400 hover:underline"
+              >
+                서명 지우기
+              </button>
+            </div>
+          </div>
+
+          {/* 가입 회원 서명 */}
+          <div>
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <label className="text-[12.5px] font-semibold text-[#6B5D47] dark:text-zinc-400">
+                가입 회원
+              </label>
+              <span className="text-[12.5px] text-[#8C8270] dark:text-zinc-500">
+                {name || "이름 입력 필요"}
+              </span>
+            </div>
+            <div className="relative rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 overflow-hidden">
+              <div className="absolute top-2 left-3 pointer-events-none text-[13px] font-semibold text-[#8C8270] dark:text-zinc-500">
+                {(name || "가입 회원") + " :"}
+              </div>
+              <canvas
+                ref={canvasRef}
+                className="block w-full h-40 touch-none cursor-crosshair"
+                onMouseDown={memberSig.start}
+                onMouseMove={memberSig.move}
+                onMouseUp={memberSig.end}
+                onMouseLeave={memberSig.end}
+                onTouchStart={memberSig.start}
+                onTouchMove={memberSig.move}
+                onTouchEnd={memberSig.end}
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-[12px] text-[#A89B80]">
+                {signatureEmpty ? "여기에 서명해 주세요" : "서명 완료"}
+              </span>
+              <button
+                type="button"
+                onClick={memberSig.clear}
+                className="text-[12px] text-[#6B5D47] dark:text-zinc-400 hover:underline"
+              >
+                서명 지우기
+              </button>
+            </div>
+          </div>
         </div>
       </Section>
 
