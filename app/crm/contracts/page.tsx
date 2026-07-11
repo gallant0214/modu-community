@@ -184,7 +184,7 @@ export default function CrmContractsPage() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={tab === "templates" ? "양식명 검색" : "고객 이름·연락처 검색"}
+          placeholder={tab === "templates" ? "양식명 검색" : "이름 검색"}
           className={`${crmInputClass} flex-1 min-w-[160px]`}
         />
         {tab === "templates" && (
@@ -267,26 +267,30 @@ export default function CrmContractsPage() {
           {query ? "일치하는 계약서가 없습니다." : "체결된 전자 계약서가 없습니다. 위 '전자 계약서 생성' 을 눌러 작성하세요."}
         </div>
       ) : (
-        <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
           {signedList.map((c) => (
             <li key={c.id}>
               <Link
                 href={`/crm/contracts/signed/${c.id}`}
-                className="block w-full text-left px-4 py-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors h-full"
+                className="flex items-center gap-3 px-4 py-3 hover:bg-[#FBF7EB] dark:hover:bg-zinc-900/60 transition-colors"
               >
-                <div className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 break-keep">
-                  {c.customer_info?.name || "(이름 없음)"}
-                </div>
-                <div className="mt-1 text-[12px] text-[#6B5D47] dark:text-zinc-400">
-                  {c.title}
-                </div>
-                {c.customer_info?.phone && (
-                  <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500">
-                    {c.customer_info.phone}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 break-keep">
+                      {c.title}
+                    </span>
+                    <span className="text-[13px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] break-keep">
+                      {c.customer_info?.name || "(이름 없음)"}
+                    </span>
                   </div>
-                )}
-                <div className="mt-1 text-[11.5px] text-[#A89B80]">
-                  서명일 : {formatDateTime(c.signed_at)}
+                  {c.customer_info?.phone && (
+                    <div className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+                      {c.customer_info.phone}
+                    </div>
+                  )}
+                </div>
+                <div className="text-[11.5px] text-[#A89B80] shrink-0 whitespace-nowrap">
+                  {formatDateTime(c.signed_at)}
                 </div>
               </Link>
             </li>
