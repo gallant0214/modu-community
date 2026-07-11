@@ -82,11 +82,24 @@ export async function GET(request: Request) {
     memberQuery = memberQuery.eq("id", -1); // empty
   }
 
-  const [{ data: members, count: memberCount }, { data: passes }, { data: reservations }] = await Promise.all([
-    memberQuery,
-    passQuery,
-    resQuery,
-  ]);
+  // 재직중인 강사 전체 (매출·예약 0건이어도 표에 표시하기 위해)
+  let activeStaffQuery = supabase
+    .from("crm_center_members")
+    .select("id, display_name, role, status")
+    .eq("center_id", ctx.centerId)
+    .eq("status", "active")
+    .in("role", ["trainer", "manager"]);
+
+  if (ctx.role === "trainer" || ctx.role === "manager") {
+    activeStaffQuery = activeStaffQuery.eq("id", ctx.centerMemberId);
+  }
+
+  const [
+    { data: members, count: memberCount },
+    { data: passes },
+    { data: reservations },
+    { data: activeStaff },
+  ] = await Promise.all([memberQuery, passQuery, resQuery, activeStaffQuery]);
 
   // 강사별 집계
   const trainerStats = new Map<
@@ -105,6 +118,11 @@ export async function GET(request: Request) {
     }
     return trainerStats.get(id)!;
   };
+
+  // 재직 강사부터 seed (매출 0인 강사도 표시)
+  (activeStaff ?? []).forEach((s) => {
+    addTrainer(s.id);
+  });
 
   (passes ?? []).forEach((p) => {
     const t = addTrainer(p.trainer_member_id);
@@ -131,17 +149,21 @@ export async function GET(request: Request) {
     paymentBreakdown[k] = (paymentBreakdown[k] ?? 0) + (p.price_won ?? 0);
   });
 
-  // 직원 이름 join
-  const trainerIds = Array.from(trainerStats.keys());
-  const { data: staffRows } = trainerIds.length
-    ? await supabase
-        .from("crm_center_members")
-        .select("id, display_name, role")
-        .in("id", trainerIds)
-    : { data: [] };
-  const staffMap = new Map(
-    (staffRows ?? []).map((s) => [s.id, { name: s.display_name, role: s.role }])
-  );
+  // 직원 이름 join — activeStaff 로 우선 채우고 나머지(퇴사자 등)만 추가 조회
+  const staffMap = new Map<number, { name: string; role: string }>();
+  (activeStaff ?? []).forEach((s) => {
+    staffMap.set(s.id, { name: s.display_name, role: s.role });
+  });
+  const missingIds = Array.from(trainerStats.keys()).filter((id) => !staffMap.has(id));
+  if (missingIds.length) {
+    const { data: extraRows } = await supabase
+      .from("crm_center_members")
+      .select("id, display_name, role")
+      .in("id", missingIds);
+    (extraRows ?? []).forEach((s) => {
+      staffMap.set(s.id, { name: s.display_name, role: s.role });
+    });
+  }
 
   return NextResponse.json({
     ym,
@@ -153,11 +175,21 @@ export async function GET(request: Request) {
       totalPassCount,
     },
     paymentBreakdown,
-    trainers: Array.from(trainerStats.entries()).map(([id, s]) => ({
-      trainerMemberId: id,
-      name: staffMap.get(id)?.name ?? `직원 #${id}`,
-      role: staffMap.get(id)?.role ?? "trainer",
-      ...s,
-    })),
+    trainers: Array.from(trainerStats.entries())
+      .map(([id, s]) => ({
+        trainerMemberId: id,
+        name: staffMap.get(id)?.name ?? `직원 #${id}`,
+        role: staffMap.get(id)?.role ?? "trainer",
+        ...s,
+      }))
+      // 역할별 → 매출 많은 순 → 이름 순
+      .sort((a, b) => {
+        const roleOrder = { manager: 0, trainer: 1 } as Record<string, number>;
+        const ra = roleOrder[a.role] ?? 9;
+        const rb = roleOrder[b.role] ?? 9;
+        if (ra !== rb) return ra - rb;
+        if (b.passes.revenue !== a.passes.revenue) return b.passes.revenue - a.passes.revenue;
+        return a.name.localeCompare(b.name, "ko");
+      }),
   });
 }
