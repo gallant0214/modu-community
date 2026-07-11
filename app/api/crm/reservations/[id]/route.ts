@@ -32,15 +32,24 @@ export async function PATCH(
   const reservationId = Number(id);
   if (!reservationId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
-  let body: { status?: string; reason?: string };
+  let body: {
+    status?: string;
+    reason?: string;
+    starts_at?: string;
+    ends_at?: string;
+    trainer_member_id?: number;
+  };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
+  // reschedule 모드: starts_at/ends_at 이 있으면 시간·강사 이동 처리
+  const isReschedule = Boolean(body.starts_at || body.ends_at || body.trainer_member_id);
+
   const newStatus = body.status as ReservationStatus;
-  if (!["booked", "attended", "cancelled", "noshow"].includes(newStatus)) {
+  if (!isReschedule && !["booked", "attended", "cancelled", "noshow"].includes(newStatus)) {
     return NextResponse.json({ error: "상태 값이 잘못됨" }, { status: 400 });
   }
 
@@ -48,7 +57,7 @@ export async function PATCH(
   const { data: cur, error: curErr } = await supabase
     .from("crm_reservations")
     .select(
-      "id, center_id, pass_id, trainer_member_id, status, consumed"
+      "id, center_id, pass_id, trainer_member_id, status, consumed, starts_at, ends_at"
     )
     .eq("id", reservationId)
     .eq("center_id", ctx.centerId)
@@ -71,6 +80,9 @@ export async function PATCH(
       cur.trainer_member_id !== ctx.centerMemberId
     ) {
       return NextResponse.json({ error: "본인 담당 예약만 수정할 수 있습니다" }, { status: 403 });
+    }
+    if (isReschedule && !perm?.can_modify_reservation) {
+      return NextResponse.json({ error: "예약 시간 변경 권한이 없어요" }, { status: 403 });
     }
     if (newStatus === "cancelled" && !perm?.can_cancel_reservation) {
       return NextResponse.json({ error: "예약 취소 권한이 없습니다" }, { status: 403 });
@@ -96,6 +108,63 @@ export async function PATCH(
         );
       }
     }
+  }
+
+  /* ── reschedule (드래그 이동) 경로 ────────────────────────────── */
+  if (isReschedule) {
+    const startsAt = body.starts_at ?? cur.starts_at;
+    const endsAt = body.ends_at ?? cur.ends_at;
+    const trainerId = body.trainer_member_id ?? cur.trainer_member_id;
+
+    if (!startsAt || !endsAt) {
+      return NextResponse.json({ error: "시작·종료 시각이 필요합니다" }, { status: 400 });
+    }
+    const s = new Date(startsAt);
+    const e = new Date(endsAt);
+    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) {
+      return NextResponse.json({ error: "시각 형식 오류" }, { status: 400 });
+    }
+    if (s.getTime() >= e.getTime()) {
+      return NextResponse.json({ error: "종료 시각이 시작 이후여야 합니다" }, { status: 400 });
+    }
+
+    // 30분 단위 스냅
+    const snapMs = 30 * 60 * 1000;
+    const startsSnapped = new Date(Math.round(s.getTime() / snapMs) * snapMs);
+    const durationMs = e.getTime() - s.getTime();
+    const endsSnapped = new Date(startsSnapped.getTime() + durationMs);
+
+    const patch: Record<string, unknown> = {
+      starts_at: startsSnapped.toISOString(),
+      ends_at: endsSnapped.toISOString(),
+    };
+    if (body.trainer_member_id && body.trainer_member_id !== cur.trainer_member_id) {
+      patch.trainer_member_id = trainerId;
+    }
+
+    const { error: upErr } = await supabase
+      .from("crm_reservations")
+      .update(patch as never)
+      .eq("id", reservationId)
+      .eq("center_id", ctx.centerId);
+
+    if (upErr) {
+      return NextResponse.json({ error: "수정 실패", detail: upErr.message }, { status: 500 });
+    }
+
+    await supabase.from("crm_audit_logs").insert({
+      center_id: ctx.centerId,
+      actor_uid: ctx.uid,
+      action: "reservation.reschedule",
+      entity_type: "reservation",
+      entity_id: reservationId,
+      payload: {
+        from: { starts_at: cur.starts_at, ends_at: cur.ends_at, trainer_member_id: cur.trainer_member_id },
+        to: { starts_at: patch.starts_at, ends_at: patch.ends_at, trainer_member_id: patch.trainer_member_id ?? cur.trainer_member_id },
+      } as never,
+    });
+
+    return NextResponse.json({ ok: true, starts_at: patch.starts_at, ends_at: patch.ends_at });
   }
 
   // 잔여 변동량 계산

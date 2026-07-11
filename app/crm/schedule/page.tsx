@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import {
   RESERVATION_STATUS_LABEL,
@@ -138,6 +138,51 @@ export default function CrmSchedulePage() {
     [staff]
   );
 
+  // 드래그로 예약 시간·강사 이동
+  const reschedule = useCallback(
+    async (
+      id: number,
+      startsAt: string,
+      endsAt: string,
+      trainerMemberId?: number
+    ) => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`/api/crm/reservations/${id}`, {
+          method: "PATCH",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({
+            starts_at: startsAt,
+            ends_at: endsAt,
+            ...(trainerMemberId ? { trainer_member_id: trainerMemberId } : {}),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data?.error || "시간 이동 실패");
+          return;
+        }
+        // 낙관적 업데이트
+        setReservations((prev) =>
+          prev.map((r) =>
+            r.id === id
+              ? {
+                  ...r,
+                  starts_at: data.starts_at ?? startsAt,
+                  ends_at: data.ends_at ?? endsAt,
+                  trainer_member_id: trainerMemberId ?? r.trainer_member_id,
+                }
+              : r
+          )
+        );
+      } catch (e) {
+        alert(e instanceof Error ? e.message : "네트워크 오류");
+      }
+    },
+    [getIdToken]
+  );
+
   const navigate = (dir: -1 | 1) => {
     const d = new Date(anchor);
     if (viewMode === "day") d.setDate(d.getDate() + dir);
@@ -243,6 +288,7 @@ export default function CrmSchedulePage() {
           events={events}
           anchorDate={anchor}
           onPick={setPicked}
+          onReschedule={reschedule}
           onSlotClick={(trainer, h, m) => {
             const startISO = kstDateToUTCISO(anchor, h, m, 0);
             const endISO = kstDateToUTCISO(anchor, h, m + 50, 0); // 기본 50분
@@ -261,6 +307,7 @@ export default function CrmSchedulePage() {
           events={events}
           trainers={trainers}
           onPick={setPicked}
+          onReschedule={reschedule}
           onSlotClick={(ymd, h, m, defaultTrainer) => {
             if (!defaultTrainer) return;
             setNewSlot({
@@ -326,6 +373,20 @@ export default function CrmSchedulePage() {
 
 /* ─── Day View (강사 × 시간 그리드) ────────────────────────────── */
 
+type DayDragState = {
+  id: number;
+  origStartsAt: string;
+  origEndsAt: string;
+  origTrainerId: number;
+  startX: number;
+  startY: number;
+  dx: number;
+  dy: number;
+  moved: boolean;
+  anchorDate: string;
+  columnRects: { trainerId: number; trainerName: string; left: number; right: number }[];
+} | null;
+
 function DayView({
   trainers,
   reservations,
@@ -333,6 +394,7 @@ function DayView({
   anchorDate,
   onPick,
   onSlotClick,
+  onReschedule,
 }: {
   trainers: StaffOption[];
   reservations: Reservation[];
@@ -340,8 +402,11 @@ function DayView({
   anchorDate: string;
   onPick: (r: Reservation) => void;
   onSlotClick: (trainer: StaffOption, h: number, m: number) => void;
+  onReschedule: (id: number, startsAt: string, endsAt: string, trainerMemberId?: number) => Promise<void> | void;
 }) {
   void anchorDate;
+  const columnRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
+  const [drag, setDrag] = useState<DayDragState>(null);
   const slots = useMemo(() => {
     const arr: { h: number; m: number; label: string }[] = [];
     for (let h = WORK_START_HOUR; h < WORK_END_HOUR; h++) {
@@ -449,7 +514,14 @@ function DayView({
               (e) => e.type === "center" || e.trainer_member_id === t.id
             );
             return (
-              <div key={t.id} className="relative border-l border-[#E8E0D0]/70 dark:border-zinc-800">
+              <div
+                key={t.id}
+                ref={(el) => {
+                  columnRefs.current.set(t.id, el);
+                }}
+                data-trainer-id={t.id}
+                className="relative border-l border-[#E8E0D0]/70 dark:border-zinc-800"
+              >
                 {slots.map((s, i) => (
                   <button
                     key={i}
@@ -486,15 +558,29 @@ function DayView({
                   const bottom = offsetPx(r.ends_at);
                   const height = Math.max(SLOT_HEIGHT_PX * 0.9, bottom - top);
                   const color = RESERVATION_STATUS_COLOR[r.status] ?? RESERVATION_STATUS_COLOR.booked;
+                  const isDragging = drag?.id === r.id && drag.moved;
                   return (
                     <button
                       key={r.id}
-                      onClick={() => onPick(r)}
-                      className={`absolute left-1 right-1 px-2 py-1 rounded-md text-left text-[11.5px] font-medium border ${color.bg} ${color.text}`}
+                      onMouseDown={(e) => {
+                        if (e.button !== 0) return;
+                        e.preventDefault();
+                        startDayDrag(
+                          e,
+                          r,
+                          anchorDate,
+                          trainers,
+                          columnRefs.current,
+                          onPick,
+                          onReschedule,
+                          setDrag
+                        );
+                      }}
+                      className={`absolute left-1 right-1 px-2 py-1 rounded-md text-left text-[11.5px] font-medium border ${color.bg} ${color.text} cursor-grab active:cursor-grabbing ${isDragging ? "opacity-40" : ""}`}
                       style={{ top: `${top}px`, height: `${height}px` }}
                     >
-                      <div className="truncate font-semibold">{r.member_name || "회원"}</div>
-                      <div className="truncate text-[10.5px] opacity-80">
+                      <div className="truncate font-semibold pointer-events-none">{r.member_name || "회원"}</div>
+                      <div className="truncate text-[10.5px] opacity-80 pointer-events-none">
                         {RESERVATION_STATUS_LABEL[r.status]}
                       </div>
                     </button>
@@ -505,11 +591,147 @@ function DayView({
           })}
         </div>
       </div>
+      {drag && drag.moved && <DayDragGhost drag={drag} />}
+    </div>
+  );
+}
+
+/** DayView 드래그 시작 — 컬럼 스냅샷 + document 리스너 등록 */
+function startDayDrag(
+  e: React.MouseEvent,
+  r: Reservation,
+  anchorDate: string,
+  trainers: StaffOption[],
+  columns: Map<number, HTMLDivElement | null>,
+  onPick: (r: Reservation) => void,
+  onReschedule: (id: number, startsAt: string, endsAt: string, trainerMemberId?: number) => Promise<void> | void,
+  setDrag: (s: DayDragState) => void
+) {
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const columnRects: { trainerId: number; trainerName: string; left: number; right: number }[] = [];
+  columns.forEach((el, trainerId) => {
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const t = trainers.find((x) => x.id === trainerId);
+    columnRects.push({
+      trainerId,
+      trainerName: t?.display_name ?? "",
+      left: rect.left,
+      right: rect.right,
+    });
+  });
+  const local = { dx: 0, dy: 0, moved: false };
+
+  setDrag({
+    id: r.id,
+    origStartsAt: r.starts_at,
+    origEndsAt: r.ends_at,
+    origTrainerId: r.trainer_member_id,
+    startX,
+    startY,
+    dx: 0,
+    dy: 0,
+    moved: false,
+    anchorDate,
+    columnRects,
+  });
+
+  const onMove = (ev: MouseEvent) => {
+    local.dx = ev.clientX - startX;
+    local.dy = ev.clientY - startY;
+    local.moved = local.moved || Math.hypot(local.dx, local.dy) > 4;
+    setDrag({
+      id: r.id,
+      origStartsAt: r.starts_at,
+      origEndsAt: r.ends_at,
+      origTrainerId: r.trainer_member_id,
+      startX,
+      startY,
+      dx: local.dx,
+      dy: local.dy,
+      moved: local.moved,
+      anchorDate,
+      columnRects,
+    });
+  };
+
+  const onUp = (ev: MouseEvent) => {
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
+    setDrag(null);
+    if (!local.moved) {
+      onPick(r);
+      return;
+    }
+    const targetCol = columnRects.find(
+      (c) => ev.clientX >= c.left && ev.clientX <= c.right
+    );
+    if (!targetCol) return;
+    const target = computeDragTarget(r, local.dy);
+    if (!target) return;
+    const newStartIso = kstDateToUTCISO(anchorDate, target.h, target.m, 0);
+    const newEndIso = new Date(
+      new Date(newStartIso).getTime() + target.durationMs
+    ).toISOString();
+    const sameTime = newStartIso === r.starts_at && newEndIso === r.ends_at;
+    const sameTrainer = targetCol.trainerId === r.trainer_member_id;
+    if (sameTime && sameTrainer) return;
+    void onReschedule(
+      r.id,
+      newStartIso,
+      newEndIso,
+      sameTrainer ? undefined : targetCol.trainerId
+    );
+  };
+
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup", onUp);
+}
+
+function DayDragGhost({ drag }: { drag: NonNullable<DayDragState> }) {
+  const target = computeDragTarget(
+    { starts_at: drag.origStartsAt, ends_at: drag.origEndsAt },
+    drag.dy
+  );
+  const targetCol = drag.columnRects.find(
+    (c) => drag.startX + drag.dx >= c.left && drag.startX + drag.dx <= c.right
+  );
+  const timeLabel = target
+    ? `${String(target.h).padStart(2, "0")}:${String(target.m).padStart(2, "0")}`
+    : "";
+  const ok = Boolean(target && targetCol);
+  return (
+    <div
+      className={`fixed z-50 pointer-events-none px-2 py-1 rounded-md text-[11.5px] font-semibold shadow-lg ${
+        ok ? "bg-[#6B7B3A] text-white" : "bg-red-500 text-white"
+      }`}
+      style={{
+        left: drag.startX + drag.dx + 12,
+        top: drag.startY + drag.dy + 12,
+      }}
+    >
+      {ok ? `${targetCol!.trainerName} ${timeLabel}` : "이동 불가"}
     </div>
   );
 }
 
 /* ─── Week View (7일 × 시간 그리드) ────────────────────────────── */
+
+type WeekDragState = {
+  id: number;
+  origStartsAt: string;
+  origEndsAt: string;
+  origDayKey: string;
+  startX: number;
+  startY: number;
+  dx: number;
+  dy: number;
+  moved: boolean;
+  /** startDrag 시점의 컬럼 위치 스냅샷 (getBoundingClientRect 결과) */
+  columnRects: { dayKey: string; left: number; right: number }[];
+} | null;
+
 
 function WeekView({
   anchor,
@@ -518,6 +740,7 @@ function WeekView({
   trainers,
   onPick,
   onSlotClick,
+  onReschedule,
 }: {
   anchor: string;
   reservations: Reservation[];
@@ -525,8 +748,12 @@ function WeekView({
   trainers: StaffOption[];
   onPick: (r: Reservation) => void;
   onSlotClick: (ymd: string, h: number, m: number, trainer: StaffOption | null) => void;
+  onReschedule: (id: number, startsAt: string, endsAt: string, trainerMemberId?: number) => Promise<void> | void;
 }) {
   void anchor;
+  const columnRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
+  const [drag, setDrag] = useState<WeekDragState>(null);
+
   const days = useMemo(() => {
     const start = startOfWeek(anchor);
     return Array.from({ length: 7 }, (_, i) => {
@@ -624,6 +851,10 @@ function WeekView({
             return (
               <div
                 key={di}
+                ref={(el) => {
+                  columnRefs.current.set(key, el);
+                }}
+                data-day-key={key}
                 className={`relative border-l border-[#E8E0D0]/70 dark:border-zinc-800 ${isTodayCol ? "bg-[#6B7B3A]/5" : ""}`}
               >
                 {slots.map((s, i) => (
@@ -673,14 +904,26 @@ function WeekView({
                   const bottom = offsetPx(r.ends_at);
                   const height = Math.max(SLOT_HEIGHT_PX * 0.9, bottom - top);
                   const color = RESERVATION_STATUS_COLOR[r.status] ?? RESERVATION_STATUS_COLOR.booked;
+                  const isDragging = drag?.id === r.id && drag.moved;
                   return (
                     <button
                       key={r.id}
-                      onClick={() => onPick(r)}
-                      className={`absolute left-1 right-1 px-1.5 py-0.5 rounded text-left text-[11px] font-medium border ${color.bg} ${color.text}`}
+                      onMouseDown={(e) => {
+                        if (e.button !== 0) return;
+                        e.preventDefault();
+                        startWeekDrag(
+                          e,
+                          r,
+                          columnRefs.current,
+                          onPick,
+                          onReschedule,
+                          setDrag
+                        );
+                      }}
+                      className={`absolute left-1 right-1 px-1.5 py-0.5 rounded text-left text-[11px] font-medium border ${color.bg} ${color.text} cursor-grab active:cursor-grabbing ${isDragging ? "opacity-40" : ""}`}
                       style={{ top: `${top}px`, height: `${height}px` }}
                     >
-                      <div className="truncate font-semibold">{r.member_name || "회원"}</div>
+                      <div className="truncate font-semibold pointer-events-none">{r.member_name || "회원"}</div>
                     </button>
                   );
                 })}
@@ -689,6 +932,145 @@ function WeekView({
           })}
         </div>
       </div>
+      {drag && drag.moved && (
+        <WeekDragGhost drag={drag} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * WeekView 드래그 시작 핸들러.
+ * mouseDown 시점의 컬럼 위치를 스냅샷 → mouseMove/Up 리스너 등록 (document 레벨).
+ * 이동 거리 4px 이하면 클릭으로 간주 → onPick. 이상이면 스냅 후 onReschedule.
+ */
+function startWeekDrag(
+  e: React.MouseEvent,
+  r: Reservation,
+  columns: Map<string, HTMLDivElement | null>,
+  onPick: (r: Reservation) => void,
+  onReschedule: (id: number, startsAt: string, endsAt: string, trainerMemberId?: number) => Promise<void> | void,
+  setDrag: (s: WeekDragState) => void
+) {
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const columnRects: { dayKey: string; left: number; right: number }[] = [];
+  columns.forEach((el, dayKey) => {
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    columnRects.push({ dayKey, left: rect.left, right: rect.right });
+  });
+  const origDayKey = kstDateKey(r.starts_at);
+  const local = { dx: 0, dy: 0, moved: false };
+
+  setDrag({
+    id: r.id,
+    origStartsAt: r.starts_at,
+    origEndsAt: r.ends_at,
+    origDayKey,
+    startX,
+    startY,
+    dx: 0,
+    dy: 0,
+    moved: false,
+    columnRects,
+  });
+
+  const onMove = (ev: MouseEvent) => {
+    local.dx = ev.clientX - startX;
+    local.dy = ev.clientY - startY;
+    local.moved = local.moved || Math.hypot(local.dx, local.dy) > 4;
+    setDrag({
+      id: r.id,
+      origStartsAt: r.starts_at,
+      origEndsAt: r.ends_at,
+      origDayKey,
+      startX,
+      startY,
+      dx: local.dx,
+      dy: local.dy,
+      moved: local.moved,
+      columnRects,
+    });
+  };
+
+  const onUp = (ev: MouseEvent) => {
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
+    setDrag(null);
+    if (!local.moved) {
+      onPick(r);
+      return;
+    }
+    const targetCol = columnRects.find(
+      (c) => ev.clientX >= c.left && ev.clientX <= c.right
+    );
+    if (!targetCol) return;
+    const target = computeDragTarget(r, local.dy);
+    if (!target) return;
+    const newStartIso = kstDateToUTCISO(targetCol.dayKey, target.h, target.m, 0);
+    const newEndIso = new Date(
+      new Date(newStartIso).getTime() + target.durationMs
+    ).toISOString();
+    if (newStartIso === r.starts_at && newEndIso === r.ends_at) return;
+    void onReschedule(r.id, newStartIso, newEndIso);
+  };
+
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup", onUp);
+}
+
+/**
+ * 세로 delta(px) 를 30분 단위로 스냅해서 새 시각을 계산.
+ * WORK_START_HOUR ~ WORK_END_HOUR 안으로 clamp.
+ */
+function computeDragTarget(
+  r: { starts_at: string; ends_at: string },
+  deltaY: number
+): { h: number; m: number; durationMs: number } | null {
+  const durationMs = new Date(r.ends_at).getTime() - new Date(r.starts_at).getTime();
+  if (!Number.isFinite(durationMs) || durationMs <= 0) return null;
+  const { h: oh, m: om } = kstParts(r.starts_at);
+  const deltaSlots = Math.round(deltaY / SLOT_HEIGHT_PX);
+  const deltaMin = deltaSlots * SLOT_MINUTES;
+  let newMin = oh * 60 + om + deltaMin;
+  const durationMin = durationMs / 60000;
+  const minAllowed = WORK_START_HOUR * 60;
+  const maxAllowed = WORK_END_HOUR * 60 - durationMin;
+  if (maxAllowed < minAllowed) return null;
+  newMin = Math.max(minAllowed, Math.min(maxAllowed, newMin));
+  const h = Math.floor(newMin / 60);
+  const m = newMin % 60;
+  return { h, m, durationMs };
+}
+
+/**
+ * 드래그 중 커서 근처에 "이동 후 시각" 라벨을 fixed 로 띄운다.
+ */
+function WeekDragGhost({ drag }: { drag: NonNullable<WeekDragState> }) {
+  const target = computeDragTarget(
+    { starts_at: drag.origStartsAt, ends_at: drag.origEndsAt },
+    drag.dy
+  );
+  const targetCol = drag.columnRects.find(
+    (c) => drag.startX + drag.dx >= c.left && drag.startX + drag.dx <= c.right
+  );
+  const label = target
+    ? `${String(target.h).padStart(2, "0")}:${String(target.m).padStart(2, "0")}`
+    : "";
+  const dayLabel = targetCol ? targetCol.dayKey.slice(5).replace("-", "/") : "";
+  const ok = Boolean(target && targetCol);
+  return (
+    <div
+      className={`fixed z-50 pointer-events-none px-2 py-1 rounded-md text-[11.5px] font-semibold shadow-lg ${
+        ok ? "bg-[#6B7B3A] text-white" : "bg-red-500 text-white"
+      }`}
+      style={{
+        left: drag.startX + drag.dx + 12,
+        top: drag.startY + drag.dy + 12,
+      }}
+    >
+      {ok ? `${dayLabel} ${label}` : "이동 불가"}
     </div>
   );
 }
