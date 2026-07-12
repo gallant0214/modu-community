@@ -186,7 +186,7 @@ export default function CrmMemberDetailPage() {
             {formatPhone(member.phone)}
             {member.gender && ` · ${GENDER_LABEL[member.gender]}`}
             {member.birth && ` · ${member.birth}`}
-            {member.registered_at && ` · 등록일 ${member.registered_at}`}
+            {member.registered_at && ` · 최근 등록일 ${member.registered_at}`}
           </div>
           {member.email && (
             <div className="mt-0.5 text-[12px] text-[#8C8270]">{member.email}</div>
@@ -228,7 +228,7 @@ export default function CrmMemberDetailPage() {
 
       <dl className="mb-5 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
         {member.registration_type && <InfoItem label="신규/재등록" value={member.registration_type} />}
-        {member.registered_at && <InfoItem label="등록일" value={member.registered_at} />}
+        {member.registered_at && <InfoItem label="최근 등록일" value={member.registered_at} />}
         {member.first_use_at && <InfoItem label="이용 시작일" value={member.first_use_at} />}
         {member.final_expire_at && <InfoItem label="최종 만료일" value={member.final_expire_at} />}
         {member.last_purchase_at && <InfoItem label="마지막 구매일" value={member.last_purchase_at} />}
@@ -554,7 +554,7 @@ function EditModal({
             />
           </CrmField>
         </div>
-        <CrmField label="등록일">
+        <CrmField label="최근 등록일">
           <input
             type="date"
             className={crmInputClass}

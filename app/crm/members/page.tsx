@@ -555,7 +555,7 @@ export default function CrmMembersPage() {
       "회원 앱",
       "연락처",
       "신규/재등록",
-      "등록일",
+      "최근 등록일",
       "이용 시작일",
       "가입일",
       "상태",
@@ -1027,7 +1027,7 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
   },
   registered_at: {
     key: "registered_at",
-    label: "등록일",
+    label: "최근 등록일",
     sortKey: "registered_at",
     render: (m) => (
       <span className="text-[#8C8270] dark:text-zinc-500">{m.registered_at ?? "—"}</span>
@@ -1680,7 +1680,7 @@ function RegisterModal({
             />
           </CrmField>
         </div>
-        <CrmField label="등록일">
+        <CrmField label="최근 등록일">
           <input
             type="date"
             className={crmInputClass}
