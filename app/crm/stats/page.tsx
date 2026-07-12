@@ -249,6 +249,8 @@ function TrainerTab({ data }: { data: MonthlyResp | null }) {
 interface CenterRevenueResp {
   ym: string;
   total: number;
+  total_ex_vat: number;
+  vat_amount: number;
   counts: { memberships: number; passes: number };
   categories: {
     membership: number;
@@ -256,6 +258,20 @@ interface CenterRevenueResp {
     locker: number;
     goods: number;
     etc: number;
+  };
+  categories_ex_vat: {
+    membership: number;
+    pass: number;
+    locker: number;
+    goods: number;
+    etc: number;
+  };
+  potential_liability: number;
+  liability_breakdown: {
+    membership: number;
+    pass: number;
+    notStarted: number;
+    inProgress: number;
   };
 }
 
@@ -296,17 +312,43 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
 
   return (
     <>
-      <section className="grid grid-cols-2 md:grid-cols-2 gap-3 mb-5">
-        <Kpi label="센터 매출 합계" value={`${formatWon(data?.total ?? 0)}원`} accent />
+      {/* 요약 KPI 3종: 부가세 포함 매출 / 부가세 제외 실매출 / 잠재부채 */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <Kpi label="센터 매출 합계 (부가세 포함)" value={`${formatWon(data?.total ?? 0)}원`} accent />
         <Kpi
-          label="이번달 활동"
-          value={`${(data?.counts.memberships ?? 0) + (data?.counts.passes ?? 0)}건`}
+          label="실매출 (부가세 제외)"
+          value={`${formatWon(data?.total_ex_vat ?? 0)}원`}
+          sub={`부가세 ${formatWon(data?.vat_amount ?? 0)}원`}
+        />
+        <Kpi
+          label="잠재부채 (선수금)"
+          value={`${formatWon(data?.potential_liability ?? 0)}원`}
+          tone="warn"
+          sub={`미시작 ${formatWon(data?.liability_breakdown.notStarted ?? 0)}원 · 진행중 ${formatWon(data?.liability_breakdown.inProgress ?? 0)}원`}
         />
       </section>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {/* 이번달 활동 건수 */}
+      <section className="mb-5 px-4 py-2 rounded-xl border border-[#E8E0D0]/60 dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 flex items-center justify-between">
+        <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+          이번달 활동
+        </span>
+        <span className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">
+          {(data?.counts.memberships ?? 0) + (data?.counts.passes ?? 0)}건
+          <span className="ml-2 text-[11.5px] font-normal text-[#8C8270]">
+            (회원권 {data?.counts.memberships ?? 0}, 수강권 {data?.counts.passes ?? 0})
+          </span>
+        </span>
+      </section>
+
+      {/* 카테고리별 매출 */}
+      <div className="mb-2 text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+        카테고리별 매출
+      </div>
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
         {cats.map((c) => {
           const v = data?.categories[c.key] ?? 0;
+          const exVat = data?.categories_ex_vat[c.key] ?? 0;
           const tracked = c.key === "membership" || c.key === "pass";
           return (
             <div
@@ -319,6 +361,11 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
               >
                 {formatWon(v)}원
               </div>
+              {tracked && v > 0 && (
+                <div className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+                  부가세 제외 {formatWon(exVat)}원
+                </div>
+              )}
               <div className="mt-2 text-[11.5px] text-[#A89B80] dark:text-zinc-500">
                 {tracked ? (
                   <>
@@ -350,6 +397,37 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
           );
         })}
       </section>
+
+      {/* 잠재부채 상세 */}
+      <div className="mb-2 text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+        잠재부채 상세
+      </div>
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+          <div className="text-[12.5px] text-[#A89B80]">회원권 잠재부채</div>
+          <div className="mt-1 text-[18px] font-bold text-[#B47B2A] dark:text-amber-300">
+            {formatWon(data?.liability_breakdown.membership ?? 0)}원
+          </div>
+          <div className="mt-2 text-[11.5px] text-[#A89B80]">
+            아직 이용하지 않은 회원권 금액 (일할 계산)
+          </div>
+        </div>
+        <div className="px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+          <div className="text-[12.5px] text-[#A89B80]">수강권 잠재부채</div>
+          <div className="mt-1 text-[18px] font-bold text-[#B47B2A] dark:text-amber-300">
+            {formatWon(data?.liability_breakdown.pass ?? 0)}원
+          </div>
+          <div className="mt-2 text-[11.5px] text-[#A89B80]">
+            남은 회차 × 회당 단가 (미시작 건은 전액)
+          </div>
+        </div>
+      </section>
+
+      <div className="mt-3 px-4 py-3 rounded-xl bg-[#FBF7EB]/60 dark:bg-zinc-900/40 text-[11.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
+        💡 <strong>잠재부채</strong>는 회원이 결제했으나 아직 이용하지 않은 금액이에요. 예) 7월에 60만원 PT 10회를 결제하고 8월부터 시작한다면, 오늘 시점 잠재부채는 60만원. 진행 중인 상품은 남은 일수/횟수 비율로 계산해요.
+        <br />
+        💡 <strong>부가세</strong>는 결제 시 상품에 "부가세 포함" 옵션을 체크한 건만 10% 를 제외한 실매출로 환산해요.
+      </div>
     </>
   );
 }
@@ -402,13 +480,32 @@ function TabBtn({
   );
 }
 
-function Kpi({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function Kpi({
+  label,
+  value,
+  accent,
+  tone,
+  sub,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  tone?: "warn";
+  sub?: string;
+}) {
+  const valueCls =
+    tone === "warn"
+      ? "text-[#B47B2A] dark:text-amber-300"
+      : accent
+      ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+      : "text-[#2A251D] dark:text-zinc-100";
   return (
     <div className="px-4 py-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
       <div className="text-[11.5px] text-[#A89B80] dark:text-zinc-500">{label}</div>
-      <div className={`mt-1 text-[18px] font-bold ${accent ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#2A251D] dark:text-zinc-100"}`}>
-        {value}
-      </div>
+      <div className={`mt-1 text-[18px] font-bold ${valueCls}`}>{value}</div>
+      {sub && (
+        <div className="mt-1 text-[11px] text-[#A89B80] dark:text-zinc-500">{sub}</div>
+      )}
     </div>
   );
 }

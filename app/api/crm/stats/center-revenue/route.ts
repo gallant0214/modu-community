@@ -4,13 +4,24 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 
 export const dynamic = "force-dynamic";
 
+const VAT_RATE = 0.1; // 부가세 10%
+
 /**
  * GET /api/crm/stats/center-revenue?ym=YYYY-MM
  *
- * 센터 매출 카테고리별 합산 (이번달 발급 기준).
+ * 센터 매출 카테고리별 합산 (해당 기간 발급 기준).
  *   - 회원권 (crm_memberships)
- *   - 수강권 (crm_passes) — 참고용 (스튜디오 합산)
- *   - 운동 용품 / 락커 / 기타 — 아직 매출 추적 없음 (0원)
+ *   - 수강권 (crm_passes)
+ *   - 락커/운동용품/기타 — 아직 매출 추적 없음 (0원)
+ *
+ * 응답 추가:
+ *   - total_ex_vat: 부가세 제외 실제 매출 (vat_included=true 인 건은 /1.1)
+ *   - potential_liability: 오늘 기준 미이행(선수금) 총합
+ *     - 미시작(start_date > today) → full price
+ *     - 시작됨 & 회원권(기간제) → 일할 계산 잔여일수/전체일수 × price
+ *     - 시작됨 & 수강권(횟수제) → remaining_sessions/total_sessions × price
+ *     - status='valid' 인 건만
+ *   - liability_breakdown: { membership, pass, notStarted, inProgress }
  */
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
@@ -41,39 +52,124 @@ export async function GET(request: Request) {
     nextMonth = new Date(y, m, 1).toISOString().slice(0, 10);
   }
 
-  const [membership, pass] = await Promise.all([
+  // 이번 기간 발급된 것 (매출)
+  const [membershipPeriod, passPeriod] = await Promise.all([
     supabase
       .from("crm_memberships")
-      .select("price_won")
+      .select("price_won, vat_included")
       .eq("center_id", ctx.centerId)
       .neq("status", "deleted")
       .gte("start_date", startDate)
       .lt("start_date", nextMonth),
     supabase
       .from("crm_passes")
-      .select("price_won")
+      .select("price_won, vat_included")
       .eq("center_id", ctx.centerId)
       .neq("status", "deleted")
       .gte("issued_at", startDate)
       .lt("issued_at", nextMonth),
   ]);
 
-  const membershipRevenue = (membership.data ?? []).reduce(
+  const membershipRevenue = (membershipPeriod.data ?? []).reduce(
     (sum, x) => sum + (x.price_won ?? 0),
     0
   );
-  const passRevenue = (pass.data ?? []).reduce((sum, x) => sum + (x.price_won ?? 0), 0);
+  const passRevenue = (passPeriod.data ?? []).reduce((sum, x) => sum + (x.price_won ?? 0), 0);
   const lockerRevenue = 0;
   const goodsRevenue = 0;
   const etcRevenue = 0;
   const total = membershipRevenue + passRevenue + lockerRevenue + goodsRevenue + etcRevenue;
 
+  const exVatOne = (price: number, vatIncluded: boolean) =>
+    vatIncluded ? Math.round(price / (1 + VAT_RATE)) : price;
+  const membershipExVat = (membershipPeriod.data ?? []).reduce(
+    (sum, x) => sum + exVatOne(x.price_won ?? 0, !!x.vat_included),
+    0
+  );
+  const passExVat = (passPeriod.data ?? []).reduce(
+    (sum, x) => sum + exVatOne(x.price_won ?? 0, !!x.vat_included),
+    0
+  );
+  const totalExVat = membershipExVat + passExVat + lockerRevenue + goodsRevenue + etcRevenue;
+
+  // 오늘 기준 잠재부채 스냅샷 (기간 무관, 활성 건 전체)
+  const today = kstYmd();
+  const [membershipsValid, passesValid] = await Promise.all([
+    paginateAll<{
+      price_won: number;
+      start_date: string;
+      expires_at: string;
+    }>((f, t) =>
+      supabase
+        .from("crm_memberships")
+        .select("price_won, start_date, expires_at")
+        .eq("center_id", ctx.centerId)
+        .eq("status", "valid")
+        .range(f, t)
+    ),
+    paginateAll<{
+      price_won: number;
+      start_date: string;
+      total_sessions: number;
+      remaining_sessions: number;
+    }>((f, t) =>
+      supabase
+        .from("crm_passes")
+        .select("price_won, start_date, total_sessions, remaining_sessions")
+        .eq("center_id", ctx.centerId)
+        .eq("status", "valid")
+        .range(f, t)
+    ),
+  ]);
+
+  let liabilityMembership = 0;
+  let liabilityPass = 0;
+  let liabilityNotStarted = 0;
+  let liabilityInProgress = 0;
+
+  for (const m of membershipsValid) {
+    const price = m.price_won ?? 0;
+    if (!price) continue;
+    if (m.start_date > today) {
+      liabilityMembership += price;
+      liabilityNotStarted += price;
+      continue;
+    }
+    // 진행중: 잔여일 / 전체일 × price
+    const totalDays = daysBetween(m.start_date, m.expires_at) + 1;
+    const remainingDays = Math.max(0, daysBetween(today, m.expires_at));
+    if (totalDays <= 0) continue;
+    const unused = Math.round((remainingDays / totalDays) * price);
+    liabilityMembership += unused;
+    liabilityInProgress += unused;
+  }
+
+  for (const p of passesValid) {
+    const price = p.price_won ?? 0;
+    if (!price) continue;
+    if (p.start_date > today) {
+      liabilityPass += price;
+      liabilityNotStarted += price;
+      continue;
+    }
+    const total = p.total_sessions ?? 0;
+    const remaining = p.remaining_sessions ?? 0;
+    if (total <= 0) continue;
+    const unused = Math.round((remaining / total) * price);
+    liabilityPass += unused;
+    liabilityInProgress += unused;
+  }
+
+  const potentialLiability = liabilityMembership + liabilityPass;
+
   return NextResponse.json({
     ym,
     total,
+    total_ex_vat: totalExVat,
+    vat_amount: total - totalExVat,
     counts: {
-      memberships: membership.data?.length ?? 0,
-      passes: pass.data?.length ?? 0,
+      memberships: membershipPeriod.data?.length ?? 0,
+      passes: passPeriod.data?.length ?? 0,
     },
     categories: {
       membership: membershipRevenue,
@@ -82,5 +178,47 @@ export async function GET(request: Request) {
       goods: goodsRevenue,
       etc: etcRevenue,
     },
+    categories_ex_vat: {
+      membership: membershipExVat,
+      pass: passExVat,
+      locker: lockerRevenue,
+      goods: goodsRevenue,
+      etc: etcRevenue,
+    },
+    potential_liability: potentialLiability,
+    liability_breakdown: {
+      membership: liabilityMembership,
+      pass: liabilityPass,
+      notStarted: liabilityNotStarted,
+      inProgress: liabilityInProgress,
+    },
   });
+}
+
+function kstYmd(): string {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 3600 * 1000);
+  return kst.toISOString().slice(0, 10);
+}
+
+function daysBetween(from: string, to: string): number {
+  const a = new Date(`${from}T00:00:00Z`);
+  const b = new Date(`${to}T00:00:00Z`);
+  return Math.round((b.getTime() - a.getTime()) / (24 * 3600 * 1000));
+}
+
+async function paginateAll<T>(
+  build: (from: number, to: number) => { then: (fn: (r: unknown) => void) => unknown },
+  chunk = 1000
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += chunk) {
+    const to = from + chunk - 1;
+    const res = (await build(from, to)) as { data: T[] | null; error: unknown };
+    if (res.error) throw res.error;
+    const rows = res.data ?? [];
+    out.push(...rows);
+    if (rows.length < chunk) break;
+  }
+  return out;
 }
