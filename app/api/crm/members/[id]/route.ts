@@ -24,7 +24,7 @@ export async function GET(
   const { data: member, error } = await supabase
     .from("crm_members")
     .select(
-      "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, created_at"
+      "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, registration_type, first_use_at, total_paid_won, final_expire_at, last_purchase_at, last_attended_at, attendance_no, current_membership, current_pass, current_rental, current_locker, created_at"
     )
     .eq("id", memberId)
     .eq("center_id", ctx.centerId)
@@ -90,6 +90,17 @@ export async function PATCH(
     mileage?: number | string;
     marketing_consent?: boolean;
     registered_at?: string;
+    registration_type?: string;
+    first_use_at?: string;
+    total_paid_won?: number | string;
+    final_expire_at?: string;
+    last_purchase_at?: string;
+    last_attended_at?: string;
+    attendance_no?: string;
+    current_membership?: string;
+    current_pass?: string;
+    current_rental?: string;
+    current_locker?: string;
   };
   try {
     body = await request.json();
@@ -130,6 +141,23 @@ export async function PATCH(
   }
   if (body.marketing_consent !== undefined) patch.marketing_consent = !!body.marketing_consent;
   if (body.registered_at !== undefined) patch.registered_at = body.registered_at || null;
+  if (body.registration_type !== undefined) patch.registration_type = body.registration_type.trim() || null;
+  if (body.first_use_at !== undefined) patch.first_use_at = body.first_use_at || null;
+  if (body.total_paid_won !== undefined) {
+    const n = Math.trunc(Number(body.total_paid_won));
+    if (!Number.isFinite(n) || n < 0) {
+      return NextResponse.json({ error: "누적 결제 금액 값이 잘못됨" }, { status: 400 });
+    }
+    patch.total_paid_won = n;
+  }
+  if (body.final_expire_at !== undefined) patch.final_expire_at = body.final_expire_at || null;
+  if (body.last_purchase_at !== undefined) patch.last_purchase_at = body.last_purchase_at || null;
+  if (body.last_attended_at !== undefined) patch.last_attended_at = body.last_attended_at || null;
+  if (body.attendance_no !== undefined) patch.attendance_no = body.attendance_no.trim() || null;
+  if (body.current_membership !== undefined) patch.current_membership = body.current_membership.trim() || null;
+  if (body.current_pass !== undefined) patch.current_pass = body.current_pass.trim() || null;
+  if (body.current_rental !== undefined) patch.current_rental = body.current_rental.trim() || null;
+  if (body.current_locker !== undefined) patch.current_locker = body.current_locker.trim() || null;
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });

@@ -2197,6 +2197,17 @@ export type Database = {
           mileage: number
           marketing_consent: boolean
           registered_at: string | null
+          registration_type: string | null
+          first_use_at: string | null
+          total_paid_won: number
+          final_expire_at: string | null
+          last_purchase_at: string | null
+          last_attended_at: string | null
+          attendance_no: string | null
+          current_membership: string | null
+          current_pass: string | null
+          current_rental: string | null
+          current_locker: string | null
           created_at: string
           updated_at: string
         }
@@ -2219,6 +2230,17 @@ export type Database = {
           mileage?: number
           marketing_consent?: boolean
           registered_at?: string | null
+          registration_type?: string | null
+          first_use_at?: string | null
+          total_paid_won?: number
+          final_expire_at?: string | null
+          last_purchase_at?: string | null
+          last_attended_at?: string | null
+          attendance_no?: string | null
+          current_membership?: string | null
+          current_pass?: string | null
+          current_rental?: string | null
+          current_locker?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -2241,6 +2263,17 @@ export type Database = {
           mileage?: number
           marketing_consent?: boolean
           registered_at?: string | null
+          registration_type?: string | null
+          first_use_at?: string | null
+          total_paid_won?: number
+          final_expire_at?: string | null
+          last_purchase_at?: string | null
+          last_attended_at?: string | null
+          attendance_no?: string | null
+          current_membership?: string | null
+          current_pass?: string | null
+          current_rental?: string | null
+          current_locker?: string | null
           created_at?: string
           updated_at?: string
         }

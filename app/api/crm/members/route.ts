@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     let query = supabase
       .from("crm_members")
       .select(
-        "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, created_at"
+        "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, registration_type, first_use_at, total_paid_won, final_expire_at, last_purchase_at, last_attended_at, attendance_no, current_membership, current_pass, current_rental, current_locker, created_at"
       )
       .eq("center_id", ctx.centerId)
       .eq("status", "active")
@@ -90,6 +90,17 @@ export async function GET(request: Request) {
     mileage: number;
     marketing_consent: boolean;
     registered_at: string | null;
+    registration_type: string | null;
+    first_use_at: string | null;
+    total_paid_won: number;
+    final_expire_at: string | null;
+    last_purchase_at: string | null;
+    last_attended_at: string | null;
+    attendance_no: string | null;
+    current_membership: string | null;
+    current_pass: string | null;
+    current_rental: string | null;
+    current_locker: string | null;
     created_at: string;
   };
 
@@ -249,6 +260,17 @@ export async function POST(request: Request) {
     mileage?: number | string;
     marketing_consent?: boolean;
     registered_at?: string;
+    registration_type?: string;
+    first_use_at?: string;
+    total_paid_won?: number | string;
+    final_expire_at?: string;
+    last_purchase_at?: string;
+    last_attended_at?: string;
+    attendance_no?: string;
+    current_membership?: string;
+    current_pass?: string;
+    current_rental?: string;
+    current_locker?: string;
   };
   try {
     body = await request.json();
@@ -292,6 +314,20 @@ export async function POST(request: Request) {
     })(),
     marketing_consent: !!body.marketing_consent,
     registered_at: body.registered_at || null,
+    registration_type: body.registration_type?.trim() || null,
+    first_use_at: body.first_use_at || null,
+    total_paid_won: (() => {
+      const n = Math.trunc(Number(body.total_paid_won ?? 0));
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    })(),
+    final_expire_at: body.final_expire_at || null,
+    last_purchase_at: body.last_purchase_at || null,
+    last_attended_at: body.last_attended_at || null,
+    attendance_no: body.attendance_no?.trim() || null,
+    current_membership: body.current_membership?.trim() || null,
+    current_pass: body.current_pass?.trim() || null,
+    current_rental: body.current_rental?.trim() || null,
+    current_locker: body.current_locker?.trim() || null,
     status: "active" as const,
   };
 
