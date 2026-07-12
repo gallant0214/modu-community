@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
-import { MEMBER_TYPE_LABEL, formatPhone } from "../_components/crm-labels";
+import { MEMBER_TYPE_LABEL, GENDER_LABEL, formatPhone } from "../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 
 interface PassItem {
@@ -659,6 +659,7 @@ function MembersTable({
               </Th>
             )}
             <Th>이름</Th>
+            <Th>성별</Th>
             <Th>회원 앱</Th>
             <Th>연락처</Th>
             <Th>가입일</Th>
@@ -694,6 +695,9 @@ function MembersTable({
                   >
                     {m.name}
                   </Link>
+                </Td>
+                <Td className="text-[#6B5D47] dark:text-zinc-400">
+                  {m.gender ? GENDER_LABEL[m.gender] ?? m.gender : "—"}
                 </Td>
                 <Td>
                   {m.linked_firebase_uid ? (
