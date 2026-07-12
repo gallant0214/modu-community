@@ -29,12 +29,62 @@ interface MonthlyResp {
   }[];
 }
 
+interface GenderCount {
+  count: number;
+  male: number;
+  female: number;
+}
+
+interface SummaryResp {
+  period: "day" | "week" | "month";
+  range: { from: string; to: string };
+  members: {
+    total: GenderCount;
+    active: GenderCount;
+    expired: GenderCount;
+    newly: GenderCount;
+    reregistered: GenderCount;
+  };
+  attendance: { attended: GenderCount; working: GenderCount };
+  revenue: {
+    membership: number;
+    personal: number;
+    group: number;
+    locker: number;
+    goods: number;
+    total: number;
+  };
+  classes: {
+    group: { count: number; applicants: number };
+    personal: { count: number; applicants: number };
+    ot: { count: number; applicants: number };
+  };
+}
+
+interface BootstrapResp {
+  role: "owner" | "admin" | "manager" | "trainer";
+  displayName: string | null;
+  centerName: string;
+}
+
 const DONUT_COLORS = ["#6B7B3A", "#B47B2A", "#A8B87A", "#E8C088", "#8C8270"];
+
+const ROLE_LABEL: Record<string, string> = {
+  owner: "대표자",
+  admin: "관리자",
+  manager: "팀장",
+  trainer: "강사",
+};
+
+type Period = "day" | "week" | "month";
 
 export default function CrmDashboardPage() {
   const { getIdToken } = useAuth();
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [monthly, setMonthly] = useState<MonthlyResp | null>(null);
+  const [summary, setSummary] = useState<SummaryResp | null>(null);
+  const [me, setMe] = useState<BootstrapResp | null>(null);
+  const [period, setPeriod] = useState<Period>("month");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -43,38 +93,75 @@ export default function CrmDashboardPage() {
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const [a, b] = await Promise.all([
-        fetch("/api/crm/stats/trend", { headers: { authorization: `Bearer ${token}` } }),
-        fetch("/api/crm/stats/monthly", { headers: { authorization: `Bearer ${token}` } }),
+      const auth = { authorization: `Bearer ${token}` };
+      const [a, b, c, d] = await Promise.all([
+        fetch("/api/crm/stats/trend", { headers: auth }),
+        fetch("/api/crm/stats/monthly", { headers: auth }),
+        fetch(`/api/crm/dashboard/summary?period=${period}`, { headers: auth, cache: "no-store" }),
+        fetch("/api/crm/bootstrap", { headers: auth, cache: "no-store" }),
       ]);
-      if (!a.ok || !b.ok) {
-        const err = !a.ok ? await a.json() : await b.json();
+      if (!a.ok || !b.ok || !c.ok) {
+        const err = !a.ok ? await a.json() : !b.ok ? await b.json() : await c.json();
         throw new Error(err?.error || "조회 실패");
       }
-      const tr = await a.json();
-      const mo = await b.json();
-      setTrend(tr.months ?? []);
-      setMonthly(mo);
+      setTrend(((await a.json()).months ?? []) as TrendPoint[]);
+      setMonthly(await b.json());
+      setSummary(await c.json());
+      if (d.ok) setMe(await d.json());
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
       setLoading(false);
     }
-  }, [getIdToken]);
+  }, [getIdToken, period]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  const todayLabel = (() => {
+    const d = new Date();
+    const k = new Date(d.getTime() + 9 * 3600 * 1000);
+    return `${k.getUTCFullYear()}년 ${String(k.getUTCMonth() + 1).padStart(2, "0")}월 ${String(k.getUTCDate()).padStart(2, "0")}일`;
+  })();
+
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-6xl mx-auto">
-      <header className="mb-5">
-        <h1 className="text-[18px] md:text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
-          대시보드
-        </h1>
-        <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-          이번달 매출과 결제 방법을 한눈에 확인해요.
-        </p>
+      {/* 헤더 */}
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[18px] md:text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
+            대시보드
+          </h1>
+          <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+            {me?.displayName ? (
+              <>
+                <strong className="text-[#2A251D] dark:text-zinc-100">{me.displayName}</strong>{" "}
+                <span className="text-[#8C8270]">· {ROLE_LABEL[me.role] ?? me.role}</span>
+              </>
+            ) : (
+              "센터 운영 현황을 한눈에 확인해요."
+            )}
+            <span className="ml-2 text-[#A89B80]">· {todayLabel}</span>
+          </p>
+        </div>
+
+        {/* 기간 탭 */}
+        <div className="inline-flex border border-[#E8E0D0] dark:border-zinc-700 rounded-lg overflow-hidden">
+          {(["day", "week", "month"] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`px-4 py-1.5 text-[12.5px] font-medium transition-colors
+                ${period === p
+                  ? "bg-[#6B7B3A] text-white"
+                  : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+                }`}
+            >
+              {p === "day" ? "일간" : p === "week" ? "주간" : "월간"}
+            </button>
+          ))}
+        </div>
       </header>
 
       {error && (
@@ -84,36 +171,99 @@ export default function CrmDashboardPage() {
       )}
 
       {loading ? (
-        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+        <div className="text-[13px] text-[#8C8270] py-8 text-center">불러오는 중…</div>
       ) : (
         <div className="space-y-5">
-          {/* 이번달 KPI 4개 */}
-          {monthly && (
+          {/* 회원 통계 */}
+          {summary && (
+            <SectionHeader
+              title="회원 통계"
+              subtitle={`${summary.range.from === summary.range.to ? summary.range.to : `${summary.range.from} ~ ${summary.range.to}`} · 총 ${summary.members.total.count.toLocaleString()}명`}
+            />
+          )}
+          {summary && (
             <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <KpiCard label="이번달 등록 회원" value={`${monthly.summary.newMembers}명`} />
-              <KpiCard label="이번달 PT매출" value={`${formatWon(monthly.summary.totalRevenue)}원`} accent />
-              <KpiCard label="발급 수강권" value={`${monthly.summary.totalPassCount}건`} />
-              <KpiCard
-                label="활동 강사"
-                value={`${monthly.trainers.filter((t) => t.passes.total > 0 || t.reservations.attended > 0).length}명`}
-              />
+              <GenderStatCard label="유효 회원" data={summary.members.active} accent />
+              <GenderStatCard label="만기 회원" data={summary.members.expired} tone="warn" />
+              <GenderStatCard label="신규 가입" data={summary.members.newly} />
+              <GenderStatCard label="재등록" data={summary.members.reregistered} />
             </section>
           )}
 
+          {/* 출석 통계 */}
+          {summary && (
+            <>
+              <SectionHeader
+                title="출석 통계"
+                subtitle="이용한 회원(기간 내 출석) · 운동 중인 회원(오늘 활성 상품 보유)"
+              />
+              <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <GenderStatCard label="이용한 회원" data={summary.attendance.attended} accent />
+                <GenderStatCard label="운동 중인 회원" data={summary.attendance.working} />
+              </section>
+            </>
+          )}
+
+          {/* 매출 통계 */}
+          {summary && (
+            <>
+              <SectionHeader
+                title="매출 통계"
+                subtitle={
+                  <>
+                    총 매출{" "}
+                    <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">
+                      {formatWon(summary.revenue.total)}원
+                    </strong>
+                  </>
+                }
+              />
+              <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <RevenueCard label="회원권" value={summary.revenue.membership} />
+                <RevenueCard label="개인 레슨" value={summary.revenue.personal} />
+                <RevenueCard label="그룹 수업" value={summary.revenue.group} note={summary.revenue.group === 0 ? "추적 예정" : undefined} />
+                <RevenueCard label="락커" value={summary.revenue.locker} note={summary.revenue.locker === 0 ? "추적 예정" : undefined} />
+                <RevenueCard label="운동 용품" value={summary.revenue.goods} note={summary.revenue.goods === 0 ? "추적 예정" : undefined} />
+              </section>
+            </>
+          )}
+
+          {/* 수업 통계 */}
+          {summary && (
+            <>
+              <SectionHeader title="수업 통계" subtitle="예약 건수 / 신청자 (unique 회원)" />
+              <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <ClassCard label="개인 레슨" data={summary.classes.personal} />
+                <ClassCard
+                  label="그룹 수업"
+                  data={summary.classes.group}
+                  note="그룹 수업 추적은 추후 지원"
+                />
+                <ClassCard
+                  label="OT (오리엔테이션)"
+                  data={summary.classes.ot}
+                  note="OT 추적은 추후 지원"
+                />
+              </section>
+            </>
+          )}
+
+          {/* PT 매출 추이 + 결제 방법 */}
+          <SectionHeader title="이번달 상세" subtitle="12개월 매출 추이 + 결제 방법 분포" />
           <section className="grid md:grid-cols-3 gap-3">
             <div className="md:col-span-2 px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-              <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
+              <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
                 월별 PT매출 추이 (12개월)
-              </h2>
+              </h3>
               <CrmLineChart
                 points={trend.map((m) => ({ label: m.ym.slice(2).replace("-", "/"), value: m.revenue }))}
                 unit="원"
               />
             </div>
             <div className="px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-              <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
+              <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
                 이번달 결제 방법
-              </h2>
+              </h3>
               {monthly && (
                 <CrmDonutChart
                   slices={Object.entries(monthly.paymentBreakdown).map(([k, v], i) => ({
@@ -126,23 +276,27 @@ export default function CrmDashboardPage() {
             </div>
           </section>
 
+          {/* 강사 랭킹 */}
           {monthly && monthly.trainers.length > 0 && (
-            <section className="grid md:grid-cols-2 gap-3">
-              <RankBox
-                title="이번달 PT매출 랭킹"
-                rows={[...monthly.trainers]
-                  .sort((a, b) => b.passes.revenue - a.passes.revenue)
-                  .slice(0, 5)
-                  .map((t) => ({ label: t.name, value: `${formatWon(t.passes.revenue)}원` }))}
-              />
-              <RankBox
-                title="이번달 수업완료 랭킹"
-                rows={[...monthly.trainers]
-                  .sort((a, b) => b.reservations.attended - a.reservations.attended)
-                  .slice(0, 5)
-                  .map((t) => ({ label: t.name, value: `${t.reservations.attended}회` }))}
-              />
-            </section>
+            <>
+              <SectionHeader title="강사 랭킹" subtitle="이번달 실적" />
+              <section className="grid md:grid-cols-2 gap-3">
+                <RankBox
+                  title="PT매출 TOP 5"
+                  rows={[...monthly.trainers]
+                    .sort((a, b) => b.passes.revenue - a.passes.revenue)
+                    .slice(0, 5)
+                    .map((t) => ({ label: t.name, value: `${formatWon(t.passes.revenue)}원` }))}
+                />
+                <RankBox
+                  title="수업완료 TOP 5"
+                  rows={[...monthly.trainers]
+                    .sort((a, b) => b.reservations.attended - a.reservations.attended)
+                    .slice(0, 5)
+                    .map((t) => ({ label: t.name, value: `${t.reservations.attended}회` }))}
+                />
+              </section>
+            </>
           )}
         </div>
       )}
@@ -150,21 +304,97 @@ export default function CrmDashboardPage() {
   );
 }
 
-function KpiCard({
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: React.ReactNode }) {
+  return (
+    <div className="pt-2 pb-1 border-b border-[#E8E0D0]/60 dark:border-zinc-800 flex items-baseline justify-between gap-2 flex-wrap">
+      <h2 className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">{title}</h2>
+      {subtitle && (
+        <span className="text-[11.5px] text-[#8C8270] dark:text-zinc-500">{subtitle}</span>
+      )}
+    </div>
+  );
+}
+
+function GenderStatCard({
   label,
-  value,
+  data,
   accent,
+  tone,
 }: {
   label: string;
-  value: string;
+  data: GenderCount;
   accent?: boolean;
+  tone?: "warn";
+}) {
+  const mainCls =
+    tone === "warn"
+      ? "text-[#B47B2A] dark:text-amber-300"
+      : accent
+      ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+      : "text-[#2A251D] dark:text-zinc-100";
+  return (
+    <div className="px-4 py-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+      <div className="text-[12px] text-[#8C8270] dark:text-zinc-500">{label}</div>
+      <div className={`mt-1 text-[22px] font-bold ${mainCls}`}>
+        {data.count.toLocaleString()}
+        <span className="text-[12px] font-medium ml-1 text-[#8C8270]">명</span>
+      </div>
+      <div className="mt-1.5 flex items-center gap-3 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+        <span className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#5A8BB0]" />
+          남성 {data.male.toLocaleString()}
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#C76C8E]" />
+          여성 {data.female.toLocaleString()}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function RevenueCard({ label, value, note }: { label: string; value: number; note?: string }) {
+  return (
+    <div className="px-4 py-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+      <div className="text-[12px] text-[#8C8270] dark:text-zinc-500">{label}</div>
+      <div className={`mt-1 text-[18px] font-bold ${value > 0 ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#3A342A] dark:text-zinc-300"}`}>
+        {formatWon(value)}
+        <span className="text-[12px] font-medium ml-0.5 text-[#8C8270]">원</span>
+      </div>
+      {note && <div className="mt-0.5 text-[10.5px] text-[#A89B80]">{note}</div>}
+    </div>
+  );
+}
+
+function ClassCard({
+  label,
+  data,
+  note,
+}: {
+  label: string;
+  data: { count: number; applicants: number };
+  note?: string;
 }) {
   return (
     <div className="px-4 py-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-      <div className="text-[11.5px] text-[#A89B80] dark:text-zinc-500">{label}</div>
-      <div className={`mt-1 text-[18px] font-bold ${accent ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#2A251D] dark:text-zinc-100"}`}>
-        {value}
+      <div className="text-[12px] text-[#8C8270] dark:text-zinc-500">{label}</div>
+      <div className="mt-1.5 flex items-center gap-4">
+        <div>
+          <div className="text-[10.5px] text-[#A89B80]">수업</div>
+          <div className="text-[18px] font-bold text-[#2A251D] dark:text-zinc-100">
+            {data.count.toLocaleString()}
+            <span className="text-[11px] ml-0.5 font-medium text-[#8C8270]">건</span>
+          </div>
+        </div>
+        <div>
+          <div className="text-[10.5px] text-[#A89B80]">신청자</div>
+          <div className="text-[18px] font-bold text-[#6B7B3A] dark:text-[#A8B87A]">
+            {data.applicants.toLocaleString()}
+            <span className="text-[11px] ml-0.5 font-medium text-[#8C8270]">명</span>
+          </div>
+        </div>
       </div>
+      {note && <div className="mt-1.5 text-[10.5px] text-[#A89B80]">{note}</div>}
     </div>
   );
 }
@@ -178,7 +408,7 @@ function RankBox({
 }) {
   return (
     <div className="px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-      <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">{title}</h2>
+      <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">{title}</h3>
       {rows.length === 0 ? (
         <div className="text-[12.5px] text-[#8C8270] py-3">데이터 없음</div>
       ) : (

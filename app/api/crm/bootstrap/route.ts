@@ -25,6 +25,12 @@ export async function GET(request: Request) {
     .select("business_no")
     .eq("id", ctx.centerId)
     .maybeSingle();
+  const { data: me } = await supabase
+    .from("crm_center_members")
+    .select("display_name")
+    .eq("center_id", ctx.centerId)
+    .eq("firebase_uid", ctx.uid)
+    .maybeSingle();
   return NextResponse.json({
     onboarded: true,
     centerId: ctx.centerId,
@@ -34,6 +40,7 @@ export async function GET(request: Request) {
     accessLevel: ctx.accessLevel,
     isSoloOwner: ctx.isSoloOwner,
     businessNo: centerInfo?.business_no ?? null,
+    displayName: me?.display_name ?? null,
   });
 }
 
