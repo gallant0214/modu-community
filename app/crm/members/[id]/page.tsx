@@ -34,6 +34,7 @@ interface Member {
   counselor: string | null;
   mileage: number;
   marketing_consent: boolean;
+  registered_at: string | null;
   created_at: string;
 }
 interface Pass {
@@ -174,6 +175,7 @@ export default function CrmMemberDetailPage() {
             {formatPhone(member.phone)}
             {member.gender && ` · ${GENDER_LABEL[member.gender]}`}
             {member.birth && ` · ${member.birth}`}
+            {member.registered_at && ` · 등록일 ${member.registered_at}`}
           </div>
           {member.email && (
             <div className="mt-0.5 text-[12px] text-[#8C8270]">{member.email}</div>
@@ -403,6 +405,7 @@ function EditModal({
   const [counselor, setCounselor] = useState(member.counselor ?? "");
   const [mileage, setMileage] = useState(String(member.mileage ?? 0));
   const [marketingConsent, setMarketingConsent] = useState(!!member.marketing_consent);
+  const [registeredAt, setRegisteredAt] = useState(member.registered_at ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -420,6 +423,7 @@ function EditModal({
       setCounselor(member.counselor ?? "");
       setMileage(String(member.mileage ?? 0));
       setMarketingConsent(!!member.marketing_consent);
+      setRegisteredAt(member.registered_at ?? "");
       setError("");
     }
   }, [open, member]);
@@ -447,6 +451,7 @@ function EditModal({
           counselor,
           mileage: Number(mileage) || 0,
           marketing_consent: marketingConsent,
+          registered_at: registeredAt || null,
         }),
       });
       const data = await res.json();
@@ -493,6 +498,14 @@ function EditModal({
             />
           </CrmField>
         </div>
+        <CrmField label="등록일">
+          <input
+            type="date"
+            className={crmInputClass}
+            value={registeredAt}
+            onChange={(e) => setRegisteredAt(e.target.value)}
+          />
+        </CrmField>
         <CrmField label="이메일">
           <input
             type="email"

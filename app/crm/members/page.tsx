@@ -30,6 +30,7 @@ interface MemberRow {
   counselor: string | null;
   mileage: number;
   marketing_consent: boolean;
+  registered_at: string | null;
   created_at: string;
   items?: PassItem[];
   locker_label?: string | null;
@@ -43,6 +44,47 @@ type AbsenceFilter = "all" | "10d" | "20d" | "30d" | "60d" | "90d";
 type ExpireFilter = "all" | "this_week" | "this_month" | "expired";
 type LockerFilter = "all" | "has" | "none";
 type GoodsFilter = "all" | "has" | "none";
+
+type SortKey =
+  | "name"
+  | "gender"
+  | "app"
+  | "phone"
+  | "registered_at"
+  | "created_at"
+  | "status"
+  | "member_type"
+  | "last_visit_at"
+  | "max_expires_at";
+type SortDir = "asc" | "desc";
+
+type ColKey =
+  | "name"
+  | "gender"
+  | "app"
+  | "phone"
+  | "registered_at"
+  | "created_at"
+  | "status"
+  | "member_type"
+  | "last_visit_at"
+  | "items"
+  | "max_expires_at";
+
+const DEFAULT_COL_ORDER: ColKey[] = [
+  "name",
+  "gender",
+  "app",
+  "phone",
+  "registered_at",
+  "created_at",
+  "status",
+  "member_type",
+  "last_visit_at",
+  "items",
+  "max_expires_at",
+];
+const COL_ORDER_KEY = "crm_members_col_order_v1";
 
 const PAGE_SIZE = 25;
 
@@ -73,6 +115,62 @@ export default function CrmMembersPage() {
   const [fGoods, setFGoods] = useState<GoodsFilter>("all");
 
   const [page, setPage] = useState(1);
+
+  // 정렬 (헤더 클릭)
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  // 열 순서 (드래그로 변경, localStorage 저장)
+  const [columnOrder, setColumnOrder] = useState<ColKey[]>(DEFAULT_COL_ORDER);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(COL_ORDER_KEY);
+      if (saved) {
+        const arr = JSON.parse(saved) as ColKey[];
+        if (
+          Array.isArray(arr) &&
+          arr.length === DEFAULT_COL_ORDER.length &&
+          DEFAULT_COL_ORDER.every((k) => arr.includes(k))
+        ) {
+          setColumnOrder(arr);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const reorderColumns = (from: number, to: number) => {
+    setColumnOrder((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      try {
+        localStorage.setItem(COL_ORDER_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+  const resetColumnOrder = () => {
+    setColumnOrder(DEFAULT_COL_ORDER);
+    try {
+      localStorage.removeItem(COL_ORDER_KEY);
+    } catch {
+      /* ignore */
+    }
+  };
+  const orderChanged =
+    JSON.stringify(columnOrder) !== JSON.stringify(DEFAULT_COL_ORDER);
 
   // 액션 모드 (회원 삭제)
   const [deleteMode, setDeleteMode] = useState(false);
@@ -186,6 +284,53 @@ export default function CrmMembersPage() {
     });
   }, [list, query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fLocker, fGoods]);
 
+  const sorted = useMemo(() => {
+    if (!sortKey) return filtered;
+    const todayStr = today().toISOString().slice(0, 10);
+    const statusRank = (m: MemberRow) => {
+      if (!m.items || m.items.length === 0) return 0; // 미보유
+      return m.max_expires_at && m.max_expires_at >= todayStr ? 2 : 1; // 유효 : 만료
+    };
+    const val = (m: MemberRow): string | number => {
+      switch (sortKey) {
+        case "name":
+          return m.name || "";
+        case "gender":
+          return m.gender || "";
+        case "app":
+          return m.linked_firebase_uid ? 1 : 0;
+        case "phone":
+          return (m.phone || "").replace(/\D/g, "");
+        case "registered_at":
+          return m.registered_at || "";
+        case "created_at":
+          return m.created_at || "";
+        case "status":
+          return statusRank(m);
+        case "member_type":
+          return MEMBER_TYPE_LABEL[m.member_type] ?? m.member_type;
+        case "last_visit_at":
+          return m.last_visit_at || "";
+        case "max_expires_at":
+          return m.max_expires_at || "";
+        default:
+          return "";
+      }
+    };
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      const va = val(a);
+      const vb = val(b);
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+      // 빈 값은 항상 뒤로
+      const sa = String(va);
+      const sb = String(vb);
+      if (!sa && sb) return 1;
+      if (sa && !sb) return -1;
+      return sa.localeCompare(sb, "ko") * dir;
+    });
+  }, [filtered, sortKey, sortDir]);
+
   const totals = useMemo(() => {
     const todayStr = today().toISOString().slice(0, 10);
     let valid = 0;
@@ -197,12 +342,12 @@ export default function CrmMembersPage() {
     return { all: list.length, valid, expired };
   }, [list]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const pageRows = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   useEffect(() => {
     setPage(1);
-  }, [query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fLocker, fGoods]);
+  }, [query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fLocker, fGoods, sortKey, sortDir]);
 
   const resetFilters = () => {
     setQuery("");
@@ -267,6 +412,7 @@ export default function CrmMembersPage() {
       "이름",
       "회원 앱",
       "연락처",
+      "등록일",
       "가입일",
       "상태",
       "회원 유형",
@@ -286,6 +432,7 @@ export default function CrmMembersPage() {
       m.name,
       m.linked_firebase_uid ? "연동" : "미연동",
       m.phone ? formatPhone(m.phone) : "",
+      m.registered_at ?? "",
       formatDate(m.created_at),
       m.max_expires_at && m.max_expires_at >= todayStr ? "유효" : "만료",
       MEMBER_TYPE_LABEL[m.member_type] ?? m.member_type,
@@ -468,10 +615,22 @@ export default function CrmMembersPage() {
       </div>
 
       <div className="mb-3 flex items-center justify-between text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-        <span>{filtered.length}명</span>
-        <button onClick={resetFilters} className="hover:underline">
-          초기화
-        </button>
+        <span className="flex items-center gap-2">
+          <span>{filtered.length}명</span>
+          <span className="hidden md:inline text-[11.5px] text-[#A89B80]">
+            · 헤더 클릭=정렬, 드래그=열 순서 변경
+          </span>
+        </span>
+        <span className="flex items-center gap-3">
+          {orderChanged && (
+            <button onClick={resetColumnOrder} className="hover:underline text-[#6B7B3A] dark:text-[#A8B87A]">
+              열 순서 초기화
+            </button>
+          )}
+          <button onClick={resetFilters} className="hover:underline">
+            초기화
+          </button>
+        </span>
       </div>
 
       {error && (
@@ -505,6 +664,11 @@ export default function CrmMembersPage() {
           selected={selected}
           onToggle={toggleSelect}
           onToggleAll={toggleSelectAllOnPage}
+          order={columnOrder}
+          onReorder={reorderColumns}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={toggleSort}
         />
       )}
 
@@ -628,21 +792,171 @@ function FilterChip({
   );
 }
 
+interface ColDef {
+  key: ColKey;
+  label: string;
+  sortKey: SortKey | null;
+  render: (m: MemberRow, todayStr: string) => React.ReactNode;
+}
+
+const COLUMN_DEFS: Record<ColKey, ColDef> = {
+  name: {
+    key: "name",
+    label: "이름",
+    sortKey: "name",
+    render: (m) => (
+      <Link
+        href={`/crm/members/${m.id}`}
+        className="font-semibold text-[#2A251D] dark:text-zinc-100 hover:text-[#6B7B3A] dark:hover:text-[#A8B87A]"
+      >
+        {m.name}
+      </Link>
+    ),
+  },
+  gender: {
+    key: "gender",
+    label: "성별",
+    sortKey: "gender",
+    render: (m) => (
+      <span className="text-[#6B5D47] dark:text-zinc-400">
+        {m.gender ? GENDER_LABEL[m.gender] ?? m.gender : "—"}
+      </span>
+    ),
+  },
+  app: {
+    key: "app",
+    label: "회원 앱",
+    sortKey: "app",
+    render: (m) =>
+      m.linked_firebase_uid ? (
+        <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]">
+          연동
+        </span>
+      ) : (
+        <span className="text-[#A89B80]">—</span>
+      ),
+  },
+  phone: {
+    key: "phone",
+    label: "연락처",
+    sortKey: "phone",
+    render: (m) => (
+      <span className="text-[#6B5D47] dark:text-zinc-400">
+        {m.phone ? formatPhone(m.phone) : "—"}
+      </span>
+    ),
+  },
+  registered_at: {
+    key: "registered_at",
+    label: "등록일",
+    sortKey: "registered_at",
+    render: (m) => (
+      <span className="text-[#8C8270] dark:text-zinc-500">{m.registered_at ?? "—"}</span>
+    ),
+  },
+  created_at: {
+    key: "created_at",
+    label: "가입일",
+    sortKey: "created_at",
+    render: (m) => (
+      <span className="text-[#8C8270] dark:text-zinc-500">{formatDate(m.created_at)}</span>
+    ),
+  },
+  status: {
+    key: "status",
+    label: "상태",
+    sortKey: "status",
+    render: (m, todayStr) => (
+      <StatusBadge
+        isValid={!!m.max_expires_at && m.max_expires_at >= todayStr}
+        hasAny={(m.items?.length ?? 0) > 0}
+      />
+    ),
+  },
+  member_type: {
+    key: "member_type",
+    label: "회원 유형",
+    sortKey: "member_type",
+    render: (m) => (
+      <span className="text-[#6B5D47] dark:text-zinc-400">
+        {MEMBER_TYPE_LABEL[m.member_type] ?? m.member_type}
+      </span>
+    ),
+  },
+  last_visit_at: {
+    key: "last_visit_at",
+    label: "최근 방문일",
+    sortKey: "last_visit_at",
+    render: (m) => (
+      <span className="text-[#8C8270] dark:text-zinc-500">
+        {m.last_visit_at ? formatDateTime(m.last_visit_at) : "—"}
+      </span>
+    ),
+  },
+  items: {
+    key: "items",
+    label: "이용 가능 상품",
+    sortKey: null,
+    render: (m) =>
+      m.items && m.items.length > 0 ? (
+        <div className="space-y-1">
+          {m.items.map((it, idx) => (
+            <div key={idx} className="text-[12px] text-[#3A342A] dark:text-zinc-300">
+              <span className="inline-block px-1.5 py-0.5 mr-1 rounded text-[10.5px] font-semibold bg-[#F5E4C8]/70 dark:bg-amber-950/40 text-[#B47B2A] dark:text-amber-300">
+                {it.type === "membership" ? "회원권" : "수강권"}
+              </span>
+              <span className="font-medium">{it.kind}</span>
+              {it.remaining !== null && (
+                <span className="ml-1.5 text-[#8C8270]">잔여 {it.remaining}회</span>
+              )}
+              <span className="ml-1.5 text-[#A89B80]">~ {it.expires}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <span className="text-[#A89B80]">—</span>
+      ),
+  },
+  max_expires_at: {
+    key: "max_expires_at",
+    label: "최종 만료일",
+    sortKey: "max_expires_at",
+    render: (m) => (
+      <span className="text-[#3A342A] dark:text-zinc-300">{m.max_expires_at ?? "—"}</span>
+    ),
+  },
+};
+
 function MembersTable({
   rows,
   deleteMode,
   selected,
   onToggle,
   onToggleAll,
+  order,
+  onReorder,
+  sortKey,
+  sortDir,
+  onSort,
 }: {
   rows: MemberRow[];
   deleteMode: boolean;
   selected: Set<number>;
   onToggle: (id: number) => void;
   onToggleAll: () => void;
+  order: ColKey[];
+  onReorder: (from: number, to: number) => void;
+  sortKey: SortKey | null;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
 }) {
   const todayStr = today().toISOString().slice(0, 10);
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+
+  const cols = order.map((k) => COLUMN_DEFS[k]);
+
   return (
     <div className="overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800">
       <table className="w-full text-[13px] min-w-[1100px]">
@@ -658,93 +972,76 @@ function MembersTable({
                 />
               </Th>
             )}
-            <Th>이름</Th>
-            <Th>성별</Th>
-            <Th>회원 앱</Th>
-            <Th>연락처</Th>
-            <Th>가입일</Th>
-            <Th>상태</Th>
-            <Th>회원 유형</Th>
-            <Th>최근 방문일</Th>
-            <Th>이용 가능 상품</Th>
-            <Th>최종 만료일</Th>
+            {cols.map((c, idx) => {
+              const active = sortKey === c.sortKey && c.sortKey !== null;
+              return (
+                <th
+                  key={c.key}
+                  draggable
+                  onDragStart={() => setDragIdx(idx)}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (overIdx !== idx) setOverIdx(idx);
+                  }}
+                  onDrop={() => {
+                    if (dragIdx !== null && dragIdx !== idx) onReorder(dragIdx, idx);
+                    setDragIdx(null);
+                    setOverIdx(null);
+                  }}
+                  onDragEnd={() => {
+                    setDragIdx(null);
+                    setOverIdx(null);
+                  }}
+                  className={`text-left font-medium px-3 py-2.5 whitespace-nowrap select-none cursor-move
+                    ${overIdx === idx && dragIdx !== null ? "bg-[#6B7B3A]/10" : ""}
+                    ${dragIdx === idx ? "opacity-40" : ""}`}
+                  title="드래그해서 열 순서 변경"
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <span className="text-[#C9BEA6] dark:text-zinc-600 text-[10px]">⠿</span>
+                    {c.sortKey ? (
+                      <button
+                        type="button"
+                        onClick={() => onSort(c.sortKey!)}
+                        className={`inline-flex items-center gap-0.5 hover:text-[#6B7B3A] ${
+                          active ? "text-[#6B7B3A] dark:text-[#A8B87A] font-semibold" : ""
+                        }`}
+                      >
+                        {c.label}
+                        <span className="text-[9px] leading-none">
+                          {active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
+                        </span>
+                      </button>
+                    ) : (
+                      <span>{c.label}</span>
+                    )}
+                  </span>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
-          {rows.map((m) => {
-            const isValid = !!m.max_expires_at && m.max_expires_at >= todayStr;
-            return (
-              <tr
-                key={m.id}
-                className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#FBF7EB] dark:hover:bg-zinc-900/60"
-              >
-                {deleteMode && (
-                  <Td className="pl-3">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(m.id)}
-                      onChange={() => onToggle(m.id)}
-                      className="w-4 h-4 accent-[#6B7B3A]"
-                    />
-                  </Td>
-                )}
-                <Td>
-                  <Link
-                    href={`/crm/members/${m.id}`}
-                    className="font-semibold text-[#2A251D] dark:text-zinc-100 hover:text-[#6B7B3A] dark:hover:text-[#A8B87A]"
-                  >
-                    {m.name}
-                  </Link>
+          {rows.map((m) => (
+            <tr
+              key={m.id}
+              className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#FBF7EB] dark:hover:bg-zinc-900/60"
+            >
+              {deleteMode && (
+                <Td className="pl-3">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(m.id)}
+                    onChange={() => onToggle(m.id)}
+                    className="w-4 h-4 accent-[#6B7B3A]"
+                  />
                 </Td>
-                <Td className="text-[#6B5D47] dark:text-zinc-400">
-                  {m.gender ? GENDER_LABEL[m.gender] ?? m.gender : "—"}
-                </Td>
-                <Td>
-                  {m.linked_firebase_uid ? (
-                    <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]">
-                      연동
-                    </span>
-                  ) : (
-                    <span className="text-[#A89B80]">—</span>
-                  )}
-                </Td>
-                <Td className="text-[#6B5D47] dark:text-zinc-400">
-                  {m.phone ? formatPhone(m.phone) : "—"}
-                </Td>
-                <Td className="text-[#8C8270] dark:text-zinc-500">{formatDate(m.created_at)}</Td>
-                <Td>
-                  <StatusBadge isValid={isValid} hasAny={(m.items?.length ?? 0) > 0} />
-                </Td>
-                <Td className="text-[#6B5D47] dark:text-zinc-400">
-                  {MEMBER_TYPE_LABEL[m.member_type] ?? m.member_type}
-                </Td>
-                <Td className="text-[#8C8270] dark:text-zinc-500">
-                  {m.last_visit_at ? formatDateTime(m.last_visit_at) : "—"}
-                </Td>
-                <Td>
-                  {m.items && m.items.length > 0 ? (
-                    <div className="space-y-1">
-                      {m.items.map((it, idx) => (
-                        <div key={idx} className="text-[12px] text-[#3A342A] dark:text-zinc-300">
-                          <span className="inline-block px-1.5 py-0.5 mr-1 rounded text-[10.5px] font-semibold bg-[#F5E4C8]/70 dark:bg-amber-950/40 text-[#B47B2A] dark:text-amber-300">
-                            {it.type === "membership" ? "회원권" : "수강권"}
-                          </span>
-                          <span className="font-medium">{it.kind}</span>
-                          {it.remaining !== null && (
-                            <span className="ml-1.5 text-[#8C8270]">잔여 {it.remaining}회</span>
-                          )}
-                          <span className="ml-1.5 text-[#A89B80]">~ {it.expires}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-[#A89B80]">—</span>
-                  )}
-                </Td>
-                <Td className="text-[#3A342A] dark:text-zinc-300">{m.max_expires_at ?? "—"}</Td>
-              </tr>
-            );
-          })}
+              )}
+              {cols.map((c) => (
+                <Td key={c.key}>{c.render(m, todayStr)}</Td>
+              ))}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -870,6 +1167,7 @@ function RegisterModal({
   const [counselor, setCounselor] = useState("");
   const [mileage, setMileage] = useState("0");
   const [marketingConsent, setMarketingConsent] = useState(false);
+  const [registeredAt, setRegisteredAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -893,6 +1191,7 @@ function RegisterModal({
       setCounselor("");
       setMileage("0");
       setMarketingConsent(false);
+      setRegisteredAt(new Date().toISOString().slice(0, 10));
       setError("");
     }
   }, [open]);
@@ -982,6 +1281,7 @@ function RegisterModal({
           counselor: counselor.trim() || undefined,
           mileage: Number(mileage) || 0,
           marketing_consent: marketingConsent,
+          registered_at: registeredAt || undefined,
         }),
       });
       const data = await res.json();
@@ -1054,6 +1354,14 @@ function RegisterModal({
             />
           </CrmField>
         </div>
+        <CrmField label="등록일">
+          <input
+            type="date"
+            className={crmInputClass}
+            value={registeredAt}
+            onChange={(e) => setRegisteredAt(e.target.value)}
+          />
+        </CrmField>
         <CrmField label="이메일">
           <input
             className={crmInputClass}
