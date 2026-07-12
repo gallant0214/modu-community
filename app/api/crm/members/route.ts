@@ -40,7 +40,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_members")
     .select(
-      "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, created_at"
+      "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, created_at"
     )
     .eq("center_id", ctx.centerId)
     .eq("status", "active")
@@ -171,6 +171,12 @@ export async function POST(request: Request) {
     gender?: string;
     linked_firebase_uid?: string;
     memo?: string;
+    address?: string;
+    visit_route?: string;
+    workout_goal?: string;
+    counselor?: string;
+    mileage?: number | string;
+    marketing_consent?: boolean;
   };
   try {
     body = await request.json();
@@ -204,6 +210,15 @@ export async function POST(request: Request) {
         : null,
     linked_firebase_uid: body.linked_firebase_uid || null,
     memo: body.memo?.trim() || null,
+    address: body.address?.trim() || null,
+    visit_route: body.visit_route?.trim() || null,
+    workout_goal: body.workout_goal?.trim() || null,
+    counselor: body.counselor?.trim() || null,
+    mileage: (() => {
+      const n = Math.trunc(Number(body.mileage ?? 0));
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    })(),
+    marketing_consent: !!body.marketing_consent,
     status: "active" as const,
   };
 

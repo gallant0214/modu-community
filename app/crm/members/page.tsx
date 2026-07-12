@@ -24,6 +24,12 @@ interface MemberRow {
   linked_firebase_uid: string | null;
   memo: string | null;
   status: string;
+  address: string | null;
+  visit_route: string | null;
+  workout_goal: string | null;
+  counselor: string | null;
+  mileage: number;
+  marketing_consent: boolean;
   created_at: string;
   items?: PassItem[];
   locker_label?: string | null;
@@ -268,6 +274,12 @@ export default function CrmMembersPage() {
       "이용 가능 상품",
       "최종 만료일",
       "락커",
+      "주소",
+      "방문 경로",
+      "운동 목적",
+      "상담 담당자",
+      "마일리지",
+      "광고성 수신",
     ];
     const todayStr = today().toISOString().slice(0, 10);
     const rows = filtered.map((m) => [
@@ -288,6 +300,12 @@ export default function CrmMembersPage() {
         .join(";"),
       m.max_expires_at ?? "",
       m.locker_label ?? "",
+      m.address ?? "",
+      m.visit_route ?? "",
+      m.workout_goal ?? "",
+      m.counselor ?? "",
+      String(m.mileage ?? 0),
+      m.marketing_consent ? "동의" : "미동의",
     ]);
     const csv = [header, ...rows]
       .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
@@ -842,6 +860,12 @@ function RegisterModal({
   const [nickSearching, setNickSearching] = useState(false);
   const [nickSearched, setNickSearched] = useState(false);
   const [memo, setMemo] = useState("");
+  const [address, setAddress] = useState("");
+  const [visitRoute, setVisitRoute] = useState("");
+  const [workoutGoal, setWorkoutGoal] = useState("");
+  const [counselor, setCounselor] = useState("");
+  const [mileage, setMileage] = useState("0");
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -859,6 +883,12 @@ function RegisterModal({
       setNickResults([]);
       setNickSearched(false);
       setMemo("");
+      setAddress("");
+      setVisitRoute("");
+      setWorkoutGoal("");
+      setCounselor("");
+      setMileage("0");
+      setMarketingConsent(false);
       setError("");
     }
   }, [open]);
@@ -942,6 +972,12 @@ function RegisterModal({
           gender: gender || undefined,
           linked_firebase_uid: linkedUid.trim() || undefined,
           memo: memo.trim() || undefined,
+          address: address.trim() || undefined,
+          visit_route: visitRoute.trim() || undefined,
+          workout_goal: workoutGoal.trim() || undefined,
+          counselor: counselor.trim() || undefined,
+          mileage: Number(mileage) || 0,
+          marketing_consent: marketingConsent,
         }),
       });
       const data = await res.json();
@@ -1101,6 +1137,44 @@ function RegisterModal({
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
           />
+        </CrmField>
+        <CrmField label="주소">
+          <input className={crmInputClass} value={address} onChange={(e) => setAddress(e.target.value)} />
+        </CrmField>
+        <div className="grid grid-cols-2 gap-2">
+          <CrmField label="방문 경로">
+            <input className={crmInputClass} value={visitRoute} onChange={(e) => setVisitRoute(e.target.value)} />
+          </CrmField>
+          <CrmField label="운동 목적">
+            <input className={crmInputClass} value={workoutGoal} onChange={(e) => setWorkoutGoal(e.target.value)} />
+          </CrmField>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <CrmField label="상담 담당자">
+            <input className={crmInputClass} value={counselor} onChange={(e) => setCounselor(e.target.value)} />
+          </CrmField>
+          <CrmField label="마일리지">
+            <input
+              type="text"
+              inputMode="numeric"
+              className={crmInputClass}
+              value={mileage}
+              onChange={(e) => setMileage(e.target.value.replace(/[^\d]/g, ""))}
+            />
+          </CrmField>
+        </div>
+        <CrmField label="광고성 수신 동의">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={marketingConsent}
+              onChange={(e) => setMarketingConsent(e.target.checked)}
+              className="w-4 h-4 accent-[#6B7B3A]"
+            />
+            <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+              마케팅·광고성 정보 수신에 동의
+            </span>
+          </label>
         </CrmField>
 
         {error && (

@@ -28,6 +28,12 @@ interface Member {
   linked_firebase_uid: string | null;
   memo: string | null;
   status: string;
+  address: string | null;
+  visit_route: string | null;
+  workout_goal: string | null;
+  counselor: string | null;
+  mileage: number;
+  marketing_consent: boolean;
   created_at: string;
 }
 interface Pass {
@@ -195,6 +201,25 @@ export default function CrmMemberDetailPage() {
         </div>
       )}
 
+      {(member.address ||
+        member.visit_route ||
+        member.workout_goal ||
+        member.counselor ||
+        member.mileage > 0 ||
+        member.marketing_consent) && (
+        <dl className="mb-5 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+          {member.address && <InfoItem label="주소" value={member.address} />}
+          {member.visit_route && <InfoItem label="방문 경로" value={member.visit_route} />}
+          {member.workout_goal && <InfoItem label="운동 목적" value={member.workout_goal} />}
+          {member.counselor && <InfoItem label="상담 담당자" value={member.counselor} />}
+          <InfoItem label="마일리지" value={`${member.mileage.toLocaleString()}점`} />
+          <InfoItem
+            label="광고성 수신"
+            value={member.marketing_consent ? "동의" : "미동의"}
+          />
+        </dl>
+      )}
+
       {error && (
         <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
           {error}
@@ -328,6 +353,17 @@ export default function CrmMemberDetailPage() {
   );
 }
 
+function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-[11px] text-[#A89B80] dark:text-zinc-500">{label}</dt>
+      <dd className="mt-0.5 text-[13px] text-[#2A251D] dark:text-zinc-100 font-medium break-words">
+        {value}
+      </dd>
+    </div>
+  );
+}
+
 function PassStatusChip({ status }: { status: string }) {
   const label = PASS_STATUS_LABEL[status] ?? status;
   const cls =
@@ -361,6 +397,12 @@ function EditModal({
   const [birth, setBirth] = useState(member.birth ?? "");
   const [gender, setGender] = useState<string>(member.gender ?? "");
   const [memo, setMemo] = useState(member.memo ?? "");
+  const [address, setAddress] = useState(member.address ?? "");
+  const [visitRoute, setVisitRoute] = useState(member.visit_route ?? "");
+  const [workoutGoal, setWorkoutGoal] = useState(member.workout_goal ?? "");
+  const [counselor, setCounselor] = useState(member.counselor ?? "");
+  const [mileage, setMileage] = useState(String(member.mileage ?? 0));
+  const [marketingConsent, setMarketingConsent] = useState(!!member.marketing_consent);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -372,6 +414,12 @@ function EditModal({
       setBirth(member.birth ?? "");
       setGender(member.gender ?? "");
       setMemo(member.memo ?? "");
+      setAddress(member.address ?? "");
+      setVisitRoute(member.visit_route ?? "");
+      setWorkoutGoal(member.workout_goal ?? "");
+      setCounselor(member.counselor ?? "");
+      setMileage(String(member.mileage ?? 0));
+      setMarketingConsent(!!member.marketing_consent);
       setError("");
     }
   }, [open, member]);
@@ -393,6 +441,12 @@ function EditModal({
           birth,
           gender,
           memo,
+          address,
+          visit_route: visitRoute,
+          workout_goal: workoutGoal,
+          counselor,
+          mileage: Number(mileage) || 0,
+          marketing_consent: marketingConsent,
         }),
       });
       const data = await res.json();
@@ -453,6 +507,44 @@ function EditModal({
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
           />
+        </CrmField>
+        <CrmField label="주소">
+          <input className={crmInputClass} value={address} onChange={(e) => setAddress(e.target.value)} />
+        </CrmField>
+        <div className="grid grid-cols-2 gap-2">
+          <CrmField label="방문 경로">
+            <input className={crmInputClass} value={visitRoute} onChange={(e) => setVisitRoute(e.target.value)} />
+          </CrmField>
+          <CrmField label="운동 목적">
+            <input className={crmInputClass} value={workoutGoal} onChange={(e) => setWorkoutGoal(e.target.value)} />
+          </CrmField>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <CrmField label="상담 담당자">
+            <input className={crmInputClass} value={counselor} onChange={(e) => setCounselor(e.target.value)} />
+          </CrmField>
+          <CrmField label="마일리지">
+            <input
+              type="text"
+              inputMode="numeric"
+              className={crmInputClass}
+              value={mileage}
+              onChange={(e) => setMileage(e.target.value.replace(/[^\d]/g, ""))}
+            />
+          </CrmField>
+        </div>
+        <CrmField label="광고성 수신 동의">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={marketingConsent}
+              onChange={(e) => setMarketingConsent(e.target.checked)}
+              className="w-4 h-4 accent-[#6B7B3A]"
+            />
+            <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+              마케팅·광고성 정보 수신에 동의
+            </span>
+          </label>
         </CrmField>
         {error && (
           <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">

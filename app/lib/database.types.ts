@@ -2190,6 +2190,12 @@ export type Database = {
           memo: string | null
           status: string
           checkin_token: string | null
+          address: string | null
+          visit_route: string | null
+          workout_goal: string | null
+          counselor: string | null
+          mileage: number
+          marketing_consent: boolean
           created_at: string
           updated_at: string
         }
@@ -2205,6 +2211,12 @@ export type Database = {
           linked_firebase_uid?: string | null
           memo?: string | null
           status?: string
+          address?: string | null
+          visit_route?: string | null
+          workout_goal?: string | null
+          counselor?: string | null
+          mileage?: number
+          marketing_consent?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -2220,6 +2232,12 @@ export type Database = {
           linked_firebase_uid?: string | null
           memo?: string | null
           status?: string
+          address?: string | null
+          visit_route?: string | null
+          workout_goal?: string | null
+          counselor?: string | null
+          mileage?: number
+          marketing_consent?: boolean
           created_at?: string
           updated_at?: string
         }

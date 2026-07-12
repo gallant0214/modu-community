@@ -24,7 +24,7 @@ export async function GET(
   const { data: member, error } = await supabase
     .from("crm_members")
     .select(
-      "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, created_at"
+      "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, created_at"
     )
     .eq("id", memberId)
     .eq("center_id", ctx.centerId)
@@ -83,6 +83,12 @@ export async function PATCH(
     birth?: string;
     gender?: string;
     memo?: string;
+    address?: string;
+    visit_route?: string;
+    workout_goal?: string;
+    counselor?: string;
+    mileage?: number | string;
+    marketing_consent?: boolean;
   };
   try {
     body = await request.json();
@@ -110,6 +116,18 @@ export async function PATCH(
     patch.gender = body.gender || null;
   }
   if (body.memo !== undefined) patch.memo = body.memo.trim() || null;
+  if (body.address !== undefined) patch.address = body.address.trim() || null;
+  if (body.visit_route !== undefined) patch.visit_route = body.visit_route.trim() || null;
+  if (body.workout_goal !== undefined) patch.workout_goal = body.workout_goal.trim() || null;
+  if (body.counselor !== undefined) patch.counselor = body.counselor.trim() || null;
+  if (body.mileage !== undefined) {
+    const n = Math.trunc(Number(body.mileage));
+    if (!Number.isFinite(n) || n < 0) {
+      return NextResponse.json({ error: "마일리지 값이 잘못됨" }, { status: 400 });
+    }
+    patch.mileage = n;
+  }
+  if (body.marketing_consent !== undefined) patch.marketing_consent = !!body.marketing_consent;
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
