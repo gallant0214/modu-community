@@ -84,7 +84,7 @@ export default function CrmMembersPage() {
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch(`/api/crm/members?detail=1&limit=200`, {
+      const res = await fetch(`/api/crm/members?detail=1&limit=5000`, {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });

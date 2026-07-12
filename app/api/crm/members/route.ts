@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const q = (url.searchParams.get("q") || "").trim();
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 50), 1), 200);
+  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 50), 1), 5000);
 
   let allowedMemberIds: number[] | null = null;
   if (ctx.role === "trainer" || ctx.role === "manager") {
@@ -66,36 +66,59 @@ export async function GET(request: Request) {
 
   const ids = members.map((m) => m.id);
 
+  // 회원 수가 많으면(예: 수천 명) .in() 에 전체 id 를 넣으면 URL 길이 초과가 날 수 있어
+  // 500개 단위로 쪼개서 조회 후 합친다.
+  const CHUNK = 500;
+  const idChunks: number[][] = [];
+  for (let i = 0; i < ids.length; i += CHUNK) idChunks.push(ids.slice(i, i + CHUNK));
+
+  const gather = async <T>(
+    run: (chunk: number[]) => PromiseLike<{ data: unknown[] | null }>
+  ): Promise<T[]> => {
+    const results = await Promise.all(idChunks.map((c) => run(c)));
+    return results.flatMap((r) => (r.data ?? []) as T[]);
+  };
+
   // 활성 수강권 + 활성 회원권 + 락커 배정 + 최근 출석
-  const [passesRes, mbRes, lockersRes, attRes] = await Promise.all([
-    supabase
-      .from("crm_passes")
-      .select("member_id, lesson_kind, remaining_sessions, total_sessions, expires_at")
-      .eq("center_id", ctx.centerId)
-      .in("member_id", ids)
-      .eq("status", "valid"),
-    supabase
-      .from("crm_memberships")
-      .select("member_id, plan_name, expires_at")
-      .eq("center_id", ctx.centerId)
-      .in("member_id", ids)
-      .eq("status", "valid"),
-    supabase
-      .from("crm_lockers")
-      .select("assigned_member_id, number, zone_id, crm_locker_zones(name)")
-      .eq("center_id", ctx.centerId)
-      .in("assigned_member_id", ids),
-    supabase
-      .from("crm_attendances")
-      .select("member_id, checked_in_at")
-      .eq("center_id", ctx.centerId)
-      .in("member_id", ids)
-      .order("checked_in_at", { ascending: false })
-      .limit(2000),
+  const [passesData, mbData, lockersData, attData] = await Promise.all([
+    gather<{ member_id: number; lesson_kind: string; remaining_sessions: number | null; total_sessions: number; expires_at: string }>(
+      (c) =>
+        supabase
+          .from("crm_passes")
+          .select("member_id, lesson_kind, remaining_sessions, total_sessions, expires_at")
+          .eq("center_id", ctx.centerId)
+          .in("member_id", c)
+          .eq("status", "valid")
+    ),
+    gather<{ member_id: number; plan_name: string; expires_at: string }>((c) =>
+      supabase
+        .from("crm_memberships")
+        .select("member_id, plan_name, expires_at")
+        .eq("center_id", ctx.centerId)
+        .in("member_id", c)
+        .eq("status", "valid")
+    ),
+    gather<{ assigned_member_id: number | null; number: number; zone_id: number; crm_locker_zones: { name?: string } | { name?: string }[] | null }>(
+      (c) =>
+        supabase
+          .from("crm_lockers")
+          .select("assigned_member_id, number, zone_id, crm_locker_zones(name)")
+          .eq("center_id", ctx.centerId)
+          .in("assigned_member_id", c)
+    ),
+    gather<{ member_id: number; checked_in_at: string }>((c) =>
+      supabase
+        .from("crm_attendances")
+        .select("member_id, checked_in_at")
+        .eq("center_id", ctx.centerId)
+        .in("member_id", c)
+        .order("checked_in_at", { ascending: false })
+        .limit(2000)
+    ),
   ]);
 
   const passMap = new Map<number, { kind: string; type: "lesson" | "membership"; remaining: number | null; expires: string }[]>();
-  for (const p of passesRes.data ?? []) {
+  for (const p of passesData) {
     const arr = passMap.get(p.member_id) ?? [];
     arr.push({
       kind: p.lesson_kind,
@@ -105,7 +128,7 @@ export async function GET(request: Request) {
     });
     passMap.set(p.member_id, arr);
   }
-  for (const m of mbRes.data ?? []) {
+  for (const m of mbData) {
     const arr = passMap.get(m.member_id) ?? [];
     arr.push({
       kind: m.plan_name,
@@ -117,17 +140,19 @@ export async function GET(request: Request) {
   }
 
   const lockerMap = new Map<number, string>();
-  for (const l of lockersRes.data ?? []) {
+  for (const l of lockersData) {
     if (l.assigned_member_id) {
-      const zone = (l.crm_locker_zones as { name?: string } | { name?: string }[] | null);
+      const zone = l.crm_locker_zones;
       const zoneName = Array.isArray(zone) ? zone[0]?.name : zone?.name;
       lockerMap.set(l.assigned_member_id, `${zoneName ?? "락커"} ${l.number}번`);
     }
   }
 
+  // 청크 간 순서가 보장되지 않으므로 회원별 최대(최근) 값으로 계산
   const lastVisitMap = new Map<number, string>();
-  for (const a of attRes.data ?? []) {
-    if (!lastVisitMap.has(a.member_id)) lastVisitMap.set(a.member_id, a.checked_in_at);
+  for (const a of attData) {
+    const prev = lastVisitMap.get(a.member_id);
+    if (!prev || a.checked_in_at > prev) lastVisitMap.set(a.member_id, a.checked_in_at);
   }
 
   const enriched = members.map((m) => {
