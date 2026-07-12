@@ -2196,6 +2196,7 @@ export type Database = {
           counselor: string | null
           mileage: number
           marketing_consent: boolean
+          registered_at: string | null
           created_at: string
           updated_at: string
         }
@@ -2217,6 +2218,7 @@ export type Database = {
           counselor?: string | null
           mileage?: number
           marketing_consent?: boolean
+          registered_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -2238,6 +2240,7 @@ export type Database = {
           counselor?: string | null
           mileage?: number
           marketing_consent?: boolean
+          registered_at?: string | null
           created_at?: string
           updated_at?: string
         }

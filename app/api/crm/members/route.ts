@@ -7,6 +7,23 @@ export const dynamic = "force-dynamic";
 const MEMBER_TYPES = ["provisional", "full", "matched"] as const;
 const GENDERS = ["M", "F", "N"] as const;
 
+// PostgREST 는 응답을 기본 1000행으로 제한하므로 range 로 나눠 모두 가져온다.
+async function paginateAll<T>(
+  buildQuery: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null }> },
+  cap: number,
+  pageSize = 1000,
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let from = 0; from < cap; from += pageSize) {
+    const to = Math.min(from + pageSize, cap) - 1;
+    const { data } = await buildQuery().range(from, to);
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < pageSize || all.length >= cap) break;
+  }
+  return all.slice(0, cap);
+}
+
 /**
  * GET /api/crm/members?q=&limit=
  *
@@ -37,28 +54,57 @@ export async function GET(request: Request) {
     }
   }
 
-  let query = supabase
-    .from("crm_members")
-    .select(
-      "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, created_at"
-    )
-    .eq("center_id", ctx.centerId)
-    .eq("status", "active")
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  const buildQuery = () => {
+    let query = supabase
+      .from("crm_members")
+      .select(
+        "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, created_at"
+      )
+      .eq("center_id", ctx.centerId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false }); // 동일 created_at 다수 → range 페이지네이션 안정화
+    if (allowedMemberIds) query = query.in("id", allowedMemberIds);
+    if (q) {
+      // name 또는 phone LIKE 매칭
+      query = query.or(`name.ilike.%${q}%,phone.ilike.%${q}%`);
+    }
+    return query;
+  };
 
-  if (allowedMemberIds) query = query.in("id", allowedMemberIds);
-  if (q) {
-    // name 또는 phone LIKE 매칭
-    query = query.or(`name.ilike.%${q}%,phone.ilike.%${q}%`);
+  type MemberBase = {
+    id: number;
+    member_type: string;
+    name: string;
+    phone: string;
+    email: string | null;
+    birth: string | null;
+    gender: string | null;
+    linked_firebase_uid: string | null;
+    memo: string | null;
+    status: string;
+    address: string | null;
+    visit_route: string | null;
+    workout_goal: string | null;
+    counselor: string | null;
+    mileage: number;
+    marketing_consent: boolean;
+    registered_at: string | null;
+    created_at: string;
+  };
+
+  let members: MemberBase[];
+  try {
+    members = await paginateAll<MemberBase>(
+      () => buildQuery() as unknown as { range: (from: number, to: number) => PromiseLike<{ data: MemberBase[] | null }> },
+      limit
+    );
+  } catch (e) {
+    return NextResponse.json(
+      { error: "조회 실패", detail: e instanceof Error ? e.message : String(e) },
+      { status: 500 }
+    );
   }
-
-  const { data, error } = await query;
-  if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
-  }
-
-  const members = data ?? [];
   const wantDetail = url.searchParams.get("detail") === "1";
   if (!wantDetail || members.length === 0) {
     return NextResponse.json({ members });
@@ -202,6 +248,7 @@ export async function POST(request: Request) {
     counselor?: string;
     mileage?: number | string;
     marketing_consent?: boolean;
+    registered_at?: string;
   };
   try {
     body = await request.json();
@@ -244,6 +291,7 @@ export async function POST(request: Request) {
       return Number.isFinite(n) && n >= 0 ? n : 0;
     })(),
     marketing_consent: !!body.marketing_consent,
+    registered_at: body.registered_at || null,
     status: "active" as const,
   };
 

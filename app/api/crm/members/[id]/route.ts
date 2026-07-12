@@ -24,7 +24,7 @@ export async function GET(
   const { data: member, error } = await supabase
     .from("crm_members")
     .select(
-      "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, created_at"
+      "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, created_at"
     )
     .eq("id", memberId)
     .eq("center_id", ctx.centerId)
@@ -89,6 +89,7 @@ export async function PATCH(
     counselor?: string;
     mileage?: number | string;
     marketing_consent?: boolean;
+    registered_at?: string;
   };
   try {
     body = await request.json();
@@ -128,6 +129,7 @@ export async function PATCH(
     patch.mileage = n;
   }
   if (body.marketing_consent !== undefined) patch.marketing_consent = !!body.marketing_consent;
+  if (body.registered_at !== undefined) patch.registered_at = body.registered_at || null;
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
