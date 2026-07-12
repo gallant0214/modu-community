@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { MEMBER_TYPE_LABEL, GENDER_LABEL, formatPhone } from "../_components/crm-labels";
@@ -31,6 +31,17 @@ interface MemberRow {
   mileage: number;
   marketing_consent: boolean;
   registered_at: string | null;
+  registration_type: string | null;
+  first_use_at: string | null;
+  total_paid_won: number;
+  final_expire_at: string | null;
+  last_purchase_at: string | null;
+  last_attended_at: string | null;
+  attendance_no: string | null;
+  current_membership: string | null;
+  current_pass: string | null;
+  current_rental: string | null;
+  current_locker: string | null;
   created_at: string;
   items?: PassItem[];
   locker_label?: string | null;
@@ -51,10 +62,16 @@ type SortKey =
   | "app"
   | "phone"
   | "registered_at"
+  | "registration_type"
+  | "first_use_at"
+  | "total_paid_won"
+  | "last_purchase_at"
+  | "attendance_no"
   | "created_at"
   | "status"
   | "member_type"
   | "last_visit_at"
+  | "last_attended_at"
   | "max_expires_at";
 type SortDir = "asc" | "desc";
 
@@ -63,28 +80,64 @@ type ColKey =
   | "gender"
   | "app"
   | "phone"
+  | "registration_type"
   | "registered_at"
+  | "first_use_at"
   | "created_at"
   | "status"
   | "member_type"
-  | "last_visit_at"
   | "items"
-  | "max_expires_at";
+  | "max_expires_at"
+  | "days_remaining"
+  | "last_visit_at"
+  | "last_attended_at"
+  | "last_purchase_at"
+  | "total_paid_won"
+  | "attendance_no";
 
 const DEFAULT_COL_ORDER: ColKey[] = [
   "name",
   "gender",
   "app",
   "phone",
+  "registration_type",
   "registered_at",
+  "first_use_at",
   "created_at",
   "status",
   "member_type",
-  "last_visit_at",
   "items",
   "max_expires_at",
+  "days_remaining",
+  "last_visit_at",
+  "last_attended_at",
+  "last_purchase_at",
+  "total_paid_won",
+  "attendance_no",
 ];
-const COL_ORDER_KEY = "crm_members_col_order_v1";
+const COL_ORDER_KEY = "crm_members_col_order_v2";
+
+const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
+  name: 110,
+  gender: 64,
+  app: 72,
+  phone: 132,
+  registration_type: 96,
+  registered_at: 108,
+  first_use_at: 108,
+  created_at: 108,
+  status: 78,
+  member_type: 92,
+  items: 240,
+  max_expires_at: 112,
+  days_remaining: 96,
+  last_visit_at: 140,
+  last_attended_at: 112,
+  last_purchase_at: 112,
+  total_paid_won: 104,
+  attendance_no: 84,
+};
+const COL_WIDTH_KEY = "crm_members_col_widths_v1";
 
 const PAGE_SIZE = 25;
 
@@ -96,6 +149,15 @@ const today = () => {
 
 const daysBetween = (a: Date, b: Date) =>
   Math.floor((a.getTime() - b.getTime()) / (24 * 3600 * 1000));
+
+// 유효 만료일: 실제 수강권/회원권(max_expires_at) 우선, 없으면 POS 스냅샷(final_expire_at)
+const effExpiry = (m: MemberRow): string | null => m.max_expires_at ?? m.final_expire_at ?? null;
+// 보유 상품 여부: 실제 items 또는 POS 스냅샷 보유(멤버십/이용권/대여권)
+const hasHoldings = (m: MemberRow): boolean =>
+  (m.items?.length ?? 0) > 0 ||
+  !!m.current_membership ||
+  !!m.current_pass ||
+  !!m.current_rental;
 
 export default function CrmMembersPage() {
   const { getIdToken } = useAuth();
@@ -172,6 +234,46 @@ export default function CrmMembersPage() {
   const orderChanged =
     JSON.stringify(columnOrder) !== JSON.stringify(DEFAULT_COL_ORDER);
 
+  // 열 너비 (드래그로 조절, localStorage 저장)
+  const [columnWidths, setColumnWidths] = useState<Record<ColKey, number>>(DEFAULT_COL_WIDTHS);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(COL_WIDTH_KEY);
+      if (saved) {
+        const obj = JSON.parse(saved) as Record<string, number>;
+        setColumnWidths({ ...DEFAULT_COL_WIDTHS, ...obj });
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const widthSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resizeColumn = useCallback((key: ColKey, width: number) => {
+    setColumnWidths((prev) => {
+      const next = { ...prev, [key]: width };
+      if (widthSaveTimer.current) clearTimeout(widthSaveTimer.current);
+      widthSaveTimer.current = setTimeout(() => {
+        try {
+          localStorage.setItem(COL_WIDTH_KEY, JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+      }, 300);
+      return next;
+    });
+  }, []);
+  const resetColumnWidths = () => {
+    setColumnWidths(DEFAULT_COL_WIDTHS);
+    try {
+      localStorage.removeItem(COL_WIDTH_KEY);
+    } catch {
+      /* ignore */
+    }
+  };
+  const widthsChanged = DEFAULT_COL_ORDER.some(
+    (k) => columnWidths[k] !== DEFAULT_COL_WIDTHS[k]
+  );
+
   // 액션 모드 (회원 삭제)
   const [deleteMode, setDeleteMode] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -224,7 +326,8 @@ export default function CrmMembersPage() {
 
       // 상태
       if (fStatus !== "all") {
-        const isValid = m.max_expires_at && m.max_expires_at >= todayStr;
+        const eff = effExpiry(m);
+        const isValid = eff && eff >= todayStr;
         if (fStatus === "valid" && !isValid) return false;
         if (fStatus === "expired" && isValid) return false;
       }
@@ -258,15 +361,16 @@ export default function CrmMembersPage() {
 
       // 최종 만료일
       if (fExpire !== "all") {
+        const eff = effExpiry(m);
         if (fExpire === "expired") {
-          if (!m.max_expires_at || m.max_expires_at >= todayStr) return false;
+          if (!eff || eff >= todayStr) return false;
         } else if (fExpire === "this_week") {
-          if (!m.max_expires_at) return false;
-          const d = new Date(m.max_expires_at);
+          if (!eff) return false;
+          const d = new Date(eff);
           if (d < startOfWeek || d >= endOfWeek) return false;
         } else if (fExpire === "this_month") {
-          if (!m.max_expires_at) return false;
-          const d = new Date(m.max_expires_at);
+          if (!eff) return false;
+          const d = new Date(eff);
           if (d < startOfMonth || d >= endOfMonth) return false;
         }
       }
@@ -288,8 +392,9 @@ export default function CrmMembersPage() {
     if (!sortKey) return filtered;
     const todayStr = today().toISOString().slice(0, 10);
     const statusRank = (m: MemberRow) => {
-      if (!m.items || m.items.length === 0) return 0; // 미보유
-      return m.max_expires_at && m.max_expires_at >= todayStr ? 2 : 1; // 유효 : 만료
+      if (!hasHoldings(m)) return 0; // 미보유
+      const eff = effExpiry(m);
+      return eff && eff >= todayStr ? 2 : 1; // 유효 : 만료
     };
     const val = (m: MemberRow): string | number => {
       switch (sortKey) {
@@ -310,9 +415,21 @@ export default function CrmMembersPage() {
         case "member_type":
           return MEMBER_TYPE_LABEL[m.member_type] ?? m.member_type;
         case "last_visit_at":
-          return m.last_visit_at || "";
+          return m.last_visit_at || m.last_attended_at || "";
+        case "last_attended_at":
+          return m.last_attended_at || "";
         case "max_expires_at":
-          return m.max_expires_at || "";
+          return effExpiry(m) || "";
+        case "registration_type":
+          return m.registration_type || "";
+        case "first_use_at":
+          return m.first_use_at || "";
+        case "total_paid_won":
+          return m.total_paid_won || 0;
+        case "last_purchase_at":
+          return m.last_purchase_at || "";
+        case "attendance_no":
+          return m.attendance_no || "";
         default:
           return "";
       }
@@ -336,7 +453,8 @@ export default function CrmMembersPage() {
     let valid = 0;
     let expired = 0;
     for (const m of list) {
-      if (m.max_expires_at && m.max_expires_at >= todayStr) valid += 1;
+      const eff = effExpiry(m);
+      if (eff && eff >= todayStr) valid += 1;
       else expired += 1;
     }
     return { all: list.length, valid, expired };
@@ -412,13 +530,20 @@ export default function CrmMembersPage() {
       "이름",
       "회원 앱",
       "연락처",
+      "신규/재등록",
       "등록일",
+      "이용 시작일",
       "가입일",
       "상태",
       "회원 유형",
-      "최근 방문일",
       "이용 가능 상품",
       "최종 만료일",
+      "남은 일수",
+      "최근 방문일",
+      "마지막 출석일",
+      "마지막 구매일",
+      "누적 결제",
+      "출석번호",
       "락커",
       "주소",
       "방문 경로",
@@ -428,32 +553,54 @@ export default function CrmMembersPage() {
       "광고성 수신",
     ];
     const todayStr = today().toISOString().slice(0, 10);
-    const rows = filtered.map((m) => [
-      m.name,
-      m.linked_firebase_uid ? "연동" : "미연동",
-      m.phone ? formatPhone(m.phone) : "",
-      m.registered_at ?? "",
-      formatDate(m.created_at),
-      m.max_expires_at && m.max_expires_at >= todayStr ? "유효" : "만료",
-      MEMBER_TYPE_LABEL[m.member_type] ?? m.member_type,
-      m.last_visit_at ? formatDateTime(m.last_visit_at) : "",
-      (m.items ?? [])
-        .map(
-          (it) =>
-            `${it.type === "membership" ? "회원권" : "수강권"}|${it.kind}|${
-              it.remaining ?? ""
-            }|${it.expires}`
-        )
-        .join(";"),
-      m.max_expires_at ?? "",
-      m.locker_label ?? "",
-      m.address ?? "",
-      m.visit_route ?? "",
-      m.workout_goal ?? "",
-      m.counselor ?? "",
-      String(m.mileage ?? 0),
-      m.marketing_consent ? "동의" : "미동의",
-    ]);
+    const rows = filtered.map((m) => {
+      const eff = effExpiry(m);
+      const holdings =
+        m.items && m.items.length > 0
+          ? m.items
+              .map(
+                (it) =>
+                  `${it.type === "membership" ? "회원권" : "수강권"}|${it.kind}|${
+                    it.remaining ?? ""
+                  }|${it.expires}`
+              )
+              .join(";")
+          : [
+              m.current_membership && `회원권|${m.current_membership}`,
+              m.current_pass && `이용권|${m.current_pass}`,
+              m.current_rental && `대여권|${m.current_rental}`,
+              m.current_locker && `락커|${m.current_locker}`,
+            ]
+              .filter(Boolean)
+              .join(";");
+      const daysLeft = eff ? daysBetween(new Date(eff), new Date(todayStr)) : null;
+      return [
+        m.name,
+        m.linked_firebase_uid ? "연동" : "미연동",
+        m.phone ? formatPhone(m.phone) : "",
+        m.registration_type ?? "",
+        m.registered_at ?? "",
+        m.first_use_at ?? "",
+        formatDate(m.created_at),
+        eff && eff >= todayStr ? "유효" : hasHoldings(m) ? "만료" : "미보유",
+        MEMBER_TYPE_LABEL[m.member_type] ?? m.member_type,
+        holdings,
+        eff ?? "",
+        daysLeft === null ? "" : daysLeft >= 0 ? `${daysLeft}일 남음` : `${-daysLeft}일 지남`,
+        m.last_visit_at ? formatDateTime(m.last_visit_at) : m.last_attended_at ?? "",
+        m.last_attended_at ?? "",
+        m.last_purchase_at ?? "",
+        m.total_paid_won > 0 ? String(m.total_paid_won) : "",
+        m.attendance_no ?? "",
+        m.locker_label ?? m.current_locker ?? "",
+        m.address ?? "",
+        m.visit_route ?? "",
+        m.workout_goal ?? "",
+        m.counselor ?? "",
+        String(m.mileage ?? 0),
+        m.marketing_consent ? "동의" : "미동의",
+      ];
+    });
     const csv = [header, ...rows]
       .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
       .join("\r\n");
@@ -618,13 +765,19 @@ export default function CrmMembersPage() {
         <span className="flex items-center gap-2">
           <span>{filtered.length}명</span>
           <span className="hidden md:inline text-[11.5px] text-[#A89B80]">
-            · 헤더 클릭=정렬, 드래그=열 순서 변경
+            · 헤더 클릭=정렬, ⠿ 드래그=순서, 오른쪽 끝 드래그=너비
           </span>
         </span>
         <span className="flex items-center gap-3">
-          {orderChanged && (
-            <button onClick={resetColumnOrder} className="hover:underline text-[#6B7B3A] dark:text-[#A8B87A]">
-              열 순서 초기화
+          {(orderChanged || widthsChanged) && (
+            <button
+              onClick={() => {
+                resetColumnOrder();
+                resetColumnWidths();
+              }}
+              className="hover:underline text-[#6B7B3A] dark:text-[#A8B87A]"
+            >
+              열 초기화
             </button>
           )}
           <button onClick={resetFilters} className="hover:underline">
@@ -669,6 +822,8 @@ export default function CrmMembersPage() {
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={toggleSort}
+          widths={columnWidths}
+          onResize={resizeColumn}
         />
       )}
 
@@ -866,12 +1021,10 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
     key: "status",
     label: "상태",
     sortKey: "status",
-    render: (m, todayStr) => (
-      <StatusBadge
-        isValid={!!m.max_expires_at && m.max_expires_at >= todayStr}
-        hasAny={(m.items?.length ?? 0) > 0}
-      />
-    ),
+    render: (m, todayStr) => {
+      const eff = effExpiry(m);
+      return <StatusBadge isValid={!!eff && eff >= todayStr} hasAny={hasHoldings(m)} />;
+    },
   },
   member_type: {
     key: "member_type",
@@ -883,46 +1036,142 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
       </span>
     ),
   },
+  registration_type: {
+    key: "registration_type",
+    label: "신규/재등록",
+    sortKey: "registration_type",
+    render: (m) =>
+      m.registration_type ? (
+        <span
+          className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-medium ${
+            m.registration_type === "재등록"
+              ? "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
+              : "bg-[#F5F0E5] dark:bg-zinc-800 text-[#8C8270]"
+          }`}
+        >
+          {m.registration_type}
+        </span>
+      ) : (
+        <span className="text-[#A89B80]">—</span>
+      ),
+  },
+  first_use_at: {
+    key: "first_use_at",
+    label: "이용 시작일",
+    sortKey: "first_use_at",
+    render: (m) => (
+      <span className="text-[#8C8270] dark:text-zinc-500">{m.first_use_at ?? "—"}</span>
+    ),
+  },
   last_visit_at: {
     key: "last_visit_at",
     label: "최근 방문일",
     sortKey: "last_visit_at",
     render: (m) => (
       <span className="text-[#8C8270] dark:text-zinc-500">
-        {m.last_visit_at ? formatDateTime(m.last_visit_at) : "—"}
+        {m.last_visit_at ? formatDateTime(m.last_visit_at) : m.last_attended_at ?? "—"}
       </span>
     ),
+  },
+  last_attended_at: {
+    key: "last_attended_at",
+    label: "마지막 출석일",
+    sortKey: "last_attended_at",
+    render: (m) => (
+      <span className="text-[#8C8270] dark:text-zinc-500">{m.last_attended_at ?? "—"}</span>
+    ),
+  },
+  last_purchase_at: {
+    key: "last_purchase_at",
+    label: "마지막 구매일",
+    sortKey: "last_purchase_at",
+    render: (m) => (
+      <span className="text-[#8C8270] dark:text-zinc-500">{m.last_purchase_at ?? "—"}</span>
+    ),
+  },
+  total_paid_won: {
+    key: "total_paid_won",
+    label: "누적 결제",
+    sortKey: "total_paid_won",
+    render: (m) => (
+      <span className="text-[#3A342A] dark:text-zinc-300">
+        {m.total_paid_won > 0 ? `${m.total_paid_won.toLocaleString()}원` : "—"}
+      </span>
+    ),
+  },
+  attendance_no: {
+    key: "attendance_no",
+    label: "출석번호",
+    sortKey: "attendance_no",
+    render: (m) => (
+      <span className="text-[#6B5D47] dark:text-zinc-400">{m.attendance_no ?? "—"}</span>
+    ),
+  },
+  days_remaining: {
+    key: "days_remaining",
+    label: "남은 일수",
+    sortKey: "max_expires_at",
+    render: (m, todayStr) => {
+      const eff = effExpiry(m);
+      if (!eff) return <span className="text-[#A89B80]">—</span>;
+      const days = daysBetween(new Date(eff), new Date(todayStr));
+      return (
+        <span className={days >= 0 ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#B47B2A] dark:text-amber-300"}>
+          {days >= 0 ? `${days}일 남음` : `${-days}일 지남`}
+        </span>
+      );
+    },
   },
   items: {
     key: "items",
     label: "이용 가능 상품",
     sortKey: null,
-    render: (m) =>
-      m.items && m.items.length > 0 ? (
+    render: (m) => {
+      if (m.items && m.items.length > 0) {
+        return (
+          <div className="space-y-1">
+            {m.items.map((it, idx) => (
+              <div key={idx} className="text-[12px] text-[#3A342A] dark:text-zinc-300">
+                <span className="inline-block px-1.5 py-0.5 mr-1 rounded text-[10.5px] font-semibold bg-[#F5E4C8]/70 dark:bg-amber-950/40 text-[#B47B2A] dark:text-amber-300">
+                  {it.type === "membership" ? "회원권" : "수강권"}
+                </span>
+                <span className="font-medium">{it.kind}</span>
+                {it.remaining !== null && (
+                  <span className="ml-1.5 text-[#8C8270]">잔여 {it.remaining}회</span>
+                )}
+                <span className="ml-1.5 text-[#A89B80]">~ {it.expires}</span>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      // POS 스냅샷 보유 상품 (실제 수강권/회원권 미임포트 회원)
+      const snaps: { tag: string; label: string }[] = [];
+      if (m.current_membership) snaps.push({ tag: "회원권", label: m.current_membership });
+      if (m.current_pass) snaps.push({ tag: "이용권", label: m.current_pass });
+      if (m.current_rental) snaps.push({ tag: "대여권", label: m.current_rental });
+      if (m.current_locker) snaps.push({ tag: "락커", label: m.current_locker });
+      if (snaps.length === 0) return <span className="text-[#A89B80]">—</span>;
+      return (
         <div className="space-y-1">
-          {m.items.map((it, idx) => (
+          {snaps.map((s, idx) => (
             <div key={idx} className="text-[12px] text-[#3A342A] dark:text-zinc-300">
-              <span className="inline-block px-1.5 py-0.5 mr-1 rounded text-[10.5px] font-semibold bg-[#F5E4C8]/70 dark:bg-amber-950/40 text-[#B47B2A] dark:text-amber-300">
-                {it.type === "membership" ? "회원권" : "수강권"}
+              <span className="inline-block px-1.5 py-0.5 mr-1 rounded text-[10.5px] font-semibold bg-[#EFE7D5] dark:bg-zinc-800 text-[#8C7B4A] dark:text-zinc-400">
+                {s.tag}
               </span>
-              <span className="font-medium">{it.kind}</span>
-              {it.remaining !== null && (
-                <span className="ml-1.5 text-[#8C8270]">잔여 {it.remaining}회</span>
-              )}
-              <span className="ml-1.5 text-[#A89B80]">~ {it.expires}</span>
+              <span className="font-medium">{s.label}</span>
             </div>
           ))}
         </div>
-      ) : (
-        <span className="text-[#A89B80]">—</span>
-      ),
+      );
+    },
   },
   max_expires_at: {
     key: "max_expires_at",
     label: "최종 만료일",
     sortKey: "max_expires_at",
     render: (m) => (
-      <span className="text-[#3A342A] dark:text-zinc-300">{m.max_expires_at ?? "—"}</span>
+      <span className="text-[#3A342A] dark:text-zinc-300">{effExpiry(m) ?? "—"}</span>
     ),
   },
 };
@@ -938,6 +1187,8 @@ function MembersTable({
   sortKey,
   sortDir,
   onSort,
+  widths,
+  onResize,
 }: {
   rows: MemberRow[];
   deleteMode: boolean;
@@ -949,21 +1200,51 @@ function MembersTable({
   sortKey: SortKey | null;
   sortDir: SortDir;
   onSort: (key: SortKey) => void;
+  widths: Record<ColKey, number>;
+  onResize: (key: ColKey, width: number) => void;
 }) {
   const todayStr = today().toISOString().slice(0, 10);
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
 
+  // 열 너비 드래그
+  const resizing = useRef<{ key: ColKey; startX: number; startW: number } | null>(null);
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const r = resizing.current;
+      if (!r) return;
+      onResize(r.key, Math.max(56, r.startW + (e.clientX - r.startX)));
+    };
+    const onUp = () => {
+      resizing.current = null;
+      document.body.style.cursor = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [onResize]);
+
   const cols = order.map((k) => COLUMN_DEFS[k]);
+  const totalWidth =
+    (deleteMode ? 36 : 0) + cols.reduce((sum, c) => sum + (widths[c.key] ?? 120), 0);
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800">
-      <table className="w-full text-[13px] min-w-[1100px]">
+      <table className="text-[13px] table-fixed" style={{ width: totalWidth }}>
+        <colgroup>
+          {deleteMode && <col style={{ width: 36 }} />}
+          {cols.map((c) => (
+            <col key={c.key} style={{ width: widths[c.key] ?? 120 }} />
+          ))}
+        </colgroup>
         <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
           <tr>
             {deleteMode && (
-              <Th className="w-9 pl-3">
+              <Th className="pl-3">
                 <input
                   type="checkbox"
                   checked={allChecked}
@@ -977,8 +1258,6 @@ function MembersTable({
               return (
                 <th
                   key={c.key}
-                  draggable
-                  onDragStart={() => setDragIdx(idx)}
                   onDragOver={(e) => {
                     e.preventDefault();
                     if (overIdx !== idx) setOverIdx(idx);
@@ -988,34 +1267,55 @@ function MembersTable({
                     setDragIdx(null);
                     setOverIdx(null);
                   }}
-                  onDragEnd={() => {
-                    setDragIdx(null);
-                    setOverIdx(null);
-                  }}
-                  className={`text-left font-medium px-3 py-2.5 whitespace-nowrap select-none cursor-move
+                  className={`relative text-left font-medium px-3 py-2.5 whitespace-nowrap select-none overflow-hidden
                     ${overIdx === idx && dragIdx !== null ? "bg-[#6B7B3A]/10" : ""}
                     ${dragIdx === idx ? "opacity-40" : ""}`}
-                  title="드래그해서 열 순서 변경"
                 >
-                  <span className="inline-flex items-center gap-1">
-                    <span className="text-[#C9BEA6] dark:text-zinc-600 text-[10px]">⠿</span>
+                  <span className="inline-flex items-center gap-1 max-w-full">
+                    <span
+                      draggable
+                      onDragStart={() => setDragIdx(idx)}
+                      onDragEnd={() => {
+                        setDragIdx(null);
+                        setOverIdx(null);
+                      }}
+                      className="text-[#C9BEA6] dark:text-zinc-600 text-[10px] cursor-move"
+                      title="드래그해서 열 순서 변경"
+                    >
+                      ⠿
+                    </span>
                     {c.sortKey ? (
                       <button
                         type="button"
                         onClick={() => onSort(c.sortKey!)}
-                        className={`inline-flex items-center gap-0.5 hover:text-[#6B7B3A] ${
+                        className={`inline-flex items-center gap-0.5 hover:text-[#6B7B3A] truncate ${
                           active ? "text-[#6B7B3A] dark:text-[#A8B87A] font-semibold" : ""
                         }`}
                       >
                         {c.label}
-                        <span className="text-[9px] leading-none">
+                        <span className="text-[9px] leading-none shrink-0">
                           {active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
                         </span>
                       </button>
                     ) : (
-                      <span>{c.label}</span>
+                      <span className="truncate">{c.label}</span>
                     )}
                   </span>
+                  {/* 오른쪽 끝: 너비 조절 핸들 */}
+                  <span
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      resizing.current = {
+                        key: c.key,
+                        startX: e.clientX,
+                        startW: widths[c.key] ?? 120,
+                      };
+                      document.body.style.cursor = "col-resize";
+                    }}
+                    className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-[#6B7B3A]/30"
+                    title="드래그해서 열 너비 조절"
+                  />
                 </th>
               );
             })}
@@ -1038,7 +1338,9 @@ function MembersTable({
                 </Td>
               )}
               {cols.map((c) => (
-                <Td key={c.key}>{c.render(m, todayStr)}</Td>
+                <Td key={c.key} className="overflow-hidden">
+                  {c.render(m, todayStr)}
+                </Td>
               ))}
             </tr>
           ))}

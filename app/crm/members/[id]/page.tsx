@@ -35,6 +35,17 @@ interface Member {
   mileage: number;
   marketing_consent: boolean;
   registered_at: string | null;
+  registration_type: string | null;
+  first_use_at: string | null;
+  total_paid_won: number;
+  final_expire_at: string | null;
+  last_purchase_at: string | null;
+  last_attended_at: string | null;
+  attendance_no: string | null;
+  current_membership: string | null;
+  current_pass: string | null;
+  current_rental: string | null;
+  current_locker: string | null;
   created_at: string;
 }
 interface Pass {
@@ -203,24 +214,36 @@ export default function CrmMemberDetailPage() {
         </div>
       )}
 
-      {(member.address ||
-        member.visit_route ||
-        member.workout_goal ||
-        member.counselor ||
-        member.mileage > 0 ||
-        member.marketing_consent) && (
-        <dl className="mb-5 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-          {member.address && <InfoItem label="주소" value={member.address} />}
-          {member.visit_route && <InfoItem label="방문 경로" value={member.visit_route} />}
-          {member.workout_goal && <InfoItem label="운동 목적" value={member.workout_goal} />}
-          {member.counselor && <InfoItem label="상담 담당자" value={member.counselor} />}
-          <InfoItem label="마일리지" value={`${member.mileage.toLocaleString()}점`} />
-          <InfoItem
-            label="광고성 수신"
-            value={member.marketing_consent ? "동의" : "미동의"}
-          />
+      {(member.current_membership ||
+        member.current_pass ||
+        member.current_rental ||
+        member.current_locker) && (
+        <dl className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
+          {member.current_membership && <InfoItem label="보유 멤버십" value={member.current_membership} />}
+          {member.current_pass && <InfoItem label="보유 이용권" value={member.current_pass} />}
+          {member.current_rental && <InfoItem label="보유 대여권" value={member.current_rental} />}
+          {member.current_locker && <InfoItem label="보유 락커" value={member.current_locker} />}
         </dl>
       )}
+
+      <dl className="mb-5 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+        {member.registration_type && <InfoItem label="신규/재등록" value={member.registration_type} />}
+        {member.registered_at && <InfoItem label="등록일" value={member.registered_at} />}
+        {member.first_use_at && <InfoItem label="이용 시작일" value={member.first_use_at} />}
+        {member.final_expire_at && <InfoItem label="최종 만료일" value={member.final_expire_at} />}
+        {member.last_purchase_at && <InfoItem label="마지막 구매일" value={member.last_purchase_at} />}
+        {member.last_attended_at && <InfoItem label="마지막 출석일" value={member.last_attended_at} />}
+        {member.total_paid_won > 0 && (
+          <InfoItem label="누적 결제" value={`${member.total_paid_won.toLocaleString()}원`} />
+        )}
+        {member.attendance_no && <InfoItem label="출석번호" value={member.attendance_no} />}
+        {member.address && <InfoItem label="주소" value={member.address} />}
+        {member.visit_route && <InfoItem label="방문 경로" value={member.visit_route} />}
+        {member.workout_goal && <InfoItem label="운동 목적" value={member.workout_goal} />}
+        {member.counselor && <InfoItem label="상담 담당자" value={member.counselor} />}
+        <InfoItem label="마일리지" value={`${member.mileage.toLocaleString()}점`} />
+        <InfoItem label="광고성 수신" value={member.marketing_consent ? "동의" : "미동의"} />
+      </dl>
 
       {error && (
         <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
@@ -406,6 +429,17 @@ function EditModal({
   const [mileage, setMileage] = useState(String(member.mileage ?? 0));
   const [marketingConsent, setMarketingConsent] = useState(!!member.marketing_consent);
   const [registeredAt, setRegisteredAt] = useState(member.registered_at ?? "");
+  const [registrationType, setRegistrationType] = useState(member.registration_type ?? "");
+  const [firstUseAt, setFirstUseAt] = useState(member.first_use_at ?? "");
+  const [finalExpireAt, setFinalExpireAt] = useState(member.final_expire_at ?? "");
+  const [lastPurchaseAt, setLastPurchaseAt] = useState(member.last_purchase_at ?? "");
+  const [lastAttendedAt, setLastAttendedAt] = useState(member.last_attended_at ?? "");
+  const [totalPaidWon, setTotalPaidWon] = useState(String(member.total_paid_won ?? 0));
+  const [attendanceNo, setAttendanceNo] = useState(member.attendance_no ?? "");
+  const [currentMembership, setCurrentMembership] = useState(member.current_membership ?? "");
+  const [currentPass, setCurrentPass] = useState(member.current_pass ?? "");
+  const [currentRental, setCurrentRental] = useState(member.current_rental ?? "");
+  const [currentLocker, setCurrentLocker] = useState(member.current_locker ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -424,6 +458,17 @@ function EditModal({
       setMileage(String(member.mileage ?? 0));
       setMarketingConsent(!!member.marketing_consent);
       setRegisteredAt(member.registered_at ?? "");
+      setRegistrationType(member.registration_type ?? "");
+      setFirstUseAt(member.first_use_at ?? "");
+      setFinalExpireAt(member.final_expire_at ?? "");
+      setLastPurchaseAt(member.last_purchase_at ?? "");
+      setLastAttendedAt(member.last_attended_at ?? "");
+      setTotalPaidWon(String(member.total_paid_won ?? 0));
+      setAttendanceNo(member.attendance_no ?? "");
+      setCurrentMembership(member.current_membership ?? "");
+      setCurrentPass(member.current_pass ?? "");
+      setCurrentRental(member.current_rental ?? "");
+      setCurrentLocker(member.current_locker ?? "");
       setError("");
     }
   }, [open, member]);
@@ -452,6 +497,17 @@ function EditModal({
           mileage: Number(mileage) || 0,
           marketing_consent: marketingConsent,
           registered_at: registeredAt || null,
+          registration_type: registrationType,
+          first_use_at: firstUseAt || null,
+          final_expire_at: finalExpireAt || null,
+          last_purchase_at: lastPurchaseAt || null,
+          last_attended_at: lastAttendedAt || null,
+          total_paid_won: Number(totalPaidWon) || 0,
+          attendance_no: attendanceNo,
+          current_membership: currentMembership,
+          current_pass: currentPass,
+          current_rental: currentRental,
+          current_locker: currentLocker,
         }),
       });
       const data = await res.json();
@@ -559,6 +615,62 @@ function EditModal({
             </span>
           </label>
         </CrmField>
+
+        <div className="pt-2 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+          <p className="mb-2 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400">이용 정보</p>
+          <div className="grid grid-cols-2 gap-2">
+            <CrmField label="신규/재등록">
+              <select
+                className={crmInputClass}
+                value={registrationType}
+                onChange={(e) => setRegistrationType(e.target.value)}
+              >
+                <option value="">선택 안 함</option>
+                <option value="신규">신규</option>
+                <option value="재등록">재등록</option>
+              </select>
+            </CrmField>
+            <CrmField label="출석번호">
+              <input className={crmInputClass} value={attendanceNo} onChange={(e) => setAttendanceNo(e.target.value)} />
+            </CrmField>
+            <CrmField label="이용 시작일">
+              <input type="date" className={crmInputClass} value={firstUseAt} onChange={(e) => setFirstUseAt(e.target.value)} />
+            </CrmField>
+            <CrmField label="최종 만료일">
+              <input type="date" className={crmInputClass} value={finalExpireAt} onChange={(e) => setFinalExpireAt(e.target.value)} />
+            </CrmField>
+            <CrmField label="마지막 구매일">
+              <input type="date" className={crmInputClass} value={lastPurchaseAt} onChange={(e) => setLastPurchaseAt(e.target.value)} />
+            </CrmField>
+            <CrmField label="마지막 출석일">
+              <input type="date" className={crmInputClass} value={lastAttendedAt} onChange={(e) => setLastAttendedAt(e.target.value)} />
+            </CrmField>
+          </div>
+          <CrmField label="누적 결제 금액 (원)">
+            <input
+              type="text"
+              inputMode="numeric"
+              className={crmInputClass}
+              value={totalPaidWon}
+              onChange={(e) => setTotalPaidWon(e.target.value.replace(/[^\d]/g, ""))}
+            />
+          </CrmField>
+          <CrmField label="보유 멤버십">
+            <input className={crmInputClass} value={currentMembership} onChange={(e) => setCurrentMembership(e.target.value)} />
+          </CrmField>
+          <div className="grid grid-cols-2 gap-2">
+            <CrmField label="보유 이용권">
+              <input className={crmInputClass} value={currentPass} onChange={(e) => setCurrentPass(e.target.value)} />
+            </CrmField>
+            <CrmField label="보유 대여권">
+              <input className={crmInputClass} value={currentRental} onChange={(e) => setCurrentRental(e.target.value)} />
+            </CrmField>
+          </div>
+          <CrmField label="보유 락커">
+            <input className={crmInputClass} value={currentLocker} onChange={(e) => setCurrentLocker(e.target.value)} />
+          </CrmField>
+        </div>
+
         {error && (
           <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
             {error}
