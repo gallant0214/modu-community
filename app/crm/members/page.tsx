@@ -138,6 +138,7 @@ const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
   attendance_no: 84,
 };
 const COL_WIDTH_KEY = "crm_members_col_widths_v1";
+const SORT_KEY_STORAGE = "crm_members_sort_v1";
 
 const PAGE_SIZE = 25;
 
@@ -178,16 +179,39 @@ export default function CrmMembersPage() {
 
   const [page, setPage] = useState(1);
 
-  // 정렬 (헤더 클릭)
+  // 정렬 (헤더 클릭, localStorage 저장)
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SORT_KEY_STORAGE);
+      if (saved) {
+        const obj = JSON.parse(saved) as { key: SortKey | null; dir: SortDir };
+        if (obj && (obj.dir === "asc" || obj.dir === "desc")) {
+          setSortKey(obj.key ?? null);
+          setSortDir(obj.dir);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const persistSort = (key: SortKey | null, dir: SortDir) => {
+    try {
+      localStorage.setItem(SORT_KEY_STORAGE, JSON.stringify({ key, dir }));
+    } catch {
+      /* ignore */
+    }
+  };
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      const nextDir = sortDir === "asc" ? "desc" : "asc";
+      setSortDir(nextDir);
+      persistSort(key, nextDir);
     } else {
       setSortKey(key);
       setSortDir("asc");
+      persistSort(key, "asc");
     }
   };
 
