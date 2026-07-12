@@ -47,11 +47,12 @@ export async function GET(request: Request) {
   }
   const nextMonth = endExclusive; // 기존 변수명 유지 (하위 쿼리 참조)
 
-  // 회원 수
+  // 회원 수 — 서버측 member_type != 'matched' 필터 + count(exact) 로 1000행 상한 우회
   let memberQuery = supabase
     .from("crm_members")
-    .select("id, created_at, member_type", { count: "exact" })
+    .select("id", { count: "exact", head: true })
     .eq("center_id", ctx.centerId)
+    .neq("member_type", "matched")
     .gte("created_at", `${startDate}T00:00:00+09:00`)
     .lt("created_at", `${nextMonth}T00:00:00+09:00`);
 
@@ -83,19 +84,20 @@ export async function GET(request: Request) {
   }
 
   // 재직중인 강사 전체 (매출·예약 0건이어도 표에 표시하기 위해)
+  // owner/admin 도 PT 진행/판매 담당 가능 → 4개 역할 전부 포함 (스케줄 페이지와 동일)
   let activeStaffQuery = supabase
     .from("crm_center_members")
     .select("id, display_name, role, status")
     .eq("center_id", ctx.centerId)
     .eq("status", "active")
-    .in("role", ["trainer", "manager"]);
+    .in("role", ["owner", "admin", "manager", "trainer"]);
 
   if (ctx.role === "trainer" || ctx.role === "manager") {
     activeStaffQuery = activeStaffQuery.eq("id", ctx.centerMemberId);
   }
 
   const [
-    { data: members, count: memberCount },
+    { count: memberCount },
     { data: passes },
     { data: reservations },
     { data: activeStaff },
@@ -169,7 +171,8 @@ export async function GET(request: Request) {
     ym,
     range: isRange ? { from: startDate, to: toRaw } : null,
     summary: {
-      newMembers: (members ?? []).filter((m) => m.member_type !== "matched").length,
+      // memberQuery 에 이미 member_type != 'matched' 반영. count(exact) 는 1000행 상한 무관.
+      newMembers: memberCount ?? 0,
       memberCount: memberCount ?? 0,
       totalRevenue,
       totalPassCount,
@@ -182,9 +185,9 @@ export async function GET(request: Request) {
         role: staffMap.get(id)?.role ?? "trainer",
         ...s,
       }))
-      // 역할별 → 매출 많은 순 → 이름 순
+      // 역할별 → 매출 많은 순 → 이름 순 (owner 를 최상단)
       .sort((a, b) => {
-        const roleOrder = { manager: 0, trainer: 1 } as Record<string, number>;
+        const roleOrder = { owner: 0, admin: 1, manager: 2, trainer: 3 } as Record<string, number>;
         const ra = roleOrder[a.role] ?? 9;
         const rb = roleOrder[b.role] ?? 9;
         if (ra !== rb) return ra - rb;
