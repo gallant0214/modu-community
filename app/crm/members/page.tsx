@@ -57,6 +57,7 @@ type LockerFilter = "all" | "has" | "none";
 type GoodsFilter = "all" | "has" | "none";
 
 type SortKey =
+  | "recency"
   | "name"
   | "gender"
   | "app"
@@ -180,8 +181,9 @@ export default function CrmMembersPage() {
   const [page, setPage] = useState(1);
 
   // 정렬 (헤더 클릭, localStorage 저장)
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  // 기본값: 최근 등록/구매(recency) 최신순 → 최근 등록·구매 회원이 최상단
+  const [sortKey, setSortKey] = useState<SortKey | null>("recency");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   useEffect(() => {
     try {
       const saved = localStorage.getItem(SORT_KEY_STORAGE);
@@ -214,6 +216,16 @@ export default function CrmMembersPage() {
       persistSort(key, "asc");
     }
   };
+  const resetSort = () => {
+    setSortKey("recency");
+    setSortDir("desc");
+    try {
+      localStorage.removeItem(SORT_KEY_STORAGE);
+    } catch {
+      /* ignore */
+    }
+  };
+  const sortChanged = !(sortKey === "recency" && sortDir === "desc");
 
   // 열 순서 (드래그로 변경, localStorage 저장)
   const [columnOrder, setColumnOrder] = useState<ColKey[]>(DEFAULT_COL_ORDER);
@@ -422,6 +434,12 @@ export default function CrmMembersPage() {
     };
     const val = (m: MemberRow): string | number => {
       switch (sortKey) {
+        case "recency": {
+          // 최근 등록일/마지막 구매일 중 더 최신 날짜 (둘 다 없으면 가입일)
+          const cands = [m.registered_at, m.last_purchase_at].filter(Boolean) as string[];
+          if (cands.length === 0) return (m.created_at || "").slice(0, 10);
+          return cands.reduce((a, b) => (b > a ? b : a));
+        }
         case "name":
           return m.name || "";
         case "gender":
@@ -793,15 +811,16 @@ export default function CrmMembersPage() {
           </span>
         </span>
         <span className="flex items-center gap-3">
-          {(orderChanged || widthsChanged) && (
+          {(orderChanged || widthsChanged || sortChanged) && (
             <button
               onClick={() => {
                 resetColumnOrder();
                 resetColumnWidths();
+                resetSort();
               }}
               className="hover:underline text-[#6B7B3A] dark:text-[#A8B87A]"
             >
-              열 초기화
+              보기 초기화
             </button>
           )}
           <button onClick={resetFilters} className="hover:underline">
