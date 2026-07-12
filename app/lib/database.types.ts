@@ -1880,6 +1880,78 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_message_broadcasts: {
+        Row: {
+          id: number
+          center_id: number
+          title: string
+          body: string
+          audience_kind: string
+          audience_filter: Json | null
+          recipient_count: number
+          sent_by_uid: string
+          sent_by_name: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          title: string
+          body: string
+          audience_kind: string
+          audience_filter?: Json | null
+          recipient_count?: number
+          sent_by_uid: string
+          sent_by_name?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          title?: string
+          body?: string
+          audience_kind?: string
+          audience_filter?: Json | null
+          recipient_count?: number
+          sent_by_uid?: string
+          sent_by_name?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      crm_message_recipients: {
+        Row: {
+          id: number
+          broadcast_id: number
+          center_id: number
+          member_id: number
+          status: string
+          read_at: string | null
+          delivered_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          broadcast_id: number
+          center_id: number
+          member_id: number
+          status?: string
+          read_at?: string | null
+          delivered_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          broadcast_id?: number
+          center_id?: number
+          member_id?: number
+          status?: string
+          read_at?: string | null
+          delivered_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       crm_schedule_events: {
         Row: {
           id: number
