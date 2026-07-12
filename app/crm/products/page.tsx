@@ -17,6 +17,8 @@ const BUILT_IN_TYPE_LABEL: Record<string, string> = {
   goods: "운동 용품",
 };
 
+const BUILT_IN_KEYS = ["membership", "group", "personal", "locker", "apparel", "goods"];
+
 /** 상품 유형별 배지 색상 — 기본 6종 */
 const BUILT_IN_BADGE: Record<string, string> = {
   membership:
@@ -114,8 +116,12 @@ export default function CrmProductsPage() {
     loadTypes();
   }, [loadTypes]);
 
-  const typeLabelOf = (key: string): string =>
-    BUILT_IN_TYPE_LABEL[key] ?? customTypes.find((t) => t.key === key)?.label ?? key;
+  // customTypes 에는 기본 유형 오버라이드 + 순수 커스텀 유형 둘 다 포함됨
+  const typeLabelOf = (key: string): string => {
+    const override = customTypes.find((t) => t.key === key);
+    if (override) return override.label;
+    return BUILT_IN_TYPE_LABEL[key] ?? key;
+  };
   const typeBadgeClsOf = (key: string): string =>
     BUILT_IN_BADGE[key] ?? CUSTOM_BADGE;
 
@@ -179,9 +185,13 @@ export default function CrmProductsPage() {
         </div>
       </header>
 
-      {/* 유형 필터 */}
+      {/* 유형 필터 — 기본 6종은 항상, 순수 커스텀만 뒤에 붙임 */}
       <div className="flex flex-wrap gap-1.5 mb-3">
-        {["", "membership", "group", "personal", "locker", "apparel", "goods", ...customTypes.map((t) => t.key)].map((t) => (
+        {[
+          "",
+          ...BUILT_IN_KEYS,
+          ...customTypes.filter((t) => !BUILT_IN_KEYS.includes(t.key)).map((t) => t.key),
+        ].map((t) => (
           <button
             key={t || "all"}
             onClick={() => setType(t)}
@@ -318,6 +328,13 @@ export default function CrmProductsPage() {
   );
 }
 
+interface DisplayRow {
+  key: string;
+  label: string;
+  dbId: number | null;
+  isBuiltin: boolean;
+}
+
 function TypeManagerModal({
   open,
   onClose,
@@ -330,11 +347,27 @@ function TypeManagerModal({
   reload: () => void;
 }) {
   const { getIdToken } = useAuth();
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [newLabel, setNewLabel] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  // 기본 6종 + 커스텀 유형 병합
+  const rows: DisplayRow[] = [
+    ...BUILT_IN_KEYS.map((k) => {
+      const override = types.find((t) => t.key === k);
+      return {
+        key: k,
+        label: override?.label ?? BUILT_IN_TYPE_LABEL[k] ?? k,
+        dbId: override?.id ?? null,
+        isBuiltin: true,
+      };
+    }),
+    ...types
+      .filter((t) => !BUILT_IN_KEYS.includes(t.key))
+      .map((t) => ({ key: t.key, label: t.label, dbId: t.id, isBuiltin: false })),
+  ];
 
   const addType = async () => {
     const label = newLabel.trim();
@@ -359,21 +392,36 @@ function TypeManagerModal({
     }
   };
 
-  const saveEdit = async (id: number) => {
+  const saveEdit = async (row: DisplayRow) => {
     const label = editLabel.trim();
     if (!label) return;
+    if (label === row.label) {
+      setEditingKey(null);
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       const token = await getIdToken();
-      const res = await fetch(`/api/crm/product-types/${id}`, {
-        method: "PATCH",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ label }),
-      });
+      let res: Response;
+      if (row.dbId) {
+        // 기존 row (기본 오버라이드 or 커스텀) → PATCH
+        res = await fetch(`/api/crm/product-types/${row.dbId}`, {
+          method: "PATCH",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ label }),
+        });
+      } else {
+        // 기본 유형 첫 오버라이드 → POST(key 포함)
+        res = await fetch("/api/crm/product-types", {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ label, key: row.key }),
+        });
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "수정 실패");
-      setEditingId(null);
+      setEditingKey(null);
       setEditLabel("");
       reload();
     } catch (e) {
@@ -383,18 +431,23 @@ function TypeManagerModal({
     }
   };
 
-  const deleteType = async (id: number) => {
-    if (!window.confirm("이 유형을 삭제할까요? 이 유형을 사용 중인 상품이 있으면 삭제되지 않아요.")) return;
+  const deleteType = async (row: DisplayRow) => {
+    if (!row.dbId) return; // 아무것도 안 함
+    if (row.isBuiltin) {
+      if (!window.confirm(`"${row.label}" → 기본 이름 "${BUILT_IN_TYPE_LABEL[row.key]}" 로 복원할까요?`)) return;
+    } else {
+      if (!window.confirm("이 유형을 삭제할까요? 이 유형을 사용 중인 상품이 있으면 삭제되지 않아요.")) return;
+    }
     setBusy(true);
     setError("");
     try {
       const token = await getIdToken();
-      const res = await fetch(`/api/crm/product-types/${id}`, {
+      const res = await fetch(`/api/crm/product-types/${row.dbId}`, {
         method: "DELETE",
         headers: { authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "삭제 실패");
+      if (!res.ok) throw new Error(data?.error || "실패");
       reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
@@ -408,7 +461,7 @@ function TypeManagerModal({
     <CrmModal open={open} onClose={onClose} title="상품 유형 관리" size="md">
       <div className="space-y-4">
         <p className="text-[12.5px] text-[#8C8270]">
-          기본 6개 유형(회원권/그룹/개인/락커/운동복/용품) 외에 센터에서 직접 만든 커스텀 유형을 여기서 이름 변경 · 삭제할 수 있어요.
+          기본 6종 유형은 이름만 변경할 수 있어요(복원 가능). 새로 만든 커스텀 유형은 이름 변경·삭제 모두 가능해요.
         </p>
 
         {/* 신규 추가 */}
@@ -437,82 +490,86 @@ function TypeManagerModal({
           </button>
         </div>
 
-        {/* 기존 리스트 */}
-        {types.length === 0 ? (
-          <div className="px-4 py-6 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] rounded-xl">
-            아직 커스텀 유형이 없어요.
-          </div>
-        ) : (
-          <ul className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800 overflow-hidden">
-            {types.map((t) => (
-              <li key={t.id} className="px-4 py-2.5 flex items-center gap-2 bg-[#FEFCF7] dark:bg-zinc-900">
-                {editingId === t.id ? (
-                  <>
-                    <input
-                      autoFocus
-                      value={editLabel}
-                      onChange={(e) => setEditLabel(e.target.value.slice(0, 20))}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          saveEdit(t.id);
-                        }
-                        if (e.key === "Escape") {
-                          setEditingId(null);
-                          setEditLabel("");
-                        }
-                      }}
-                      maxLength={20}
-                      className={`${crmInputClass} flex-1`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => saveEdit(t.id)}
-                      disabled={busy}
-                      className="px-3 py-1.5 rounded-full text-[12px] font-semibold bg-[#6B7B3A] text-white hover:bg-[#5a6932] disabled:opacity-60"
-                    >
-                      저장
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingId(null);
+        {/* 리스트: 기본 6종 + 커스텀 */}
+        <ul className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800 overflow-hidden">
+          {rows.map((row) => (
+            <li
+              key={row.key}
+              className="px-4 py-2.5 flex items-center gap-2 bg-[#FEFCF7] dark:bg-zinc-900"
+            >
+              {editingKey === row.key ? (
+                <>
+                  <input
+                    autoFocus
+                    value={editLabel}
+                    onChange={(e) => setEditLabel(e.target.value.slice(0, 20))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        saveEdit(row);
+                      }
+                      if (e.key === "Escape") {
+                        setEditingKey(null);
                         setEditLabel("");
-                      }}
-                      className="px-2 py-1.5 text-[12px] text-[#6B5D47] hover:text-[#3A342A]"
-                    >
-                      취소
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span className="flex-1 text-[14px] font-medium text-[#2A251D] dark:text-zinc-100">
-                      {t.label}
-                    </span>
-                    <span className="text-[10.5px] text-[#A89B80]">{t.key}</span>
+                      }
+                    }}
+                    maxLength={20}
+                    className={`${crmInputClass} flex-1`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => saveEdit(row)}
+                    disabled={busy}
+                    className="px-3 py-1.5 rounded-full text-[12px] font-semibold bg-[#6B7B3A] text-white hover:bg-[#5a6932] disabled:opacity-60"
+                  >
+                    저장
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingKey(null);
+                      setEditLabel("");
+                    }}
+                    className="px-2 py-1.5 text-[12px] text-[#6B5D47] hover:text-[#3A342A]"
+                  >
+                    취소
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="flex-1 text-[14px] font-medium text-[#2A251D] dark:text-zinc-100 flex items-center gap-2">
+                    {row.label}
+                    {row.isBuiltin && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-normal bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]">
+                        기본
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-[10.5px] text-[#A89B80]">{row.key}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingKey(row.key);
+                      setEditLabel(row.label);
+                    }}
+                    className="text-[12px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+                  >
+                    수정
+                  </button>
+                  {row.dbId && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setEditingId(t.id);
-                        setEditLabel(t.label);
-                      }}
-                      className="text-[12px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
-                    >
-                      수정
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteType(t.id)}
+                      onClick={() => deleteType(row)}
                       className="text-[12px] text-red-600 hover:underline"
                     >
-                      삭제
+                      {row.isBuiltin ? "복원" : "삭제"}
                     </button>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+                  )}
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
 
         {error && (
           <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">

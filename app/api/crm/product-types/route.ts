@@ -48,34 +48,62 @@ export async function POST(request: Request) {
   if (label.length > 20)
     return NextResponse.json({ error: "유형 이름은 20자 이내" }, { status: 400 });
 
-  // 기본 유형 이름과 중복되면 방지
-  const RESERVED = ["회원권", "그룹 수업", "그룹수업", "개인 레슨", "개인레슨", "락커", "운동복", "운동 용품", "운동용품"];
-  if (RESERVED.includes(label)) {
-    return NextResponse.json({ error: "이미 기본 유형에 있어요" }, { status: 400 });
+  const BUILT_IN_KEYS = new Set([
+    "membership",
+    "group",
+    "personal",
+    "locker",
+    "apparel",
+    "goods",
+  ]);
+  const explicitKey = (body.key ?? "").trim().toLowerCase();
+  const isBuiltinKey = explicitKey && BUILT_IN_KEYS.has(explicitKey);
+
+  // 기본 유형 label 오버라이드가 아니면, 기본 유형 이름 중복 방지
+  if (!isBuiltinKey) {
+    const RESERVED = ["회원권", "그룹 수업", "그룹수업", "개인 레슨", "개인레슨", "락커", "운동복", "운동 용품", "운동용품"];
+    if (RESERVED.includes(label)) {
+      return NextResponse.json({ error: "이미 기본 유형에 있어요" }, { status: 400 });
+    }
   }
 
-  // key 자동 생성 (영문/숫자 없으면 랜덤 문자열)
-  let key = (body.key ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  // key 결정
+  let key = explicitKey.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   if (!key) {
     key = `t${Math.floor(Math.random() * 1000000).toString(36)}${Date.now().toString(36).slice(-4)}`;
   }
 
   const color = body.color?.trim() || null;
 
-  const { data, error } = await supabase
-    .from("crm_product_types")
-    .insert({
-      center_id: ctx.centerId,
-      key,
-      label,
-      color,
-      status: "active",
-    })
-    .select("id, key, label, color, sort_order")
-    .single();
+  // 기본 유형 오버라이드는 upsert (재발 시 label 갱신), 커스텀은 순수 insert
+  const query = isBuiltinKey
+    ? supabase
+        .from("crm_product_types")
+        .upsert(
+          {
+            center_id: ctx.centerId,
+            key,
+            label,
+            color,
+            status: "active",
+          } as never,
+          { onConflict: "center_id,key" }
+        )
+        .select("id, key, label, color, sort_order")
+        .single()
+    : supabase
+        .from("crm_product_types")
+        .insert({
+          center_id: ctx.centerId,
+          key,
+          label,
+          color,
+          status: "active",
+        } as never)
+        .select("id, key, label, color, sort_order")
+        .single();
+
+  const { data, error } = await query;
 
   if (error) {
     if (error.code === "23505") {

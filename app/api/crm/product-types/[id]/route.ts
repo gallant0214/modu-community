@@ -41,8 +41,9 @@ export async function PATCH(
 }
 
 /**
- * DELETE /api/crm/product-types/[id] — 커스텀 유형 삭제(soft, status=inactive).
- * 이 유형을 사용 중인 상품이 있으면 안내와 함께 거부.
+ * DELETE /api/crm/product-types/[id]
+ *  - 커스텀 유형: soft delete (status=inactive). 사용 중인 상품이 있으면 거부.
+ *  - 기본 유형(membership/group/personal/locker/apparel/goods) 오버라이드 row: 완전 삭제 → 기본 라벨로 복원. 상품 참조 유지되므로 검사 생략.
  */
 export async function DELETE(
   request: Request,
@@ -62,6 +63,28 @@ export async function DELETE(
     .eq("center_id", ctx.centerId)
     .maybeSingle();
   if (!t) return NextResponse.json({ error: "유형을 찾을 수 없어요" }, { status: 404 });
+
+  const BUILT_IN_KEYS = new Set([
+    "membership",
+    "group",
+    "personal",
+    "locker",
+    "apparel",
+    "goods",
+  ]);
+
+  if (BUILT_IN_KEYS.has(t.key)) {
+    // 기본 유형 라벨 복원 → row 완전 제거
+    const { error } = await supabase
+      .from("crm_product_types")
+      .delete()
+      .eq("id", typeId)
+      .eq("center_id", ctx.centerId);
+    if (error) {
+      return NextResponse.json({ error: "이름 복원 실패", detail: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, reverted: true });
+  }
 
   const { count } = await supabase
     .from("crm_products")

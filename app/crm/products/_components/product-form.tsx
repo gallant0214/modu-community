@@ -46,6 +46,8 @@ const BUILT_IN_TYPES: TypeOption[] = [
   { value: "goods", label: "운동 용품" },
 ];
 
+const BUILT_IN_KEYS = new Set(["membership", "group", "personal", "locker", "apparel", "goods"]);
+
 const UNIT_OPTIONS: { value: DurationUnit; label: string }[] = [
   { value: "month", label: "개월" },
   { value: "day", label: "일" },
@@ -77,10 +79,18 @@ export function ProductForm({ mode, initial, onSaved, onCancel }: Props) {
   const [addingType, setAddingType] = useState(false);
   const [addTypeError, setAddTypeError] = useState("");
 
-  const typeOptions: TypeOption[] = useMemo(
-    () => [...BUILT_IN_TYPES, ...customTypes],
-    [customTypes]
-  );
+  // 기본 유형은 오버라이드 라벨 적용, 나머지는 순수 커스텀만 뒤에 추가
+  const typeOptions: TypeOption[] = useMemo(() => {
+    const overrides = new Map(
+      customTypes.filter((t) => BUILT_IN_KEYS.has(t.value)).map((t) => [t.value, t.label])
+    );
+    const builtIn = BUILT_IN_TYPES.map((bi) => ({
+      ...bi,
+      label: overrides.get(bi.value) ?? bi.label,
+    }));
+    const purely = customTypes.filter((t) => !BUILT_IN_KEYS.has(t.value));
+    return [...builtIn, ...purely];
+  }, [customTypes]);
 
   useEffect(() => {
     (async () => {
