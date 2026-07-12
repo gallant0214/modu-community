@@ -182,12 +182,38 @@ export default function CrmDashboardPage() {
             />
           )}
           {summary && (
-            <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <GenderStatCard label="유효 회원" data={summary.members.active} accent />
-              <GenderStatCard label="만기 회원" data={summary.members.expired} tone="warn" />
-              <GenderStatCard label="신규 가입" data={summary.members.newly} />
-              <GenderStatCard label="재등록" data={summary.members.reregistered} />
-            </section>
+            <>
+              <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <GenderStatCard label="유효 회원" data={summary.members.active} accent />
+                <GenderStatCard label="만기 회원" data={summary.members.expired} tone="warn" />
+                <GenderStatCard
+                  label="신규 가입"
+                  data={summary.members.newly}
+                  ratioNote={(() => {
+                    const t = summary.members.newly.count + summary.members.reregistered.count;
+                    if (!t) return "이번달 등록 없음";
+                    return `등록 중 ${Math.round((summary.members.newly.count / t) * 100)}%`;
+                  })()}
+                />
+                <GenderStatCard
+                  label="재등록"
+                  data={summary.members.reregistered}
+                  ratioNote={(() => {
+                    const t = summary.members.newly.count + summary.members.reregistered.count;
+                    if (!t) return "이번달 등록 없음";
+                    return `등록 중 ${Math.round((summary.members.reregistered.count / t) * 100)}%`;
+                  })()}
+                />
+              </section>
+
+              {/* 신규 vs 재등록 비율 스택바 */}
+              {(summary.members.newly.count + summary.members.reregistered.count) > 0 && (
+                <RegistrationMixBar
+                  newly={summary.members.newly.count}
+                  reregistered={summary.members.reregistered.count}
+                />
+              )}
+            </>
           )}
 
           {/* 출석 통계 */}
@@ -315,16 +341,62 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle?: React.Re
   );
 }
 
+function RegistrationMixBar({
+  newly,
+  reregistered,
+}: {
+  newly: number;
+  reregistered: number;
+}) {
+  const total = newly + reregistered;
+  const newPct = total > 0 ? (newly / total) * 100 : 0;
+  const rePct = total > 0 ? (reregistered / total) * 100 : 0;
+  return (
+    <div className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 px-4 py-3">
+      <div className="flex items-center justify-between mb-2 text-[12.5px] text-[#3A342A] dark:text-zinc-200">
+        <span className="font-semibold">이번달 등록 구성</span>
+        <span className="text-[#8C8270]">총 {total.toLocaleString()}건</span>
+      </div>
+      <div className="relative h-3 rounded-full overflow-hidden bg-[#F5F0E5] dark:bg-zinc-800 flex">
+        <div
+          className="h-full bg-[#6B7B3A] transition-all"
+          style={{ width: `${newPct}%` }}
+          title={`신규 ${newly}명 (${newPct.toFixed(1)}%)`}
+        />
+        <div
+          className="h-full bg-[#B47B2A] transition-all"
+          style={{ width: `${rePct}%` }}
+          title={`재등록 ${reregistered}명 (${rePct.toFixed(1)}%)`}
+        />
+      </div>
+      <div className="mt-2 flex items-center justify-between text-[11.5px]">
+        <span className="flex items-center gap-1.5 text-[#6B7B3A] dark:text-[#A8B87A]">
+          <span className="w-2 h-2 rounded-full bg-[#6B7B3A]" />
+          신규 <strong className="font-bold">{newly.toLocaleString()}</strong>명
+          <span className="text-[#8C8270]">({newPct.toFixed(1)}%)</span>
+        </span>
+        <span className="flex items-center gap-1.5 text-[#B47B2A] dark:text-amber-300">
+          <span className="w-2 h-2 rounded-full bg-[#B47B2A]" />
+          재등록 <strong className="font-bold">{reregistered.toLocaleString()}</strong>명
+          <span className="text-[#8C8270]">({rePct.toFixed(1)}%)</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function GenderStatCard({
   label,
   data,
   accent,
   tone,
+  ratioNote,
 }: {
   label: string;
   data: GenderCount;
   accent?: boolean;
   tone?: "warn";
+  ratioNote?: string;
 }) {
   const mainCls =
     tone === "warn"
@@ -339,6 +411,11 @@ function GenderStatCard({
         {data.count.toLocaleString()}
         <span className="text-[12px] font-medium ml-1 text-[#8C8270]">명</span>
       </div>
+      {ratioNote && (
+        <div className="mt-0.5 text-[11px] font-medium text-[#B47B2A] dark:text-amber-300">
+          {ratioNote}
+        </div>
+      )}
       <div className="mt-1.5 flex items-center gap-3 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
         <span className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-[#5A8BB0]" />
