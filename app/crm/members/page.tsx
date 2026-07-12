@@ -60,6 +60,8 @@ type SortKey =
   | "recency"
   | "name"
   | "gender"
+  | "birth"
+  | "age"
   | "app"
   | "phone"
   | "registered_at"
@@ -79,6 +81,8 @@ type SortDir = "asc" | "desc";
 type ColKey =
   | "name"
   | "gender"
+  | "birth"
+  | "age"
   | "app"
   | "phone"
   | "registration_type"
@@ -99,28 +103,32 @@ type ColKey =
 const DEFAULT_COL_ORDER: ColKey[] = [
   "name",
   "gender",
-  "app",
+  "birth",
+  "age",
   "phone",
   "registration_type",
   "registered_at",
-  "first_use_at",
-  "created_at",
+  "last_purchase_at",
+  "last_attended_at",
   "status",
   "member_type",
   "items",
   "max_expires_at",
   "days_remaining",
+  "first_use_at",
   "last_visit_at",
-  "last_attended_at",
-  "last_purchase_at",
   "total_paid_won",
   "attendance_no",
+  "app",
+  "created_at",
 ];
-const COL_ORDER_KEY = "crm_members_col_order_v2";
+const COL_ORDER_KEY = "crm_members_col_order_v3";
 
 const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
   name: 110,
   gender: 64,
+  birth: 108,
+  age: 64,
   app: 72,
   phone: 132,
   registration_type: 96,
@@ -139,7 +147,7 @@ const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
   attendance_no: 84,
 };
 const COL_WIDTH_KEY = "crm_members_col_widths_v1";
-const SORT_KEY_STORAGE = "crm_members_sort_v1";
+const SORT_KEY_STORAGE = "crm_members_sort_v2";
 
 const PAGE_SIZE = 25;
 
@@ -151,6 +159,16 @@ const today = () => {
 
 const daysBetween = (a: Date, b: Date) =>
   Math.floor((a.getTime() - b.getTime()) / (24 * 3600 * 1000));
+
+// 만 나이 계산 (생년월일 → 오늘 기준)
+const calcAge = (birth: string | null): number | null => {
+  if (!birth || !/^\d{4}-\d{2}-\d{2}$/.test(birth)) return null;
+  const t = today();
+  const [y, mo, d] = birth.split("-").map(Number);
+  let age = t.getFullYear() - y;
+  if (t.getMonth() + 1 < mo || (t.getMonth() + 1 === mo && t.getDate() < d)) age -= 1;
+  return age >= 0 && age < 130 ? age : null;
+};
 
 // 유효 만료일: 실제 수강권/회원권(max_expires_at) 우선, 없으면 POS 스냅샷(final_expire_at)
 const effExpiry = (m: MemberRow): string | null => m.max_expires_at ?? m.final_expire_at ?? null;
@@ -444,6 +462,10 @@ export default function CrmMembersPage() {
           return m.name || "";
         case "gender":
           return m.gender || "";
+        case "birth":
+          return m.birth || "";
+        case "age":
+          return calcAge(m.birth) ?? -1;
         case "app":
           return m.linked_firebase_uid ? 1 : 0;
         case "phone":
@@ -570,6 +592,9 @@ export default function CrmMembersPage() {
   const downloadExcel = () => {
     const header = [
       "이름",
+      "성별",
+      "생년월일",
+      "나이",
       "회원 앱",
       "연락처",
       "신규/재등록",
@@ -616,8 +641,12 @@ export default function CrmMembersPage() {
               .filter(Boolean)
               .join(";");
       const daysLeft = eff ? daysBetween(new Date(eff), new Date(todayStr)) : null;
+      const age = calcAge(m.birth);
       return [
         m.name,
+        m.gender ? GENDER_LABEL[m.gender] ?? m.gender : "",
+        m.birth ?? "",
+        age === null ? "" : `${age}세`,
         m.linked_firebase_uid ? "연동" : "미연동",
         m.phone ? formatPhone(m.phone) : "",
         m.registration_type ?? "",
@@ -1020,6 +1049,27 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
         {m.gender ? GENDER_LABEL[m.gender] ?? m.gender : "—"}
       </span>
     ),
+  },
+  birth: {
+    key: "birth",
+    label: "생년월일",
+    sortKey: "birth",
+    render: (m) => (
+      <span className="text-[#6B5D47] dark:text-zinc-400">{m.birth ?? "—"}</span>
+    ),
+  },
+  age: {
+    key: "age",
+    label: "나이",
+    sortKey: "age",
+    render: (m) => {
+      const age = calcAge(m.birth);
+      return (
+        <span className="text-[#6B5D47] dark:text-zinc-400">
+          {age === null ? "—" : `${age}세`}
+        </span>
+      );
+    },
   },
   app: {
     key: "app",
