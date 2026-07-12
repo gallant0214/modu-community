@@ -185,8 +185,14 @@ function TrainerTab({ data }: { data: MonthlyResp | null }) {
         <Kpi label="PT매출" value={`${formatWon(data.summary.totalRevenue)}원`} accent />
         <Kpi label="수강권 발급" value={`${data.summary.totalPassCount}건`} />
         <Kpi
-          label="활동 강사"
-          value={`${data.trainers.filter((t) => t.passes.total > 0 || t.reservations.attended > 0).length}명`}
+          label="재직 강사"
+          value={`${data.trainers.length}명`}
+          sub={(() => {
+            const active = data.trainers.filter(
+              (t) => t.passes.total > 0 || t.reservations.attended > 0
+            ).length;
+            return `이번달 활동 ${active}명`;
+          })()}
         />
       </section>
 
