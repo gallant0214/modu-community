@@ -51,7 +51,13 @@ interface SummaryResp {
     lesson: number;
     locker: number;
     goods: number;
+    rental: number;
     total: number;
+  };
+  active_by_type: {
+    new: number;
+    renewal: number;
+    unknown: number;
   };
   classes: {
     group: { count: number; applicants: number };
@@ -209,12 +215,43 @@ export default function CrmDashboardPage() {
                 />
               </section>
 
-              {/* 신규 vs 재등록 비율 스택바 */}
+              {/* 신규 vs 재등록 비율 스택바 (이번 기간 등록) */}
               {(summary.members.newly.count + summary.members.reregistered.count) > 0 && (
                 <RegistrationMixBar
                   newly={summary.members.newly.count}
                   reregistered={summary.members.reregistered.count}
                 />
+              )}
+
+              {/* 유효 회원 신규/재등록 구성 도넛 (전체 스냅샷) */}
+              {(summary.active_by_type.new + summary.active_by_type.renewal + summary.active_by_type.unknown) > 0 && (
+                <div className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 px-5 py-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                      유효 회원 구성 (신규 vs 재등록)
+                    </h3>
+                    <span className="text-[11.5px] text-[#8C8270]">
+                      총 {summary.members.active.count.toLocaleString()}명
+                    </span>
+                  </div>
+                  <CrmDonutChart
+                    slices={[
+                      {
+                        label: "신규",
+                        value: summary.active_by_type.new,
+                        color: "#6B7B3A",
+                      },
+                      {
+                        label: "재등록",
+                        value: summary.active_by_type.renewal,
+                        color: "#B47B2A",
+                      },
+                      ...(summary.active_by_type.unknown > 0
+                        ? [{ label: "구분 없음", value: summary.active_by_type.unknown, color: "#A89B80" }]
+                        : []),
+                    ]}
+                  />
+                </div>
               )}
             </>
           )}
@@ -248,11 +285,37 @@ export default function CrmDashboardPage() {
                 }
               />
               <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <RevenueCard label="회원권" value={summary.revenue.membership} />
+                <RevenueCard label="헬스권 (회원권)" value={summary.revenue.membership} />
                 <RevenueCard label="레슨권" value={summary.revenue.lesson} note="개인 레슨 + 그룹 수업" />
                 <RevenueCard label="락커" value={summary.revenue.locker} note={summary.revenue.locker === 0 ? "추적 예정" : undefined} />
                 <RevenueCard label="운동 용품" value={summary.revenue.goods} note={summary.revenue.goods === 0 ? "추적 예정" : undefined} />
               </section>
+
+              {/* 전체 매출 카테고리 도넛 (헬스권/레슨권/대여권) */}
+              {summary.revenue.total > 0 && (
+                <div className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 px-5 py-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                      매출 카테고리 구성
+                    </h3>
+                    <span className="text-[11.5px] text-[#8C8270]">
+                      총 {formatWon(summary.revenue.total)}원
+                    </span>
+                  </div>
+                  <CrmDonutChart
+                    slices={[
+                      { label: "헬스권", value: summary.revenue.membership, color: "#6B7B3A" },
+                      { label: "레슨권", value: summary.revenue.lesson, color: "#8B6BAA" },
+                      { label: "대여권", value: summary.revenue.rental, color: "#5A8BB0" },
+                    ]}
+                  />
+                  {summary.revenue.rental === 0 && (
+                    <div className="mt-2 text-[11px] text-[#A89B80]">
+                      💡 대여권(운동복 등) 매출 추적은 추후 지원 예정
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
 

@@ -131,14 +131,23 @@ export async function GET(request: Request) {
   const newMembers = emptyGC();
   const reregisteredMembers = emptyGC();
 
+  // 유효 회원 중 신규/재등록 구성 (도넛용, period 무관)
+  let activeNew = 0;
+  let activeRenewal = 0;
+  let activeUnknown = 0;
+
   for (const m of members) {
     addGender(totalMembers, m.gender);
     // 활성: 정식 데이터 우선 → 없으면 POS 스냅샷 final_expire_at
     const isActive =
       activeMemberIds.has(m.id) ||
       (m.final_expire_at !== null && m.final_expire_at >= today);
-    if (isActive) addGender(activeMembers, m.gender);
-    else addGender(expiredMembers, m.gender);
+    if (isActive) {
+      addGender(activeMembers, m.gender);
+      if (m.registration_type === "재등록") activeRenewal += 1;
+      else if (m.registration_type === "신규") activeNew += 1;
+      else activeUnknown += 1;
+    } else addGender(expiredMembers, m.gender);
 
     // 신규/재등록: POS registered_at 우선(POS 원본 최초 등록일), 없으면 created_at
     const anchorYmd = (m.registered_at ?? m.created_at ?? "").slice(0, 10);
@@ -261,7 +270,13 @@ export async function GET(request: Request) {
       lesson: lessonRevenue,
       locker: lockerRevenue,
       goods: goodsRevenue,
+      rental: 0,
       total: membershipRevenue + lessonRevenue + lockerRevenue + goodsRevenue,
+    },
+    active_by_type: {
+      new: activeNew,
+      renewal: activeRenewal,
+      unknown: activeUnknown,
     },
     classes: {
       group: groupClasses,
