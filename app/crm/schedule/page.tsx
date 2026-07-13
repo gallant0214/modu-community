@@ -55,7 +55,7 @@ const WORK_END_HOUR = 23;
 
 export default function CrmSchedulePage() {
   const { getIdToken } = useAuth();
-  const [viewMode, setViewMode] = useState<ViewMode>("day");
+  const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [anchor, setAnchor] = useState(() => new Date().toISOString().slice(0, 10));
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
