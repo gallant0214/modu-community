@@ -109,13 +109,14 @@ export async function POST(request: Request) {
   }
 
   const passId = Number(body.pass_id);
-  if (!passId || !body.starts_at || !body.ends_at) {
+  if (!passId || !body.starts_at) {
     return NextResponse.json({ error: "필수 항목이 비어있습니다" }, { status: 400 });
   }
 
+  // session_minutes 까지 조회 → 예약 종료 시각 서버측 파생
   const { data: pass } = await supabase
     .from("crm_passes")
-    .select("id, center_id, member_id, trainer_member_id, remaining_sessions, status")
+    .select("id, center_id, member_id, trainer_member_id, remaining_sessions, status, session_minutes")
     .eq("id", passId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -136,6 +137,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "이 수강권의 담당이 아닙니다" }, { status: 403 });
   }
 
+  // 종료 시각: 수강권 session_minutes 로 서버측 파생 (웹·앱 공통 규칙).
+  // 유효값 없으면 클라이언트 ends_at 폴백 → 그것도 없으면 50분 기본
+  const sessionMinutes = pass.session_minutes && pass.session_minutes > 0 ? pass.session_minutes : null;
+  const startsAt = new Date(body.starts_at);
+  if (Number.isNaN(startsAt.getTime())) {
+    return NextResponse.json({ error: "시작 시각 형식 오류" }, { status: 400 });
+  }
+  let endsAtIso: string;
+  if (sessionMinutes) {
+    endsAtIso = new Date(startsAt.getTime() + sessionMinutes * 60 * 1000).toISOString();
+  } else if (body.ends_at) {
+    const e = new Date(body.ends_at);
+    if (Number.isNaN(e.getTime()) || e.getTime() <= startsAt.getTime()) {
+      return NextResponse.json({ error: "종료 시각 형식 오류" }, { status: 400 });
+    }
+    endsAtIso = e.toISOString();
+  } else {
+    endsAtIso = new Date(startsAt.getTime() + 50 * 60 * 1000).toISOString();
+  }
+
   const { data: created, error } = await supabase
     .from("crm_reservations")
     .insert({
@@ -143,8 +164,8 @@ export async function POST(request: Request) {
       pass_id: passId,
       member_id: pass.member_id,
       trainer_member_id: pass.trainer_member_id,
-      starts_at: body.starts_at,
-      ends_at: body.ends_at,
+      starts_at: startsAt.toISOString(),
+      ends_at: endsAtIso,
       status: "booked",
       consumed: false,
       created_by_uid: ctx.uid,
@@ -155,5 +176,10 @@ export async function POST(request: Request) {
   if (error || !created) {
     return NextResponse.json({ error: "예약 생성 실패", detail: error?.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, reservationId: created.id });
+  return NextResponse.json({
+    ok: true,
+    reservationId: created.id,
+    ends_at: endsAtIso,
+    session_minutes: sessionMinutes,
+  });
 }

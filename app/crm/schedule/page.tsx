@@ -1896,41 +1896,55 @@ function NewReservationModal({
             ))}
           </div>
 
-          {/* 수업 길이 */}
+          {/* 수업 길이 — 수강권 선택된 레슨 예약이면 pass.session_minutes 로 잠금 (서버도 강제) */}
           <div>
             <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
               수업 시간(분)
+              {eventType === "lesson" && passId && (
+                <span className="ml-2 text-[11px] text-[#B47B2A] dark:text-amber-300">
+                  수강권 설정으로 자동 적용
+                </span>
+              )}
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {[30, 45, 50, 60, 75, 90].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setDuration(n)}
-                  className={`px-2.5 py-1 rounded-full text-[12px] font-medium border
-                    ${duration === n
-                      ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
-                      : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
-                    }`}
-                >
-                  {n}분
-                </button>
-              ))}
-              <div className="inline-flex items-center gap-1 ml-1">
-                <input
-                  type="number"
-                  min={5}
-                  max={480}
-                  value={duration}
-                  onChange={(e) =>
-                    setDuration(Math.max(5, Math.min(480, Number(e.target.value) || 0)))
-                  }
-                  className="w-16 px-2 py-1 rounded-full text-[12px] border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 bg-white dark:bg-zinc-900 text-center focus:outline-none"
-                  aria-label="수업 시간 직접 입력 (분)"
-                />
-                <span className="text-[11.5px] text-[#A89B80]">직접</span>
+            {eventType === "lesson" && passId ? (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#6B7B3A]/40 bg-[#6B7B3A]/5 text-[#3A342A] dark:text-zinc-100 text-[13px]">
+                <span className="font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">
+                  {duration}분
+                </span>
+                <span className="text-[11.5px] text-[#8C8270]">잠금</span>
               </div>
-            </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[30, 45, 50, 60, 75, 90].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setDuration(n)}
+                    className={`px-2.5 py-1 rounded-full text-[12px] font-medium border
+                      ${duration === n
+                        ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                        : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                      }`}
+                  >
+                    {n}분
+                  </button>
+                ))}
+                <div className="inline-flex items-center gap-1 ml-1">
+                  <input
+                    type="number"
+                    min={5}
+                    max={480}
+                    value={duration}
+                    onChange={(e) =>
+                      setDuration(Math.max(5, Math.min(480, Number(e.target.value) || 0)))
+                    }
+                    className="w-16 px-2 py-1 rounded-full text-[12px] border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 bg-white dark:bg-zinc-900 text-center focus:outline-none"
+                    aria-label="수업 시간 직접 입력 (분)"
+                  />
+                  <span className="text-[11.5px] text-[#A89B80]">직접</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 이벤트(센터/개인) 제목·설명 입력 */}
