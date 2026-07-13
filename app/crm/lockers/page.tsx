@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 import { formatPhone } from "../_components/crm-labels";
+import { MemberQuickModal } from "../_components/member-quick-modal";
 
 type Tab = "assigned" | "unassigned" | "returns" | "settings";
 type ViewMode = "compact" | "box" | "list";
@@ -39,7 +40,7 @@ interface Locker {
 
 const STATE_FILTERS: { key: "all" | DisplayState; label: string; color: string }[] = [
   { key: "all",        label: "전체",    color: "bg-[#B47B2A] text-white" },
-  { key: "active",     label: "활성",    color: "bg-[#6B7B3A] text-white" },
+  { key: "active",     label: "활성",    color: "bg-emerald-500 text-white" },
   { key: "expiring",   label: "임박",    color: "bg-red-500 text-white" },
   { key: "reserved",   label: "예정",    color: "bg-amber-400 text-[#3A342A]" },
   { key: "unassigned", label: "미배정",  color: "bg-[#A89B80] text-white" },
@@ -73,7 +74,7 @@ const STATE_LABEL: Record<DisplayState, string> = {
   broken: "고장",
 };
 const STATE_CHIP_CLS: Record<DisplayState, string> = {
-  active:     "bg-[#6B7B3A]/20 text-[#6B7B3A] dark:text-[#A8B87A]",
+  active:     "bg-emerald-500 text-white dark:bg-emerald-500 dark:text-white",
   expiring:   "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
   reserved:   "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
   unassigned: "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-400",
@@ -522,7 +523,7 @@ export default function CrmLockersPage() {
                 return ds === "unassigned"
                   ? "border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[#A89B80] hover:border-[#6B7B3A]/40"
                   : ds === "active"
-                  ? "border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#3A342A] dark:text-zinc-100 hover:bg-[#6B7B3A]/20"
+                  ? "border-emerald-500 bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-500"
                   : ds === "expiring"
                   ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300"
                   : ds === "expired"
@@ -535,7 +536,8 @@ export default function CrmLockersPage() {
                 return (
                   <div
                     className="grid gap-1.5"
-                    style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
+                    // 압축 뷰 셀 크기 상한 (남자탈의실 기준). 열 수 적어도 과대 확대 방지
+                    style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(40px, 90px))` }}
                   >
                     {Array.from({ length: gridRows * gridCols }, (_, i) => {
                       const r = Math.floor(i / gridCols);
@@ -588,7 +590,9 @@ export default function CrmLockersPage() {
                 return (
                   <div
                     className="grid gap-2.5"
-                    style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(90px, 1fr))` }}
+                    // cap max width so 컬럼 수가 적을 때(예: 6열 센터입구) 셀이 과도하게 커지지 않음.
+                    // 남자탈의실(8열) 기준 셀 크기와 비슷하게 유지.
+                    style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(90px, 130px))` }}
                   >
                     {Array.from({ length: gridRows * gridCols }, (_, i) => {
                       const r = Math.floor(i / gridCols);
@@ -1751,6 +1755,8 @@ function LockerActionModal({
     }[]
   >([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  // 회원 이름 클릭 시 열리는 회원 상세 미니 모달
+  const [quickMemberId, setQuickMemberId] = useState<number | null>(null);
 
   // 배정 폼
   const [memberQuery, setMemberQuery] = useState("");
@@ -1869,14 +1875,18 @@ function LockerActionModal({
             {STATE_LABEL[ds]}
           </span>
           {locker.member && (
-            <span className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            <button
+              type="button"
+              onClick={() => setQuickMemberId(locker.member!.id)}
+              className="text-[13px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+            >
               {locker.member.name}
               {locker.member.phone && (
                 <span className="ml-1 text-[12px] text-[#8C8270] font-normal">
                   · {formatPhone(locker.member.phone)}
                 </span>
               )}
-            </span>
+            </button>
           )}
         </div>
 
@@ -2210,42 +2220,52 @@ function LockerActionModal({
 
   if (variant === "panel") {
     return (
-      <aside className="flex flex-col rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-sm overflow-hidden max-h-[calc(100vh-140px)] lg:sticky lg:top-3">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#E8E0D0]/70 dark:border-zinc-800">
-          <div className="flex items-baseline gap-2 min-w-0">
-            <h2 className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
-              락커 {locker.number}번
-            </h2>
-            {locker.member && (
-              <span className="text-[12px] text-[#8C8270] truncate">
-                {locker.member.name}
-              </span>
-            )}
+      <>
+        <aside className="flex flex-col rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-sm overflow-hidden max-h-[calc(100vh-140px)] lg:sticky lg:top-3">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[#E8E0D0]/70 dark:border-zinc-800">
+            <div className="flex items-baseline gap-2 min-w-0">
+              <h2 className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
+                락커 {locker.number}번
+              </h2>
+              {locker.member && (
+                <button
+                  type="button"
+                  onClick={() => setQuickMemberId(locker.member!.id)}
+                  className="text-[12px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline truncate"
+                >
+                  {locker.member.name}
+                </button>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="닫기"
+              className="p-1 -m-1 text-[#A89B80] hover:text-[#3A342A] dark:hover:text-zinc-200 shrink-0"
+            >
+              <svg className="w-4.5 h-4.5" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="닫기"
-            className="p-1 -m-1 text-[#A89B80] hover:text-[#3A342A] dark:hover:text-zinc-200 shrink-0"
-          >
-            <svg className="w-4.5 h-4.5" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4">{body}</div>
-      </aside>
+          <div className="flex-1 overflow-y-auto p-4">{body}</div>
+        </aside>
+        <MemberQuickModal memberId={quickMemberId} onClose={() => setQuickMemberId(null)} />
+      </>
     );
   }
 
   return (
-    <CrmModal
-      open={open}
-      onClose={onClose}
-      title={`락커 ${locker.number}번`}
-      size="md"
-    >
-      {body}
-    </CrmModal>
+    <>
+      <CrmModal
+        open={open}
+        onClose={onClose}
+        title={`락커 ${locker.number}번`}
+        size="md"
+      >
+        {body}
+      </CrmModal>
+      <MemberQuickModal memberId={quickMemberId} onClose={() => setQuickMemberId(null)} />
+    </>
   );
 }
 
@@ -2599,7 +2619,7 @@ function LockerTile({ locker, today }: { locker: Locker; today: string }) {
     ds === "unassigned"
       ? "border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[#A89B80]"
       : ds === "active"
-      ? "border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#3A342A] dark:text-zinc-100"
+      ? "border-emerald-500 bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-500"
       : ds === "expiring"
       ? "border-red-300 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
       : ds === "expired"
@@ -2892,7 +2912,7 @@ function dotColor(key: string, active: boolean): string {
   if (active) return "bg-white";
   switch (key) {
     case "all": return "bg-[#B47B2A]";
-    case "active": return "bg-[#6B7B3A]";
+    case "active": return "bg-emerald-500";
     case "expiring": return "bg-red-500";
     case "reserved": return "bg-amber-400";
     case "unassigned": return "bg-[#A89B80]";
