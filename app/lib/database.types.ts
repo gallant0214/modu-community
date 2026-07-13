@@ -1416,6 +1416,9 @@ export type Database = {
           pause_enabled: boolean
           pause_days: number
           price_won: number
+          mileage_earn: number
+          mileage_usable: boolean
+          pause_count: number
           vat_included: boolean
           capacity: number
           session_minutes: number
@@ -1441,6 +1444,9 @@ export type Database = {
           pause_enabled?: boolean
           pause_days?: number
           price_won?: number
+          mileage_earn?: number
+          mileage_usable?: boolean
+          pause_count?: number
           vat_included?: boolean
           capacity?: number
           session_minutes?: number
@@ -1466,6 +1472,9 @@ export type Database = {
           pause_enabled?: boolean
           pause_days?: number
           price_won?: number
+          mileage_earn?: number
+          mileage_usable?: boolean
+          pause_count?: number
           vat_included?: boolean
           capacity?: number
           session_minutes?: number
@@ -1485,6 +1494,8 @@ export type Database = {
           duration_days: number
           price_won: number
           discount_won: number
+          mileage_earned: number
+          mileage_used: number
           vat_included: boolean
           payment_method: string
           payment_method_custom: string | null
@@ -1507,6 +1518,8 @@ export type Database = {
           duration_days: number
           price_won?: number
           discount_won?: number
+          mileage_earned?: number
+          mileage_used?: number
           vat_included?: boolean
           payment_method?: string
           payment_method_custom?: string | null
@@ -1529,6 +1542,8 @@ export type Database = {
           duration_days?: number
           price_won?: number
           discount_won?: number
+          mileage_earned?: number
+          mileage_used?: number
           vat_included?: boolean
           payment_method?: string
           payment_method_custom?: string | null
@@ -1604,6 +1619,8 @@ export type Database = {
           item_name: string
           price_won: number
           discount_won: number
+          mileage_earned: number
+          mileage_used: number
           vat_included: boolean
           payment_method: string
           payment_method_custom: string | null
@@ -1622,6 +1639,8 @@ export type Database = {
           item_name: string
           price_won?: number
           discount_won?: number
+          mileage_earned?: number
+          mileage_used?: number
           vat_included?: boolean
           payment_method?: string
           payment_method_custom?: string | null
@@ -1640,6 +1659,8 @@ export type Database = {
           item_name?: string
           price_won?: number
           discount_won?: number
+          mileage_earned?: number
+          mileage_used?: number
           vat_included?: boolean
           payment_method?: string
           payment_method_custom?: string | null

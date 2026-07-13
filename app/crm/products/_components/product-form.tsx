@@ -24,8 +24,11 @@ export interface ProductInitial {
   total_sessions?: number | null;
   pause_enabled?: boolean;
   pause_days?: number;
+  pause_count?: number;
   price_won: number;
   vat_included?: boolean;
+  mileage_earn?: number;
+  mileage_usable?: boolean;
   capacity?: number;
   session_minutes?: number;
 }
@@ -180,6 +183,9 @@ export function ProductForm({ mode, initial, onSaved, onCancel }: Props) {
   const [totalSessions, setTotalSessions] = useState(initial?.total_sessions ?? 10);
   const [pauseEnabled, setPauseEnabled] = useState(initial?.pause_enabled ?? false);
   const [pauseDays, setPauseDays] = useState(initial?.pause_days ?? 0);
+  const [pauseCount, setPauseCount] = useState(initial?.pause_count ?? 0);
+  const [mileageEarn, setMileageEarn] = useState(initial?.mileage_earn ?? 0);
+  const [mileageUsable, setMileageUsable] = useState(initial?.mileage_usable ?? true);
   const [priceText, setPriceText] = useState(
     initial?.price_won ? String(initial.price_won) : ""
   );
@@ -232,6 +238,9 @@ export function ProductForm({ mode, initial, onSaved, onCancel }: Props) {
         total_sessions: billingMode === "count" ? totalSessions ?? 0 : 0,
         pause_enabled: pauseEnabled,
         pause_days: pauseEnabled ? pauseDays ?? 0 : 0,
+        pause_count: pauseEnabled ? pauseCount ?? 0 : 0,
+        mileage_earn: mileageEarn ?? 0,
+        mileage_usable: mileageUsable,
         price_won: priceWon,
         vat_included: vatIncluded,
         capacity: type === "group" ? capacity ?? 0 : 0,
@@ -599,15 +608,28 @@ export function ProductForm({ mode, initial, onSaved, onCancel }: Props) {
           </span>
         </label>
         {pauseEnabled && (
-          <div className="mb-3">
-            <FieldLabel>최대 정지 기간 (일)</FieldLabel>
-            <input
-              type="number"
-              min={0}
-              value={pauseDays ?? 0}
-              onChange={(e) => setPauseDays(Math.max(0, Number(e.target.value) || 0))}
-              className={crmInputClass}
-            />
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            <div>
+              <FieldLabel>최대 정지 기간 (일)</FieldLabel>
+              <input
+                type="number"
+                min={0}
+                value={pauseDays ?? 0}
+                onChange={(e) => setPauseDays(Math.max(0, Number(e.target.value) || 0))}
+                className={crmInputClass}
+              />
+            </div>
+            <div>
+              <FieldLabel>정지 가능 횟수</FieldLabel>
+              <input
+                type="number"
+                min={0}
+                value={pauseCount ?? 0}
+                onChange={(e) => setPauseCount(Math.max(0, Number(e.target.value) || 0))}
+                className={crmInputClass}
+                placeholder="0 = 제한 없음"
+              />
+            </div>
           </div>
         )}
 
@@ -634,6 +656,35 @@ export function ProductForm({ mode, initial, onSaved, onCancel }: Props) {
           />
           <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
             부가세 포함 금액
+          </span>
+        </label>
+      </Section>
+
+      {/* 마일리지 */}
+      <Section title="마일리지 설정">
+        <FieldLabel>구매 시 적립 마일리지 (P)</FieldLabel>
+        <div className="relative">
+          <input
+            type="number"
+            min={0}
+            value={mileageEarn ?? 0}
+            onChange={(e) => setMileageEarn(Math.max(0, Number(e.target.value) || 0))}
+            placeholder="0"
+            className={`${crmInputClass} pr-9`}
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+            P
+          </span>
+        </div>
+        <label className="mt-3 flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={mileageUsable}
+            onChange={(e) => setMileageUsable(e.target.checked)}
+            className="w-4 h-4 accent-[#6B7B3A]"
+          />
+          <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+            이 상품 구매 시 마일리지 사용 허용
           </span>
         </label>
       </Section>

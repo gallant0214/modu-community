@@ -19,8 +19,11 @@ export interface ProductDetail {
   total_sessions: number | null;
   pause_enabled: boolean;
   pause_days: number;
+  pause_count?: number;
   price_won: number;
   vat_included: boolean;
+  mileage_earn?: number;
+  mileage_usable?: boolean;
   capacity: number;
   session_minutes: number;
   status: string;
@@ -116,8 +119,15 @@ export function ProductDetailModal({ product, typeLabel, onClose, onEdit, onDele
             {(p.open_time ?? "").slice(0, 5)} ~ {(p.close_time ?? "").slice(0, 5)}
           </Field>
           {p.pause_enabled && (
-            <Field label="정지(휴회)">최대 {p.pause_days}일</Field>
+            <Field label="정지(휴회)">
+              최대 {p.pause_days}일
+              {p.pause_count ? ` · ${p.pause_count}회` : ""}
+            </Field>
           )}
+          {!!p.mileage_earn && p.mileage_earn > 0 && (
+            <Field label="적립 마일리지">{p.mileage_earn.toLocaleString()}P</Field>
+          )}
+          <Field label="마일리지 사용">{p.mileage_usable === false ? "불가" : "가능"}</Field>
         </div>
 
         {/* 설명 */}
