@@ -210,11 +210,8 @@ export default function CrmMemberDetailPage() {
         </div>
       </header>
 
-      {member.memo && (
-        <div className="mb-5 px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
-          {member.memo}
-        </div>
-      )}
+      <MemoSection memberId={member.id} memo={member.memo} onSaved={load} />
+
 
       {(member.current_membership ||
         member.current_pass ||
@@ -397,6 +394,112 @@ export default function CrmMemberDetailPage() {
           load();
         }}
       />
+    </div>
+  );
+}
+
+function MemoSection({
+  memberId,
+  memo,
+  onSaved,
+}: {
+  memberId: number;
+  memo: string | null;
+  onSaved: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(memo ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setText(memo ?? "");
+    setEditing(false);
+  }, [memo]);
+
+  const save = async (value: string) => {
+    setSaving(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members/${memberId}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ memo: value }),
+      });
+      if (res.ok) {
+        setEditing(false);
+        onSaved();
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mb-5">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[11.5px] font-semibold text-[#8C8270] dark:text-zinc-500">메모</span>
+        {!editing && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setText(memo ?? "");
+                setEditing(true);
+              }}
+              className="text-[11.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+            >
+              {memo ? "수정" : "+ 메모 추가"}
+            </button>
+            {memo && (
+              <button
+                onClick={() => {
+                  if (confirm("메모를 삭제할까요?")) save("");
+                }}
+                className="text-[11.5px] text-red-600 dark:text-red-400 hover:underline"
+              >
+                삭제
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {editing ? (
+        <div>
+          <textarea
+            className={`${crmInputClass} min-h-[64px]`}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="메모를 입력하세요"
+            autoFocus
+          />
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <button
+              onClick={() => save(text.trim())}
+              disabled={saving}
+              className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+            >
+              {saving ? "저장 중…" : "저장"}
+            </button>
+            <button
+              onClick={() => {
+                setEditing(false);
+                setText(memo ?? "");
+              }}
+              className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5]"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      ) : memo ? (
+        <div className="px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
+          {memo}
+        </div>
+      ) : (
+        <div className="px-3.5 py-2 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#A89B80]">
+          메모가 없습니다.
+        </div>
+      )}
     </div>
   );
 }
