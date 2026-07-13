@@ -220,12 +220,12 @@ export default function CrmMemberDetailPage() {
         member.current_pass ||
         member.current_rental ||
         member.current_locker) && (
-        <dl className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
-          {member.current_membership && <InfoItem label="보유 멤버십" value={member.current_membership} />}
-          {member.current_pass && <InfoItem label="보유 이용권" value={member.current_pass} />}
-          {member.current_rental && <InfoItem label="보유 대여권" value={member.current_rental} />}
-          {member.current_locker && <InfoItem label="보유 락커" value={member.current_locker} />}
-        </dl>
+        <div className="mb-3 flex flex-wrap gap-1.5 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
+          {holdingCards("회원권", member.current_membership)}
+          {holdingCards("이용권", member.current_pass)}
+          {holdingCards("대여권", member.current_rental)}
+          {holdingCards("락커", member.current_locker)}
+        </div>
       )}
 
       <dl className="mb-5 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
@@ -410,6 +410,61 @@ function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
       </dd>
     </div>
   );
+}
+
+// 콤마로 구분된 보유 상품 문자열을 개별 항목으로 분리 (괄호 안 콤마는 무시)
+function splitTopLevel(text: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let cur = "";
+  for (const ch of text) {
+    if (ch === "(") depth += 1;
+    else if (ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === "," && depth === 0) {
+      if (cur.trim()) out.push(cur.trim());
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+
+// "이름 (2026. 4. 13. ~ 2026. 7. 12.)" → { name, period }
+function splitNamePeriod(s: string): { name: string; period: string | null } {
+  const m = s.match(/^(.*?)\s*\(([^()]*~[^()]*)\)\s*$/);
+  if (m) return { name: m[1].trim(), period: m[2].replace(/\s+/g, " ").trim() };
+  return { name: s.trim(), period: null };
+}
+
+const SNAP_STYLE: Record<string, string> = {
+  회원권: "border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]",
+  이용권: "border-[#B47B2A]/40 bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300",
+  대여권: "border-[#3E7C8C]/40 bg-[#3E7C8C]/10 text-[#3E7C8C] dark:text-cyan-300",
+  락커: "border-[#8B6BB1]/40 bg-[#8B6BB1]/10 text-[#8B6BB1] dark:text-purple-300",
+};
+
+function SnapHoldingCard({ tag, name, period }: { tag: string; name: string; period: string | null }) {
+  return (
+    <div
+      className={`inline-flex flex-col rounded-lg border px-2.5 py-1.5 leading-tight ${
+        SNAP_STYLE[tag] ?? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
+      }`}
+    >
+      <span className="text-[9.5px] font-bold uppercase tracking-wide opacity-80">{tag}</span>
+      <span className="text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">{name}</span>
+      {period && <span className="text-[10.5px] text-[#A89B80] dark:text-zinc-500">{period}</span>}
+    </div>
+  );
+}
+
+function holdingCards(tag: string, text: string | null) {
+  if (!text) return null;
+  return splitTopLevel(text).map((chunk, i) => {
+    const { name, period } = splitNamePeriod(chunk);
+    return <SnapHoldingCard key={`${tag}-${i}`} tag={tag} name={name} period={period} />;
+  });
 }
 
 function PassStatusChip({ status }: { status: string }) {
