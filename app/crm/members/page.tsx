@@ -1019,6 +1019,53 @@ function FilterChip({
   );
 }
 
+// 보유 상품 라벨에서 기간 "(2026. 4. 13. ~ 2026. 7. 12.)" 분리
+function splitHolding(label: string): { name: string; period: string | null } {
+  const m = label.match(/^(.*?)\s*\(([^()]*~[^()]*)\)\s*$/);
+  if (m) return { name: m[1].trim(), period: m[2].replace(/\s+/g, " ").trim() };
+  return { name: label.trim(), period: null };
+}
+
+const HOLDING_STYLE: Record<string, string> = {
+  회원권: "border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]",
+  수강권: "border-[#B47B2A]/40 bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300",
+  이용권: "border-[#B47B2A]/40 bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300",
+  대여권: "border-[#3E7C8C]/40 bg-[#3E7C8C]/10 text-[#3E7C8C] dark:text-cyan-300",
+  락커: "border-[#8B6BB1]/40 bg-[#8B6BB1]/10 text-[#8B6BB1] dark:text-purple-300",
+};
+
+function HoldingCard({
+  tag,
+  name,
+  period,
+  extra,
+}: {
+  tag: string;
+  name: string;
+  period: string | null;
+  extra?: string | null;
+}) {
+  return (
+    <div
+      className={`inline-flex flex-col rounded-md border px-1.5 py-1 leading-tight max-w-full ${
+        HOLDING_STYLE[tag] ?? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
+      }`}
+    >
+      <span className="text-[9px] font-bold uppercase tracking-wide opacity-80">{tag}</span>
+      <span className="text-[11.5px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
+        {name}
+      </span>
+      {(period || extra) && (
+        <span className="text-[9.5px] text-[#A89B80] dark:text-zinc-500 truncate">
+          {extra ? `${extra}` : ""}
+          {extra && period ? " · " : ""}
+          {period ?? ""}
+        </span>
+      )}
+    </div>
+  );
+}
+
 interface ColDef {
   key: ColKey;
   label: string;
@@ -1222,18 +1269,15 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
     render: (m) => {
       if (m.items && m.items.length > 0) {
         return (
-          <div className="space-y-1">
+          <div className="flex flex-wrap gap-1">
             {m.items.map((it, idx) => (
-              <div key={idx} className="text-[12px] text-[#3A342A] dark:text-zinc-300">
-                <span className="inline-block px-1.5 py-0.5 mr-1 rounded text-[10.5px] font-semibold bg-[#F5E4C8]/70 dark:bg-amber-950/40 text-[#B47B2A] dark:text-amber-300">
-                  {it.type === "membership" ? "회원권" : "수강권"}
-                </span>
-                <span className="font-medium">{it.kind}</span>
-                {it.remaining !== null && (
-                  <span className="ml-1.5 text-[#8C8270]">잔여 {it.remaining}회</span>
-                )}
-                <span className="ml-1.5 text-[#A89B80]">~ {it.expires}</span>
-              </div>
+              <HoldingCard
+                key={idx}
+                tag={it.type === "membership" ? "회원권" : "수강권"}
+                name={it.kind}
+                period={`~ ${it.expires}`}
+                extra={it.remaining !== null ? `잔여 ${it.remaining}회` : null}
+              />
             ))}
           </div>
         );
@@ -1246,15 +1290,11 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
       if (m.current_locker) snaps.push({ tag: "락커", label: m.current_locker });
       if (snaps.length === 0) return <span className="text-[#A89B80]">—</span>;
       return (
-        <div className="space-y-1">
-          {snaps.map((s, idx) => (
-            <div key={idx} className="text-[12px] text-[#3A342A] dark:text-zinc-300">
-              <span className="inline-block px-1.5 py-0.5 mr-1 rounded text-[10.5px] font-semibold bg-[#EFE7D5] dark:bg-zinc-800 text-[#8C7B4A] dark:text-zinc-400">
-                {s.tag}
-              </span>
-              <span className="font-medium">{s.label}</span>
-            </div>
-          ))}
+        <div className="flex flex-wrap gap-1">
+          {snaps.map((s, idx) => {
+            const { name, period } = splitHolding(s.label);
+            return <HoldingCard key={idx} tag={s.tag} name={name} period={period} />;
+          })}
         </div>
       );
     },
