@@ -48,8 +48,7 @@ interface SummaryResp {
   attendance: { attended: GenderCount; working: GenderCount };
   revenue: {
     membership: number;
-    personal: number;
-    group: number;
+    lesson: number;
     locker: number;
     goods: number;
     total: number;
@@ -65,6 +64,7 @@ interface BootstrapResp {
   role: "owner" | "admin" | "manager" | "trainer";
   displayName: string | null;
   centerName: string;
+  permissions: Record<string, boolean>;
 }
 
 const DONUT_COLORS = ["#6B7B3A", "#B47B2A", "#A8B87A", "#E8C088", "#8C8270"];
@@ -118,6 +118,9 @@ export default function CrmDashboardPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 재무 지표(매출/결제/랭킹) 가시성 — dashboard.finance 권한 기반 (owner 는 서버측에서 항상 true)
+  const canFinance = me?.permissions?.["dashboard.finance"] ?? false;
 
   const todayLabel = (() => {
     const d = new Date();
@@ -230,8 +233,8 @@ export default function CrmDashboardPage() {
             </>
           )}
 
-          {/* 매출 통계 */}
-          {summary && (
+          {/* 매출 통계 — 재무 권한(dashboard.finance) 필요 */}
+          {summary && canFinance && (
             <>
               <SectionHeader
                 title="매출 통계"
@@ -244,10 +247,9 @@ export default function CrmDashboardPage() {
                   </>
                 }
               />
-              <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <RevenueCard label="회원권" value={summary.revenue.membership} />
-                <RevenueCard label="개인 레슨" value={summary.revenue.personal} />
-                <RevenueCard label="그룹 수업" value={summary.revenue.group} note={summary.revenue.group === 0 ? "추적 예정" : undefined} />
+                <RevenueCard label="레슨권" value={summary.revenue.lesson} note="개인 레슨 + 그룹 수업" />
                 <RevenueCard label="락커" value={summary.revenue.locker} note={summary.revenue.locker === 0 ? "추적 예정" : undefined} />
                 <RevenueCard label="운동 용품" value={summary.revenue.goods} note={summary.revenue.goods === 0 ? "추적 예정" : undefined} />
               </section>
@@ -274,7 +276,9 @@ export default function CrmDashboardPage() {
             </>
           )}
 
-          {/* PT 매출 추이 + 결제 방법 */}
+          {/* PT 매출 추이 + 결제 방법 — 재무 권한 필요 */}
+          {canFinance && (
+          <>
           <SectionHeader title="이번달 상세" subtitle="12개월 매출 추이 + 결제 방법 분포" />
           <section className="grid md:grid-cols-3 gap-3">
             <div className="md:col-span-2 px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
@@ -301,19 +305,23 @@ export default function CrmDashboardPage() {
               )}
             </div>
           </section>
+          </>
+          )}
 
-          {/* 강사 랭킹 */}
+          {/* 강사 랭킹 — PT매출은 재무 권한 필요, 수업완료는 항상 표시 */}
           {monthly && monthly.trainers.length > 0 && (
             <>
               <SectionHeader title="강사 랭킹" subtitle="이번달 실적" />
-              <section className="grid md:grid-cols-2 gap-3">
-                <RankBox
-                  title="PT매출 TOP 5"
-                  rows={[...monthly.trainers]
-                    .sort((a, b) => b.passes.revenue - a.passes.revenue)
-                    .slice(0, 5)
-                    .map((t) => ({ label: t.name, value: `${formatWon(t.passes.revenue)}원` }))}
-                />
+              <section className={`grid gap-3 ${canFinance ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
+                {canFinance && (
+                  <RankBox
+                    title="PT매출 TOP 5"
+                    rows={[...monthly.trainers]
+                      .sort((a, b) => b.passes.revenue - a.passes.revenue)
+                      .slice(0, 5)
+                      .map((t) => ({ label: t.name, value: `${formatWon(t.passes.revenue)}원` }))}
+                  />
+                )}
                 <RankBox
                   title="수업완료 TOP 5"
                   rows={[...monthly.trainers]

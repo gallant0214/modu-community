@@ -76,15 +76,20 @@ export async function GET(request: Request) {
   else from = firstOfMonth(today);
   const toExcl = shiftYmd(today, 1); // to (exclusive)
 
-  // 회원 전체 (성별 스냅샷)
+  // 회원 전체 (성별·POS 스냅샷 필드 포함).
+  // crm_passes/memberships 정식 임포트 전이라 final_expire_at·registered_at·registration_type 을
+  // 활성/신규/재등록 판정에 사용.
   const members = await paginateAll<{
     id: number;
     gender: Gender;
     created_at: string;
+    registered_at: string | null;
+    final_expire_at: string | null;
+    registration_type: string | null;
   }>((f, t) =>
     supabase
       .from("crm_members")
-      .select("id, gender, created_at")
+      .select("id, gender, created_at, registered_at, final_expire_at, registration_type")
       .eq("center_id", ctx.centerId)
       .eq("status", "active")
       .range(f, t)
@@ -93,7 +98,7 @@ export async function GET(request: Request) {
   const genderById = new Map<number, Gender>();
   for (const m of members) genderById.set(m.id, m.gender);
 
-  // 활성 상품 보유 회원 집합
+  // 활성 상품 보유 회원 집합 (정식 pass/membership 이 있으면 우선 사용)
   const [validPasses, validMemberships] = await Promise.all([
     paginateAll<{ member_id: number }>((f, t) =>
       supabase
@@ -124,17 +129,26 @@ export async function GET(request: Request) {
   const activeMembers = emptyGC();
   const expiredMembers = emptyGC();
   const newMembers = emptyGC();
+  const reregisteredMembers = emptyGC();
 
   for (const m of members) {
     addGender(totalMembers, m.gender);
-    if (activeMemberIds.has(m.id)) addGender(activeMembers, m.gender);
+    // 활성: 정식 데이터 우선 → 없으면 POS 스냅샷 final_expire_at
+    const isActive =
+      activeMemberIds.has(m.id) ||
+      (m.final_expire_at !== null && m.final_expire_at >= today);
+    if (isActive) addGender(activeMembers, m.gender);
     else addGender(expiredMembers, m.gender);
-    const createdYmd = m.created_at.slice(0, 10);
-    if (createdYmd >= from && createdYmd < toExcl) addGender(newMembers, m.gender);
+
+    // 신규/재등록: POS registered_at 우선(POS 원본 최초 등록일), 없으면 created_at
+    const anchorYmd = (m.registered_at ?? m.created_at ?? "").slice(0, 10);
+    if (anchorYmd >= from && anchorYmd < toExcl) {
+      if (m.registration_type === "재등록") addGender(reregisteredMembers, m.gender);
+      else addGender(newMembers, m.gender);
+    }
   }
 
-  // 재등록 (period 내 발급된 renewal 유형 수강권 보유자).
-  // crm_memberships 는 issue_type 컬럼 없어 수강권 기준만 사용.
+  // 정식 crm_passes 에 있는 renewal 도 재등록에 합산 (POS 스냅샷과 상호보완)
   const renewalPasses = await paginateAll<{ member_id: number }>((f, t) =>
     supabase
       .from("crm_passes")
@@ -145,9 +159,17 @@ export async function GET(request: Request) {
       .lt("issued_at", toExcl)
       .range(f, t)
   );
-  const reregMemberIds = new Set<number>(renewalPasses.map((p) => p.member_id));
-  const reregisteredMembers = emptyGC();
-  for (const id of reregMemberIds) addGender(reregisteredMembers, genderById.get(id) ?? null);
+  const alreadyCounted = new Set<number>();
+  for (const m of members) {
+    const anchorYmd = (m.registered_at ?? m.created_at ?? "").slice(0, 10);
+    if (m.registration_type === "재등록" && anchorYmd >= from && anchorYmd < toExcl) {
+      alreadyCounted.add(m.id);
+    }
+  }
+  for (const p of renewalPasses) {
+    if (alreadyCounted.has(p.member_id)) continue;
+    addGender(reregisteredMembers, genderById.get(p.member_id) ?? null);
+  }
 
   // 출석 통계 (period 내 unique 출석 회원)
   const attends = await paginateAll<{ member_id: number }>((f, t) =>
@@ -195,8 +217,8 @@ export async function GET(request: Request) {
   ]);
 
   const membershipRevenue = memshipsInPeriod.reduce((s, r) => s + (r.price_won ?? 0), 0);
-  const personalRevenue = passesInPeriod.reduce((s, r) => s + (r.price_won ?? 0), 0);
-  const groupRevenue = 0; // 추적 미구현 (crm_products.type='group' 사용 시)
+  // 레슨권 = 개인 레슨 + 그룹 수업 통합. 그룹 매출 별도 추적은 미구현이라 현재 개인 레슨 합계와 동일
+  const lessonRevenue = passesInPeriod.reduce((s, r) => s + (r.price_won ?? 0), 0);
   const lockerRevenue = 0;
   const goodsRevenue = 0;
 
@@ -236,11 +258,10 @@ export async function GET(request: Request) {
     },
     revenue: {
       membership: membershipRevenue,
-      personal: personalRevenue,
-      group: groupRevenue,
+      lesson: lessonRevenue,
       locker: lockerRevenue,
       goods: goodsRevenue,
-      total: membershipRevenue + personalRevenue + groupRevenue + lockerRevenue + goodsRevenue,
+      total: membershipRevenue + lessonRevenue + lockerRevenue + goodsRevenue,
     },
     classes: {
       group: groupClasses,

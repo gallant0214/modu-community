@@ -61,11 +61,12 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
-    key: "insights",
-    label: "인사이트 대시보드",
+    key: "dashboard",
+    label: "대시보드 표시",
     items: [
-      { key: "insights.members", label: "고객 현황 열람", defaults: D_MGR },
-      { key: "insights.finance", label: "재무 현황 열람", defaults: D_ADMIN },
+      { key: "dashboard.view",     label: "대시보드 열람",                       defaults: D_ALL },
+      { key: "dashboard.members",  label: "회원·출석·수업 통계 열람",           defaults: D_ALL },
+      { key: "dashboard.finance",  label: "매출·결제·강사 매출 랭킹 등 재무 열람", defaults: D_ADMIN },
     ],
   },
   {
