@@ -21,10 +21,21 @@ export function CrmModal({ open, onClose, title, children, size = "md" }: Props)
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
+
+    // 스크롤바 폭만큼 body 에 padding 을 넣어 배경 레이아웃이 밀리지 않게 함
+    // (기존엔 overflow:hidden 만 걸어 세로 스크롤바 사라지면서 그리드가 재배치됨)
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    const prevOverflow = document.body.style.overflow;
+    const prevPadding = document.body.style.paddingRight;
     document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPadding;
     };
   }, [open, onClose]);
 
