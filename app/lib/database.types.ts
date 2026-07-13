@@ -1484,6 +1484,7 @@ export type Database = {
           plan_name: string
           duration_days: number
           price_won: number
+          discount_won: number
           vat_included: boolean
           payment_method: string
           payment_method_custom: string | null
@@ -1505,6 +1506,7 @@ export type Database = {
           plan_name: string
           duration_days: number
           price_won?: number
+          discount_won?: number
           vat_included?: boolean
           payment_method?: string
           payment_method_custom?: string | null
@@ -1526,6 +1528,7 @@ export type Database = {
           plan_name?: string
           duration_days?: number
           price_won?: number
+          discount_won?: number
           vat_included?: boolean
           payment_method?: string
           payment_method_custom?: string | null
@@ -1600,6 +1603,7 @@ export type Database = {
           seller_member_id: number | null
           item_name: string
           price_won: number
+          discount_won: number
           vat_included: boolean
           payment_method: string
           payment_method_custom: string | null
@@ -1617,6 +1621,7 @@ export type Database = {
           seller_member_id?: number | null
           item_name: string
           price_won?: number
+          discount_won?: number
           vat_included?: boolean
           payment_method?: string
           payment_method_custom?: string | null
@@ -1634,6 +1639,7 @@ export type Database = {
           seller_member_id?: number | null
           item_name?: string
           price_won?: number
+          discount_won?: number
           vat_included?: boolean
           payment_method?: string
           payment_method_custom?: string | null

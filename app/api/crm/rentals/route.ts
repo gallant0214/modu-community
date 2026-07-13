@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_rentals")
     .select(
-      "id, member_id, seller_member_id, item_name, price_won, vat_included, payment_method, payment_method_custom, start_date, expires_at, status, memo, created_at"
+      "id, member_id, seller_member_id, item_name, price_won, discount_won, vat_included, payment_method, payment_method_custom, start_date, expires_at, status, memo, created_at"
     )
     .eq("center_id", ctx.centerId)
     .neq("status", "deleted")
@@ -50,6 +50,7 @@ export async function POST(request: Request) {
     seller_member_id?: number;
     item_name?: string;
     price_won?: number;
+    discount_won?: number;
     payment_method?: string;
     payment_method_custom?: string;
     start_date?: string;
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
       seller_member_id: sellerId,
       item_name: itemName,
       price_won: Number(body.price_won) || 0,
+      discount_won: Math.max(0, Math.floor(Number(body.discount_won) || 0)),
       vat_included: !!body.vat_included,
       payment_method: paymentMethod,
       payment_method_custom:

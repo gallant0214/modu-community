@@ -84,6 +84,7 @@ export default function CrmMemberDetailPage() {
   const [passOpen, setPassOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
   const [usageReload, setUsageReload] = useState(0);
+  const [paymentDetail, setPaymentDetail] = useState<PaymentDetail | null>(null);
   const [detailPassId, setDetailPassId] = useState<number | null>(null);
   const [bodyOpen, setBodyOpen] = useState(false);
 
@@ -172,6 +173,17 @@ export default function CrmMemberDetailPage() {
     );
   }
 
+  const onSnapSelect = (tag: string, name: string, period: string | null) => {
+    setPaymentDetail({
+      tag,
+      name,
+      period,
+      source: "snapshot",
+      priceWon: member.total_paid_won,
+      paidAt: member.last_purchase_at,
+    });
+  };
+
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-3xl mx-auto">
       <BackLink />
@@ -218,10 +230,10 @@ export default function CrmMemberDetailPage() {
         member.current_rental ||
         member.current_locker) && (
         <div className="mb-3 flex flex-wrap gap-1.5 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
-          {holdingCards("회원권", member.current_membership)}
-          {holdingCards("이용권", member.current_pass)}
-          {holdingCards("대여권", member.current_rental)}
-          {holdingCards("락커", member.current_locker)}
+          {holdingCards("회원권", member.current_membership, onSnapSelect)}
+          {holdingCards("이용권", member.current_pass, onSnapSelect)}
+          {holdingCards("대여권", member.current_rental, onSnapSelect)}
+          {holdingCards("락커", member.current_locker, onSnapSelect)}
         </div>
       )}
 
@@ -307,7 +319,14 @@ export default function CrmMemberDetailPage() {
         )}
       </section>
 
-      <UsageSection memberId={member.id} reloadKey={usageReload} />
+      <UsageSection
+        memberId={member.id}
+        reloadKey={usageReload}
+        staffList={staffList}
+        onOpenDetail={setPaymentDetail}
+      />
+
+      <HoldingDetailModal detail={paymentDetail} onClose={() => setPaymentDetail(null)} />
 
       <SignedContractsSection memberId={member.id} />
 
@@ -548,25 +567,49 @@ const SNAP_STYLE: Record<string, string> = {
   락커: "border-[#8B6BB1]/40 bg-[#8B6BB1]/10 text-[#8B6BB1] dark:text-purple-300",
 };
 
-function SnapHoldingCard({ tag, name, period }: { tag: string; name: string; period: string | null }) {
+function SnapHoldingCard({
+  tag,
+  name,
+  period,
+  onClick,
+}: {
+  tag: string;
+  name: string;
+  period: string | null;
+  onClick?: () => void;
+}) {
   return (
-    <div
-      className={`inline-flex flex-col rounded-lg border px-2.5 py-1.5 leading-tight ${
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex flex-col text-left rounded-lg border px-2.5 py-1.5 leading-tight hover:brightness-95 ${
         SNAP_STYLE[tag] ?? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
       }`}
     >
       <span className="text-[9.5px] font-bold uppercase tracking-wide opacity-80">{tag}</span>
       <span className="text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">{name}</span>
       {period && <span className="text-[10.5px] text-[#A89B80] dark:text-zinc-500">{period}</span>}
-    </div>
+    </button>
   );
 }
 
-function holdingCards(tag: string, text: string | null) {
+function holdingCards(
+  tag: string,
+  text: string | null,
+  onSelect?: (tag: string, name: string, period: string | null) => void
+) {
   if (!text) return null;
   return splitTopLevel(text).map((chunk, i) => {
     const { name, period } = splitNamePeriod(chunk);
-    return <SnapHoldingCard key={`${tag}-${i}`} tag={tag} name={name} period={period} />;
+    return (
+      <SnapHoldingCard
+        key={`${tag}-${i}`}
+        tag={tag}
+        name={name}
+        period={period}
+        onClick={onSelect ? () => onSelect(tag, name, period) : undefined}
+      />
+    );
   });
 }
 
@@ -871,22 +914,66 @@ function EditModal({
 
 interface MembershipRow {
   id: number;
+  seller_member_id: number | null;
   plan_name: string;
   price_won: number;
+  discount_won: number;
+  vat_included: boolean;
+  payment_method: string;
+  payment_method_custom: string | null;
   start_date: string;
   expires_at: string;
   status: string;
+  memo: string | null;
+  outstanding_won: number;
+  payment_status: string;
+  created_at: string;
 }
 interface RentalRow {
   id: number;
+  seller_member_id: number | null;
   item_name: string;
   price_won: number;
+  discount_won: number;
+  vat_included: boolean;
+  payment_method: string;
+  payment_method_custom: string | null;
   start_date: string;
   expires_at: string;
   status: string;
+  memo: string | null;
+  created_at: string;
 }
 
-function UsageSection({ memberId, reloadKey }: { memberId: number; reloadKey: number }) {
+interface PaymentDetail {
+  tag: string;
+  name: string;
+  period: string | null;
+  source: "record" | "snapshot";
+  priceWon?: number;
+  discountWon?: number;
+  vatIncluded?: boolean;
+  paymentMethod?: string | null;
+  paymentCustom?: string | null;
+  outstandingWon?: number | null;
+  paymentStatus?: string | null;
+  sellerName?: string | null;
+  paidAt?: string | null;
+  memo?: string | null;
+  note?: string | null;
+}
+
+function UsageSection({
+  memberId,
+  reloadKey,
+  staffList,
+  onOpenDetail,
+}: {
+  memberId: number;
+  reloadKey: number;
+  staffList: { id: number; display_name: string; role: string; status: string }[];
+  onOpenDetail: (d: PaymentDetail) => void;
+}) {
   const { getIdToken } = useAuth();
   const [memberships, setMemberships] = useState<MembershipRow[]>([]);
   const [rentals, setRentals] = useState<RentalRow[]>([]);
@@ -914,6 +1001,8 @@ function UsageSection({ memberId, reloadKey }: { memberId: number; reloadKey: nu
   const total = memberships.length + rentals.length;
   const todayStr = new Date().toISOString().slice(0, 10);
   const isValid = (s: string, exp: string) => s === "valid" && exp >= todayStr;
+  const sellerName = (id: number | null) =>
+    id ? staffList.find((s) => s.id === id)?.display_name ?? null : null;
 
   return (
     <section className="mt-6 mb-2">
@@ -936,6 +1025,24 @@ function UsageSection({ memberId, reloadKey }: { memberId: number; reloadKey: nu
               price={m.price_won}
               period={`${m.start_date} ~ ${m.expires_at}`}
               valid={isValid(m.status, m.expires_at)}
+              onClick={() =>
+                onOpenDetail({
+                  tag: "회원권",
+                  name: m.plan_name,
+                  period: `${m.start_date} ~ ${m.expires_at}`,
+                  source: "record",
+                  priceWon: m.price_won,
+                  discountWon: m.discount_won,
+                  vatIncluded: m.vat_included,
+                  paymentMethod: m.payment_method,
+                  paymentCustom: m.payment_method_custom,
+                  outstandingWon: m.outstanding_won,
+                  paymentStatus: m.payment_status,
+                  sellerName: sellerName(m.seller_member_id),
+                  paidAt: m.created_at,
+                  memo: m.memo,
+                })
+              }
             />
           ))}
           {rentals.map((r) => (
@@ -946,6 +1053,22 @@ function UsageSection({ memberId, reloadKey }: { memberId: number; reloadKey: nu
               price={r.price_won}
               period={`${r.start_date} ~ ${r.expires_at}`}
               valid={isValid(r.status, r.expires_at)}
+              onClick={() =>
+                onOpenDetail({
+                  tag: "대여권",
+                  name: r.item_name,
+                  period: `${r.start_date} ~ ${r.expires_at}`,
+                  source: "record",
+                  priceWon: r.price_won,
+                  discountWon: r.discount_won,
+                  vatIncluded: r.vat_included,
+                  paymentMethod: r.payment_method,
+                  paymentCustom: r.payment_method_custom,
+                  sellerName: sellerName(r.seller_member_id),
+                  paidAt: r.created_at,
+                  memo: r.memo,
+                })
+              }
             />
           ))}
         </ul>
@@ -960,39 +1083,142 @@ function UsageCard({
   price,
   period,
   valid,
+  onClick,
 }: {
   tag: string;
   name: string;
   price: number;
   period: string;
   valid: boolean;
+  onClick: () => void;
 }) {
   const tone =
     tag === "회원권"
       ? "text-[#6B7B3A] dark:text-[#A8B87A]"
       : "text-[#3E7C8C] dark:text-cyan-300";
   return (
-    <li className="px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="flex items-center gap-1.5">
-          <span className={`text-[10.5px] font-bold ${tone}`}>{tag}</span>
-          <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{name}</span>
-        </span>
-        <span
-          className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-            valid
-              ? "bg-transparent border border-[#4CAF50] text-[#4CAF50]"
-              : "bg-[#F5F0E5] dark:bg-zinc-800 text-[#A89B80]"
-          }`}
-        >
-          {valid ? "유효" : "만료"}
-        </span>
-      </div>
-      <div className="mt-1 text-[11.5px] text-[#A89B80]">
-        {period}
-        {price > 0 && ` · ${formatWon(price)}원`}
-      </div>
+    <li>
+      <button
+        onClick={onClick}
+        className="w-full text-left px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors"
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="flex items-center gap-1.5">
+            <span className={`text-[10.5px] font-bold ${tone}`}>{tag}</span>
+            <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{name}</span>
+          </span>
+          <span
+            className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+              valid
+                ? "bg-transparent border border-[#4CAF50] text-[#4CAF50]"
+                : "bg-[#F5F0E5] dark:bg-zinc-800 text-[#A89B80]"
+            }`}
+          >
+            {valid ? "유효" : "만료"}
+          </span>
+        </div>
+        <div className="mt-1 text-[11.5px] text-[#A89B80]">
+          {period}
+          {price > 0 && ` · ${formatWon(price)}원`}
+          <span className="ml-1 text-[#6B7B3A] dark:text-[#A8B87A]">· 결제 상세 ›</span>
+        </div>
+      </button>
     </li>
+  );
+}
+
+function HoldingDetailModal({
+  detail,
+  onClose,
+}: {
+  detail: PaymentDetail | null;
+  onClose: () => void;
+}) {
+  const open = detail !== null;
+  const paymentLabel =
+    detail?.paymentMethod === "etc" && detail?.paymentCustom
+      ? `${detail.paymentCustom} (기타)`
+      : detail
+        ? PAYMENT_METHOD_LABEL[detail.paymentMethod ?? ""] ?? detail.paymentMethod ?? "—"
+        : "—";
+  const listPrice =
+    detail && detail.priceWon !== undefined
+      ? detail.priceWon + (detail.discountWon ?? 0)
+      : null;
+
+  return (
+    <CrmModal open={open} onClose={onClose} title="결제 상세">
+      {!detail ? null : detail.source === "snapshot" ? (
+        <div className="space-y-4">
+          <div className="px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
+            <div className="text-[10.5px] font-bold text-[#8C8270]">{detail.tag}</div>
+            <div className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">{detail.name}</div>
+            {detail.period && (
+              <div className="mt-0.5 text-[12px] text-[#A89B80]">{detail.period}</div>
+            )}
+          </div>
+          <DetailGrid
+            rows={[
+              ["누적 결제", detail.priceWon ? `${formatWon(detail.priceWon)}원` : "—"],
+              ["마지막 구매일", detail.paidAt ?? "—"],
+            ]}
+          />
+          <div className="px-3 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12px] text-[#8C8270] leading-relaxed">
+            {detail.note ??
+              "POS에서 가져온 보유 내역이라 이 상품의 개별 결제 상세(담당자·결제일·할인 등)는 저장돼 있지 않아요. '이용권 발급'으로 새로 발급하면 상세가 기록됩니다."}
+          </div>
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+          >
+            닫기
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
+            <div className="text-[10.5px] font-bold text-[#6B7B3A] dark:text-[#A8B87A]">{detail.tag}</div>
+            <div className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">{detail.name}</div>
+            {detail.period && (
+              <div className="mt-0.5 text-[12px] text-[#A89B80]">{detail.period}</div>
+            )}
+          </div>
+          <DetailGrid
+            rows={[
+              ["결제일", detail.paidAt ? new Date(detail.paidAt).toISOString().slice(0, 10) : "—"],
+              ["담당자", detail.sellerName ?? "—"],
+              ...(detail.discountWon && detail.discountWon > 0
+                ? ([
+                    ["정가", listPrice !== null ? `${formatWon(listPrice)}원` : "—"],
+                    ["할인", `-${formatWon(detail.discountWon)}원`],
+                  ] as [string, React.ReactNode][])
+                : []),
+              [
+                "결제 금액",
+                `${formatWon(detail.priceWon ?? 0)}원${detail.vatIncluded ? " (부가세 포함)" : " (부가세 별도)"}`,
+              ],
+              ["결제 수단", paymentLabel],
+              ...(detail.outstandingWon && detail.outstandingWon > 0
+                ? ([["미수금", <span key="o" className="text-red-600 dark:text-red-400 font-semibold">{formatWon(detail.outstandingWon)}원</span>]] as [string, React.ReactNode][])
+                : detail.paymentStatus
+                  ? ([["결제 상태", detail.paymentStatus === "paid" ? "완납" : detail.paymentStatus === "partial" ? "부분 결제" : "미결제"]] as [string, React.ReactNode][])
+                  : []),
+            ]}
+          />
+          {detail.memo && (
+            <div className="px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
+              <strong className="text-[#3A342A] dark:text-zinc-300">메모 ·</strong> {detail.memo}
+            </div>
+          )}
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+          >
+            닫기
+          </button>
+        </div>
+      )}
+    </CrmModal>
   );
 }
 
@@ -1034,6 +1260,7 @@ function UsageIssueModal({
   const [type, setType] = useState<UsageType>("membership");
   const [name, setName] = useState("");
   const [priceWon, setPriceWon] = useState(0);
+  const [discountWon, setDiscountWon] = useState(0);
   const [vatIncluded, setVatIncluded] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "etc">("card");
   const [paymentCustom, setPaymentCustom] = useState("");
@@ -1061,6 +1288,7 @@ function UsageIssueModal({
       setType("membership");
       setName("");
       setPriceWon(0);
+      setDiscountWon(0);
       setVatIncluded(false);
       setPaymentMethod("card");
       setPaymentCustom("");
@@ -1144,6 +1372,7 @@ function UsageIssueModal({
             plan_name: name.trim(),
             duration_days: durationDays,
             price_won: priceWon,
+            discount_won: discountWon,
             vat_included: vatIncluded,
             payment_method: paymentMethod,
             payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
@@ -1161,6 +1390,7 @@ function UsageIssueModal({
             seller_member_id: Number(sellerId),
             item_name: name.trim(),
             price_won: priceWon,
+            discount_won: discountWon,
             vat_included: vatIncluded,
             payment_method: paymentMethod,
             payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
@@ -1319,25 +1549,43 @@ function UsageIssueModal({
           </select>
         </CrmField>
 
-        <CrmField label={type === "locker" ? "대여료 (원)" : "결제 금액 (원)"}>
-          <input
-            type="text"
-            inputMode="numeric"
-            className={crmInputClass}
-            value={priceWon ? formatWon(priceWon) : ""}
-            onChange={(e) => setPriceWon(parseWon(e.target.value))}
-            placeholder="0"
-          />
-          <label className="mt-2 flex items-center gap-2 cursor-pointer">
+        <div className="grid grid-cols-2 gap-2">
+          <CrmField label={type === "locker" ? "대여료 (원)" : "결제 금액 (원)"}>
             <input
-              type="checkbox"
-              checked={vatIncluded}
-              onChange={(e) => setVatIncluded(e.target.checked)}
-              className="w-4 h-4 accent-[#6B7B3A]"
+              type="text"
+              inputMode="numeric"
+              className={crmInputClass}
+              value={priceWon ? formatWon(priceWon) : ""}
+              onChange={(e) => setPriceWon(parseWon(e.target.value))}
+              placeholder="0"
             />
-            <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">부가세 포함 금액</span>
-          </label>
-        </CrmField>
+          </CrmField>
+          <CrmField label="할인 금액 (원)">
+            <input
+              type="text"
+              inputMode="numeric"
+              className={crmInputClass}
+              value={discountWon ? formatWon(discountWon) : ""}
+              onChange={(e) => setDiscountWon(parseWon(e.target.value))}
+              placeholder="0"
+            />
+          </CrmField>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer -mt-1">
+          <input
+            type="checkbox"
+            checked={vatIncluded}
+            onChange={(e) => setVatIncluded(e.target.checked)}
+            className="w-4 h-4 accent-[#6B7B3A]"
+          />
+          <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">부가세 포함 금액</span>
+        </label>
+        {discountWon > 0 && (
+          <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 -mt-1">
+            정가 {formatWon(priceWon + discountWon)}원 · 할인 {formatWon(discountWon)}원 → 실결제{" "}
+            <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{formatWon(priceWon)}원</strong>
+          </div>
+        )}
 
         <CrmField label="결제 수단">
           <div className="grid grid-cols-4 gap-1.5">
