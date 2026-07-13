@@ -364,6 +364,7 @@ export default function CrmMemberDetailPage() {
         open={usageOpen}
         onClose={() => setUsageOpen(false)}
         memberId={member.id}
+        memberMileage={member.mileage}
         staffList={staffList}
         onSuccess={() => {
           setUsageOpen(false);
@@ -918,6 +919,8 @@ interface MembershipRow {
   plan_name: string;
   price_won: number;
   discount_won: number;
+  mileage_earned: number;
+  mileage_used: number;
   vat_included: boolean;
   payment_method: string;
   payment_method_custom: string | null;
@@ -935,6 +938,8 @@ interface RentalRow {
   item_name: string;
   price_won: number;
   discount_won: number;
+  mileage_earned: number;
+  mileage_used: number;
   vat_included: boolean;
   payment_method: string;
   payment_method_custom: string | null;
@@ -957,6 +962,8 @@ interface PaymentDetail {
   paymentCustom?: string | null;
   outstandingWon?: number | null;
   paymentStatus?: string | null;
+  mileageEarned?: number | null;
+  mileageUsed?: number | null;
   sellerName?: string | null;
   paidAt?: string | null;
   memo?: string | null;
@@ -1038,6 +1045,8 @@ function UsageSection({
                   paymentCustom: m.payment_method_custom,
                   outstandingWon: m.outstanding_won,
                   paymentStatus: m.payment_status,
+                  mileageEarned: m.mileage_earned,
+                  mileageUsed: m.mileage_used,
                   sellerName: sellerName(m.seller_member_id),
                   paidAt: m.created_at,
                   memo: m.memo,
@@ -1064,6 +1073,8 @@ function UsageSection({
                   vatIncluded: r.vat_included,
                   paymentMethod: r.payment_method,
                   paymentCustom: r.payment_method_custom,
+                  mileageEarned: r.mileage_earned,
+                  mileageUsed: r.mileage_used,
                   sellerName: sellerName(r.seller_member_id),
                   paidAt: r.created_at,
                   memo: r.memo,
@@ -1198,6 +1209,12 @@ function HoldingDetailModal({
                 `${formatWon(detail.priceWon ?? 0)}원${detail.vatIncluded ? " (부가세 포함)" : " (부가세 별도)"}`,
               ],
               ["결제 수단", paymentLabel],
+              ...(detail.mileageUsed && detail.mileageUsed > 0
+                ? ([["마일리지 사용", `-${detail.mileageUsed.toLocaleString()}P`]] as [string, React.ReactNode][])
+                : []),
+              ...(detail.mileageEarned && detail.mileageEarned > 0
+                ? ([["마일리지 적립", <span key="me" className="text-[#6B7B3A] dark:text-[#A8B87A] font-semibold">+{detail.mileageEarned.toLocaleString()}P</span>]] as [string, React.ReactNode][])
+                : []),
               ...(detail.outstandingWon && detail.outstandingWon > 0
                 ? ([["미수금", <span key="o" className="text-red-600 dark:text-red-400 font-semibold">{formatWon(detail.outstandingWon)}원</span>]] as [string, React.ReactNode][])
                 : detail.paymentStatus
@@ -1236,6 +1253,8 @@ interface UsageProduct {
   price_won: number;
   duration_value: number | null;
   duration_unit: string | null;
+  mileage_earn: number;
+  mileage_usable: boolean;
 }
 interface VacantLocker {
   id: number;
@@ -1247,12 +1266,14 @@ function UsageIssueModal({
   open,
   onClose,
   memberId,
+  memberMileage,
   staffList,
   onSuccess,
 }: {
   open: boolean;
   onClose: () => void;
   memberId: number;
+  memberMileage: number;
   staffList: { id: number; display_name: string; role: string; status: string }[];
   onSuccess: () => void;
 }) {
@@ -1260,6 +1281,9 @@ function UsageIssueModal({
   const [type, setType] = useState<UsageType>("membership");
   const [name, setName] = useState("");
   const [priceWon, setPriceWon] = useState(0);
+  const [mileageEarn, setMileageEarn] = useState(0);
+  const [mileageUsable, setMileageUsable] = useState(true);
+  const [mileageUse, setMileageUse] = useState(0);
   const [discountWon, setDiscountWon] = useState(0);
   const [vatIncluded, setVatIncluded] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "etc">("card");
@@ -1289,6 +1313,9 @@ function UsageIssueModal({
       setName("");
       setPriceWon(0);
       setDiscountWon(0);
+      setMileageEarn(0);
+      setMileageUsable(true);
+      setMileageUse(0);
       setVatIncluded(false);
       setPaymentMethod("card");
       setPaymentCustom("");
@@ -1310,6 +1337,9 @@ function UsageIssueModal({
   // 타입별 상품 카탈로그 로드 (프리필용)
   useEffect(() => {
     if (!open) return;
+    setMileageEarn(0);
+    setMileageUsable(true);
+    setMileageUse(0);
     (async () => {
       const token = await getIdToken();
       if (!token) return;
@@ -1339,6 +1369,9 @@ function UsageIssueModal({
   const applyProduct = (p: UsageProduct) => {
     setName(p.name);
     setPriceWon(p.price_won ?? 0);
+    setMileageEarn(p.mileage_earn ?? 0);
+    setMileageUsable(p.mileage_usable !== false);
+    if (p.mileage_usable === false) setMileageUse(0);
     if (p.duration_value && p.duration_unit) {
       const mult = p.duration_unit === "year" ? 365 : p.duration_unit === "month" ? 30 : 1;
       setDurationDays(Math.max(1, p.duration_value * mult));
@@ -1373,6 +1406,8 @@ function UsageIssueModal({
             duration_days: durationDays,
             price_won: priceWon,
             discount_won: discountWon,
+            mileage_earned: mileageEarn,
+            mileage_used: mileageUse,
             vat_included: vatIncluded,
             payment_method: paymentMethod,
             payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
@@ -1391,6 +1426,8 @@ function UsageIssueModal({
             item_name: name.trim(),
             price_won: priceWon,
             discount_won: discountWon,
+            mileage_earned: mileageEarn,
+            mileage_used: mileageUse,
             vat_included: vatIncluded,
             payment_method: paymentMethod,
             payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
@@ -1584,6 +1621,58 @@ function UsageIssueModal({
           <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 -mt-1">
             정가 {formatWon(priceWon + discountWon)}원 · 할인 {formatWon(discountWon)}원 → 실결제{" "}
             <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{formatWon(priceWon)}원</strong>
+          </div>
+        )}
+
+        {/* 마일리지 */}
+        {type !== "locker" && (
+          <div className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/50 dark:bg-zinc-900/40 space-y-2">
+            <div className="flex items-center justify-between text-[12px]">
+              <span className="text-[#6B5D47] dark:text-zinc-400">
+                적립 예정 <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{mileageEarn.toLocaleString()}P</strong>
+              </span>
+              <span className="text-[#A89B80]">보유 {memberMileage.toLocaleString()}P</span>
+            </div>
+            {mileageUsable && memberMileage > 0 && (
+              <div>
+                <label className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400">마일리지 사용 (P)</label>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className={`${crmInputClass} flex-1`}
+                    value={mileageUse ? mileageUse.toLocaleString() : ""}
+                    onChange={(e) =>
+                      setMileageUse(
+                        Math.max(
+                          0,
+                          Math.min(
+                            memberMileage,
+                            Number(e.target.value.replace(/[^\d]/g, "")) || 0
+                          )
+                        )
+                      )
+                    }
+                    placeholder="0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMileageUse(memberMileage)}
+                    className="px-2.5 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap hover:bg-[#F5F0E5]"
+                  >
+                    전액
+                  </button>
+                </div>
+                {mileageUse > 0 && (
+                  <div className="mt-1 text-[11px] text-[#8C8270]">
+                    사용 후 잔여 {(memberMileage - mileageUse + mileageEarn).toLocaleString()}P (적립 반영)
+                  </div>
+                )}
+              </div>
+            )}
+            {!mileageUsable && (
+              <div className="text-[11px] text-[#A89B80]">이 상품은 마일리지 사용이 제한되어 있어요.</div>
+            )}
           </div>
         )}
 

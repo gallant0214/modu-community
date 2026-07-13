@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_rentals")
     .select(
-      "id, member_id, seller_member_id, item_name, price_won, discount_won, vat_included, payment_method, payment_method_custom, start_date, expires_at, status, memo, created_at"
+      "id, member_id, seller_member_id, item_name, price_won, discount_won, mileage_earned, mileage_used, vat_included, payment_method, payment_method_custom, start_date, expires_at, status, memo, created_at"
     )
     .eq("center_id", ctx.centerId)
     .neq("status", "deleted")
@@ -51,6 +51,8 @@ export async function POST(request: Request) {
     item_name?: string;
     price_won?: number;
     discount_won?: number;
+    mileage_earned?: number;
+    mileage_used?: number;
     payment_method?: string;
     payment_method_custom?: string;
     start_date?: string;
@@ -97,6 +99,8 @@ export async function POST(request: Request) {
       item_name: itemName,
       price_won: Number(body.price_won) || 0,
       discount_won: Math.max(0, Math.floor(Number(body.discount_won) || 0)),
+      mileage_earned: Math.max(0, Math.floor(Number(body.mileage_earned) || 0)),
+      mileage_used: Math.max(0, Math.floor(Number(body.mileage_used) || 0)),
       vat_included: !!body.vat_included,
       payment_method: paymentMethod,
       payment_method_custom:
@@ -111,6 +115,24 @@ export async function POST(request: Request) {
 
   if (error || !created) {
     return NextResponse.json({ error: "발급 실패", detail: error?.message }, { status: 500 });
+  }
+
+  // 마일리지 적립/사용 → 회원 잔고 갱신
+  const mileageEarned = Math.max(0, Math.floor(Number(body.mileage_earned) || 0));
+  const mileageUsed = Math.max(0, Math.floor(Number(body.mileage_used) || 0));
+  if (mileageEarned > 0 || mileageUsed > 0) {
+    const { data: mem } = await supabase
+      .from("crm_members")
+      .select("mileage")
+      .eq("id", memberId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    const nextMileage = Math.max(0, (mem?.mileage ?? 0) + mileageEarned - mileageUsed);
+    await supabase
+      .from("crm_members")
+      .update({ mileage: nextMileage } as never)
+      .eq("id", memberId)
+      .eq("center_id", ctx.centerId);
   }
 
   await supabase.from("crm_audit_logs").insert({

@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_memberships")
     .select(
-      "id, member_id, seller_member_id, plan_name, duration_days, price_won, discount_won, vat_included, payment_method, payment_method_custom, start_date, expires_at, status, memo, outstanding_won, payment_status, created_at"
+      "id, member_id, seller_member_id, plan_name, duration_days, price_won, discount_won, mileage_earned, mileage_used, vat_included, payment_method, payment_method_custom, start_date, expires_at, status, memo, outstanding_won, payment_status, created_at"
     )
     .eq("center_id", ctx.centerId)
     .neq("status", "deleted")
@@ -74,6 +74,8 @@ export async function POST(request: Request) {
     expires_at?: string;
     vat_included?: boolean;
     memo?: string;
+    mileage_earned?: number;
+    mileage_used?: number;
     /** 발급 시점에 받은 금액. 미입력 시 price_won 전액. */
     paid_amount_won?: number;
   };
@@ -127,6 +129,8 @@ export async function POST(request: Request) {
       duration_days: duration,
       price_won: priceWon,
       discount_won: Math.max(0, Math.floor(Number(body.discount_won) || 0)),
+      mileage_earned: Math.max(0, Math.floor(Number(body.mileage_earned) || 0)),
+      mileage_used: Math.max(0, Math.floor(Number(body.mileage_used) || 0)),
       vat_included: !!body.vat_included,
       payment_method: paymentMethod,
       payment_method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
@@ -142,6 +146,24 @@ export async function POST(request: Request) {
 
   if (error || !created) {
     return NextResponse.json({ error: "발급 실패", detail: error?.message }, { status: 500 });
+  }
+
+  // 마일리지 적립/사용 → 회원 잔고 갱신
+  const mileageEarned = Math.max(0, Math.floor(Number(body.mileage_earned) || 0));
+  const mileageUsed = Math.max(0, Math.floor(Number(body.mileage_used) || 0));
+  if (mileageEarned > 0 || mileageUsed > 0) {
+    const { data: mem } = await supabase
+      .from("crm_members")
+      .select("mileage")
+      .eq("id", memberId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    const nextMileage = Math.max(0, (mem?.mileage ?? 0) + mileageEarned - mileageUsed);
+    await supabase
+      .from("crm_members")
+      .update({ mileage: nextMileage } as never)
+      .eq("id", memberId)
+      .eq("center_id", ctx.centerId);
   }
 
   // 초기 결제 금액이 있으면 payment 기록 추가
