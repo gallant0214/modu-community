@@ -82,6 +82,8 @@ export default function CrmMemberDetailPage() {
   const [error, setError] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [passOpen, setPassOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
+  const [usageReload, setUsageReload] = useState(0);
   const [detailPassId, setDetailPassId] = useState<number | null>(null);
   const [bodyOpen, setBodyOpen] = useState(false);
 
@@ -256,12 +258,20 @@ export default function CrmMemberDetailPage() {
           <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
             수강권 ({passes.length})
           </h2>
-          <button
-            onClick={() => setPassOpen(true)}
-            className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]"
-          >
-            + 수강권 발급
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setUsageOpen(true)}
+              className="px-3 py-1.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/5"
+            >
+              + 이용권 발급
+            </button>
+            <button
+              onClick={() => setPassOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]"
+            >
+              + 수강권 발급
+            </button>
+          </div>
         </div>
         {passes.length === 0 ? (
           <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
@@ -300,6 +310,8 @@ export default function CrmMemberDetailPage() {
         )}
       </section>
 
+      <UsageSection memberId={member.id} reloadKey={usageReload} />
+
       <SignedContractsSection memberId={member.id} />
 
       <BodyMeasurementSection memberId={member.id} onOpen={() => setBodyOpen(true)} />
@@ -329,6 +341,17 @@ export default function CrmMemberDetailPage() {
           setPassOpen(false);
           setPendingPassId(passId);
           setChoiceOpen(true);
+          load();
+        }}
+      />
+      <UsageIssueModal
+        open={usageOpen}
+        onClose={() => setUsageOpen(false)}
+        memberId={member.id}
+        staffList={staffList}
+        onSuccess={() => {
+          setUsageOpen(false);
+          setUsageReload((n) => n + 1);
           load();
         }}
       />
@@ -682,6 +705,527 @@ function EditModal({
           className="w-full px-4 py-3 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[14.5px] font-semibold hover:bg-[#5a6932] mt-2"
         >
           {submitting ? "저장 중…" : "저장"}
+        </button>
+      </div>
+    </CrmModal>
+  );
+}
+
+interface MembershipRow {
+  id: number;
+  plan_name: string;
+  price_won: number;
+  start_date: string;
+  expires_at: string;
+  status: string;
+}
+interface RentalRow {
+  id: number;
+  item_name: string;
+  price_won: number;
+  start_date: string;
+  expires_at: string;
+  status: string;
+}
+
+function UsageSection({ memberId, reloadKey }: { memberId: number; reloadKey: number }) {
+  const { getIdToken } = useAuth();
+  const [memberships, setMemberships] = useState<MembershipRow[]>([]);
+  const [rentals, setRentals] = useState<RentalRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const headers = { authorization: `Bearer ${token}` };
+        const [mRes, rRes] = await Promise.all([
+          fetch(`/api/crm/memberships?member_id=${memberId}`, { headers, cache: "no-store" }),
+          fetch(`/api/crm/rentals?member_id=${memberId}`, { headers, cache: "no-store" }),
+        ]);
+        if (mRes.ok) setMemberships((await mRes.json()).memberships ?? []);
+        if (rRes.ok) setRentals((await rRes.json()).rentals ?? []);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [memberId, reloadKey, getIdToken]);
+
+  const total = memberships.length + rentals.length;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isValid = (s: string, exp: string) => s === "valid" && exp >= todayStr;
+
+  return (
+    <section className="mt-6 mb-2">
+      <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
+        회원권 · 대여권 ({total})
+      </h2>
+      {loading && total === 0 ? (
+        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : total === 0 ? (
+        <div className="px-4 py-6 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          발급된 회원권·대여권이 없습니다. "+ 이용권 발급"으로 추가해 주세요.
+        </div>
+      ) : (
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {memberships.map((m) => (
+            <UsageCard
+              key={`m${m.id}`}
+              tag="회원권"
+              name={m.plan_name}
+              price={m.price_won}
+              period={`${m.start_date} ~ ${m.expires_at}`}
+              valid={isValid(m.status, m.expires_at)}
+            />
+          ))}
+          {rentals.map((r) => (
+            <UsageCard
+              key={`r${r.id}`}
+              tag="대여권"
+              name={r.item_name}
+              price={r.price_won}
+              period={`${r.start_date} ~ ${r.expires_at}`}
+              valid={isValid(r.status, r.expires_at)}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function UsageCard({
+  tag,
+  name,
+  price,
+  period,
+  valid,
+}: {
+  tag: string;
+  name: string;
+  price: number;
+  period: string;
+  valid: boolean;
+}) {
+  const tone =
+    tag === "회원권"
+      ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+      : "text-[#3E7C8C] dark:text-cyan-300";
+  return (
+    <li className="px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="flex items-center gap-1.5">
+          <span className={`text-[10.5px] font-bold ${tone}`}>{tag}</span>
+          <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{name}</span>
+        </span>
+        <span
+          className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+            valid
+              ? "bg-transparent border border-[#4CAF50] text-[#4CAF50]"
+              : "bg-[#F5F0E5] dark:bg-zinc-800 text-[#A89B80]"
+          }`}
+        >
+          {valid ? "유효" : "만료"}
+        </span>
+      </div>
+      <div className="mt-1 text-[11.5px] text-[#A89B80]">
+        {period}
+        {price > 0 && ` · ${formatWon(price)}원`}
+      </div>
+    </li>
+  );
+}
+
+type UsageType = "membership" | "locker" | "apparel";
+
+const USAGE_TABS: { key: UsageType; label: string }[] = [
+  { key: "membership", label: "헬스 이용권" },
+  { key: "locker", label: "락커" },
+  { key: "apparel", label: "운동복" },
+];
+
+interface UsageProduct {
+  id: number;
+  name: string;
+  price_won: number;
+  duration_value: number | null;
+  duration_unit: string | null;
+}
+interface VacantLocker {
+  id: number;
+  zone_name: string;
+  number: number;
+}
+
+function UsageIssueModal({
+  open,
+  onClose,
+  memberId,
+  staffList,
+  onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  memberId: number;
+  staffList: { id: number; display_name: string; role: string; status: string }[];
+  onSuccess: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [type, setType] = useState<UsageType>("membership");
+  const [name, setName] = useState("");
+  const [priceWon, setPriceWon] = useState(0);
+  const [vatIncluded, setVatIncluded] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "etc">("card");
+  const [paymentCustom, setPaymentCustom] = useState("");
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [durationDays, setDurationDays] = useState(30);
+  const [memo, setMemo] = useState("");
+  const [sellerId, setSellerId] = useState<number | "">("");
+  const [products, setProducts] = useState<UsageProduct[]>([]);
+  const [lockers, setLockers] = useState<VacantLocker[]>([]);
+  const [lockerId, setLockerId] = useState<number | "">("");
+  const [lockerPassword, setLockerPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const expiresAt = (() => {
+    if (!startDate) return "";
+    const d = new Date(`${startDate}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + Math.max(1, durationDays));
+    return d.toISOString().slice(0, 10);
+  })();
+
+  // 초기화
+  useEffect(() => {
+    if (open) {
+      setType("membership");
+      setName("");
+      setPriceWon(0);
+      setVatIncluded(false);
+      setPaymentMethod("card");
+      setPaymentCustom("");
+      setStartDate(new Date().toISOString().slice(0, 10));
+      setDurationDays(30);
+      setMemo("");
+      setLockerId("");
+      setLockerPassword("");
+      setError("");
+    }
+  }, [open]);
+
+  // 담당 직원 기본값
+  useEffect(() => {
+    if (open && staffList.length > 0 && sellerId === "") setSellerId(staffList[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, staffList]);
+
+  // 타입별 상품 카탈로그 로드 (프리필용)
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const productType = type === "apparel" ? "apparel" : type; // membership | locker | apparel
+      const res = await fetch(`/api/crm/products?type=${productType}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProducts(data.products ?? []);
+      }
+      if (type === "locker") {
+        const lr = await fetch("/api/crm/lockers/vacant", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (lr.ok) {
+          const ld = await lr.json();
+          setLockers(ld.lockers ?? []);
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, type]);
+
+  const applyProduct = (p: UsageProduct) => {
+    setName(p.name);
+    setPriceWon(p.price_won ?? 0);
+    if (p.duration_value && p.duration_unit) {
+      const mult = p.duration_unit === "year" ? 365 : p.duration_unit === "month" ? 30 : 1;
+      setDurationDays(Math.max(1, p.duration_value * mult));
+    }
+  };
+
+  const submit = async () => {
+    setError("");
+    if (type === "locker") {
+      if (!lockerId) return setError("배정할 락커를 선택해 주세요");
+    } else if (!name.trim()) {
+      return setError(type === "membership" ? "이용권명을 입력해 주세요" : "품목명을 입력해 주세요");
+    }
+    if (!startDate || !expiresAt) return setError("기간을 확인해 주세요");
+    if (!sellerId) return setError("담당 직원을 선택해 주세요");
+    setSubmitting(true);
+    try {
+      const token = await getIdToken();
+      const headers = {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      };
+      let res: Response;
+      if (type === "membership") {
+        res = await fetch("/api/crm/memberships", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            member_id: memberId,
+            seller_member_id: Number(sellerId),
+            plan_name: name.trim(),
+            duration_days: durationDays,
+            price_won: priceWon,
+            vat_included: vatIncluded,
+            payment_method: paymentMethod,
+            payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
+            start_date: startDate,
+            expires_at: expiresAt,
+            memo: memo || undefined,
+          }),
+        });
+      } else if (type === "apparel") {
+        res = await fetch("/api/crm/rentals", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            member_id: memberId,
+            seller_member_id: Number(sellerId),
+            item_name: name.trim(),
+            price_won: priceWon,
+            vat_included: vatIncluded,
+            payment_method: paymentMethod,
+            payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
+            start_date: startDate,
+            expires_at: expiresAt,
+            memo: memo || undefined,
+          }),
+        });
+      } else {
+        // locker
+        const priceNote = priceWon > 0 ? `대여료 ${formatWon(priceWon)}원` : "";
+        const fullMemo = [priceNote, memo].filter(Boolean).join(" · ");
+        res = await fetch(`/api/crm/lockers/${lockerId}`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({
+            action: "assign",
+            member_id: memberId,
+            start_date: startDate,
+            expires_at: expiresAt,
+            password: lockerPassword || undefined,
+            memo: fullMemo || undefined,
+          }),
+        });
+      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "발급 실패");
+      onSuccess();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <CrmModal open={open} onClose={onClose} title="이용권 발급" size="lg">
+      <div className="space-y-3">
+        <CrmField label="종류" required>
+          <div className="grid grid-cols-3 gap-2">
+            {USAGE_TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setType(t.key)}
+                className={`px-2 py-2 rounded-lg text-[13px] font-medium
+                  ${type === t.key
+                    ? "border border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
+                    : "border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                  }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </CrmField>
+
+        {/* 상품 카탈로그 프리필 */}
+        {products.length > 0 && (
+          <CrmField label="상품 선택 (선택)">
+            <select
+              className={crmInputClass}
+              value=""
+              onChange={(e) => {
+                const p = products.find((x) => x.id === Number(e.target.value));
+                if (p) applyProduct(p);
+              }}
+            >
+              <option value="">상품에서 불러오기…</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.price_won ? ` · ${formatWon(p.price_won)}원` : ""}
+                </option>
+              ))}
+            </select>
+          </CrmField>
+        )}
+
+        {type === "locker" ? (
+          <>
+            <CrmField label="락커 선택" required>
+              {lockers.length === 0 ? (
+                <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 text-[12.5px] text-[#8C8270]">
+                  비어있는 락커가 없어요. 락커 관리에서 확인해 주세요.
+                </div>
+              ) : (
+                <select
+                  className={crmInputClass}
+                  value={lockerId}
+                  onChange={(e) => setLockerId(e.target.value ? Number(e.target.value) : "")}
+                >
+                  <option value="">선택해 주세요</option>
+                  {lockers.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.zone_name} {l.number}번
+                    </option>
+                  ))}
+                </select>
+              )}
+            </CrmField>
+            <CrmField label="락커 비밀번호">
+              <input
+                className={crmInputClass}
+                value={lockerPassword}
+                onChange={(e) => setLockerPassword(e.target.value)}
+                placeholder="선택 입력"
+              />
+            </CrmField>
+          </>
+        ) : (
+          <CrmField label={type === "membership" ? "이용권명" : "품목명"} required>
+            <input
+              className={crmInputClass}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={type === "membership" ? "예: 헬스 3개월" : "예: 운동복"}
+            />
+          </CrmField>
+        )}
+
+        <div className="grid grid-cols-2 gap-2">
+          <CrmField label="시작일" required>
+            <input
+              type="date"
+              className={crmInputClass}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </CrmField>
+          <CrmField label="이용 기간(일)" required>
+            <input
+              type="number"
+              min={1}
+              className={crmInputClass}
+              value={durationDays}
+              onChange={(e) => setDurationDays(Math.max(1, Number(e.target.value) || 0))}
+            />
+          </CrmField>
+        </div>
+        <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 -mt-1">
+          만료일: <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{expiresAt || "—"}</strong>
+        </div>
+
+        <CrmField label="담당 직원" required>
+          <select
+            className={crmInputClass}
+            value={sellerId}
+            onChange={(e) => setSellerId(e.target.value ? Number(e.target.value) : "")}
+          >
+            <option value="">선택해 주세요</option>
+            {staffList.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.display_name}
+              </option>
+            ))}
+          </select>
+        </CrmField>
+
+        <CrmField label={type === "locker" ? "대여료 (원)" : "결제 금액 (원)"}>
+          <input
+            type="text"
+            inputMode="numeric"
+            className={crmInputClass}
+            value={priceWon ? formatWon(priceWon) : ""}
+            onChange={(e) => setPriceWon(parseWon(e.target.value))}
+            placeholder="0"
+          />
+          <label className="mt-2 flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={vatIncluded}
+              onChange={(e) => setVatIncluded(e.target.checked)}
+              className="w-4 h-4 accent-[#6B7B3A]"
+            />
+            <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">부가세 포함 금액</span>
+          </label>
+        </CrmField>
+
+        <CrmField label="결제 수단">
+          <div className="grid grid-cols-4 gap-1.5">
+            {(["cash", "card", "transfer", "etc"] as const).map((mth) => (
+              <button
+                key={mth}
+                onClick={() => setPaymentMethod(mth)}
+                className={`px-2 py-2 rounded-lg text-[12px] font-medium
+                  ${paymentMethod === mth
+                    ? "border border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
+                    : "border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                  }`}
+              >
+                {PAYMENT_METHOD_LABEL[mth]}
+              </button>
+            ))}
+          </div>
+          {paymentMethod === "etc" && (
+            <input
+              className={`${crmInputClass} mt-2`}
+              value={paymentCustom}
+              onChange={(e) => setPaymentCustom(e.target.value)}
+              placeholder="결제 수단을 직접 입력하세요"
+            />
+          )}
+        </CrmField>
+
+        <CrmField label="메모">
+          <textarea
+            className={`${crmInputClass} min-h-[56px]`}
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+          />
+        </CrmField>
+
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+            {error}
+          </div>
+        )}
+        <button
+          onClick={submit}
+          disabled={submitting}
+          className="w-full px-4 py-3 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[14.5px] font-semibold hover:bg-[#5a6932] mt-2"
+        >
+          {submitting ? "발급 중…" : "발급"}
         </button>
       </div>
     </CrmModal>

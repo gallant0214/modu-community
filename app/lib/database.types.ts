@@ -1592,6 +1592,60 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_rentals: {
+        Row: {
+          id: number
+          center_id: number
+          member_id: number
+          seller_member_id: number | null
+          item_name: string
+          price_won: number
+          vat_included: boolean
+          payment_method: string
+          payment_method_custom: string | null
+          start_date: string
+          expires_at: string
+          status: string
+          memo: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          member_id: number
+          seller_member_id?: number | null
+          item_name: string
+          price_won?: number
+          vat_included?: boolean
+          payment_method?: string
+          payment_method_custom?: string | null
+          start_date: string
+          expires_at: string
+          status?: string
+          memo?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          member_id?: number
+          seller_member_id?: number | null
+          item_name?: string
+          price_won?: number
+          vat_included?: boolean
+          payment_method?: string
+          payment_method_custom?: string | null
+          start_date?: string
+          expires_at?: string
+          status?: string
+          memo?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_pauses: {
         Row: {
           id: number
