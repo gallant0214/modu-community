@@ -1453,7 +1453,7 @@ function StatusBadge({ isValid, hasAny }: { isValid: boolean; hasAny: boolean })
   }
   if (isValid) {
     return (
-      <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#6B7B3A]/15 text-[#6B7B3A] dark:text-[#A8B87A]">
+      <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-medium bg-transparent border border-[#4CAF50] text-[#4CAF50] dark:border-[#6ECF70] dark:text-[#6ECF70]">
         유효
       </span>
     );
