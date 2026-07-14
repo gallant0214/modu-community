@@ -994,8 +994,11 @@ function LockerCard({
           <div className="mt-1 text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
             {locker.member.name}
           </div>
-          {/* 만료일/D-day 는 카드에서 제거 — 이름 위에 겹치는 문제 해소.
-              상세 패널에서 확인 가능. 상태 태그(활성/임박/만료)로 시각 구분. */}
+          {locker.expires_at && (
+            <div className="mt-auto text-[11.5px] text-[#8C8270] dark:text-zinc-500 truncate">
+              {expireSubtitle(locker.expires_at, today)}
+            </div>
+          )}
         </>
       ) : (
         <div className="flex-1 flex items-center justify-center pb-3 text-[#A89B80] dark:text-zinc-500 text-[26px] leading-none">
