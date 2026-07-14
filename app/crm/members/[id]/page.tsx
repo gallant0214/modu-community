@@ -1258,6 +1258,7 @@ interface UsageProduct {
 }
 interface VacantLocker {
   id: number;
+  zone_id: number;
   zone_name: string;
   number: number;
 }
@@ -1294,6 +1295,7 @@ function UsageIssueModal({
   const [sellerId, setSellerId] = useState<number | "">("");
   const [products, setProducts] = useState<UsageProduct[]>([]);
   const [lockers, setLockers] = useState<VacantLocker[]>([]);
+  const [lockerZone, setLockerZone] = useState<number | "">("");
   const [lockerId, setLockerId] = useState<number | "">("");
   const [lockerPassword, setLockerPassword] = useState("");
   const [showProducts, setShowProducts] = useState(false);
@@ -1323,6 +1325,7 @@ function UsageIssueModal({
       setStartDate(new Date().toISOString().slice(0, 10));
       setDurationDays(30);
       setMemo("");
+      setLockerZone("");
       setLockerId("");
       setLockerPassword("");
       setError("");
@@ -1381,11 +1384,16 @@ function UsageIssueModal({
 
   const submit = async () => {
     setError("");
-    if (type === "locker") {
-      if (!lockerId) return setError("배정할 락커를 선택해 주세요");
-    } else if (!name.trim()) {
-      return setError(type === "membership" ? "이용권명을 입력해 주세요" : "품목명을 입력해 주세요");
+    if (!name.trim()) {
+      return setError(
+        type === "membership"
+          ? "이용권 상품을 선택하거나 입력해 주세요"
+          : type === "locker"
+            ? "락커 상품을 선택하거나 입력해 주세요"
+            : "대여 상품을 선택하거나 입력해 주세요"
+      );
     }
+    if (type === "locker" && !lockerId) return setError("배정할 빈 자리를 선택해 주세요");
     if (!startDate || !expiresAt) return setError("기간을 확인해 주세요");
     if (!sellerId) return setError("담당 직원을 선택해 주세요");
     setSubmitting(true);
@@ -1438,10 +1446,10 @@ function UsageIssueModal({
           }),
         });
       } else {
-        // locker
-        const priceNote = priceWon > 0 ? `대여료 ${formatWon(priceWon)}원` : "";
-        const fullMemo = [priceNote, memo].filter(Boolean).join(" · ");
-        res = await fetch(`/api/crm/lockers/${lockerId}`, {
+        // locker: ① 물리 락커 배정 ② 판매 기록(crm_rentals, 매출·마일리지)
+        const loc = lockers.find((l) => l.id === lockerId);
+        const locLabel = loc ? `락커 ${loc.zone_name} ${loc.number}번` : "락커";
+        const assignRes = await fetch(`/api/crm/lockers/${lockerId}`, {
           method: "PATCH",
           headers,
           body: JSON.stringify({
@@ -1450,7 +1458,29 @@ function UsageIssueModal({
             start_date: startDate,
             expires_at: expiresAt,
             password: lockerPassword || undefined,
-            memo: fullMemo || undefined,
+            memo: memo || undefined,
+          }),
+        });
+        const assignData = await assignRes.json();
+        if (!assignRes.ok) throw new Error(assignData?.error || "락커 배정 실패");
+
+        res = await fetch("/api/crm/rentals", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            member_id: memberId,
+            seller_member_id: Number(sellerId),
+            item_name: name.trim(),
+            price_won: priceWon,
+            discount_won: discountWon,
+            mileage_earned: mileageEarn,
+            mileage_used: mileageUse,
+            vat_included: vatIncluded,
+            payment_method: paymentMethod,
+            payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
+            start_date: startDate,
+            expires_at: expiresAt,
+            memo: [locLabel, memo].filter(Boolean).join(" · "),
           }),
         });
       }
@@ -1485,28 +1515,115 @@ function UsageIssueModal({
           </div>
         </CrmField>
 
-        {type === "locker" ? (
+        {/* 상품 검색 (모든 탭 공통) */}
+        <CrmField
+          label={type === "membership" ? "이용권 상품" : type === "locker" ? "락커 상품" : "대여 상품"}
+          required
+        >
+          <div className="relative">
+            <input
+              className={crmInputClass}
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setShowProducts(true);
+              }}
+              onFocus={() => setShowProducts(true)}
+              onBlur={() => setTimeout(() => setShowProducts(false), 150)}
+              placeholder="상품 관리에 등록된 상품명 검색 (직접 입력 가능)"
+              autoComplete="off"
+            />
+            {showProducts &&
+              (() => {
+                const q = name.trim().toLowerCase();
+                const matches = products
+                  .filter((p) => !q || p.name.toLowerCase().includes(q))
+                  .slice(0, 50);
+                if (matches.length === 0) return null;
+                return (
+                  <ul className="absolute z-20 left-0 right-0 mt-1 max-h-[360px] overflow-y-auto rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg">
+                    {matches.map((p) => (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            applyProduct(p);
+                            setShowProducts(false);
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800 last:border-0"
+                        >
+                          <div className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">
+                            {p.name}
+                          </div>
+                          <div className="text-[11px] text-[#8C8270]">
+                            {p.price_won ? `${formatWon(p.price_won)}원` : "금액 미정"}
+                            {p.mileage_earn > 0 && ` · 적립 ${p.mileage_earn.toLocaleString()}P`}
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()}
+          </div>
+          {products.length === 0 && (
+            <p className="mt-1 text-[11px] text-[#A89B80]">
+              등록된 {type === "membership" ? "이용권" : type === "locker" ? "락커" : "대여"} 상품이
+              없어요. 직접 입력하거나 상품 관리에서 추가해 주세요.
+            </p>
+          )}
+        </CrmField>
+
+        {/* 락커: 구역 → 빈 자리 → 비밀번호 */}
+        {type === "locker" && (
           <>
-            <CrmField label="락커 선택" required>
-              {lockers.length === 0 ? (
-                <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 text-[12.5px] text-[#8C8270]">
-                  비어있는 락커가 없어요. 락커 관리에서 확인해 주세요.
-                </div>
-              ) : (
-                <select
-                  className={crmInputClass}
-                  value={lockerId}
-                  onChange={(e) => setLockerId(e.target.value ? Number(e.target.value) : "")}
-                >
-                  <option value="">선택해 주세요</option>
-                  {lockers.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.zone_name} {l.number}번
+            {lockers.length === 0 ? (
+              <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 text-[12.5px] text-[#8C8270]">
+                비어있는 락커가 없어요. 락커 관리에서 확인해 주세요.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <CrmField label="구역" required>
+                  <select
+                    className={crmInputClass}
+                    value={lockerZone}
+                    onChange={(e) => {
+                      setLockerZone(e.target.value ? Number(e.target.value) : "");
+                      setLockerId("");
+                    }}
+                  >
+                    <option value="">구역 선택</option>
+                    {Array.from(
+                      new Map(lockers.map((l) => [l.zone_id, l.zone_name])).entries()
+                    ).map(([zid, zname]) => (
+                      <option key={zid} value={zid}>
+                        {zname} ({lockers.filter((l) => l.zone_id === zid).length}자리)
+                      </option>
+                    ))}
+                  </select>
+                </CrmField>
+                <CrmField label="빈 자리" required>
+                  <select
+                    className={crmInputClass}
+                    value={lockerId}
+                    disabled={lockerZone === ""}
+                    onChange={(e) => setLockerId(e.target.value ? Number(e.target.value) : "")}
+                  >
+                    <option value="">
+                      {lockerZone === "" ? "구역 먼저 선택" : "자리 선택"}
                     </option>
-                  ))}
-                </select>
-              )}
-            </CrmField>
+                    {lockers
+                      .filter((l) => l.zone_id === lockerZone)
+                      .map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.number}번
+                        </option>
+                      ))}
+                  </select>
+                </CrmField>
+              </div>
+            )}
             <CrmField label="락커 비밀번호">
               <input
                 className={crmInputClass}
@@ -1516,61 +1633,6 @@ function UsageIssueModal({
               />
             </CrmField>
           </>
-        ) : (
-          <CrmField label={type === "membership" ? "이용권 상품" : "대여 상품"} required>
-            <div className="relative">
-              <input
-                className={crmInputClass}
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  setShowProducts(true);
-                }}
-                onFocus={() => setShowProducts(true)}
-                onBlur={() => setTimeout(() => setShowProducts(false), 150)}
-                placeholder="상품 관리에 등록된 상품명 검색 (직접 입력 가능)"
-                autoComplete="off"
-              />
-              {showProducts &&
-                (() => {
-                  const q = name.trim().toLowerCase();
-                  const matches = products
-                    .filter((p) => !q || p.name.toLowerCase().includes(q))
-                    .slice(0, 50);
-                  if (matches.length === 0) return null;
-                  return (
-                    <ul className="absolute z-20 left-0 right-0 mt-1 max-h-[360px] overflow-y-auto rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg">
-                      {matches.map((p) => (
-                        <li key={p.id}>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              applyProduct(p);
-                              setShowProducts(false);
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800 last:border-0"
-                          >
-                            <div className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">
-                              {p.name}
-                            </div>
-                            <div className="text-[11px] text-[#8C8270]">
-                              {p.price_won ? `${formatWon(p.price_won)}원` : "금액 미정"}
-                              {p.mileage_earn > 0 && ` · 적립 ${p.mileage_earn.toLocaleString()}P`}
-                            </div>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  );
-                })()}
-            </div>
-            {products.length === 0 && (
-              <p className="mt-1 text-[11px] text-[#A89B80]">
-                등록된 {type === "membership" ? "이용권" : "대여"} 상품이 없어요. 직접 입력하거나 상품 관리에서 추가해 주세요.
-              </p>
-            )}
-          </CrmField>
         )}
 
         <div className="grid grid-cols-2 gap-2">
@@ -1650,7 +1712,7 @@ function UsageIssueModal({
         )}
 
         {/* 마일리지 */}
-        {type !== "locker" && (
+        {(
           <div className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/50 dark:bg-zinc-900/40 space-y-2">
             <div className="flex items-center justify-between text-[12px]">
               <span className="text-[#6B5D47] dark:text-zinc-400">
