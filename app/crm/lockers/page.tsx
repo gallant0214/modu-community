@@ -91,7 +91,12 @@ export default function CrmLockersPage() {
   const [loadingZones, setLoadingZones] = useState(true);
   const [loadingLockers, setLoadingLockers] = useState(false);
   const [error, setError] = useState("");
-  const [today] = useState(() => new Date().toISOString().slice(0, 10));
+  // KST 기준 오늘 (UTC 로 계산하면 새벽·저녁대에 D-day/임박 판정이 하루씩 밀림)
+  const [today] = useState(() => {
+    const d = new Date();
+    const kst = new Date(d.getTime() + 9 * 3600 * 1000);
+    return kst.toISOString().slice(0, 10);
+  });
 
   // 필터
   const [filter, setFilter] = useState<"all" | DisplayState>("all");
