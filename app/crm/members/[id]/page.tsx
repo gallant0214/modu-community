@@ -1536,10 +1536,10 @@ function UsageIssueModal({
                   const q = name.trim().toLowerCase();
                   const matches = products
                     .filter((p) => !q || p.name.toLowerCase().includes(q))
-                    .slice(0, 8);
+                    .slice(0, 50);
                   if (matches.length === 0) return null;
                   return (
-                    <ul className="absolute z-20 left-0 right-0 mt-1 max-h-[240px] overflow-y-auto rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg">
+                    <ul className="absolute z-20 left-0 right-0 mt-1 max-h-[360px] overflow-y-auto rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg">
                       {matches.map((p) => (
                         <li key={p.id}>
                           <button
