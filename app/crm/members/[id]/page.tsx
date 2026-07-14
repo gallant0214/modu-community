@@ -1296,6 +1296,7 @@ function UsageIssueModal({
   const [lockers, setLockers] = useState<VacantLocker[]>([]);
   const [lockerId, setLockerId] = useState<number | "">("");
   const [lockerPassword, setLockerPassword] = useState("");
+  const [showProducts, setShowProducts] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -1484,28 +1485,6 @@ function UsageIssueModal({
           </div>
         </CrmField>
 
-        {/* 상품 카탈로그 프리필 */}
-        {products.length > 0 && (
-          <CrmField label="상품 선택 (선택)">
-            <select
-              className={crmInputClass}
-              value=""
-              onChange={(e) => {
-                const p = products.find((x) => x.id === Number(e.target.value));
-                if (p) applyProduct(p);
-              }}
-            >
-              <option value="">상품에서 불러오기…</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                  {p.price_won ? ` · ${formatWon(p.price_won)}원` : ""}
-                </option>
-              ))}
-            </select>
-          </CrmField>
-        )}
-
         {type === "locker" ? (
           <>
             <CrmField label="락커 선택" required>
@@ -1538,13 +1517,59 @@ function UsageIssueModal({
             </CrmField>
           </>
         ) : (
-          <CrmField label={type === "membership" ? "이용권명" : "품목명"} required>
-            <input
-              className={crmInputClass}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={type === "membership" ? "예: 헬스 3개월" : "예: 운동복"}
-            />
+          <CrmField label={type === "membership" ? "이용권 상품" : "대여 상품"} required>
+            <div className="relative">
+              <input
+                className={crmInputClass}
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setShowProducts(true);
+                }}
+                onFocus={() => setShowProducts(true)}
+                onBlur={() => setTimeout(() => setShowProducts(false), 150)}
+                placeholder="상품 관리에 등록된 상품명 검색 (직접 입력 가능)"
+                autoComplete="off"
+              />
+              {showProducts &&
+                (() => {
+                  const q = name.trim().toLowerCase();
+                  const matches = products
+                    .filter((p) => !q || p.name.toLowerCase().includes(q))
+                    .slice(0, 8);
+                  if (matches.length === 0) return null;
+                  return (
+                    <ul className="absolute z-20 left-0 right-0 mt-1 max-h-[240px] overflow-y-auto rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg">
+                      {matches.map((p) => (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              applyProduct(p);
+                              setShowProducts(false);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800 last:border-0"
+                          >
+                            <div className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">
+                              {p.name}
+                            </div>
+                            <div className="text-[11px] text-[#8C8270]">
+                              {p.price_won ? `${formatWon(p.price_won)}원` : "금액 미정"}
+                              {p.mileage_earn > 0 && ` · 적립 ${p.mileage_earn.toLocaleString()}P`}
+                            </div>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                })()}
+            </div>
+            {products.length === 0 && (
+              <p className="mt-1 text-[11px] text-[#A89B80]">
+                등록된 {type === "membership" ? "이용권" : "대여"} 상품이 없어요. 직접 입력하거나 상품 관리에서 추가해 주세요.
+              </p>
+            )}
           </CrmField>
         )}
 
