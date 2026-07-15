@@ -2711,27 +2711,33 @@ function LayoutEditor({
     const used = new Set<string>();
     for (const p of placed) used.add(`${p.row}-${p.col}`);
 
-    // 학습 방향: 이웃 번호쌍의 (dr,dc) 최빈값 (거리 1인 쌍만)
+    // 학습 방향: n → n+1 연속번호쌍만 (거리 1 인 셀만) 델타 집계
+    //   • 사용자가 최근 배치한 소수의 규칙성 있는 쌍이 초기 자동배치 패턴에 묻히지 않도록
+    //   • 최소 5개 이상의 연속번호쌍이 학습되어야 방향으로 채택
     let linearize: ((r: number, c: number) => number) | null = null;
     if (placed.length >= 6) {
+      const numberToPos = new Map(placed.map((p) => [p.number, p]));
       const counts = new Map<string, number>();
-      for (let i = 1; i < placed.length; i += 1) {
-        const dr = placed[i].row - placed[i - 1].row;
-        const dc = placed[i].col - placed[i - 1].col;
+      for (const p of placed) {
+        const next = numberToPos.get(p.number + 1);
+        if (!next) continue;
+        const dr = next.row - p.row;
+        const dc = next.col - p.col;
         if (Math.abs(dr) + Math.abs(dc) === 1) {
           const k = `${dr},${dc}`;
           counts.set(k, (counts.get(k) ?? 0) + 1);
         }
       }
-      if (counts.size > 0) {
-        let bestKey = "";
-        let bestCount = 0;
-        counts.forEach((v, k) => {
-          if (v > bestCount) {
-            bestCount = v;
-            bestKey = k;
-          }
-        });
+      let bestKey = "";
+      let bestCount = 0;
+      counts.forEach((v, k) => {
+        if (v > bestCount) {
+          bestCount = v;
+          bestKey = k;
+        }
+      });
+      // 5쌍 이상 일치할 때만 채택. 그 이하면 폴백(row-major LR)
+      if (bestCount >= 5) {
         const [drStr, dcStr] = bestKey.split(",");
         const dr = Number(drStr);
         const dc = Number(dcStr);
@@ -2753,18 +2759,12 @@ function LayoutEditor({
     }
     emptyCells.sort((a, b) => a.score - b.score);
 
-    // 학습 성공 시 이미 배치된 최대 score 이후 셀만 채움 (앞자리 비지 않게)
-    let targetCells = emptyCells;
-    if (linearize && placed.length > 0) {
-      const maxPlacedScore = Math.max(...placed.map((p) => linearize!(p.row, p.col)));
-      const afterCells = emptyCells.filter((c) => c.score > maxPlacedScore);
-      if (afterCells.length > 0) targetCells = afterCells;
-    }
-
+    // 빈 셀을 학습된 순서(score ASC)로 정렬. 이미 배치된 락커 중 규칙에서 벗어난 셀은
+    // 그대로 두고, unplaced 를 남은 빈 셀에 번호 ASC 순으로 배치.
     const sortedPool = [...pool].sort((a, b) => a.number - b.number);
     const nextMap = { ...layoutMap };
-    for (let i = 0; i < sortedPool.length && i < targetCells.length; i += 1) {
-      nextMap[sortedPool[i].id] = { row: targetCells[i].row, col: targetCells[i].col };
+    for (let i = 0; i < sortedPool.length && i < emptyCells.length; i += 1) {
+      nextMap[sortedPool[i].id] = { row: emptyCells[i].row, col: emptyCells[i].col };
     }
     onBulkReplace(nextMap);
   };
