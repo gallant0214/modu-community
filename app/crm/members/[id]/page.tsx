@@ -1538,6 +1538,7 @@ function UsageIssueModal({
                 const q = name.trim().toLowerCase();
                 const matches = products
                   .filter((p) => !q || p.name.toLowerCase().includes(q))
+                  .sort((a, b) => a.name.localeCompare(b.name, "ko"))
                   .slice(0, 50);
                 if (matches.length === 0) return null;
                 return (
