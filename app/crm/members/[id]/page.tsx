@@ -1262,6 +1262,16 @@ interface VacantLocker {
   zone_name: string;
   number: number;
 }
+interface PassProduct {
+  id: number;
+  name: string;
+  price_won: number;
+  total_sessions: number | null;
+  session_minutes: number | null;
+  service_days: number | null;
+  duration_value: number | null;
+  duration_unit: string | null;
+}
 
 function UsageIssueModal({
   open,
@@ -1832,6 +1842,8 @@ function PassIssueModal({
   const [issueType, setIssueType] = useState<"new" | "renewal" | "trial" | "service">("new");
   const [lessonKind, setLessonKind] = useState("");
   const [lessonKinds, setLessonKinds] = useState<{ id: number; label: string }[]>([]);
+  const [passProducts, setPassProducts] = useState<PassProduct[]>([]);
+  const [showKindList, setShowKindList] = useState(false);
   const [totalSessions, setTotalSessions] = useState(10);
   const [sessionMinutes, setSessionMinutes] = useState(50);
   const [priceWon, setPriceWon] = useState(0);
@@ -1862,25 +1874,45 @@ function PassIssueModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, staffList]);
 
-  // 열릴 때 수업 종류 목록 로드
+  // 열릴 때 수업 종류 목록 + 수강권 상품(개인/그룹) 로드
   useEffect(() => {
     if (!open) return;
     (async () => {
       const token = await getIdToken();
       if (!token) return;
-      const res = await fetch("/api/crm/lesson-kinds", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
+      const headers = { authorization: `Bearer ${token}` };
+      const res = await fetch("/api/crm/lesson-kinds", { headers, cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
-        const kinds = data.kinds ?? [];
-        setLessonKinds(kinds);
-        if (!lessonKind && kinds.length > 0) setLessonKind(kinds[0].label);
+        setLessonKinds(data.kinds ?? []);
       }
+      const [pRes, gRes] = await Promise.all([
+        fetch("/api/crm/products?type=personal", { headers, cache: "no-store" }),
+        fetch("/api/crm/products?type=group", { headers, cache: "no-store" }),
+      ]);
+      const merged: PassProduct[] = [];
+      if (pRes.ok) merged.push(...((await pRes.json()).products ?? []));
+      if (gRes.ok) merged.push(...((await gRes.json()).products ?? []));
+      setPassProducts(merged);
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // 수강권 상품 선택 → 금액·세션·기간 자동 적용
+  const applyPassProduct = (p: PassProduct) => {
+    setLessonKind(p.name);
+    if (p.total_sessions && p.total_sessions > 0) setTotalSessions(p.total_sessions);
+    if (p.session_minutes && p.session_minutes > 0) setSessionMinutes(p.session_minutes);
+    setPriceWon(p.price_won ?? 0);
+    if (p.service_days && p.service_days > 0) {
+      setDurationDays(p.service_days);
+      setUnlimited(false);
+    } else if (p.duration_value && p.duration_unit) {
+      const mult = p.duration_unit === "year" ? 365 : p.duration_unit === "month" ? 30 : 1;
+      setDurationDays(Math.max(1, p.duration_value * mult));
+      setUnlimited(false);
+    }
+  };
 
   const submit = async () => {
     setError("");
@@ -1924,31 +1956,77 @@ function PassIssueModal({
   return (
     <CrmModal open={open} onClose={onClose} title="수강권 발급" size="lg">
       <div className="space-y-3">
-        <CrmField label="수업 종류" required>
-          {lessonKinds.length === 0 ? (
-            <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[12.5px] text-[#8C8270]">
-              등록된 수업 종류가 없어요.{" "}
-              <Link
-                href="/crm/settings"
-                className="text-[#6B7B3A] hover:underline font-medium"
-              >
-                설정 → 수강권 종류 에서 추가하러 가기 →
-              </Link>
-            </div>
-          ) : (
-            <select
+        <CrmField label="수강권 상품" required>
+          <div className="relative">
+            <input
               className={crmInputClass}
               value={lessonKind}
-              onChange={(e) => setLessonKind(e.target.value)}
-            >
-              <option value="">선택해 주세요</option>
-              {lessonKinds.map((k) => (
-                <option key={k.id} value={k.label}>
-                  {k.label}
-                </option>
-              ))}
-            </select>
-          )}
+              onChange={(e) => {
+                setLessonKind(e.target.value);
+                setShowKindList(true);
+              }}
+              onFocus={() => setShowKindList(true)}
+              onBlur={() => setTimeout(() => setShowKindList(false), 150)}
+              placeholder="상품 관리에 등록된 수강권 검색 (직접 입력 가능)"
+              autoComplete="off"
+            />
+            {showKindList &&
+              (() => {
+                const q = lessonKind.trim().toLowerCase();
+                const prods = passProducts
+                  .filter((p) => !q || p.name.toLowerCase().includes(q))
+                  .sort((a, b) => a.name.localeCompare(b.name, "ko"));
+                const kinds = lessonKinds
+                  .filter((k) => !q || k.label.toLowerCase().includes(q))
+                  .sort((a, b) => a.label.localeCompare(b.label, "ko"));
+                if (prods.length === 0 && kinds.length === 0) return null;
+                return (
+                  <ul className="absolute z-20 left-0 right-0 mt-1 max-h-[360px] overflow-y-auto rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg">
+                    {prods.map((p) => (
+                      <li key={`p${p.id}`}>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            applyPassProduct(p);
+                            setShowKindList(false);
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800"
+                        >
+                          <div className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">
+                            {p.name}
+                          </div>
+                          <div className="text-[11px] text-[#8C8270]">
+                            {p.price_won ? `${formatWon(p.price_won)}원` : "금액 미정"}
+                            {p.total_sessions ? ` · ${p.total_sessions}회` : ""}
+                            {p.session_minutes ? ` · ${p.session_minutes}분` : ""}
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                    {kinds.map((k) => (
+                      <li key={`k${k.id}`}>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setLessonKind(k.label);
+                            setShowKindList(false);
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800 last:border-0"
+                        >
+                          <span className="text-[13px] text-[#3A342A] dark:text-zinc-200">{k.label}</span>
+                          <span className="ml-1.5 text-[10.5px] text-[#A89B80]">수업 종류</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()}
+          </div>
+          <p className="mt-1 text-[11px] text-[#A89B80]">
+            수강권을 선택하면 금액·세션·기간이 자동 채워져요. 미선택 시 직접 입력하면 됩니다.
+          </p>
         </CrmField>
         <CrmField label="담당 강사" required>
           <select
