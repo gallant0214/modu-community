@@ -1776,7 +1776,7 @@ function UsageIssueModal({
 
         <CrmField label="결제 수단">
           <div className="grid grid-cols-4 gap-1.5">
-            {(["cash", "card", "transfer", "etc"] as const).map((mth) => (
+            {(["card", "cash", "transfer", "etc"] as const).map((mth) => (
               <button
                 key={mth}
                 onClick={() => setPaymentMethod(mth)}
@@ -2103,7 +2103,7 @@ function PassIssueModal({
         </CrmField>
         <CrmField label="결제 수단">
           <div className="grid grid-cols-4 gap-1.5">
-            {(["cash", "card", "transfer", "etc"] as const).map((m) => (
+            {(["card", "cash", "transfer", "etc"] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => setPaymentMethod(m)}
