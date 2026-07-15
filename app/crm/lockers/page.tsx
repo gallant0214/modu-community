@@ -2694,23 +2694,77 @@ function LayoutEditor({
     }
   };
 
-  // 남은 락커를 빈 셀에 왼쪽 위 → 오른쪽 아래 순으로 자동 채움
+  // 남은 락커 자동 채우기.
+  //   • 배치된 락커 6개 이상 → 이웃 번호쌍의 (dr,dc) 델타 중 최빈값으로 방향 학습 후 동일 규칙 적용
+  //   • 그 미만 → 왼쪽 위 → 오른쪽 아래 row-major 폴백
   const autoFillRemaining = () => {
     if (!hasGrid || pool.length === 0) return;
+
+    const placed = lockers
+      .map((l) => {
+        const pos = layoutMap[l.id];
+        return pos ? { id: l.id, number: l.number, row: pos.row, col: pos.col } : null;
+      })
+      .filter((x): x is { id: number; number: number; row: number; col: number } => x !== null)
+      .sort((a, b) => a.number - b.number);
+
     const used = new Set<string>();
-    for (const l of lockers) {
-      const pos = layoutMap[l.id];
-      if (pos) used.add(`${pos.row}-${pos.col}`);
+    for (const p of placed) used.add(`${p.row}-${p.col}`);
+
+    // 학습 방향: 이웃 번호쌍의 (dr,dc) 최빈값 (거리 1인 쌍만)
+    let linearize: ((r: number, c: number) => number) | null = null;
+    if (placed.length >= 6) {
+      const counts = new Map<string, number>();
+      for (let i = 1; i < placed.length; i += 1) {
+        const dr = placed[i].row - placed[i - 1].row;
+        const dc = placed[i].col - placed[i - 1].col;
+        if (Math.abs(dr) + Math.abs(dc) === 1) {
+          const k = `${dr},${dc}`;
+          counts.set(k, (counts.get(k) ?? 0) + 1);
+        }
+      }
+      if (counts.size > 0) {
+        let bestKey = "";
+        let bestCount = 0;
+        counts.forEach((v, k) => {
+          if (v > bestCount) {
+            bestCount = v;
+            bestKey = k;
+          }
+        });
+        const [drStr, dcStr] = bestKey.split(",");
+        const dr = Number(drStr);
+        const dc = Number(dcStr);
+        if (dc === 1) linearize = (r, c) => r * cols + c;
+        else if (dc === -1) linearize = (r, c) => r * cols + (cols - 1 - c);
+        else if (dr === 1) linearize = (r, c) => c * rows + r;
+        else if (dr === -1) linearize = (r, c) => c * rows + (rows - 1 - r);
+      }
     }
-    const nextMap = { ...layoutMap };
-    let pi = 0;
-    outer: for (let r = 0; r < rows; r += 1) {
+
+    // 빈 셀 목록 (학습 순서로 정렬)
+    const emptyCells: { row: number; col: number; score: number }[] = [];
+    for (let r = 0; r < rows; r += 1) {
       for (let c = 0; c < cols; c += 1) {
         if (used.has(`${r}-${c}`)) continue;
-        if (pi >= pool.length) break outer;
-        nextMap[pool[pi].id] = { row: r, col: c };
-        pi += 1;
+        const score = linearize ? linearize(r, c) : r * cols + c;
+        emptyCells.push({ row: r, col: c, score });
       }
+    }
+    emptyCells.sort((a, b) => a.score - b.score);
+
+    // 학습 성공 시 이미 배치된 최대 score 이후 셀만 채움 (앞자리 비지 않게)
+    let targetCells = emptyCells;
+    if (linearize && placed.length > 0) {
+      const maxPlacedScore = Math.max(...placed.map((p) => linearize!(p.row, p.col)));
+      const afterCells = emptyCells.filter((c) => c.score > maxPlacedScore);
+      if (afterCells.length > 0) targetCells = afterCells;
+    }
+
+    const sortedPool = [...pool].sort((a, b) => a.number - b.number);
+    const nextMap = { ...layoutMap };
+    for (let i = 0; i < sortedPool.length && i < targetCells.length; i += 1) {
+      nextMap[sortedPool[i].id] = { row: targetCells[i].row, col: targetCells[i].col };
     }
     onBulkReplace(nextMap);
   };
@@ -2783,9 +2837,9 @@ function LayoutEditor({
             onClick={autoFillRemaining}
             disabled={pool.length === 0}
             className="px-2.5 py-1 rounded-full text-[11.5px] font-semibold border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5 disabled:opacity-40 disabled:cursor-not-allowed"
-            title="배치 안 된 락커를 남은 빈 셀에 왼쪽 위부터 자동으로 채워요"
+            title="배치된 락커 6개 이상이면 그 순서·방향을 학습해 같은 규칙으로 이어서 배치, 6개 미만이면 왼쪽 위부터 채워요"
           >
-            + 남은 락커 자동 채우기
+            + 나머지 자동 배치
           </button>
           <button
             type="button"
