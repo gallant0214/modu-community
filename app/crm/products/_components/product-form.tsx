@@ -550,11 +550,22 @@ export function ProductForm({ mode, initial, onSaved, onCancel }: Props) {
               <FieldLabel>유효 기간 (일)</FieldLabel>
               <input
                 type="number"
-                min={0}
-                value={serviceDays ?? 0}
+                min={1}
+                disabled={serviceDays === 0}
+                value={serviceDays === 0 ? "" : serviceDays ?? 0}
                 onChange={(e) => setServiceDays(Math.max(0, Number(e.target.value) || 0))}
-                className={crmInputClass}
+                className={`${crmInputClass} disabled:opacity-50`}
+                placeholder={serviceDays === 0 ? "무기한" : undefined}
               />
+              <label className="mt-2 flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={serviceDays === 0}
+                  onChange={(e) => setServiceDays(e.target.checked ? 0 : 30)}
+                  className="w-4 h-4 accent-[#6B7B3A]"
+                />
+                <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">무기한</span>
+              </label>
             </div>
           </div>
         )}

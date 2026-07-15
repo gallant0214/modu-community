@@ -1907,10 +1907,13 @@ function PassIssueModal({
     if (p.service_days && p.service_days > 0) {
       setDurationDays(p.service_days);
       setUnlimited(false);
-    } else if (p.duration_value && p.duration_unit) {
+    } else if (p.duration_value && p.duration_value > 0 && p.duration_unit) {
       const mult = p.duration_unit === "year" ? 365 : p.duration_unit === "month" ? 30 : 1;
       setDurationDays(Math.max(1, p.duration_value * mult));
       setUnlimited(false);
+    } else {
+      // 유효기간 미설정(0) = 무기한
+      setUnlimited(true);
     }
   };
 
