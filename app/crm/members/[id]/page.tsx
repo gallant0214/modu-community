@@ -80,7 +80,6 @@ export default function CrmMemberDetailPage() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [editOpen, setEditOpen] = useState(false);
   const [passOpen, setPassOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
   const [usageReload, setUsageReload] = useState(0);
@@ -89,6 +88,8 @@ export default function CrmMemberDetailPage() {
   const [bodyOpen, setBodyOpen] = useState(false);
   // 탭: 정보 / 결제내역 / 로그
   const [tab, setTab] = useState<"info" | "payments" | "logs">("info");
+  // 현재 유저 권한 (members.edit_basic / members.edit_usage / members.delete)
+  const [perms, setPerms] = useState<Record<string, boolean>>({});
 
   // 결제 후 흐름 (계약서 작성 선택)
   const [pendingPassId, setPendingPassId] = useState<number | null>(null);
@@ -128,6 +129,30 @@ export default function CrmMemberDetailPage() {
   useEffect(() => {
     if (memberId) load();
   }, [memberId, load]);
+
+  // 현재 유저의 회원 관련 권한 로드
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/bootstrap", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPerms(data.permissions ?? {});
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [getIdToken]);
+
+  const canEditBasic = !!perms["members.edit_basic"];
+  const canEditUsage = !!perms["members.edit_usage"];
+  const canDelete = !!perms["members.delete"];
 
   // 직원 목록 1회 로드 (수강권 발급 모달 + 상세 모달 공용)
   useEffect(() => {
@@ -222,18 +247,14 @@ export default function CrmMemberDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={() => setEditOpen(true)}
-            className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
-          >
-            정보 수정
-          </button>
-          <button
-            onClick={remove}
-            className="px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900 text-[12.5px] text-red-700 dark:text-red-300 hover:bg-red-50"
-          >
-            회원 삭제
-          </button>
+            {canDelete && (
+              <button
+                onClick={remove}
+                className="px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900 text-[12.5px] text-red-700 dark:text-red-300 hover:bg-red-50"
+              >
+                회원 삭제
+              </button>
+            )}
           </div>
         </div>
 
@@ -287,34 +308,36 @@ export default function CrmMemberDetailPage() {
       <MemoSection memberId={member.id} memo={member.memo} onSaved={load} />
 
       <div className="mb-6 grid grid-cols-1 lg:grid-cols-2 gap-3">
-      <DetailSection title="기본 정보">
-        <EditableInfoCard memberId={member.id} field="phone" label="연락처" value={member.phone} type="text" formatDisplay={(v) => (v ? formatPhone(String(v)) : "—")} onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="gender" label="성별" value={member.gender} type="select" options={[{ v: "M", l: "남" }, { v: "F", l: "여" }, { v: "N", l: "기타" }]} formatDisplay={(v) => (v ? GENDER_LABEL[v as "M" | "F" | "N"] ?? String(v) : "—")} onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="birth" label="생년월일" value={member.birth} type="date" onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="email" label="이메일" value={member.email} type="text" onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="address" label="주소" value={member.address} type="text" onSaved={load} />
-      </DetailSection>
+        <DetailSection title="기본 정보">
+          <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="name" label="이름" value={member.name} type="text" onSaved={load} />
+          <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="phone" label="연락처" value={member.phone} type="text" formatDisplay={(v) => (v ? formatPhone(String(v)) : "—")} onSaved={load} />
+          <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="gender" label="성별" value={member.gender} type="select" options={[{ v: "M", l: "남" }, { v: "F", l: "여" }, { v: "N", l: "기타" }]} formatDisplay={(v) => (v ? GENDER_LABEL[v as "M" | "F" | "N"] ?? String(v) : "—")} onSaved={load} />
+          <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="birth" label="생년월일" value={member.birth} type="date" onSaved={load} />
+          <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="email" label="이메일" value={member.email} type="text" onSaved={load} />
+          <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="address" label="주소" value={member.address} type="text" onSaved={load} />
+        </DetailSection>
 
       <DetailSection title="등록 정보">
-        <EditableInfoCard memberId={member.id} field="member_type" label="회원 유형" value={member.member_type} type="select" options={[{ v: "provisional", l: "가회원" }, { v: "full", l: "정회원" }, { v: "matched", l: "연동 회원" }]} formatDisplay={(v) => (v ? MEMBER_TYPE_LABEL[String(v)] ?? String(v) : "—")} onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="registration_type" label="신규/재등록" value={member.registration_type} type="select" options={[{ v: "신규", l: "신규" }, { v: "재등록", l: "재등록" }]} onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="registered_at" label="최근 등록일" value={member.registered_at} type="date" onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="first_use_at" label="이용 시작일" value={member.first_use_at} type="date" onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="final_expire_at" label="최종 만료일" value={member.final_expire_at} type="date" onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="last_purchase_at" label="마지막 구매일" value={member.last_purchase_at} type="date" onSaved={load} />
+        <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="member_type" label="회원 유형" value={member.member_type} type="select" options={[{ v: "provisional", l: "가회원" }, { v: "full", l: "정회원" }, { v: "matched", l: "연동 회원" }]} formatDisplay={(v) => (v ? MEMBER_TYPE_LABEL[String(v)] ?? String(v) : "—")} onSaved={load} />
+        <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="registration_type" label="신규/재등록" value={member.registration_type} type="select" options={[{ v: "신규", l: "신규" }, { v: "재등록", l: "재등록" }]} onSaved={load} />
+        <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="registered_at" label="최근 등록일" value={member.registered_at} type="date" onSaved={load} />
+        <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="first_use_at" label="이용 시작일" value={member.first_use_at} type="date" onSaved={load} />
+        <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="final_expire_at" label="최종 만료일" value={member.final_expire_at} type="date" onSaved={load} />
+        <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="last_purchase_at" label="마지막 구매일" value={member.last_purchase_at} type="date" onSaved={load} />
       </DetailSection>
 
       <DetailSection title="이용 정보">
-        <EditableInfoCard memberId={member.id} field="last_attended_at" label="마지막 출석일" value={member.last_attended_at} type="date" onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="total_paid_won" label="누적 결제" value={member.total_paid_won} type="number" suffix="원" onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="attendance_no" label="출석번호" value={member.attendance_no} type="text" onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="workout_goal" label="운동 목적" value={member.workout_goal} type="text" onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="mileage" label="마일리지" value={member.mileage} type="number" suffix="점" onSaved={load} />
+        <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="last_attended_at" label="마지막 출석일" value={member.last_attended_at} type="date" onSaved={load} />
+        <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="total_paid_won" label="누적 결제" value={member.total_paid_won} type="number" suffix="원" onSaved={load} />
+        <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="attendance_no" label="출석번호" value={member.attendance_no} type="text" onSaved={load} />
+        <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="workout_goal" label="운동 목적" value={member.workout_goal} type="text" onSaved={load} />
+        <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="mileage" label="마일리지" value={member.mileage} type="number" suffix="점" onSaved={load} />
       </DetailSection>
 
       <DetailSection title="관리 정보">
-        <EditableInfoCard memberId={member.id} field="visit_route" label="방문 경로" value={member.visit_route} type="text" onSaved={load} />
+        <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="visit_route" label="방문 경로" value={member.visit_route} type="text" onSaved={load} />
         <EditableInfoCard
+          canEdit={canEditUsage}
           memberId={member.id}
           field="counselor"
           label="상담 담당자"
@@ -328,7 +351,7 @@ export default function CrmMemberDetailPage() {
           ]}
           onSaved={load}
         />
-        <EditableInfoCard memberId={member.id} field="marketing_consent" label="광고성 수신" value={member.marketing_consent} type="bool" onSaved={load} />
+        <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="marketing_consent" label="광고성 수신" value={member.marketing_consent} type="bool" onSaved={load} />
       </DetailSection>
       </div>
 
@@ -417,15 +440,6 @@ export default function CrmMemberDetailPage() {
         onDone={() => setBodyOpen(false)}
       />
 
-      <EditModal
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        member={member}
-        onSuccess={() => {
-          setEditOpen(false);
-          load();
-        }}
-      />
       <PassIssueModal
         open={passOpen}
         onClose={() => setPassOpen(false)}
@@ -977,6 +991,7 @@ function EditableInfoCard({
   options,
   suffix,
   formatDisplay,
+  canEdit = true,
   onSaved,
 }: {
   memberId: number;
@@ -987,6 +1002,7 @@ function EditableInfoCard({
   options?: { v: string; l: string }[];
   suffix?: string;
   formatDisplay?: (v: string | number | boolean | null) => string;
+  canEdit?: boolean;
   onSaved: () => void;
 }) {
   const { getIdToken } = useAuth();
@@ -1029,8 +1045,13 @@ function EditableInfoCard({
         }
         payload[field] = n;
       } else {
-        // string
-        payload[field] = (draft as string).trim() || null;
+        const text = (draft as string).trim();
+        if ((field === "name" || field === "phone") && !text) {
+          setError(`${label}을 입력해 주세요`);
+          setSaving(false);
+          return;
+        }
+        payload[field] = text || null;
       }
       const res = await fetch(`/api/crm/members/${memberId}`, {
         method: "PATCH",
@@ -1052,7 +1073,7 @@ function EditableInfoCard({
     <div className="group px-3 py-2 rounded-lg bg-white/60 dark:bg-zinc-950/40 border border-[#E8E0D0]/50 dark:border-zinc-800/60 hover:border-[#6B7B3A]/40 transition-colors">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[11px] text-[#A89B80] dark:text-zinc-500">{label}</span>
-        {!editing && (
+        {!editing && canEdit && (
           <button
             type="button"
             onClick={() => setEditing(true)}
@@ -1156,76 +1177,6 @@ function EditableInfoCard({
 }
 
 // 콤마로 구분된 보유 상품 문자열을 개별 항목으로 분리 (괄호 안 콤마는 무시)
-/**
- * 보유 회원권/수강권/대여권/락커 편집용 — 콤마 구분 텍스트를 리스트로 관리.
- * 각 항목은 별도 행에 표시, X 로 삭제, + 로 추가.
- */
-function HoldingListInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  const items = value
-    ? splitTopLevel(value)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0)
-    : [];
-
-  const setItem = (idx: number, next: string) => {
-    const arr = items.slice();
-    arr[idx] = next;
-    onChange(arr.filter((s) => s.length > 0).join(", "));
-  };
-  const removeItem = (idx: number) => {
-    const arr = items.slice();
-    arr.splice(idx, 1);
-    onChange(arr.join(", "));
-  };
-  const addItem = () => {
-    onChange([...items, ""].filter((s, i, a) => i === a.length - 1 || s.length > 0).join(", "));
-  };
-
-  return (
-    <CrmField label={label}>
-      {items.length === 0 ? (
-        <div className="text-[12px] text-[#A89B80] italic mb-1.5">없음</div>
-      ) : (
-        <ul className="space-y-1.5 mb-2">
-          {items.map((it, i) => (
-            <li key={i} className="flex items-center gap-1.5">
-              <input
-                type="text"
-                value={it}
-                onChange={(e) => setItem(i, e.target.value)}
-                className={`${crmInputClass} flex-1`}
-              />
-              <button
-                type="button"
-                onClick={() => removeItem(i)}
-                aria-label="삭제"
-                className="px-2 py-1.5 rounded-lg border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-[12px] hover:bg-red-50 shrink-0"
-              >
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <button
-        type="button"
-        onClick={addItem}
-        className="text-[12px] px-2.5 py-1 rounded-full border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
-      >
-        + 항목 추가
-      </button>
-    </CrmField>
-  );
-}
-
 function splitTopLevel(text: string): string[] {
   const out: string[] = [];
   let depth = 0;
@@ -1316,280 +1267,6 @@ function PassStatusChip({ status }: { status: string }) {
     <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${cls}`}>
       {label}
     </span>
-  );
-}
-
-function EditModal({
-  open,
-  onClose,
-  member,
-  onSuccess,
-}: {
-  open: boolean;
-  onClose: () => void;
-  member: Member;
-  onSuccess: () => void;
-}) {
-  const { getIdToken } = useAuth();
-  const [name, setName] = useState(member.name);
-  const [phone, setPhone] = useState(member.phone);
-  const [email, setEmail] = useState(member.email ?? "");
-  const [birth, setBirth] = useState(member.birth ?? "");
-  const [gender, setGender] = useState<string>(member.gender ?? "");
-  const [memo, setMemo] = useState(member.memo ?? "");
-  const [address, setAddress] = useState(member.address ?? "");
-  const [visitRoute, setVisitRoute] = useState(member.visit_route ?? "");
-  const [workoutGoal, setWorkoutGoal] = useState(member.workout_goal ?? "");
-  const [counselor, setCounselor] = useState(member.counselor ?? "");
-  const [mileage, setMileage] = useState(String(member.mileage ?? 0));
-  const [marketingConsent, setMarketingConsent] = useState(!!member.marketing_consent);
-  const [registeredAt, setRegisteredAt] = useState(member.registered_at ?? "");
-  const [registrationType, setRegistrationType] = useState(member.registration_type ?? "");
-  const [firstUseAt, setFirstUseAt] = useState(member.first_use_at ?? "");
-  const [finalExpireAt, setFinalExpireAt] = useState(member.final_expire_at ?? "");
-  const [lastPurchaseAt, setLastPurchaseAt] = useState(member.last_purchase_at ?? "");
-  const [lastAttendedAt, setLastAttendedAt] = useState(member.last_attended_at ?? "");
-  const [totalPaidWon, setTotalPaidWon] = useState(String(member.total_paid_won ?? 0));
-  const [attendanceNo, setAttendanceNo] = useState(member.attendance_no ?? "");
-  const [currentMembership, setCurrentMembership] = useState(member.current_membership ?? "");
-  const [currentPass, setCurrentPass] = useState(member.current_pass ?? "");
-  const [currentRental, setCurrentRental] = useState(member.current_rental ?? "");
-  const [currentLocker, setCurrentLocker] = useState(member.current_locker ?? "");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (open) {
-      setName(member.name);
-      setPhone(member.phone);
-      setEmail(member.email ?? "");
-      setBirth(member.birth ?? "");
-      setGender(member.gender ?? "");
-      setMemo(member.memo ?? "");
-      setAddress(member.address ?? "");
-      setVisitRoute(member.visit_route ?? "");
-      setWorkoutGoal(member.workout_goal ?? "");
-      setCounselor(member.counselor ?? "");
-      setMileage(String(member.mileage ?? 0));
-      setMarketingConsent(!!member.marketing_consent);
-      setRegisteredAt(member.registered_at ?? "");
-      setRegistrationType(member.registration_type ?? "");
-      setFirstUseAt(member.first_use_at ?? "");
-      setFinalExpireAt(member.final_expire_at ?? "");
-      setLastPurchaseAt(member.last_purchase_at ?? "");
-      setLastAttendedAt(member.last_attended_at ?? "");
-      setTotalPaidWon(String(member.total_paid_won ?? 0));
-      setAttendanceNo(member.attendance_no ?? "");
-      setCurrentMembership(member.current_membership ?? "");
-      setCurrentPass(member.current_pass ?? "");
-      setCurrentRental(member.current_rental ?? "");
-      setCurrentLocker(member.current_locker ?? "");
-      setError("");
-    }
-  }, [open, member]);
-
-  const submit = async () => {
-    setError("");
-    if (!name.trim()) return setError("이름을 입력해주세요");
-    if (!phone.trim()) return setError("연락처를 입력해주세요");
-    setSubmitting(true);
-    try {
-      const token = await getIdToken();
-      const res = await fetch(`/api/crm/members/${member.id}`, {
-        method: "PATCH",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          phone: phone.trim(),
-          email,
-          birth,
-          gender,
-          memo,
-          address,
-          visit_route: visitRoute,
-          workout_goal: workoutGoal,
-          counselor,
-          mileage: Number(mileage) || 0,
-          marketing_consent: marketingConsent,
-          registered_at: registeredAt || null,
-          registration_type: registrationType,
-          first_use_at: firstUseAt || null,
-          final_expire_at: finalExpireAt || null,
-          last_purchase_at: lastPurchaseAt || null,
-          last_attended_at: lastAttendedAt || null,
-          total_paid_won: Number(totalPaidWon) || 0,
-          attendance_no: attendanceNo,
-          current_membership: currentMembership,
-          current_pass: currentPass,
-          current_rental: currentRental,
-          current_locker: currentLocker,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "수정 실패");
-      onSuccess();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "네트워크 오류");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <CrmModal open={open} onClose={onClose} title="회원 정보 수정">
-      <div className="space-y-3">
-        <CrmField label="이름" required>
-          <input className={crmInputClass} value={name} onChange={(e) => setName(e.target.value)} />
-        </CrmField>
-        <CrmField label="연락처" required>
-          <input
-            className={crmInputClass}
-            type="tel"
-            inputMode="numeric"
-            value={phone}
-            onChange={(e) => setPhone(formatPhone(e.target.value))}
-            placeholder="010-1234-5678"
-          />
-        </CrmField>
-        <div className="grid grid-cols-2 gap-2">
-          <CrmField label="성별">
-            <select className={crmInputClass} value={gender} onChange={(e) => setGender(e.target.value)}>
-              <option value="">선택 안 함</option>
-              <option value="M">남</option>
-              <option value="F">여</option>
-              <option value="N">기타</option>
-            </select>
-          </CrmField>
-          <CrmField label="생년월일">
-            <input
-              type="date"
-              className={crmInputClass}
-              value={birth}
-              onChange={(e) => setBirth(e.target.value)}
-            />
-          </CrmField>
-        </div>
-        <CrmField label="최근 등록일">
-          <input
-            type="date"
-            className={crmInputClass}
-            value={registeredAt}
-            onChange={(e) => setRegisteredAt(e.target.value)}
-          />
-        </CrmField>
-        <CrmField label="이메일">
-          <input
-            type="email"
-            className={crmInputClass}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </CrmField>
-        <CrmField label="메모">
-          <textarea
-            className={`${crmInputClass} min-h-[72px]`}
-            value={memo}
-            onChange={(e) => setMemo(e.target.value)}
-          />
-        </CrmField>
-        <CrmField label="주소">
-          <input className={crmInputClass} value={address} onChange={(e) => setAddress(e.target.value)} />
-        </CrmField>
-        <div className="grid grid-cols-2 gap-2">
-          <CrmField label="방문 경로">
-            <input className={crmInputClass} value={visitRoute} onChange={(e) => setVisitRoute(e.target.value)} />
-          </CrmField>
-          <CrmField label="운동 목적">
-            <input className={crmInputClass} value={workoutGoal} onChange={(e) => setWorkoutGoal(e.target.value)} />
-          </CrmField>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <CrmField label="상담 담당자">
-            <input className={crmInputClass} value={counselor} onChange={(e) => setCounselor(e.target.value)} />
-          </CrmField>
-          <CrmField label="마일리지">
-            <input
-              type="text"
-              inputMode="numeric"
-              className={crmInputClass}
-              value={mileage}
-              onChange={(e) => setMileage(e.target.value.replace(/[^\d]/g, ""))}
-            />
-          </CrmField>
-        </div>
-        <CrmField label="광고성 수신 동의">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={marketingConsent}
-              onChange={(e) => setMarketingConsent(e.target.checked)}
-              className="w-4 h-4 accent-[#6B7B3A]"
-            />
-            <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-              마케팅·광고성 정보 수신에 동의
-            </span>
-          </label>
-        </CrmField>
-
-        <div className="pt-2 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
-          <p className="mb-2 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400">이용 정보</p>
-          <div className="grid grid-cols-2 gap-2">
-            <CrmField label="신규/재등록">
-              <select
-                className={crmInputClass}
-                value={registrationType}
-                onChange={(e) => setRegistrationType(e.target.value)}
-              >
-                <option value="">선택 안 함</option>
-                <option value="신규">신규</option>
-                <option value="재등록">재등록</option>
-              </select>
-            </CrmField>
-            <CrmField label="출석번호">
-              <input className={crmInputClass} value={attendanceNo} onChange={(e) => setAttendanceNo(e.target.value)} />
-            </CrmField>
-            <CrmField label="이용 시작일">
-              <input type="date" className={crmInputClass} value={firstUseAt} onChange={(e) => setFirstUseAt(e.target.value)} />
-            </CrmField>
-            <CrmField label="최종 만료일">
-              <input type="date" className={crmInputClass} value={finalExpireAt} onChange={(e) => setFinalExpireAt(e.target.value)} />
-            </CrmField>
-            <CrmField label="마지막 구매일">
-              <input type="date" className={crmInputClass} value={lastPurchaseAt} onChange={(e) => setLastPurchaseAt(e.target.value)} />
-            </CrmField>
-            <CrmField label="마지막 출석일">
-              <input type="date" className={crmInputClass} value={lastAttendedAt} onChange={(e) => setLastAttendedAt(e.target.value)} />
-            </CrmField>
-          </div>
-          <CrmField label="누적 결제 금액 (원)">
-            <input
-              type="text"
-              inputMode="numeric"
-              className={crmInputClass}
-              value={totalPaidWon}
-              onChange={(e) => setTotalPaidWon(e.target.value.replace(/[^\d]/g, ""))}
-            />
-          </CrmField>
-          <HoldingListInput label="보유 회원권" value={currentMembership} onChange={setCurrentMembership} />
-          <HoldingListInput label="보유 수강권" value={currentPass} onChange={setCurrentPass} />
-          <HoldingListInput label="보유 대여권" value={currentRental} onChange={setCurrentRental} />
-          <HoldingListInput label="보유 락커" value={currentLocker} onChange={setCurrentLocker} />
-        </div>
-
-        {error && (
-          <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
-            {error}
-          </div>
-        )}
-        <button
-          onClick={submit}
-          disabled={submitting}
-          className="w-full px-4 py-3 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[14.5px] font-semibold hover:bg-[#5a6932] mt-2"
-        >
-          {submitting ? "저장 중…" : "저장"}
-        </button>
-      </div>
-    </CrmModal>
   );
 }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { loadPermissionsForRole } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -61,16 +62,51 @@ export async function GET(
   return NextResponse.json({ member, passes: passes ?? [] });
 }
 
+// 회원 필드 그룹 — 권한 매트릭스와 매핑
+const BASIC_FIELDS = new Set([
+  "name",
+  "phone",
+  "email",
+  "birth",
+  "gender",
+  "member_type",
+  "memo",
+]);
+const USAGE_FIELDS = new Set([
+  "address",
+  "visit_route",
+  "workout_goal",
+  "counselor",
+  "mileage",
+  "marketing_consent",
+  "registered_at",
+  "registration_type",
+  "first_use_at",
+  "final_expire_at",
+  "last_purchase_at",
+  "last_attended_at",
+  "total_paid_won",
+  "attendance_no",
+  "current_membership",
+  "current_pass",
+  "current_rental",
+  "current_locker",
+]);
+
 /**
  * PATCH /api/crm/members/[id]
- * 회원 정보 수정. owner/admin 만.
+ * 회원 정보 수정.
+ * 권한: 필드가 기본정보(BASIC_FIELDS) 면 members.edit_basic,
+ *       이용정보(USAGE_FIELDS) 면 members.edit_usage 가 있어야 함.
  */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+
+  const perms = await loadPermissionsForRole(ctx.centerId, ctx.role);
 
   const { id } = await params;
   const memberId = Number(id);
@@ -170,6 +206,22 @@ export async function PATCH(
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
   }
 
+  // 필드 그룹별 권한 검사
+  const touchedBasic = Object.keys(patch).some((k) => BASIC_FIELDS.has(k));
+  const touchedUsage = Object.keys(patch).some((k) => USAGE_FIELDS.has(k));
+  if (touchedBasic && !perms["members.edit_basic"]) {
+    return NextResponse.json(
+      { error: "회원 기본정보 수정 권한이 없습니다" },
+      { status: 403 }
+    );
+  }
+  if (touchedUsage && !perms["members.edit_usage"]) {
+    return NextResponse.json(
+      { error: "회원 이용정보 수정 권한이 없습니다" },
+      { status: 403 }
+    );
+  }
+
   // 변경 전 스냅샷 (diff 로 audit log 에 기록)
   const { data: before } = await supabase
     .from("crm_members")
@@ -212,14 +264,19 @@ export async function PATCH(
 
 /**
  * DELETE /api/crm/members/[id]
- * soft delete (status='deleted'). owner/admin 만.
+ * soft delete (status='deleted'). members.delete 권한 필요.
  */
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+
+  const perms = await loadPermissionsForRole(ctx.centerId, ctx.role);
+  if (!perms["members.delete"]) {
+    return NextResponse.json({ error: "회원 삭제 권한이 없습니다" }, { status: 403 });
+  }
 
   const { id } = await params;
   const memberId = Number(id);
