@@ -269,24 +269,23 @@ export default function CrmMemberDetailPage() {
         </div>
       )}
 
-      <dl className="mb-5 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-        {member.registration_type && <InfoItem label="신규/재등록" value={member.registration_type} />}
-        {member.registered_at && <InfoItem label="최근 등록일" value={member.registered_at} />}
-        {member.first_use_at && <InfoItem label="이용 시작일" value={member.first_use_at} />}
-        {member.final_expire_at && <InfoItem label="최종 만료일" value={member.final_expire_at} />}
-        {member.last_purchase_at && <InfoItem label="마지막 구매일" value={member.last_purchase_at} />}
-        {member.last_attended_at && <InfoItem label="마지막 출석일" value={member.last_attended_at} />}
-        {member.total_paid_won > 0 && (
-          <InfoItem label="누적 결제" value={`${member.total_paid_won.toLocaleString()}원`} />
-        )}
-        {member.attendance_no && <InfoItem label="출석번호" value={member.attendance_no} />}
-        {member.address && <InfoItem label="주소" value={member.address} />}
-        {member.visit_route && <InfoItem label="방문 경로" value={member.visit_route} />}
-        {member.workout_goal && <InfoItem label="운동 목적" value={member.workout_goal} />}
-        {member.counselor && <InfoItem label="상담 담당자" value={member.counselor} />}
-        <InfoItem label="마일리지" value={`${member.mileage.toLocaleString()}점`} />
-        <InfoItem label="광고성 수신" value={member.marketing_consent ? "동의" : "미동의"} />
-      </dl>
+      {/* 상세 정보 카드 — 각 필드 인라인 수정 가능 */}
+      <div className="mb-5 grid grid-cols-1 md:grid-cols-2 gap-2 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+        <EditableInfoCard memberId={member.id} field="registration_type" label="신규/재등록" value={member.registration_type} type="select" options={[{ v: "신규", l: "신규" }, { v: "재등록", l: "재등록" }]} onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="registered_at" label="최근 등록일" value={member.registered_at} type="date" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="first_use_at" label="이용 시작일" value={member.first_use_at} type="date" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="final_expire_at" label="최종 만료일" value={member.final_expire_at} type="date" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="last_purchase_at" label="마지막 구매일" value={member.last_purchase_at} type="date" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="last_attended_at" label="마지막 출석일" value={member.last_attended_at} type="date" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="total_paid_won" label="누적 결제" value={member.total_paid_won} type="number" suffix="원" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="attendance_no" label="출석번호" value={member.attendance_no} type="text" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="address" label="주소" value={member.address} type="text" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="visit_route" label="방문 경로" value={member.visit_route} type="text" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="workout_goal" label="운동 목적" value={member.workout_goal} type="text" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="counselor" label="상담 담당자" value={member.counselor} type="text" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="mileage" label="마일리지" value={member.mileage} type="number" suffix="점" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="marketing_consent" label="광고성 수신" value={member.marketing_consent} type="bool" onSaved={load} />
+      </div>
 
       {error && (
         <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
@@ -725,6 +724,194 @@ function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
       <dd className="mt-0.5 text-[13px] text-[#2A251D] dark:text-zinc-100 font-medium break-words">
         {value}
       </dd>
+    </div>
+  );
+}
+
+/**
+ * 인라인 수정 가능한 정보 카드. 필드별 hover 시 '수정' 노출, 클릭하면 인풋으로 전환.
+ * 삭제는 없음 (메모 UX 를 정보 필드에 확장 · 사용자 요청).
+ */
+function EditableInfoCard({
+  memberId,
+  field,
+  label,
+  value,
+  type,
+  options,
+  suffix,
+  onSaved,
+}: {
+  memberId: number;
+  field: string;
+  label: string;
+  value: string | number | boolean | null;
+  type: "text" | "date" | "number" | "select" | "bool";
+  options?: { v: string; l: string }[];
+  suffix?: string;
+  onSaved: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState<string | boolean>(() => {
+    if (type === "bool") return !!value;
+    return value === null || value === undefined ? "" : String(value);
+  });
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (type === "bool") setDraft(!!value);
+    else setDraft(value === null || value === undefined ? "" : String(value));
+  }, [value, type]);
+
+  const displayValue = (() => {
+    if (type === "bool") return value ? "동의" : "미동의";
+    if (value === null || value === undefined || value === "") return "—";
+    if (type === "number" && typeof value === "number") {
+      return `${value.toLocaleString()}${suffix ?? ""}`;
+    }
+    return String(value) + (suffix ?? "");
+  })();
+
+  const save = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const payload: Record<string, unknown> = {};
+      if (type === "bool") payload[field] = draft as boolean;
+      else if (type === "number") {
+        const n = Number(draft);
+        if (!Number.isFinite(n) || n < 0) {
+          setError("숫자를 확인해 주세요");
+          setSaving(false);
+          return;
+        }
+        payload[field] = n;
+      } else {
+        // string
+        payload[field] = (draft as string).trim() || null;
+      }
+      const res = await fetch(`/api/crm/members/${memberId}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "수정 실패");
+      setEditing(false);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="group px-3 py-2 rounded-lg bg-white/60 dark:bg-zinc-950/40 border border-[#E8E0D0]/50 dark:border-zinc-800/60 hover:border-[#6B7B3A]/40 transition-colors">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[11px] text-[#A89B80] dark:text-zinc-500">{label}</span>
+        {!editing && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="text-[11px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            수정
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <div className="mt-1 space-y-1.5">
+          {type === "text" && (
+            <input
+              type="text"
+              value={draft as string}
+              onChange={(e) => setDraft(e.target.value)}
+              className={crmInputClass}
+              autoFocus
+            />
+          )}
+          {type === "date" && (
+            <input
+              type="date"
+              value={draft as string}
+              onChange={(e) => setDraft(e.target.value)}
+              className={crmInputClass}
+              autoFocus
+            />
+          )}
+          {type === "number" && (
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min={0}
+                value={draft as string}
+                onChange={(e) => setDraft(e.target.value)}
+                className={crmInputClass}
+                autoFocus
+              />
+              {suffix && <span className="text-[12px] text-[#8C8270]">{suffix}</span>}
+            </div>
+          )}
+          {type === "select" && (
+            <select
+              value={draft as string}
+              onChange={(e) => setDraft(e.target.value)}
+              className={crmInputClass}
+              autoFocus
+            >
+              <option value="">선택</option>
+              {(options ?? []).map((o) => (
+                <option key={o.v} value={o.v}>
+                  {o.l}
+                </option>
+              ))}
+            </select>
+          )}
+          {type === "bool" && (
+            <label className="flex items-center gap-2 text-[13px] text-[#3A342A] dark:text-zinc-200">
+              <input
+                type="checkbox"
+                checked={draft as boolean}
+                onChange={(e) => setDraft(e.target.checked)}
+                className="w-4 h-4 accent-[#6B7B3A]"
+              />
+              동의
+            </label>
+          )}
+          {error && (
+            <div className="text-[11px] text-red-600">{error}</div>
+          )}
+          <div className="flex gap-1.5">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="px-3 py-1 rounded-lg bg-[#6B7B3A] text-white text-[11.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+            >
+              {saving ? "…" : "저장"}
+            </button>
+            <button
+              onClick={() => {
+                setEditing(false);
+                setError("");
+                if (type === "bool") setDraft(!!value);
+                else setDraft(value === null || value === undefined ? "" : String(value));
+              }}
+              disabled={saving}
+              className="px-3 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[11.5px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5]"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-0.5 text-[13px] text-[#2A251D] dark:text-zinc-100 font-medium break-words">
+          {displayValue}
+        </div>
+      )}
     </div>
   );
 }
