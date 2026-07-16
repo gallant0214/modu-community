@@ -86,8 +86,8 @@ export default function CrmMemberDetailPage() {
   const [paymentDetail, setPaymentDetail] = useState<PaymentDetail | null>(null);
   const [detailPassId, setDetailPassId] = useState<number | null>(null);
   const [bodyOpen, setBodyOpen] = useState(false);
-  // 탭: 정보 / 결제내역 / 로그
-  const [tab, setTab] = useState<"info" | "payments" | "logs">("info");
+  // 탭: 정보 / 예약내역 / 결제내역 / 로그
+  const [tab, setTab] = useState<"info" | "reservations" | "payments" | "logs">("info");
   // 현재 유저 권한 (members.edit_basic / members.edit_usage / members.delete)
   const [perms, setPerms] = useState<Record<string, boolean>>({});
 
@@ -268,7 +268,7 @@ export default function CrmMemberDetailPage() {
 
       {/* 탭: 정보 / 결제내역 / 로그 */}
       <div className="mb-4 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800">
-        {(["info", "payments", "logs"] as const).map((t) => (
+        {(["info", "reservations", "payments", "logs"] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -279,7 +279,7 @@ export default function CrmMemberDetailPage() {
                 : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
               }`}
           >
-            {t === "info" ? "정보" : t === "payments" ? "결제내역" : "로그"}
+            {t === "info" ? "정보" : t === "reservations" ? "예약내역" : t === "payments" ? "결제내역" : "로그"}
           </button>
         ))}
       </div>
@@ -288,6 +288,8 @@ export default function CrmMemberDetailPage() {
         <MemberLogsSection memberId={member.id} />
       ) : tab === "payments" ? (
         <MemberPaymentsSection memberId={member.id} />
+      ) : tab === "reservations" ? (
+        <MemberReservationsSection memberId={member.id} />
       ) : (
       <>
       {(member.current_membership ||
@@ -699,6 +701,327 @@ function todayDate(): string {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 3600 * 1000);
   return `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, "0")}-${String(kst.getUTCDate()).padStart(2, "0")}`;
+}
+
+/* ─── 회원 예약내역 (달력 + 리스트 + 통계) ────────────────────────────── */
+
+interface ReservationRow {
+  id: number;
+  pass_id: number | null;
+  trainer_member_id: number;
+  trainer_name: string | null;
+  starts_at: string;
+  ends_at: string;
+  status: string;
+  consumed: boolean;
+  attended_at: string | null;
+  cancelled_at: string | null;
+  cancelled_reason: string | null;
+  pass: { lesson_kind: string; session_minutes: number } | null;
+}
+
+const STATUS_LABEL_R: Record<string, string> = {
+  booked: "예약",
+  attended: "정상 출석",
+  cancelled: "예약 취소",
+  noshow: "노쇼",
+};
+const STATUS_STYLE_R: Record<string, string> = {
+  booked: "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]",
+  attended: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+  cancelled: "bg-[#F5F0E5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-400",
+  noshow: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
+};
+
+function MemberReservationsSection({ memberId }: { memberId: number }) {
+  const { getIdToken } = useAuth();
+  const [rows, setRows] = useState<ReservationRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [monthYm, setMonthYm] = useState(() => {
+    const d = new Date();
+    const k = new Date(d.getTime() + 9 * 3600 * 1000);
+    return `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}`;
+  });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+        const res = await fetch(`/api/crm/members/${memberId}/reservations`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "조회 실패");
+        setRows(data.reservations ?? []);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "네트워크 오류");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [memberId, getIdToken]);
+
+  // KST 기준 상태별 집계 + 월별 예약 카운트
+  const kstDate = (iso: string) => {
+    const d = new Date(iso);
+    const k = new Date(d.getTime() + 9 * 3600 * 1000);
+    return `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")}`;
+  };
+  const attended = rows.filter((r) => r.status === "attended").length;
+  const cancelled = rows.filter((r) => r.status === "cancelled").length;
+  const noshow = rows.filter((r) => r.status === "noshow").length;
+  const booked = rows.filter((r) => r.status === "booked").length;
+  const monthCount = rows.filter((r) => kstDate(r.starts_at).slice(0, 7) === monthYm).length;
+
+  // 달력 데이터: 이번달 KST 기준 예약 있는 날짜 → 상태 목록
+  const daysInMonthMap = new Map<string, ReservationRow[]>();
+  for (const r of rows) {
+    const d = kstDate(r.starts_at);
+    if (d.slice(0, 7) !== monthYm) continue;
+    const list = daysInMonthMap.get(d) ?? [];
+    list.push(r);
+    daysInMonthMap.set(d, list);
+  }
+
+  const [yy, mm] = monthYm.split("-").map(Number);
+  const firstDay = new Date(Date.UTC(yy, mm - 1, 1));
+  const startWeekday = firstDay.getUTCDay(); // 0=일
+  const lastDate = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+  const cells: Array<{ date: string | null; day: number | null }> = [];
+  for (let i = 0; i < startWeekday; i += 1) cells.push({ date: null, day: null });
+  for (let d = 1; d <= lastDate; d += 1) {
+    const ymd = `${yy}-${String(mm).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    cells.push({ date: ymd, day: d });
+  }
+  while (cells.length % 7 !== 0) cells.push({ date: null, day: null });
+
+  const shiftMonth = (delta: number) => {
+    const [y, m] = monthYm.split("-").map(Number);
+    const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+    setMonthYm(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
+  };
+
+  if (loading) return <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>;
+  if (error)
+    return (
+      <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+        {error}
+      </div>
+    );
+
+  const today = (() => {
+    const now = new Date();
+    const k = new Date(now.getTime() + 9 * 3600 * 1000);
+    return `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")}`;
+  })();
+
+  return (
+    <div className="space-y-4">
+      {/* 통계 카드 */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <StatMini label="총 예약" value={rows.length} tone="olive" />
+        <StatMini label="정상 출석" value={attended} tone="emerald" />
+        <StatMini label="예약 취소" value={cancelled} tone="gray" />
+        <StatMini label="노쇼" value={noshow} tone="red" />
+        <StatMini label={`${monthYm.slice(5)}월 예약`} value={monthCount} tone="amber" />
+      </div>
+
+      {/* 예약 대기 표시 (booked) */}
+      {booked > 0 && (
+        <div className="text-[12px] text-[#6B5D47] dark:text-zinc-400">
+          예약 대기(booked) {booked}건은 아직 진행 전
+        </div>
+      )}
+
+      {/* 달력 */}
+      <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
+          <button
+            type="button"
+            onClick={() => shiftMonth(-1)}
+            className="px-2 py-1 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:text-[#3A342A]"
+          >
+            ‹ 이전
+          </button>
+          <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            {yy}년 {mm}월
+          </span>
+          <button
+            type="button"
+            onClick={() => shiftMonth(1)}
+            className="px-2 py-1 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:text-[#3A342A]"
+          >
+            다음 ›
+          </button>
+        </div>
+        <div className="grid grid-cols-7 text-[11px] text-[#8C8270] border-b border-[#E8E0D0]/60 dark:border-zinc-800">
+          {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => (
+            <div
+              key={i}
+              className={`px-1 py-1.5 text-center ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : ""}`}
+            >
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7">
+          {cells.map((c, i) => {
+            const list = c.date ? daysInMonthMap.get(c.date) ?? [] : [];
+            const hasAttended = list.some((r) => r.status === "attended");
+            const hasNoShow = list.some((r) => r.status === "noshow");
+            const hasCancel = list.some((r) => r.status === "cancelled");
+            const hasBooked = list.some((r) => r.status === "booked");
+            const isToday = c.date === today;
+            const isWeekend = i % 7 === 0 || i % 7 === 6;
+            return (
+              <div
+                key={i}
+                className={`min-h-[54px] p-1 border-t border-l border-[#E8E0D0]/40 dark:border-zinc-800/60 ${
+                  isToday ? "bg-[#6B7B3A]/10" : ""
+                }`}
+                title={list.length ? `${c.date} · 예약 ${list.length}건` : undefined}
+              >
+                {c.day && (
+                  <>
+                    <div
+                      className={`text-[10.5px] font-medium ${
+                        i % 7 === 0 ? "text-red-500" : i % 7 === 6 ? "text-blue-500" : "text-[#3A342A] dark:text-zinc-300"
+                      } ${isWeekend ? "" : ""}`}
+                    >
+                      {c.day}
+                    </div>
+                    {list.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-0.5">
+                        {hasAttended && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="정상 출석" />
+                        )}
+                        {hasNoShow && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500" title="노쇼" />
+                        )}
+                        {hasCancel && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#A89B80]" title="예약 취소" />
+                        )}
+                        {hasBooked && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#6B7B3A]" title="예약" />
+                        )}
+                        {list.length > 3 && (
+                          <span className="text-[9px] text-[#8C8270] leading-none ml-0.5">+{list.length - 3}</span>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 border-t border-[#E8E0D0] dark:border-zinc-800 text-[10.5px] text-[#6B5D47] dark:text-zinc-400">
+          <LegendDot color="bg-[#6B7B3A]" label="예약" />
+          <LegendDot color="bg-emerald-500" label="정상 출석" />
+          <LegendDot color="bg-red-500" label="노쇼" />
+          <LegendDot color="bg-[#A89B80]" label="예약 취소" />
+        </div>
+      </div>
+
+      {/* 리스트 (전체 최근 500건) */}
+      <div>
+        <div className="mb-2 text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+          예약 이력 ({rows.length}건, 최신순)
+        </div>
+        {rows.length === 0 ? (
+          <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+            예약 내역이 없습니다.
+          </div>
+        ) : (
+          <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800 max-h-[520px] overflow-y-auto">
+            {rows.map((r) => {
+              const d = new Date(r.starts_at);
+              const k = new Date(d.getTime() + 9 * 3600 * 1000);
+              const dateStr = `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")}`;
+              const hm = `${String(k.getUTCHours()).padStart(2, "0")}:${String(k.getUTCMinutes()).padStart(2, "0")}`;
+              const eD = new Date(r.ends_at);
+              const eK = new Date(eD.getTime() + 9 * 3600 * 1000);
+              const hmE = `${String(eK.getUTCHours()).padStart(2, "0")}:${String(eK.getUTCMinutes()).padStart(2, "0")}`;
+              return (
+                <li key={r.id} className="px-4 py-2.5">
+                  <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                        {dateStr}
+                      </span>
+                      <span className="text-[12px] text-[#8C8270]">
+                        {hm} ~ {hmE}
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10.5px] font-semibold ${STATUS_STYLE_R[r.status] ?? ""}`}
+                      >
+                        {STATUS_LABEL_R[r.status] ?? r.status}
+                      </span>
+                    </div>
+                    <span className="text-[11.5px] text-[#A89B80]">
+                      {r.trainer_name ?? "—"}
+                    </span>
+                  </div>
+                  {r.pass && (
+                    <div className="mt-0.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+                      {r.pass.lesson_kind} · {r.pass.session_minutes}분
+                    </div>
+                  )}
+                  {r.cancelled_reason && (
+                    <div className="mt-0.5 text-[11px] text-red-600">
+                      취소 사유: {r.cancelled_reason}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatMini({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "olive" | "emerald" | "red" | "gray" | "amber";
+}) {
+  const cls =
+    tone === "olive"
+      ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+      : tone === "emerald"
+      ? "text-emerald-600 dark:text-emerald-300"
+      : tone === "red"
+      ? "text-red-600 dark:text-red-300"
+      : tone === "amber"
+      ? "text-[#B47B2A] dark:text-amber-300"
+      : "text-[#8C8270] dark:text-zinc-400";
+  return (
+    <div className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+      <div className="text-[11px] text-[#A89B80] dark:text-zinc-500">{label}</div>
+      <div className={`mt-0.5 text-[18px] font-bold ${cls}`}>
+        {value.toLocaleString()}
+        <span className="text-[11px] ml-0.5 font-medium text-[#8C8270]">건</span>
+      </div>
+    </div>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className={`w-2 h-2 rounded-full ${color}`} />
+      <span>{label}</span>
+    </span>
+  );
 }
 
 /* ─── 회원 결제내역 ────────────────────────────── */
