@@ -53,7 +53,9 @@ export async function GET(request: Request) {
   }
 
   // 이번 기간 발급된 것 (매출)
-  const [membershipPeriod, passPeriod] = await Promise.all([
+  // 회원권 그룹 = 헬스이용권(crm_memberships) + 락커·운동복(crm_rentals)
+  // 수강권 그룹 = PT·레슨권(crm_passes)
+  const [membershipPeriod, passPeriod, rentalPeriod] = await Promise.all([
     supabase
       .from("crm_memberships")
       .select("price_won, vat_included")
@@ -68,33 +70,37 @@ export async function GET(request: Request) {
       .neq("status", "deleted")
       .gte("issued_at", startDate)
       .lt("issued_at", nextMonth),
+    supabase
+      .from("crm_rentals")
+      .select("price_won, vat_included")
+      .eq("center_id", ctx.centerId)
+      .neq("status", "deleted")
+      .gte("start_date", startDate)
+      .lt("start_date", nextMonth),
   ]);
 
-  const membershipRevenue = (membershipPeriod.data ?? []).reduce(
-    (sum, x) => sum + (x.price_won ?? 0),
-    0
-  );
-  const passRevenue = (passPeriod.data ?? []).reduce((sum, x) => sum + (x.price_won ?? 0), 0);
+  const exVatOne = (price: number, vatIncluded: boolean) =>
+    vatIncluded ? Math.round(price / (1 + VAT_RATE)) : price;
+  const sumPrice = (rows: { price_won: number | null }[] | null) =>
+    (rows ?? []).reduce((s, x) => s + (x.price_won ?? 0), 0);
+  const sumExVat = (rows: { price_won: number | null; vat_included: boolean | null }[] | null) =>
+    (rows ?? []).reduce((s, x) => s + exVatOne(x.price_won ?? 0, !!x.vat_included), 0);
+
+  // 회원권 그룹 = 헬스이용권 + 락커·운동복
+  const membershipRevenue = sumPrice(membershipPeriod.data) + sumPrice(rentalPeriod.data);
+  const passRevenue = sumPrice(passPeriod.data);
   const lockerRevenue = 0;
   const goodsRevenue = 0;
   const etcRevenue = 0;
   const total = membershipRevenue + passRevenue + lockerRevenue + goodsRevenue + etcRevenue;
 
-  const exVatOne = (price: number, vatIncluded: boolean) =>
-    vatIncluded ? Math.round(price / (1 + VAT_RATE)) : price;
-  const membershipExVat = (membershipPeriod.data ?? []).reduce(
-    (sum, x) => sum + exVatOne(x.price_won ?? 0, !!x.vat_included),
-    0
-  );
-  const passExVat = (passPeriod.data ?? []).reduce(
-    (sum, x) => sum + exVatOne(x.price_won ?? 0, !!x.vat_included),
-    0
-  );
+  const membershipExVat = sumExVat(membershipPeriod.data) + sumExVat(rentalPeriod.data);
+  const passExVat = sumExVat(passPeriod.data);
   const totalExVat = membershipExVat + passExVat + lockerRevenue + goodsRevenue + etcRevenue;
 
   // 오늘 기준 잠재부채 스냅샷 (기간 무관, 활성 건 전체)
   const today = kstYmd();
-  const [membershipsValid, passesValid] = await Promise.all([
+  const [membershipsValid, passesValid, rentalsValid] = await Promise.all([
     paginateAll<{
       price_won: number;
       start_date: string;
@@ -120,6 +126,18 @@ export async function GET(request: Request) {
         .eq("status", "valid")
         .range(f, t)
     ),
+    paginateAll<{
+      price_won: number;
+      start_date: string;
+      expires_at: string;
+    }>((f, t) =>
+      supabase
+        .from("crm_rentals")
+        .select("price_won, start_date, expires_at")
+        .eq("center_id", ctx.centerId)
+        .eq("status", "valid")
+        .range(f, t)
+    ),
   ]);
 
   let liabilityMembership = 0;
@@ -138,6 +156,23 @@ export async function GET(request: Request) {
     // 진행중: 잔여일 / 전체일 × price
     const totalDays = daysBetween(m.start_date, m.expires_at) + 1;
     const remainingDays = Math.max(0, daysBetween(today, m.expires_at));
+    if (totalDays <= 0) continue;
+    const unused = Math.round((remainingDays / totalDays) * price);
+    liabilityMembership += unused;
+    liabilityInProgress += unused;
+  }
+
+  // 락커·운동복(crm_rentals) — 기간제, 회원권 그룹에 합산
+  for (const r of rentalsValid) {
+    const price = r.price_won ?? 0;
+    if (!price) continue;
+    if (r.start_date > today) {
+      liabilityMembership += price;
+      liabilityNotStarted += price;
+      continue;
+    }
+    const totalDays = daysBetween(r.start_date, r.expires_at) + 1;
+    const remainingDays = Math.max(0, daysBetween(today, r.expires_at));
     if (totalDays <= 0) continue;
     const unused = Math.round((remainingDays / totalDays) * price);
     liabilityMembership += unused;

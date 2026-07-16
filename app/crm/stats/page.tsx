@@ -305,11 +305,8 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
   }, [load]);
 
   const cats: { key: keyof CenterRevenueResp["categories"]; label: string; href?: string }[] = [
-    { key: "membership", label: "회원권 매출", href: "/crm/memberships" },
-    { key: "pass", label: "수강권 매출", href: "/crm/passes" },
-    { key: "goods", label: "운동 용품 매출" },
-    { key: "locker", label: "락커 매출", href: "/crm/lockers" },
-    { key: "etc", label: "기타 판매 매출" },
+    { key: "membership", label: "회원권 매출 (헬스·락커·운동복)", href: "/crm/memberships" },
+    { key: "pass", label: "수강권 매출 (PT·레슨)", href: "/crm/passes" },
   ];
 
   if (loading) {
@@ -410,7 +407,7 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
       </div>
       <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-          <div className="text-[12.5px] text-[#A89B80]">회원권 잠재부채</div>
+          <div className="text-[12.5px] text-[#A89B80]">회원권 잠재부채 (헬스·락커·운동복)</div>
           <div className="mt-1 text-[18px] font-bold text-[#B47B2A] dark:text-amber-300">
             {formatWon(data?.liability_breakdown.membership ?? 0)}원
           </div>
@@ -419,7 +416,7 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
           </div>
         </div>
         <div className="px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-          <div className="text-[12.5px] text-[#A89B80]">수강권 잠재부채</div>
+          <div className="text-[12.5px] text-[#A89B80]">수강권 잠재부채 (PT·레슨)</div>
           <div className="mt-1 text-[18px] font-bold text-[#B47B2A] dark:text-amber-300">
             {formatWon(data?.liability_breakdown.pass ?? 0)}원
           </div>
