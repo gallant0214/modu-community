@@ -186,20 +186,42 @@ export default function CrmMemberDetailPage() {
     });
   };
 
+  const currentHoldings = [
+    member.current_membership,
+    member.current_pass,
+    member.current_rental,
+    member.current_locker,
+  ].filter(Boolean).length;
+
   return (
-    <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-3xl mx-auto">
+    <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-5xl mx-auto">
       <BackLink />
 
-      <header className="mt-3 mb-5 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
-            {member.name}
-            <span className="ml-2 text-[12px] text-[#A89B80]">
-              · {MEMBER_TYPE_LABEL[member.member_type] ?? member.member_type}
-            </span>
-          </h1>
-        </div>
-        <div className="flex flex-col gap-1.5 shrink-0">
+      <header className="mt-3 mb-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-white/75 dark:bg-zinc-900 px-4 py-4 md:px-5 md:py-5 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-[24px] md:text-[28px] leading-tight font-bold text-[#2A251D] dark:text-zinc-100">
+                {member.name}
+              </h1>
+              <span className="px-2 py-1 rounded-full bg-[#6B7B3A]/10 text-[11.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">
+                {MEMBER_TYPE_LABEL[member.member_type] ?? member.member_type}
+              </span>
+              <span className={`px-2 py-1 rounded-full text-[11.5px] font-semibold ${
+                isMemberActive(member)
+                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  : "bg-[#F5F0E5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-400"
+              }`}>
+                {isMemberActive(member) ? "이용중" : "확인 필요"}
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+              <span>{member.phone ? formatPhone(member.phone) : "연락처 없음"}</span>
+              {member.email && <span>{member.email}</span>}
+              {member.attendance_no && <span>출석번호 {member.attendance_no}</span>}
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={() => setEditOpen(true)}
             className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
@@ -212,6 +234,14 @@ export default function CrmMemberDetailPage() {
           >
             회원 삭제
           </button>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+          <SummaryMetric label="최종 만료" value={member.final_expire_at ?? "—"} hint={expireHint(member.final_expire_at)} tone={expireTone(member.final_expire_at)} />
+          <SummaryMetric label="누적 결제" value={`${formatWon(member.total_paid_won)}원`} hint={member.last_purchase_at ? `최근 ${member.last_purchase_at}` : "결제 기록 없음"} tone="money" />
+          <SummaryMetric label="마지막 출석" value={member.last_attended_at ?? "—"} hint={attendanceHint(member.last_attended_at)} />
+          <SummaryMetric label="보유 상품" value={`${currentHoldings}종`} hint={member.current_pass || member.current_membership ? "보유 내역 있음" : "보유 내역 없음"} />
         </div>
       </header>
 
@@ -239,39 +269,51 @@ export default function CrmMemberDetailPage() {
         <MemberPaymentsSection memberId={member.id} />
       ) : (
       <>
-      <MemoSection memberId={member.id} memo={member.memo} onSaved={load} />
-
-
       {(member.current_membership ||
         member.current_pass ||
         member.current_rental ||
         member.current_locker) && (
-        <div className="mb-3 flex flex-wrap gap-1.5 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
+        <section className="mb-4">
+          <div className="mb-2 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400">현재 보유</div>
+          <div className="flex flex-wrap gap-1.5 px-3.5 py-3 rounded-xl border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
           {holdingCards("회원권", member.current_membership, onSnapSelect)}
           {holdingCards("수강권", member.current_pass, onSnapSelect)}
           {holdingCards("대여권", member.current_rental, onSnapSelect)}
           {holdingCards("락커", member.current_locker, onSnapSelect)}
-        </div>
+          </div>
+        </section>
       )}
 
-      {/* 상세 정보 카드 — 각 필드 인라인 수정 가능 */}
-      <div className="mb-5 grid grid-cols-1 md:grid-cols-2 gap-2 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+      <MemoSection memberId={member.id} memo={member.memo} onSaved={load} />
+
+      <div className="mb-6 grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <DetailSection title="기본 정보">
         <EditableInfoCard memberId={member.id} field="phone" label="연락처" value={member.phone} type="text" formatDisplay={(v) => (v ? formatPhone(String(v)) : "—")} onSaved={load} />
         <EditableInfoCard memberId={member.id} field="gender" label="성별" value={member.gender} type="select" options={[{ v: "M", l: "남" }, { v: "F", l: "여" }, { v: "N", l: "기타" }]} formatDisplay={(v) => (v ? GENDER_LABEL[v as "M" | "F" | "N"] ?? String(v) : "—")} onSaved={load} />
         <EditableInfoCard memberId={member.id} field="birth" label="생년월일" value={member.birth} type="date" onSaved={load} />
         <EditableInfoCard memberId={member.id} field="email" label="이메일" value={member.email} type="text" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="address" label="주소" value={member.address} type="text" onSaved={load} />
+      </DetailSection>
+
+      <DetailSection title="등록 정보">
         <EditableInfoCard memberId={member.id} field="member_type" label="회원 유형" value={member.member_type} type="select" options={[{ v: "provisional", l: "가회원" }, { v: "full", l: "정회원" }, { v: "matched", l: "연동 회원" }]} formatDisplay={(v) => (v ? MEMBER_TYPE_LABEL[String(v)] ?? String(v) : "—")} onSaved={load} />
         <EditableInfoCard memberId={member.id} field="registration_type" label="신규/재등록" value={member.registration_type} type="select" options={[{ v: "신규", l: "신규" }, { v: "재등록", l: "재등록" }]} onSaved={load} />
         <EditableInfoCard memberId={member.id} field="registered_at" label="최근 등록일" value={member.registered_at} type="date" onSaved={load} />
         <EditableInfoCard memberId={member.id} field="first_use_at" label="이용 시작일" value={member.first_use_at} type="date" onSaved={load} />
         <EditableInfoCard memberId={member.id} field="final_expire_at" label="최종 만료일" value={member.final_expire_at} type="date" onSaved={load} />
         <EditableInfoCard memberId={member.id} field="last_purchase_at" label="마지막 구매일" value={member.last_purchase_at} type="date" onSaved={load} />
+      </DetailSection>
+
+      <DetailSection title="이용 정보">
         <EditableInfoCard memberId={member.id} field="last_attended_at" label="마지막 출석일" value={member.last_attended_at} type="date" onSaved={load} />
         <EditableInfoCard memberId={member.id} field="total_paid_won" label="누적 결제" value={member.total_paid_won} type="number" suffix="원" onSaved={load} />
         <EditableInfoCard memberId={member.id} field="attendance_no" label="출석번호" value={member.attendance_no} type="text" onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="address" label="주소" value={member.address} type="text" onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="visit_route" label="방문 경로" value={member.visit_route} type="text" onSaved={load} />
         <EditableInfoCard memberId={member.id} field="workout_goal" label="운동 목적" value={member.workout_goal} type="text" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="mileage" label="마일리지" value={member.mileage} type="number" suffix="점" onSaved={load} />
+      </DetailSection>
+
+      <DetailSection title="관리 정보">
+        <EditableInfoCard memberId={member.id} field="visit_route" label="방문 경로" value={member.visit_route} type="text" onSaved={load} />
         <EditableInfoCard
           memberId={member.id}
           field="counselor"
@@ -286,8 +328,8 @@ export default function CrmMemberDetailPage() {
           ]}
           onSaved={load}
         />
-        <EditableInfoCard memberId={member.id} field="mileage" label="마일리지" value={member.mileage} type="number" suffix="점" onSaved={load} />
         <EditableInfoCard memberId={member.id} field="marketing_consent" label="광고성 수신" value={member.marketing_consent} type="bool" onSaved={load} />
+      </DetailSection>
       </div>
 
       {error && (
@@ -558,6 +600,91 @@ function MemoSection({
       )}
     </div>
   );
+}
+
+function SummaryMetric({
+  label,
+  value,
+  hint,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  tone?: "default" | "good" | "warn" | "money";
+}) {
+  const toneClass =
+    tone === "good"
+      ? "text-emerald-700 dark:text-emerald-300"
+      : tone === "warn"
+      ? "text-red-700 dark:text-red-300"
+      : tone === "money"
+      ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+      : "text-[#2A251D] dark:text-zinc-100";
+
+  return (
+    <div className="rounded-xl border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950/40 px-3 py-2.5 min-w-0">
+      <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">{label}</div>
+      <div className={`mt-1 text-[15px] md:text-[16px] font-bold truncate ${toneClass}`}>
+        {value}
+      </div>
+      <div className="mt-0.5 text-[11px] text-[#A89B80] dark:text-zinc-500 truncate">{hint}</div>
+    </div>
+  );
+}
+
+function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 px-3.5 py-3">
+      <h2 className="mb-2.5 text-[13px] font-bold text-[#3A342A] dark:text-zinc-200">{title}</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{children}</div>
+    </section>
+  );
+}
+
+function isMemberActive(member: Member): boolean {
+  if (member.status === "inactive") return false;
+  if (!member.final_expire_at) return Boolean(member.current_membership || member.current_pass);
+  return member.final_expire_at >= todayDate();
+}
+
+function expireTone(date: string | null): "default" | "good" | "warn" {
+  if (!date) return "default";
+  const days = daysFromToday(date);
+  if (days === null) return "default";
+  if (days < 0 || days <= 7) return "warn";
+  return "good";
+}
+
+function expireHint(date: string | null): string {
+  if (!date) return "만료일 없음";
+  const days = daysFromToday(date);
+  if (days === null) return "날짜 확인 필요";
+  if (days < 0) return `${Math.abs(days)}일 지남`;
+  if (days === 0) return "오늘 만료";
+  return `${days}일 남음`;
+}
+
+function attendanceHint(date: string | null): string {
+  if (!date) return "출석 기록 없음";
+  const days = daysFromToday(date);
+  if (days === null) return "날짜 확인 필요";
+  if (days === 0) return "오늘 출석";
+  if (days < 0) return `${Math.abs(days)}일 전`;
+  return "미래 날짜";
+}
+
+function daysFromToday(date: string): number | null {
+  const target = Date.parse(`${date.slice(0, 10)}T00:00:00+09:00`);
+  const today = Date.parse(`${todayDate()}T00:00:00+09:00`);
+  if (!Number.isFinite(target) || !Number.isFinite(today)) return null;
+  return Math.round((target - today) / 86400000);
+}
+
+function todayDate(): string {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 3600 * 1000);
+  return `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, "0")}-${String(kst.getUTCDate()).padStart(2, "0")}`;
 }
 
 /* ─── 회원 결제내역 ────────────────────────────── */
@@ -835,17 +962,6 @@ function formatLogTime(iso: string): string {
   } catch {
     return iso;
   }
-}
-
-function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-[11px] text-[#A89B80] dark:text-zinc-500">{label}</dt>
-      <dd className="mt-0.5 text-[13px] text-[#2A251D] dark:text-zinc-100 font-medium break-words">
-        {value}
-      </dd>
-    </div>
-  );
 }
 
 /**
@@ -1584,7 +1700,7 @@ function UsageSection({
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : total === 0 ? (
         <div className="px-4 py-6 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-          발급된 회원권·대여권이 없습니다. "+ 회원권 발급"으로 추가해 주세요.
+          발급된 회원권·대여권이 없습니다. &quot;+ 회원권 발급&quot;으로 추가해 주세요.
         </div>
       ) : (
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -3339,7 +3455,7 @@ function BodyMeasurementSection({ memberId, onOpen }: { memberId: number; onOpen
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : list.length === 0 ? (
         <div className="px-4 py-8 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-          신체 측정 기록이 없어요. "+ 측정 기록"으로 추가해 주세요.
+          신체 측정 기록이 없어요. &quot;+ 측정 기록&quot;으로 추가해 주세요.
         </div>
       ) : (
         <>
@@ -3615,9 +3731,24 @@ function SignedContractsSection({ memberId }: { memberId: number }) {
         open={requestOpen}
         memberId={memberId}
         onClose={() => setRequestOpen(false)}
-        onCreated={() => {
+        onCreated={async (createdId) => {
           setRequestOpen(false);
-          reload();
+          // 리스트 리로드 후 방금 만든 요청의 row 를 찾아 요청 관리 모달을 바로 오픈
+          try {
+            const token = await getIdToken();
+            if (!token) return;
+            const res = await fetch(`/api/crm/contracts/sign?member_id=${memberId}`, {
+              headers: { authorization: `Bearer ${token}` },
+              cache: "no-store",
+            });
+            const data = await res.json();
+            const next: SignedContractRow[] = data.contracts ?? [];
+            setList(next);
+            const created = next.find((c) => c.id === createdId);
+            if (created) setManagePending(created);
+          } finally {
+            setLoading(false);
+          }
         }}
       />
       {loading ? (
@@ -3825,7 +3956,7 @@ function RequestLinkModal({
   open: boolean;
   memberId: number;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (createdId: number) => void;
 }) {
   const { getIdToken } = useAuth();
   const [templates, setTemplates] = useState<
@@ -3884,7 +4015,8 @@ function RequestLinkModal({
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "요청 생성 실패");
       setLink(data.url);
-      onCreated();
+      // 생성 성공 시 부모가 요청 관리 모달을 바로 열도록 id 전달
+      onCreated(data.id as number);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
