@@ -25,7 +25,7 @@ export async function GET(
   const { data: member, error } = await supabase
     .from("crm_members")
     .select(
-      "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, registration_type, first_use_at, total_paid_won, final_expire_at, last_purchase_at, last_attended_at, attendance_no, current_membership, current_pass, current_rental, current_locker, created_at"
+      "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, registration_type, first_use_at, total_paid_won, final_expire_at, last_purchase_at, last_attended_at, attendance_no, current_membership, current_pass, current_rental, current_locker, face_image_data, created_at"
     )
     .eq("id", memberId)
     .eq("center_id", ctx.centerId)
@@ -91,7 +91,11 @@ const USAGE_FIELDS = new Set([
   "current_pass",
   "current_rental",
   "current_locker",
+  "face_image_data",
 ]);
+
+// 얼굴 사진 base64 최대 크기 (안전장치 · 300KB)
+const FACE_MAX_BASE64_LEN = 400_000;
 
 /**
  * PATCH /api/crm/members/[id]
@@ -138,6 +142,7 @@ export async function PATCH(
     current_pass?: string;
     current_rental?: string;
     current_locker?: string;
+    face_image_data?: string | null;
   };
   try {
     body = await request.json();
@@ -201,6 +206,19 @@ export async function PATCH(
   if (body.current_pass !== undefined) patch.current_pass = body.current_pass.trim() || null;
   if (body.current_rental !== undefined) patch.current_rental = body.current_rental.trim() || null;
   if (body.current_locker !== undefined) patch.current_locker = body.current_locker.trim() || null;
+  if (body.face_image_data !== undefined) {
+    const v = body.face_image_data;
+    if (v === null || v === "") {
+      patch.face_image_data = null;
+    } else if (typeof v === "string" && v.startsWith("data:image/") && v.length <= FACE_MAX_BASE64_LEN) {
+      patch.face_image_data = v;
+    } else {
+      return NextResponse.json(
+        { error: "얼굴 이미지가 너무 크거나 형식이 잘못됐어요" },
+        { status: 400 }
+      );
+    }
+  }
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });

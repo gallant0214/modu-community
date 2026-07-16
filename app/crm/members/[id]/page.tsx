@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
@@ -46,6 +46,7 @@ interface Member {
   current_pass: string | null;
   current_rental: string | null;
   current_locker: string | null;
+  face_image_data: string | null;
   created_at: string;
 }
 interface Pass {
@@ -224,7 +225,14 @@ export default function CrmMemberDetailPage() {
 
       <header className="mt-3 mb-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-white/75 dark:bg-zinc-900 px-4 py-4 md:px-5 md:py-5 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-          <div className="min-w-0">
+          <div className="min-w-0 flex items-start gap-3">
+            <FacePhotoUpload
+              memberId={member.id}
+              current={member.face_image_data}
+              canEdit={canEditBasic}
+              onSaved={load}
+            />
+            <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-[24px] md:text-[28px] leading-tight font-bold text-[#2A251D] dark:text-zinc-100">
                 {member.name}
@@ -244,6 +252,7 @@ export default function CrmMemberDetailPage() {
               <span>{member.phone ? formatPhone(member.phone) : "연락처 없음"}</span>
               {member.email && <span>{member.email}</span>}
               {member.attendance_no && <span>출석번호 {member.attendance_no}</span>}
+            </div>
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -703,6 +712,164 @@ function todayDate(): string {
   return `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, "0")}-${String(kst.getUTCDate()).padStart(2, "0")}`;
 }
 
+/* ─── 얼굴 사진 업로드 ────────────────────────────── */
+
+/**
+ * 회원 얼굴 사진.
+ * • 파일 선택 → 클라이언트 압축 (300x300, JPEG q=0.75) → base64 data URL 로 PATCH
+ * • 회원 상세 헤더의 아바타로 표시
+ */
+function FacePhotoUpload({
+  memberId,
+  current,
+  canEdit,
+  onSaved,
+}: {
+  memberId: number;
+  current: string | null;
+  canEdit: boolean;
+  onSaved: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const onFile = async (file: File) => {
+    setError("");
+    if (!file.type.startsWith("image/")) {
+      setError("이미지 파일만 업로드할 수 있어요");
+      return;
+    }
+    setBusy(true);
+    try {
+      const compressed = await compressToDataUrl(file, 300, 0.75);
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members/${memberId}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ face_image_data: compressed }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "업로드 실패");
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!window.confirm("얼굴 사진을 삭제할까요?")) return;
+    setBusy(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members/${memberId}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ face_image_data: null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "삭제 실패");
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-1 shrink-0">
+      <div className="relative w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
+        {current ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={current} alt="얼굴" className="w-full h-full object-cover" />
+        ) : (
+          <span className="text-[10px] text-[#A89B80]">사진 없음</span>
+        )}
+        {busy && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-[10px]">
+            처리중…
+          </div>
+        )}
+      </div>
+      {canEdit && (
+        <div className="flex items-center gap-1">
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            capture="user"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onFile(f);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={busy}
+            className="text-[10.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline disabled:opacity-50"
+          >
+            {current ? "변경" : "얼굴 등록"}
+          </button>
+          {current && (
+            <>
+              <span className="text-[10px] text-[#E8E0D0]">|</span>
+              <button
+                type="button"
+                onClick={remove}
+                disabled={busy}
+                className="text-[10.5px] text-red-600 hover:underline disabled:opacity-50"
+              >
+                삭제
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {error && (
+        <div className="text-[10px] text-red-600 max-w-[90px] text-center">{error}</div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 이미지 파일 → 정사각형 캔버스에 축소 → JPEG base64 반환.
+ * 얼굴 알아볼 정도의 크기(기본 300x300) · 품질 0.75 → 대략 20~35KB.
+ * center-crop 으로 얼굴이 중앙에 크게 담기도록.
+ */
+async function compressToDataUrl(file: File, size: number, quality: number): Promise<string> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas 컨텍스트 생성 실패");
+    // center-crop: 원본에서 정사각형 영역을 잘라 캔버스에 채움
+    const srcSide = Math.min(img.width, img.height);
+    const sx = (img.width - srcSide) / 2;
+    const sy = (img.height - srcSide) / 2;
+    ctx.drawImage(img, sx, sy, srcSide, srcSide, 0, 0, size, size);
+    return canvas.toDataURL("image/jpeg", quality);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 /* ─── 회원 예약내역 (달력 + 리스트 + 통계) ────────────────────────────── */
 
 interface ReservationRow {
@@ -776,33 +943,18 @@ function MemberReservationsSection({ memberId }: { memberId: number }) {
   const booked = rows.filter((r) => r.status === "booked").length;
   const monthCount = rows.filter((r) => kstDate(r.starts_at).slice(0, 7) === monthYm).length;
 
-  // 달력 데이터: 이번달 KST 기준 예약 있는 날짜 → 상태 목록
-  const daysInMonthMap = new Map<string, ReservationRow[]>();
-  for (const r of rows) {
-    const d = kstDate(r.starts_at);
-    if (d.slice(0, 7) !== monthYm) continue;
-    const list = daysInMonthMap.get(d) ?? [];
-    list.push(r);
-    daysInMonthMap.set(d, list);
-  }
-
-  const [yy, mm] = monthYm.split("-").map(Number);
-  const firstDay = new Date(Date.UTC(yy, mm - 1, 1));
-  const startWeekday = firstDay.getUTCDay(); // 0=일
-  const lastDate = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
-  const cells: Array<{ date: string | null; day: number | null }> = [];
-  for (let i = 0; i < startWeekday; i += 1) cells.push({ date: null, day: null });
-  for (let d = 1; d <= lastDate; d += 1) {
-    const ymd = `${yy}-${String(mm).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    cells.push({ date: ymd, day: d });
-  }
-  while (cells.length % 7 !== 0) cells.push({ date: null, day: null });
-
   const shiftMonth = (delta: number) => {
     const [y, m] = monthYm.split("-").map(Number);
     const d = new Date(Date.UTC(y, m - 1 + delta, 1));
     setMonthYm(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
   };
+
+  // 이번달 기준 전 달 ymStr 계산
+  const prevYm = (() => {
+    const [y, m] = monthYm.split("-").map(Number);
+    const d = new Date(Date.UTC(y, m - 2, 1));
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  })();
 
   if (loading) return <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>;
   if (error)
@@ -836,94 +988,35 @@ function MemberReservationsSection({ memberId }: { memberId: number }) {
         </div>
       )}
 
-      {/* 달력 */}
-      <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-2 border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
-          <button
-            type="button"
-            onClick={() => shiftMonth(-1)}
-            className="px-2 py-1 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:text-[#3A342A]"
-          >
-            ‹ 이전
-          </button>
-          <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
-            {yy}년 {mm}월
-          </span>
-          <button
-            type="button"
-            onClick={() => shiftMonth(1)}
-            className="px-2 py-1 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:text-[#3A342A]"
-          >
-            다음 ›
-          </button>
-        </div>
-        <div className="grid grid-cols-7 text-[11px] text-[#8C8270] border-b border-[#E8E0D0]/60 dark:border-zinc-800">
-          {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => (
-            <div
-              key={i}
-              className={`px-1 py-1.5 text-center ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : ""}`}
-            >
-              {d}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7">
-          {cells.map((c, i) => {
-            const list = c.date ? daysInMonthMap.get(c.date) ?? [] : [];
-            const hasAttended = list.some((r) => r.status === "attended");
-            const hasNoShow = list.some((r) => r.status === "noshow");
-            const hasCancel = list.some((r) => r.status === "cancelled");
-            const hasBooked = list.some((r) => r.status === "booked");
-            const isToday = c.date === today;
-            const isWeekend = i % 7 === 0 || i % 7 === 6;
-            return (
-              <div
-                key={i}
-                className={`min-h-[54px] p-1 border-t border-l border-[#E8E0D0]/40 dark:border-zinc-800/60 ${
-                  isToday ? "bg-[#6B7B3A]/10" : ""
-                }`}
-                title={list.length ? `${c.date} · 예약 ${list.length}건` : undefined}
-              >
-                {c.day && (
-                  <>
-                    <div
-                      className={`text-[10.5px] font-medium ${
-                        i % 7 === 0 ? "text-red-500" : i % 7 === 6 ? "text-blue-500" : "text-[#3A342A] dark:text-zinc-300"
-                      } ${isWeekend ? "" : ""}`}
-                    >
-                      {c.day}
-                    </div>
-                    {list.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-0.5">
-                        {hasAttended && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="정상 출석" />
-                        )}
-                        {hasNoShow && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-500" title="노쇼" />
-                        )}
-                        {hasCancel && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#A89B80]" title="예약 취소" />
-                        )}
-                        {hasBooked && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#6B7B3A]" title="예약" />
-                        )}
-                        {list.length > 3 && (
-                          <span className="text-[9px] text-[#8C8270] leading-none ml-0.5">+{list.length - 3}</span>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 border-t border-[#E8E0D0] dark:border-zinc-800 text-[10.5px] text-[#6B5D47] dark:text-zinc-400">
+      {/* 달력: 전 달 + 이번달 좌우 */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => shiftMonth(-1)}
+          className="px-2 py-1 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 hover:text-[#3A342A]"
+        >
+          ‹ 이전
+        </button>
+        <div className="text-[11.5px] text-[#8C8270]">
           <LegendDot color="bg-[#6B7B3A]" label="예약" />
+          <span className="mx-2" />
           <LegendDot color="bg-emerald-500" label="정상 출석" />
+          <span className="mx-2" />
           <LegendDot color="bg-red-500" label="노쇼" />
+          <span className="mx-2" />
           <LegendDot color="bg-[#A89B80]" label="예약 취소" />
         </div>
+        <button
+          type="button"
+          onClick={() => shiftMonth(1)}
+          className="px-2 py-1 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 hover:text-[#3A342A]"
+        >
+          다음 ›
+        </button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <MiniMonthCalendar ymStr={prevYm} rows={rows} kstDate={kstDate} today={today} muted />
+        <MiniMonthCalendar ymStr={monthYm} rows={rows} kstDate={kstDate} today={today} />
       </div>
 
       {/* 리스트 (전체 최근 500건) */}
@@ -1021,6 +1114,106 @@ function LegendDot({ color, label }: { color: string; label: string }) {
       <span className={`w-2 h-2 rounded-full ${color}`} />
       <span>{label}</span>
     </span>
+  );
+}
+
+/**
+ * 예약내역 탭에서 쓰는 미니 월 달력.
+ * ymStr='YYYY-MM' 기준 해당 월 셀 렌더. muted=true 이면 전 달용 옅은 톤.
+ */
+function MiniMonthCalendar({
+  ymStr,
+  rows,
+  kstDate,
+  today,
+  muted,
+}: {
+  ymStr: string;
+  rows: ReservationRow[];
+  kstDate: (iso: string) => string;
+  today: string;
+  muted?: boolean;
+}) {
+  const [yy, mm] = ymStr.split("-").map(Number);
+  const daysInMonthMap = new Map<string, ReservationRow[]>();
+  for (const r of rows) {
+    const d = kstDate(r.starts_at);
+    if (d.slice(0, 7) !== ymStr) continue;
+    const list = daysInMonthMap.get(d) ?? [];
+    list.push(r);
+    daysInMonthMap.set(d, list);
+  }
+  const firstDay = new Date(Date.UTC(yy, mm - 1, 1));
+  const startWeekday = firstDay.getUTCDay();
+  const lastDate = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+  const cells: Array<{ date: string | null; day: number | null }> = [];
+  for (let i = 0; i < startWeekday; i += 1) cells.push({ date: null, day: null });
+  for (let d = 1; d <= lastDate; d += 1) {
+    const ymd = `${yy}-${String(mm).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    cells.push({ date: ymd, day: d });
+  }
+  while (cells.length % 7 !== 0) cells.push({ date: null, day: null });
+
+  return (
+    <div
+      className={`rounded-xl border border-[#E8E0D0] dark:border-zinc-800 overflow-hidden ${
+        muted ? "bg-[#FBF7EB]/50 dark:bg-zinc-900/40" : "bg-[#FEFCF7] dark:bg-zinc-900"
+      }`}
+    >
+      <div className="px-3 py-2 border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60 text-center text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+        {yy}년 {mm}월
+      </div>
+      <div className="grid grid-cols-7 text-[11px] text-[#8C8270] border-b border-[#E8E0D0]/60 dark:border-zinc-800">
+        {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => (
+          <div
+            key={i}
+            className={`px-1 py-1.5 text-center ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : ""}`}
+          >
+            {d}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7">
+        {cells.map((c, i) => {
+          const list = c.date ? daysInMonthMap.get(c.date) ?? [] : [];
+          const hasAttended = list.some((r) => r.status === "attended");
+          const hasNoShow = list.some((r) => r.status === "noshow");
+          const hasCancel = list.some((r) => r.status === "cancelled");
+          const hasBooked = list.some((r) => r.status === "booked");
+          const isToday = c.date === today;
+          const wd = i % 7;
+          return (
+            <div
+              key={i}
+              className={`min-h-[48px] p-1 border-t border-l border-[#E8E0D0]/40 dark:border-zinc-800/60 ${
+                isToday ? "bg-[#6B7B3A]/10" : ""
+              } ${muted && !list.length ? "opacity-70" : ""}`}
+              title={list.length ? `${c.date} · 예약 ${list.length}건` : undefined}
+            >
+              {c.day && (
+                <>
+                  <div
+                    className={`text-[10.5px] font-medium ${
+                      wd === 0 ? "text-red-500" : wd === 6 ? "text-blue-500" : "text-[#3A342A] dark:text-zinc-300"
+                    }`}
+                  >
+                    {c.day}
+                  </div>
+                  {list.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-0.5">
+                      {hasAttended && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="정상 출석" />}
+                      {hasNoShow && <span className="w-1.5 h-1.5 rounded-full bg-red-500" title="노쇼" />}
+                      {hasCancel && <span className="w-1.5 h-1.5 rounded-full bg-[#A89B80]" title="예약 취소" />}
+                      {hasBooked && <span className="w-1.5 h-1.5 rounded-full bg-[#6B7B3A]" title="예약" />}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
