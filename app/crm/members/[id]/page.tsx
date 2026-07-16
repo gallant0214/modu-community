@@ -231,7 +231,7 @@ export default function CrmMemberDetailPage() {
         member.current_locker) && (
         <div className="mb-3 flex flex-wrap gap-1.5 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
           {holdingCards("회원권", member.current_membership, onSnapSelect)}
-          {holdingCards("이용권", member.current_pass, onSnapSelect)}
+          {holdingCards("수강권", member.current_pass, onSnapSelect)}
           {holdingCards("대여권", member.current_rental, onSnapSelect)}
           {holdingCards("락커", member.current_locker, onSnapSelect)}
         </div>
@@ -272,7 +272,7 @@ export default function CrmMemberDetailPage() {
               onClick={() => setUsageOpen(true)}
               className="px-3 py-1.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/5"
             >
-              + 이용권 발급
+              + 회원권 발급
             </button>
             <button
               onClick={() => setPassOpen(true)}
@@ -563,7 +563,7 @@ function splitNamePeriod(s: string): { name: string; period: string | null } {
 
 const SNAP_STYLE: Record<string, string> = {
   회원권: "border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]",
-  이용권: "border-[#B47B2A]/40 bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300",
+  수강권: "border-[#B47B2A]/40 bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300",
   대여권: "border-[#3E7C8C]/40 bg-[#3E7C8C]/10 text-[#3E7C8C] dark:text-cyan-300",
   락커: "border-[#8B6BB1]/40 bg-[#8B6BB1]/10 text-[#8B6BB1] dark:text-purple-300",
 };
@@ -884,7 +884,7 @@ function EditModal({
             <input className={crmInputClass} value={currentMembership} onChange={(e) => setCurrentMembership(e.target.value)} />
           </CrmField>
           <div className="grid grid-cols-2 gap-2">
-            <CrmField label="보유 이용권">
+            <CrmField label="보유 회원권">
               <input className={crmInputClass} value={currentPass} onChange={(e) => setCurrentPass(e.target.value)} />
             </CrmField>
             <CrmField label="보유 대여권">
@@ -1020,7 +1020,7 @@ function UsageSection({
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : total === 0 ? (
         <div className="px-4 py-6 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-          발급된 회원권·대여권이 없습니다. "+ 이용권 발급"으로 추가해 주세요.
+          발급된 회원권·대여권이 없습니다. "+ 회원권 발급"으로 추가해 주세요.
         </div>
       ) : (
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -1176,7 +1176,7 @@ function HoldingDetailModal({
           />
           <div className="px-3 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12px] text-[#8C8270] leading-relaxed">
             {detail.note ??
-              "POS에서 가져온 보유 내역이라 이 상품의 개별 결제 상세(담당자·결제일·할인 등)는 저장돼 있지 않아요. '이용권 발급'으로 새로 발급하면 상세가 기록됩니다."}
+              "POS에서 가져온 보유 내역이라 이 상품의 개별 결제 상세(담당자·결제일·할인 등)는 저장돼 있지 않아요. '회원권 발급'으로 새로 발급하면 상세가 기록됩니다."}
           </div>
           <button
             onClick={onClose}
@@ -1242,7 +1242,7 @@ function HoldingDetailModal({
 type UsageType = "membership" | "locker" | "apparel";
 
 const USAGE_TABS: { key: UsageType; label: string }[] = [
-  { key: "membership", label: "헬스 이용권" },
+  { key: "membership", label: "회원권" },
   { key: "locker", label: "락커" },
   { key: "apparel", label: "운동복" },
 ];
@@ -1397,7 +1397,7 @@ function UsageIssueModal({
     if (!name.trim()) {
       return setError(
         type === "membership"
-          ? "이용권 상품을 선택하거나 입력해 주세요"
+          ? "회원권 상품을 선택하거나 입력해 주세요"
           : type === "locker"
             ? "락커 상품을 선택하거나 입력해 주세요"
             : "대여 상품을 선택하거나 입력해 주세요"
@@ -1505,7 +1505,7 @@ function UsageIssueModal({
   };
 
   return (
-    <CrmModal open={open} onClose={onClose} title="이용권 발급" size="lg">
+    <CrmModal open={open} onClose={onClose} title="회원권 발급" size="lg">
       <div className="space-y-3">
         <CrmField label="종류" required>
           <div className="grid grid-cols-3 gap-2">
@@ -1527,7 +1527,7 @@ function UsageIssueModal({
 
         {/* 상품 검색 (모든 탭 공통) */}
         <CrmField
-          label={type === "membership" ? "이용권 상품" : type === "locker" ? "락커 상품" : "대여 상품"}
+          label={type === "membership" ? "회원권 상품" : type === "locker" ? "락커 상품" : "대여 상품"}
           required
         >
           <div className="relative">
@@ -1580,7 +1580,7 @@ function UsageIssueModal({
           </div>
           {products.length === 0 && (
             <p className="mt-1 text-[11px] text-[#A89B80]">
-              등록된 {type === "membership" ? "이용권" : type === "locker" ? "락커" : "대여"} 상품이
+              등록된 {type === "membership" ? "회원권" : type === "locker" ? "락커" : "대여"} 상품이
               없어요. 직접 입력하거나 상품 관리에서 추가해 주세요.
             </p>
           )}
@@ -2249,6 +2249,38 @@ function PassDetailModal({
   const [error, setError] = useState("");
   const [refunding, setRefunding] = useState(false);
   const [holdOpen, setHoldOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
+  // 수정 폼 값 (편집 시작 시 detail 로부터 초기화)
+  const [editTrainerId, setEditTrainerId] = useState<number | "">("");
+  const [editSellerId, setEditSellerId] = useState<number | "">("");
+  const [editLessonKind, setEditLessonKind] = useState("");
+  const [editSessionMinutes, setEditSessionMinutes] = useState(60);
+  const [editTotal, setEditTotal] = useState(0);
+  const [editRemaining, setEditRemaining] = useState(0);
+  const [editExpires, setEditExpires] = useState("");
+  const [editMemo, setEditMemo] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // 수강권 수정 권한 조회
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/bootstrap", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCanEdit(!!data?.permissions?.["passes.edit"]);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [getIdToken]);
 
   useEffect(() => {
     if (passId === null) {
@@ -2297,6 +2329,52 @@ function PassDetailModal({
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
       setRefunding(false);
+    }
+  };
+
+  const startEdit = () => {
+    if (!detail?.pass) return;
+    const p = detail.pass;
+    setEditTrainerId(p.trainer_member_id);
+    setEditSellerId(p.seller_member_id);
+    setEditLessonKind(p.lesson_kind ?? "");
+    setEditSessionMinutes(p.session_minutes ?? 60);
+    setEditTotal(p.total_sessions ?? 0);
+    setEditRemaining(p.remaining_sessions ?? 0);
+    setEditExpires(p.expires_at ?? "");
+    setEditMemo(p.memo ?? "");
+    setEditing(true);
+    setError("");
+  };
+
+  const saveEdit = async () => {
+    if (!detail?.pass || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/passes/${detail.pass.id}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          trainer_member_id: editTrainerId || undefined,
+          seller_member_id: editSellerId || undefined,
+          lesson_kind: editLessonKind || undefined,
+          session_minutes: editSessionMinutes,
+          total_sessions: editTotal,
+          remaining_sessions: Math.min(editRemaining, editTotal),
+          expires_at: editExpires || undefined,
+          memo: editMemo,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "수정 실패");
+      setEditing(false);
+      onRefunded();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -2349,7 +2427,139 @@ function PassDetailModal({
             ]}
           />
 
-          {pass.memo && (
+          {canEdit && !editing && pass.status === "valid" && (
+            <div>
+              <button
+                type="button"
+                onClick={startEdit}
+                className="px-3 py-1.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/5"
+              >
+                수강권 수정
+              </button>
+            </div>
+          )}
+
+          {editing && (
+            <div className="rounded-2xl border-2 border-[#6B7B3A]/40 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 p-4 space-y-3">
+              <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                수강권 수정
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <CrmField label="담당 강사">
+                  <select
+                    value={editTrainerId}
+                    onChange={(e) =>
+                      setEditTrainerId(e.target.value ? Number(e.target.value) : "")
+                    }
+                    className={crmInputClass}
+                  >
+                    <option value="">선택</option>
+                    {staffList
+                      .filter((s) => s.status === "active")
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.display_name} ({s.role})
+                        </option>
+                      ))}
+                  </select>
+                </CrmField>
+                <CrmField label="판매 직원">
+                  <select
+                    value={editSellerId}
+                    onChange={(e) =>
+                      setEditSellerId(e.target.value ? Number(e.target.value) : "")
+                    }
+                    className={crmInputClass}
+                  >
+                    <option value="">선택</option>
+                    {staffList
+                      .filter((s) => s.status === "active")
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.display_name} ({s.role})
+                        </option>
+                      ))}
+                  </select>
+                </CrmField>
+                <CrmField label="수업 종류">
+                  <input
+                    type="text"
+                    value={editLessonKind}
+                    onChange={(e) => setEditLessonKind(e.target.value)}
+                    className={crmInputClass}
+                    placeholder="예: PT 개인 레슨"
+                  />
+                </CrmField>
+                <CrmField label="회당 수업 시간(분)">
+                  <input
+                    type="number"
+                    min={0}
+                    value={editSessionMinutes}
+                    onChange={(e) =>
+                      setEditSessionMinutes(Math.max(0, Number(e.target.value) || 0))
+                    }
+                    className={crmInputClass}
+                  />
+                </CrmField>
+                <CrmField label="총 세션">
+                  <input
+                    type="number"
+                    min={0}
+                    value={editTotal}
+                    onChange={(e) => setEditTotal(Math.max(0, Number(e.target.value) || 0))}
+                    className={crmInputClass}
+                  />
+                </CrmField>
+                <CrmField label="잔여 세션">
+                  <input
+                    type="number"
+                    min={0}
+                    max={editTotal}
+                    value={editRemaining}
+                    onChange={(e) =>
+                      setEditRemaining(Math.max(0, Number(e.target.value) || 0))
+                    }
+                    className={crmInputClass}
+                  />
+                </CrmField>
+                <CrmField label="만료일">
+                  <input
+                    type="date"
+                    value={editExpires}
+                    onChange={(e) => setEditExpires(e.target.value)}
+                    className={crmInputClass}
+                  />
+                </CrmField>
+              </div>
+              <CrmField label="메모">
+                <textarea
+                  value={editMemo}
+                  onChange={(e) => setEditMemo(e.target.value)}
+                  className={`${crmInputClass} min-h-[60px]`}
+                />
+              </CrmField>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEditing(false)}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] disabled:opacity-50"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={saveEdit}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
+                >
+                  {saving ? "저장 중…" : "저장"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!editing && pass.memo && (
             <div className="px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
               <strong className="text-[#3A342A] dark:text-zinc-300">메모 ·</strong> {pass.memo}
             </div>

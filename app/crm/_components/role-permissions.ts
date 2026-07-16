@@ -94,6 +94,14 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    key: "passes",
+    label: "수강권 관리",
+    items: [
+      { key: "passes.edit",   label: "수강권 수정 (담당강사·세션·메모 등)", defaults: D_ADMIN },
+      { key: "passes.refund", label: "수강권 환불",                          defaults: D_ADMIN },
+    ],
+  },
+  {
     key: "segments",
     label: "세그먼트 관리",
     items: [

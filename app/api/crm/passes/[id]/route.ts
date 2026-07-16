@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { loadPermissionsForRole } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -59,14 +60,20 @@ export async function GET(
 
 /**
  * PATCH /api/crm/passes/[id]
- * 수강권 정보 수정 (메모, 만료일, 결제정보). 잔여 횟수는 별도 로직.
+ * 수강권 정보 수정 — 담당강사·수업 종류·회당 시간·메모·만료일·결제 등.
+ * 권한: passes.edit (default owner/admin. 설정 > 권한에서 manager/trainer 에게 부여 가능)
  */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+
+  const perms = await loadPermissionsForRole(ctx.centerId, ctx.role);
+  if (!perms["passes.edit"]) {
+    return NextResponse.json({ error: "수강권 수정 권한이 없습니다" }, { status: 403 });
+  }
 
   const { id } = await params;
   const passId = Number(id);
@@ -78,6 +85,12 @@ export async function PATCH(
     price_won?: number;
     payment_method?: string;
     payment_method_custom?: string;
+    trainer_member_id?: number;
+    seller_member_id?: number;
+    session_minutes?: number;
+    lesson_kind?: string;
+    total_sessions?: number;
+    remaining_sessions?: number;
   };
   try {
     body = await request.json();
@@ -97,6 +110,26 @@ export async function PATCH(
       patch.payment_method_custom = null;
     }
   }
+  if (body.trainer_member_id && Number.isFinite(body.trainer_member_id)) {
+    patch.trainer_member_id = Number(body.trainer_member_id);
+  }
+  if (body.seller_member_id && Number.isFinite(body.seller_member_id)) {
+    patch.seller_member_id = Number(body.seller_member_id);
+  }
+  if (body.session_minutes !== undefined && body.session_minutes >= 0) {
+    patch.session_minutes = Number(body.session_minutes);
+  }
+  if (body.lesson_kind !== undefined && typeof body.lesson_kind === "string") {
+    const v = body.lesson_kind.trim();
+    if (v) patch.lesson_kind = v;
+  }
+  if (body.total_sessions !== undefined && body.total_sessions >= 0) {
+    patch.total_sessions = Number(body.total_sessions);
+  }
+  if (body.remaining_sessions !== undefined && body.remaining_sessions >= 0) {
+    patch.remaining_sessions = Number(body.remaining_sessions);
+  }
+
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
   }
@@ -110,6 +143,16 @@ export async function PATCH(
   if (error) {
     return NextResponse.json({ error: "수정 실패", detail: error.message }, { status: 500 });
   }
+
+  await supabase.from("crm_audit_logs").insert({
+    center_id: ctx.centerId,
+    actor_uid: ctx.uid,
+    action: "pass.update",
+    entity_type: "crm_passes",
+    entity_id: passId,
+    payload: patch as never,
+  });
+
   return NextResponse.json({ ok: true });
 }
 
