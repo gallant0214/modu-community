@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_products")
     .select(
-      "id, type, billing_mode, category, name, description, open_time, close_time, operating_days, duration_value, duration_unit, service_days, total_sessions, pause_enabled, pause_days, pause_count, price_won, vat_included, mileage_earn, mileage_usable, capacity, session_minutes, status, created_at"
+      "id, type, billing_mode, category, name, description, open_time, close_time, operating_days, duration_value, duration_unit, service_days, total_sessions, pause_enabled, pause_days, pause_count, price_won, vat_included, mileage_earn, mileage_usable, capacity, session_minutes, daily_check_in_limit, daily_time_limit_enabled, status, created_at"
     )
     .eq("center_id", ctx.centerId)
     .eq("status", "active")
@@ -72,6 +72,8 @@ export async function POST(request: Request) {
     mileage_usable?: boolean;
     capacity?: number;
     session_minutes?: number;
+    daily_check_in_limit?: number;
+    daily_time_limit_enabled?: boolean;
   };
   try {
     body = await request.json();
@@ -141,8 +143,10 @@ export async function POST(request: Request) {
         body.type === "personal" || body.type === "group"
           ? Math.max(0, Number(body.session_minutes) || 0)
           : 0,
+      daily_check_in_limit: Math.max(1, Number(body.daily_check_in_limit) || 1),
+      daily_time_limit_enabled: !!body.daily_time_limit_enabled,
       status: "active",
-    })
+    } as never)
     .select("id")
     .single();
 

@@ -1422,6 +1422,8 @@ export type Database = {
           vat_included: boolean
           capacity: number
           session_minutes: number
+          daily_check_in_limit: number
+          daily_time_limit_enabled: boolean
           status: string
           created_at: string
           updated_at: string
@@ -1450,6 +1452,8 @@ export type Database = {
           vat_included?: boolean
           capacity?: number
           session_minutes?: number
+          daily_check_in_limit?: number
+          daily_time_limit_enabled?: boolean
           status?: string
           created_at?: string
           updated_at?: string
@@ -1478,6 +1482,8 @@ export type Database = {
           vat_included?: boolean
           capacity?: number
           session_minutes?: number
+          daily_check_in_limit?: number
+          daily_time_limit_enabled?: boolean
           status?: string
           created_at?: string
           updated_at?: string

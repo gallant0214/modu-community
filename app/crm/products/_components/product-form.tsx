@@ -31,6 +31,8 @@ export interface ProductInitial {
   mileage_usable?: boolean;
   capacity?: number;
   session_minutes?: number;
+  daily_check_in_limit?: number;
+  daily_time_limit_enabled?: boolean;
 }
 
 interface TypeOption {
@@ -192,6 +194,10 @@ export function ProductForm({ mode, initial, onSaved, onCancel }: Props) {
   const [vatIncluded, setVatIncluded] = useState(initial?.vat_included ?? false);
   const [capacity, setCapacity] = useState(initial?.capacity ?? 10);
   const [sessionMinutes, setSessionMinutes] = useState(initial?.session_minutes ?? 60);
+  const [dailyCheckInLimit, setDailyCheckInLimit] = useState(initial?.daily_check_in_limit ?? 1);
+  const [dailyTimeLimitEnabled, setDailyTimeLimitEnabled] = useState(
+    initial?.daily_time_limit_enabled ?? false
+  );
   const [description, setDescription] = useState(initial?.description ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -246,6 +252,8 @@ export function ProductForm({ mode, initial, onSaved, onCancel }: Props) {
         capacity: type === "group" ? capacity ?? 0 : 0,
         session_minutes:
           type === "personal" || type === "group" ? sessionMinutes ?? 0 : 0,
+        daily_check_in_limit: Math.max(1, dailyCheckInLimit ?? 1),
+        daily_time_limit_enabled: dailyTimeLimitEnabled,
       };
 
       const url =
@@ -433,25 +441,77 @@ export function ProductForm({ mode, initial, onSaved, onCancel }: Props) {
           maxLength={60}
         />
 
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          <div>
-            <FieldLabel>시작 시간</FieldLabel>
+        {/* 하루 출석 가능 횟수 (기본 1) */}
+        <div className="mt-3">
+          <FieldLabel>하루 출석 가능 횟수</FieldLabel>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setDailyCheckInLimit(n)}
+                className={`px-2.5 py-1 rounded-full text-[12px] font-medium border
+                  ${dailyCheckInLimit === n
+                    ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                    : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                  }`}
+              >
+                {n}회
+              </button>
+            ))}
             <input
-              type="time"
-              value={openTime}
-              onChange={(e) => setOpenTime(e.target.value)}
-              className={crmInputClass}
+              type="number"
+              min={1}
+              max={99}
+              value={dailyCheckInLimit}
+              onChange={(e) =>
+                setDailyCheckInLimit(Math.max(1, Math.min(99, Number(e.target.value) || 1)))
+              }
+              className="w-16 px-2 py-1 rounded-full text-[12px] border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 bg-white dark:bg-zinc-900 text-center focus:outline-none ml-1"
+              aria-label="하루 출석 가능 횟수 직접 입력"
             />
+            <span className="text-[11.5px] text-[#A89B80]">회</span>
           </div>
-          <div>
-            <FieldLabel>종료 시간</FieldLabel>
+        </div>
+
+        {/* 하루 이용 가능 시간 (체크박스로 활성화) */}
+        <div className="mt-3">
+          <label className="flex items-center gap-2 mb-2 cursor-pointer">
             <input
-              type="time"
-              value={closeTime}
-              onChange={(e) => setCloseTime(e.target.value)}
-              className={crmInputClass}
+              type="checkbox"
+              checked={dailyTimeLimitEnabled}
+              onChange={(e) => setDailyTimeLimitEnabled(e.target.checked)}
+              className="w-4 h-4 accent-[#6B7B3A]"
             />
-          </div>
+            <span className="text-[13px] font-medium text-[#3A342A] dark:text-zinc-300">
+              하루 이용 가능 시간 제한
+            </span>
+            {!dailyTimeLimitEnabled && (
+              <span className="text-[11.5px] text-[#A89B80]">(체크 시 시간대 지정)</span>
+            )}
+          </label>
+          {dailyTimeLimitEnabled && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <FieldLabel>시작 시간</FieldLabel>
+                <input
+                  type="time"
+                  value={openTime}
+                  onChange={(e) => setOpenTime(e.target.value)}
+                  className={crmInputClass}
+                />
+              </div>
+              <div>
+                <FieldLabel>종료 시간</FieldLabel>
+                <input
+                  type="time"
+                  value={closeTime}
+                  onChange={(e) => setCloseTime(e.target.value)}
+                  className={crmInputClass}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-3">

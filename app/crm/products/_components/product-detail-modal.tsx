@@ -26,6 +26,8 @@ export interface ProductDetail {
   mileage_usable?: boolean;
   capacity: number;
   session_minutes: number;
+  daily_check_in_limit?: number;
+  daily_time_limit_enabled?: boolean;
   status: string;
 }
 
@@ -115,9 +117,12 @@ export function ProductDetailModal({ product, typeLabel, onClose, onEdit, onDele
             <Field label="그룹 정원">{p.capacity}명</Field>
           )}
           <Field label="운영 요일">{daysText || "—"}</Field>
-          <Field label="운영 시간">
-            {(p.open_time ?? "").slice(0, 5)} ~ {(p.close_time ?? "").slice(0, 5)}
+          <Field label="하루 이용 가능 시간">
+            {p.daily_time_limit_enabled
+              ? `${(p.open_time ?? "").slice(0, 5)} ~ ${(p.close_time ?? "").slice(0, 5)}`
+              : "제한 없음"}
           </Field>
+          <Field label="하루 출석 가능 횟수">{p.daily_check_in_limit ?? 1}회</Field>
           {p.pause_enabled && (
             <Field label="정지(휴회)">
               최대 {p.pause_days}일
