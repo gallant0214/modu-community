@@ -87,8 +87,8 @@ export default function CrmMemberDetailPage() {
   const [paymentDetail, setPaymentDetail] = useState<PaymentDetail | null>(null);
   const [detailPassId, setDetailPassId] = useState<number | null>(null);
   const [bodyOpen, setBodyOpen] = useState(false);
-  // 탭: '정보' 기본, '로그' 는 audit 이력
-  const [tab, setTab] = useState<"info" | "logs">("info");
+  // 탭: 정보 / 결제내역 / 로그
+  const [tab, setTab] = useState<"info" | "payments" | "logs">("info");
 
   // 결제 후 흐름 (계약서 작성 선택)
   const [pendingPassId, setPendingPassId] = useState<number | null>(null);
@@ -215,34 +215,28 @@ export default function CrmMemberDetailPage() {
         </div>
       </header>
 
-      {/* 탭: 정보 / 로그 */}
+      {/* 탭: 정보 / 결제내역 / 로그 */}
       <div className="mb-4 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800">
-        <button
-          type="button"
-          onClick={() => setTab("info")}
-          className={`px-4 py-2 -mb-px text-[13px] font-medium border-b-2 transition-colors
-            ${tab === "info"
-              ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A]"
-              : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
-            }`}
-        >
-          정보
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("logs")}
-          className={`px-4 py-2 -mb-px text-[13px] font-medium border-b-2 transition-colors
-            ${tab === "logs"
-              ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A]"
-              : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
-            }`}
-        >
-          로그
-        </button>
+        {(["info", "payments", "logs"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className={`px-4 py-2 -mb-px text-[13px] font-medium border-b-2 transition-colors
+              ${tab === t
+                ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A]"
+                : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
+              }`}
+          >
+            {t === "info" ? "정보" : t === "payments" ? "결제내역" : "로그"}
+          </button>
+        ))}
       </div>
 
       {tab === "logs" ? (
         <MemberLogsSection memberId={member.id} />
+      ) : tab === "payments" ? (
+        <MemberPaymentsSection memberId={member.id} />
       ) : (
       <>
       <MemoSection memberId={member.id} memo={member.memo} onSaved={load} />
@@ -562,6 +556,123 @@ function MemoSection({
           메모가 없습니다.
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── 회원 결제내역 ────────────────────────────── */
+
+interface PaymentRow {
+  id: number;
+  member_id: number;
+  pass_id: number | null;
+  membership_id: number | null;
+  amount_won: number;
+  method: string;
+  method_custom: string | null;
+  paid_at: string;
+  note: string | null;
+  status: string;
+  created_at: string;
+}
+
+const PAYMENT_METHOD_KO: Record<string, string> = {
+  cash: "현금",
+  card: "카드",
+  transfer: "계좌이체",
+  etc: "기타",
+};
+
+function MemberPaymentsSection({ memberId }: { memberId: number }) {
+  const { getIdToken } = useAuth();
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+        const res = await fetch(`/api/crm/payments?member_id=${memberId}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "조회 실패");
+        setPayments(data.payments ?? []);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "네트워크 오류");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [memberId, getIdToken]);
+
+  const total = payments.reduce((s, p) => s + (p.amount_won ?? 0), 0);
+
+  if (loading) return <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>;
+  if (error)
+    return (
+      <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+        {error}
+      </div>
+    );
+  if (payments.length === 0) {
+    return (
+      <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+        결제내역이 없습니다.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
+          총 {payments.length}건
+        </span>
+        <span className="text-[15px] font-bold text-[#6B7B3A] dark:text-[#A8B87A]">
+          누적 {total.toLocaleString()}원
+        </span>
+      </div>
+      <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
+        {payments.map((p) => {
+          const linked = p.pass_id
+            ? `수강권 #${p.pass_id}`
+            : p.membership_id
+            ? `회원권 #${p.membership_id}`
+            : "—";
+          const methodLabel =
+            p.method === "etc" && p.method_custom
+              ? `${p.method_custom}(기타)`
+              : PAYMENT_METHOD_KO[p.method] ?? p.method;
+          return (
+            <li key={p.id} className="px-4 py-3">
+              <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <span className="text-[14px] font-bold text-[#6B7B3A] dark:text-[#A8B87A]">
+                    {p.amount_won.toLocaleString()}원
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#B47B2A]/10 text-[#B47B2A] dark:bg-amber-900/40 dark:text-amber-300">
+                    {methodLabel}
+                  </span>
+                  <span className="text-[12px] text-[#8C8270]">{linked}</span>
+                  {p.status !== "paid" && (
+                    <span className="text-[11px] text-red-600">({p.status})</span>
+                  )}
+                </div>
+                <span className="text-[11.5px] text-[#A89B80] shrink-0">{p.paid_at}</span>
+              </div>
+              {p.note && (
+                <div className="mt-1 text-[12px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap">
+                  {p.note}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -929,6 +1040,76 @@ function EditableInfoCard({
 }
 
 // 콤마로 구분된 보유 상품 문자열을 개별 항목으로 분리 (괄호 안 콤마는 무시)
+/**
+ * 보유 회원권/수강권/대여권/락커 편집용 — 콤마 구분 텍스트를 리스트로 관리.
+ * 각 항목은 별도 행에 표시, X 로 삭제, + 로 추가.
+ */
+function HoldingListInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const items = value
+    ? splitTopLevel(value)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+    : [];
+
+  const setItem = (idx: number, next: string) => {
+    const arr = items.slice();
+    arr[idx] = next;
+    onChange(arr.filter((s) => s.length > 0).join(", "));
+  };
+  const removeItem = (idx: number) => {
+    const arr = items.slice();
+    arr.splice(idx, 1);
+    onChange(arr.join(", "));
+  };
+  const addItem = () => {
+    onChange([...items, ""].filter((s, i, a) => i === a.length - 1 || s.length > 0).join(", "));
+  };
+
+  return (
+    <CrmField label={label}>
+      {items.length === 0 ? (
+        <div className="text-[12px] text-[#A89B80] italic mb-1.5">없음</div>
+      ) : (
+        <ul className="space-y-1.5 mb-2">
+          {items.map((it, i) => (
+            <li key={i} className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={it}
+                onChange={(e) => setItem(i, e.target.value)}
+                className={`${crmInputClass} flex-1`}
+              />
+              <button
+                type="button"
+                onClick={() => removeItem(i)}
+                aria-label="삭제"
+                className="px-2 py-1.5 rounded-lg border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-[12px] hover:bg-red-50 shrink-0"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        onClick={addItem}
+        className="text-[12px] px-2.5 py-1 rounded-full border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
+      >
+        + 항목 추가
+      </button>
+    </CrmField>
+  );
+}
+
 function splitTopLevel(text: string): string[] {
   const out: string[] = [];
   let depth = 0;
@@ -1273,20 +1454,10 @@ function EditModal({
               onChange={(e) => setTotalPaidWon(e.target.value.replace(/[^\d]/g, ""))}
             />
           </CrmField>
-          <CrmField label="보유 멤버십">
-            <input className={crmInputClass} value={currentMembership} onChange={(e) => setCurrentMembership(e.target.value)} />
-          </CrmField>
-          <div className="grid grid-cols-2 gap-2">
-            <CrmField label="보유 회원권">
-              <input className={crmInputClass} value={currentPass} onChange={(e) => setCurrentPass(e.target.value)} />
-            </CrmField>
-            <CrmField label="보유 대여권">
-              <input className={crmInputClass} value={currentRental} onChange={(e) => setCurrentRental(e.target.value)} />
-            </CrmField>
-          </div>
-          <CrmField label="보유 락커">
-            <input className={crmInputClass} value={currentLocker} onChange={(e) => setCurrentLocker(e.target.value)} />
-          </CrmField>
+          <HoldingListInput label="보유 회원권" value={currentMembership} onChange={setCurrentMembership} />
+          <HoldingListInput label="보유 수강권" value={currentPass} onChange={setCurrentPass} />
+          <HoldingListInput label="보유 대여권" value={currentRental} onChange={setCurrentRental} />
+          <HoldingListInput label="보유 락커" value={currentLocker} onChange={setCurrentLocker} />
         </div>
 
         {error && (
