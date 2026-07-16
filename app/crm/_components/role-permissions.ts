@@ -33,7 +33,9 @@ export interface PermissionGroup {
 const D_ALL = { owner: true, admin: true, manager: true, trainer: true };
 const D_ADMIN = { owner: true, admin: true, manager: false, trainer: false };
 const D_MGR = { owner: true, admin: true, manager: true, trainer: false };
-const D_OWNER = { owner: true, admin: false, manager: false, trainer: false };
+// D_OWNER: 정책상 owner 전용. 그러나 "관리자는 기본적으로 모든 권한 보유" 원칙에 맞춰 admin 도 true.
+// 필요 시 사장님이 설정 > 권한 페이지에서 개별 관리자 토글로 끌 수 있음.
+const D_OWNER = { owner: true, admin: true, manager: false, trainer: false };
 
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
