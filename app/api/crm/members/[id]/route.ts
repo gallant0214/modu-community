@@ -82,6 +82,7 @@ export async function PATCH(
     email?: string;
     birth?: string;
     gender?: string;
+    member_type?: string;
     memo?: string;
     address?: string;
     visit_route?: string;
@@ -126,6 +127,12 @@ export async function PATCH(
       return NextResponse.json({ error: "성별 값이 잘못됨" }, { status: 400 });
     }
     patch.gender = body.gender || null;
+  }
+  if (body.member_type !== undefined) {
+    if (!["provisional", "full", "matched"].includes(body.member_type)) {
+      return NextResponse.json({ error: "회원 유형 값이 잘못됨" }, { status: 400 });
+    }
+    patch.member_type = body.member_type;
   }
   if (body.memo !== undefined) patch.memo = body.memo.trim() || null;
   if (body.address !== undefined) patch.address = body.address.trim() || null;

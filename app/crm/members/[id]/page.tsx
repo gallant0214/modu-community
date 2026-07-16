@@ -198,15 +198,6 @@ export default function CrmMemberDetailPage() {
               · {MEMBER_TYPE_LABEL[member.member_type] ?? member.member_type}
             </span>
           </h1>
-          <div className="mt-1 text-[12.5px] text-[#8C8270] dark:text-zinc-500">
-            {formatPhone(member.phone)}
-            {member.gender && ` · ${GENDER_LABEL[member.gender]}`}
-            {member.birth && ` · ${member.birth}`}
-            {member.registered_at && ` · 최근 등록일 ${member.registered_at}`}
-          </div>
-          {member.email && (
-            <div className="mt-0.5 text-[12px] text-[#8C8270]">{member.email}</div>
-          )}
         </div>
         <div className="flex flex-col gap-1.5 shrink-0">
           <button
@@ -271,6 +262,11 @@ export default function CrmMemberDetailPage() {
 
       {/* 상세 정보 카드 — 각 필드 인라인 수정 가능 */}
       <div className="mb-5 grid grid-cols-1 md:grid-cols-2 gap-2 px-3.5 py-3 rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+        <EditableInfoCard memberId={member.id} field="phone" label="연락처" value={member.phone} type="text" formatDisplay={(v) => (v ? formatPhone(String(v)) : "—")} onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="gender" label="성별" value={member.gender} type="select" options={[{ v: "M", l: "남" }, { v: "F", l: "여" }, { v: "N", l: "기타" }]} formatDisplay={(v) => (v ? GENDER_LABEL[v as "M" | "F" | "N"] ?? String(v) : "—")} onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="birth" label="생년월일" value={member.birth} type="date" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="email" label="이메일" value={member.email} type="text" onSaved={load} />
+        <EditableInfoCard memberId={member.id} field="member_type" label="회원 유형" value={member.member_type} type="select" options={[{ v: "provisional", l: "가회원" }, { v: "full", l: "정회원" }, { v: "matched", l: "연동 회원" }]} formatDisplay={(v) => (v ? MEMBER_TYPE_LABEL[String(v)] ?? String(v) : "—")} onSaved={load} />
         <EditableInfoCard memberId={member.id} field="registration_type" label="신규/재등록" value={member.registration_type} type="select" options={[{ v: "신규", l: "신규" }, { v: "재등록", l: "재등록" }]} onSaved={load} />
         <EditableInfoCard memberId={member.id} field="registered_at" label="최근 등록일" value={member.registered_at} type="date" onSaved={load} />
         <EditableInfoCard memberId={member.id} field="first_use_at" label="이용 시작일" value={member.first_use_at} type="date" onSaved={load} />
@@ -282,7 +278,20 @@ export default function CrmMemberDetailPage() {
         <EditableInfoCard memberId={member.id} field="address" label="주소" value={member.address} type="text" onSaved={load} />
         <EditableInfoCard memberId={member.id} field="visit_route" label="방문 경로" value={member.visit_route} type="text" onSaved={load} />
         <EditableInfoCard memberId={member.id} field="workout_goal" label="운동 목적" value={member.workout_goal} type="text" onSaved={load} />
-        <EditableInfoCard memberId={member.id} field="counselor" label="상담 담당자" value={member.counselor} type="text" onSaved={load} />
+        <EditableInfoCard
+          memberId={member.id}
+          field="counselor"
+          label="상담 담당자"
+          value={member.counselor}
+          type="select"
+          options={[
+            { v: "", l: "지정 안 함" },
+            ...staffList
+              .filter((s) => s.status === "active")
+              .map((s) => ({ v: s.display_name, l: s.display_name })),
+          ]}
+          onSaved={load}
+        />
         <EditableInfoCard memberId={member.id} field="mileage" label="마일리지" value={member.mileage} type="number" suffix="점" onSaved={load} />
         <EditableInfoCard memberId={member.id} field="marketing_consent" label="광고성 수신" value={member.marketing_consent} type="bool" onSaved={load} />
       </div>
@@ -740,6 +749,7 @@ function EditableInfoCard({
   type,
   options,
   suffix,
+  formatDisplay,
   onSaved,
 }: {
   memberId: number;
@@ -749,6 +759,7 @@ function EditableInfoCard({
   type: "text" | "date" | "number" | "select" | "bool";
   options?: { v: string; l: string }[];
   suffix?: string;
+  formatDisplay?: (v: string | number | boolean | null) => string;
   onSaved: () => void;
 }) {
   const { getIdToken } = useAuth();
@@ -766,6 +777,7 @@ function EditableInfoCard({
   }, [value, type]);
 
   const displayValue = (() => {
+    if (formatDisplay) return formatDisplay(value);
     if (type === "bool") return value ? "동의" : "미동의";
     if (value === null || value === undefined || value === "") return "—";
     if (type === "number" && typeof value === "number") {
