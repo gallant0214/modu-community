@@ -163,6 +163,14 @@ export async function PATCH(
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
   }
 
+  // 변경 전 스냅샷 (diff 로 audit log 에 기록)
+  const { data: before } = await supabase
+    .from("crm_members")
+    .select("*")
+    .eq("id", memberId)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+
   const { error: updErr } = await supabase
     .from("crm_members")
     .update(patch as never)
@@ -172,6 +180,26 @@ export async function PATCH(
   if (updErr) {
     return NextResponse.json({ error: "수정 실패", detail: updErr.message }, { status: 500 });
   }
+
+  // 실제 변경된 필드만 before/after diff 로 기록
+  const beforeRow = (before ?? {}) as Record<string, unknown>;
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (beforeRow[k] !== v) {
+      changes[k] = { from: beforeRow[k] ?? null, to: v };
+    }
+  }
+  if (Object.keys(changes).length > 0) {
+    await supabase.from("crm_audit_logs").insert({
+      center_id: ctx.centerId,
+      actor_uid: ctx.uid,
+      action: "member.update",
+      entity_type: "member",
+      entity_id: memberId,
+      payload: { changes } as never,
+    });
+  }
+
   return NextResponse.json({ ok: true });
 }
 

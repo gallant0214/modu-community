@@ -87,6 +87,8 @@ export default function CrmMemberDetailPage() {
   const [paymentDetail, setPaymentDetail] = useState<PaymentDetail | null>(null);
   const [detailPassId, setDetailPassId] = useState<number | null>(null);
   const [bodyOpen, setBodyOpen] = useState(false);
+  // 탭: '정보' 기본, '로그' 는 audit 이력
+  const [tab, setTab] = useState<"info" | "logs">("info");
 
   // 결제 후 흐름 (계약서 작성 선택)
   const [pendingPassId, setPendingPassId] = useState<number | null>(null);
@@ -222,6 +224,36 @@ export default function CrmMemberDetailPage() {
         </div>
       </header>
 
+      {/* 탭: 정보 / 로그 */}
+      <div className="mb-4 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800">
+        <button
+          type="button"
+          onClick={() => setTab("info")}
+          className={`px-4 py-2 -mb-px text-[13px] font-medium border-b-2 transition-colors
+            ${tab === "info"
+              ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A]"
+              : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
+            }`}
+        >
+          정보
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("logs")}
+          className={`px-4 py-2 -mb-px text-[13px] font-medium border-b-2 transition-colors
+            ${tab === "logs"
+              ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A]"
+              : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
+            }`}
+        >
+          로그
+        </button>
+      </div>
+
+      {tab === "logs" ? (
+        <MemberLogsSection memberId={member.id} />
+      ) : (
+      <>
       <MemoSection memberId={member.id} memo={member.memo} onSaved={load} />
 
 
@@ -331,6 +363,8 @@ export default function CrmMemberDetailPage() {
       <SignedContractsSection memberId={member.id} />
 
       <BodyMeasurementSection memberId={member.id} onOpen={() => setBodyOpen(true)} />
+      </>
+      )}
 
       <BodyMeasurementModal
         memberId={member.id}
@@ -522,6 +556,166 @@ function MemoSection({
       )}
     </div>
   );
+}
+
+/* ─── 회원 변경 로그 (audit 이력) ────────────────────────────── */
+
+interface AuditLog {
+  id: number;
+  action: string;
+  entity_type: string;
+  entity_id: number | null;
+  actor_uid: string;
+  actor_name: string | null;
+  payload: unknown;
+  created_at: string;
+}
+
+const ACTION_LABEL: Record<string, string> = {
+  "member.create": "회원 등록",
+  "member.update": "회원 정보 수정",
+  "member.delete": "회원 삭제",
+  "pass.issue": "수강권 발급",
+  "pass.update": "수강권 수정",
+  "pass.refund": "수강권 환불",
+  "membership.issue": "회원권 발급",
+  "membership.update": "회원권 수정",
+  "membership.refund": "회원권 환불",
+  "reservation.book": "예약 생성",
+  "reservation.update": "예약 상태 변경",
+  "reservation.reschedule": "예약 시간 이동",
+  "reservation.cancel": "예약 취소",
+  "reservation.attended": "출석 처리",
+  "reservation.noshow": "노쇼 처리",
+  "reservation.cancelled": "예약 취소",
+  "contract.sign": "계약서 서명",
+  "contract.request": "계약서 발송",
+  "contract.void": "계약서 무효",
+  "payment.add": "결제 추가",
+  "pause.create": "홀딩 시작",
+  "pause.update": "홀딩 수정",
+  "message.broadcast": "메시지 발송",
+};
+
+function MemberLogsSection({ memberId }: { memberId: number }) {
+  const { getIdToken } = useAuth();
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+        const res = await fetch(`/api/crm/members/${memberId}/logs`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "조회 실패");
+        setLogs(data.logs ?? []);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "네트워크 오류");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [memberId, getIdToken]);
+
+  if (loading) {
+    return <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>;
+  }
+  if (error) {
+    return (
+      <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+        {error}
+      </div>
+    );
+  }
+  if (logs.length === 0) {
+    return (
+      <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+        아직 기록된 변경 이력이 없습니다.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="text-[11.5px] text-[#8C8270]">최근 {logs.length}건 · 최신순</div>
+      <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
+        {logs.map((l) => (
+          <li key={l.id} className="px-4 py-3">
+            <div className="flex items-baseline justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]">
+                  {ACTION_LABEL[l.action] ?? l.action}
+                </span>
+                <span className="text-[12px] text-[#8C8270] truncate">
+                  {l.actor_name ?? "—"}
+                </span>
+              </div>
+              <span className="text-[11px] text-[#A89B80] shrink-0">
+                {formatLogTime(l.created_at)}
+              </span>
+            </div>
+            {renderPayload(l)}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function renderPayload(l: AuditLog): React.ReactNode {
+  if (!l.payload || typeof l.payload !== "object") return null;
+  const p = l.payload as Record<string, unknown>;
+  // 회원 정보 수정: changes: { field: {from, to} }
+  const changes = p.changes as Record<string, { from: unknown; to: unknown }> | undefined;
+  if (changes && Object.keys(changes).length > 0) {
+    return (
+      <ul className="mt-1.5 space-y-0.5 text-[12px] text-[#6B5D47] dark:text-zinc-400">
+        {Object.entries(changes).map(([k, v]) => (
+          <li key={k} className="flex items-baseline gap-2">
+            <span className="text-[#8C8270] shrink-0">{k}</span>
+            <span className="text-[#A89B80] line-through">{fmtVal(v.from)}</span>
+            <span className="text-[#A89B80]">→</span>
+            <span className="text-[#3A342A] dark:text-zinc-200 font-medium">{fmtVal(v.to)}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  // 기타 payload 요약
+  const summary = Object.entries(p)
+    .filter(([k]) => k !== "member_id")
+    .map(([k, v]) => `${k}: ${fmtVal(v)}`)
+    .join(" · ");
+  if (!summary) return null;
+  return (
+    <div className="mt-1 text-[11.5px] text-[#8C8270] dark:text-zinc-500 truncate">
+      {summary}
+    </div>
+  );
+}
+
+function fmtVal(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "boolean") return v ? "true" : "false";
+  if (typeof v === "string") return v.length > 40 ? v.slice(0, 40) + "…" : v;
+  if (typeof v === "number") return v.toLocaleString();
+  return JSON.stringify(v).slice(0, 40);
+}
+
+function formatLogTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const k = new Date(d.getTime() + 9 * 3600 * 1000);
+    return `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")} ${String(k.getUTCHours()).padStart(2, "0")}:${String(k.getUTCMinutes()).padStart(2, "0")}`;
+  } catch {
+    return iso;
+  }
 }
 
 function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
