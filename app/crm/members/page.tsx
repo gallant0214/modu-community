@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { MEMBER_TYPE_LABEL, GENDER_LABEL, formatPhone } from "../_components/crm-labels";
@@ -53,7 +53,7 @@ interface MemberRow {
 
 type StatusFilter = "all" | "valid" | "expired";
 type SignupFilter = "all" | "this_week" | "this_month" | "this_year" | "custom";
-type AbsenceFilter = "all" | "10d" | "20d" | "30d" | "60d" | "90d";
+type AbsenceFilter = "all" | "10d" | "15d" | "20d" | "30d" | "60d" | "90d";
 type ExpireFilter = "all" | "this_week" | "this_month" | "expired";
 type LockerFilter = "all" | "has" | "none";
 type GoodsFilter = "all" | "has" | "none";
@@ -183,43 +183,44 @@ const hasHoldings = (m: MemberRow): boolean =>
 
 export default function CrmMembersPage() {
   const { getIdToken } = useAuth();
+  const searchParamsHook = useSearchParams();
   const [list, setList] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
 
   // 필터
-  const [fStatus, setFStatus] = useState<StatusFilter>("all");
+  const [fStatus, setFStatus] = useState<StatusFilter>(() => {
+    const v = searchParamsHook.get("status");
+    return v === "valid" || v === "expired" ? v : "all";
+  });
   const [fSignup, setFSignup] = useState<SignupFilter>("all");
   const [fSignupFrom, setFSignupFrom] = useState("");
   const [fSignupTo, setFSignupTo] = useState("");
-  const [fAbsence, setFAbsence] = useState<AbsenceFilter>("all");
+  const [fAbsence, setFAbsence] = useState<AbsenceFilter>(() => {
+    const v = searchParamsHook.get("absence");
+    return v === "10d" || v === "15d" || v === "20d" || v === "30d" || v === "60d" || v === "90d"
+      ? v
+      : "all";
+  });
   const [fExpire, setFExpire] = useState<ExpireFilter>("all");
   const [fLocker, setFLocker] = useState<LockerFilter>("all");
   const [fGoods, setFGoods] = useState<GoodsFilter>("all");
 
-  // 페이지 상태 (URL ?page= 와 sessionStorage 로 유지 → 뒤로가기 시 그대로 복원)
-  const searchParamsHook = useSearchParams();
-  const [page, setPage] = useState(() => {
-    // 우선순위: URL ?page= → sessionStorage → 1
-    if (typeof window !== "undefined") {
-      const urlPage = Number(searchParamsHook.get("page") || "0");
-      if (Number.isFinite(urlPage) && urlPage >= 1) return urlPage;
-      const savedPage = Number(sessionStorage.getItem("crm_members_page") || "0");
-      if (Number.isFinite(savedPage) && savedPage >= 1) return savedPage;
-    }
-    return 1;
-  });
-
-  // page 변경 시 URL 과 sessionStorage 동기화
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    if (page > 1) url.searchParams.set("page", String(page));
-    else url.searchParams.delete("page");
-    window.history.replaceState({}, "", url.toString());
-    sessionStorage.setItem("crm_members_page", String(page));
-  }, [page]);
+  // 페이지 = URL ?page= 가 진실의 원천. 뒤로가기 시 Next 가 URL·스크롤을 복원하므로 그대로 유지됨.
+  const router = useRouter();
+  const pathname = usePathname();
+  const page = Math.max(1, Number(searchParamsHook.get("page")) || 1);
+  const setPage = useCallback(
+    (p: number) => {
+      const sp = new URLSearchParams(searchParamsHook.toString());
+      if (p > 1) sp.set("page", String(p));
+      else sp.delete("page");
+      const qs = sp.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParamsHook]
+  );
 
   // 스크롤 위치 저장/복원 (뒤로가기 시 마지막 위치로)
   const scrollRestoredRef = useRef(false);
@@ -452,10 +453,15 @@ export default function CrmMembersPage() {
 
       // 미방문 기간
       if (fAbsence !== "all") {
-        const last = m.last_visit_at ? new Date(m.last_visit_at) : null;
+        const last = m.last_visit_at
+          ? new Date(m.last_visit_at)
+          : m.last_attended_at
+            ? new Date(`${m.last_attended_at}T00:00:00`)
+            : null;
         const days = last ? daysBetween(t0, last) : Infinity;
         const threshold: Record<Exclude<AbsenceFilter, "all">, number> = {
           "10d": 10,
+          "15d": 15,
           "20d": 20,
           "30d": 30,
           "60d": 60,
@@ -850,6 +856,7 @@ export default function CrmMembersPage() {
           options={[
             { value: "all", label: "전체" },
             { value: "10d", label: "10일 이상" },
+            { value: "15d", label: "15일 이상" },
             { value: "20d", label: "20일 이상" },
             { value: "30d", label: "30일 이상" },
             { value: "60d", label: "60일 이상" },

@@ -4401,16 +4401,23 @@ function RequestLinkModal({
 }
 
 function BackLink() {
+  const router = useRouter();
+  const goBack = () => {
+    // 이전 페이지(목록)로 진짜 뒤로가기 → 페이지 번호·스크롤 위치 그대로 복원
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/crm/members");
+  };
   return (
-    <Link
-      href="/crm/members"
+    <button
+      type="button"
+      onClick={goBack}
       className="inline-flex items-center gap-1 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:text-[#3A342A]"
     >
       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
       </svg>
       회원 목록
-    </Link>
+    </button>
   );
 }
 
