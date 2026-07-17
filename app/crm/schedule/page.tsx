@@ -18,6 +18,14 @@ interface Reservation {
   status: string;
   consumed: boolean;
   attended_at: string | null;
+  session_index: number | null;
+  session_total: number | null;
+}
+
+// "총 10회 중 3회째" → "3/10회" 짧은 배지
+function sessionBadge(r: { session_index: number | null; session_total: number | null }): string | null {
+  if (!r.session_index || !r.session_total) return null;
+  return `${r.session_index}/${r.session_total}회`;
 }
 
 interface ScheduleEvent {
@@ -710,6 +718,7 @@ function DayView({
                       <div className="truncate font-semibold pointer-events-none">{r.member_name || "회원"}</div>
                       <div className="truncate text-[10.5px] opacity-80 pointer-events-none">
                         {RESERVATION_STATUS_LABEL[r.status]}
+                        {sessionBadge(r) && <span className="ml-1 font-semibold">· {sessionBadge(r)}</span>}
                       </div>
                     </button>
                   );
@@ -871,6 +880,7 @@ function DayDragGhost({ drag }: { drag: NonNullable<DayDragState> }) {
           </div>
           <div className="truncate text-[10.5px] opacity-80">
             {RESERVATION_STATUS_LABEL[r.status]}
+            {sessionBadge(r) && <span className="ml-1 font-semibold">· {sessionBadge(r)}</span>}
           </div>
         </div>
       )}
@@ -1102,6 +1112,11 @@ function WeekView({
                       style={{ top: `${top}px`, height: `${height}px` }}
                     >
                       <div className="truncate font-semibold pointer-events-none">{r.member_name || "회원"}</div>
+                      {sessionBadge(r) && (
+                        <div className="truncate text-[10.5px] opacity-80 pointer-events-none font-semibold">
+                          {sessionBadge(r)}
+                        </div>
+                      )}
                     </button>
                   );
                 })}
@@ -1432,6 +1447,11 @@ function ReservationDialog({
             {RESERVATION_STATUS_LABEL[reservation.status]}
             {reservation.consumed && <span className="ml-1 text-[#B47B2A]">· 차감됨</span>}
           </div>
+          {sessionBadge(reservation) && (
+            <div className="mt-1 inline-block px-2 py-0.5 rounded-full text-[11.5px] font-semibold bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]">
+              총 {reservation.session_total}회 중 {reservation.session_index}회째 수업
+            </div>
+          )}
         </div>
 
         <div className="mt-4 space-y-2">

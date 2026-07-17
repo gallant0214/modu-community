@@ -67,10 +67,44 @@ export async function GET(request: Request) {
     : { data: [] };
   const nameMap = new Map((members ?? []).map((m) => [m.id, m.name]));
 
+  // 수강권 회차 표시: 각 예약이 해당 수강권의 몇 회째인지 + 총 횟수
+  // 회차 = 취소되지 않은 예약을 시작시각 순으로 매긴 순번 (노쇼도 차감이므로 포함)
+  const passIds = Array.from(
+    new Set((data ?? []).map((r) => r.pass_id).filter((v): v is number => !!v))
+  );
+  const sessionIndexMap = new Map<number, number>(); // reservation id → 회차
+  const passTotalMap = new Map<number, number>(); // pass id → total_sessions
+  if (passIds.length > 0) {
+    const [{ data: passes }, { data: allRes }] = await Promise.all([
+      supabase
+        .from("crm_passes")
+        .select("id, total_sessions")
+        .eq("center_id", ctx.centerId)
+        .in("id", passIds),
+      supabase
+        .from("crm_reservations")
+        .select("id, pass_id, starts_at, status")
+        .eq("center_id", ctx.centerId)
+        .in("pass_id", passIds)
+        .neq("status", "cancelled")
+        .order("starts_at", { ascending: true }),
+    ]);
+    for (const p of passes ?? []) passTotalMap.set(p.id, p.total_sessions ?? 0);
+    const counter = new Map<number, number>();
+    for (const r of allRes ?? []) {
+      if (!r.pass_id) continue;
+      const n = (counter.get(r.pass_id) ?? 0) + 1;
+      counter.set(r.pass_id, n);
+      sessionIndexMap.set(r.id, n);
+    }
+  }
+
   return NextResponse.json({
     reservations: (data ?? []).map((r) => ({
       ...r,
       member_name: nameMap.get(r.member_id) ?? "",
+      session_index: r.pass_id ? sessionIndexMap.get(r.id) ?? null : null,
+      session_total: r.pass_id ? passTotalMap.get(r.pass_id) ?? null : null,
     })),
   });
 }
