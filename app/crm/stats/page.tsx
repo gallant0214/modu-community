@@ -341,6 +341,8 @@ interface CenterRevenueResp {
     etc: number;
   };
   potential_liability: number;
+  potential_liability_ex_vat: number;
+  potential_liability_vat: number;
   liability_breakdown: {
     membership: number;
     pass: number;
@@ -394,6 +396,8 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
     rows.push(["  수강권", data.liability_breakdown.pass]);
     rows.push(["  미시작", data.liability_breakdown.notStarted]);
     rows.push(["  진행중", data.liability_breakdown.inProgress]);
+    rows.push(["  부가세(10%)", data.potential_liability_vat]);
+    rows.push(["  부가세 제외", data.potential_liability_ex_vat]);
     rows.push([]);
     rows.push(["이번달 활동 건수"]);
     rows.push(["회원권 발급 수", data.counts.memberships]);
@@ -525,6 +529,33 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
           </div>
           <div className="mt-2 text-[11.5px] text-[#A89B80]">
             남은 회차 × 회당 단가 (미시작 건은 전액)
+          </div>
+        </div>
+
+        {/* 부가세 구분 (전체 잠재부채) */}
+        <div className="md:col-span-2 px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/50 dark:bg-zinc-900/60">
+          <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200 mb-3">
+            부가세 구분 (전체 잠재부채)
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <div className="text-[11.5px] text-[#A89B80]">부가세 포함</div>
+              <div className="mt-0.5 text-[16px] font-bold text-[#3A342A] dark:text-zinc-100 tabular-nums">
+                {formatWon(data?.potential_liability ?? 0)}원
+              </div>
+            </div>
+            <div>
+              <div className="text-[11.5px] text-[#A89B80]">부가세 (10%)</div>
+              <div className="mt-0.5 text-[16px] font-bold text-[#B47B2A] dark:text-amber-300 tabular-nums">
+                {formatWon(data?.potential_liability_vat ?? 0)}원
+              </div>
+            </div>
+            <div>
+              <div className="text-[11.5px] text-[#A89B80]">부가세 제외</div>
+              <div className="mt-0.5 text-[16px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] tabular-nums">
+                {formatWon(data?.potential_liability_ex_vat ?? 0)}원
+              </div>
+            </div>
           </div>
         </div>
       </section>

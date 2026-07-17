@@ -103,37 +103,40 @@ export async function GET(request: Request) {
   const [membershipsValid, passesValid, rentalsValid] = await Promise.all([
     paginateAll<{
       price_won: number;
+      vat_included: boolean | null;
       start_date: string;
       expires_at: string;
     }>((f, t) =>
       supabase
         .from("crm_memberships")
-        .select("price_won, start_date, expires_at")
+        .select("price_won, vat_included, start_date, expires_at")
         .eq("center_id", ctx.centerId)
         .eq("status", "valid")
         .range(f, t)
     ),
     paginateAll<{
       price_won: number;
+      vat_included: boolean | null;
       start_date: string;
       total_sessions: number;
       remaining_sessions: number;
     }>((f, t) =>
       supabase
         .from("crm_passes")
-        .select("price_won, start_date, total_sessions, remaining_sessions")
+        .select("price_won, vat_included, start_date, total_sessions, remaining_sessions")
         .eq("center_id", ctx.centerId)
         .eq("status", "valid")
         .range(f, t)
     ),
     paginateAll<{
       price_won: number;
+      vat_included: boolean | null;
       start_date: string;
       expires_at: string;
     }>((f, t) =>
       supabase
         .from("crm_rentals")
-        .select("price_won, start_date, expires_at")
+        .select("price_won, vat_included, start_date, expires_at")
         .eq("center_id", ctx.centerId)
         .eq("status", "valid")
         .range(f, t)
@@ -144,58 +147,73 @@ export async function GET(request: Request) {
   let liabilityPass = 0;
   let liabilityNotStarted = 0;
   let liabilityInProgress = 0;
+  // 잠재부채 중 부가세 제외분 (vat_included 건은 /1.1)
+  let liabilityExVat = 0;
 
   for (const m of membershipsValid) {
     const price = m.price_won ?? 0;
     if (!price) continue;
+    const exVat = exVatOne(price, !!m.vat_included);
     if (m.start_date > today) {
       liabilityMembership += price;
       liabilityNotStarted += price;
+      liabilityExVat += exVat;
       continue;
     }
     // 진행중: 잔여일 / 전체일 × price
     const totalDays = daysBetween(m.start_date, m.expires_at) + 1;
     const remainingDays = Math.max(0, daysBetween(today, m.expires_at));
     if (totalDays <= 0) continue;
-    const unused = Math.round((remainingDays / totalDays) * price);
+    const frac = remainingDays / totalDays;
+    const unused = Math.round(frac * price);
     liabilityMembership += unused;
     liabilityInProgress += unused;
+    liabilityExVat += Math.round(frac * exVat);
   }
 
   // 락커·운동복(crm_rentals) — 기간제, 회원권 그룹에 합산
   for (const r of rentalsValid) {
     const price = r.price_won ?? 0;
     if (!price) continue;
+    const exVat = exVatOne(price, !!r.vat_included);
     if (r.start_date > today) {
       liabilityMembership += price;
       liabilityNotStarted += price;
+      liabilityExVat += exVat;
       continue;
     }
     const totalDays = daysBetween(r.start_date, r.expires_at) + 1;
     const remainingDays = Math.max(0, daysBetween(today, r.expires_at));
     if (totalDays <= 0) continue;
-    const unused = Math.round((remainingDays / totalDays) * price);
+    const frac = remainingDays / totalDays;
+    const unused = Math.round(frac * price);
     liabilityMembership += unused;
     liabilityInProgress += unused;
+    liabilityExVat += Math.round(frac * exVat);
   }
 
   for (const p of passesValid) {
     const price = p.price_won ?? 0;
     if (!price) continue;
+    const exVat = exVatOne(price, !!p.vat_included);
     if (p.start_date > today) {
       liabilityPass += price;
       liabilityNotStarted += price;
+      liabilityExVat += exVat;
       continue;
     }
     const total = p.total_sessions ?? 0;
     const remaining = p.remaining_sessions ?? 0;
     if (total <= 0) continue;
-    const unused = Math.round((remaining / total) * price);
+    const frac = remaining / total;
+    const unused = Math.round(frac * price);
     liabilityPass += unused;
     liabilityInProgress += unused;
+    liabilityExVat += Math.round(frac * exVat);
   }
 
   const potentialLiability = liabilityMembership + liabilityPass;
+  const liabilityVat = potentialLiability - liabilityExVat;
 
   return NextResponse.json({
     ym,
@@ -221,6 +239,8 @@ export async function GET(request: Request) {
       etc: etcRevenue,
     },
     potential_liability: potentialLiability,
+    potential_liability_ex_vat: liabilityExVat,
+    potential_liability_vat: liabilityVat,
     liability_breakdown: {
       membership: liabilityMembership,
       pass: liabilityPass,
