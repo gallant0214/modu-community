@@ -212,28 +212,37 @@ export async function resolveAudience(
     return (data ?? []).map((m) => m.id);
   }
 
-  // 전체 active 회원 base
-  const { data: allMembers } = await supabase
-    .from("crm_members")
-    .select("id")
-    .eq("center_id", centerId)
-    .eq("status", "active");
-  const allIds = new Set((allMembers ?? []).map((m) => m.id));
+  // 전체 active 회원 base — 1000행 상한 우회(paginateAll)
+  const allMembers = await paginateAll<{ id: number }>((f, t) =>
+    supabase
+      .from("crm_members")
+      .select("id")
+      .eq("center_id", centerId)
+      .eq("status", "active")
+      .range(f, t)
+  );
+  const allIds = new Set(allMembers.map((m) => m.id));
 
   if (kind === "all") return Array.from(allIds);
 
-  // 활성/만료 판단: passes + memberships 조합
-  const [passRes, memRes] = await Promise.all([
-    supabase
-      .from("crm_passes")
-      .select("member_id, expires_at, status")
-      .eq("center_id", centerId)
-      .eq("status", "valid"),
-    supabase
-      .from("crm_memberships")
-      .select("member_id, expires_at, status")
-      .eq("center_id", centerId)
-      .eq("status", "valid"),
+  // 활성/만료 판단: passes + memberships 조합 (둘 다 paginateAll)
+  const [passRows, memRows] = await Promise.all([
+    paginateAll<{ member_id: number; expires_at: string }>((f, t) =>
+      supabase
+        .from("crm_passes")
+        .select("member_id, expires_at")
+        .eq("center_id", centerId)
+        .eq("status", "valid")
+        .range(f, t)
+    ),
+    paginateAll<{ member_id: number; expires_at: string }>((f, t) =>
+      supabase
+        .from("crm_memberships")
+        .select("member_id, expires_at")
+        .eq("center_id", centerId)
+        .eq("status", "valid")
+        .range(f, t)
+    ),
   ]);
 
   const withinDays = opts.within_days ?? 7;
@@ -242,7 +251,7 @@ export async function resolveAudience(
   const activeIds = new Set<number>();
   const expiringIds = new Set<number>();
   const validMemberIds = new Set<number>();
-  for (const r of [...(passRes.data ?? []), ...(memRes.data ?? [])]) {
+  for (const r of [...passRows, ...memRows]) {
     validMemberIds.add(r.member_id);
     if (r.expires_at >= today) {
       activeIds.add(r.member_id);
@@ -277,4 +286,21 @@ function addDays(ymd: string, n: number): string {
   const d = new Date(`${ymd}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
+}
+
+/** PostgREST 1000행 상한 우회 — range 로 전량 페이지네이션 */
+async function paginateAll<T>(
+  build: (from: number, to: number) => { then: (fn: (r: unknown) => void) => unknown },
+  chunk = 1000
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += chunk) {
+    const to = from + chunk - 1;
+    const res = (await build(from, to)) as { data: T[] | null; error: unknown };
+    if (res.error) throw res.error;
+    const rows = res.data ?? [];
+    out.push(...rows);
+    if (rows.length < chunk) break;
+  }
+  return out;
 }
