@@ -7,7 +7,6 @@ import { useAuth } from "@/app/components/auth-provider";
 import {
   ROLE_LABEL,
   ATTENDANCE_MODE_LABEL,
-  EMPLOYMENT_STATUS_LABEL,
   EMPLOYMENT_TYPE_LABEL,
   formatPhone,
 } from "../../_components/crm-labels";
@@ -190,34 +189,19 @@ export default function CrmStaffDetailPage() {
       />
 
       <Section title="인사 정보">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <div className="text-[12.5px] text-[#A89B80] mb-1.5">재직상태</div>
-            <select
-              className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 disabled:opacity-60"
-              value={member.employment_status}
-              disabled={saving}
-              onChange={(e) => patchMember({ employment_status: e.target.value })}
-            >
-              {Object.entries(EMPLOYMENT_STATUS_LABEL).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <div className="text-[12.5px] text-[#A89B80] mb-1.5">근무형태</div>
-            <select
-              className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 disabled:opacity-60"
-              value={member.employment_type ?? ""}
-              disabled={saving}
-              onChange={(e) => patchMember({ employment_type: e.target.value || null })}
-            >
-              <option value="">선택 안 함</option>
-              {Object.entries(EMPLOYMENT_TYPE_LABEL).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <div className="text-[12.5px] text-[#A89B80] mb-1.5">근무형태</div>
+          <select
+            className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 disabled:opacity-60"
+            value={member.employment_type ?? ""}
+            disabled={saving}
+            onChange={(e) => patchMember({ employment_type: e.target.value || null })}
+          >
+            <option value="">선택 안 함</option>
+            {Object.entries(EMPLOYMENT_TYPE_LABEL).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
         </div>
       </Section>
 
@@ -276,18 +260,27 @@ export default function CrmStaffDetailPage() {
       <Section title="재직 상태">
         <div className="flex gap-2">
           <SegBtn
-            selected={member.status === "active"}
+            selected={member.status === "active" && member.employment_status !== "on_leave"}
             disabled={saving || member.is_solo_owner}
-            onClick={() => patchMember({ status: "active" })}
+            onClick={() => patchMember({ employment_status: "working", status: "active" })}
           >
             재직
+          </SegBtn>
+          <SegBtn
+            selected={member.status === "active" && member.employment_status === "on_leave"}
+            disabled={saving || member.is_solo_owner}
+            onClick={() => patchMember({ employment_status: "on_leave", status: "active" })}
+          >
+            휴직
           </SegBtn>
           <SegBtn
             selected={member.status === "inactive"}
             disabled={saving || member.is_solo_owner}
             onClick={() => {
               if (confirm("이 직원을 퇴사 처리할까요? CRM 접근이 차단됩니다.")) {
-                patchMember({ status: "inactive" }).then(() => router.push("/crm/staff"));
+                patchMember({ employment_status: "resigned", status: "inactive" }).then(() =>
+                  router.push("/crm/staff")
+                );
               }
             }}
             danger
@@ -295,6 +288,9 @@ export default function CrmStaffDetailPage() {
             퇴사 처리
           </SegBtn>
         </div>
+        <p className="mt-2 text-[12px] text-[#A89B80] leading-relaxed">
+          휴직: CRM 접근은 유지되고 재직 목록에 남아요. 퇴사 처리: CRM 접근이 차단돼요.
+        </p>
       </Section>
     </div>
   );
