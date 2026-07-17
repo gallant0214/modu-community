@@ -734,6 +734,7 @@ function FacePhotoUpload({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [zoomOpen, setZoomOpen] = useState(false);
 
   const onFile = async (file: File) => {
     setError("");
@@ -783,19 +784,34 @@ function FacePhotoUpload({
 
   return (
     <div className="flex flex-col items-center gap-1 shrink-0">
-      <div className="relative w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
-        {current ? (
-          // eslint-disable-next-line @next/next/no-img-element
+      {current ? (
+        <button
+          type="button"
+          onClick={() => setZoomOpen(true)}
+          aria-label="사진 확대 보기"
+          className="relative w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center cursor-zoom-in hover:border-[#6B7B3A]/60 transition-colors"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={current} alt="얼굴" className="w-full h-full object-cover" />
-        ) : (
+          {busy && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-[10px]">
+              처리중…
+            </div>
+          )}
+        </button>
+      ) : (
+        <div className="relative w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
           <span className="text-[10px] text-[#A89B80]">사진 없음</span>
-        )}
-        {busy && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-[10px]">
-            처리중…
-          </div>
-        )}
-      </div>
+          {busy && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-[10px]">
+              처리중…
+            </div>
+          )}
+        </div>
+      )}
+      {zoomOpen && current && (
+        <FaceZoomModal src={current} onClose={() => setZoomOpen(false)} />
+      )}
       {canEdit && (
         <div className="flex items-center gap-1">
           <input
@@ -836,6 +852,49 @@ function FacePhotoUpload({
       {error && (
         <div className="text-[10px] text-red-600 max-w-[90px] text-center">{error}</div>
       )}
+    </div>
+  );
+}
+
+/**
+ * 얼굴 사진 확대 보기 모달. 백드롭 or ESC or 사진 클릭 → 닫힘.
+ */
+function FaceZoomModal({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-black/80" />
+      <div className="relative max-w-[92vw] max-h-[92vh] flex flex-col items-center gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt="얼굴 사진 확대"
+          className="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain bg-black/20"
+          onClick={(e) => e.stopPropagation()}
+        />
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-2 rounded-lg bg-white/90 text-[#2A251D] text-[13px] font-semibold hover:bg-white shadow-lg"
+        >
+          닫기
+        </button>
+      </div>
     </div>
   );
 }
