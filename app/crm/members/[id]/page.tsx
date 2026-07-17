@@ -744,12 +744,16 @@ function FacePhotoUpload({
     }
     setBusy(true);
     try {
-      const compressed = await compressToDataUrl(file, 300, 0.75);
+      // 상세용(300x300, q=0.75) + 목록 썸네일(48x48, q=0.55) 동시 생성
+      const [compressed, thumb] = await Promise.all([
+        compressToDataUrl(file, 300, 0.75),
+        compressToDataUrl(file, 48, 0.55),
+      ]);
       const token = await getIdToken();
       const res = await fetch(`/api/crm/members/${memberId}`, {
         method: "PATCH",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ face_image_data: compressed }),
+        body: JSON.stringify({ face_image_data: compressed, face_image_thumb: thumb }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "업로드 실패");
@@ -770,7 +774,7 @@ function FacePhotoUpload({
       const res = await fetch(`/api/crm/members/${memberId}`, {
         method: "PATCH",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ face_image_data: null }),
+        body: JSON.stringify({ face_image_data: null, face_image_thumb: null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "삭제 실패");

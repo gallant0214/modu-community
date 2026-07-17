@@ -25,7 +25,7 @@ export async function GET(
   const { data: member, error } = await supabase
     .from("crm_members")
     .select(
-      "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, registration_type, first_use_at, total_paid_won, final_expire_at, last_purchase_at, last_attended_at, attendance_no, current_membership, current_pass, current_rental, current_locker, face_image_data, created_at"
+      "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, registration_type, first_use_at, total_paid_won, final_expire_at, last_purchase_at, last_attended_at, attendance_no, current_membership, current_pass, current_rental, current_locker, face_image_data, face_image_thumb, created_at"
     )
     .eq("id", memberId)
     .eq("center_id", ctx.centerId)
@@ -92,6 +92,7 @@ const USAGE_FIELDS = new Set([
   "current_rental",
   "current_locker",
   "face_image_data",
+  "face_image_thumb",
 ]);
 
 // 얼굴 사진 base64 최대 크기 (안전장치 · 300KB)
@@ -143,6 +144,7 @@ export async function PATCH(
     current_rental?: string;
     current_locker?: string;
     face_image_data?: string | null;
+    face_image_thumb?: string | null;
   };
   try {
     body = await request.json();
@@ -215,6 +217,19 @@ export async function PATCH(
     } else {
       return NextResponse.json(
         { error: "얼굴 이미지가 너무 크거나 형식이 잘못됐어요" },
+        { status: 400 }
+      );
+    }
+  }
+  if (body.face_image_thumb !== undefined) {
+    const v = body.face_image_thumb;
+    if (v === null || v === "") {
+      patch.face_image_thumb = null;
+    } else if (typeof v === "string" && v.startsWith("data:image/") && v.length <= 20_000) {
+      patch.face_image_thumb = v;
+    } else {
+      return NextResponse.json(
+        { error: "썸네일 이미지가 너무 크거나 형식이 잘못됐어요" },
         { status: 400 }
       );
     }

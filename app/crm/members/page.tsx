@@ -42,6 +42,7 @@ interface MemberRow {
   current_pass: string | null;
   current_rental: string | null;
   current_locker: string | null;
+  face_image_thumb: string | null;
   created_at: string;
   items?: PassItem[];
   locker_label?: string | null;
@@ -1081,9 +1082,21 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
     render: (m) => (
       <Link
         href={`/crm/members/${m.id}`}
-        className="font-semibold text-[#2A251D] dark:text-zinc-100 hover:text-[#6B7B3A] dark:hover:text-[#A8B87A]"
+        className="inline-flex items-center gap-2 font-semibold text-[#2A251D] dark:text-zinc-100 hover:text-[#6B7B3A] dark:hover:text-[#A8B87A]"
       >
-        {m.name}
+        {m.face_image_thumb ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={m.face_image_thumb}
+            alt=""
+            className="w-6 h-6 rounded-full object-cover border border-[#E8E0D0] dark:border-zinc-700 shrink-0"
+          />
+        ) : (
+          <span className="w-6 h-6 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-700 shrink-0 flex items-center justify-center text-[9px] text-[#A89B80]">
+            —
+          </span>
+        )}
+        <span className="truncate">{m.name}</span>
       </Link>
     ),
   },
