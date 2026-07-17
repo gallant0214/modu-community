@@ -64,7 +64,7 @@ export async function GET(
   // 강사 개인 수업료(정산) 설정
   const { data: trainer } = await supabase
     .from("crm_center_members")
-    .select("commission_type, commission_rate, commission_tiers, base_salary")
+    .select("commission_type, commission_rate, commission_tiers, base_salary, employment_type")
     .eq("id", trainerId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -141,6 +141,13 @@ export async function GET(
   const baseSalary = Math.max(0, Number(trainer?.base_salary ?? 0));
   const totalPay = baseSalary + commissionPayout;
 
+  // 프리랜서(사업소득)는 3.3% 원천징수 후 실지급
+  const employmentType = (trainer?.employment_type as string) ?? null;
+  const isFreelance = employmentType === "freelance";
+  const WITHHOLDING_RATE = 0.033; // 소득세 3% + 지방소득세 0.3%
+  const withholdingTax = isFreelance ? Math.round(totalPay * WITHHOLDING_RATE) : 0;
+  const netPay = totalPay - withholdingTax;
+
   return NextResponse.json({
     ym,
     passes: passes ?? [],
@@ -158,5 +165,10 @@ export async function GET(
     },
     base_salary: baseSalary,
     total_pay: totalPay,
+    employment_type: employmentType,
+    is_freelance: isFreelance,
+    withholding_rate: WITHHOLDING_RATE,
+    withholding_tax: withholdingTax,
+    net_pay: netPay,
   });
 }

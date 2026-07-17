@@ -126,6 +126,11 @@ function RevenueTab({ memberId }: { memberId: number }) {
     };
     base_salary: number;
     total_pay: number;
+    employment_type: string | null;
+    is_freelance: boolean;
+    withholding_rate: number;
+    withholding_tax: number;
+    net_pay: number;
   } | null>(null);
 
   const ymForPeriod = (p: Period): string => {
@@ -194,9 +199,30 @@ function RevenueTab({ memberId }: { memberId: number }) {
           <RevenueKpi label="고정 급여" value={data?.base_salary ?? 0} small />
           <RevenueKpi label={`수업료 (${data?.commission.effective_rate ?? 0}%)`} value={data?.commission.payout ?? 0} small />
         </div>
+
+        {data?.is_freelance && (
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <RevenueKpi label="원천징수 3.3%" value={-(data?.withholding_tax ?? 0)} small muted />
+            <div className="rounded-xl border-2 border-[#6B7B3A]/50 bg-white dark:bg-zinc-900 px-3 py-2.5">
+              <div className="text-[11.5px] text-[#6B7B3A] dark:text-[#A8B87A] font-medium">세후 실지급액</div>
+              <div className="text-[17px] font-bold text-[#3A342A] dark:text-zinc-100 tabular-nums">
+                {formatWon(data?.net_pay ?? 0)}<span className="text-[12px] font-normal ml-0.5">원</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         <p className="mt-3 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
           고정 {formatWon(data?.base_salary ?? 0)}원 + 수업료(매출 {formatWon(data?.breakdown.total ?? 0)}원 × {data?.commission.effective_rate ?? 0}%) ={" "}
           <strong className="text-[#3A342A] dark:text-zinc-200">{formatWon(data?.total_pay ?? 0)}원</strong>
+          {data?.is_freelance && (
+            <>
+              {" "}− 3.3% 세금 {formatWon(data?.withholding_tax ?? 0)}원 ={" "}
+              <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{formatWon(data?.net_pay ?? 0)}원</strong>
+              <br />
+              프리랜서(사업소득)라 총 지급액에서 3.3%(소득세 3% + 지방소득세 0.3%)가 원천징수돼요.
+            </>
+          )}
           {data && data.commission.effective_rate === 0 && data.base_salary === 0 && data.breakdown.total > 0 && (
             <>
               <br />
