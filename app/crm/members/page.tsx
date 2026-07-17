@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { MEMBER_TYPE_LABEL, GENDER_LABEL, formatPhone } from "../_components/crm-labels";
@@ -197,7 +198,55 @@ export default function CrmMembersPage() {
   const [fLocker, setFLocker] = useState<LockerFilter>("all");
   const [fGoods, setFGoods] = useState<GoodsFilter>("all");
 
-  const [page, setPage] = useState(1);
+  // 페이지 상태 (URL ?page= 와 sessionStorage 로 유지 → 뒤로가기 시 그대로 복원)
+  const searchParamsHook = useSearchParams();
+  const [page, setPage] = useState(() => {
+    // 우선순위: URL ?page= → sessionStorage → 1
+    if (typeof window !== "undefined") {
+      const urlPage = Number(searchParamsHook.get("page") || "0");
+      if (Number.isFinite(urlPage) && urlPage >= 1) return urlPage;
+      const savedPage = Number(sessionStorage.getItem("crm_members_page") || "0");
+      if (Number.isFinite(savedPage) && savedPage >= 1) return savedPage;
+    }
+    return 1;
+  });
+
+  // page 변경 시 URL 과 sessionStorage 동기화
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (page > 1) url.searchParams.set("page", String(page));
+    else url.searchParams.delete("page");
+    window.history.replaceState({}, "", url.toString());
+    sessionStorage.setItem("crm_members_page", String(page));
+  }, [page]);
+
+  // 스크롤 위치 저장/복원 (뒤로가기 시 마지막 위치로)
+  const scrollRestoredRef = useRef(false);
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("crm_members_scroll", String(window.scrollY));
+        sessionStorage.setItem("crm_members_scroll_ts", String(Date.now()));
+      }
+    };
+  }, []);
+  const [loadingForScroll, setLoadingForScroll] = useState(true);
+  useEffect(() => {
+    if (loadingForScroll || scrollRestoredRef.current) return;
+    if (typeof window === "undefined") return;
+    const saved = sessionStorage.getItem("crm_members_scroll");
+    const ts = Number(sessionStorage.getItem("crm_members_scroll_ts") || "0");
+    // 5분 이내 저장분만 복원 (fresh navigation 은 무시)
+    if (saved && Date.now() - ts < 5 * 60_000) {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, Number(saved));
+      });
+    }
+    sessionStorage.removeItem("crm_members_scroll");
+    sessionStorage.removeItem("crm_members_scroll_ts");
+    scrollRestoredRef.current = true;
+  }, [loadingForScroll]);
 
   // 정렬 (헤더 클릭, localStorage 저장)
   // 기본값: 최근 등록/구매(recency) 최신순 → 최근 등록·구매 회원이 최상단
@@ -350,6 +399,7 @@ export default function CrmMembersPage() {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
       setLoading(false);
+      setLoadingForScroll(false);
     }
   }, [getIdToken]);
 
@@ -528,9 +578,15 @@ export default function CrmMembersPage() {
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const pageRows = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  // 필터/검색 변경 시 1페이지로. 단 첫 마운트(복원된 페이지)와 정렬 변경은 제외
+  const skipPageReset = useRef(true);
   useEffect(() => {
+    if (skipPageReset.current) {
+      skipPageReset.current = false;
+      return;
+    }
     setPage(1);
-  }, [query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fLocker, fGoods, sortKey, sortDir]);
+  }, [query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fLocker, fGoods]);
 
   const resetFilters = () => {
     setQuery("");

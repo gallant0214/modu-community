@@ -744,10 +744,10 @@ function FacePhotoUpload({
     }
     setBusy(true);
     try {
-      // 상세용(300x300, q=0.75) + 목록 썸네일(48x48, q=0.55) 동시 생성
+      // 상세용(420x420, q=0.85) + 목록 썸네일(144x144, q=0.9) — 48px 디스플레이 retina 3x 까지 선명
       const [compressed, thumb] = await Promise.all([
-        compressToDataUrl(file, 300, 0.75),
-        compressToDataUrl(file, 48, 0.55),
+        compressToDataUrl(file, 420, 0.85),
+        compressToDataUrl(file, 144, 0.9),
       ]);
       const token = await getIdToken();
       const res = await fetch(`/api/crm/members/${memberId}`, {
@@ -933,6 +933,9 @@ async function compressToDataUrl(file: File, size: number, quality: number): Pro
     canvas.height = size;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas 컨텍스트 생성 실패");
+    // 부드러운 다운스케일링 → 픽셀 지글거림 최소화
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     // center-crop: 원본에서 정사각형 영역을 잘라 캔버스에 채움
     const srcSide = Math.min(img.width, img.height);
     const sx = (img.width - srcSide) / 2;
