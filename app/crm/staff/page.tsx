@@ -518,7 +518,12 @@ function StaffTable({ rows, label, muted }: { rows: StaffRow[]; label: string; m
             {rows.map((s) => (
               <tr key={s.id} className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
                 <Td>
-                  <span className="font-semibold text-[#2A251D] dark:text-zinc-100">{s.display_name}</span>
+                  <Link
+                    href={`/crm/staff/${s.id}`}
+                    className="font-semibold text-[#2A251D] dark:text-zinc-100 hover:text-[#6B7B3A] dark:hover:text-[#A8B87A] hover:underline"
+                  >
+                    {s.display_name}
+                  </Link>
                   {s.is_solo_owner && (
                     <span className="ml-1.5 text-[11px] text-[#A89B80]">· 본인</span>
                   )}
