@@ -1979,6 +1979,45 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_fixed_expenses: {
+        Row: {
+          id: number
+          center_id: number
+          label: string
+          amount_won: number
+          billing_day: number | null
+          memo: string | null
+          sort_order: number
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          label: string
+          amount_won?: number
+          billing_day?: number | null
+          memo?: string | null
+          sort_order?: number
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          label?: string
+          amount_won?: number
+          billing_day?: number | null
+          memo?: string | null
+          sort_order?: number
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_grade_permissions: {
         Row: {
           id: number

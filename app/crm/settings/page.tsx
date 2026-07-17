@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmModal, CrmField } from "../_components/crm-modal";
 import { crmInputClass } from "../_components/crm-modal";
-import { CONTRACT_CATEGORY_LABEL } from "../_components/crm-labels";
+import { CONTRACT_CATEGORY_LABEL, formatWon, parseWon } from "../_components/crm-labels";
 import {
   ContractSectionsEditor,
   ContractSection,
@@ -90,7 +90,7 @@ interface BootstrapInfo {
 export default function CrmSettingsPage() {
   const router = useRouter();
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<"reservation" | "alerts" | "grades" | "permissions" | "payout" | "contracts" | "lessons" | "logs" | "danger">("reservation");
+  const [tab, setTab] = useState<"reservation" | "alerts" | "grades" | "permissions" | "payout" | "contracts" | "lessons" | "logs" | "expenses" | "danger">("reservation");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [info, setInfo] = useState<BootstrapInfo | null>(null);
@@ -204,6 +204,9 @@ export default function CrmSettingsPage() {
         </TabBtn>
         <TabBtn active={tab === "logs"} onClick={() => setTab("logs")}>
           활동 로그
+        </TabBtn>
+        <TabBtn active={tab === "expenses"} onClick={() => setTab("expenses")}>
+          고정 지출
         </TabBtn>
         <TabBtn active={tab === "danger"} onClick={() => setTab("danger")} danger>
           센터 탈퇴
@@ -384,6 +387,8 @@ export default function CrmSettingsPage() {
           )}
         </Card>
       )}
+
+      {tab === "expenses" && <FixedExpensesPanel />}
 
       {tab === "danger" && (
         <section className="px-4 py-4 rounded-2xl border-2 border-red-200 dark:border-red-900/60 bg-red-50/40 dark:bg-red-950/20">
@@ -1424,6 +1429,318 @@ function RolePermissionsPanel() {
       <p className="text-[11.5px] text-[#A89B80] leading-relaxed">
         기본값은 최소 권한 원칙에 따라 설정되어 있어요. 등급을 추가·수정하려면 등급 관리 탭을 이용하세요.
       </p>
+    </div>
+  );
+}
+
+/* ─── 고정 지출 패널 ──────────────────────── */
+
+interface FixedExpense {
+  id: number;
+  label: string;
+  amount_won: number;
+  billing_day: number | null;
+  memo: string | null;
+  sort_order: number;
+}
+
+function FixedExpensesPanel() {
+  const { getIdToken } = useAuth();
+  const [list, setList] = useState<FixedExpense[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  // 신규 입력
+  const [nLabel, setNLabel] = useState("");
+  const [nAmount, setNAmount] = useState("");
+  const [nDay, setNDay] = useState("");
+  const [nMemo, setNMemo] = useState("");
+
+  // 편집 상태
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [eLabel, setELabel] = useState("");
+  const [eAmount, setEAmount] = useState("");
+  const [eDay, setEDay] = useState("");
+  const [eMemo, setEMemo] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch("/api/crm/fixed-expenses", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setList(data.items ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const total = list.reduce((s, x) => s + (x.amount_won ?? 0), 0);
+
+  const add = async () => {
+    setError("");
+    const label = nLabel.trim();
+    if (!label) return setError("항목명을 입력해 주세요");
+    setAdding(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/fixed-expenses", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          label,
+          amount_won: parseWon(nAmount),
+          billing_day: nDay ? Number(nDay) : null,
+          memo: nMemo.trim() || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "추가 실패");
+      setNLabel("");
+      setNAmount("");
+      setNDay("");
+      setNMemo("");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const startEdit = (x: FixedExpense) => {
+    setEditingId(x.id);
+    setELabel(x.label);
+    setEAmount(String(x.amount_won ?? 0));
+    setEDay(x.billing_day ? String(x.billing_day) : "");
+    setEMemo(x.memo ?? "");
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+  const saveEdit = async () => {
+    if (!editingId) return;
+    const label = eLabel.trim();
+    if (!label) return setError("항목명을 입력해 주세요");
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/fixed-expenses/${editingId}`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        label,
+        amount_won: parseWon(eAmount),
+        billing_day: eDay ? Number(eDay) : null,
+        memo: eMemo.trim() || null,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data?.error || "수정 실패");
+      return;
+    }
+    cancelEdit();
+    load();
+  };
+
+  const remove = async (id: number) => {
+    if (!window.confirm("이 고정 지출 항목을 삭제할까요?")) return;
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/fixed-expenses/${id}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (res.ok) load();
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
+        가게 월세, 관리비, 기타 정기 결제 등 매월 고정으로 나가는 지출을 등록해요. 결제일은 선택 사항이에요.
+      </p>
+
+      {/* 신규 입력 */}
+      <div className="p-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 space-y-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px_110px] gap-2">
+          <input
+            className={crmInputClass}
+            value={nLabel}
+            onChange={(e) => setNLabel(e.target.value.slice(0, 40))}
+            placeholder="항목명 (예: 가게 월세)"
+            maxLength={40}
+          />
+          <input
+            className={`${crmInputClass} text-right`}
+            value={nAmount ? formatWon(parseWon(nAmount)) : ""}
+            onChange={(e) => setNAmount(e.target.value)}
+            inputMode="numeric"
+            placeholder="금액(원)"
+          />
+          <input
+            className={crmInputClass}
+            value={nDay}
+            onChange={(e) => setNDay(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))}
+            inputMode="numeric"
+            placeholder="결제일"
+          />
+        </div>
+        <div className="flex gap-2">
+          <input
+            className={`${crmInputClass} flex-1`}
+            value={nMemo}
+            onChange={(e) => setNMemo(e.target.value.slice(0, 100))}
+            placeholder="메모 (선택)"
+            maxLength={100}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                add();
+              }
+            }}
+          />
+          <button
+            onClick={add}
+            disabled={adding || !nLabel.trim()}
+            className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-60 whitespace-nowrap"
+          >
+            {adding ? "…" : "+ 추가"}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : list.length === 0 ? (
+        <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          등록된 고정 지출이 없어요. 위 입력창에서 추가해 주세요.
+        </div>
+      ) : (
+        <>
+          <ul className="space-y-2">
+            {list.map((x) => (
+              <li
+                key={x.id}
+                className="px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900"
+              >
+                {editingId === x.id ? (
+                  <div className="space-y-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px_110px] gap-2">
+                      <input
+                        className={crmInputClass}
+                        value={eLabel}
+                        onChange={(e) => setELabel(e.target.value.slice(0, 40))}
+                        placeholder="항목명"
+                        maxLength={40}
+                        autoFocus
+                      />
+                      <input
+                        className={`${crmInputClass} text-right`}
+                        value={eAmount ? formatWon(parseWon(eAmount)) : ""}
+                        onChange={(e) => setEAmount(e.target.value)}
+                        inputMode="numeric"
+                        placeholder="금액(원)"
+                      />
+                      <input
+                        className={crmInputClass}
+                        value={eDay}
+                        onChange={(e) => setEDay(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))}
+                        inputMode="numeric"
+                        placeholder="결제일"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        className={`${crmInputClass} flex-1`}
+                        value={eMemo}
+                        onChange={(e) => setEMemo(e.target.value.slice(0, 100))}
+                        placeholder="메모 (선택)"
+                        maxLength={100}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            saveEdit();
+                          }
+                          if (e.key === "Escape") cancelEdit();
+                        }}
+                      />
+                      <button
+                        onClick={saveEdit}
+                        className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12px] font-semibold whitespace-nowrap"
+                      >
+                        저장
+                      </button>
+                      <button
+                        onClick={cancelEdit}
+                        className="px-2 py-1.5 text-[12px] text-[#6B5D47]"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                          {x.label}
+                        </span>
+                        {x.billing_day != null && (
+                          <span className="text-[11.5px] text-[#A89B80]">매월 {x.billing_day}일</span>
+                        )}
+                      </div>
+                      {x.memo && (
+                        <div className="mt-0.5 text-[11.5px] text-[#8C8270] truncate">{x.memo}</div>
+                      )}
+                    </div>
+                    <span className="text-[14px] font-bold text-[#3A342A] dark:text-zinc-100 tabular-nums whitespace-nowrap">
+                      {formatWon(x.amount_won)}원
+                    </span>
+                    <button
+                      onClick={() => startEdit(x)}
+                      className="px-2.5 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+                    >
+                      수정
+                    </button>
+                    <button
+                      onClick={() => remove(x.id)}
+                      className="px-2.5 py-1 rounded-md border border-red-200 dark:border-red-900/60 text-[12px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-[#6B7B3A]/8 dark:bg-[#6B7B3A]/15 border border-[#6B7B3A]/25">
+            <span className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">
+              월 고정 지출 합계
+            </span>
+            <span className="text-[16px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] tabular-nums">
+              {formatWon(total)}원
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
