@@ -1426,13 +1426,7 @@ function ReservationDialog({
   onChange: (next: string, reason?: string) => void;
 }) {
   const [reason, setReason] = useState<string>("");
-  const cancelWith = (next: "cancelled" | "noshow") => {
-    if (!reason) {
-      alert("취소 사유를 선택해 주세요 (강사 요청 / 회원 요청)");
-      return;
-    }
-    onChange(next, reason);
-  };
+  const [cancelMode, setCancelMode] = useState(false);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -1455,44 +1449,61 @@ function ReservationDialog({
         </div>
 
         <div className="mt-4 space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <ActionBtn label="출석 완료" onClick={() => onChange("attended")} color="green" />
-            <ActionBtn label="예약 완료로 되돌리기" onClick={() => onChange("booked")} color="neutral" />
-          </div>
-
-          {/* 취소 사유 선택 */}
-          <div className="pt-1">
-            <div className="text-[11.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1">
-              취소 사유
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {CANCEL_REASONS.map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setReason(r)}
-                  className={`px-2.5 py-2 rounded-lg text-[12.5px] font-medium border transition-colors
-                    ${reason === r
-                      ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
-                      : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
-                    }`}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <ActionBtn label="예약 취소(미차감)" onClick={() => cancelWith("cancelled")} color="neutral" />
-            <ActionBtn label="노쇼(차감 취소)" onClick={() => cancelWith("noshow")} color="red" />
-          </div>
-          <button
-            onClick={onClose}
-            className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-          >
-            닫기
-          </button>
+          {!cancelMode ? (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <ActionBtn label="출석 완료" onClick={() => onChange("attended")} color="green" />
+                <ActionBtn label="예약 완료로 되돌리기" onClick={() => onChange("booked")} color="neutral" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <ActionBtn label="예약 취소" onClick={() => setCancelMode(true)} color="neutral" />
+                {/* 노쇼 = 회원이 시간을 지키지 않은 것 → 사유 선택 불필요, 바로 처리 */}
+                <ActionBtn label="노쇼(차감 취소)" onClick={() => onChange("noshow")} color="red" />
+              </div>
+              <button
+                onClick={onClose}
+                className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+              >
+                닫기
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="text-[11.5px] font-medium text-[#6B5D47] dark:text-zinc-400">
+                취소 사유를 선택해 주세요
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {CANCEL_REASONS.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setReason(r)}
+                    className={`px-2.5 py-2 rounded-lg text-[12.5px] font-medium border transition-colors
+                      ${reason === r
+                        ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
+                        : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                      }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+              <ActionBtn
+                label={reason ? `'${reason}'으로 예약 취소` : "취소 확정"}
+                onClick={() => reason && onChange("cancelled", reason)}
+                color="red"
+              />
+              <button
+                onClick={() => {
+                  setCancelMode(false);
+                  setReason("");
+                }}
+                className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+              >
+                뒤로
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
