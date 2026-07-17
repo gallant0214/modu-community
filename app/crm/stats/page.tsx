@@ -518,19 +518,9 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
         부가세 (선택 기간 결제 기준)
       </div>
       <section className="mb-5 px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/50 dark:bg-zinc-900/60">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <div className="text-[11.5px] text-[#A89B80]">부가세 (10%)</div>
-            <div className="mt-0.5 text-[18px] font-bold text-[#B47B2A] dark:text-amber-300 tabular-nums">
-              {formatWon(data?.vat_amount ?? 0)}원
-            </div>
-          </div>
-          <div>
-            <div className="text-[11.5px] text-[#A89B80]">부가세 제외 실매출</div>
-            <div className="mt-0.5 text-[16px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] tabular-nums">
-              {formatWon(data?.total_ex_vat ?? 0)}원
-            </div>
-          </div>
+        <div className="text-[11.5px] text-[#A89B80]">부가세 (10%)</div>
+        <div className="mt-0.5 text-[20px] font-bold text-[#B47B2A] dark:text-amber-300 tabular-nums">
+          {formatWon(data?.vat_amount ?? 0)}원
         </div>
         <div className="mt-2.5 text-[11.5px] text-[#A89B80]">
           결제 시 “부가세 포함”으로 체크된 상품만 10%를 분리해 합산해요. 선택한 기간(월/직접 선택)에 결제된 건 기준이에요.
