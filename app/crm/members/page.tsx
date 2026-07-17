@@ -1959,7 +1959,7 @@ function Th({ children, className }: { children: React.ReactNode; className?: st
   return <th className={`text-left font-medium px-3 py-2.5 ${className || ""}`}>{children}</th>;
 }
 function Td({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-3 py-3 align-top ${className || ""}`}>{children}</td>;
+  return <td className={`px-3 py-3 align-middle ${className || ""}`}>{children}</td>;
 }
 function formatDate(iso: string) {
   try {
