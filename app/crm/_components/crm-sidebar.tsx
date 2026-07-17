@@ -88,10 +88,10 @@ export function CrmSidebar({ role, centerName, isSoloOwner: _isSoloOwner }: Prop
         </span>
       </div>
 
-      {/* 데스크탑 사이드바 */}
-      <aside className="hidden md:flex flex-col w-60 shrink-0 border-r border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40">
+      {/* 데스크탑 사이드바 — 스크롤/메뉴 이동 시 고정 (navbar 56px 아래에 sticky) */}
+      <aside className="hidden md:flex flex-col w-60 shrink-0 border-r border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 sticky top-14 self-start h-[calc(100dvh-3.5rem)]">
         <SidebarHeader centerName={centerName} />
-        <nav className="flex-1 px-3 pt-1.5 pb-2 space-y-1">{links}</nav>
+        <nav className="flex-1 min-h-0 overflow-y-auto px-3 pt-1.5 pb-2 space-y-1">{links}</nav>
         <SidebarFooter />
       </aside>
 
