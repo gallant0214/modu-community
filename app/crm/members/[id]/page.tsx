@@ -834,22 +834,33 @@ function FacePhotoUpload({
             type="button"
             onClick={() => inputRef.current?.click()}
             disabled={busy}
-            className="text-[10.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline disabled:opacity-50"
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold shadow-sm border transition-colors disabled:opacity-50 ${
+              current
+                ? "border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                : "border-[#6B7B3A] bg-[#6B7B3A] text-white hover:bg-[#5a6932]"
+            }`}
           >
-            {current ? "변경" : "얼굴 등록"}
+            <svg
+              className="w-3 h-3"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2-2H10L8 7H5a2 2 0 00-2 2z" />
+              <circle cx="12" cy="13" r="3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {current ? "사진 변경" : "얼굴 등록"}
           </button>
           {current && (
-            <>
-              <span className="text-[10px] text-[#E8E0D0]">|</span>
-              <button
-                type="button"
-                onClick={remove}
-                disabled={busy}
-                className="text-[10.5px] text-red-600 hover:underline disabled:opacity-50"
-              >
-                삭제
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={remove}
+              disabled={busy}
+              className="px-2 py-1 rounded-full text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              삭제
+            </button>
           )}
         </div>
       )}
