@@ -679,17 +679,17 @@ function ContactSection({
   saving: boolean;
   onSave: (patch: { phone?: string | null; email?: string | null; address?: string | null }) => void;
 }) {
-  const [p, setP] = useState(phone ?? "");
+  const [p, setP] = useState(formatPhone(phone ?? ""));
   const [e, setE] = useState(email ?? "");
   const [a, setA] = useState(address ?? "");
 
   useEffect(() => {
-    setP(phone ?? "");
+    setP(formatPhone(phone ?? ""));
     setE(email ?? "");
     setA(address ?? "");
   }, [phone, email, address]);
 
-  const dirtyPhone = p !== (phone ?? "");
+  const dirtyPhone = p !== formatPhone(phone ?? "");
   const dirtyEmail = e !== (email ?? "");
   const dirtyAddress = a !== (address ?? "");
   const dirty = dirtyPhone || dirtyEmail || dirtyAddress;

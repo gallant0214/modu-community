@@ -66,6 +66,14 @@ export async function GET(request: Request) {
     .gte("issued_at", startDate)
     .lt("issued_at", nextMonth);
 
+  let membershipQuery = supabase
+    .from("crm_memberships")
+    .select("id, seller_member_id, price_won, payment_method, start_date, status")
+    .eq("center_id", ctx.centerId)
+    .neq("status", "deleted")
+    .gte("start_date", startDate)
+    .lt("start_date", nextMonth);
+
   // 예약 (해당 월 attended 기준)
   let resQuery = supabase
     .from("crm_reservations")
@@ -78,6 +86,7 @@ export async function GET(request: Request) {
     passQuery = passQuery.or(
       `trainer_member_id.eq.${ctx.centerMemberId},seller_member_id.eq.${ctx.centerMemberId}`
     );
+    membershipQuery = membershipQuery.eq("seller_member_id", ctx.centerMemberId);
     resQuery = resQuery.eq("trainer_member_id", ctx.centerMemberId);
     // 회원은 본인 담당만 — 단 trainer 가 직접 가입시킨 회원 추적 안 함. 본인 회원수는 0 표시.
     memberQuery = memberQuery.eq("id", -1); // empty
@@ -99,9 +108,10 @@ export async function GET(request: Request) {
   const [
     { count: memberCount },
     { data: passes },
+    { data: memberships },
     { data: reservations },
     { data: activeStaff },
-  ] = await Promise.all([memberQuery, passQuery, resQuery, activeStaffQuery]);
+  ] = await Promise.all([memberQuery, passQuery, membershipQuery, resQuery, activeStaffQuery]);
 
   // 강사별 집계
   const trainerStats = new Map<
@@ -149,6 +159,10 @@ export async function GET(request: Request) {
   (passes ?? []).forEach((p) => {
     const k = p.payment_method ?? "etc";
     paymentBreakdown[k] = (paymentBreakdown[k] ?? 0) + (p.price_won ?? 0);
+  });
+  (memberships ?? []).forEach((m) => {
+    const k = m.payment_method ?? "etc";
+    paymentBreakdown[k] = (paymentBreakdown[k] ?? 0) + (m.price_won ?? 0);
   });
 
   // 직원 이름 join — activeStaff 로 우선 채우고 나머지(퇴사자 등)만 추가 조회

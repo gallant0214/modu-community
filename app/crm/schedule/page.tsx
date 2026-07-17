@@ -645,7 +645,9 @@ function DayView({
           </div>
 
           {trainers.map((t) => {
-            const list = reservations.filter((r) => r.trainer_member_id === t.id);
+            const list = reservations.filter(
+              (r) => r.trainer_member_id === t.id && r.status !== "cancelled"
+            );
             const evList = events.filter(
               (e) => e.type === "center" || e.trainer_member_id === t.id
             );
@@ -1027,7 +1029,9 @@ function WeekView({
 
           {days.map((d, di) => {
             const key = dayKey(d);
-            const list = reservations.filter((r) => kstDateKey(r.starts_at) === key);
+            const list = reservations.filter(
+              (r) => kstDateKey(r.starts_at) === key && r.status !== "cancelled"
+            );
             const evList = events.filter((e) => kstDateKey(e.starts_at) === key);
             const defaultTrainer = trainers[0] ?? null;
             const now = nowKst();

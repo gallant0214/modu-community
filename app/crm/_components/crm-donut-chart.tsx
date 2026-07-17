@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import type { MouseEvent } from "react";
+
 interface Slice {
   label: string;
   value: number;
@@ -10,13 +13,27 @@ interface Props {
   slices: Slice[];
   /** 차트 크기 (정사각형 픽셀) */
   size?: number;
+  /** 툴팁 값 표시 방식 */
+  valueKind?: "money" | "count" | "plain";
+  /** 범례에 값도 함께 표시 */
+  showLegendValue?: boolean;
+  /** 범례 위치 */
+  legendPosition?: "side" | "bottom";
 }
 
 /**
  * 도넛 차트 — SVG arc 직접 렌더 (PDF 1-1 결제방법 도넛).
  */
-export function CrmDonutChart({ slices, size = 180 }: Props) {
-  const total = slices.reduce((s, x) => s + x.value, 0);
+export function CrmDonutChart({
+  slices,
+  size = 180,
+  valueKind = "count",
+  showLegendValue = false,
+  legendPosition = "side",
+}: Props) {
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const visibleSlices = slices.filter((s) => s.value > 0);
+  const total = visibleSlices.reduce((s, x) => s + x.value, 0);
   if (total === 0) {
     return (
       <div className="text-[12.5px] text-[#8C8270] dark:text-zinc-500 px-3 py-6 text-center">
@@ -30,36 +47,76 @@ export function CrmDonutChart({ slices, size = 180 }: Props) {
   const cy = size / 2;
   const innerR = R * 0.62;
 
-  let cum = 0;
-  const arcs = slices.map((s) => {
-    const startA = (cum / total) * 2 * Math.PI;
-    cum += s.value;
-    const endA = (cum / total) * 2 * Math.PI;
-    return { ...s, startA, endA };
-  });
+  const arcs = visibleSlices.reduce<(Slice & { startA: number; endA: number })[]>((acc, s) => {
+    const prev = acc.length ? acc[acc.length - 1].endA / (2 * Math.PI) * total : 0;
+    const startA = (prev / total) * 2 * Math.PI;
+    const endA = ((prev + s.value) / total) * 2 * Math.PI;
+    acc.push({ ...s, startA, endA });
+    return acc;
+  }, []);
+
+  const layoutClass =
+    legendPosition === "bottom"
+      ? "relative flex flex-col items-center gap-3"
+      : "relative flex flex-col md:flex-row items-center gap-4";
+
+  const showTooltip = (event: MouseEvent<SVGElement>, label: string, value: number) => {
+    const rect = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
+    if (!rect) return;
+    const percent = ((value / total) * 100).toFixed(0);
+    setTooltip({
+      x: event.clientX - rect.left + 12,
+      y: event.clientY - rect.top + 12,
+      text: `${label}: ${formatTooltipValue(value, valueKind)} (${percent}%)`,
+    });
+  };
 
   return (
-    <div className="flex flex-col md:flex-row items-center gap-4">
+    <div className={layoutClass}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {arcs.map((a, i) => (
-          <path
-            key={i}
-            d={arcPath(cx, cy, R, innerR, a.startA, a.endA)}
-            fill={a.color}
-          >
-            <title>{`${a.label}: ${a.value.toLocaleString()} (${((a.value / total) * 100).toFixed(0)}%)`}</title>
-          </path>
-        ))}
+        {arcs.length === 1 ? (
+          <circle
+            cx={cx}
+            cy={cy}
+            r={(R + innerR) / 2}
+            fill="none"
+            stroke={arcs[0].color}
+            strokeWidth={R - innerR}
+            onMouseMove={(event) => showTooltip(event, arcs[0].label, arcs[0].value)}
+            onMouseLeave={() => setTooltip(null)}
+          />
+        ) : (
+          arcs.map((a, i) => (
+            <path
+              key={i}
+              d={arcPath(cx, cy, R, innerR, a.startA, a.endA)}
+              fill={a.color}
+              onMouseMove={(event) => showTooltip(event, a.label, a.value)}
+              onMouseLeave={() => setTooltip(null)}
+            />
+          ))
+        )}
       </svg>
-      <ul className="space-y-1 text-[12.5px] min-w-[110px]">
+      {tooltip && (
+        <div
+          className="pointer-events-none absolute z-20 rounded-md border border-[#D9CBB5] bg-[#2A251D] px-2.5 py-1.5 text-[11.5px] font-semibold text-white shadow-lg dark:border-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
+          style={{ left: tooltip.x, top: tooltip.y }}
+        >
+          {tooltip.text}
+        </div>
+      )}
+      <ul className="space-y-1 text-[12.5px] min-w-[130px] w-full">
         {arcs.map((a, i) => (
-          <li key={i} className="flex items-center gap-2 text-[#3A342A] dark:text-zinc-300">
+          <li key={i} className="grid grid-cols-[12px_minmax(44px,auto)_1fr] items-center gap-2 text-[#3A342A] dark:text-zinc-300">
             <span
               className="inline-block w-3 h-3 rounded"
               style={{ backgroundColor: a.color }}
             />
-            <span className="font-medium">{a.label}</span>
-            <span className="text-[#8C8270] dark:text-zinc-500 ml-auto">
+            <span className="font-medium whitespace-nowrap">{a.label}</span>
+            <span className="text-right whitespace-nowrap text-[#8C8270] dark:text-zinc-500">
+              {showLegendValue && (
+                <span className="mr-1.5">({formatTooltipValue(a.value, valueKind)})</span>
+              )}
               {((a.value / total) * 100).toFixed(0)}%
             </span>
           </li>
@@ -67,6 +124,12 @@ export function CrmDonutChart({ slices, size = 180 }: Props) {
       </ul>
     </div>
   );
+}
+
+function formatTooltipValue(value: number, kind: Props["valueKind"]) {
+  if (kind === "money") return `${value.toLocaleString()}원`;
+  if (kind === "count") return `${value.toLocaleString()}명`;
+  return value.toLocaleString();
 }
 
 function arcPath(

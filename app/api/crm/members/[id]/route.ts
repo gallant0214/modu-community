@@ -225,7 +225,7 @@ export async function PATCH(
     const v = body.face_image_thumb;
     if (v === null || v === "") {
       patch.face_image_thumb = null;
-    } else if (typeof v === "string" && v.startsWith("data:image/") && v.length <= 20_000) {
+    } else if (typeof v === "string" && v.startsWith("data:image/") && v.length <= 40_000) {
       patch.face_image_thumb = v;
     } else {
       return NextResponse.json(

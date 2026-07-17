@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import type { MouseEvent } from "react";
+
 interface Point {
   label: string;
   value: number;
@@ -25,9 +28,10 @@ export function CrmLineChart({
   color = "#6B7B3A",
   height = 220,
 }: Props) {
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
   const W = 600;
   const H = height;
-  const padL = 40;
+  const padL = unit === "원" ? 58 : 40;
   const padR = 12;
   const padT = 16;
   const padB = 28;
@@ -58,8 +62,18 @@ export function CrmLineChart({
   const gridYs = [0, 0.25, 0.5, 0.75, 1].map((t) => padT + innerH * (1 - t));
   const gridValues = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(max * t));
 
+  const showTooltip = (event: MouseEvent<SVGCircleElement>, p: Point) => {
+    const rect = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
+    if (!rect) return;
+    setTooltip({
+      x: event.clientX - rect.left + 12,
+      y: event.clientY - rect.top + 12,
+      text: `${p.label}: ${formatTooltipValue(p.value, unit)}`,
+    });
+  };
+
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="relative w-full overflow-x-auto">
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className="w-full text-[#A89B80] dark:text-zinc-500"
@@ -84,7 +98,7 @@ export function CrmLineChart({
               fontSize={10}
               fill="currentColor"
             >
-              {formatShort(gridValues[i])}
+              {formatAxisValue(gridValues[i], unit)}
             </text>
           </g>
         ))}
@@ -113,17 +127,49 @@ export function CrmLineChart({
           return (
             <g key={i}>
               <circle cx={x} cy={py} r={3.5} fill={color} />
-              <title>{`${p.label}: ${p.value.toLocaleString()}${unit ? " " + unit : ""}`}</title>
+              <circle
+                cx={x}
+                cy={py}
+                r={11}
+                fill="transparent"
+                onMouseMove={(event) => showTooltip(event, p)}
+                onMouseLeave={() => setTooltip(null)}
+              />
             </g>
           );
         })}
       </svg>
+      {tooltip && (
+        <div
+          className="pointer-events-none absolute z-20 rounded-md border border-[#D9CBB5] bg-[#2A251D] px-2.5 py-1.5 text-[11.5px] font-semibold text-white shadow-lg dark:border-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
+          style={{ left: tooltip.x, top: tooltip.y }}
+        >
+          {tooltip.text}
+        </div>
+      )}
     </div>
   );
 }
 
-function formatShort(n: number) {
+function formatAxisValue(n: number, unit: string) {
+  if (unit === "원") return formatWonAxis(n);
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
   return n.toString();
+}
+
+function formatWonAxis(n: number) {
+  if (n >= 100_000_000) return `${trimDecimal(n / 100_000_000)}억`;
+  if (n >= 10_000) return `${trimDecimal(n / 10_000)}만`;
+  return n.toLocaleString();
+}
+
+function formatTooltipValue(value: number, unit: string) {
+  if (unit === "원") return `${value.toLocaleString()}원`;
+  if (unit) return `${value.toLocaleString()}${unit}`;
+  return value.toLocaleString();
+}
+
+function trimDecimal(value: number) {
+  return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
 }

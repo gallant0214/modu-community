@@ -48,7 +48,12 @@ interface Product {
   duration_unit: string | null;
   total_sessions: number | null;
   price_won: number;
+  vat_included?: boolean;
+  mileage_earn?: number;
+  pause_enabled?: boolean;
   capacity: number;
+  session_minutes?: number;
+  status?: string;
 }
 
 interface CustomType {
@@ -157,62 +162,82 @@ export default function CrmProductsPage() {
     }
   };
 
+  const typeKeys = [
+    "",
+    ...BUILT_IN_KEYS,
+    ...customTypes.filter((t) => !BUILT_IN_KEYS.includes(t.key)).map((t) => t.key),
+  ];
+  const totalPrice = list.reduce((sum, p) => sum + (p.price_won ?? 0), 0);
+  const averagePrice = list.length > 0 ? Math.round(totalPrice / list.length) : 0;
+  const periodCount = list.filter((p) => p.billing_mode === "period").length;
+  const lessonCount = list.filter((p) => p.type === "group" || p.type === "personal").length;
+
   return (
-    <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-6xl mx-auto">
-      <header className="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[18px] md:text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
-            상품
-          </h1>
-          <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-            센터에서 판매하는 상품(회원권/수업/락커/용품)을 등록해요. 상품을 눌러 상세를 확인하세요.
-          </p>
+    <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-7xl mx-auto">
+      <header className="mb-4 rounded-2xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-4 py-4 md:px-5 md:py-5 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div>
+            <p className="text-[12px] font-semibold text-[#7F6F55] dark:text-zinc-500">CRM</p>
+            <h1 className="mt-1 text-[24px] md:text-[28px] leading-tight font-bold text-[#241F18] dark:text-zinc-100">
+              상품 관리
+            </h1>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setTypeManagerOpen(true)}
+              className="px-3 py-2 rounded-lg border border-[#D9CDB8] dark:border-zinc-700 bg-white/80 dark:bg-zinc-950 text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200 hover:bg-[#F6F1E8] whitespace-nowrap"
+            >
+              유형 관리
+            </button>
+            <Link
+              href={type ? `/crm/products/new?type=${type}` : "/crm/products/new"}
+              className="px-3 py-2 rounded-lg bg-[#2F3A2B] text-white text-[13px] font-semibold hover:bg-[#20291E] whitespace-nowrap"
+            >
+              + 상품 추가
+            </Link>
+          </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setTypeManagerOpen(true)}
-            className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] font-medium text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] whitespace-nowrap"
-          >
-            유형 관리
-          </button>
-          <Link
-            href={type ? `/crm/products/new?type=${type}` : "/crm/products/new"}
-            className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] whitespace-nowrap"
-          >
-            + 상품 추가
-          </Link>
+
+        <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-2">
+          <ProductMetric label="등록 상품" value={`${list.length}개`} hint={type ? typeLabelOf(type) : "전체 유형"} />
+          <ProductMetric label="기간제" value={`${periodCount}개`} hint={`횟수제 ${Math.max(0, list.length - periodCount)}개`} tone="green" />
+          <ProductMetric label="수업 상품" value={`${lessonCount}개`} hint="그룹·개인 레슨" tone="blue" />
+          <ProductMetric label="평균 가격" value={`${formatWon(averagePrice)}원`} hint="현재 목록 기준" tone="gold" />
         </div>
       </header>
 
-      {/* 유형 필터 — 기본 6종은 항상, 순수 커스텀만 뒤에 붙임 */}
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {[
-          "",
-          ...BUILT_IN_KEYS,
-          ...customTypes.filter((t) => !BUILT_IN_KEYS.includes(t.key)).map((t) => t.key),
-        ].map((t) => (
-          <button
-            key={t || "all"}
-            onClick={() => setType(t)}
-            className={`px-3 py-1.5 rounded-full text-[12.5px] font-medium border whitespace-nowrap
-              ${type === t
-                ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
-                : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
-              }`}
-          >
-            {t ? typeLabelOf(t) : "전체"}
-          </button>
-        ))}
-      </div>
-
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="상품명 검색"
-        className={`${crmInputClass} mb-4`}
-      />
+      <section className="mb-4 rounded-2xl border border-[#E4D9C6] dark:border-zinc-800 bg-[#FFFEFB] dark:bg-zinc-900 px-3 py-3 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          <div className="relative flex-1 min-w-0">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#A89B80]">
+              ⌕
+            </span>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="상품명 검색"
+              className={`${crmInputClass} pl-8 h-10 mb-0 bg-white dark:bg-zinc-950`}
+            />
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto category-scroll pb-0.5 lg:pb-0">
+            {typeKeys.map((t) => (
+              <button
+                key={t || "all"}
+                onClick={() => setType(t)}
+                className={`px-3 py-2 rounded-lg text-[12.5px] font-semibold border whitespace-nowrap transition-colors
+                  ${type === t
+                    ? "border-[#2F3A2B] bg-[#2F3A2B] text-white dark:border-[#A8B87A] dark:bg-[#A8B87A] dark:text-zinc-950"
+                    : "border-transparent bg-transparent text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F6F1E8] dark:hover:bg-zinc-800"
+                  }`}
+              >
+                {t ? typeLabelOf(t) : "전체"}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {error && (
         <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
@@ -229,68 +254,93 @@ export default function CrmProductsPage() {
             : '등록된 상품이 없어요. "+ 상품 추가"로 첫 상품을 만들어 보세요.'}
         </Msg>
       ) : (
-        <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {list.map((p) => (
-            <li
-              key={p.id}
-              onClick={() => openDetail(p)}
-              className={`px-4 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 cursor-pointer hover:border-[#6B7B3A]/50 transition-colors ${
-                detailLoadingId === p.id ? "opacity-70" : ""
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${typeBadgeClsOf(p.type)}`}
-                  >
-                    {typeLabelOf(p.type)}
-                  </span>
+        <section>
+          <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {list.map((p) => (
+              <li key={p.id}>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openDetail(p)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openDetail(p);
+                    }
+                  }}
+                  className={`h-full rounded-2xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-4 py-4 shadow-sm hover:border-[#AFA083] hover:bg-[#FFFCF5] dark:hover:bg-zinc-800/70 transition-colors ${
+                    detailLoadingId === p.id ? "opacity-70" : ""
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2 min-w-0">
+                      <span className="mt-0.5 w-1.5 h-9 rounded-full bg-[#2F3A2B] dark:bg-[#A8B87A] shrink-0" />
+                      <div className="min-w-0">
+                        <div className="truncate text-[15px] font-bold text-[#241F18] dark:text-zinc-100">
+                          {p.name}
+                        </div>
+                        <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500 truncate">
+                          {p.category || "종목 미지정"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="text-[16px] font-bold text-[#2F3A2B] dark:text-[#A8B87A]">
+                        {formatWon(p.price_won)}원
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-[#A89B80] dark:text-zinc-500">
+                        {p.vat_included ? "VAT 포함" : "VAT 별도"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+                    <span
+                      className={`inline-flex items-center px-2 py-1 rounded-md text-[11px] font-bold ${typeBadgeClsOf(p.type)}`}
+                    >
+                      {typeLabelOf(p.type)}
+                    </span>
+                    <span className="inline-flex items-center px-2 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[11px] font-semibold text-[#6B5D47] dark:text-zinc-400">
+                      {p.billing_mode === "period" ? "기간제" : "횟수제"}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 rounded-xl bg-[#F8F4EC] dark:bg-zinc-950/50 px-3 py-2 text-[13px] text-[#3A342A] dark:text-zinc-200">
+                    <div className="font-bold">{productTerm(p)}</div>
+                    <div className="mt-0.5 text-[12px] leading-relaxed text-[#8C8270] dark:text-zinc-500">
+                      {productSubMeta(p)}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex justify-end items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const token = await getIdToken();
+                        const res = await fetch(`/api/crm/products/${p.id}`, {
+                          headers: { authorization: `Bearer ${token}` },
+                          cache: "no-store",
+                        });
+                        const data = await res.json();
+                        if (res.ok) setEditProduct(data.product as ProductDetail);
+                      }}
+                      className="px-2.5 py-1.5 rounded-md border border-[#D9CDB8] dark:border-zinc-700 text-[12px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-950"
+                    >
+                      수정
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => remove(p.id)}
+                      className="px-2.5 py-1.5 rounded-md text-[12px] font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                    >
+                      삭제
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const token = await getIdToken();
-                      const res = await fetch(`/api/crm/products/${p.id}`, {
-                        headers: { authorization: `Bearer ${token}` },
-                        cache: "no-store",
-                      });
-                      const data = await res.json();
-                      if (res.ok) setEditProduct(data.product as ProductDetail);
-                    }}
-                    className="text-[11px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
-                  >
-                    수정
-                  </button>
-                  <span className="text-[11px] text-[#E8E0D0] dark:text-zinc-700">|</span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      remove(p.id);
-                    }}
-                    className="text-[11px] text-red-600 hover:underline"
-                  >
-                    삭제
-                  </button>
-                </div>
-              </div>
-              <div className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 mb-2">
-                {p.name}
-              </div>
-              <div className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-                {p.billing_mode === "period"
-                  ? `기간제 · ${p.duration_value}${unitKo(p.duration_unit)}`
-                  : `횟수제 · ${p.total_sessions ?? 0}회`}
-                {p.type === "group" && p.capacity > 0 && (
-                  <span className="ml-1.5 text-[#8C8270]">· 정원 {p.capacity}명</span>
-                )}
-              </div>
-              <div className="mt-1.5 text-[16px] font-bold text-[#6B7B3A] dark:text-[#A8B87A]">
-                {formatWon(p.price_won)}원
-              </div>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {/* 상세 모달 (읽기 전용) */}
@@ -333,6 +383,56 @@ interface DisplayRow {
   label: string;
   dbId: number | null;
   isBuiltin: boolean;
+}
+
+function ProductMetric({
+  label,
+  value,
+  hint,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  tone?: "default" | "green" | "blue" | "gold";
+}) {
+  const toneClass =
+    tone === "green"
+      ? "text-[#2F6F54] dark:text-emerald-300"
+      : tone === "blue"
+      ? "text-[#315F7D] dark:text-sky-300"
+      : tone === "gold"
+      ? "text-[#8A641D] dark:text-amber-300"
+      : "text-[#241F18] dark:text-zinc-100";
+
+  return (
+    <div className="rounded-xl border border-[#E8E0D0]/80 dark:border-zinc-800 bg-[#FFFEFB] dark:bg-zinc-950/40 px-3 py-2.5 min-w-0">
+      <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">{label}</div>
+      <div className={`mt-1 text-[16px] md:text-[17px] font-bold truncate ${toneClass}`}>
+        {value}
+      </div>
+      <div className="mt-0.5 text-[11px] text-[#A89B80] dark:text-zinc-500 truncate">{hint}</div>
+    </div>
+  );
+}
+
+function productTerm(p: Product): string {
+  if (p.billing_mode === "period") {
+    const value = p.duration_value && p.duration_value > 0 ? p.duration_value : null;
+    return value ? `${value}${unitKo(p.duration_unit)}` : "기간 무제한";
+  }
+  return `${p.total_sessions ?? 0}회`;
+}
+
+function productSubMeta(p: Product): string {
+  const parts: string[] = [];
+  if (p.type === "group" && p.capacity > 0) parts.push(`정원 ${p.capacity}명`);
+  if ((p.type === "group" || p.type === "personal") && p.session_minutes) {
+    parts.push(`${p.session_minutes}분 수업`);
+  }
+  if (p.pause_enabled) parts.push("정지 가능");
+  if (p.mileage_earn && p.mileage_earn > 0) parts.push(`${p.mileage_earn.toLocaleString()}P 적립`);
+  return parts.length > 0 ? parts.join(" · ") : "추가 조건 없음";
 }
 
 function TypeManagerModal({
