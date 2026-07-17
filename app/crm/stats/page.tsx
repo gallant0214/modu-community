@@ -174,10 +174,60 @@ export default function CrmStatsPage() {
   );
 }
 
+/* ─── CSV 다운로드 (엑셀 호환) ────────────────────────────── */
+
+function downloadCsv(filenameBase: string, rows: (string | number)[][]) {
+  const csv = rows
+    .map((r) =>
+      r.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")
+    )
+    .join("\r\n");
+  const bom = "﻿"; // Excel 에서 한글 깨짐 방지
+  const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const ts = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `${filenameBase}_${ts}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /* ─── 강사 매출 탭 ────────────────────────────── */
 
 function TrainerTab({ data }: { data: MonthlyResp | null }) {
   if (!data) return null;
+
+  const exportCsv = () => {
+    const header = ["강사", "등급", "신규(건)", "재등록(건)", "체험(건)", "매출(원)", "출석완료(회)", "취소(회)", "노쇼(회)"];
+    const body = data.trainers.map((t) => [
+      t.name,
+      ROLE_LABEL[t.role] ?? t.role,
+      t.passes.new,
+      t.passes.renewal,
+      t.passes.trial,
+      t.passes.revenue,
+      t.reservations.attended,
+      t.reservations.cancelled,
+      t.reservations.noshow,
+    ]);
+    // 합계 행
+    const sum = data.trainers.reduce(
+      (a, t) => ({
+        n: a.n + t.passes.new,
+        r: a.r + t.passes.renewal,
+        tri: a.tri + t.passes.trial,
+        rev: a.rev + t.passes.revenue,
+        att: a.att + t.reservations.attended,
+        can: a.can + t.reservations.cancelled,
+        ns: a.ns + t.reservations.noshow,
+      }),
+      { n: 0, r: 0, tri: 0, rev: 0, att: 0, can: 0, ns: 0 }
+    );
+    body.push(["합계", "", sum.n, sum.r, sum.tri, sum.rev, sum.att, sum.can, sum.ns]);
+    downloadCsv(`강사매출_${data.ym}`, [header, ...body]);
+  };
+
   return (
     <>
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
@@ -195,6 +245,17 @@ function TrainerTab({ data }: { data: MonthlyResp | null }) {
           })()}
         />
       </section>
+
+      <div className="mb-3 flex justify-end">
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={data.trainers.length === 0}
+          className="px-3 py-1.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/5 disabled:opacity-50"
+        >
+          📥 엑셀 다운로드
+        </button>
+      </div>
 
       <section className="overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800">
         <table className="w-full text-[13px]">
@@ -309,12 +370,47 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
     { key: "pass", label: "수강권 매출 (PT·레슨)", href: "/crm/passes" },
   ];
 
+  const exportCsv = () => {
+    if (!data) return;
+    const rows: (string | number)[][] = [];
+    rows.push(["항목", "부가세 포함(원)", "부가세 제외(원)"]);
+    rows.push(["센터 매출 합계", data.total, data.total_ex_vat]);
+    rows.push(["부가세", data.vat_amount, 0]);
+    rows.push([]);
+    rows.push(["카테고리별"]);
+    for (const c of cats) {
+      rows.push([c.label, data.categories[c.key] ?? 0, data.categories_ex_vat[c.key] ?? 0]);
+    }
+    rows.push([]);
+    rows.push(["잠재부채(선수금)", data.potential_liability]);
+    rows.push(["  회원권", data.liability_breakdown.membership]);
+    rows.push(["  수강권", data.liability_breakdown.pass]);
+    rows.push(["  미시작", data.liability_breakdown.notStarted]);
+    rows.push(["  진행중", data.liability_breakdown.inProgress]);
+    rows.push([]);
+    rows.push(["이번달 활동 건수"]);
+    rows.push(["회원권 발급 수", data.counts.memberships]);
+    rows.push(["수강권 발급 수", data.counts.passes]);
+    downloadCsv(`센터매출_${data.ym}`, rows);
+  };
+
   if (loading) {
     return <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>;
   }
 
   return (
     <>
+      <div className="mb-3 flex justify-end">
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={!data}
+          className="px-3 py-1.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/5 disabled:opacity-50"
+        >
+          📥 엑셀 다운로드
+        </button>
+      </div>
+
       {/* 요약 KPI 3종: 부가세 포함 매출 / 부가세 제외 실매출 / 잠재부채 */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
         <Kpi label="센터 매출 합계 (부가세 포함)" value={`${formatWon(data?.total ?? 0)}원`} accent />
