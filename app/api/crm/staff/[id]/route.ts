@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
+import { loadPermissionsForRole } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export async function GET(
   const { data: member, error } = await supabase
     .from("crm_center_members")
     .select(
-      "id, firebase_uid, role, grade_id, display_name, phone, email, address, employment_status, employment_type, access_level, is_solo_owner, status, joined_at, left_at"
+      "id, firebase_uid, role, grade_id, display_name, phone, email, address, employment_status, employment_type, access_level, is_solo_owner, status, joined_at, left_at, commission_type, commission_rate, commission_tiers, base_salary"
     )
     .eq("id", memberId)
     .eq("center_id", ctx.centerId)
@@ -77,6 +78,10 @@ export async function PATCH(
     address?: string;
     employment_status?: string;
     employment_type?: string | null;
+    commission_type?: string;
+    commission_rate?: number;
+    commission_tiers?: { upTo: number | null; rate: number }[];
+    base_salary?: number;
   };
   try {
     body = await request.json();
@@ -85,6 +90,42 @@ export async function PATCH(
   }
 
   const patch: Record<string, unknown> = {};
+
+  // 수업료(정산) 설정은 sales.commission_edit 권한 필요
+  const touchesCommission =
+    body.commission_type !== undefined ||
+    body.commission_rate !== undefined ||
+    body.commission_tiers !== undefined ||
+    body.base_salary !== undefined;
+  if (touchesCommission) {
+    const perms = await loadPermissionsForRole(ctx.centerId, ctx.role);
+    if (!perms["sales.commission_edit"]) {
+      return NextResponse.json({ error: "수업료 설정 권한이 없습니다" }, { status: 403 });
+    }
+    if (body.base_salary !== undefined) {
+      const s = Math.max(0, Math.floor(Number(body.base_salary) || 0));
+      patch.base_salary = s;
+    }
+    if (body.commission_type !== undefined) {
+      if (body.commission_type !== "fixed" && body.commission_type !== "tiered") {
+        return NextResponse.json({ error: "수업료 유형이 잘못됨" }, { status: 400 });
+      }
+      patch.commission_type = body.commission_type;
+    }
+    if (body.commission_rate !== undefined) {
+      const r = Number(body.commission_rate);
+      patch.commission_rate = Number.isFinite(r) ? Math.max(0, Math.min(100, r)) : 0;
+    }
+    if (body.commission_tiers !== undefined) {
+      const tiers = Array.isArray(body.commission_tiers) ? body.commission_tiers : [];
+      patch.commission_tiers = tiers
+        .map((t) => ({
+          upTo: t.upTo == null ? null : Math.max(0, Math.floor(Number(t.upTo) || 0)),
+          rate: Math.max(0, Math.min(100, Number(t.rate) || 0)),
+        }))
+        .slice(0, 20);
+    }
+  }
 
   // grade_id 변경: 해당 등급의 base_role 로 role 자동 sync
   if (body.grade_id !== undefined && body.grade_id !== null) {

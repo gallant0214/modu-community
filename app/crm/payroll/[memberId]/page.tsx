@@ -117,6 +117,15 @@ function RevenueTab({ memberId }: { memberId: number }) {
     payout: { new: number; renewal: number; trial: number; total: number };
     sessionCount: number;
     has_override: boolean;
+    commission: {
+      type: string;
+      rate: number;
+      tiers: { upTo: number | null; rate: number }[];
+      effective_rate: number;
+      payout: number;
+    };
+    base_salary: number;
+    total_pay: number;
   } | null>(null);
 
   const ymForPeriod = (p: Period): string => {
@@ -171,29 +180,27 @@ function RevenueTab({ memberId }: { memberId: number }) {
       <section className="rounded-2xl border-2 border-[#6B7B3A]/40 bg-[#6B7B3A]/5 dark:bg-[#6B7B3A]/10 p-4 md:p-5 mb-4">
         <div className="flex items-baseline justify-between gap-2 mb-3">
           <h2 className="text-[14.5px] font-bold text-[#3A342A] dark:text-zinc-100">
-            이달 지급액 (정산)
+            이달 지급액 (수업료)
           </h2>
           <a
-            href={`/crm/settings`}
+            href={`/crm/staff/${memberId}`}
             className="text-[11.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
           >
-            정산 규칙 편집 →
+            수업료 설정 →
           </a>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <RevenueKpi label="지급 합계" value={data?.payout.total ?? 0} />
-          <RevenueKpi label="신규" value={data?.payout.new ?? 0} small />
-          <RevenueKpi label="재등록" value={data?.payout.renewal ?? 0} small />
-          <RevenueKpi label="체험" value={data?.payout.trial ?? 0} small />
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <RevenueKpi label="총 지급액" value={data?.total_pay ?? 0} />
+          <RevenueKpi label="고정 급여" value={data?.base_salary ?? 0} small />
+          <RevenueKpi label={`수업료 (${data?.commission.effective_rate ?? 0}%)`} value={data?.commission.payout ?? 0} small />
         </div>
         <p className="mt-3 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
-          {data?.has_override
-            ? "이 강사 전용 정산 규칙이 적용 중이에요."
-            : "센터 기본 정산 규칙이 적용 중이에요. 강사별 규칙은 설정 → 정산 규칙에서 설정할 수 있어요."}
-          {data && data.payout.total === 0 && data.breakdown.total > 0 && (
+          고정 {formatWon(data?.base_salary ?? 0)}원 + 수업료(매출 {formatWon(data?.breakdown.total ?? 0)}원 × {data?.commission.effective_rate ?? 0}%) ={" "}
+          <strong className="text-[#3A342A] dark:text-zinc-200">{formatWon(data?.total_pay ?? 0)}원</strong>
+          {data && data.commission.effective_rate === 0 && data.base_salary === 0 && data.breakdown.total > 0 && (
             <>
               <br />
-              매출은 있지만 정산 규칙이 없거나 가격 구간 외라 지급액이 0원이에요. 설정에서 규칙을 추가해 주세요.
+              수업료 비율과 고정 급여가 없어요. 직원 관리 → 수업료 설정에서 지정해 주세요.
             </>
           )}
         </p>

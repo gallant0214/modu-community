@@ -1224,6 +1224,10 @@ export type Database = {
           joined_at: string
           left_at: string | null
           grade_id: number | null
+          commission_type: string
+          commission_rate: number
+          commission_tiers: unknown
+          base_salary: number
           created_at: string
           updated_at: string
         }
@@ -1244,6 +1248,10 @@ export type Database = {
           joined_at?: string
           left_at?: string | null
           grade_id?: number | null
+          commission_type?: string
+          commission_rate?: number
+          commission_tiers?: unknown
+          base_salary?: number
           created_at?: string
           updated_at?: string
         }
@@ -1264,6 +1272,10 @@ export type Database = {
           joined_at?: string
           left_at?: string | null
           grade_id?: number | null
+          commission_type?: string
+          commission_rate?: number
+          commission_tiers?: unknown
+          base_salary?: number
           created_at?: string
           updated_at?: string
         }

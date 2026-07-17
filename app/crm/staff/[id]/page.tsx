@@ -30,6 +30,10 @@ interface StaffMember {
   status: string;
   joined_at: string;
   left_at: string | null;
+  commission_type: string;
+  commission_rate: number;
+  commission_tiers: { upTo: number | null; rate: number }[];
+  base_salary: number;
 }
 
 interface Grade {
@@ -218,6 +222,8 @@ export default function CrmStaffDetailPage() {
         </div>
       </Section>
 
+      <CommissionSection member={member} saving={saving} onSave={(p) => patchMember(p)} />
+
       {error && (
         <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
           {error}
@@ -375,6 +381,198 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       </h2>
       {children}
     </section>
+  );
+}
+
+/* ─── 수업료(정산) 설정 ────────────────────────────── */
+
+interface TierInput {
+  upToMan: string; // 만원 단위 (빈값 = 이상/상한 없음)
+  rate: string; // %
+}
+
+function CommissionSection({
+  member,
+  saving,
+  onSave,
+}: {
+  member: StaffMember;
+  saving: boolean;
+  onSave: (p: Record<string, unknown>) => void;
+}) {
+  const [type, setType] = useState<"fixed" | "tiered">(
+    member.commission_type === "tiered" ? "tiered" : "fixed"
+  );
+  const [rate, setRate] = useState(String(member.commission_rate ?? 0));
+  const [baseSalary, setBaseSalary] = useState(String(member.base_salary ?? 0));
+  const [hasBase, setHasBase] = useState((member.base_salary ?? 0) > 0);
+  const [tiers, setTiers] = useState<TierInput[]>(() =>
+    member.commission_tiers && member.commission_tiers.length > 0
+      ? member.commission_tiers.map((t) => ({
+          upToMan: t.upTo == null ? "" : String(Math.round(t.upTo / 10000)),
+          rate: String(t.rate),
+        }))
+      : [
+          { upToMan: "600", rate: "50" },
+          { upToMan: "1000", rate: "60" },
+          { upToMan: "", rate: "70" },
+        ]
+  );
+
+  const setTier = (i: number, patch: Partial<TierInput>) =>
+    setTiers((prev) => prev.map((t, idx) => (idx === i ? { ...t, ...patch } : t)));
+  const addTier = () => setTiers((prev) => [...prev, { upToMan: "", rate: "" }]);
+  const removeTier = (i: number) => setTiers((prev) => prev.filter((_, idx) => idx !== i));
+
+  const save = () => {
+    const base = hasBase ? Math.max(0, Number(baseSalary) || 0) : 0;
+    if (type === "fixed") {
+      onSave({ commission_type: "fixed", commission_rate: Number(rate) || 0, base_salary: base });
+    } else {
+      const parsed = tiers
+        .filter((t) => t.rate.trim() !== "")
+        .map((t) => ({
+          upTo: t.upToMan.trim() === "" ? null : Math.round((Number(t.upToMan) || 0) * 10000),
+          rate: Number(t.rate) || 0,
+        }));
+      onSave({ commission_type: "tiered", commission_tiers: parsed, base_salary: base });
+    }
+  };
+
+  return (
+    <Section title="수업료(정산) 설정">
+      {/* 고정 급여 유무 */}
+      <div className="mb-4 pb-4 border-b border-[#E8E0D0]/70 dark:border-zinc-800">
+        <label className="flex items-center gap-2 cursor-pointer mb-2">
+          <input
+            type="checkbox"
+            checked={hasBase}
+            onChange={(e) => setHasBase(e.target.checked)}
+            className="w-4 h-4 accent-[#6B7B3A]"
+          />
+          <span className="text-[13px] font-medium text-[#3A342A] dark:text-zinc-300">
+            고정 급여 있음 (월)
+          </span>
+        </label>
+        {hasBase && (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={baseSalary ? Number(baseSalary).toLocaleString() : ""}
+              onChange={(e) => setBaseSalary(e.target.value.replace(/[^\d]/g, ""))}
+              placeholder="0"
+              className={`${crmInputClass} max-w-[180px]`}
+            />
+            <span className="text-[14px] text-[#6B5D47] dark:text-zinc-400">원 / 월</span>
+          </div>
+        )}
+        <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
+          총 지급액 = 고정 급여 + 수업료(아래 비율 적용)
+        </p>
+      </div>
+      <div className="flex gap-2 mb-3">
+        <button
+          type="button"
+          onClick={() => setType("fixed")}
+          className={`px-3 py-2 rounded-lg text-[13px] font-medium border ${
+            type === "fixed"
+              ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
+              : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+          }`}
+        >
+          고정 %
+        </button>
+        <button
+          type="button"
+          onClick={() => setType("tiered")}
+          className={`px-3 py-2 rounded-lg text-[13px] font-medium border ${
+            type === "tiered"
+              ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
+              : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+          }`}
+        >
+          매출 구간별 %
+        </button>
+      </div>
+
+      {type === "fixed" ? (
+        <div>
+          <div className="text-[12.5px] text-[#A89B80] mb-1.5">건당 수업료 비율 (매출과 무관 고정)</div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              className={`${crmInputClass} max-w-[120px]`}
+            />
+            <span className="text-[14px] text-[#6B5D47] dark:text-zinc-400">%</span>
+          </div>
+          <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
+            예: 50 → 강사 매출의 50% 지급
+          </p>
+        </div>
+      ) : (
+        <div>
+          <div className="text-[12.5px] text-[#A89B80] mb-2">
+            월 매출 구간에 따라 비율 적용 (해당 구간 비율을 전체 매출에 적용)
+          </div>
+          <div className="space-y-2">
+            {tiers.map((t, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  value={t.upToMan}
+                  onChange={(e) => setTier(i, { upToMan: e.target.value })}
+                  placeholder="이상(상한없음)"
+                  className={`${crmInputClass} max-w-[130px]`}
+                />
+                <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap">
+                  만원까지
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={t.rate}
+                  onChange={(e) => setTier(i, { rate: e.target.value })}
+                  className={`${crmInputClass} max-w-[80px]`}
+                />
+                <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">%</span>
+                <button
+                  type="button"
+                  onClick={() => removeTier(i)}
+                  className="ml-auto text-[12px] text-red-600 hover:underline shrink-0"
+                >
+                  삭제
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={addTier}
+            className="mt-2 text-[12.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+          >
+            + 구간 추가
+          </button>
+          <p className="mt-2 text-[11.5px] text-[#A89B80] leading-relaxed">
+            예: 600만원까지 50% · 1000만원까지 60% · (마지막 칸 비우면) 그 이상 70%
+          </p>
+        </div>
+      )}
+
+      <button
+        onClick={save}
+        disabled={saving}
+        className="mt-4 w-full px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+      >
+        {saving ? "저장 중…" : "수업료 설정 저장"}
+      </button>
+    </Section>
   );
 }
 

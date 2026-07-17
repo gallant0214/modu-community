@@ -61,6 +61,14 @@ export async function GET(
 
   const rules = (overrideRules ?? []).length > 0 ? overrideRules! : defaultRules ?? [];
 
+  // 강사 개인 수업료(정산) 설정
+  const { data: trainer } = await supabase
+    .from("crm_center_members")
+    .select("commission_type, commission_rate, commission_tiers, base_salary")
+    .eq("id", trainerId)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+
   type Rule = {
     mode: string;
     tier_index: number;
@@ -113,6 +121,26 @@ export async function GET(
     else if (p.issue_type === "trial") payout.trial += amount;
   }
 
+  // 강사 개인 수업료 설정으로 지급액 계산 (매출 전체에 적용)
+  type Tier = { upTo: number | null; rate: number };
+  const commissionType = (trainer?.commission_type as string) ?? "fixed";
+  const commissionRate = Number(trainer?.commission_rate ?? 0);
+  const commissionTiers: Tier[] = Array.isArray(trainer?.commission_tiers)
+    ? (trainer!.commission_tiers as Tier[])
+    : [];
+  const revenue = breakdown.total;
+  let effectiveRate = commissionRate;
+  if (commissionType === "tiered") {
+    const sorted = [...commissionTiers].sort(
+      (a, b) => (a.upTo ?? Number.POSITIVE_INFINITY) - (b.upTo ?? Number.POSITIVE_INFINITY)
+    );
+    const tier = sorted.find((t) => t.upTo == null || revenue <= t.upTo);
+    effectiveRate = tier ? Number(tier.rate) : 0;
+  }
+  const commissionPayout = Math.round((revenue * effectiveRate) / 100);
+  const baseSalary = Math.max(0, Number(trainer?.base_salary ?? 0));
+  const totalPay = baseSalary + commissionPayout;
+
   return NextResponse.json({
     ym,
     passes: passes ?? [],
@@ -121,5 +149,14 @@ export async function GET(
     payout,
     sessionCount,
     has_override: (overrideRules ?? []).length > 0,
+    commission: {
+      type: commissionType,
+      rate: commissionRate,
+      tiers: commissionTiers,
+      effective_rate: effectiveRate,
+      payout: commissionPayout,
+    },
+    base_salary: baseSalary,
+    total_pay: totalPay,
   });
 }

@@ -60,6 +60,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "sales.delete",       label: "매출 삭제",             defaults: D_ADMIN },
       { key: "sales.excel",        label: "매출 엑셀 추출",       defaults: D_ADMIN },
       { key: "sales.payroll_view", label: "급여 정책 열람",       defaults: D_ADMIN },
+      { key: "sales.commission_edit", label: "강사 수업료(정산) 설정", defaults: D_ADMIN },
     ],
   },
   {
