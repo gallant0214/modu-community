@@ -299,7 +299,14 @@ function TrainerTab({ data }: { data: MonthlyResp | null }) {
                   <Td>{t.passes.trial}건</Td>
                   <Td className="font-semibold">{formatWon(t.passes.revenue)}원</Td>
                   <Td>{t.reservations.attended}회</Td>
-                  <Td className="text-[#A89B80]">{t.reservations.cancelled}회</Td>
+                  <Td>
+                    <Link
+                      href={`/crm/stats/${t.trainerMemberId}?tab=cancel`}
+                      className="text-[#6B7B3A] dark:text-[#A8B87A] hover:underline font-medium"
+                    >
+                      {t.reservations.cancelled}회
+                    </Link>
+                  </Td>
                   <Td className="text-red-600 dark:text-red-400">{t.reservations.noshow}회</Td>
                 </tr>
               ))
