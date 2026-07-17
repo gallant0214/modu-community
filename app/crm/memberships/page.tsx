@@ -12,6 +12,31 @@ import {
   parseWon,
   formatPhone,
 } from "../_components/crm-labels";
+import { useColumnWidths, ResizableTh } from "../_components/use-column-widths";
+
+const M_COLS = [
+  { key: "member", label: "회원" },
+  { key: "plan", label: "플랜" },
+  { key: "purchased", label: "구매일" },
+  { key: "duration", label: "기간(일)" },
+  { key: "start", label: "시작" },
+  { key: "expires", label: "만료" },
+  { key: "price", label: "금액" },
+  { key: "payment", label: "결제" },
+  { key: "status", label: "상태" },
+] as const;
+type MColKey = (typeof M_COLS)[number]["key"];
+const M_DEFAULT_WIDTHS: Record<MColKey, number> = {
+  member: 190,
+  plan: 150,
+  purchased: 110,
+  duration: 84,
+  start: 110,
+  expires: 110,
+  price: 110,
+  payment: 96,
+  status: 90,
+};
 
 interface Row {
   id: number;
@@ -36,6 +61,10 @@ export default function CrmMembershipsPage() {
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [issueOpen, setIssueOpen] = useState(false);
+  const { widths, startResize, reset, changed, totalWidth } = useColumnWidths<MColKey>(
+    "crm_memberships_col_widths_v1",
+    M_DEFAULT_WIDTHS
+  );
 
   // 발급 → 계약서 선택 흐름
   const [pending, setPending] = useState<{ membershipId: number; memberId: number } | null>(null);
@@ -87,7 +116,7 @@ export default function CrmMembershipsPage() {
         </button>
       </header>
 
-      <div className="mb-4">
+      <div className="mb-4 flex items-center gap-2">
         <select
           className={crmInputClass}
           style={{ maxWidth: 160 }}
@@ -99,6 +128,15 @@ export default function CrmMembershipsPage() {
           <option value="expired">만료</option>
           <option value="refunded">환불</option>
         </select>
+        {changed && (
+          <button
+            type="button"
+            onClick={reset}
+            className="px-2.5 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+          >
+            열 너비 초기화
+          </button>
+        )}
       </div>
 
       {error && (
@@ -113,18 +151,17 @@ export default function CrmMembershipsPage() {
         <Msg>발급된 회원권이 없습니다.</Msg>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800">
-          <table className="w-full text-[13px]">
+          <table className="text-[13px] table-fixed" style={{ width: totalWidth }}>
+            <colgroup>
+              {M_COLS.map((c) => (
+                <col key={c.key} style={{ width: widths[c.key] }} />
+              ))}
+            </colgroup>
             <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
               <tr>
-                <Th>회원</Th>
-                <Th>플랜</Th>
-                <Th>구매일</Th>
-                <Th>기간(일)</Th>
-                <Th>시작</Th>
-                <Th>만료</Th>
-                <Th>금액</Th>
-                <Th>결제</Th>
-                <Th>상태</Th>
+                {M_COLS.map((c) => (
+                  <ResizableTh key={c.key} colKey={c.key} label={c.label} onStart={startResize} />
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -134,7 +171,7 @@ export default function CrmMembershipsPage() {
                   className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900"
                 >
                   <Td>
-                    <span className="inline-flex items-center gap-2">
+                    <span className="flex items-center gap-2 min-w-0">
                       {p.member_face_thumb ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -147,7 +184,7 @@ export default function CrmMembershipsPage() {
                           —
                         </span>
                       )}
-                      <span className="font-semibold">{p.member_name || "—"}</span>
+                      <span className="font-semibold truncate">{p.member_name || "—"}</span>
                     </span>
                   </Td>
                   <Td>{p.plan_name}</Td>
@@ -719,11 +756,12 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">{children}</th>;
-}
 function Td({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-3 py-3 whitespace-nowrap ${className || ""}`}>{children}</td>;
+  return (
+    <td className={`px-3 py-3 whitespace-nowrap overflow-hidden text-ellipsis ${className || ""}`}>
+      {children}
+    </td>
+  );
 }
 function Msg({ children }: { children: React.ReactNode }) {
   return (

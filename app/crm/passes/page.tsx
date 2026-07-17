@@ -10,6 +10,31 @@ import {
   formatWon,
 } from "../_components/crm-labels";
 import { crmInputClass } from "../_components/crm-modal";
+import { useColumnWidths, ResizableTh } from "../_components/use-column-widths";
+
+const P_COLS = [
+  { key: "member", label: "회원" },
+  { key: "lesson", label: "수업" },
+  { key: "remaining", label: "잔여" },
+  { key: "price", label: "금액" },
+  { key: "payment", label: "결제" },
+  { key: "trainer", label: "강사" },
+  { key: "purchased", label: "구매일" },
+  { key: "expires", label: "만료" },
+  { key: "status", label: "상태" },
+] as const;
+type PColKey = (typeof P_COLS)[number]["key"];
+const P_DEFAULT_WIDTHS: Record<PColKey, number> = {
+  member: 190,
+  lesson: 160,
+  remaining: 72,
+  price: 104,
+  payment: 96,
+  trainer: 110,
+  purchased: 110,
+  expires: 110,
+  status: 90,
+};
 
 interface PassRow {
   id: number;
@@ -49,6 +74,10 @@ export default function CrmPassesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [trainerFilter, setTrainerFilter] = useState<string>("");
   const [paymentFilter, setPaymentFilter] = useState<string>("");
+  const { widths, startResize, reset, changed, totalWidth } = useColumnWidths<PColKey>(
+    "crm_passes_col_widths_v1",
+    P_DEFAULT_WIDTHS
+  );
 
   const load = useCallback(async () => {
     setError("");
@@ -147,24 +176,35 @@ export default function CrmPassesPage() {
         </div>
       )}
 
+      {changed && !loading && list.length > 0 && (
+        <div className="mb-2 flex justify-end">
+          <button
+            type="button"
+            onClick={reset}
+            className="px-2.5 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+          >
+            열 너비 초기화
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <Msg>불러오는 중…</Msg>
       ) : list.length === 0 ? (
         <Msg>일치하는 수강권이 없습니다.</Msg>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800">
-          <table className="w-full text-[13px]">
+          <table className="text-[13px] table-fixed" style={{ width: totalWidth }}>
+            <colgroup>
+              {P_COLS.map((c) => (
+                <col key={c.key} style={{ width: widths[c.key] }} />
+              ))}
+            </colgroup>
             <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
               <tr>
-                <Th>회원</Th>
-                <Th>수업</Th>
-                <Th>잔여</Th>
-                <Th>금액</Th>
-                <Th>결제</Th>
-                <Th>강사</Th>
-                <Th>구매일</Th>
-                <Th>만료</Th>
-                <Th>상태</Th>
+                {P_COLS.map((c) => (
+                  <ResizableTh key={c.key} colKey={c.key} label={c.label} onStart={startResize} />
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -173,7 +213,7 @@ export default function CrmPassesPage() {
                   <Td>
                     <Link
                       href={`/crm/members/${p.member_id}`}
-                      className="inline-flex items-center gap-2 font-semibold text-[#2A251D] dark:text-zinc-100 hover:text-[#6B7B3A]"
+                      className="flex items-center gap-2 min-w-0 font-semibold text-[#2A251D] dark:text-zinc-100 hover:text-[#6B7B3A]"
                     >
                       {p.member_face_thumb ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -187,7 +227,7 @@ export default function CrmPassesPage() {
                           —
                         </span>
                       )}
-                      <span>{p.member_name || "—"}</span>
+                      <span className="truncate">{p.member_name || "—"}</span>
                     </Link>
                   </Td>
                   <Td>
@@ -241,11 +281,12 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">{children}</th>;
-}
 function Td({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-3 py-3 whitespace-nowrap ${className || ""}`}>{children}</td>;
+  return (
+    <td className={`px-3 py-3 whitespace-nowrap overflow-hidden text-ellipsis ${className || ""}`}>
+      {children}
+    </td>
+  );
 }
 function Msg({ children }: { children: React.ReactNode }) {
   return (
