@@ -1089,10 +1089,10 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
           <img
             src={m.face_image_thumb}
             alt=""
-            className="w-6 h-6 rounded-full object-cover border border-[#E8E0D0] dark:border-zinc-700 shrink-0"
+            className="w-12 h-12 rounded-full object-cover border border-[#E8E0D0] dark:border-zinc-700 shrink-0"
           />
         ) : (
-          <span className="w-6 h-6 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-700 shrink-0 flex items-center justify-center text-[9px] text-[#A89B80]">
+          <span className="w-12 h-12 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-700 shrink-0 flex items-center justify-center text-[10px] text-[#A89B80]">
             —
           </span>
         )}
