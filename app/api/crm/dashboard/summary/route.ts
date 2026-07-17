@@ -48,6 +48,13 @@ function firstOfMonth(ymd: string): string {
   return `${ymd.slice(0, 7)}-01`;
 }
 
+function classifyLessonKind(label: string | null): "personal" | "group" | "ot" {
+  const text = (label ?? "").toLowerCase();
+  if (text.includes("group") || text.includes("그룹")) return "group";
+  if (text.includes("ot") || text.includes("오티") || text.includes("오리엔테이션")) return "ot";
+  return "personal";
+}
+
 async function paginateAll<T>(
   build: (from: number, to: number) => { then: (fn: (r: unknown) => void) => unknown },
   chunk = 1000
@@ -257,34 +264,31 @@ export async function GET(request: Request) {
 
   // 수업 통계 — 그룹/개인/OT
   // period 내 예약 건수 + 신청자 수(unique) + 미진행(시작시각 지났는데 출석 처리 안 된 건: noshow·취소·미출석)
-  const reservations = await paginateAll<{
-    id: number;
-    member_id: number;
-    status: string;
-    starts_at: string;
-  }>((f, t) =>
+  const reservations = await paginateAll<{ id: number; member_id: number }>((f, t) =>
     supabase
       .from("crm_reservations")
-      .select("id, member_id, status, starts_at")
+      .select("id, member_id")
       .eq("center_id", ctx.centerId)
       .gte("starts_at", `${from}T00:00:00+09:00`)
       .lt("starts_at", `${toExcl}T00:00:00+09:00`)
       .range(f, t)
   );
-  const nowMs = Date.now();
-  // 미진행 = 시작시각이 지났는데 출석(attended)되지 않은 수업 (noshow / 취소 / 미출석 booked 모두 포함)
-  const notConducted = reservations.filter(
-    (r) => r.status !== "attended" && new Date(r.starts_at).getTime() < nowMs
-  ).length;
   const personalClasses = {
     count: reservations.length,
     applicants: new Set(reservations.map((r) => r.member_id)).size,
-    pending: notConducted,
+    pending: 0,
   };
-
-  // 그룹·OT 는 별도 예약 추적 없음 → 0
   const otClasses = { count: 0, applicants: 0, pending: 0 };
   const groupClasses = { count: 0, applicants: 0, pending: 0 };
+
+  // 미진행 = 결제했으나 아직 진행(예약)하지 않은 세션 = 유효 수강권의 잔여 세션 합
+  for (const p of validPasses) {
+    const pending = Math.max(0, Number(p.remaining_sessions) || 0);
+    const kind = classifyLessonKind(p.lesson_kind);
+    if (kind === "group") groupClasses.pending += pending;
+    else if (kind === "ot") otClasses.pending += pending;
+    else personalClasses.pending += pending;
+  }
 
   return NextResponse.json({
     period,
