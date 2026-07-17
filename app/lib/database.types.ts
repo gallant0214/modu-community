@@ -1979,6 +1979,36 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_grade_permissions: {
+        Row: {
+          id: number
+          center_id: number
+          grade_id: number
+          permission_key: string
+          enabled: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          grade_id: number
+          permission_key: string
+          enabled: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          grade_id?: number
+          permission_key?: string
+          enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_message_broadcasts: {
         Row: {
           id: number

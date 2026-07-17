@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
-import { loadPermissionsForRole } from "@/app/lib/crm-permissions";
+import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -97,7 +97,7 @@ export async function PATCH(
     body.commission_tiers !== undefined ||
     body.base_salary !== undefined;
   if (touchesCommission) {
-    const perms = await loadPermissionsForRole(ctx.centerId, ctx.role);
+    const perms = await loadPermissionsForContext(ctx);
     if (!perms["sales.commission_edit"]) {
       return NextResponse.json({ error: "수업료 설정 권한이 없습니다" }, { status: 403 });
     }

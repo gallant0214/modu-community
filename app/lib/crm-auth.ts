@@ -31,6 +31,8 @@ export interface CrmContext {
   centerId: number;
   centerMemberId: number;
   role: CrmRole;
+  /** 소속 등급 id (crm_grades). 레거시 멤버는 null → role 기반 권한 폴백 */
+  gradeId: number | null;
   accessLevel: "admin" | "schedule" | "none";
   isSoloOwner: boolean;
   centerKind: "solo" | "center";
@@ -67,7 +69,7 @@ export async function requireCrmContext(
   const { data: rows, error } = await supabase
     .from("crm_center_members")
     .select(
-      "id, center_id, role, access_level, is_solo_owner, status, joined_at, crm_centers!inner(kind, name)"
+      "id, center_id, role, grade_id, access_level, is_solo_owner, status, joined_at, crm_centers!inner(kind, name)"
     )
     .eq("firebase_uid", user.uid)
     .eq("status", "active")
@@ -109,6 +111,7 @@ export async function requireCrmContext(
     centerId: membership.center_id,
     centerMemberId: membership.id,
     role,
+    gradeId: membership.grade_id ?? null,
     accessLevel,
     isSoloOwner: membership.is_solo_owner,
     centerKind: (centerInfo?.kind ?? "center") as "solo" | "center",
@@ -132,7 +135,7 @@ export async function loadCrmContextForUid(
   const { data: rows } = await supabase
     .from("crm_center_members")
     .select(
-      "id, center_id, role, access_level, is_solo_owner, status, joined_at, crm_centers!inner(kind, name)"
+      "id, center_id, role, grade_id, access_level, is_solo_owner, status, joined_at, crm_centers!inner(kind, name)"
     )
     .eq("firebase_uid", uid)
     .eq("status", "active")
@@ -156,6 +159,7 @@ export async function loadCrmContextForUid(
     centerId: membership.center_id,
     centerMemberId: membership.id,
     role,
+    gradeId: membership.grade_id ?? null,
     accessLevel,
     isSoloOwner: membership.is_solo_owner,
     centerKind: (centerInfo?.kind ?? "center") as "solo" | "center",

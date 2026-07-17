@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
-import { loadPermissionsForRole } from "@/app/lib/crm-permissions";
+import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -111,7 +111,7 @@ export async function PATCH(
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  const perms = await loadPermissionsForRole(ctx.centerId, ctx.role);
+  const perms = await loadPermissionsForContext(ctx);
 
   const { id } = await params;
   const memberId = Number(id);
@@ -306,7 +306,7 @@ export async function DELETE(
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  const perms = await loadPermissionsForRole(ctx.centerId, ctx.role);
+  const perms = await loadPermissionsForContext(ctx);
   if (!perms["members.delete"]) {
     return NextResponse.json({ error: "회원 삭제 권한이 없습니다" }, { status: 403 });
   }

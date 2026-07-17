@@ -147,3 +147,42 @@ export function buildPermissionMatrix(
 export const ALL_PERMISSION_KEYS = PERMISSION_GROUPS.flatMap((g) =>
   g.items.map((i) => i.key)
 );
+
+export interface GradeMeta {
+  id: number;
+  base_role: "owner" | "admin" | "manager" | "trainer";
+  label: string;
+}
+
+/**
+ * 등급별 권한 매트릭스: 각 등급의 기본값은 등급의 base_role defaults 를 따르고,
+ * crm_grade_permissions 에 저장된 (grade_id, permission_key) override 로 덮어씀.
+ * base_role='owner' 등급은 언제나 전부 true.
+ */
+export function buildGradePermissionMatrix(
+  grades: GradeMeta[],
+  saved: { grade_id: number; permission_key: string; enabled: boolean }[]
+): Record<number, Record<string, boolean>> {
+  const map: Record<number, Record<string, boolean>> = {};
+  for (const grade of grades) {
+    const row: Record<string, boolean> = {};
+    for (const g of PERMISSION_GROUPS) {
+      for (const it of g.items) {
+        row[it.key] =
+          grade.base_role === "owner"
+            ? true
+            : it.defaults[grade.base_role] ?? false;
+      }
+    }
+    map[grade.id] = row;
+  }
+  // 저장된 override 덮어쓰기 (owner 등급은 무시 — 항상 true)
+  for (const s of saved) {
+    const target = map[s.grade_id];
+    if (!target) continue;
+    const grade = grades.find((g) => g.id === s.grade_id);
+    if (grade?.base_role === "owner") continue;
+    target[s.permission_key] = s.enabled;
+  }
+  return map;
+}

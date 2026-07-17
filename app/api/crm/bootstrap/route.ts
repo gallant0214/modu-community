@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { loadCrmContextForUid } from "@/app/lib/crm-auth";
-import { loadPermissionsForRole } from "@/app/lib/crm-permissions";
+import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     .eq("center_id", ctx.centerId)
     .eq("firebase_uid", ctx.uid)
     .maybeSingle();
-  const permissions = await loadPermissionsForRole(ctx.centerId, ctx.role);
+  const permissions = await loadPermissionsForContext(ctx);
   return NextResponse.json({
     onboarded: true,
     centerId: ctx.centerId,

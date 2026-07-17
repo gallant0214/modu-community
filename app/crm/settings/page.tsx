@@ -11,9 +11,9 @@ import {
   ContractSection,
 } from "../_components/contract-sections-editor";
 import {
-  ROLE_COLS,
   PERMISSION_GROUPS,
-  buildPermissionMatrix,
+  buildGradePermissionMatrix,
+  type GradeMeta,
 } from "../_components/role-permissions";
 
 interface Settings {
@@ -1254,8 +1254,9 @@ function WithdrawModal({
 
 function RolePermissionsPanel() {
   const { getIdToken } = useAuth();
+  const [grades, setGrades] = useState<GradeMeta[]>([]);
   const [items, setItems] = useState<
-    { role_key: string; permission_key: string; enabled: boolean }[]
+    { grade_id: number; permission_key: string; enabled: boolean }[]
   >([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -1267,13 +1268,28 @@ function RolePermissionsPanel() {
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch("/api/crm/role-permissions", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "조회 실패");
-      setItems(data.items ?? []);
+      const [gRes, pRes] = await Promise.all([
+        fetch("/api/crm/grades", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }),
+        fetch("/api/crm/grade-permissions", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }),
+      ]);
+      const gData = await gRes.json();
+      const pData = await pRes.json();
+      if (!gRes.ok) throw new Error(gData?.error || "등급 조회 실패");
+      if (!pRes.ok) throw new Error(pData?.error || "권한 조회 실패");
+      setGrades(
+        (gData.grades ?? []).map((g: { id: number; base_role: string; label: string }) => ({
+          id: g.id,
+          base_role: g.base_role as GradeMeta["base_role"],
+          label: g.label,
+        }))
+      );
+      setItems(pData.items ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -1285,23 +1301,23 @@ function RolePermissionsPanel() {
     load();
   }, [load]);
 
-  const matrix = buildPermissionMatrix(items);
+  const matrix = buildGradePermissionMatrix(grades, items);
 
-  const toggle = async (roleKey: string, permKey: string, next: boolean) => {
-    if (roleKey === "owner") return; // owner 는 항상 활성
-    const cellId = `${roleKey}:${permKey}`;
+  const toggle = async (grade: GradeMeta, permKey: string, next: boolean) => {
+    if (grade.base_role === "owner") return; // 대표자 등급은 항상 활성
+    const cellId = `${grade.id}:${permKey}`;
     setSaving(cellId);
     // 낙관적 업데이트
     const filtered = items.filter(
-      (i) => !(i.role_key === roleKey && i.permission_key === permKey)
+      (i) => !(i.grade_id === grade.id && i.permission_key === permKey)
     );
-    setItems([...filtered, { role_key: roleKey, permission_key: permKey, enabled: next }]);
+    setItems([...filtered, { grade_id: grade.id, permission_key: permKey, enabled: next }]);
     try {
       const token = await getIdToken();
-      const res = await fetch("/api/crm/role-permissions", {
+      const res = await fetch("/api/crm/grade-permissions", {
         method: "PATCH",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ role_key: roleKey, permission_key: permKey, enabled: next }),
+        body: JSON.stringify({ grade_id: grade.id, permission_key: permKey, enabled: next }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "저장 실패");
@@ -1313,10 +1329,13 @@ function RolePermissionsPanel() {
     }
   };
 
+  const colWidth = grades.length > 5 ? "w-[58px]" : "w-[70px]";
+  const minW = 200 + grades.length * 64;
+
   return (
     <div className="space-y-4">
       <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
-        각 직급이 CRM 에서 사용할 수 있는 기능을 On/Off 로 설정해요. 대표자는 항상 모든 권한이 활성 상태예요.
+        각 직급이 CRM 에서 사용할 수 있는 기능을 On/Off 로 설정해요. 직급별로 개별 설정되며, 대표자는 항상 모든 권한이 활성 상태예요.
       </p>
 
       {error && (
@@ -1327,6 +1346,8 @@ function RolePermissionsPanel() {
 
       {loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : grades.length === 0 ? (
+        <div className="text-[13px] text-[#8C8270]">등급이 없습니다. 등급 관리에서 먼저 추가해주세요.</div>
       ) : (
         <div className="space-y-5">
           {PERMISSION_GROUPS.map((group) => (
@@ -1340,16 +1361,16 @@ function RolePermissionsPanel() {
                 </h3>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-[13px] min-w-[520px]">
+                <table className="w-full text-[13px]" style={{ minWidth: minW }}>
                   <thead>
                     <tr className="text-[12px] text-[#A89B80] dark:text-zinc-500 bg-[#FBF7EB]/50 dark:bg-zinc-900/40">
                       <th className="text-left px-4 py-2 font-medium">권한</th>
-                      {ROLE_COLS.map((r) => (
+                      {grades.map((g) => (
                         <th
-                          key={r.key}
-                          className="px-2 py-2 font-medium text-center w-[70px]"
+                          key={g.id}
+                          className={`px-2 py-2 font-medium text-center ${colWidth}`}
                         >
-                          {r.label}
+                          {g.label}
                         </th>
                       ))}
                     </tr>
@@ -1363,16 +1384,16 @@ function RolePermissionsPanel() {
                         <td className="px-4 py-2 text-[13px] text-[#3A342A] dark:text-zinc-300">
                           {it.label}
                         </td>
-                        {ROLE_COLS.map((r) => {
-                          const on = matrix[r.key][it.key];
-                          const cellId = `${r.key}:${it.key}`;
+                        {grades.map((g) => {
+                          const on = matrix[g.id]?.[it.key] ?? false;
+                          const cellId = `${g.id}:${it.key}`;
                           const isSaving = saving === cellId;
-                          const locked = r.key === "owner";
+                          const locked = g.base_role === "owner";
                           return (
-                            <td key={r.key} className="px-2 py-1.5 text-center">
+                            <td key={g.id} className="px-2 py-1.5 text-center">
                               <button
                                 type="button"
-                                onClick={() => toggle(r.key, it.key, !on)}
+                                onClick={() => toggle(g, it.key, !on)}
                                 disabled={locked || isSaving}
                                 className={`relative inline-flex w-9 h-5 rounded-full transition-colors disabled:opacity-70
                                   ${on
@@ -1401,7 +1422,7 @@ function RolePermissionsPanel() {
       )}
 
       <p className="text-[11.5px] text-[#A89B80] leading-relaxed">
-        기본값은 최소 권한 원칙에 따라 설정되어 있어요. 각 권한 사용 시 실제 API 엔드포인트에서 이 값을 확인하는 로직은 단계별로 확장 중입니다.
+        기본값은 최소 권한 원칙에 따라 설정되어 있어요. 등급을 추가·수정하려면 등급 관리 탭을 이용하세요.
       </p>
     </div>
   );
