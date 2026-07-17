@@ -22,11 +22,11 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_memberships")
     .select(
-      "id, member_id, seller_member_id, plan_name, duration_days, price_won, discount_won, mileage_earned, mileage_used, vat_included, payment_method, payment_method_custom, start_date, expires_at, status, memo, outstanding_won, payment_status, created_at"
+      "id, member_id, seller_member_id, plan_name, duration_days, price_won, discount_won, mileage_earned, mileage_used, vat_included, payment_method, payment_method_custom, start_date, expires_at, purchased_at, status, memo, outstanding_won, payment_status, created_at"
     )
     .eq("center_id", ctx.centerId)
     .neq("status", "deleted")
-    .order("created_at", { ascending: false })
+    .order("purchased_at", { ascending: false, nullsFirst: false })
     .order("id", { ascending: false })
     .limit(limit);
 
@@ -76,6 +76,7 @@ export async function POST(request: Request) {
     payment_method_custom?: string;
     start_date?: string;
     expires_at?: string;
+    purchased_at?: string;
     vat_included?: boolean;
     memo?: string;
     mileage_earned?: number;
@@ -140,6 +141,9 @@ export async function POST(request: Request) {
       payment_method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
       start_date: body.start_date,
       expires_at: body.expires_at,
+      purchased_at: /^\d{4}-\d{2}-\d{2}$/.test(body.purchased_at ?? "")
+        ? body.purchased_at
+        : kstYmd(),
       status: "valid",
       memo: body.memo?.trim() || null,
       outstanding_won: outstanding,
@@ -200,4 +204,9 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ ok: true, membershipId: created.id });
+}
+
+function kstYmd(): string {
+  const now = new Date();
+  return new Date(now.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 }

@@ -1519,6 +1519,7 @@ export type Database = {
           payment_method_custom: string | null
           start_date: string
           expires_at: string
+          purchased_at: string | null
           status: string
           memo: string | null
           outstanding_won: number
@@ -1543,6 +1544,7 @@ export type Database = {
           payment_method_custom?: string | null
           start_date: string
           expires_at: string
+          purchased_at?: string | null
           status?: string
           memo?: string | null
           outstanding_won?: number
@@ -1567,6 +1569,7 @@ export type Database = {
           payment_method_custom?: string | null
           start_date?: string
           expires_at?: string
+          purchased_at?: string | null
           status?: string
           memo?: string | null
           outstanding_won?: number

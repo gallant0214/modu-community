@@ -25,6 +25,7 @@ interface Row {
   payment_method_custom: string | null;
   start_date: string;
   expires_at: string;
+  purchased_at: string | null;
   status: string;
 }
 
@@ -117,6 +118,7 @@ export default function CrmMembershipsPage() {
               <tr>
                 <Th>회원</Th>
                 <Th>플랜</Th>
+                <Th>구매일</Th>
                 <Th>기간(일)</Th>
                 <Th>시작</Th>
                 <Th>만료</Th>
@@ -149,6 +151,7 @@ export default function CrmMembershipsPage() {
                     </span>
                   </Td>
                   <Td>{p.plan_name}</Td>
+                  <Td className="text-[#8C8270]">{p.purchased_at ? p.purchased_at.slice(0, 10) : "—"}</Td>
                   <Td>{p.duration_days}일</Td>
                   <Td className="text-[#8C8270]">{p.start_date}</Td>
                   <Td className="text-[#8C8270]">{p.expires_at}</Td>
