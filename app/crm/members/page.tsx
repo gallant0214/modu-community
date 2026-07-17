@@ -849,12 +849,17 @@ export default function CrmMembersPage() {
                 resetSort();
               }}
               className="hover:underline text-[#6B7B3A] dark:text-[#A8B87A]"
+              title="열 순서·너비·정렬을 기본값으로 되돌리기"
             >
-              보기 초기화
+              열 배치 초기화
             </button>
           )}
-          <button onClick={resetFilters} className="hover:underline">
-            초기화
+          <button
+            onClick={resetFilters}
+            className="hover:underline"
+            title="검색·상태·기간 등 필터를 모두 해제"
+          >
+            필터 초기화
           </button>
         </span>
       </div>
