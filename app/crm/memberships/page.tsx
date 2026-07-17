@@ -17,6 +17,7 @@ interface Row {
   id: number;
   member_id: number;
   member_name: string;
+  member_face_thumb: string | null;
   plan_name: string;
   duration_days: number;
   price_won: number;
@@ -130,7 +131,23 @@ export default function CrmMembershipsPage() {
                   key={p.id}
                   className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900"
                 >
-                  <Td><span className="font-semibold">{p.member_name || "—"}</span></Td>
+                  <Td>
+                    <span className="inline-flex items-center gap-2">
+                      {p.member_face_thumb ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.member_face_thumb}
+                          alt=""
+                          className="w-8 h-8 rounded-full object-cover border border-[#E8E0D0] dark:border-zinc-700 shrink-0"
+                        />
+                      ) : (
+                        <span className="w-8 h-8 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-700 shrink-0 flex items-center justify-center text-[10px] text-[#A89B80]">
+                          —
+                        </span>
+                      )}
+                      <span className="font-semibold">{p.member_name || "—"}</span>
+                    </span>
+                  </Td>
                   <Td>{p.plan_name}</Td>
                   <Td>{p.duration_days}일</Td>
                   <Td className="text-[#8C8270]">{p.start_date}</Td>

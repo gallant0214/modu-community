@@ -26,7 +26,8 @@ export async function GET(request: Request) {
     )
     .eq("center_id", ctx.centerId)
     .neq("status", "deleted")
-    .order("start_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(limit);
 
   if (status) query = query.eq("status", status);
@@ -37,17 +38,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
 
-  // 회원 이름 join
+  // 회원 이름 + 얼굴 썸네일 join
+  type MemberLite = { id: number; name: string; face_image_thumb: string | null };
   const memberIds = Array.from(new Set((data ?? []).map((p) => p.member_id)));
-  const { data: members } = memberIds.length
-    ? await supabase.from("crm_members").select("id, name").in("id", memberIds)
+  const membersRes = memberIds.length
+    ? await supabase.from("crm_members").select("id, name, face_image_thumb").in("id", memberIds)
     : { data: [] };
-  const memberMap = new Map((members ?? []).map((m) => [m.id, m.name]));
+  const members = (membersRes.data ?? []) as unknown as MemberLite[];
+  const memberMap = new Map(members.map((m) => [m.id, m]));
 
   return NextResponse.json({
     memberships: (data ?? []).map((p) => ({
       ...p,
-      member_name: memberMap.get(p.member_id) ?? "",
+      member_name: memberMap.get(p.member_id)?.name ?? "",
+      member_face_thumb: memberMap.get(p.member_id)?.face_image_thumb ?? null,
     })),
   });
 }
