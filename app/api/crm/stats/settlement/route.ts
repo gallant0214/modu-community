@@ -1,0 +1,193 @@
+import { NextResponse } from "next/server";
+import { supabase } from "@/app/lib/supabase";
+import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+
+export const dynamic = "force-dynamic";
+
+const VAT_RATE = 0.1;
+
+/**
+ * GET /api/crm/stats/settlement?ym=YYYY-MM | ?from=YYYY-MM-DD&to=YYYY-MM-DD
+ *
+ * 순이익 정산 = 총매출 − 고정지출 − 부가세 − 직원급여 − 추가지출.
+ *  - 총매출: 기간 내 발급/결제 (회원권+수강권+대여, 부가세 포함)
+ *  - 부가세: vat_included 체크 건의 10% 합
+ *  - 고정지출: crm_fixed_expenses 월합 × 기간 개월수
+ *  - 직원급여: 재직 직원별 (고정급×개월수 + 수업료(기간 매출×비율))
+ *  - 추가지출: crm_additional_expenses 기간 내 월(ym) 합
+ *
+ * admin 이상만 (재무 정보).
+ */
+export async function GET(request: Request) {
+  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  if (isCrmError(ctx)) return ctx;
+
+  const url = new URL(request.url);
+  const ymRaw = url.searchParams.get("ym");
+  const fromRaw = url.searchParams.get("from");
+  const toRaw = url.searchParams.get("to");
+  const ymd = /^\d{4}-\d{2}-\d{2}$/;
+  const isRange =
+    ymd.test(fromRaw || "") && ymd.test(toRaw || "") && (toRaw as string) >= (fromRaw as string);
+
+  const ym = /^\d{4}-\d{2}$/.test(ymRaw || "")
+    ? (ymRaw as string)
+    : new Date().toISOString().slice(0, 7);
+
+  let startDate: string;
+  let nextMonth: string;
+  if (isRange) {
+    startDate = fromRaw as string;
+    const to = new Date(`${toRaw}T00:00:00Z`);
+    to.setUTCDate(to.getUTCDate() + 1);
+    nextMonth = to.toISOString().slice(0, 10);
+  } else {
+    const [y, m] = ym.split("-").map(Number);
+    startDate = `${ym}-01`;
+    nextMonth = new Date(y, m, 1).toISOString().slice(0, 10);
+  }
+
+  // 기간에 속한 월 목록 (YYYY-MM). 고정지출·직원 고정급 개월수 + 추가지출 귀속월 매칭.
+  const monthsList = listMonths(startDate, nextMonth);
+  const monthsInPeriod = Math.max(1, monthsList.length);
+
+  // ── 매출 (부가세 포함/제외) ─────────────────────────────
+  const [membershipRows, passRows, rentalRows] = await Promise.all([
+    supabase
+      .from("crm_memberships")
+      .select("price_won, vat_included")
+      .eq("center_id", ctx.centerId)
+      .neq("status", "deleted")
+      .gte("start_date", startDate)
+      .lt("start_date", nextMonth),
+    supabase
+      .from("crm_passes")
+      .select("price_won, vat_included, trainer_member_id")
+      .eq("center_id", ctx.centerId)
+      .neq("status", "deleted")
+      .gte("issued_at", startDate)
+      .lt("issued_at", nextMonth),
+    supabase
+      .from("crm_rentals")
+      .select("price_won, vat_included")
+      .eq("center_id", ctx.centerId)
+      .neq("status", "deleted")
+      .gte("start_date", startDate)
+      .lt("start_date", nextMonth),
+  ]);
+
+  const exVatOne = (price: number, vatIncluded: boolean) =>
+    vatIncluded ? Math.round(price / (1 + VAT_RATE)) : price;
+
+  const allRevRows = [
+    ...(membershipRows.data ?? []),
+    ...(passRows.data ?? []),
+    ...(rentalRows.data ?? []),
+  ] as { price_won: number | null; vat_included: boolean | null }[];
+
+  let totalRevenue = 0;
+  let totalExVat = 0;
+  for (const r of allRevRows) {
+    const p = r.price_won ?? 0;
+    totalRevenue += p;
+    totalExVat += exVatOne(p, !!r.vat_included);
+  }
+  const vatAmount = totalRevenue - totalExVat;
+
+  // 강사별 기간 매출 (수업료 계산용)
+  const revenueByTrainer = new Map<number, number>();
+  for (const p of (passRows.data ?? []) as { price_won: number | null; trainer_member_id: number | null }[]) {
+    if (!p.trainer_member_id) continue;
+    revenueByTrainer.set(
+      p.trainer_member_id,
+      (revenueByTrainer.get(p.trainer_member_id) ?? 0) + (p.price_won ?? 0)
+    );
+  }
+
+  // ── 고정 지출 ───────────────────────────────────────────
+  const { data: fixedRows } = await supabase
+    .from("crm_fixed_expenses")
+    .select("amount_won")
+    .eq("center_id", ctx.centerId)
+    .eq("status", "active");
+  const fixedMonthly = (fixedRows ?? []).reduce((s, x) => s + (x.amount_won ?? 0), 0);
+  const fixedTotal = fixedMonthly * monthsInPeriod;
+
+  // ── 직원 급여 ───────────────────────────────────────────
+  type Tier = { upTo: number | null; rate: number };
+  const { data: staff } = await supabase
+    .from("crm_center_members")
+    .select("id, display_name, role, commission_type, commission_rate, commission_tiers, base_salary")
+    .eq("center_id", ctx.centerId)
+    .eq("status", "active")
+    .in("role", ["owner", "admin", "manager", "trainer"]);
+
+  const staffBreakdown: {
+    id: number;
+    name: string;
+    base: number;
+    commission: number;
+    total: number;
+  }[] = [];
+  let salaryTotal = 0;
+  for (const s of staff ?? []) {
+    const revenue = revenueByTrainer.get(s.id) ?? 0;
+    const type = (s.commission_type as string) ?? "fixed";
+    const rate = Number(s.commission_rate ?? 0);
+    const tiers: Tier[] = Array.isArray(s.commission_tiers) ? (s.commission_tiers as Tier[]) : [];
+    let effectiveRate = rate;
+    if (type === "tiered") {
+      const sorted = [...tiers].sort(
+        (a, b) => (a.upTo ?? Number.POSITIVE_INFINITY) - (b.upTo ?? Number.POSITIVE_INFINITY)
+      );
+      const tier = sorted.find((t) => t.upTo == null || revenue <= t.upTo);
+      effectiveRate = tier ? Number(tier.rate) : 0;
+    }
+    const commission = Math.round((revenue * effectiveRate) / 100);
+    const base = Math.max(0, Number(s.base_salary ?? 0)) * monthsInPeriod;
+    const pay = base + commission;
+    if (pay <= 0) continue;
+    staffBreakdown.push({ id: s.id, name: s.display_name ?? "", base, commission, total: pay });
+    salaryTotal += pay;
+  }
+  staffBreakdown.sort((a, b) => b.total - a.total);
+
+  // ── 추가 지출 (기간 내 월) ───────────────────────────────
+  const { data: addRows } = await supabase
+    .from("crm_additional_expenses")
+    .select("amount_won, ym")
+    .eq("center_id", ctx.centerId)
+    .in("ym", monthsList.length ? monthsList : [ym]);
+  const additionalTotal = (addRows ?? []).reduce((s, x) => s + (x.amount_won ?? 0), 0);
+
+  const netProfit = totalRevenue - fixedTotal - vatAmount - salaryTotal - additionalTotal;
+
+  return NextResponse.json({
+    ym,
+    months: monthsList,
+    months_in_period: monthsInPeriod,
+    total_revenue: totalRevenue,
+    total_ex_vat: totalExVat,
+    vat_amount: vatAmount,
+    fixed_monthly: fixedMonthly,
+    fixed_total: fixedTotal,
+    salary_total: salaryTotal,
+    staff_breakdown: staffBreakdown,
+    additional_total: additionalTotal,
+    net_profit: netProfit,
+  });
+}
+
+/** startDate(포함) ~ endExclusive(미포함) 사이의 YYYY-MM 목록 */
+function listMonths(startDate: string, endExclusive: string): string[] {
+  const out: string[] = [];
+  const start = new Date(`${startDate.slice(0, 7)}-01T00:00:00Z`);
+  const end = new Date(`${endExclusive.slice(0, 10)}T00:00:00Z`);
+  const cur = new Date(start);
+  for (let guard = 0; guard < 240; guard += 1) {
+    if (cur >= end) break;
+    out.push(cur.toISOString().slice(0, 7));
+    cur.setUTCMonth(cur.getUTCMonth() + 1);
+  }
+  return out.length ? out : [startDate.slice(0, 7)];
+}

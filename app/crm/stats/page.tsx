@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
-import { ROLE_LABEL, formatWon } from "../_components/crm-labels";
+import { ROLE_LABEL, formatWon, parseWon } from "../_components/crm-labels";
 
 interface MonthlyResp {
   ym: string;
@@ -23,7 +23,7 @@ interface MonthlyResp {
   }[];
 }
 
-type Tab = "trainer" | "center";
+type Tab = "trainer" | "center" | "settlement";
 
 type DateMode = "year" | "month" | "range";
 
@@ -92,7 +92,9 @@ export default function CrmStatsPage() {
           <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
             {tab === "trainer"
               ? `강사별 매출과 수업 현황을 ${dateMode === "year" ? "연 단위" : dateMode === "month" ? "월 단위" : "지정 기간"}로 확인해요.`
-              : `센터 매출(회원권·운동복·락커·기타)을 ${dateMode === "year" ? "연 단위" : dateMode === "month" ? "월 단위" : "지정 기간"}로 확인해요.`}
+              : tab === "center"
+              ? `센터 매출(회원권·운동복·락커·기타)을 ${dateMode === "year" ? "연 단위" : dateMode === "month" ? "월 단위" : "지정 기간"}로 확인해요.`
+              : `총매출에서 고정지출·부가세·직원급여·추가지출을 뺀 순이익을 ${dateMode === "year" ? "연 단위" : dateMode === "month" ? "월 단위" : "지정 기간"}로 정산해요.`}
           </p>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -155,6 +157,9 @@ export default function CrmStatsPage() {
         <TabBtn active={tab === "center"} onClick={() => setTab("center")}>
           센터 매출
         </TabBtn>
+        <TabBtn active={tab === "settlement"} onClick={() => setTab("settlement")}>
+          정산
+        </TabBtn>
       </div>
 
       {error && (
@@ -167,8 +172,10 @@ export default function CrmStatsPage() {
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : tab === "trainer" ? (
         <TrainerTab data={data} />
-      ) : (
+      ) : tab === "center" ? (
         <CenterTab rangeQs={rangeQs} />
+      ) : (
+        <SettlementTab rangeQs={rangeQs} defaultYm={ym} />
       )}
     </div>
   );
@@ -396,8 +403,6 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
     rows.push(["  수강권", data.liability_breakdown.pass]);
     rows.push(["  미시작", data.liability_breakdown.notStarted]);
     rows.push(["  진행중", data.liability_breakdown.inProgress]);
-    rows.push(["  부가세(10%)", data.potential_liability_vat]);
-    rows.push(["  부가세 제외", data.potential_liability_ex_vat]);
     rows.push([]);
     rows.push(["이번달 활동 건수"]);
     rows.push(["회원권 발급 수", data.counts.memberships]);
@@ -508,6 +513,36 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
         })}
       </section>
 
+      {/* 부가세 (선택 기간 결제 기준) */}
+      <div className="mb-2 text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+        부가세 (선택 기간 결제 기준)
+      </div>
+      <section className="mb-5 px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/50 dark:bg-zinc-900/60">
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <div className="text-[11.5px] text-[#A89B80]">부가세 포함 매출</div>
+            <div className="mt-0.5 text-[16px] font-bold text-[#3A342A] dark:text-zinc-100 tabular-nums">
+              {formatWon(data?.total ?? 0)}원
+            </div>
+          </div>
+          <div>
+            <div className="text-[11.5px] text-[#A89B80]">부가세 (10%)</div>
+            <div className="mt-0.5 text-[18px] font-bold text-[#B47B2A] dark:text-amber-300 tabular-nums">
+              {formatWon(data?.vat_amount ?? 0)}원
+            </div>
+          </div>
+          <div>
+            <div className="text-[11.5px] text-[#A89B80]">부가세 제외 실매출</div>
+            <div className="mt-0.5 text-[16px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] tabular-nums">
+              {formatWon(data?.total_ex_vat ?? 0)}원
+            </div>
+          </div>
+        </div>
+        <div className="mt-2.5 text-[11.5px] text-[#A89B80]">
+          결제 시 “부가세 포함”으로 체크된 상품만 10%를 분리해 합산해요. 선택한 기간(월/직접 선택)에 결제된 건 기준이에요.
+        </div>
+      </section>
+
       {/* 잠재부채 상세 */}
       <div className="mb-2 text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
         잠재부채 상세
@@ -531,33 +566,6 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
             남은 회차 × 회당 단가 (미시작 건은 전액)
           </div>
         </div>
-
-        {/* 부가세 구분 (전체 잠재부채) */}
-        <div className="md:col-span-2 px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/50 dark:bg-zinc-900/60">
-          <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200 mb-3">
-            부가세 구분 (전체 잠재부채)
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <div className="text-[11.5px] text-[#A89B80]">부가세 포함</div>
-              <div className="mt-0.5 text-[16px] font-bold text-[#3A342A] dark:text-zinc-100 tabular-nums">
-                {formatWon(data?.potential_liability ?? 0)}원
-              </div>
-            </div>
-            <div>
-              <div className="text-[11.5px] text-[#A89B80]">부가세 (10%)</div>
-              <div className="mt-0.5 text-[16px] font-bold text-[#B47B2A] dark:text-amber-300 tabular-nums">
-                {formatWon(data?.potential_liability_vat ?? 0)}원
-              </div>
-            </div>
-            <div>
-              <div className="text-[11.5px] text-[#A89B80]">부가세 제외</div>
-              <div className="mt-0.5 text-[16px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] tabular-nums">
-                {formatWon(data?.potential_liability_ex_vat ?? 0)}원
-              </div>
-            </div>
-          </div>
-        </div>
       </section>
 
       <div className="mt-3 px-4 py-3 rounded-xl bg-[#FBF7EB]/60 dark:bg-zinc-900/40 text-[11.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
@@ -566,6 +574,331 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
         💡 <strong>부가세</strong>는 결제 시 상품에 "부가세 포함" 옵션을 체크한 건만 10% 를 제외한 실매출로 환산해요.
       </div>
     </>
+  );
+}
+
+/* ─── 정산 탭 ────────────────────────────── */
+
+interface SettlementResp {
+  ym: string;
+  months: string[];
+  months_in_period: number;
+  total_revenue: number;
+  total_ex_vat: number;
+  vat_amount: number;
+  fixed_monthly: number;
+  fixed_total: number;
+  salary_total: number;
+  staff_breakdown: { id: number; name: string; base: number; commission: number; total: number }[];
+  additional_total: number;
+  net_profit: number;
+}
+
+interface AdditionalExpense {
+  id: number;
+  ym: string;
+  label: string;
+  amount_won: number;
+  memo: string | null;
+}
+
+function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: string }) {
+  const { getIdToken } = useAuth();
+  const [data, setData] = useState<SettlementResp | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // 추가 지출 관리 (귀속 월 단위)
+  const [expenseYm, setExpenseYm] = useState(defaultYm);
+  const [addList, setAddList] = useState<AdditionalExpense[]>([]);
+  const [nLabel, setNLabel] = useState("");
+  const [nAmount, setNAmount] = useState("");
+  const [nMemo, setNMemo] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [eLabel, setELabel] = useState("");
+  const [eAmount, setEAmount] = useState("");
+  const [eMemo, setEMemo] = useState("");
+
+  const loadSettlement = useCallback(async () => {
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/crm/stats/settlement?${rangeQs}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) setData(await res.json());
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken, rangeQs]);
+
+  const loadAddList = useCallback(async () => {
+    const token = await getIdToken();
+    if (!token) return;
+    const res = await fetch(`/api/crm/additional-expenses?ym=${expenseYm}`, {
+      headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const j = await res.json();
+      setAddList(j.items ?? []);
+    }
+  }, [getIdToken, expenseYm]);
+
+  useEffect(() => {
+    loadSettlement();
+  }, [loadSettlement]);
+  useEffect(() => {
+    loadAddList();
+  }, [loadAddList]);
+
+  const add = async () => {
+    setError("");
+    const label = nLabel.trim();
+    if (!label) return setError("내용을 입력해 주세요");
+    setAdding(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/additional-expenses", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ ym: expenseYm, label, amount_won: parseWon(nAmount), memo: nMemo.trim() || null }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "추가 실패");
+      setNLabel("");
+      setNAmount("");
+      setNMemo("");
+      loadAddList();
+      loadSettlement();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const startEdit = (x: AdditionalExpense) => {
+    setEditingId(x.id);
+    setELabel(x.label);
+    setEAmount(String(x.amount_won ?? 0));
+    setEMemo(x.memo ?? "");
+  };
+  const saveEdit = async () => {
+    if (!editingId) return;
+    const label = eLabel.trim();
+    if (!label) return setError("내용을 입력해 주세요");
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/additional-expenses/${editingId}`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ label, amount_won: parseWon(eAmount), memo: eMemo.trim() || null }),
+    });
+    if (res.ok) {
+      setEditingId(null);
+      loadAddList();
+      loadSettlement();
+    }
+  };
+  const remove = async (id: number) => {
+    if (!window.confirm("이 추가 지출을 삭제할까요?")) return;
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/additional-expenses/${id}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      loadAddList();
+      loadSettlement();
+    }
+  };
+
+  if (loading) {
+    return <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>;
+  }
+
+  const multiMonth = (data?.months_in_period ?? 1) > 1;
+  const net = data?.net_profit ?? 0;
+
+  return (
+    <>
+      {/* 순이익 카드 */}
+      <section className="mb-4 px-5 py-5 rounded-2xl border-2 border-[#6B7B3A]/40 bg-[#6B7B3A]/5 dark:bg-[#6B7B3A]/10">
+        <div className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">순이익</div>
+        <div className={`mt-1 text-[26px] font-bold tabular-nums ${net < 0 ? "text-red-600 dark:text-red-400" : "text-[#3A342A] dark:text-zinc-100"}`}>
+          {formatWon(net)}원
+        </div>
+        {multiMonth && (
+          <div className="mt-1 text-[11.5px] text-[#A89B80]">
+            선택 기간 {data?.months_in_period}개월 합산 (고정지출·직원 고정급은 개월수만큼 반영)
+          </div>
+        )}
+      </section>
+
+      {/* 계산 상세 */}
+      <section className="mb-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden">
+        <SettleRow label="총 매출 (부가세 포함)" value={data?.total_revenue ?? 0} sign="" strong />
+        <SettleRow label="− 고정 지출" value={-(data?.fixed_total ?? 0)} sub={multiMonth ? `월 ${formatWon(data?.fixed_monthly ?? 0)}원 × ${data?.months_in_period}개월` : undefined} />
+        <SettleRow label="− 부가세" value={-(data?.vat_amount ?? 0)} sub="부가세 포함 결제 건의 10%" />
+        <SettleRow label="− 직원 급여" value={-(data?.salary_total ?? 0)} sub="고정급 + 수업료(정산)" />
+        <SettleRow label="− 추가 지출" value={-(data?.additional_total ?? 0)} />
+        <div className="flex items-center justify-between px-5 py-3.5 bg-[#6B7B3A]/8 dark:bg-[#6B7B3A]/15 border-t border-[#6B7B3A]/25">
+          <span className="text-[13.5px] font-bold text-[#3A342A] dark:text-zinc-100">= 순이익</span>
+          <span className={`text-[16px] font-bold tabular-nums ${net < 0 ? "text-red-600 dark:text-red-400" : "text-[#6B7B3A] dark:text-[#A8B87A]"}`}>
+            {formatWon(net)}원
+          </span>
+        </div>
+      </section>
+
+      {/* 직원 급여 상세 */}
+      {(data?.staff_breakdown.length ?? 0) > 0 && (
+        <>
+          <div className="mb-2 text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">직원 급여 상세</div>
+          <section className="mb-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden">
+            {data?.staff_breakdown.map((s) => (
+              <div key={s.id} className="flex items-center justify-between px-5 py-2.5 border-b border-[#E8E0D0]/50 dark:border-zinc-800/50 last:border-0">
+                <span className="text-[13px] text-[#3A342A] dark:text-zinc-300">{s.name}</span>
+                <span className="text-[12px] text-[#A89B80] tabular-nums">
+                  고정 {formatWon(s.base)} + 수업료 {formatWon(s.commission)} ={" "}
+                  <strong className="text-[#3A342A] dark:text-zinc-200 text-[13px]">{formatWon(s.total)}원</strong>
+                </span>
+              </div>
+            ))}
+          </section>
+        </>
+      )}
+
+      {/* 추가 지출 관리 */}
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">추가 지출 관리 (월별)</span>
+        <input
+          type="month"
+          value={expenseYm}
+          onChange={(e) => setExpenseYm(e.target.value)}
+          className="px-2.5 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[12.5px] text-[#2A251D] dark:text-zinc-100"
+        />
+      </div>
+      <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-3.5 space-y-2.5">
+        {/* 입력 */}
+        <div className="flex flex-wrap gap-2">
+          <input
+            className="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
+            value={nLabel}
+            onChange={(e) => setNLabel(e.target.value.slice(0, 40))}
+            placeholder="내용 (예: 에어컨 수리)"
+            maxLength={40}
+          />
+          <input
+            className="w-[130px] px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-right"
+            value={nAmount ? formatWon(parseWon(nAmount)) : ""}
+            onChange={(e) => setNAmount(e.target.value)}
+            inputMode="numeric"
+            placeholder="금액(원)"
+          />
+          <input
+            className="w-[150px] px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
+            value={nMemo}
+            onChange={(e) => setNMemo(e.target.value.slice(0, 100))}
+            placeholder="메모 (선택)"
+            maxLength={100}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                add();
+              }
+            }}
+          />
+          <button
+            onClick={add}
+            disabled={adding || !nLabel.trim()}
+            className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-60 whitespace-nowrap"
+          >
+            {adding ? "…" : "+ 추가"}
+          </button>
+        </div>
+
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">{error}</div>
+        )}
+
+        {addList.length === 0 ? (
+          <div className="px-4 py-6 text-center text-[12.5px] text-[#8C8270]">
+            {expenseYm} 에 등록된 추가 지출이 없어요.
+          </div>
+        ) : (
+          <ul className="space-y-1.5">
+            {addList.map((x) => (
+              <li key={x.id} className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 bg-white dark:bg-zinc-950">
+                {editingId === x.id ? (
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      className="flex-1 min-w-[140px] px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
+                      value={eLabel}
+                      onChange={(e) => setELabel(e.target.value.slice(0, 40))}
+                      autoFocus
+                    />
+                    <input
+                      className="w-[120px] px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-right"
+                      value={eAmount ? formatWon(parseWon(eAmount)) : ""}
+                      onChange={(e) => setEAmount(e.target.value)}
+                      inputMode="numeric"
+                    />
+                    <input
+                      className="w-[130px] px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
+                      value={eMemo}
+                      onChange={(e) => setEMemo(e.target.value.slice(0, 100))}
+                      placeholder="메모"
+                    />
+                    <button onClick={saveEdit} className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12px] font-semibold">저장</button>
+                    <button onClick={() => setEditingId(null)} className="px-2 py-1.5 text-[12px] text-[#6B5D47]">취소</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">{x.label}</span>
+                      {x.memo && <span className="ml-2 text-[11.5px] text-[#8C8270]">{x.memo}</span>}
+                    </div>
+                    <span className="text-[13px] font-bold text-[#3A342A] dark:text-zinc-100 tabular-nums whitespace-nowrap">{formatWon(x.amount_won)}원</span>
+                    <button onClick={() => startEdit(x)} className="px-2 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]">수정</button>
+                    <button onClick={() => remove(x.id)} className="px-2 py-1 rounded-md border border-red-200 dark:border-red-900/60 text-[12px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30">삭제</button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="text-[11.5px] text-[#A89B80] leading-relaxed">
+          여기서 등록한 추가 지출은 해당 월이 정산 기간에 포함될 때 순이익에서 차감돼요.
+        </div>
+      </section>
+    </>
+  );
+}
+
+function SettleRow({
+  label,
+  value,
+  sub,
+  strong,
+}: {
+  label: string;
+  value: number;
+  sign?: string;
+  sub?: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between px-5 py-3 border-b border-[#E8E0D0]/50 dark:border-zinc-800/50">
+      <div>
+        <div className={`text-[13px] ${strong ? "font-semibold text-[#2A251D] dark:text-zinc-100" : "text-[#3A342A] dark:text-zinc-300"}`}>{label}</div>
+        {sub && <div className="mt-0.5 text-[11px] text-[#A89B80]">{sub}</div>}
+      </div>
+      <span className={`text-[14px] font-semibold tabular-nums ${value < 0 ? "text-[#B47B2A] dark:text-amber-300" : "text-[#3A342A] dark:text-zinc-100"}`}>
+        {formatWon(value)}원
+      </span>
+    </div>
   );
 }
 
