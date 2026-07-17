@@ -1410,7 +1410,14 @@ function ReservationDialog({
   onClose: () => void;
   onChange: (next: string, reason?: string) => void;
 }) {
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState<string>("");
+  const cancelWith = (next: "cancelled" | "noshow") => {
+    if (!reason) {
+      alert("취소 사유를 선택해 주세요 (강사 요청 / 회원 요청)");
+      return;
+    }
+    onChange(next, reason);
+  };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -1431,15 +1438,35 @@ function ReservationDialog({
           <div className="grid grid-cols-2 gap-2">
             <ActionBtn label="출석 완료" onClick={() => onChange("attended")} color="green" />
             <ActionBtn label="예약 완료로 되돌리기" onClick={() => onChange("booked")} color="neutral" />
-            <ActionBtn label="예약 취소(미차감)" onClick={() => onChange("cancelled", reason)} color="neutral" />
-            <ActionBtn label="노쇼(차감 취소)" onClick={() => onChange("noshow", reason)} color="red" />
           </div>
-          <input
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="취소·노쇼 사유 (선택)"
-            className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[12.5px] text-[#2A251D] dark:text-zinc-100"
-          />
+
+          {/* 취소 사유 선택 */}
+          <div className="pt-1">
+            <div className="text-[11.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1">
+              취소 사유
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {CANCEL_REASONS.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setReason(r)}
+                  className={`px-2.5 py-2 rounded-lg text-[12.5px] font-medium border transition-colors
+                    ${reason === r
+                      ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
+                      : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                    }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <ActionBtn label="예약 취소(미차감)" onClick={() => cancelWith("cancelled")} color="neutral" />
+            <ActionBtn label="노쇼(차감 취소)" onClick={() => cancelWith("noshow")} color="red" />
+          </div>
           <button
             onClick={onClose}
             className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
@@ -1451,6 +1478,8 @@ function ReservationDialog({
     </div>
   );
 }
+
+const CANCEL_REASONS = ["강사 요청", "회원 요청"] as const;
 
 function ActionBtn({
   label,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { MEMBER_TYPE_LABEL, GENDER_LABEL, formatPhone } from "../_components/crm-labels";
@@ -153,6 +153,12 @@ const SORT_KEY_STORAGE = "crm_members_sort_v2";
 
 const PAGE_SIZE = 25;
 
+// SPA 내비게이션(목록↔상세) 간 페이지·스크롤 유지 (모듈 스코프).
+// 뒤로가기 시 컴포넌트가 remount 돼도 이 값이 남아 있어 그대로 복원됨. F5(전체 새로고침) 시에만 초기화.
+let memoPage = 1;
+let memoScroll = 0;
+let memoScrollTs = 0;
+
 const today = () => {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -207,46 +213,31 @@ export default function CrmMembersPage() {
   const [fLocker, setFLocker] = useState<LockerFilter>("all");
   const [fGoods, setFGoods] = useState<GoodsFilter>("all");
 
-  // 페이지 = URL ?page= 가 진실의 원천. 뒤로가기 시 Next 가 URL·스크롤을 복원하므로 그대로 유지됨.
-  const router = useRouter();
-  const pathname = usePathname();
-  const page = Math.max(1, Number(searchParamsHook.get("page")) || 1);
-  const setPage = useCallback(
-    (p: number) => {
-      const sp = new URLSearchParams(searchParamsHook.toString());
-      if (p > 1) sp.set("page", String(p));
-      else sp.delete("page");
-      const qs = sp.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    },
-    [pathname, router, searchParamsHook]
-  );
+  // 페이지 = 모듈 스코프 memoPage 로 유지 (뒤로가기 remount 시에도 남아있음)
+  const [page, setPageState] = useState(() => memoPage);
+  const setPage = useCallback((p: number) => {
+    memoPage = p;
+    setPageState(p);
+  }, []);
 
-  // 스크롤 위치 저장/복원 (뒤로가기 시 마지막 위치로)
+  // 스크롤 위치: 스크롤 시 memoScroll 기록, 로드 완료 후 복원
   const scrollRestoredRef = useRef(false);
   useEffect(() => {
-    return () => {
-      if (typeof window !== "undefined") {
-        sessionStorage.setItem("crm_members_scroll", String(window.scrollY));
-        sessionStorage.setItem("crm_members_scroll_ts", String(Date.now()));
-      }
+    const onScroll = () => {
+      memoScroll = window.scrollY;
+      memoScrollTs = Date.now();
     };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
   const [loadingForScroll, setLoadingForScroll] = useState(true);
   useEffect(() => {
     if (loadingForScroll || scrollRestoredRef.current) return;
-    if (typeof window === "undefined") return;
-    const saved = sessionStorage.getItem("crm_members_scroll");
-    const ts = Number(sessionStorage.getItem("crm_members_scroll_ts") || "0");
-    // 5분 이내 저장분만 복원 (fresh navigation 은 무시)
-    if (saved && Date.now() - ts < 5 * 60_000) {
-      requestAnimationFrame(() => {
-        window.scrollTo(0, Number(saved));
-      });
-    }
-    sessionStorage.removeItem("crm_members_scroll");
-    sessionStorage.removeItem("crm_members_scroll_ts");
     scrollRestoredRef.current = true;
+    // 5분 이내 저장분만 복원
+    if (memoScroll > 0 && Date.now() - memoScrollTs < 5 * 60_000) {
+      requestAnimationFrame(() => window.scrollTo(0, memoScroll));
+    }
   }, [loadingForScroll]);
 
   // 정렬 (헤더 클릭, localStorage 저장)
