@@ -19,6 +19,11 @@ interface GenderCount {
   female: number;
 }
 
+interface GenderRevenue {
+  male: number;
+  female: number;
+}
+
 function emptyGC(): GenderCount {
   return { count: 0, male: 0, female: 0 };
 }
@@ -85,11 +90,12 @@ export async function GET(request: Request) {
     created_at: string;
     registered_at: string | null;
     final_expire_at: string | null;
+    last_attended_at: string | null;
     registration_type: string | null;
   }>((f, t) =>
     supabase
       .from("crm_members")
-      .select("id, gender, created_at, registered_at, final_expire_at, registration_type")
+      .select("id, gender, created_at, registered_at, final_expire_at, last_attended_at, registration_type")
       .eq("center_id", ctx.centerId)
       .eq("status", "active")
       .range(f, t)
@@ -100,10 +106,10 @@ export async function GET(request: Request) {
 
   // 활성 상품 보유 회원 집합 (정식 pass/membership 이 있으면 우선 사용)
   const [validPasses, validMemberships] = await Promise.all([
-    paginateAll<{ member_id: number }>((f, t) =>
+    paginateAll<{ member_id: number; lesson_kind: string | null; remaining_sessions: number | null }>((f, t) =>
       supabase
         .from("crm_passes")
-        .select("member_id")
+        .select("member_id, lesson_kind, remaining_sessions")
         .eq("center_id", ctx.centerId)
         .eq("status", "valid")
         .gte("expires_at", today)
@@ -123,6 +129,7 @@ export async function GET(request: Request) {
     ...validPasses.map((p) => p.member_id),
     ...validMemberships.map((m) => m.member_id),
   ]);
+  const activePassMemberIds = new Set<number>(validPasses.map((p) => p.member_id));
 
   // 회원 통계 집계
   const totalMembers = emptyGC();
@@ -130,11 +137,15 @@ export async function GET(request: Request) {
   const expiredMembers = emptyGC();
   const newMembers = emptyGC();
   const reregisteredMembers = emptyGC();
+  const inactive15dMembers = emptyGC();
+  const inactiveCutoff = shiftYmd(today, -15);
 
   // 유효 회원 중 신규/재등록 구성 (도넛용, period 무관)
   let activeNew = 0;
   let activeRenewal = 0;
   let activeUnknown = 0;
+  let activeLesson = 0;
+  let activeMembershipOnly = 0;
 
   for (const m of members) {
     addGender(totalMembers, m.gender);
@@ -144,9 +155,16 @@ export async function GET(request: Request) {
       (m.final_expire_at !== null && m.final_expire_at >= today);
     if (isActive) {
       addGender(activeMembers, m.gender);
+      const lastAttended = (m.last_attended_at ?? "").slice(0, 10);
+      if (!lastAttended || lastAttended <= inactiveCutoff) {
+        addGender(inactive15dMembers, m.gender);
+      }
       if (m.registration_type === "재등록") activeRenewal += 1;
       else if (m.registration_type === "신규") activeNew += 1;
       else activeUnknown += 1;
+
+      if (activePassMemberIds.has(m.id)) activeLesson += 1;
+      else activeMembershipOnly += 1;
     } else addGender(expiredMembers, m.gender);
 
     // 신규/재등록: POS registered_at 우선(POS 원본 최초 등록일), 없으면 created_at
@@ -202,11 +220,11 @@ export async function GET(request: Request) {
   // 회원권 — crm_memberships
   // 락커/운동복/일반 — 아직 매출 추적 미구현 (0)
   const [passesInPeriod, memshipsInPeriod] = await Promise.all([
-    paginateAll<{ price_won: number; total_sessions: number; lesson_kind: string | null }>(
+    paginateAll<{ member_id: number; price_won: number; total_sessions: number; lesson_kind: string | null }>(
       (f, t) =>
         supabase
           .from("crm_passes")
-          .select("price_won, total_sessions, lesson_kind")
+          .select("member_id, price_won, total_sessions, lesson_kind")
           .eq("center_id", ctx.centerId)
           .neq("status", "deleted")
           .gte("issued_at", from)
@@ -228,28 +246,45 @@ export async function GET(request: Request) {
   const membershipRevenue = memshipsInPeriod.reduce((s, r) => s + (r.price_won ?? 0), 0);
   // 레슨권 = 개인 레슨 + 그룹 수업 통합. 그룹 매출 별도 추적은 미구현이라 현재 개인 레슨 합계와 동일
   const lessonRevenue = passesInPeriod.reduce((s, r) => s + (r.price_won ?? 0), 0);
+  const lessonRevenueByGender: GenderRevenue = { male: 0, female: 0 };
+  for (const p of passesInPeriod) {
+    const gender = genderById.get(p.member_id) ?? null;
+    if (gender === "M") lessonRevenueByGender.male += p.price_won ?? 0;
+    else if (gender === "F") lessonRevenueByGender.female += p.price_won ?? 0;
+  }
   const lockerRevenue = 0;
   const goodsRevenue = 0;
 
   // 수업 통계 — 그룹/개인/OT
-  // period 내 예약 건수 (그룹은 향후 group session 추적 필요) + 신청자 수(unique member_id)
-  const reservations = await paginateAll<{ id: number; member_id: number }>((f, t) =>
+  // period 내 예약 건수 + 신청자 수(unique) + 미진행(시작시각 지났는데 출석 처리 안 된 건: noshow·취소·미출석)
+  const reservations = await paginateAll<{
+    id: number;
+    member_id: number;
+    status: string;
+    starts_at: string;
+  }>((f, t) =>
     supabase
       .from("crm_reservations")
-      .select("id, member_id")
+      .select("id, member_id, status, starts_at")
       .eq("center_id", ctx.centerId)
       .gte("starts_at", `${from}T00:00:00+09:00`)
       .lt("starts_at", `${toExcl}T00:00:00+09:00`)
       .range(f, t)
   );
+  const nowMs = Date.now();
+  // 미진행 = 시작시각이 지났는데 출석(attended)되지 않은 수업 (noshow / 취소 / 미출석 booked 모두 포함)
+  const notConducted = reservations.filter(
+    (r) => r.status !== "attended" && new Date(r.starts_at).getTime() < nowMs
+  ).length;
   const personalClasses = {
     count: reservations.length,
     applicants: new Set(reservations.map((r) => r.member_id)).size,
+    pending: notConducted,
   };
 
-  // OT 는 별도 추적 없음 → 0
-  const otClasses = { count: 0, applicants: 0 };
-  const groupClasses = { count: 0, applicants: 0 };
+  // 그룹·OT 는 별도 예약 추적 없음 → 0
+  const otClasses = { count: 0, applicants: 0, pending: 0 };
+  const groupClasses = { count: 0, applicants: 0, pending: 0 };
 
   return NextResponse.json({
     period,
@@ -264,10 +299,12 @@ export async function GET(request: Request) {
     attendance: {
       attended: attendedMembers,
       working: workingMembers,
+      inactive15d: inactive15dMembers,
     },
     revenue: {
       membership: membershipRevenue,
       lesson: lessonRevenue,
+      lessonByGender: lessonRevenueByGender,
       locker: lockerRevenue,
       goods: goodsRevenue,
       rental: 0,
@@ -277,6 +314,10 @@ export async function GET(request: Request) {
       new: activeNew,
       renewal: activeRenewal,
       unknown: activeUnknown,
+    },
+    active_by_product: {
+      lesson: activeLesson,
+      membership: activeMembershipOnly,
     },
     classes: {
       group: groupClasses,
