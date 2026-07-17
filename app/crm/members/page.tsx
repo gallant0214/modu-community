@@ -1201,10 +1201,10 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
     render: (m) =>
       m.registration_type ? (
         <span
-          className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-medium ${
+          className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
             m.registration_type === "재등록"
-              ? "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
-              : "bg-[#F5F0E5] dark:bg-zinc-800 text-[#8C8270]"
+              ? "bg-[#B47B2A] text-white border-[#B47B2A]"
+              : "bg-emerald-500 text-white border-emerald-500"
           }`}
         >
           {m.registration_type}

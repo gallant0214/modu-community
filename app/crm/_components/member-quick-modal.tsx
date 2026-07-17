@@ -107,10 +107,10 @@ export function MemberQuickModal({ memberId, onClose }: Props) {
             <Field label="등록 유형">
               {data.registration_type ? (
                 <span
-                  className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
                     data.registration_type === "재등록"
-                      ? "bg-[#B47B2A]/15 text-[#B47B2A] dark:bg-amber-900/40 dark:text-amber-300"
-                      : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+                      ? "bg-[#B47B2A] text-white border-[#B47B2A]"
+                      : "bg-emerald-500 text-white border-emerald-500"
                   }`}
                 >
                   {data.registration_type}
