@@ -10,6 +10,7 @@ interface MonthlyResp {
   summary: {
     newMembers: number;
     memberCount: number;
+    lessonMemberCount: number;
     totalRevenue: number;
     totalPassCount: number;
   };
@@ -29,7 +30,7 @@ type DateMode = "year" | "month" | "range";
 
 export default function CrmStatsPage() {
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<Tab>("trainer");
+  const [tab, setTab] = useState<Tab>("center");
   const [dateMode, setDateMode] = useState<DateMode>("month");
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [ym, setYm] = useState(() => new Date().toISOString().slice(0, 7));
@@ -151,11 +152,11 @@ export default function CrmStatsPage() {
       </header>
 
       <div className="mb-5 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800">
-        <TabBtn active={tab === "trainer"} onClick={() => setTab("trainer")}>
-          강사 매출
-        </TabBtn>
         <TabBtn active={tab === "center"} onClick={() => setTab("center")}>
           센터 매출
+        </TabBtn>
+        <TabBtn active={tab === "trainer"} onClick={() => setTab("trainer")}>
+          강사 매출
         </TabBtn>
         <TabBtn active={tab === "settlement"} onClick={() => setTab("settlement")}>
           정산
@@ -238,7 +239,7 @@ function TrainerTab({ data }: { data: MonthlyResp | null }) {
   return (
     <>
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-        <Kpi label="등록 회원수" value={`${data.summary.newMembers}명`} />
+        <Kpi label="레슨 회원 수" value={`${data.summary.lessonMemberCount}명`} />
         <Kpi label="PT매출" value={`${formatWon(data.summary.totalRevenue)}원`} accent />
         <Kpi label="수강권 발급" value={`${data.summary.totalPassCount}건`} />
         <Kpi

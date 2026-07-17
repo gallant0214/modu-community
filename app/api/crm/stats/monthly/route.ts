@@ -153,6 +153,10 @@ export async function GET(request: Request) {
 
   const totalRevenue = (passes ?? []).reduce((s, p) => s + (p.price_won ?? 0), 0);
   const totalPassCount = (passes ?? []).length;
+  // 레슨(수강권) 회원 수 — 기간 내 수강권 발급받은 고유 회원 수
+  const lessonMemberCount = new Set(
+    (passes ?? []).map((p) => p.member_id).filter((v): v is number => !!v)
+  ).size;
 
   // 결제수단 분포
   const paymentBreakdown: Record<string, number> = {};
@@ -188,6 +192,7 @@ export async function GET(request: Request) {
       // memberQuery 에 이미 member_type != 'matched' 반영. count(exact) 는 1000행 상한 무관.
       newMembers: memberCount ?? 0,
       memberCount: memberCount ?? 0,
+      lessonMemberCount,
       totalRevenue,
       totalPassCount,
     },
