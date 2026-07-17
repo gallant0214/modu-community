@@ -29,7 +29,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ staff: data ?? [] });
+  // 등급 라벨 매핑 (grade_id → crm_grades.label)
+  const gradeIds = Array.from(
+    new Set((data ?? []).map((m) => m.grade_id).filter((v): v is number => !!v))
+  );
+  const gradeMap = new Map<number, string>();
+  if (gradeIds.length > 0) {
+    const { data: grades } = await supabase
+      .from("crm_grades")
+      .select("id, label")
+      .eq("center_id", ctx.centerId)
+      .in("id", gradeIds);
+    for (const g of grades ?? []) gradeMap.set(g.id, g.label);
+  }
+
+  const staff = (data ?? []).map((m) => ({
+    ...m,
+    grade_label: m.grade_id ? gradeMap.get(m.grade_id) ?? null : null,
+  }));
+
+  return NextResponse.json({ staff });
 }
 
 /**

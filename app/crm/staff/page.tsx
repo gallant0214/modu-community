@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import {
   ROLE_LABEL,
-  ACCESS_LEVEL_LABEL,
   EMPLOYMENT_STATUS_LABEL,
   EMPLOYMENT_TYPE_LABEL,
   formatPhone,
@@ -16,6 +15,7 @@ interface StaffRow {
   id: number;
   firebase_uid: string;
   role: string;
+  grade_label: string | null;
   display_name: string;
   phone: string | null;
   email: string | null;
@@ -504,7 +504,6 @@ function StaffTable({ rows, label, muted }: { rows: StaffRow[]; label: string; m
             <tr>
               <Th>이름</Th>
               <Th>등급</Th>
-              <Th>권한</Th>
               <Th>연락처</Th>
               <Th>주소</Th>
               <Th>재직상태</Th>
@@ -528,8 +527,9 @@ function StaffTable({ rows, label, muted }: { rows: StaffRow[]; label: string; m
                     <span className="ml-1.5 text-[11px] text-[#A89B80]">· 본인</span>
                   )}
                 </Td>
-                <Td>{ROLE_LABEL[s.role] ?? s.role}</Td>
-                <Td>{ACCESS_LEVEL_LABEL[s.access_level] ?? s.access_level}</Td>
+                <Td className="font-medium text-[#3A342A] dark:text-zinc-300">
+                  {s.grade_label ?? ROLE_LABEL[s.role] ?? s.role}
+                </Td>
                 <Td className="text-[#6B5D47] dark:text-zinc-400">{s.phone ? formatPhone(s.phone) : "—"}</Td>
                 <Td className="text-[#6B5D47] dark:text-zinc-400">
                   <span className="block max-w-[220px] truncate" title={s.address || ""}>
