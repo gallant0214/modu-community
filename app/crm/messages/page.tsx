@@ -5,14 +5,14 @@ import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../_components/crm-modal";
 import { formatPhone } from "../_components/crm-labels";
 
-type AudienceKind = "all" | "active" | "expiring" | "expired" | "unassigned" | "individual";
+type AudienceKind = "all" | "active" | "dormant" | "expiring" | "expired" | "unassigned" | "individual";
 
 interface Broadcast {
   id: number;
   title: string;
   body: string;
   audience_kind: AudienceKind;
-  audience_filter: { member_ids?: number[]; within_days?: number } | null;
+  audience_filter: { member_ids?: number[]; within_days?: number; inactive_days?: number } | null;
   recipient_count: number;
   sent_by_name: string | null;
   created_at: string;
@@ -28,6 +28,7 @@ interface MemberOption {
 const AUDIENCE_OPTIONS: { key: AudienceKind; label: string; desc: string }[] = [
   { key: "all", label: "전체 회원", desc: "센터에 등록된 활성 회원 전체" },
   { key: "active", label: "유효 회원", desc: "오늘 기준 활성 수강권 또는 회원권 보유" },
+  { key: "dormant", label: "장기 미출석 회원", desc: "유효 회원 중 지정 일수 이상 미출석" },
   { key: "expiring", label: "만료 임박", desc: "지정 일수 이내 만료 예정" },
   { key: "expired", label: "만료 회원", desc: "활성 상품 없음 (과거 이력 있음)" },
   { key: "unassigned", label: "미가입 회원", desc: "수강권/회원권 이력 없음" },
@@ -45,6 +46,7 @@ export default function CrmMessagesPage() {
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState<AudienceKind>("all");
   const [withinDays, setWithinDays] = useState(7);
+  const [inactiveDays, setInactiveDays] = useState(14);
   const [selectedMembers, setSelectedMembers] = useState<MemberOption[]>([]);
   const [memberQuery, setMemberQuery] = useState("");
   const [memberResults, setMemberResults] = useState<MemberOption[]>([]);
@@ -92,6 +94,7 @@ export default function CrmMessagesPage() {
           audience_kind: audience,
           member_ids: selectedMembers.map((m) => m.id),
           within_days: withinDays,
+          inactive_days: inactiveDays,
         }),
       });
       if (res.ok) {
@@ -101,7 +104,7 @@ export default function CrmMessagesPage() {
     } catch {
       /* ignore */
     }
-  }, [audience, selectedMembers, withinDays, getIdToken]);
+  }, [audience, selectedMembers, withinDays, inactiveDays, getIdToken]);
 
   useEffect(() => {
     refreshPreview();
@@ -157,6 +160,7 @@ export default function CrmMessagesPage() {
           audience_kind: audience,
           member_ids: selectedMembers.map((m) => m.id),
           within_days: withinDays,
+          inactive_days: inactiveDays,
         }),
       });
       const data = await res.json();
@@ -176,8 +180,9 @@ export default function CrmMessagesPage() {
   const audienceLabel = useMemo(() => {
     if (audience === "individual") return `개별 ${selectedMembers.length}명`;
     if (audience === "expiring") return `${AUDIENCE_LABEL.expiring} (${withinDays}일 이내)`;
+    if (audience === "dormant") return `${AUDIENCE_LABEL.dormant} (${inactiveDays}일 이상)`;
     return AUDIENCE_LABEL[audience];
-  }, [audience, selectedMembers, withinDays]);
+  }, [audience, selectedMembers, withinDays, inactiveDays]);
 
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-4xl mx-auto">
@@ -226,6 +231,21 @@ export default function CrmMessagesPage() {
               className={`${crmInputClass} !w-20`}
             />
             <span>일 이내</span>
+          </div>
+        )}
+
+        {audience === "dormant" && (
+          <div className="mt-3 flex items-center gap-2 text-[13px] text-[#3A342A] dark:text-zinc-200">
+            <span>최근</span>
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={inactiveDays}
+              onChange={(e) => setInactiveDays(Math.max(1, Math.min(365, Number(e.target.value) || 1)))}
+              className={`${crmInputClass} !w-20`}
+            />
+            <span>일 이상 미출석 (출석 이력 없는 유효 회원 포함)</span>
           </div>
         )}
 

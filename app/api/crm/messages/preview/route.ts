@@ -18,6 +18,7 @@ export async function POST(request: Request) {
     audience_kind?: string;
     member_ids?: number[];
     within_days?: number;
+    inactive_days?: number;
   };
   try {
     body = await request.json();
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
   }
 
   const kind = body.audience_kind ?? "";
-  const validKinds = ["all", "active", "expiring", "expired", "unassigned", "individual"];
+  const validKinds = ["all", "active", "expiring", "expired", "unassigned", "individual", "dormant"];
   if (!validKinds.includes(kind)) {
     return NextResponse.json({ error: "대상 유형이 잘못됨" }, { status: 400 });
   }
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
   const memberIds = await resolveAudience(ctx.centerId, kind, {
     member_ids: body.member_ids ?? [],
     within_days: body.within_days ?? 7,
+    inactive_days: body.inactive_days ?? 14,
   });
 
   return NextResponse.json({ count: memberIds.length });

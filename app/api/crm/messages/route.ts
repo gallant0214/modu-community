@@ -73,6 +73,7 @@ export async function POST(request: Request) {
     audience_kind?: string;
     member_ids?: number[];
     within_days?: number;
+    inactive_days?: number;
   };
   try {
     body = await request.json();
@@ -89,15 +90,17 @@ export async function POST(request: Request) {
   if (title.length > 60) return NextResponse.json({ error: "제목은 60자 이내로 입력해 주세요" }, { status: 400 });
   if (bodyText.length > 2000) return NextResponse.json({ error: "내용은 2000자 이내로 입력해 주세요" }, { status: 400 });
 
-  const validKinds = ["all", "active", "expiring", "expired", "unassigned", "individual"];
+  const validKinds = ["all", "active", "expiring", "expired", "unassigned", "individual", "dormant"];
   if (!validKinds.includes(kind)) {
     return NextResponse.json({ error: "대상 유형이 잘못됨" }, { status: 400 });
   }
 
   const withinDays = Math.max(1, Math.min(60, body.within_days ?? 7));
+  const inactiveDays = Math.max(1, Math.min(365, body.inactive_days ?? 14));
   const memberIds = await resolveAudience(ctx.centerId, kind, {
     member_ids: body.member_ids ?? [],
     within_days: withinDays,
+    inactive_days: inactiveDays,
   });
 
   if (memberIds.length === 0) {
@@ -112,6 +115,8 @@ export async function POST(request: Request) {
       ? { member_ids: body.member_ids ?? [] }
       : kind === "expiring"
       ? { within_days: withinDays }
+      : kind === "dormant"
+      ? { inactive_days: inactiveDays }
       : null;
 
   // 발송자 이름 조회 (스냅샷)
@@ -195,7 +200,7 @@ export async function POST(request: Request) {
 export async function resolveAudience(
   centerId: number,
   kind: string,
-  opts: { member_ids?: number[]; within_days?: number }
+  opts: { member_ids?: number[]; within_days?: number; inactive_days?: number }
 ): Promise<number[]> {
   const today = kstYmd();
 
@@ -213,10 +218,10 @@ export async function resolveAudience(
   }
 
   // 전체 active 회원 base — 1000행 상한 우회(paginateAll)
-  const allMembers = await paginateAll<{ id: number }>((f, t) =>
+  const allMembers = await paginateAll<{ id: number; last_attended_at: string | null }>((f, t) =>
     supabase
       .from("crm_members")
-      .select("id")
+      .select("id, last_attended_at")
       .eq("center_id", centerId)
       .eq("status", "active")
       .range(f, t)
@@ -262,6 +267,39 @@ export async function resolveAudience(
   if (kind === "active") return Array.from(activeIds).filter((id) => allIds.has(id));
   if (kind === "expiring") return Array.from(expiringIds).filter((id) => allIds.has(id));
 
+  if (kind === "dormant") {
+    // 유효 회원(활성 상품 보유) 중 장기 미출석 — 마지막 출석이 inactive_days 이전이거나 출석 이력 없음
+    const inactiveDays = opts.inactive_days ?? 14;
+    const cutoffDate = addDays(today, -inactiveDays);
+
+    // 마지막 출석일 = max(crm_attendances.checked_in_at, crm_members.last_attended_at)
+    const attRows = await paginateAll<{ member_id: number; checked_in_at: string }>((f, t) =>
+      supabase
+        .from("crm_attendances")
+        .select("member_id, checked_in_at")
+        .eq("center_id", centerId)
+        .range(f, t)
+    );
+    const lastAtt = new Map<number, string>();
+    const bump = (mid: number, ymd: string) => {
+      const prev = lastAtt.get(mid);
+      if (!prev || ymd > prev) lastAtt.set(mid, ymd);
+    };
+    for (const a of attRows) {
+      if (a.checked_in_at) bump(a.member_id, toKstYmd(a.checked_in_at));
+    }
+    for (const m of allMembers) {
+      if (m.last_attended_at) bump(m.id, m.last_attended_at.slice(0, 10));
+    }
+
+    // 활성 상품 보유(유효 회원)면서 마지막 출석이 cutoff 이전(또는 이력 없음)
+    return Array.from(activeIds).filter((id) => {
+      if (!allIds.has(id)) return false;
+      const last = lastAtt.get(id);
+      return !last || last < cutoffDate;
+    });
+  }
+
   if (kind === "expired") {
     // 활성 상품 없는 회원만
     const expired = Array.from(allIds).filter((id) => !activeIds.has(id) && validMemberIds.has(id));
@@ -280,6 +318,13 @@ function kstYmd(): string {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 3600 * 1000);
   return kst.toISOString().slice(0, 10);
+}
+
+/** timestamptz(또는 date) 문자열 → KST YYYY-MM-DD */
+function toKstYmd(ts: string): string {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return ts.slice(0, 10);
+  return new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
 function addDays(ymd: string, n: number): string {
