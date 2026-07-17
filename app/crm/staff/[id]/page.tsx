@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import {
   ROLE_LABEL,
-  ACCESS_LEVEL_LABEL,
   ATTENDANCE_MODE_LABEL,
   EMPLOYMENT_STATUS_LABEL,
   EMPLOYMENT_TYPE_LABEL,
@@ -266,24 +265,6 @@ export default function CrmStaffDetailPage() {
             본인(개인 강사) 등급은 변경할 수 없어요.
           </p>
         )}
-      </Section>
-
-      <Section title="접근 권한">
-        <div className="grid grid-cols-3 gap-2">
-          {(["none", "schedule", "admin"] as const).map((al) => (
-            <SegBtn
-              key={al}
-              selected={member.access_level === al || (member.role === "owner" && al === "admin")}
-              disabled={saving || member.role === "owner"}
-              onClick={() => patchMember({ access_level: al })}
-            >
-              {ACCESS_LEVEL_LABEL[al]}
-            </SegBtn>
-          ))}
-        </div>
-        <p className="mt-2 text-[12px] text-[#A89B80] leading-relaxed">
-          대표자는 항상 관리자 권한이에요. 새로 가입한 강사는 기본 "강사" 권한이라 본인 데이터 위주로 보여요. 스케줄/관리자로 올리면 권한 범위가 확장돼요.
-        </p>
       </Section>
 
       {isTrainerLike && (

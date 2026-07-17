@@ -6,7 +6,6 @@ import { loadPermissionsForRole } from "@/app/lib/crm-permissions";
 export const dynamic = "force-dynamic";
 
 const ALLOWED_ROLES: CrmRole[] = ["owner", "admin", "manager", "trainer"];
-const ALLOWED_ACCESS_LEVELS = ["none", "schedule", "admin"] as const;
 
 /**
  * GET /api/crm/staff/[id] — 직원 상세 + 권한 row
@@ -127,7 +126,11 @@ export async function PATCH(
     }
   }
 
-  // grade_id 변경: 해당 등급의 base_role 로 role 자동 sync
+  // 등급(base_role)에 따라 접근 권한 자동 세팅 (owner/admin/manager → admin, trainer → schedule)
+  const accessForRole = (role: string): "admin" | "schedule" =>
+    role === "trainer" ? "schedule" : "admin";
+
+  // grade_id 변경: 해당 등급의 base_role 로 role + access_level 자동 sync
   if (body.grade_id !== undefined && body.grade_id !== null) {
     const { data: g } = await supabase
       .from("crm_grades")
@@ -140,17 +143,13 @@ export async function PATCH(
     }
     patch.grade_id = g.id;
     patch.role = g.base_role;
+    patch.access_level = accessForRole(g.base_role);
   } else if (body.role !== undefined) {
     if (!ALLOWED_ROLES.includes(body.role as CrmRole)) {
       return NextResponse.json({ error: "등급 값이 잘못됨" }, { status: 400 });
     }
     patch.role = body.role;
-  }
-  if (body.access_level !== undefined) {
-    if (!ALLOWED_ACCESS_LEVELS.includes(body.access_level as "none" | "schedule" | "admin")) {
-      return NextResponse.json({ error: "권한 레벨 값이 잘못됨" }, { status: 400 });
-    }
-    patch.access_level = body.access_level;
+    patch.access_level = accessForRole(body.role);
   }
   if (body.status !== undefined) {
     if (body.status !== "active" && body.status !== "inactive") {
