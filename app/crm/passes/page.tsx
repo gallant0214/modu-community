@@ -15,6 +15,7 @@ interface PassRow {
   id: number;
   member_id: number;
   member_name: string;
+  member_face_thumb: string | null;
   trainer_member_id: number;
   seller_member_id: number;
   issue_type: string;
@@ -161,7 +162,7 @@ export default function CrmPassesPage() {
                 <Th>금액</Th>
                 <Th>결제</Th>
                 <Th>강사</Th>
-                <Th>발급</Th>
+                <Th>구매일</Th>
                 <Th>만료</Th>
                 <Th>상태</Th>
               </tr>
@@ -172,9 +173,21 @@ export default function CrmPassesPage() {
                   <Td>
                     <Link
                       href={`/crm/members/${p.member_id}`}
-                      className="font-semibold text-[#2A251D] dark:text-zinc-100 hover:text-[#6B7B3A]"
+                      className="inline-flex items-center gap-2 font-semibold text-[#2A251D] dark:text-zinc-100 hover:text-[#6B7B3A]"
                     >
-                      {p.member_name || "—"}
+                      {p.member_face_thumb ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.member_face_thumb}
+                          alt=""
+                          className="w-8 h-8 rounded-full object-cover border border-[#E8E0D0] dark:border-zinc-700 shrink-0"
+                        />
+                      ) : (
+                        <span className="w-8 h-8 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-700 shrink-0 flex items-center justify-center text-[10px] text-[#A89B80]">
+                          —
+                        </span>
+                      )}
+                      <span>{p.member_name || "—"}</span>
                     </Link>
                   </Td>
                   <Td>

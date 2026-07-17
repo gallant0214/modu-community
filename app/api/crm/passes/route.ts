@@ -29,7 +29,8 @@ export async function GET(request: Request) {
       "id, member_id, trainer_member_id, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, payment_method, payment_method_custom, issued_at, start_date, expires_at, status, created_at"
     )
     .eq("center_id", ctx.centerId)
-    .order("issued_at", { ascending: false })
+    .order("issued_at", { ascending: false, nullsFirst: false })
+    .order("id", { ascending: false })
     .limit(limit);
 
   if (status) query = query.eq("status", status);
@@ -47,20 +48,23 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
 
-  // 회원 이름 join (Supabase 단순화: 한 번 더 쿼리)
+  // 회원 이름 + 얼굴 썸네일 join (Supabase 단순화: 한 번 더 쿼리)
+  type MemberLite = { id: number; name: string; face_image_thumb: string | null };
   const memberIds = Array.from(new Set((data ?? []).map((p) => p.member_id)));
-  const { data: members } = memberIds.length
+  const membersRes = memberIds.length
     ? await supabase
         .from("crm_members")
-        .select("id, name")
+        .select("id, name, face_image_thumb")
         .in("id", memberIds)
     : { data: [] };
-  const memberMap = new Map((members ?? []).map((m) => [m.id, m.name]));
+  const members = (membersRes.data ?? []) as unknown as MemberLite[];
+  const memberMap = new Map(members.map((m) => [m.id, m]));
 
   return NextResponse.json({
     passes: (data ?? []).map((p) => ({
       ...p,
-      member_name: memberMap.get(p.member_id) ?? "",
+      member_name: memberMap.get(p.member_id)?.name ?? "",
+      member_face_thumb: memberMap.get(p.member_id)?.face_image_thumb ?? null,
     })),
   });
 }
