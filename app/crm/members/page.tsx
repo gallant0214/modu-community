@@ -50,9 +50,13 @@ interface MemberRow {
   locker_label?: string | null;
   last_visit_at?: string | null;
   max_expires_at?: string | null;
+  on_hold?: boolean;
+  scheduled?: boolean;
 }
 
-type StatusFilter = "all" | "valid" | "expired";
+type StatusFilter = "all" | "valid" | "scheduled" | "expired" | "hold" | "expiring";
+/** 만료 임박 기준 일수 */
+const EXPIRING_DAYS = 7;
 type SignupFilter = "all" | "this_week" | "this_month" | "this_year" | "custom";
 type AbsenceFilter = "all" | "10d" | "15d" | "20d" | "30d" | "60d" | "90d";
 type ExpireFilter = "all" | "this_week" | "this_month" | "expired";
@@ -188,6 +192,41 @@ const hasHoldings = (m: MemberRow): boolean =>
   !!m.current_pass ||
   !!m.current_rental;
 
+// ymd 문자열에 일수 더하기
+const addDaysYmd = (ymd: string, n: number): string => {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * 회원이 특정 상태 카테고리에 해당하는지 판정.
+ * - valid(유효): 유효 이용권 보유(만료 전) & 아직 시작 예정 아님
+ * - scheduled(예정): 시작일이 미래인 이용권 보유
+ * - expired(만료): 유효 만료일이 없거나 지남
+ * - hold(홀딩): 홀딩(정지)중인 유효 이용권 보유
+ * - expiring(임박): 유효한데 EXPIRING_DAYS 안에 만료 예정
+ */
+const matchStatus = (m: MemberRow, filter: StatusFilter, todayStr: string): boolean => {
+  if (filter === "all") return true;
+  const eff = effExpiry(m);
+  const activeNow = !!eff && eff >= todayStr && !m.scheduled;
+  switch (filter) {
+    case "valid":
+      return activeNow;
+    case "scheduled":
+      return !!m.scheduled;
+    case "expired":
+      return !eff || eff < todayStr;
+    case "hold":
+      return !!m.on_hold;
+    case "expiring":
+      return activeNow && eff! <= addDaysYmd(todayStr, EXPIRING_DAYS);
+    default:
+      return true;
+  }
+};
+
 export default function CrmMembersPage() {
   const { getIdToken } = useAuth();
   const searchParamsHook = useSearchParams();
@@ -199,7 +238,8 @@ export default function CrmMembersPage() {
   // 필터
   const [fStatus, setFStatus] = useState<StatusFilter>(() => {
     const v = searchParamsHook.get("status");
-    return v === "valid" || v === "expired" ? v : "all";
+    const allowed: StatusFilter[] = ["valid", "scheduled", "expired", "hold", "expiring"];
+    return allowed.includes(v as StatusFilter) ? (v as StatusFilter) : "all";
   });
   const [fSignup, setFSignup] = useState<SignupFilter>("all");
   const [fSignupFrom, setFSignupFrom] = useState("");
@@ -443,13 +483,8 @@ export default function CrmMembersPage() {
         if (!hit) return false;
       }
 
-      // 상태
-      if (fStatus !== "all") {
-        const eff = effExpiry(m);
-        const isValid = eff && eff >= todayStr;
-        if (fStatus === "valid" && !isValid) return false;
-        if (fStatus === "expired" && isValid) return false;
-      }
+      // 상태 (상단 카드 = 상태 필터)
+      if (fStatus !== "all" && !matchStatus(m, fStatus, todayStr)) return false;
 
       // 가입일
       if (fSignup !== "all") {
@@ -585,13 +620,18 @@ export default function CrmMembersPage() {
   const totals = useMemo(() => {
     const todayStr = today().toISOString().slice(0, 10);
     let valid = 0;
+    let scheduled = 0;
     let expired = 0;
+    let hold = 0;
+    let expiring = 0;
     for (const m of list) {
-      const eff = effExpiry(m);
-      if (eff && eff >= todayStr) valid += 1;
-      else expired += 1;
+      if (matchStatus(m, "valid", todayStr)) valid += 1;
+      if (matchStatus(m, "scheduled", todayStr)) scheduled += 1;
+      if (matchStatus(m, "expired", todayStr)) expired += 1;
+      if (matchStatus(m, "hold", todayStr)) hold += 1;
+      if (matchStatus(m, "expiring", todayStr)) expiring += 1;
     }
-    return { all: list.length, valid, expired };
+    return { all: list.length, valid, scheduled, expired, hold, expiring };
   }, [list]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
@@ -842,11 +882,14 @@ export default function CrmMembersPage() {
         </div>
       )}
 
-      {/* 통계 */}
-      <div className="mb-4 grid grid-cols-3 gap-2 md:max-w-md">
-        <StatCard label="전체 회원" value={totals.all} />
-        <StatCard label="유효" value={totals.valid} tone="ok" />
-        <StatCard label="만료" value={totals.expired} tone="warn" />
+      {/* 통계 카드 = 상태 필터. 누르면 회원 목록이 해당 상태로 필터링됨 */}
+      <div className="mb-4 grid grid-cols-3 md:grid-cols-6 gap-2">
+        <StatCard label="전체 회원" value={totals.all} active={fStatus === "all"} onClick={() => setFStatus("all")} />
+        <StatCard label="유효" value={totals.valid} tone="ok" active={fStatus === "valid"} onClick={() => setFStatus("valid")} />
+        <StatCard label="예정" value={totals.scheduled} tone="info" active={fStatus === "scheduled"} onClick={() => setFStatus("scheduled")} />
+        <StatCard label="만료" value={totals.expired} tone="warn" active={fStatus === "expired"} onClick={() => setFStatus("expired")} />
+        <StatCard label="홀딩" value={totals.hold} tone="hold" active={fStatus === "hold"} onClick={() => setFStatus("hold")} />
+        <StatCard label={`임박 (${EXPIRING_DAYS}일)`} value={totals.expiring} tone="warn" active={fStatus === "expiring"} onClick={() => setFStatus("expiring")} />
       </div>
 
       {/* 검색 */}
@@ -860,16 +903,6 @@ export default function CrmMembersPage() {
 
       {/* 필터 */}
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <FilterChip
-          label="상태"
-          value={fStatus}
-          onChange={(v) => setFStatus(v as StatusFilter)}
-          options={[
-            { value: "all", label: "전체" },
-            { value: "valid", label: "유효" },
-            { value: "expired", label: "만료" },
-          ]}
-        />
         <div className="inline-flex items-center gap-1.5 flex-wrap">
           <FilterChip
             label="가입일"
@@ -1089,18 +1122,42 @@ function ActionBtn({
   );
 }
 
-function StatCard({ label, value, tone }: { label: string; value: number; tone?: "ok" | "warn" }) {
+function StatCard({
+  label,
+  value,
+  tone,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  tone?: "ok" | "warn" | "info" | "hold";
+  active?: boolean;
+  onClick?: () => void;
+}) {
   const color =
     tone === "ok"
       ? "text-[#6B7B3A] dark:text-[#A8B87A]"
       : tone === "warn"
         ? "text-[#B47B2A] dark:text-amber-300"
-        : "text-[#2A251D] dark:text-zinc-100";
+        : tone === "info"
+          ? "text-blue-600 dark:text-blue-300"
+          : tone === "hold"
+            ? "text-purple-600 dark:text-purple-300"
+            : "text-[#2A251D] dark:text-zinc-100";
   return (
-    <div className="px-3 py-2.5 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-      <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400">{label}</div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left px-3 py-2.5 rounded-xl border transition-colors ${
+        active
+          ? "border-[#6B7B3A] bg-[#6B7B3A]/10 dark:bg-[#6B7B3A]/20 ring-1 ring-[#6B7B3A]/40"
+          : "border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
+      }`}
+    >
+      <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 truncate">{label}</div>
       <div className={`text-[16px] font-bold mt-0.5 ${color}`}>{value}명</div>
-    </div>
+    </button>
   );
 }
 

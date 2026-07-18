@@ -138,19 +138,19 @@ export async function GET(request: Request) {
 
   // 활성 수강권 + 활성 회원권 + 락커 배정 + 최근 출석
   const [passesData, mbData, lockersData, attData] = await Promise.all([
-    gather<{ member_id: number; lesson_kind: string; remaining_sessions: number | null; total_sessions: number; expires_at: string }>(
+    gather<{ member_id: number; lesson_kind: string; remaining_sessions: number | null; total_sessions: number; expires_at: string; start_date: string | null; is_paused: boolean }>(
       (c) =>
         supabase
           .from("crm_passes")
-          .select("member_id, lesson_kind, remaining_sessions, total_sessions, expires_at")
+          .select("member_id, lesson_kind, remaining_sessions, total_sessions, expires_at, start_date, is_paused")
           .eq("center_id", ctx.centerId)
           .in("member_id", c)
           .eq("status", "valid")
     ),
-    gather<{ member_id: number; plan_name: string; expires_at: string }>((c) =>
+    gather<{ member_id: number; plan_name: string; expires_at: string; start_date: string | null; is_paused: boolean }>((c) =>
       supabase
         .from("crm_memberships")
-        .select("member_id, plan_name, expires_at")
+        .select("member_id, plan_name, expires_at, start_date, is_paused")
         .eq("center_id", ctx.centerId)
         .in("member_id", c)
         .eq("status", "valid")
@@ -174,6 +174,11 @@ export async function GET(request: Request) {
     ),
   ]);
 
+  // KST 오늘 (예정 판정용)
+  const todayKstYmd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const holdSet = new Set<number>(); // 유효 이용권 중 홀딩(정지)중인 회원
+  const scheduledSet = new Set<number>(); // 시작일이 미래인(아직 시작 안 함) 이용권 보유 회원
+
   const passMap = new Map<number, { kind: string; type: "lesson" | "membership"; remaining: number | null; expires: string }[]>();
   for (const p of passesData) {
     const arr = passMap.get(p.member_id) ?? [];
@@ -184,6 +189,8 @@ export async function GET(request: Request) {
       expires: p.expires_at,
     });
     passMap.set(p.member_id, arr);
+    if (p.is_paused) holdSet.add(p.member_id);
+    if (p.start_date && p.start_date > todayKstYmd) scheduledSet.add(p.member_id);
   }
   for (const m of mbData) {
     const arr = passMap.get(m.member_id) ?? [];
@@ -194,6 +201,8 @@ export async function GET(request: Request) {
       expires: m.expires_at,
     });
     passMap.set(m.member_id, arr);
+    if (m.is_paused) holdSet.add(m.member_id);
+    if (m.start_date && m.start_date > todayKstYmd) scheduledSet.add(m.member_id);
   }
 
   const lockerMap = new Map<number, string>();
@@ -224,6 +233,8 @@ export async function GET(request: Request) {
       locker_label: lockerMap.get(m.id) ?? null,
       last_visit_at: lastVisitMap.get(m.id) ?? null,
       max_expires_at: maxExpires,
+      on_hold: holdSet.has(m.id),
+      scheduled: scheduledSet.has(m.id),
     };
   });
 
