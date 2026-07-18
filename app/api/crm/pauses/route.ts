@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   let q = supabase
     .from("crm_pauses")
     .select(
-      "id, member_id, pass_id, membership_id, start_date, end_date, reason, requested_by, status, extended_days, created_at, cancelled_at"
+      "id, member_id, pass_id, membership_id, rental_id, start_date, end_date, reason, requested_by, status, extended_days, created_at, cancelled_at"
     )
     .eq("center_id", ctx.centerId)
     .order("start_date", { ascending: false })
@@ -60,6 +60,7 @@ export async function POST(request: Request) {
   let body: {
     pass_id?: number;
     membership_id?: number;
+    rental_id?: number;
     start_date?: string;
     end_date?: string;
     reason?: string;
@@ -73,8 +74,9 @@ export async function POST(request: Request) {
 
   const passId = body.pass_id ? Number(body.pass_id) : null;
   const mbId = body.membership_id ? Number(body.membership_id) : null;
-  if ((!passId && !mbId) || (passId && mbId)) {
-    return NextResponse.json({ error: "수강권 또는 회원권 중 하나만 선택해 주세요" }, { status: 400 });
+  const rentalId = body.rental_id ? Number(body.rental_id) : null;
+  if ([passId, mbId, rentalId].filter(Boolean).length !== 1) {
+    return NextResponse.json({ error: "수강권·회원권·대여권 중 하나만 선택해 주세요" }, { status: 400 });
   }
   const start = body.start_date;
   const end = body.end_date;
@@ -85,8 +87,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "종료일이 시작일보다 빠를 수 없어요" }, { status: 400 });
   }
 
-  const table = passId ? "crm_passes" : "crm_memberships";
-  const targetId = (passId ?? mbId) as number;
+  const table = passId ? "crm_passes" : mbId ? "crm_memberships" : "crm_rentals";
+  const entityType = passId ? "crm_passes" : mbId ? "crm_memberships" : "crm_rentals";
+  const targetId = (passId ?? mbId ?? rentalId) as number;
   const { data: target, error: tErr } = await supabase
     .from(table)
     .select("id, member_id, expires_at, status, is_paused")
@@ -97,7 +100,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "대상을 찾을 수 없습니다" }, { status: 404 });
   }
   if (target.status !== "valid") {
-    return NextResponse.json({ error: "유효한 수강권/회원권만 홀딩할 수 있어요" }, { status: 400 });
+    return NextResponse.json({ error: "유효한 이용권만 홀딩할 수 있어요" }, { status: 400 });
   }
   if (target.is_paused) {
     return NextResponse.json({ error: "이미 진행중인 홀딩이 있어요" }, { status: 400 });
@@ -114,6 +117,7 @@ export async function POST(request: Request) {
       member_id: target.member_id,
       pass_id: passId,
       membership_id: mbId,
+      rental_id: rentalId,
       start_date: start,
       end_date: end,
       reason: body.reason?.trim() || null,
@@ -141,7 +145,7 @@ export async function POST(request: Request) {
     center_id: ctx.centerId,
     actor_uid: ctx.uid,
     action: "pause.create",
-    entity_type: passId ? "crm_passes" : "crm_memberships",
+    entity_type: entityType,
     entity_id: targetId,
     payload: { start, end, days, reason: body.reason, requested_by: body.requested_by } as never,
   });

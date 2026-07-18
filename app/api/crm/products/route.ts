@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_products")
     .select(
-      "id, type, billing_mode, category, name, description, open_time, close_time, operating_days, duration_value, duration_unit, service_days, total_sessions, pause_enabled, pause_days, pause_count, price_won, vat_included, mileage_earn, mileage_usable, capacity, session_minutes, daily_check_in_limit, daily_time_limit_enabled, status, created_at"
+      "id, type, billing_mode, category, name, description, open_time, close_time, operating_days, duration_value, duration_unit, service_days, total_sessions, pause_enabled, pause_days, pause_count, price_won, vat_included, mileage_earn, mileage_usable, attendance_mileage_earn, capacity, session_minutes, daily_check_in_limit, daily_time_limit_enabled, status, created_at"
     )
     .eq("center_id", ctx.centerId)
     .eq("status", "active")
@@ -70,6 +70,7 @@ export async function POST(request: Request) {
     vat_included?: boolean;
     mileage_earn?: number;
     mileage_usable?: boolean;
+    attendance_mileage_earn?: number;
     capacity?: number;
     session_minutes?: number;
     daily_check_in_limit?: number;
@@ -138,6 +139,7 @@ export async function POST(request: Request) {
       vat_included: !!body.vat_included,
       mileage_earn: Math.max(0, Number(body.mileage_earn) || 0),
       mileage_usable: body.mileage_usable !== false,
+      attendance_mileage_earn: Math.max(0, Number(body.attendance_mileage_earn) || 0),
       capacity: body.type === "group" ? Math.max(0, Number(body.capacity) || 0) : 0,
       session_minutes:
         body.type === "personal" || body.type === "group"

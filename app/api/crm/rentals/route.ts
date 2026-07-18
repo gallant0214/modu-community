@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_rentals")
     .select(
-      "id, member_id, seller_member_id, item_name, price_won, discount_won, mileage_earned, mileage_used, vat_included, payment_method, payment_method_custom, start_date, expires_at, status, memo, created_at"
+      "id, member_id, seller_member_id, item_name, price_won, discount_won, mileage_earned, mileage_used, vat_included, payment_method, payment_method_custom, start_date, expires_at, status, memo, is_paused, created_at"
     )
     .eq("center_id", ctx.centerId)
     .neq("status", "deleted")

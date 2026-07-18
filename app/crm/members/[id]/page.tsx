@@ -85,6 +85,7 @@ export default function CrmMemberDetailPage() {
   const [usageOpen, setUsageOpen] = useState(false);
   const [usageReload, setUsageReload] = useState(0);
   const [paymentDetail, setPaymentDetail] = useState<PaymentDetail | null>(null);
+  const [holdTarget, setHoldTarget] = useState<{ kind: "membership" | "rental"; id: number } | null>(null);
   const [detailPassId, setDetailPassId] = useState<number | null>(null);
   const [bodyOpen, setBodyOpen] = useState(false);
   // 탭: 정보 / 예약내역 / 결제내역 / 로그
@@ -441,6 +442,22 @@ export default function CrmMemberDetailPage() {
         onClose={() => setPaymentDetail(null)}
         staffList={staffList}
         onSaved={() => setUsageReload((n) => n + 1)}
+        onHold={(t) => {
+          setPaymentDetail(null);
+          setHoldTarget(t);
+        }}
+      />
+
+      <HoldModal
+        open={holdTarget !== null}
+        passId={null}
+        membershipId={holdTarget?.kind === "membership" ? holdTarget.id : null}
+        rentalId={holdTarget?.kind === "rental" ? holdTarget.id : null}
+        onClose={() => setHoldTarget(null)}
+        onDone={() => {
+          setHoldTarget(null);
+          setUsageReload((n) => n + 1);
+        }}
       />
 
       <SignedContractsSection memberId={member.id} />
@@ -1885,6 +1902,7 @@ interface MembershipRow {
   memo: string | null;
   outstanding_won: number;
   payment_status: string;
+  is_paused?: boolean;
   created_at: string;
 }
 interface RentalRow {
@@ -1902,6 +1920,7 @@ interface RentalRow {
   expires_at: string;
   status: string;
   memo: string | null;
+  is_paused?: boolean;
   created_at: string;
 }
 
@@ -1916,6 +1935,8 @@ interface PaymentDetail {
   sellerMemberId?: number | null;
   startDate?: string | null;
   expiresAt?: string | null;
+  status?: string;
+  isPaused?: boolean;
   priceWon?: number;
   discountWon?: number;
   vatIncluded?: boolean;
@@ -2004,6 +2025,8 @@ function UsageSection({
                   sellerMemberId: m.seller_member_id,
                   startDate: m.start_date,
                   expiresAt: m.expires_at,
+                  status: m.status,
+                  isPaused: m.is_paused,
                   priceWon: m.price_won,
                   discountWon: m.discount_won,
                   vatIncluded: m.vat_included,
@@ -2039,6 +2062,8 @@ function UsageSection({
                   sellerMemberId: r.seller_member_id,
                   startDate: r.start_date,
                   expiresAt: r.expires_at,
+                  status: r.status,
+                  isPaused: r.is_paused,
                   priceWon: r.price_won,
                   discountWon: r.discount_won,
                   vatIncluded: r.vat_included,
@@ -2065,6 +2090,7 @@ function UsageCard({
   price,
   period,
   valid,
+  paused,
   onClick,
 }: {
   tag: string;
@@ -2072,6 +2098,7 @@ function UsageCard({
   price: number;
   period: string;
   valid: boolean;
+  paused?: boolean;
   onClick: () => void;
 }) {
   const tone =
@@ -2088,6 +2115,11 @@ function UsageCard({
           <span className="flex items-center gap-1.5">
             <span className={`text-[10.5px] font-bold ${tone}`}>{tag}</span>
             <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{name}</span>
+            {paused && (
+              <span className="px-1.5 py-0.5 rounded-full bg-[#B47B2A]/12 text-[#B47B2A] dark:text-amber-300 text-[10px] font-semibold">
+                홀딩중
+              </span>
+            )}
           </span>
           <span
             className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
@@ -2114,11 +2146,13 @@ function HoldingDetailModal({
   onClose,
   staffList,
   onSaved,
+  onHold,
 }: {
   detail: PaymentDetail | null;
   onClose: () => void;
   staffList: { id: number; display_name: string; role: string; status: string }[];
   onSaved: () => void;
+  onHold: (target: { kind: "membership" | "rental"; id: number }) => void;
 }) {
   const { getIdToken } = useAuth();
   const open = detail !== null;
@@ -2404,21 +2438,37 @@ function HoldingDetailModal({
               </div>
             </div>
           ) : (
-            <div className="flex gap-2">
-              {editable && canEdit && (
-                <button
-                  onClick={startEdit}
-                  className="flex-1 px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13.5px] font-semibold hover:bg-[#6B7B3A]/5"
-                >
-                  수정
-                </button>
+            <div className="space-y-2">
+              {editable && detail.status === "valid" && (
+                detail.isPaused ? (
+                  <div className="px-3 py-2 rounded-lg bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300 text-[12.5px] text-center font-medium">
+                    홀딩 중 (만료일이 홀딩 기간만큼 연장되었어요)
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => detail.id && detail.kind && onHold({ kind: detail.kind, id: detail.id })}
+                    className="w-full px-4 py-2.5 rounded-lg border border-[#B47B2A]/50 text-[#B47B2A] dark:text-amber-300 text-[13.5px] font-semibold hover:bg-[#B47B2A]/5"
+                  >
+                    ⏸ 홀딩 (일시정지)
+                  </button>
+                )
               )}
-              <button
-                onClick={onClose}
-                className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
-              >
-                닫기
-              </button>
+              <div className="flex gap-2">
+                {editable && canEdit && (
+                  <button
+                    onClick={startEdit}
+                    className="flex-1 px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13.5px] font-semibold hover:bg-[#6B7B3A]/5"
+                  >
+                    수정
+                  </button>
+                )}
+                <button
+                  onClick={onClose}
+                  className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+                >
+                  닫기
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -2443,6 +2493,7 @@ interface UsageProduct {
   duration_unit: string | null;
   mileage_earn: number;
   mileage_usable: boolean;
+  attendance_mileage_earn?: number;
 }
 interface VacantLocker {
   id: number;
@@ -2482,6 +2533,7 @@ function UsageIssueModal({
   const [priceWon, setPriceWon] = useState(0);
   const [mileageEarn, setMileageEarn] = useState(0);
   const [mileageUsable, setMileageUsable] = useState(true);
+  const [attendanceMileageEarn, setAttendanceMileageEarn] = useState(0);
   const [mileageUse, setMileageUse] = useState(0);
   const [discountWon, setDiscountWon] = useState(0);
   const [vatIncluded, setVatIncluded] = useState(false);
@@ -2573,6 +2625,7 @@ function UsageIssueModal({
     setPriceWon(p.price_won ?? 0);
     setMileageEarn(p.mileage_earn ?? 0);
     setMileageUsable(p.mileage_usable !== false);
+    setAttendanceMileageEarn(p.attendance_mileage_earn ?? 0);
     if (p.mileage_usable === false) setMileageUse(0);
     if (p.duration_value && p.duration_unit) {
       const mult = p.duration_unit === "year" ? 365 : p.duration_unit === "month" ? 30 : 1;
@@ -2615,6 +2668,7 @@ function UsageIssueModal({
             discount_won: discountWon,
             mileage_earned: mileageEarn,
             mileage_used: mileageUse,
+            attendance_mileage_earn: attendanceMileageEarn,
             vat_included: vatIncluded,
             payment_method: paymentMethod,
             payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
@@ -4911,12 +4965,14 @@ function HoldModal({
   open,
   passId,
   membershipId,
+  rentalId = null,
   onClose,
   onDone,
 }: {
   open: boolean;
   passId: number | null;
   membershipId: number | null;
+  rentalId?: number | null;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -4948,7 +5004,7 @@ function HoldModal({
 
   const submit = async () => {
     setError("");
-    if (!passId && !membershipId) return setError("대상이 없습니다");
+    if (!passId && !membershipId && !rentalId) return setError("대상이 없습니다");
     if (!startDate || !endDate) return setError("시작일과 종료일을 입력해 주세요");
     if (endDate < startDate) return setError("종료일이 시작일보다 빠를 수 없어요");
     if (!requestedBy.trim()) return setError("홀딩 요청자(이름)을 입력해 주세요");
@@ -4961,6 +5017,7 @@ function HoldModal({
         body: JSON.stringify({
           pass_id: passId,
           membership_id: membershipId,
+          rental_id: rentalId,
           start_date: startDate,
           end_date: endDate,
           reason: reason.trim() || undefined,

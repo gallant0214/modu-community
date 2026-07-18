@@ -27,7 +27,7 @@ export async function DELETE(
 
   const { data: pause, error: pErr } = await supabase
     .from("crm_pauses")
-    .select("id, pass_id, membership_id, extended_days, status")
+    .select("id, pass_id, membership_id, rental_id, extended_days, status")
     .eq("id", pauseId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -38,8 +38,10 @@ export async function DELETE(
     return NextResponse.json({ error: "이미 취소된 홀딩입니다" }, { status: 400 });
   }
 
-  const table = pause.pass_id ? "crm_passes" : "crm_memberships";
-  const targetId = (pause.pass_id ?? pause.membership_id) as number;
+  const pr = pause as typeof pause & { rental_id: number | null };
+  const table = pr.pass_id ? "crm_passes" : pr.membership_id ? "crm_memberships" : "crm_rentals";
+  const entityType = table;
+  const targetId = (pr.pass_id ?? pr.membership_id ?? pr.rental_id) as number;
   const { data: target } = await supabase
     .from(table)
     .select("expires_at")
@@ -69,7 +71,7 @@ export async function DELETE(
     center_id: ctx.centerId,
     actor_uid: ctx.uid,
     action: "pause.cancel",
-    entity_type: pause.pass_id ? "crm_passes" : "crm_memberships",
+    entity_type: entityType,
     entity_id: targetId,
     payload: { pause_id: pauseId, restored_days: pause.extended_days } as never,
   });

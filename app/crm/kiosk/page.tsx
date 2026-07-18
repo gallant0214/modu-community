@@ -13,7 +13,7 @@ interface Attendance {
 }
 
 type Toast =
-  | { kind: "success"; name: string; phone: string | null; at: string; duplicate?: boolean }
+  | { kind: "success"; name: string; phone: string | null; at: string; duplicate?: boolean; mileageAwarded?: number }
   | { kind: "error"; message: string };
 
 /**
@@ -78,6 +78,7 @@ export default function CrmKioskPage() {
           phone: data.member?.phone ?? null,
           at: data.attendance?.checked_in_at ?? "",
           duplicate: data.duplicate,
+          mileageAwarded: data.mileage_awarded ?? 0,
         });
         await load();
       }
@@ -144,6 +145,11 @@ export default function CrmKioskPage() {
               {toast.phone && (
                 <div className="text-[13px] text-[#6B5D47] font-normal mt-1">
                   {formatPhone(toast.phone)}
+                </div>
+              )}
+              {!toast.duplicate && !!toast.mileageAwarded && toast.mileageAwarded > 0 && (
+                <div className="mt-2 inline-block px-3 py-1 rounded-full bg-[#6B7B3A] text-white text-[13px] font-bold">
+                  출석 마일리지 +{toast.mileageAwarded.toLocaleString()}P
                 </div>
               )}
             </>

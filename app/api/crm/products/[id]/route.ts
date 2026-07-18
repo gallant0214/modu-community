@@ -74,6 +74,7 @@ export async function PATCH(
     "vat_included",
     "mileage_earn",
     "mileage_usable",
+    "attendance_mileage_earn",
     "capacity",
     "session_minutes",
     "daily_check_in_limit",

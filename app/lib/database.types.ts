@@ -1297,6 +1297,7 @@ export type Database = {
           checked_in_at: string
           source: string
           note: string | null
+          attendance_mileage_awarded: number
         }
         Insert: {
           id?: number
@@ -1305,6 +1306,7 @@ export type Database = {
           checked_in_at?: string
           source?: string
           note?: string | null
+          attendance_mileage_awarded?: number
         }
         Update: {
           id?: number
@@ -1313,6 +1315,7 @@ export type Database = {
           checked_in_at?: string
           source?: string
           note?: string | null
+          attendance_mileage_awarded?: number
         }
         Relationships: []
       }
@@ -1430,6 +1433,7 @@ export type Database = {
           price_won: number
           mileage_earn: number
           mileage_usable: boolean
+          attendance_mileage_earn: number
           pause_count: number
           vat_included: boolean
           capacity: number
@@ -1460,6 +1464,7 @@ export type Database = {
           price_won?: number
           mileage_earn?: number
           mileage_usable?: boolean
+          attendance_mileage_earn?: number
           pause_count?: number
           vat_included?: boolean
           capacity?: number
@@ -1490,6 +1495,7 @@ export type Database = {
           price_won?: number
           mileage_earn?: number
           mileage_usable?: boolean
+          attendance_mileage_earn?: number
           pause_count?: number
           vat_included?: boolean
           capacity?: number
@@ -1514,6 +1520,7 @@ export type Database = {
           discount_won: number
           mileage_earned: number
           mileage_used: number
+          attendance_mileage_earn: number
           vat_included: boolean
           payment_method: string
           payment_method_custom: string | null
@@ -1539,6 +1546,7 @@ export type Database = {
           discount_won?: number
           mileage_earned?: number
           mileage_used?: number
+          attendance_mileage_earn?: number
           vat_included?: boolean
           payment_method?: string
           payment_method_custom?: string | null
@@ -1564,6 +1572,7 @@ export type Database = {
           discount_won?: number
           mileage_earned?: number
           mileage_used?: number
+          attendance_mileage_earn?: number
           vat_included?: boolean
           payment_method?: string
           payment_method_custom?: string | null
@@ -1648,6 +1657,7 @@ export type Database = {
           start_date: string
           expires_at: string
           status: string
+          is_paused: boolean
           memo: string | null
           created_at: string
           updated_at: string
@@ -1668,6 +1678,7 @@ export type Database = {
           start_date: string
           expires_at: string
           status?: string
+          is_paused?: boolean
           memo?: string | null
           created_at?: string
           updated_at?: string
@@ -1688,6 +1699,7 @@ export type Database = {
           start_date?: string
           expires_at?: string
           status?: string
+          is_paused?: boolean
           memo?: string | null
           created_at?: string
           updated_at?: string
@@ -1701,6 +1713,7 @@ export type Database = {
           member_id: number
           pass_id: number | null
           membership_id: number | null
+          rental_id: number | null
           start_date: string
           end_date: string
           reason: string | null
@@ -1718,6 +1731,7 @@ export type Database = {
           member_id: number
           pass_id?: number | null
           membership_id?: number | null
+          rental_id?: number | null
           start_date: string
           end_date: string
           reason?: string | null
@@ -1735,6 +1749,7 @@ export type Database = {
           member_id?: number
           pass_id?: number | null
           membership_id?: number | null
+          rental_id?: number | null
           start_date?: string
           end_date?: string
           reason?: string | null

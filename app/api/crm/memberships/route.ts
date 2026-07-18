@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_memberships")
     .select(
-      "id, member_id, seller_member_id, plan_name, duration_days, price_won, discount_won, mileage_earned, mileage_used, vat_included, payment_method, payment_method_custom, start_date, expires_at, purchased_at, status, memo, outstanding_won, payment_status, created_at"
+      "id, member_id, seller_member_id, plan_name, duration_days, price_won, discount_won, mileage_earned, mileage_used, vat_included, payment_method, payment_method_custom, start_date, expires_at, purchased_at, status, memo, outstanding_won, payment_status, is_paused, created_at"
     )
     .eq("center_id", ctx.centerId)
     .neq("status", "deleted")
@@ -81,6 +81,8 @@ export async function POST(request: Request) {
     memo?: string;
     mileage_earned?: number;
     mileage_used?: number;
+    /** 이 회원권 회원이 출석할 때 하루 1회 적립할 마일리지 (상품에서 스냅샷). */
+    attendance_mileage_earn?: number;
     /** 발급 시점에 받은 금액. 미입력 시 price_won 전액. */
     paid_amount_won?: number;
   };
@@ -136,6 +138,7 @@ export async function POST(request: Request) {
       discount_won: Math.max(0, Math.floor(Number(body.discount_won) || 0)),
       mileage_earned: Math.max(0, Math.floor(Number(body.mileage_earned) || 0)),
       mileage_used: Math.max(0, Math.floor(Number(body.mileage_used) || 0)),
+      attendance_mileage_earn: Math.max(0, Math.floor(Number(body.attendance_mileage_earn) || 0)),
       vat_included: !!body.vat_included,
       payment_method: paymentMethod,
       payment_method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,

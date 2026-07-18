@@ -24,6 +24,7 @@ export interface ProductDetail {
   vat_included: boolean;
   mileage_earn?: number;
   mileage_usable?: boolean;
+  attendance_mileage_earn?: number;
   capacity: number;
   session_minutes: number;
   daily_check_in_limit?: number;
@@ -130,7 +131,13 @@ export function ProductDetailModal({ product, typeLabel, onClose, onEdit, onDele
             </Field>
           )}
           {!!p.mileage_earn && p.mileage_earn > 0 && (
-            <Field label="적립 마일리지">{p.mileage_earn.toLocaleString()}P</Field>
+            <Field label="구매 적립 마일리지">{p.mileage_earn.toLocaleString()}P</Field>
+          )}
+          {!!p.attendance_mileage_earn && p.attendance_mileage_earn > 0 && (
+            <Field label="출석 적립 마일리지">
+              {p.attendance_mileage_earn.toLocaleString()}P
+              <span className="text-[11.5px] text-[#A89B80] ml-1">(하루 1회)</span>
+            </Field>
           )}
           <Field label="마일리지 사용">{p.mileage_usable === false ? "불가" : "가능"}</Field>
         </div>
