@@ -1010,13 +1010,8 @@ function LockerCard({
             {locker.member.name}
           </div>
           {locker.expires_at && (
-            <div className="mt-auto truncate">
-              <div className="text-[11.5px] font-medium text-[#3A342A] dark:text-zinc-300">
-                ~{expireShort(locker.expires_at)}까지
-              </div>
-              <div className="text-[10.5px] text-[#8C8270] dark:text-zinc-500">
-                {expireSubtitle(locker.expires_at, today)}
-              </div>
+            <div className="mt-auto text-[11.5px] font-medium text-[#3A342A] dark:text-zinc-300 truncate">
+              ~{expireShort(locker.expires_at)}까지
             </div>
           )}
         </>
