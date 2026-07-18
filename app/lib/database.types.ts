@@ -1164,6 +1164,42 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_center_notices: {
+        Row: {
+          id: number
+          center_id: number
+          title: string
+          body: string
+          is_published: boolean
+          status: string
+          created_by_uid: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          title: string
+          body?: string
+          is_published?: boolean
+          status?: string
+          created_by_uid?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          title?: string
+          body?: string
+          is_published?: boolean
+          status?: string
+          created_by_uid?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_centers: {
         Row: {
           id: number

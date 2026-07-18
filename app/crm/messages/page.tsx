@@ -110,23 +110,41 @@ export default function CrmMessagesPage() {
     refreshPreview();
   }, [refreshPreview]);
 
-  const searchMembers = async () => {
-    const q = memberQuery.trim();
-    if (!q) return;
-    setSearching(true);
-    try {
-      const token = await getIdToken();
-      const res = await fetch(`/api/crm/members?q=${encodeURIComponent(q)}`, {
-        headers: { authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMemberResults(data.members ?? []);
+  const searchMembers = useCallback(
+    async (raw?: string) => {
+      const q = (raw ?? memberQuery).trim();
+      if (!q) {
+        setMemberResults([]);
+        return;
       }
-    } finally {
-      setSearching(false);
+      setSearching(true);
+      try {
+        const token = await getIdToken();
+        const res = await fetch(`/api/crm/members?q=${encodeURIComponent(q)}&limit=30`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setMemberResults(data.members ?? []);
+        }
+      } finally {
+        setSearching(false);
+      }
+    },
+    [memberQuery, getIdToken]
+  );
+
+  // 개별 선택: 입력 즉시 검색(디바운스 300ms)
+  useEffect(() => {
+    if (audience !== "individual") return;
+    const q = memberQuery.trim();
+    if (!q) {
+      setMemberResults([]);
+      return;
     }
-  };
+    const t = setTimeout(() => searchMembers(q), 300);
+    return () => clearTimeout(t);
+  }, [memberQuery, audience, searchMembers]);
 
   const addMember = (m: MemberOption) => {
     if (selectedMembers.some((x) => x.id === m.id)) return;
@@ -267,16 +285,23 @@ export default function CrmMessagesPage() {
               />
               <button
                 type="button"
-                onClick={searchMembers}
+                onClick={() => searchMembers()}
                 disabled={searching}
                 className="px-4 rounded-lg bg-[#6B5D47] text-white text-[13px] font-semibold disabled:opacity-60"
               >
                 {searching ? "검색 중…" : "검색"}
               </button>
             </div>
+            {memberQuery.trim() && !searching && memberResults.length === 0 && (
+              <div className="px-3 py-2 text-[12.5px] text-[#8C8270] text-center border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-lg">
+                검색 결과가 없어요. 이름 또는 연락처를 확인해 주세요.
+              </div>
+            )}
             {memberResults.length > 0 && (
               <ul className="rounded-lg border border-[#E8E0D0] dark:border-zinc-700 max-h-40 overflow-y-auto">
-                {memberResults.map((m) => (
+                {memberResults
+                  .filter((m) => !selectedMembers.some((s) => s.id === m.id))
+                  .map((m) => (
                   <li key={m.id}>
                     <button
                       type="button"
