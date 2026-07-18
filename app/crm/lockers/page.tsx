@@ -256,6 +256,9 @@ export default function CrmLockersPage() {
     return arr;
   }, [lockers, filter, today, query]);
 
+  // 상세 패널이 열리면 그리드가 좁아짐 → 박스에서 만료일(~까지)은 숨기고 'N일후 만료'만 표시
+  const compactBox = !!pickedLocker && isDesktop;
+
   const dirtySettings = useMemo(() => {
     if (!currentZone) return true;
     return (
@@ -565,9 +568,16 @@ export default function CrmLockersPage() {
                         >
                           <span className="text-[13.5px]">{l.number}</span>
                           {l.expires_at && (
-                            <span className="mt-0.5 text-[7.5px] font-medium opacity-80">
-                              ~{expireShort(l.expires_at)}까지
-                            </span>
+                            <>
+                              {!compactBox && (
+                                <span className="mt-0.5 text-[7.5px] font-medium opacity-80">
+                                  ~{expireShort(l.expires_at)}까지
+                                </span>
+                              )}
+                              <span className="text-[7.5px] font-medium opacity-70">
+                                {expireSubtitle(l.expires_at, today)}
+                              </span>
+                            </>
                           )}
                         </button>
                       );
@@ -585,9 +595,16 @@ export default function CrmLockersPage() {
                     >
                       <span className="text-[13.5px]">{l.number}</span>
                       {l.expires_at && (
-                        <span className="mt-0.5 text-[7.5px] font-medium opacity-80">
-                          ~{expireShort(l.expires_at)}까지
-                        </span>
+                        <>
+                          {!compactBox && (
+                            <span className="mt-0.5 text-[7.5px] font-medium opacity-80">
+                              ~{expireShort(l.expires_at)}까지
+                            </span>
+                          )}
+                          <span className="text-[7.5px] font-medium opacity-70">
+                            {expireSubtitle(l.expires_at, today)}
+                          </span>
+                        </>
                       )}
                     </button>
                   ))}
@@ -627,7 +644,7 @@ export default function CrmLockersPage() {
                           key={l.id}
                           className={`aspect-square min-h-[90px] flex ${dimmed ? "opacity-25" : ""}`}
                         >
-                          <LockerCard locker={l} today={today} onClick={() => setPickedLocker(l)} />
+                          <LockerCard locker={l} today={today} compact={compactBox} onClick={() => setPickedLocker(l)} />
                         </div>
                       );
                     })}
@@ -641,6 +658,7 @@ export default function CrmLockersPage() {
                       <LockerCard
                         locker={l}
                         today={today}
+                        compact={compactBox}
                         onClick={() => setPickedLocker(l)}
                       />
                     </div>
@@ -976,10 +994,12 @@ function LockerCard({
   locker,
   today,
   onClick,
+  compact,
 }: {
   locker: Locker;
   today: string;
   onClick: () => void;
+  compact?: boolean;
 }) {
   const ds = getDisplayState(locker, today);
   const isEmpty = ds === "unassigned" || ds === "broken";
@@ -1010,8 +1030,15 @@ function LockerCard({
             {locker.member.name}
           </div>
           {locker.expires_at && (
-            <div className="mt-auto text-[11.5px] font-medium text-[#3A342A] dark:text-zinc-300 truncate">
-              ~{expireShort(locker.expires_at)}까지
+            <div className="mt-auto truncate">
+              {!compact && (
+                <div className="text-[11.5px] font-medium text-[#3A342A] dark:text-zinc-300">
+                  ~{expireShort(locker.expires_at)}까지
+                </div>
+              )}
+              <div className="text-[10.5px] text-[#8C8270] dark:text-zinc-500">
+                {expireSubtitle(locker.expires_at, today)}
+              </div>
             </div>
           )}
         </>
