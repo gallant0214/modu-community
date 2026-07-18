@@ -256,8 +256,11 @@ export default function CrmLockersPage() {
     return arr;
   }, [lockers, filter, today, query]);
 
-  // 상세 패널이 열리면 그리드가 좁아짐 → 박스에서 만료일(~까지)은 숨기고 'N일후 만료'만 표시
-  const compactBox = !!pickedLocker && isDesktop;
+  // 박스에서 만료일(~까지)을 숨기고 '회원명 + N일후 만료'만 표시하는 조건:
+  //  1) 상세 패널 열림 → 그리드가 좁아짐
+  //  2) 밀집 구역(복도처럼 열이 많아 칸이 작음, layout_cols >= 10) → 글씨 잘림 방지
+  const zoneDense = (currentZone?.layout_cols ?? 0) >= 10;
+  const compactBox = (!!pickedLocker && isDesktop) || zoneDense;
 
   const dirtySettings = useMemo(() => {
     if (!currentZone) return true;
