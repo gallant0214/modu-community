@@ -214,11 +214,30 @@ export default function CrmMembersPage() {
   const [fLocker, setFLocker] = useState<LockerFilter>("all");
   const [fGoods, setFGoods] = useState<GoodsFilter>("all");
 
-  // 페이지 = 모듈 스코프 memoPage 로 유지 (뒤로가기 remount 시에도 남아있음)
-  const [page, setPageState] = useState(() => memoPage);
+  // 페이지 유지: URL ?page= 우선(브라우저 뒤로가기/새로고침 복원) → 없으면 모듈 스코프 memoPage
+  const [page, setPageState] = useState(() => {
+    const urlPage = Number(searchParamsHook.get("page"));
+    if (Number.isInteger(urlPage) && urlPage >= 1) {
+      memoPage = urlPage;
+      return urlPage;
+    }
+    return memoPage;
+  });
   const setPage = useCallback((p: number) => {
     memoPage = p;
     setPageState(p);
+    // URL 에 page 동기화 (Next 재렌더 없이 history 만 갱신 → 뒤로가기 시 복원)
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (p > 1) params.set("page", String(p));
+      else params.delete("page");
+      const qs = params.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+      );
+    }
   }, []);
 
   // 스크롤 위치: 스크롤 시 memoScroll 기록, 로드 완료 후 복원
