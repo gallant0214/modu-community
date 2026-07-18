@@ -87,6 +87,9 @@ export default function CrmMemberDetailPage() {
   const [paymentDetail, setPaymentDetail] = useState<PaymentDetail | null>(null);
   const [holdTarget, setHoldTarget] = useState<{ kind: "membership" | "rental"; id: number } | null>(null);
   const [detailPassId, setDetailPassId] = useState<number | null>(null);
+  // 현재 보유(상단 요약) 편집용 실제 레코드
+  const [holdMs, setHoldMs] = useState<MembershipRow[]>([]);
+  const [holdRs, setHoldRs] = useState<RentalRow[]>([]);
   const [bodyOpen, setBodyOpen] = useState(false);
   // 탭: 정보 / 예약내역 / 결제내역 / 로그
   const [tab, setTab] = useState<"info" | "reservations" | "payments" | "logs">("info");
@@ -131,6 +134,21 @@ export default function CrmMemberDetailPage() {
   useEffect(() => {
     if (memberId) load();
   }, [memberId, load]);
+
+  // 현재 보유(회원권·대여권) 실제 레코드 로드 — 상단 요약 칩을 편집 가능한 상세로 열기 위함
+  useEffect(() => {
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const h = { authorization: `Bearer ${token}` };
+      const [mR, rR] = await Promise.all([
+        fetch(`/api/crm/memberships?member_id=${memberId}`, { headers: h, cache: "no-store" }),
+        fetch(`/api/crm/rentals?member_id=${memberId}`, { headers: h, cache: "no-store" }),
+      ]);
+      if (mR.ok) setHoldMs((await mR.json()).memberships ?? []);
+      if (rR.ok) setHoldRs((await rR.json()).rentals ?? []);
+    })();
+  }, [memberId, usageReload, getIdToken]);
 
   // 현재 유저의 회원 관련 권한 로드
   useEffect(() => {
@@ -212,6 +230,24 @@ export default function CrmMemberDetailPage() {
       paidAt: member.last_purchase_at,
     });
   };
+
+  // 현재 보유(상단 요약) — 실제 유효 레코드가 있으면 그걸로 (편집 가능), 없으면 POS 스냅샷 fallback
+  const staffName = (id: number | null) =>
+    id ? staffList.find((s) => s.id === id)?.display_name ?? null : null;
+  const holdToday = new Date().toISOString().slice(0, 10);
+  const validHoldMs = holdMs.filter((m) => m.status === "valid" && m.expires_at >= holdToday);
+  const validHoldRs = holdRs.filter((r) => r.status === "valid" && r.expires_at >= holdToday);
+  const validHoldPasses = passes.filter(
+    (p) => p.status === "valid" && p.expires_at >= holdToday
+  );
+  const hasHoldings =
+    validHoldMs.length > 0 ||
+    validHoldRs.length > 0 ||
+    validHoldPasses.length > 0 ||
+    !!member.current_membership ||
+    !!member.current_pass ||
+    !!member.current_rental ||
+    !!member.current_locker;
 
   const currentHoldings = [
     member.current_membership,
@@ -302,16 +338,47 @@ export default function CrmMemberDetailPage() {
         <MemberReservationsSection memberId={member.id} />
       ) : (
       <>
-      {(member.current_membership ||
-        member.current_pass ||
-        member.current_rental ||
-        member.current_locker) && (
+      {hasHoldings && (
         <section className="mb-4">
           <div className="mb-2 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400">현재 보유</div>
           <div className="flex flex-wrap gap-1.5 px-3.5 py-3 rounded-xl border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
-          {holdingCards("회원권", member.current_membership, onSnapSelect)}
-          {holdingCards("수강권", member.current_pass, onSnapSelect)}
-          {holdingCards("대여권", member.current_rental, onSnapSelect)}
+          {/* 회원권: 실제 레코드 우선(편집 가능), 없으면 스냅샷 */}
+          {validHoldMs.length > 0
+            ? validHoldMs.map((m) => (
+                <SnapHoldingCard
+                  key={`hm${m.id}`}
+                  tag="회원권"
+                  name={m.plan_name}
+                  period={`${m.start_date} ~ ${m.expires_at}`}
+                  onClick={() => setPaymentDetail(membershipToDetail(m, staffName))}
+                />
+              ))
+            : holdingCards("회원권", member.current_membership, onSnapSelect)}
+          {/* 수강권: 실제 레코드 우선(수강권 수정) */}
+          {validHoldPasses.length > 0
+            ? validHoldPasses.map((p) => (
+                <SnapHoldingCard
+                  key={`hp${p.id}`}
+                  tag="수강권"
+                  name={p.lesson_kind}
+                  period={`잔여 ${p.remaining_sessions}/${p.total_sessions}회 · ~${p.expires_at}`}
+                  onClick={() => setDetailPassId(p.id)}
+                />
+              ))
+            : holdingCards("수강권", member.current_pass, onSnapSelect)}
+          {/* 대여권: 실제 레코드 우선(편집 가능) */}
+          {validHoldRs.length > 0
+            ? validHoldRs.map((r) => (
+                <SnapHoldingCard
+                  key={`hr${r.id}`}
+                  tag="대여권"
+                  name={r.item_name}
+                  period={`${r.start_date} ~ ${r.expires_at}`}
+                  onClick={() => setPaymentDetail(rentalToDetail(r, staffName))}
+                />
+              ))
+            : holdingCards("대여권", member.current_rental, onSnapSelect)}
+          {/* 락커는 별도 관리(락커 관리 페이지) — 스냅샷 표시만 */}
           {holdingCards("락커", member.current_locker, onSnapSelect)}
           </div>
         </section>
@@ -1952,6 +2019,66 @@ interface PaymentDetail {
   note?: string | null;
 }
 
+function membershipToDetail(
+  m: MembershipRow,
+  sellerName: (id: number | null) => string | null
+): PaymentDetail {
+  return {
+    tag: "회원권",
+    name: m.plan_name,
+    period: `${m.start_date} ~ ${m.expires_at}`,
+    source: "record",
+    id: m.id,
+    kind: "membership",
+    sellerMemberId: m.seller_member_id,
+    startDate: m.start_date,
+    expiresAt: m.expires_at,
+    status: m.status,
+    isPaused: m.is_paused,
+    priceWon: m.price_won,
+    discountWon: m.discount_won,
+    vatIncluded: m.vat_included,
+    paymentMethod: m.payment_method,
+    paymentCustom: m.payment_method_custom,
+    outstandingWon: m.outstanding_won,
+    paymentStatus: m.payment_status,
+    mileageEarned: m.mileage_earned,
+    mileageUsed: m.mileage_used,
+    sellerName: sellerName(m.seller_member_id),
+    paidAt: m.created_at,
+    memo: m.memo,
+  };
+}
+
+function rentalToDetail(
+  r: RentalRow,
+  sellerName: (id: number | null) => string | null
+): PaymentDetail {
+  return {
+    tag: "대여권",
+    name: r.item_name,
+    period: `${r.start_date} ~ ${r.expires_at}`,
+    source: "record",
+    id: r.id,
+    kind: "rental",
+    sellerMemberId: r.seller_member_id,
+    startDate: r.start_date,
+    expiresAt: r.expires_at,
+    status: r.status,
+    isPaused: r.is_paused,
+    priceWon: r.price_won,
+    discountWon: r.discount_won,
+    vatIncluded: r.vat_included,
+    paymentMethod: r.payment_method,
+    paymentCustom: r.payment_method_custom,
+    mileageEarned: r.mileage_earned,
+    mileageUsed: r.mileage_used,
+    sellerName: sellerName(r.seller_member_id),
+    paidAt: r.created_at,
+    memo: r.memo,
+  };
+}
+
 function UsageSection({
   memberId,
   reloadKey,
@@ -2015,33 +2142,7 @@ function UsageSection({
               period={`${m.start_date} ~ ${m.expires_at}`}
               valid={isValid(m.status, m.expires_at)}
               paused={m.is_paused}
-              onClick={() =>
-                onOpenDetail({
-                  tag: "회원권",
-                  name: m.plan_name,
-                  period: `${m.start_date} ~ ${m.expires_at}`,
-                  source: "record",
-                  id: m.id,
-                  kind: "membership",
-                  sellerMemberId: m.seller_member_id,
-                  startDate: m.start_date,
-                  expiresAt: m.expires_at,
-                  status: m.status,
-                  isPaused: m.is_paused,
-                  priceWon: m.price_won,
-                  discountWon: m.discount_won,
-                  vatIncluded: m.vat_included,
-                  paymentMethod: m.payment_method,
-                  paymentCustom: m.payment_method_custom,
-                  outstandingWon: m.outstanding_won,
-                  paymentStatus: m.payment_status,
-                  mileageEarned: m.mileage_earned,
-                  mileageUsed: m.mileage_used,
-                  sellerName: sellerName(m.seller_member_id),
-                  paidAt: m.created_at,
-                  memo: m.memo,
-                })
-              }
+              onClick={() => onOpenDetail(membershipToDetail(m, sellerName))}
             />
           ))}
           {rentals.map((r) => (
@@ -2053,31 +2154,7 @@ function UsageSection({
               period={`${r.start_date} ~ ${r.expires_at}`}
               valid={isValid(r.status, r.expires_at)}
               paused={r.is_paused}
-              onClick={() =>
-                onOpenDetail({
-                  tag: "대여권",
-                  name: r.item_name,
-                  period: `${r.start_date} ~ ${r.expires_at}`,
-                  source: "record",
-                  id: r.id,
-                  kind: "rental",
-                  sellerMemberId: r.seller_member_id,
-                  startDate: r.start_date,
-                  expiresAt: r.expires_at,
-                  status: r.status,
-                  isPaused: r.is_paused,
-                  priceWon: r.price_won,
-                  discountWon: r.discount_won,
-                  vatIncluded: r.vat_included,
-                  paymentMethod: r.payment_method,
-                  paymentCustom: r.payment_method_custom,
-                  mileageEarned: r.mileage_earned,
-                  mileageUsed: r.mileage_used,
-                  sellerName: sellerName(r.seller_member_id),
-                  paidAt: r.created_at,
-                  memo: r.memo,
-                })
-              }
+              onClick={() => onOpenDetail(rentalToDetail(r, sellerName))}
             />
           ))}
         </ul>

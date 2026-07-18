@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { MEMBER_TYPE_LABEL, GENDER_LABEL, formatPhone } from "../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
+import { BulkActionBar } from "./_components/bulk-actions";
 
 interface PassItem {
   kind: string;
@@ -370,8 +371,10 @@ export default function CrmMembersPage() {
     (k) => columnWidths[k] !== DEFAULT_COL_WIDTHS[k]
   );
 
-  // 액션 모드 (회원 삭제)
+  // 액션 모드 (회원 삭제 / 일괄 작업)
   const [deleteMode, setDeleteMode] = useState(false);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkFlash, setBulkFlash] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [registerOpen, setRegisterOpen] = useState(false);
 
@@ -620,11 +623,29 @@ export default function CrmMembersPage() {
 
   const enterDeleteMode = () => {
     setDeleteMode(true);
+    setBulkMode(false);
     setSelected(new Set());
   };
   const cancelDeleteMode = () => {
     setDeleteMode(false);
     setSelected(new Set());
+  };
+
+  const enterBulkMode = () => {
+    setBulkMode(true);
+    setDeleteMode(false);
+    setBulkFlash("");
+    setSelected(new Set());
+  };
+  const cancelBulkMode = () => {
+    setBulkMode(false);
+    setSelected(new Set());
+  };
+  const handleBulkDone = (summary: string) => {
+    setBulkMode(false);
+    setSelected(new Set());
+    setBulkFlash(summary);
+    load();
   };
 
   const confirmDelete = async () => {
@@ -760,7 +781,10 @@ export default function CrmMembersPage() {
 
       {/* 액션 툴바 */}
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
-        <ActionBtn active={!deleteMode} onClick={cancelDeleteMode}>회원 정보</ActionBtn>
+        <ActionBtn active={!deleteMode && !bulkMode} onClick={() => { cancelDeleteMode(); cancelBulkMode(); }}>회원 정보</ActionBtn>
+        <ActionBtn active={bulkMode} onClick={bulkMode ? cancelBulkMode : enterBulkMode}>
+          {bulkMode ? `일괄 작업 (${selected.size})` : "일괄 작업"}
+        </ActionBtn>
         <ActionBtn
           active={deleteMode}
           onClick={deleteMode ? confirmDelete : enterDeleteMode}
@@ -778,10 +802,26 @@ export default function CrmMembersPage() {
         )}
         <ActionBtn onClick={() => showNotReady("미수 관리")}>미수 관리</ActionBtn>
         <ActionBtn onClick={() => showNotReady("취소/환불")}>취소/환불</ActionBtn>
-        <ActionBtn onClick={() => showNotReady("단체 연장")}>단체 연장</ActionBtn>
-        <ActionBtn onClick={() => showNotReady("정지 기록")}>정지 기록</ActionBtn>
         <ActionBtn onClick={() => showNotReady("수정 기록")}>수정 기록</ActionBtn>
       </div>
+
+      {/* 일괄 작업 바 */}
+      {bulkMode && (
+        <BulkActionBar
+          selectedIds={Array.from(selected)}
+          onDone={handleBulkDone}
+          onCancel={cancelBulkMode}
+        />
+      )}
+
+      {/* 일괄 작업 결과 안내 */}
+      {bulkFlash && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-[#6B7B3A]/40 bg-[#6B7B3A]/10 px-3 py-2 text-[13px] text-[#3A342A] dark:text-zinc-200">
+          <span className="font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">완료</span>
+          <span>{bulkFlash}</span>
+          <button onClick={() => setBulkFlash("")} className="ml-auto text-[#A89B80] hover:text-[#6B5D47]">✕</button>
+        </div>
+      )}
 
       {/* 통계 */}
       <div className="mb-4 grid grid-cols-3 gap-2 md:max-w-md">
@@ -947,7 +987,7 @@ export default function CrmMembersPage() {
       ) : (
         <MembersTable
           rows={pageRows}
-          deleteMode={deleteMode}
+          deleteMode={deleteMode || bulkMode}
           selected={selected}
           onToggle={toggleSelect}
           onToggleAll={toggleSelectAllOnPage}
