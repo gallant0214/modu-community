@@ -47,7 +47,13 @@ interface SummaryResp {
     newly: GenderCount;
     reregistered: GenderCount;
   };
-  attendance: { attended: GenderCount; working: GenderCount; inactive15d?: GenderCount };
+  attendance: {
+    attended: GenderCount;
+    working: GenderCount;
+    inactive15d?: GenderCount;
+    weekly?: { label: string; count: number }[];
+    weekStart?: string;
+  };
   revenue: {
     membership: number;
     lesson: number;
@@ -195,18 +201,12 @@ export default function CrmDashboardPage() {
         </div>
 
         {summary && (
-          <section className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-2">
+          <section className="mt-5 grid grid-cols-2 lg:grid-cols-3 gap-2">
             <DashboardHeroMetric
               label="유효 회원"
               value={`${summary.members.active.count.toLocaleString()}명`}
               hint={`전체 ${summary.members.total.count.toLocaleString()}명`}
               tone="green"
-            />
-            <DashboardHeroMetric
-              label={`${periodLabel} 출석`}
-              value={`${summary.attendance.attended.count.toLocaleString()}명`}
-              hint={`운동 중 ${summary.attendance.working.count.toLocaleString()}명`}
-              tone="blue"
             />
             <DashboardHeroMetric
               label={canFinance ? `${periodLabel} 매출` : `${periodLabel} 수업`}
@@ -378,10 +378,22 @@ export default function CrmDashboardPage() {
                 title="출석 통계"
                 subtitle="출석 흐름과 장기 미출석 유효회원"
               />
-              <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <GenderStatCard label="이용한 회원" data={summary.attendance.attended} accent />
-                <GenderStatCard label="운동 중인 회원" data={summary.attendance.working} />
-                <Link href="/crm/members?status=valid&absence=15d">
+              <section className="grid gap-3">
+                {/* 주간(월~일) 출석 그래프 — 매출 그래프와 동일 스타일 */}
+                <div className="px-5 py-4 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm">
+                  <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
+                    주간 출석 (월~일)
+                  </h3>
+                  <CrmLineChart
+                    points={(summary.attendance.weekly ?? []).map((w) => ({
+                      label: w.label,
+                      value: w.count,
+                    }))}
+                    unit="명"
+                    color="#5A8BB0"
+                  />
+                </div>
+                <Link href="/crm/members?status=valid&absence=15d" className="block md:max-w-xs">
                   <GenderStatCard
                     label="15일 이상 미출석"
                     data={summary.attendance.inactive15d ?? { count: 0, male: 0, female: 0 }}

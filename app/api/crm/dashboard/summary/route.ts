@@ -222,6 +222,32 @@ export async function GET(request: Request) {
   // 운동 중인 회원 = 오늘 활성 상품 보유
   const workingMembers = activeMembers;
 
+  // 요일별(월~일) 출석 — 이번 주, KST 기준 (매출 그래프처럼 표시)
+  const dow = new Date(`${today}T00:00:00Z`).getUTCDay(); // 0=일 ~ 6=토
+  const backToMon = (dow + 6) % 7;
+  const weekStart = shiftYmd(today, -backToMon); // 이번 주 월요일
+  const weekEndExcl = shiftYmd(weekStart, 7);
+  const weekAtt = await paginateAll<{ member_id: number; checked_in_at: string }>((f, t) =>
+    supabase
+      .from("crm_attendances")
+      .select("member_id, checked_in_at")
+      .eq("center_id", ctx.centerId)
+      .gte("checked_in_at", `${weekStart}T00:00:00+09:00`)
+      .lt("checked_in_at", `${weekEndExcl}T00:00:00+09:00`)
+      .range(f, t)
+  );
+  const weeklySets = Array.from({ length: 7 }, () => new Set<number>()); // 월=0 ~ 일=6
+  for (const a of weekAtt) {
+    const kst = new Date(new Date(a.checked_in_at).getTime() + 9 * 3600 * 1000);
+    const wd = (kst.getUTCDay() + 6) % 7;
+    weeklySets[wd].add(a.member_id);
+  }
+  const weekdayLabels = ["월", "화", "수", "목", "금", "토", "일"];
+  const weeklyAttendance = weekdayLabels.map((label, i) => ({
+    label,
+    count: weeklySets[i].size,
+  }));
+
   // 매출 통계 (period 내 발급)
   // 수강권(personal/group PT/OT etc) — crm_passes
   // 회원권 — crm_memberships
@@ -304,6 +330,8 @@ export async function GET(request: Request) {
       attended: attendedMembers,
       working: workingMembers,
       inactive15d: inactive15dMembers,
+      weekly: weeklyAttendance,
+      weekStart,
     },
     revenue: {
       membership: membershipRevenue,
