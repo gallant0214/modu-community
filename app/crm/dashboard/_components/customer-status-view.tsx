@@ -12,6 +12,8 @@ interface CustomerStatus {
   age: Record<string, number[]>;
   newMembership: number[];
   newPass: number[];
+  newReg: number[];
+  reReg: number[];
   visited: number[];
   churn: number[];
 }
@@ -74,6 +76,10 @@ export function CustomerStatusView() {
     { label: "회원권", color: "#6B7B3A", values: data.newMembership },
     { label: "수강권", color: "#B47B2A", values: data.newPass },
   ];
+  const regRatioSeries: Series[] = [
+    { label: "신규등록", color: "#6B7B3A", values: data.newReg ?? data.months.map(() => 0) },
+    { label: "재등록", color: "#B47B2A", values: data.reReg ?? data.months.map(() => 0) },
+  ];
 
   return (
     <div className="space-y-3">
@@ -107,25 +113,31 @@ export function CustomerStatusView() {
         <MonthlyStackedBars months={data.months} series={newSeries} mode="count" />
       </ChartCard>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        {/* 방문(출석) */}
-        <ChartCard title="방문(출석) 고객 수" subtitle="그 달 1회 이상 출석한 고객">
-          <MonthlyStackedBars
-            months={data.months}
-            series={[{ label: "방문고객", color: "#5A8BB0", values: data.visited }]}
-            mode="count"
-          />
-        </ChartCard>
+      {/* 신규 vs 재등록 비율 */}
+      <ChartCard
+        title="신규 · 재등록 비율"
+        subtitle="그 달 발급 중 첫 등록(신규) vs 재등록 비율 · 100% 띠그래프"
+      >
+        <MonthlyStackedBars months={data.months} series={regRatioSeries} mode="percent" />
+      </ChartCard>
 
-        {/* 이탈 */}
-        <ChartCard title="이탈 고객 수" subtitle="마지막 이용권이 그 달에 만료된 고객">
-          <MonthlyStackedBars
-            months={data.months}
-            series={[{ label: "이탈고객", color: "#C76C8E", values: data.churn }]}
-            mode="count"
-          />
-        </ChartCard>
-      </div>
+      {/* 이탈 */}
+      <ChartCard title="이탈 고객 수" subtitle="마지막 이용권이 그 달에 만료된 고객">
+        <MonthlyStackedBars
+          months={data.months}
+          series={[{ label: "이탈고객", color: "#C76C8E", values: data.churn }]}
+          mode="count"
+        />
+      </ChartCard>
+
+      {/* 월별 출석 회원수 (마지막) */}
+      <ChartCard title="월별 출석 회원수" subtitle="그 달 1회 이상 출석(체크인)한 회원 수">
+        <MonthlyStackedBars
+          months={data.months}
+          series={[{ label: "출석회원", color: "#5A8BB0", values: data.visited }]}
+          mode="count"
+        />
+      </ChartCard>
     </div>
   );
 }
