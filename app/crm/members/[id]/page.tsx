@@ -2014,6 +2014,7 @@ function UsageSection({
               price={m.price_won}
               period={`${m.start_date} ~ ${m.expires_at}`}
               valid={isValid(m.status, m.expires_at)}
+              paused={m.is_paused}
               onClick={() =>
                 onOpenDetail({
                   tag: "회원권",
@@ -2051,6 +2052,7 @@ function UsageSection({
               price={r.price_won}
               period={`${r.start_date} ~ ${r.expires_at}`}
               valid={isValid(r.status, r.expires_at)}
+              paused={r.is_paused}
               onClick={() =>
                 onOpenDetail({
                   tag: "대여권",
