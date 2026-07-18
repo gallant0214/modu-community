@@ -23,7 +23,7 @@ export async function GET(
   const { data: pass, error } = await supabase
     .from("crm_passes")
     .select(
-      "id, member_id, trainer_member_id, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, vat_included, payment_method, payment_method_custom, issued_at, expires_at, status, memo, created_at"
+      "id, member_id, trainer_member_id, co_trainer_ids, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, vat_included, payment_method, payment_method_custom, issued_at, expires_at, status, memo, created_at"
     )
     .eq("id", passId)
     .eq("center_id", ctx.centerId)
@@ -45,7 +45,10 @@ export async function GET(
     return NextResponse.json({ error: "접근 권한이 없습니다" }, { status: 403 });
   }
 
-  const [{ data: member }, { data: reservations }] = await Promise.all([
+  const coIds = ((pass as { co_trainer_ids?: number[] }).co_trainer_ids ?? []).filter(
+    (v): v is number => !!v
+  );
+  const [{ data: member }, { data: reservations }, { data: coRows }] = await Promise.all([
     supabase.from("crm_members").select("id, name, phone").eq("id", pass.member_id).maybeSingle(),
     supabase
       .from("crm_reservations")
@@ -53,9 +56,19 @@ export async function GET(
       .eq("pass_id", passId)
       .order("starts_at", { ascending: false })
       .limit(100),
+    coIds.length
+      ? supabase.from("crm_center_members").select("id, display_name").in("id", coIds)
+      : Promise.resolve({ data: [] as { id: number; display_name: string }[] }),
   ]);
 
-  return NextResponse.json({ pass, member, reservations: reservations ?? [] });
+  const co_trainers = coIds
+    .map((id) => {
+      const row = (coRows ?? []).find((r) => r.id === id);
+      return row ? { id: row.id, name: row.display_name } : null;
+    })
+    .filter((v): v is { id: number; name: string } => !!v);
+
+  return NextResponse.json({ pass, member, reservations: reservations ?? [], co_trainers });
 }
 
 /**
@@ -86,6 +99,7 @@ export async function PATCH(
     payment_method?: string;
     payment_method_custom?: string;
     trainer_member_id?: number;
+    co_trainer_ids?: number[];
     seller_member_id?: number;
     session_minutes?: number;
     lesson_kind?: string;
@@ -112,6 +126,27 @@ export async function PATCH(
   }
   if (body.trainer_member_id && Number.isFinite(body.trainer_member_id)) {
     patch.trainer_member_id = Number(body.trainer_member_id);
+  }
+  if (body.co_trainer_ids !== undefined) {
+    const primary = Number(patch.trainer_member_id ?? body.trainer_member_id ?? 0);
+    const requested = Array.from(
+      new Set(
+        (Array.isArray(body.co_trainer_ids) ? body.co_trainer_ids : [])
+          .map((n) => Number(n))
+          .filter((n) => Number.isInteger(n) && n > 0 && n !== primary)
+      )
+    );
+    if (requested.length) {
+      // 본인 센터 소속 직원인지 검증
+      const { data: valid } = await supabase
+        .from("crm_center_members")
+        .select("id")
+        .eq("center_id", ctx.centerId)
+        .in("id", requested);
+      patch.co_trainer_ids = (valid ?? []).map((v) => v.id);
+    } else {
+      patch.co_trainer_ids = [];
+    }
   }
   if (body.seller_member_id && Number.isFinite(body.seller_member_id)) {
     patch.seller_member_id = Number(body.seller_member_id);

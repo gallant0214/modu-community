@@ -2489,6 +2489,7 @@ export type Database = {
           center_id: number
           member_id: number
           trainer_member_id: number
+          co_trainer_ids: number[]
           seller_member_id: number
           issue_type: string
           lesson_kind: string
@@ -2515,6 +2516,7 @@ export type Database = {
           center_id: number
           member_id: number
           trainer_member_id: number
+          co_trainer_ids?: number[]
           seller_member_id: number
           issue_type: string
           lesson_kind: string
@@ -2541,6 +2543,7 @@ export type Database = {
           center_id?: number
           member_id?: number
           trainer_member_id?: number
+          co_trainer_ids?: number[]
           seller_member_id?: number
           issue_type?: string
           lesson_kind?: string

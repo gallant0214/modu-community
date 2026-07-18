@@ -2813,6 +2813,7 @@ function PassIssueModal({
   })();
   const [memo, setMemo] = useState("");
   const [trainerId, setTrainerId] = useState<number | "">("");
+  const [coTrainerIds, setCoTrainerIds] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -2881,6 +2882,7 @@ function PassIssueModal({
         body: JSON.stringify({
           member_id: memberId,
           trainer_member_id: Number(trainerId),
+          co_trainer_ids: coTrainerIds,
           seller_member_id: Number(trainerId),
           issue_type: issueType,
           lesson_kind: `${lessonKind}(${totalSessions}회)`,
@@ -2995,6 +2997,12 @@ function PassIssueModal({
             ))}
           </select>
         </CrmField>
+        <CoTrainerPicker
+          staffList={staffList}
+          primaryId={trainerId}
+          value={coTrainerIds}
+          onChange={setCoTrainerIds}
+        />
         <CrmField label="발급 유형">
           <div className="grid grid-cols-4 gap-2">
             {(["new", "renewal", "trial", "service"] as const).map((t) => (
@@ -3167,6 +3175,67 @@ function PassIssueModal({
   );
 }
 
+/** 추가 강사(공동 진행) 다중 선택 — 칩 + 드롭다운으로 추가/삭제 */
+function CoTrainerPicker({
+  staffList,
+  primaryId,
+  value,
+  onChange,
+}: {
+  staffList: { id: number; display_name: string; role: string; status: string }[];
+  primaryId: number | "";
+  value: number[];
+  onChange: (ids: number[]) => void;
+}) {
+  const nameOf = (id: number) => staffList.find((s) => s.id === id)?.display_name ?? `#${id}`;
+  const selectable = staffList.filter(
+    (s) => s.status === "active" && s.id !== primaryId && !value.includes(s.id)
+  );
+  return (
+    <div>
+      <div className="text-[12px] text-[#8C8270] dark:text-zinc-500 mb-1">추가 강사 (공동 진행)</div>
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {value.map((id) => (
+            <span
+              key={id}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[#6B7B3A]/12 text-[#4d5a28] dark:text-[#A8B87A] text-[12px]"
+            >
+              {nameOf(id)}
+              <button
+                type="button"
+                onClick={() => onChange(value.filter((v) => v !== id))}
+                className="text-[#8C8270] hover:text-red-600"
+                title="제거"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <select
+        value=""
+        onChange={(e) => {
+          const id = Number(e.target.value);
+          if (id) onChange([...value, id]);
+        }}
+        className={crmInputClass}
+        disabled={selectable.length === 0}
+      >
+        <option value="">
+          {selectable.length === 0 ? "추가할 강사 없음" : "+ 추가 강사 선택"}
+        </option>
+        {selectable.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.display_name} ({s.role})
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function PassDetailModal({
   passId,
   staffList,
@@ -3194,6 +3263,7 @@ function PassDetailModal({
       status: string;
       consumed: boolean;
     }[];
+    co_trainers?: { id: number; name: string }[];
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -3203,6 +3273,7 @@ function PassDetailModal({
   const [canEdit, setCanEdit] = useState(false);
   // 수정 폼 값 (편집 시작 시 detail 로부터 초기화)
   const [editTrainerId, setEditTrainerId] = useState<number | "">("");
+  const [editCoTrainerIds, setEditCoTrainerIds] = useState<number[]>([]);
   const [editSellerId, setEditSellerId] = useState<number | "">("");
   const [editLessonKind, setEditLessonKind] = useState("");
   const [editSessionMinutes, setEditSessionMinutes] = useState(60);
@@ -3286,6 +3357,7 @@ function PassDetailModal({
     if (!detail?.pass) return;
     const p = detail.pass;
     setEditTrainerId(p.trainer_member_id);
+    setEditCoTrainerIds((detail.co_trainers ?? []).map((c) => c.id));
     setEditSellerId(p.seller_member_id);
     setEditLessonKind(p.lesson_kind ?? "");
     setEditSessionMinutes(p.session_minutes ?? 60);
@@ -3308,6 +3380,7 @@ function PassDetailModal({
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify({
           trainer_member_id: editTrainerId || undefined,
+          co_trainer_ids: editCoTrainerIds,
           seller_member_id: editSellerId || undefined,
           lesson_kind: editLessonKind || undefined,
           session_minutes: editSessionMinutes,
@@ -3332,6 +3405,10 @@ function PassDetailModal({
   const staffMap = new Map(staffList.map((s) => [s.id, s.display_name]));
   const pass = detail?.pass;
   const trainerName = pass ? staffMap.get(pass.trainer_member_id) ?? "—" : "—";
+  const coTrainerNames = (detail?.co_trainers ?? [])
+    .map((c) => c.name || staffMap.get(c.id) || "")
+    .filter(Boolean)
+    .join(", ");
   const sellerName = pass ? staffMap.get(pass.seller_member_id) ?? "—" : "—";
   const paymentLabel = pass
     ? pass.payment_method === "etc" && pass.payment_method_custom
@@ -3365,6 +3442,7 @@ function PassDetailModal({
             rows={[
               ["회원", detail.member?.name ?? "—"],
               ["담당 강사", trainerName],
+              ...(coTrainerNames ? [["추가 강사", coTrainerNames] as [string, string]] : []),
               ["판매 직원", sellerName],
               ["발급일", pass.issued_at],
               [
@@ -3413,6 +3491,14 @@ function PassDetailModal({
                       ))}
                   </select>
                 </CrmField>
+                <div className="col-span-2">
+                  <CoTrainerPicker
+                    staffList={staffList}
+                    primaryId={editTrainerId}
+                    value={editCoTrainerIds}
+                    onChange={setEditCoTrainerIds}
+                  />
+                </div>
                 <CrmField label="판매 직원">
                   <select
                     value={editSellerId}

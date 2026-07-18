@@ -106,6 +106,7 @@ export async function POST(request: Request) {
     expires_at?: string;
     vat_included?: boolean;
     memo?: string;
+    co_trainer_ids?: number[];
     /** 발급 시점에 받은 금액. 미입력 시 price_won 전액(=완납) 으로 간주. */
     paid_amount_won?: number;
   };
@@ -159,6 +160,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "회원 또는 강사를 찾을 수 없습니다" }, { status: 404 });
   }
 
+  // 추가 강사(공동 진행) — 본인 센터 소속 + 주 강사 제외 + 중복 제거
+  let coTrainerIds: number[] = [];
+  const reqCo = Array.from(
+    new Set(
+      (Array.isArray(body.co_trainer_ids) ? body.co_trainer_ids : [])
+        .map((n) => Number(n))
+        .filter((n) => Number.isInteger(n) && n > 0 && n !== trainerMemberId)
+    )
+  );
+  if (reqCo.length) {
+    const { data: validCo } = await supabase
+      .from("crm_center_members")
+      .select("id")
+      .eq("center_id", ctx.centerId)
+      .in("id", reqCo);
+    coTrainerIds = (validCo ?? []).map((v) => v.id);
+  }
+
   const totalSessions = Number(body.total_sessions);
   const priceWon = Number(body.price_won) || 0;
   const paidAmount =
@@ -174,6 +193,7 @@ export async function POST(request: Request) {
       center_id: ctx.centerId,
       member_id: memberId,
       trainer_member_id: trainerMemberId,
+      co_trainer_ids: coTrainerIds,
       seller_member_id: sellerMemberId,
       issue_type: issueType,
       lesson_kind: body.lesson_kind.trim(),
