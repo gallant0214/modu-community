@@ -3,13 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
-import { CrmModal, CrmField } from "../_components/crm-modal";
+import { CrmModal } from "../_components/crm-modal";
 import { crmInputClass } from "../_components/crm-modal";
-import { CONTRACT_CATEGORY_LABEL, formatWon, parseWon } from "../_components/crm-labels";
-import {
-  ContractSectionsEditor,
-  ContractSection,
-} from "../_components/contract-sections-editor";
+import { formatWon, parseWon } from "../_components/crm-labels";
 import {
   PERMISSION_GROUPS,
   buildGradePermissionMatrix,
@@ -90,7 +86,7 @@ interface BootstrapInfo {
 export default function CrmSettingsPage() {
   const router = useRouter();
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<"reservation" | "alerts" | "grades" | "permissions" | "payout" | "contracts" | "lessons" | "logs" | "expenses" | "danger">("reservation");
+  const [tab, setTab] = useState<"reservation" | "alerts" | "notices" | "grades" | "permissions" | "logs" | "expenses" | "danger">("reservation");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [info, setInfo] = useState<BootstrapInfo | null>(null);
@@ -187,20 +183,14 @@ export default function CrmSettingsPage() {
         <TabBtn active={tab === "alerts"} onClick={() => setTab("alerts")}>
           알림
         </TabBtn>
+        <TabBtn active={tab === "notices"} onClick={() => setTab("notices")}>
+          공지 설정
+        </TabBtn>
         <TabBtn active={tab === "grades"} onClick={() => setTab("grades")}>
           등급 관리
         </TabBtn>
         <TabBtn active={tab === "permissions"} onClick={() => setTab("permissions")}>
           직급 권한
-        </TabBtn>
-        <TabBtn active={tab === "payout"} onClick={() => setTab("payout")}>
-          정산 규칙
-        </TabBtn>
-        <TabBtn active={tab === "contracts"} onClick={() => setTab("contracts")}>
-          계약서 관리
-        </TabBtn>
-        <TabBtn active={tab === "lessons"} onClick={() => setTab("lessons")}>
-          수강권 종류
         </TabBtn>
         <TabBtn active={tab === "logs"} onClick={() => setTab("logs")}>
           활동 로그
@@ -352,15 +342,11 @@ export default function CrmSettingsPage() {
         </Card>
       )}
 
+      {tab === "notices" && <NoticesPanel />}
+
       {tab === "grades" && <GradesPanel />}
 
       {tab === "permissions" && <RolePermissionsPanel />}
-
-      {tab === "payout" && <PayoutRulesPanel />}
-
-      {tab === "contracts" && <ContractTemplatesPanel />}
-
-      {tab === "lessons" && <LessonKindsPanel />}
 
       {tab === "logs" && (
         <Card title="최근 활동 (최대 80건)">
@@ -707,227 +693,6 @@ function GradesPanel() {
         <div className="mt-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
           {error}
         </div>
-      )}
-    </Card>
-  );
-}
-
-interface PayoutRule {
-  id: number;
-  target_member_id: number | null;
-  mode: "rate" | "flat";
-  tier_index: number;
-  min_pass_price_won: number;
-  max_pass_price_won: number | null;
-  new_member_value: number;
-  renewal_value: number;
-  trial_value: number;
-}
-
-function PayoutRulesPanel() {
-  const { getIdToken } = useAuth();
-  const [rules, setRules] = useState<PayoutRule[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  // 새 룰 폼
-  const [mode, setMode] = useState<"rate" | "flat">("rate");
-  const [minPrice, setMinPrice] = useState("0");
-  const [maxPrice, setMaxPrice] = useState("");
-  const [newVal, setNewVal] = useState("50");
-  const [renewalVal, setRenewalVal] = useState("50");
-  const [trialVal, setTrialVal] = useState("50");
-  const [adding, setAdding] = useState(false);
-
-  const load = useCallback(async () => {
-    setError("");
-    try {
-      const token = await getIdToken();
-      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch("/api/crm/payout-rules", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "조회 실패");
-      setRules(data.rules ?? []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "네트워크 오류");
-    } finally {
-      setLoading(false);
-    }
-  }, [getIdToken]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const add = async () => {
-    if (adding) return;
-    setAdding(true);
-    setError("");
-    try {
-      const token = await getIdToken();
-      const res = await fetch("/api/crm/payout-rules", {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          target_member_id: null,
-          mode,
-          tier_index: rules.length,
-          min_pass_price_won: Number(minPrice) || 0,
-          max_pass_price_won: maxPrice ? Number(maxPrice) : null,
-          new_member_value: Number(newVal) || 0,
-          renewal_value: Number(renewalVal) || 0,
-          trial_value: Number(trialVal) || 0,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "추가 실패");
-      setMinPrice("0");
-      setMaxPrice("");
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "네트워크 오류");
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  const remove = async (id: number) => {
-    if (!window.confirm("이 룰을 삭제할까요?")) return;
-    const token = await getIdToken();
-    const res = await fetch(`/api/crm/payout-rules/${id}`, {
-      method: "DELETE",
-      headers: { authorization: `Bearer ${token}` },
-    });
-    if (res.ok) load();
-  };
-
-  const fmtMoney = (n: number) => n.toLocaleString("ko-KR");
-
-  return (
-    <Card title="센터 기본 정산 규칙">
-      <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed -mt-1 mb-3">
-        강사 수강권 매출에서 지급할 금액을 가격 구간별로 정의해요. <strong>정률제</strong>는 백분율(%), <strong>정액제</strong>는 세션당 고정 금액(원). 강사별 별도 규칙은 추후 강사 상세 페이지에서 설정.
-      </p>
-
-      {loading ? (
-        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
-      ) : rules.length === 0 ? (
-        <div className="px-3 py-4 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] rounded-lg mb-3">
-          등록된 정산 규칙이 없어요. 아래 폼에서 추가해 주세요.
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800 mb-3">
-          <table className="w-full text-[12.5px]">
-            <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
-              <tr>
-                <th className="text-left px-3 py-2 font-medium">방식</th>
-                <th className="text-left px-3 py-2 font-medium">가격 구간 (원)</th>
-                <th className="text-left px-3 py-2 font-medium">신규</th>
-                <th className="text-left px-3 py-2 font-medium">재등록</th>
-                <th className="text-left px-3 py-2 font-medium">체험</th>
-                <th className="text-right px-3 py-2 font-medium">관리</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rules.map((r) => (
-                <tr key={r.id} className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-                  <td className="px-3 py-2 font-semibold">
-                    {r.mode === "rate" ? "정률제" : "정액제"}
-                  </td>
-                  <td className="px-3 py-2 text-[#6B5D47] dark:text-zinc-400">
-                    {fmtMoney(r.min_pass_price_won)} ~{" "}
-                    {r.max_pass_price_won ? fmtMoney(r.max_pass_price_won) : "∞"}
-                  </td>
-                  <td className="px-3 py-2">
-                    {r.new_member_value}
-                    {r.mode === "rate" ? "%" : "원"}
-                  </td>
-                  <td className="px-3 py-2">
-                    {r.renewal_value}
-                    {r.mode === "rate" ? "%" : "원"}
-                  </td>
-                  <td className="px-3 py-2">
-                    {r.trial_value}
-                    {r.mode === "rate" ? "%" : "원"}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <button
-                      onClick={() => remove(r.id)}
-                      className="px-2 py-0.5 rounded text-[11.5px] border border-red-200 text-red-700 hover:bg-red-50"
-                    >
-                      삭제
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <div className="pt-3 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
-        <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
-          새 규칙 추가
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
-          <select
-            className={crmInputClass}
-            value={mode}
-            onChange={(e) => setMode(e.target.value as "rate" | "flat")}
-          >
-            <option value="rate">정률제 (%)</option>
-            <option value="flat">정액제 (원)</option>
-          </select>
-          <input
-            className={crmInputClass}
-            placeholder="최소 가격"
-            inputMode="numeric"
-            value={minPrice}
-            onChange={(e) => setMinPrice(e.target.value.replace(/\D/g, ""))}
-          />
-          <input
-            className={crmInputClass}
-            placeholder="최대 가격 (빈칸=무한)"
-            inputMode="numeric"
-            value={maxPrice}
-            onChange={(e) => setMaxPrice(e.target.value.replace(/\D/g, ""))}
-          />
-          <input
-            className={crmInputClass}
-            placeholder="신규"
-            inputMode="numeric"
-            value={newVal}
-            onChange={(e) => setNewVal(e.target.value.replace(/\D/g, ""))}
-          />
-          <input
-            className={crmInputClass}
-            placeholder="재등록"
-            inputMode="numeric"
-            value={renewalVal}
-            onChange={(e) => setRenewalVal(e.target.value.replace(/\D/g, ""))}
-          />
-          <input
-            className={crmInputClass}
-            placeholder="체험"
-            inputMode="numeric"
-            value={trialVal}
-            onChange={(e) => setTrialVal(e.target.value.replace(/\D/g, ""))}
-          />
-        </div>
-        <button
-          onClick={add}
-          disabled={adding}
-          className="mt-2 px-4 py-2 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932]"
-        >
-          {adding ? "추가 중…" : "규칙 추가"}
-        </button>
-      </div>
-
-      {error && (
-        <div className="mt-3 px-3 py-2 rounded-lg bg-red-50 text-[13px] text-red-700">{error}</div>
       )}
     </Card>
   );
@@ -1745,23 +1510,34 @@ function FixedExpensesPanel() {
   );
 }
 
-/* ─── 수강권 레슨 종류 패널 ──────────────────────── */
+/* ─── 공지 설정 패널 ──────────────────────── */
 
-interface LessonKind {
+interface Notice {
   id: number;
-  label: string;
-  sort_order: number;
+  title: string;
+  body: string;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
-function LessonKindsPanel() {
+function NoticesPanel() {
   const { getIdToken } = useAuth();
-  const [list, setList] = useState<LessonKind[]>([]);
+  const [list, setList] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newLabel, setNewLabel] = useState("");
-  const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  // 신규 입력
+  const [nTitle, setNTitle] = useState("");
+  const [nBody, setNBody] = useState("");
+  const [nPublished, setNPublished] = useState(true);
+
+  // 편집 상태
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editLabel, setEditLabel] = useState("");
+  const [eTitle, setETitle] = useState("");
+  const [eBody, setEBody] = useState("");
+  const [ePublished, setEPublished] = useState(true);
 
   const load = useCallback(async () => {
     setError("");
@@ -1769,13 +1545,13 @@ function LessonKindsPanel() {
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch("/api/crm/lesson-kinds", {
+      const res = await fetch("/api/crm/notices", {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "조회 실패");
-      setList(data.kinds ?? []);
+      setList(data.notices ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -1789,19 +1565,21 @@ function LessonKindsPanel() {
 
   const add = async () => {
     setError("");
-    const label = newLabel.trim();
-    if (!label) return setError("이름을 입력해 주세요");
+    const title = nTitle.trim();
+    if (!title) return setError("제목을 입력해 주세요");
     setAdding(true);
     try {
       const token = await getIdToken();
-      const res = await fetch("/api/crm/lesson-kinds", {
+      const res = await fetch("/api/crm/notices", {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ label }),
+        body: JSON.stringify({ title, body: nBody.trim(), is_published: nPublished }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "추가 실패");
-      setNewLabel("");
+      setNTitle("");
+      setNBody("");
+      setNPublished(true);
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
@@ -1810,33 +1588,22 @@ function LessonKindsPanel() {
     }
   };
 
-  const remove = async (id: number) => {
-    if (!window.confirm("이 종류를 삭제할까요?")) return;
-    const token = await getIdToken();
-    const res = await fetch(`/api/crm/lesson-kinds/${id}`, {
-      method: "DELETE",
-      headers: { authorization: `Bearer ${token}` },
-    });
-    if (res.ok) load();
+  const startEdit = (x: Notice) => {
+    setEditingId(x.id);
+    setETitle(x.title);
+    setEBody(x.body ?? "");
+    setEPublished(x.is_published);
   };
-
-  const startEdit = (k: LessonKind) => {
-    setEditingId(k.id);
-    setEditLabel(k.label);
-  };
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditLabel("");
-  };
+  const cancelEdit = () => setEditingId(null);
   const saveEdit = async () => {
     if (!editingId) return;
-    const label = editLabel.trim();
-    if (!label) return setError("이름을 입력해 주세요");
+    const title = eTitle.trim();
+    if (!title) return setError("제목을 입력해 주세요");
     const token = await getIdToken();
-    const res = await fetch(`/api/crm/lesson-kinds/${editingId}`, {
+    const res = await fetch(`/api/crm/notices/${editingId}`, {
       method: "PATCH",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ label }),
+      body: JSON.stringify({ title, body: eBody.trim(), is_published: ePublished }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -1847,33 +1614,60 @@ function LessonKindsPanel() {
     load();
   };
 
+  const togglePublish = async (x: Notice) => {
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/notices/${x.id}`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ is_published: !x.is_published }),
+    });
+    if (res.ok) load();
+  };
+
+  const remove = async (id: number) => {
+    if (!window.confirm("이 공지를 삭제할까요?")) return;
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/notices/${id}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (res.ok) load();
+  };
+
   return (
     <div className="space-y-4">
       <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
-        수강권 발급 시 "수업 종류" 드롭다운에 노출될 항목이에요. 예: 개인 PT / 그룹 PT / 재활 등.
+        센터 공지사항을 등록해요. 게시 상태인 공지는 추후 회원 전용 앱 메인 화면에 표시될 예정이에요.
       </p>
 
-      <div className="flex gap-2">
+      {/* 신규 입력 */}
+      <div className="p-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 space-y-2.5">
         <input
           className={crmInputClass}
-          value={newLabel}
-          onChange={(e) => setNewLabel(e.target.value.slice(0, 30))}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              add();
-            }
-          }}
-          placeholder="예: 개인 PT"
-          maxLength={30}
+          value={nTitle}
+          onChange={(e) => setNTitle(e.target.value.slice(0, 100))}
+          placeholder="공지 제목"
+          maxLength={100}
         />
-        <button
-          onClick={add}
-          disabled={adding || !newLabel.trim()}
-          className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-60 whitespace-nowrap"
-        >
-          {adding ? "…" : "+ 추가"}
-        </button>
+        <textarea
+          className={`${crmInputClass} resize-none`}
+          value={nBody}
+          onChange={(e) => setNBody(e.target.value.slice(0, 2000))}
+          placeholder="공지 내용을 입력해 주세요."
+          rows={4}
+        />
+        <div className="flex items-center justify-between gap-2">
+          <div className="w-44">
+            <Toggle label="게시 (앱 노출)" on={nPublished} onChange={setNPublished} />
+          </div>
+          <button
+            onClick={add}
+            disabled={adding || !nTitle.trim()}
+            className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-60 whitespace-nowrap"
+          >
+            {adding ? "…" : "+ 공지 등록"}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -1882,475 +1676,109 @@ function LessonKindsPanel() {
         </div>
       )}
 
+      {/* 목록 */}
       {loading ? (
-        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+        <div className="px-4 py-8 text-center text-[12.5px] text-[#8C8270]">불러오는 중…</div>
       ) : list.length === 0 ? (
-        <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-          등록된 수강권 종류가 없어요. 위 입력창에서 추가해 주세요.
+        <div className="px-4 py-8 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          등록된 공지가 없어요.
         </div>
       ) : (
         <ul className="space-y-2">
-          {list.map((k) => (
+          {list.map((x) => (
             <li
-              key={k.id}
-              className="flex items-center gap-2 px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900"
+              key={x.id}
+              className="p-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900"
             >
-              {editingId === k.id ? (
-                <>
+              {editingId === x.id ? (
+                <div className="space-y-2.5">
                   <input
-                    className={`${crmInputClass} flex-1`}
-                    value={editLabel}
-                    onChange={(e) => setEditLabel(e.target.value.slice(0, 30))}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        saveEdit();
-                      }
-                      if (e.key === "Escape") cancelEdit();
-                    }}
-                    autoFocus
+                    className={crmInputClass}
+                    value={eTitle}
+                    onChange={(e) => setETitle(e.target.value.slice(0, 100))}
+                    maxLength={100}
                   />
-                  <button
-                    onClick={saveEdit}
-                    className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12px] font-semibold"
-                  >
-                    저장
-                  </button>
-                  <button
-                    onClick={cancelEdit}
-                    className="px-2 py-1.5 text-[12px] text-[#6B5D47]"
-                  >
-                    취소
-                  </button>
-                </>
+                  <textarea
+                    className={`${crmInputClass} resize-none`}
+                    value={eBody}
+                    onChange={(e) => setEBody(e.target.value.slice(0, 2000))}
+                    rows={4}
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="w-44">
+                      <Toggle label="게시 (앱 노출)" on={ePublished} onChange={setEPublished} />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={cancelEdit}
+                        className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] font-medium text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                      >
+                        취소
+                      </button>
+                      <button
+                        onClick={saveEdit}
+                        className="px-4 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]"
+                      >
+                        저장
+                      </button>
+                    </div>
+                  </div>
+                </div>
               ) : (
-                <>
-                  <span className="flex-1 text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
-                    {k.label}
-                  </span>
-                  <button
-                    onClick={() => startEdit(k)}
-                    className="px-2.5 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
-                  >
-                    수정
-                  </button>
-                  <button
-                    onClick={() => remove(k.id)}
-                    className="px-2.5 py-1 rounded-md border border-red-200 text-red-700 text-[12px] hover:bg-red-50"
-                  >
-                    삭제
-                  </button>
-                </>
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
+                          {x.title}
+                        </span>
+                        <span
+                          className={`shrink-0 px-1.5 py-0.5 rounded text-[10.5px] font-semibold ${
+                            x.is_published
+                              ? "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/30 dark:text-[#A8B87A]"
+                              : "bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
+                          }`}
+                        >
+                          {x.is_published ? "게시중" : "숨김"}
+                        </span>
+                      </div>
+                      {x.body && (
+                        <p className="mt-1 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap line-clamp-3">
+                          {x.body}
+                        </p>
+                      )}
+                      <div className="mt-1.5 text-[11px] text-[#A89B80] dark:text-zinc-500">
+                        {formatDateTime(x.updated_at)}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 gap-1.5">
+                      <button
+                        onClick={() => togglePublish(x)}
+                        className="px-2.5 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] font-medium text-[#6B5D47] dark:text-zinc-400 hover:border-[#6B7B3A]/40"
+                      >
+                        {x.is_published ? "숨기기" : "게시"}
+                      </button>
+                      <button
+                        onClick={() => startEdit(x)}
+                        className="px-2.5 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] font-medium text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
+                      >
+                        수정
+                      </button>
+                      <button
+                        onClick={() => remove(x.id)}
+                        className="px-2.5 py-1 rounded-lg border border-red-200 text-[12px] font-medium text-red-600 hover:bg-red-50"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
             </li>
           ))}
         </ul>
       )}
     </div>
-  );
-}
-
-/* ─── 계약서 양식 관리 패널 ──────────────────────── */
-
-type ContractCategory = "purchase" | "transfer" | "refund" | "employment" | "etc";
-
-interface ContractTemplate {
-  id: number;
-  category: ContractCategory;
-  title: string;
-  created_at: string;
-  updated_at: string;
-}
-
-function ContractTemplatesPanel() {
-  const { getIdToken } = useAuth();
-  const [list, setList] = useState<ContractTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [error, setError] = useState("");
-
-  const load = useCallback(async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const token = await getIdToken();
-      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch("/api/crm/contracts?sort=name_asc", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "조회 실패");
-      setList(data.contracts ?? []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "네트워크 오류");
-    } finally {
-      setLoading(false);
-    }
-  }, [getIdToken]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
-          회원·직원과 체결할 계약서 양식을 작성하고 관리해요.
-        </p>
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] whitespace-nowrap"
-        >
-          + 새 양식 작성
-        </button>
-      </div>
-
-      {error && (
-        <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
-      ) : list.length === 0 ? (
-        <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-          등록된 양식이 없어요. + 새 양식 작성 으로 시작해 보세요.
-        </div>
-      ) : (
-        <ul className="space-y-2">
-          {list.map((t) => (
-            <li key={t.id}>
-              <button
-                onClick={() => setEditId(t.id)}
-                className="w-full text-left px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
-                    {t.title}
-                  </span>
-                  <span className="shrink-0 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#F5F0E5] text-[#6B5D47]">
-                    {CONTRACT_CATEGORY_LABEL[t.category] ?? t.category}
-                  </span>
-                </div>
-                <div className="mt-1 text-[11.5px] text-[#A89B80]">
-                  수정 {t.updated_at?.slice(0, 10)}
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <ContractTemplateEditModal
-        mode="create"
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onSaved={() => {
-          setCreateOpen(false);
-          load();
-        }}
-      />
-
-      <ContractTemplateEditModal
-        mode="edit"
-        templateId={editId}
-        open={editId !== null}
-        onClose={() => setEditId(null)}
-        onSaved={() => {
-          setEditId(null);
-          load();
-        }}
-        onDeleted={() => {
-          setEditId(null);
-          load();
-        }}
-      />
-    </div>
-  );
-}
-
-function ContractTemplateEditModal({
-  mode,
-  open,
-  templateId,
-  onClose,
-  onSaved,
-  onDeleted,
-}: {
-  mode: "create" | "edit";
-  open: boolean;
-  templateId?: number | null;
-  onClose: () => void;
-  onSaved: () => void;
-  onDeleted?: () => void;
-}) {
-  const { getIdToken } = useAuth();
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<string>("purchase");
-  const [customCats, setCustomCats] = useState<{ id: number; key: string; label: string }[]>([]);
-  const [newCatOpen, setNewCatOpen] = useState(false);
-  const [newCatLabel, setNewCatLabel] = useState("");
-  const [addingCat, setAddingCat] = useState(false);
-  const [sections, setSections] = useState<ContractSection[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!open) {
-      setTitle("");
-      setCategory("purchase");
-      setSections([]);
-      setNewCatOpen(false);
-      setNewCatLabel("");
-      setError("");
-      return;
-    }
-    // 카테고리 로드
-    (async () => {
-      const token = await getIdToken();
-      if (!token) return;
-      const res = await fetch("/api/crm/contract-categories", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setCustomCats(data.categories ?? []);
-      }
-    })();
-    if (mode === "edit" && templateId) {
-      (async () => {
-        setLoading(true);
-        try {
-          const token = await getIdToken();
-          const res = await fetch(`/api/crm/contracts/${templateId}`, {
-            headers: { authorization: `Bearer ${token}` },
-            cache: "no-store",
-          });
-          const data = await res.json();
-          if (res.ok && data.contract) {
-            setTitle(data.contract.title);
-            setCategory(data.contract.category);
-            const secs = Array.isArray(data.contract.sections) ? data.contract.sections : [];
-            let normalized = secs.map(
-              (
-                s: { key?: string; title?: string; body?: string; required?: boolean },
-                i: number
-              ) => ({
-                key: s.key || `s${i + 1}`,
-                title: s.title || "",
-                body: s.body || "",
-                required: s.required !== false,
-              })
-            );
-            if (normalized.length === 0 && data.contract.body) {
-              normalized = parseTemplateBodyToSections(data.contract.body);
-            }
-            setSections(normalized);
-          } else {
-            setError(data?.error || "조회 실패");
-          }
-        } catch (e) {
-          setError(e instanceof Error ? e.message : "네트워크 오류");
-        } finally {
-          setLoading(false);
-        }
-      })();
-    }
-  }, [open, mode, templateId, getIdToken]);
-
-  const addCategory = async () => {
-    setError("");
-    const label = newCatLabel.trim();
-    if (!label) return setError("카테고리 이름을 입력해 주세요");
-    setAddingCat(true);
-    try {
-      const token = await getIdToken();
-      const res = await fetch("/api/crm/contract-categories", {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ label }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "추가 실패");
-      setCustomCats((prev) => [...prev, data.category]);
-      setCategory(data.category.key);
-      setNewCatLabel("");
-      setNewCatOpen(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "네트워크 오류");
-    } finally {
-      setAddingCat(false);
-    }
-  };
-
-  const submit = async () => {
-    setError("");
-    if (!title.trim()) return setError("제목을 입력해주세요");
-    setSubmitting(true);
-    try {
-      const token = await getIdToken();
-      const path =
-        mode === "edit" && templateId
-          ? `/api/crm/contracts/${templateId}`
-          : "/api/crm/contracts";
-      const method = mode === "edit" ? "PATCH" : "POST";
-      const res = await fetch(path, {
-        method,
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), category, sections }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "저장 실패");
-      onSaved();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "네트워크 오류");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const remove = async () => {
-    if (!templateId) return;
-    if (!window.confirm("이 양식을 삭제할까요?")) return;
-    const token = await getIdToken();
-    const res = await fetch(`/api/crm/contracts/${templateId}`, {
-      method: "DELETE",
-      headers: { authorization: `Bearer ${token}` },
-    });
-    if (res.ok) onDeleted?.();
-  };
-
-  return (
-    <CrmModal
-      open={open}
-      onClose={onClose}
-      title={mode === "edit" ? "양식 수정" : "새 양식 작성"}
-      size="lg"
-    >
-      {loading ? (
-        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
-      ) : (
-        <div className="space-y-3">
-          <CrmField label="카테고리" required>
-            {newCatOpen ? (
-              <div className="flex items-center gap-2">
-                <input
-                  autoFocus
-                  type="text"
-                  value={newCatLabel}
-                  onChange={(e) => setNewCatLabel(e.target.value.slice(0, 20))}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addCategory();
-                    }
-                    if (e.key === "Escape") {
-                      setNewCatOpen(false);
-                      setNewCatLabel("");
-                    }
-                  }}
-                  placeholder="새 카테고리 이름"
-                  className={`${crmInputClass} flex-1`}
-                />
-                <button
-                  type="button"
-                  onClick={addCategory}
-                  disabled={addingCat || !newCatLabel.trim()}
-                  className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold disabled:opacity-60"
-                >
-                  {addingCat ? "…" : "추가"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewCatOpen(false);
-                    setNewCatLabel("");
-                  }}
-                  className="px-2 py-2 rounded-lg text-[13px] text-[#6B5D47]"
-                >
-                  취소
-                </button>
-              </div>
-            ) : (
-              <select
-                className={crmInputClass}
-                value={category}
-                onChange={(e) => {
-                  if (e.target.value === "__add__") {
-                    setNewCatOpen(true);
-                  } else {
-                    setCategory(e.target.value);
-                  }
-                }}
-              >
-                {(["purchase", "transfer", "refund", "employment", "etc"] as const).map((k) => (
-                  <option key={k} value={k}>
-                    {CONTRACT_CATEGORY_LABEL[k]}
-                  </option>
-                ))}
-                {customCats.map((c) => (
-                  <option key={c.key} value={c.key}>
-                    {c.label}
-                  </option>
-                ))}
-                <option value="__add__">+ 생성하기</option>
-              </select>
-            )}
-          </CrmField>
-          <CrmField label="제목" required>
-            <input
-              className={crmInputClass}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="예) 피티 회원가입 계약서"
-              autoFocus
-            />
-          </CrmField>
-          <CrmField label="내용 (섹션별)">
-            <ContractSectionsEditor sections={sections} onChange={setSections} />
-          </CrmField>
-
-          {error && (
-            <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
-              {error}
-            </div>
-          )}
-
-          <div className="flex gap-2 pt-1">
-            {mode === "edit" && (
-              <button
-                type="button"
-                onClick={remove}
-                className="px-4 py-2.5 rounded-lg border border-red-200 text-red-700 text-[13px] font-semibold hover:bg-red-50"
-              >
-                삭제
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-            >
-              취소
-            </button>
-            <button
-              type="button"
-              onClick={submit}
-              disabled={submitting}
-              className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
-            >
-              {submitting ? "저장 중…" : "저장"}
-            </button>
-          </div>
-        </div>
-      )}
-    </CrmModal>
   );
 }
 
@@ -2461,39 +1889,3 @@ function formatDateTime(iso: string) {
 }
 
 /** 구버전 단일 body 안의 "[제목]" 헤더를 기준으로 섹션 배열로 분리 */
-function parseTemplateBodyToSections(raw: string): ContractSection[] {
-  if (!raw) return [];
-  const lines = raw.split("\n");
-  const out: ContractSection[] = [];
-  let curTitle = "";
-  let curBody: string[] = [];
-  let idx = 0;
-  const push = () => {
-    const bodyText = curBody.join("\n").trim();
-    if (curTitle || bodyText) {
-      const isOptional = /광고/.test(curTitle);
-      out.push({
-        key: `s${idx + 1}`,
-        title: curTitle || `섹션 ${idx + 1}`,
-        body: bodyText,
-        required: !isOptional,
-      });
-      idx += 1;
-    }
-  };
-  for (const line of lines) {
-    const m = line.match(/^\s*\[(.+?)\]\s*$/);
-    if (m) {
-      push();
-      curTitle = m[1].trim();
-      curBody = [];
-    } else {
-      curBody.push(line);
-    }
-  }
-  push();
-  if (out.length === 0) {
-    out.push({ key: "s1", title: "약관", body: raw.trim(), required: true });
-  }
-  return out;
-}
