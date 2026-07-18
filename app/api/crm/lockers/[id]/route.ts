@@ -97,6 +97,10 @@ export async function PATCH(
     history.start_date = body.start_date;
     history.expires_at = body.expires_at;
     history.note = body.note ?? null;
+    // 배정 시 등록한 비밀번호 기록 ("무엇으로 등록했는지")
+    if (body.password) {
+      history.changes = { password: { from: null, to: body.password } };
+    }
   } else if (action === "return") {
     if (locker.state !== "assigned") {
       return NextResponse.json({ error: "배정된 락커만 회수할 수 있습니다" }, { status: 400 });
@@ -122,6 +126,10 @@ export async function PATCH(
     history.member_id = locker.assigned_member_id;
     history.member_name = memberName;
     history.note = body.note ?? null;
+    // 회수 시점에 남아있던 비밀번호 기록 (해제됨)
+    if (locker.password) {
+      history.changes = { password: { from: locker.password, to: null } };
+    }
   } else if (action === "update") {
     const changes: Record<string, { from: unknown; to: unknown }> = {};
     if (body.password !== undefined) {
