@@ -177,7 +177,18 @@ export async function GET(request: Request) {
   // KST 오늘 (예정 판정용)
   const todayKstYmd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const holdSet = new Set<number>(); // 유효 이용권 중 홀딩(정지)중인 회원
-  const scheduledSet = new Set<number>(); // 시작일이 미래인(아직 시작 안 함) 이용권 보유 회원
+  const hasActiveSet = new Set<number>(); // 지금 이용중(시작함 & 만료 전)인 이용권 보유 회원
+  const hasFutureSet = new Set<number>(); // 시작일이 미래인(아직 시작 안 함) 이용권 보유 회원
+
+  // 유효 이용권 1건을 사람별 활성/미래/홀딩 집합에 반영
+  const classify = (memberId: number, startDate: string | null, expires: string, paused: boolean) => {
+    if (paused) holdSet.add(memberId);
+    if (startDate && startDate > todayKstYmd) {
+      hasFutureSet.add(memberId); // 아직 시작 안 함
+    } else if (!expires || expires >= todayKstYmd) {
+      hasActiveSet.add(memberId); // 시작됨(또는 시작일 없음) & 만료 전 → 현재 이용중
+    }
+  };
 
   const passMap = new Map<number, { kind: string; type: "lesson" | "membership"; remaining: number | null; expires: string }[]>();
   for (const p of passesData) {
@@ -189,8 +200,7 @@ export async function GET(request: Request) {
       expires: p.expires_at,
     });
     passMap.set(p.member_id, arr);
-    if (p.is_paused) holdSet.add(p.member_id);
-    if (p.start_date && p.start_date > todayKstYmd) scheduledSet.add(p.member_id);
+    classify(p.member_id, p.start_date, p.expires_at, p.is_paused);
   }
   for (const m of mbData) {
     const arr = passMap.get(m.member_id) ?? [];
@@ -201,8 +211,7 @@ export async function GET(request: Request) {
       expires: m.expires_at,
     });
     passMap.set(m.member_id, arr);
-    if (m.is_paused) holdSet.add(m.member_id);
-    if (m.start_date && m.start_date > todayKstYmd) scheduledSet.add(m.member_id);
+    classify(m.member_id, m.start_date, m.expires_at, m.is_paused);
   }
 
   const lockerMap = new Map<number, string>();
@@ -234,7 +243,8 @@ export async function GET(request: Request) {
       last_visit_at: lastVisitMap.get(m.id) ?? null,
       max_expires_at: maxExpires,
       on_hold: holdSet.has(m.id),
-      scheduled: scheduledSet.has(m.id),
+      // 예정 = 미래 시작 이용권이 있고, 지금 이용중인 이용권은 없는 회원
+      scheduled: hasFutureSet.has(m.id) && !hasActiveSet.has(m.id),
     };
   });
 
