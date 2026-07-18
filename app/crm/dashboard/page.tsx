@@ -52,6 +52,7 @@ interface SummaryResp {
     working: GenderCount;
     inactive15d?: GenderCount;
     weekly?: { label: string; count: number }[];
+    weeklyAvg?: { label: string; count: number }[];
     weekStart?: string;
   };
   revenue: {
@@ -391,6 +392,11 @@ export default function CrmDashboardPage() {
                     }))}
                     unit="명"
                     color="#5A8BB0"
+                    overlay={(summary.attendance.weeklyAvg ?? []).map((w) => ({
+                      label: w.label,
+                      value: w.count,
+                    }))}
+                    overlayLabel="평균(최근 12주)"
                   />
                 </div>
                 <Link href="/crm/members?status=valid&absence=15d" className="block md:max-w-xs">

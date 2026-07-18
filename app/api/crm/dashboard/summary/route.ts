@@ -248,6 +248,36 @@ export async function GET(request: Request) {
     count: weeklySets[i].size,
   }));
 
+  // 요일별 평균 출석 (이번 주 직전 최근 AVG_WEEKS 주 누적 평균) — 연한 보조선용
+  const AVG_WEEKS = 12;
+  const avgStart = shiftYmd(weekStart, -7 * AVG_WEEKS);
+  const avgAtt = await paginateAll<{ member_id: number; checked_in_at: string }>((f, t) =>
+    supabase
+      .from("crm_attendances")
+      .select("member_id, checked_in_at")
+      .eq("center_id", ctx.centerId)
+      .gte("checked_in_at", `${avgStart}T00:00:00+09:00`)
+      .lt("checked_in_at", `${weekStart}T00:00:00+09:00`)
+      .range(f, t)
+  );
+  // 날짜별 unique 출석 인원 → 요일별 합산 후 주 수로 나눠 평균
+  const dayMembers = new Map<string, Set<number>>();
+  for (const a of avgAtt) {
+    const kst = new Date(new Date(a.checked_in_at).getTime() + 9 * 3600 * 1000);
+    const ymd = kst.toISOString().slice(0, 10);
+    if (!dayMembers.has(ymd)) dayMembers.set(ymd, new Set());
+    dayMembers.get(ymd)!.add(a.member_id);
+  }
+  const wdSum = Array<number>(7).fill(0);
+  for (const [ymd, set] of dayMembers) {
+    const wd = (new Date(`${ymd}T00:00:00Z`).getUTCDay() + 6) % 7;
+    wdSum[wd] += set.size;
+  }
+  const weeklyAvgAttendance = weekdayLabels.map((label, i) => ({
+    label,
+    count: Math.round((wdSum[i] / AVG_WEEKS) * 10) / 10,
+  }));
+
   // 매출 통계 (period 내 발급)
   // 수강권(personal/group PT/OT etc) — crm_passes
   // 회원권 — crm_memberships
@@ -331,6 +361,7 @@ export async function GET(request: Request) {
       working: workingMembers,
       inactive15d: inactive15dMembers,
       weekly: weeklyAttendance,
+      weeklyAvg: weeklyAvgAttendance,
       weekStart,
     },
     revenue: {

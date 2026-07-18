@@ -16,6 +16,12 @@ interface Props {
   color?: string;
   /** 차트 픽셀 높이 */
   height?: number;
+  /** 연하게 겹쳐 그릴 보조선(예: 평균). points 와 인덱스로 정렬됨. */
+  overlay?: Point[];
+  /** 보조선 색상. 기본 회색. */
+  overlayColor?: string;
+  /** 보조선 범례 라벨 (예: "평균"). */
+  overlayLabel?: string;
 }
 
 /**
@@ -27,6 +33,9 @@ export function CrmLineChart({
   unit = "",
   color = "#6B7B3A",
   height = 220,
+  overlay,
+  overlayColor = "#9AA0A6",
+  overlayLabel,
 }: Props) {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
   const W = 600;
@@ -46,29 +55,37 @@ export function CrmLineChart({
     );
   }
 
-  const max = Math.max(...points.map((p) => p.value), 1);
+  const overlayPts = overlay ?? [];
+  const max = Math.max(...points.map((p) => p.value), ...overlayPts.map((p) => p.value), 1);
   const min = 0;
   const xStep = points.length > 1 ? innerW / (points.length - 1) : innerW / 2;
   const y = (v: number) => padT + innerH - ((v - min) / (max - min || 1)) * innerH;
+  const xAt = (i: number) => padL + (points.length > 1 ? i * xStep : innerW / 2);
 
   const path = points
-    .map((p, i) => {
-      const x = padL + (points.length > 1 ? i * xStep : innerW / 2);
-      return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y(p.value).toFixed(1)}`;
-    })
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${y(p.value).toFixed(1)}`)
+    .join(" ");
+
+  const overlayPath = overlayPts
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${y(p.value).toFixed(1)}`)
     .join(" ");
 
   // 4개 그리드 라인
   const gridYs = [0, 0.25, 0.5, 0.75, 1].map((t) => padT + innerH * (1 - t));
   const gridValues = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(max * t));
 
-  const showTooltip = (event: MouseEvent<SVGCircleElement>, p: Point) => {
+  const showTooltip = (event: MouseEvent<SVGCircleElement>, p: Point, i: number) => {
     const rect = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
     if (!rect) return;
+    const ov = overlayPts[i];
+    const avgText =
+      ov !== undefined
+        ? ` · ${overlayLabel ?? "평균"} ${formatTooltipValue(ov.value, unit)}`
+        : "";
     setTooltip({
       x: event.clientX - rect.left + 12,
       y: event.clientY - rect.top + 12,
-      text: `${p.label}: ${formatTooltipValue(p.value, unit)}`,
+      text: `${p.label}: ${formatTooltipValue(p.value, unit)}${avgText}`,
     });
   };
 
@@ -117,6 +134,18 @@ export function CrmLineChart({
           </text>
         ))}
 
+        {/* 보조선(평균) — 연하게, 점선 */}
+        {overlayPath && (
+          <path
+            d={overlayPath}
+            fill="none"
+            stroke={overlayColor}
+            strokeWidth={1.5}
+            strokeDasharray="4 4"
+            strokeOpacity={0.55}
+          />
+        )}
+
         {/* 라인 */}
         <path d={path} fill="none" stroke={color} strokeWidth={2} />
 
@@ -132,13 +161,28 @@ export function CrmLineChart({
                 cy={py}
                 r={11}
                 fill="transparent"
-                onMouseMove={(event) => showTooltip(event, p)}
+                onMouseMove={(event) => showTooltip(event, p, i)}
                 onMouseLeave={() => setTooltip(null)}
               />
             </g>
           );
         })}
       </svg>
+      {overlayLabel && overlayPts.length > 0 && (
+        <div className="mt-1.5 flex items-center gap-3 text-[11px] text-[#8C8270] dark:text-zinc-500">
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block w-4 h-0.5 rounded" style={{ background: color }} />
+            이번 주
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span
+              className="inline-block w-4 h-0 border-t-2 border-dashed"
+              style={{ borderColor: overlayColor }}
+            />
+            {overlayLabel}
+          </span>
+        </div>
+      )}
       {tooltip && (
         <div
           className="pointer-events-none absolute z-20 rounded-md border border-[#D9CBB5] bg-[#2A251D] px-2.5 py-1.5 text-[11.5px] font-semibold text-white shadow-lg dark:border-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
