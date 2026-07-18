@@ -575,15 +575,17 @@ export default function CrmMembersPage() {
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const pageRows = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // 필터/검색 변경 시 1페이지로. 단 첫 마운트(복원된 페이지)와 정렬 변경은 제외
-  const skipPageReset = useRef(true);
+  // 필터/검색 변경 시에만 1페이지로. 마운트·정렬변경·StrictMode 이중호출에는 반응하지 않음
+  // (ref 시그니처 비교: 실제로 필터가 바뀔 때만 리셋 → 뒤로가기 시 memoPage 유지)
+  const filterSig = JSON.stringify([
+    query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fLocker, fGoods,
+  ]);
+  const lastFilterSig = useRef(filterSig);
   useEffect(() => {
-    if (skipPageReset.current) {
-      skipPageReset.current = false;
-      return;
-    }
+    if (lastFilterSig.current === filterSig) return; // 마운트/무변화 → 페이지 유지
+    lastFilterSig.current = filterSig;
     setPage(1);
-  }, [query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fLocker, fGoods]);
+  }, [filterSig, setPage]);
 
   const resetFilters = () => {
     setQuery("");
