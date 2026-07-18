@@ -36,7 +36,7 @@ export async function PATCH(
     patch.amount_won = Math.max(0, Math.floor(Number(body.amount_won) || 0));
   }
   if (body.memo !== undefined) {
-    patch.memo = body.memo.trim() || null;
+    patch.memo = body.memo?.trim() || null;
   }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없어요" }, { status: 400 });

@@ -46,7 +46,7 @@ export async function PATCH(
     patch.billing_day = normalizeBillingDay(body.billing_day);
   }
   if (body.memo !== undefined) {
-    patch.memo = body.memo.trim() || null;
+    patch.memo = body.memo?.trim() || null;
   }
   if (body.sort_order !== undefined) {
     patch.sort_order = Number(body.sort_order) || 100;
