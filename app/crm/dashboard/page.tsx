@@ -6,6 +6,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { CrmLineChart } from "../_components/crm-line-chart";
 import { CrmDonutChart } from "../_components/crm-donut-chart";
 import { PAYMENT_METHOD_LABEL, formatWon } from "../_components/crm-labels";
+import { CustomerStatusView } from "./_components/customer-status-view";
 
 interface TrendPoint {
   ym: string;
@@ -108,6 +109,7 @@ export default function CrmDashboardPage() {
   const [summary, setSummary] = useState<SummaryResp | null>(null);
   const [me, setMe] = useState<BootstrapResp | null>(null);
   const [period, setPeriod] = useState<Period>("month");
+  const [view, setView] = useState<"overview" | "customers">("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -144,6 +146,8 @@ export default function CrmDashboardPage() {
 
   // 재무 지표(매출/결제/랭킹) 가시성 — dashboard.finance 권한 기반 (owner 는 서버측에서 항상 true)
   const canFinance = me?.permissions?.["dashboard.finance"] ?? false;
+  // 고객 현황은 전체 센터 집계 → trainer 제외 (데이터 격리)
+  const canCustomers = !!me && me.role !== "trainer";
 
   const todayLabel = (() => {
     const d = new Date();
@@ -229,6 +233,22 @@ export default function CrmDashboardPage() {
         )}
       </header>
 
+      {/* 상단 탭: 운영 현황 / 고객 현황 (전체 집계라 trainer 제외) */}
+      <div className="mb-4 flex gap-1 border-b border-[#E8E0D0] dark:border-zinc-800">
+        <DashTab active={view === "overview"} onClick={() => setView("overview")}>
+          운영 현황
+        </DashTab>
+        {canCustomers && (
+          <DashTab active={view === "customers"} onClick={() => setView("customers")}>
+            고객 현황
+          </DashTab>
+        )}
+      </div>
+
+      {view === "customers" && canCustomers ? (
+        <CustomerStatusView />
+      ) : (
+      <>
       {error && (
         <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
           {error}
@@ -585,7 +605,24 @@ export default function CrmDashboardPage() {
           )}
         </div>
       )}
+      </>
+      )}
     </div>
+  );
+}
+
+function DashTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3.5 py-2 -mb-px text-[13.5px] font-semibold border-b-2 transition-colors whitespace-nowrap ${
+        active
+          ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A]"
+          : "border-transparent text-[#8C8270] dark:text-zinc-500 hover:text-[#3A342A] dark:hover:text-zinc-300"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
