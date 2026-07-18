@@ -561,9 +561,14 @@ export default function CrmLockersPage() {
                         <button
                           key={l.id}
                           onClick={() => setPickedLocker(l)}
-                          className={`aspect-square rounded-lg border text-[13.5px] font-bold flex items-center justify-center transition-colors ${cellCls(l)} ${dimmed ? "opacity-25" : ""}`}
+                          className={`aspect-square rounded-lg border font-bold flex flex-col items-center justify-center leading-none transition-colors ${cellCls(l)} ${dimmed ? "opacity-25" : ""}`}
                         >
-                          {l.number}
+                          <span className="text-[13.5px]">{l.number}</span>
+                          {l.expires_at && (
+                            <span className="mt-0.5 text-[7.5px] font-medium opacity-80">
+                              ~{expireShort(l.expires_at)}까지
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -576,9 +581,14 @@ export default function CrmLockersPage() {
                     <button
                       key={l.id}
                       onClick={() => setPickedLocker(l)}
-                      className={`aspect-square rounded-lg border text-[13.5px] font-bold flex items-center justify-center transition-colors ${cellCls(l)}`}
+                      className={`aspect-square rounded-lg border font-bold flex flex-col items-center justify-center leading-none transition-colors ${cellCls(l)}`}
                     >
-                      {l.number}
+                      <span className="text-[13.5px]">{l.number}</span>
+                      {l.expires_at && (
+                        <span className="mt-0.5 text-[7.5px] font-medium opacity-80">
+                          ~{expireShort(l.expires_at)}까지
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -1000,8 +1010,13 @@ function LockerCard({
             {locker.member.name}
           </div>
           {locker.expires_at && (
-            <div className="mt-auto text-[11.5px] text-[#8C8270] dark:text-zinc-500 truncate">
-              {expireSubtitle(locker.expires_at, today)}
+            <div className="mt-auto truncate">
+              <div className="text-[11.5px] font-medium text-[#3A342A] dark:text-zinc-300">
+                ~{expireShort(locker.expires_at)}까지
+              </div>
+              <div className="text-[10.5px] text-[#8C8270] dark:text-zinc-500">
+                {expireSubtitle(locker.expires_at, today)}
+              </div>
             </div>
           )}
         </>
@@ -1012,6 +1027,14 @@ function LockerCard({
       )}
     </button>
   );
+}
+
+/** "2026-09-10" → "26.09.10" (박스 표시용 짧은 만료일) */
+function expireShort(ymd: string | null): string {
+  if (!ymd) return "";
+  const m = ymd.slice(0, 10).split("-");
+  if (m.length !== 3) return "";
+  return `${m[0].slice(2)}.${m[1]}.${m[2]}`;
 }
 
 function expireSubtitle(expires: string, today: string): string {
