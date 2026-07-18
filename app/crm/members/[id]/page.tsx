@@ -436,7 +436,12 @@ export default function CrmMemberDetailPage() {
         onOpenDetail={setPaymentDetail}
       />
 
-      <HoldingDetailModal detail={paymentDetail} onClose={() => setPaymentDetail(null)} />
+      <HoldingDetailModal
+        detail={paymentDetail}
+        onClose={() => setPaymentDetail(null)}
+        staffList={staffList}
+        onSaved={() => setUsageReload((n) => n + 1)}
+      />
 
       <SignedContractsSection memberId={member.id} />
 
@@ -1905,6 +1910,12 @@ interface PaymentDetail {
   name: string;
   period: string | null;
   source: "record" | "snapshot";
+  /** 편집용 (record 인 경우) */
+  id?: number;
+  kind?: "membership" | "rental";
+  sellerMemberId?: number | null;
+  startDate?: string | null;
+  expiresAt?: string | null;
   priceWon?: number;
   discountWon?: number;
   vatIncluded?: boolean;
@@ -1988,6 +1999,11 @@ function UsageSection({
                   name: m.plan_name,
                   period: `${m.start_date} ~ ${m.expires_at}`,
                   source: "record",
+                  id: m.id,
+                  kind: "membership",
+                  sellerMemberId: m.seller_member_id,
+                  startDate: m.start_date,
+                  expiresAt: m.expires_at,
                   priceWon: m.price_won,
                   discountWon: m.discount_won,
                   vatIncluded: m.vat_included,
@@ -2018,6 +2034,11 @@ function UsageSection({
                   name: r.item_name,
                   period: `${r.start_date} ~ ${r.expires_at}`,
                   source: "record",
+                  id: r.id,
+                  kind: "rental",
+                  sellerMemberId: r.seller_member_id,
+                  startDate: r.start_date,
+                  expiresAt: r.expires_at,
                   priceWon: r.price_won,
                   discountWon: r.discount_won,
                   vatIncluded: r.vat_included,
@@ -2091,11 +2112,106 @@ function UsageCard({
 function HoldingDetailModal({
   detail,
   onClose,
+  staffList,
+  onSaved,
 }: {
   detail: PaymentDetail | null;
   onClose: () => void;
+  staffList: { id: number; display_name: string; role: string; status: string }[];
+  onSaved: () => void;
 }) {
+  const { getIdToken } = useAuth();
   const open = detail !== null;
+  const editable = !!detail && detail.source === "record" && !!detail.id && !!detail.kind;
+
+  const [canEdit, setCanEdit] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // 편집 폼 값
+  const [ePrice, setEPrice] = useState(0);
+  const [eDiscount, setEDiscount] = useState(0);
+  const [eVat, setEVat] = useState(false);
+  const [eMethod, setEMethod] = useState<string>("card");
+  const [eMethodCustom, setEMethodCustom] = useState("");
+  const [eSeller, setESeller] = useState<number | "">("");
+  const [eStart, setEStart] = useState("");
+  const [eExpires, setEExpires] = useState("");
+  const [eMemo, setEMemo] = useState("");
+
+  // 모달 열릴 때 권한 조회 + 편집 상태 초기화
+  useEffect(() => {
+    setEditing(false);
+    setError("");
+    if (!open) return;
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/bootstrap", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCanEdit(!!data.permissions?.["sales.edit"]);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [open, getIdToken]);
+
+  const startEdit = () => {
+    if (!detail) return;
+    setEPrice(detail.priceWon ?? 0);
+    setEDiscount(detail.discountWon ?? 0);
+    setEVat(!!detail.vatIncluded);
+    setEMethod(detail.paymentMethod || "card");
+    setEMethodCustom(detail.paymentCustom || "");
+    setESeller(detail.sellerMemberId ?? "");
+    setEStart(detail.startDate ?? "");
+    setEExpires(detail.expiresAt ?? "");
+    setEMemo(detail.memo ?? "");
+    setError("");
+    setEditing(true);
+  };
+
+  const saveEdit = async () => {
+    if (!detail?.id || !detail.kind || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const path = detail.kind === "membership" ? "memberships" : "rentals";
+      const res = await fetch(`/api/crm/${path}/${detail.id}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          price_won: ePrice,
+          discount_won: eDiscount,
+          vat_included: eVat,
+          payment_method: eMethod,
+          payment_method_custom: eMethod === "etc" ? eMethodCustom : undefined,
+          seller_member_id: eSeller || undefined,
+          start_date: eStart || undefined,
+          expires_at: eExpires || undefined,
+          memo: eMemo,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "수정 실패");
+      setEditing(false);
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const paymentLabel =
     detail?.paymentMethod === "etc" && detail?.paymentCustom
       ? `${detail.paymentCustom} (기타)`
@@ -2172,17 +2288,139 @@ function HoldingDetailModal({
                   : []),
             ]}
           />
-          {detail.memo && (
+          {detail.memo && !editing && (
             <div className="px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
               <strong className="text-[#3A342A] dark:text-zinc-300">메모 ·</strong> {detail.memo}
             </div>
           )}
-          <button
-            onClick={onClose}
-            className="w-full px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
-          >
-            닫기
-          </button>
+
+          {error && (
+            <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[12.5px] text-red-700 dark:text-red-300">
+              {error}
+            </div>
+          )}
+
+          {editing ? (
+            <div className="rounded-2xl border-2 border-[#6B7B3A]/40 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 p-4 space-y-3">
+              <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">결제 상세 수정</div>
+              <div className="grid grid-cols-2 gap-3">
+                <CrmField label="결제 금액(원)">
+                  <input
+                    className={`${crmInputClass} text-right`}
+                    value={ePrice ? formatWon(ePrice) : ""}
+                    onChange={(e) => setEPrice(parseWon(e.target.value))}
+                    inputMode="numeric"
+                  />
+                </CrmField>
+                <CrmField label="할인(원)">
+                  <input
+                    className={`${crmInputClass} text-right`}
+                    value={eDiscount ? formatWon(eDiscount) : ""}
+                    onChange={(e) => setEDiscount(parseWon(e.target.value))}
+                    inputMode="numeric"
+                  />
+                </CrmField>
+                <CrmField label="담당자">
+                  <select
+                    value={eSeller}
+                    onChange={(e) => setESeller(e.target.value ? Number(e.target.value) : "")}
+                    className={crmInputClass}
+                  >
+                    <option value="">선택</option>
+                    {staffList
+                      .filter((s) => s.status === "active")
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.display_name} ({s.role})
+                        </option>
+                      ))}
+                  </select>
+                </CrmField>
+                <CrmField label="결제 수단">
+                  <select
+                    value={eMethod}
+                    onChange={(e) => setEMethod(e.target.value)}
+                    className={crmInputClass}
+                  >
+                    {(["card", "cash", "transfer", "etc"] as const).map((m) => (
+                      <option key={m} value={m}>
+                        {PAYMENT_METHOD_LABEL[m]}
+                      </option>
+                    ))}
+                  </select>
+                </CrmField>
+                {eMethod === "etc" && (
+                  <CrmField label="결제 수단 직접 입력">
+                    <input
+                      className={crmInputClass}
+                      value={eMethodCustom}
+                      onChange={(e) => setEMethodCustom(e.target.value)}
+                      placeholder="예: 상품권"
+                    />
+                  </CrmField>
+                )}
+                <CrmField label="시작일">
+                  <input
+                    type="date"
+                    className={crmInputClass}
+                    value={eStart}
+                    onChange={(e) => setEStart(e.target.value)}
+                  />
+                </CrmField>
+                <CrmField label="만료일">
+                  <input
+                    type="date"
+                    className={crmInputClass}
+                    value={eExpires}
+                    onChange={(e) => setEExpires(e.target.value)}
+                  />
+                </CrmField>
+              </div>
+              <label className="flex items-center gap-2 text-[13px] text-[#3A342A] dark:text-zinc-300">
+                <input type="checkbox" checked={eVat} onChange={(e) => setEVat(e.target.checked)} />
+                부가세 포함 금액
+              </label>
+              <CrmField label="메모">
+                <textarea
+                  className={`${crmInputClass} min-h-[60px]`}
+                  value={eMemo}
+                  onChange={(e) => setEMemo(e.target.value)}
+                />
+              </CrmField>
+              <div className="flex gap-2">
+                <button
+                  onClick={saveEdit}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+                >
+                  {saving ? "저장 중…" : "저장"}
+                </button>
+                <button
+                  onClick={() => setEditing(false)}
+                  className="px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] text-[#6B5D47] dark:text-zinc-300"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              {editable && canEdit && (
+                <button
+                  onClick={startEdit}
+                  className="flex-1 px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13.5px] font-semibold hover:bg-[#6B7B3A]/5"
+                >
+                  수정
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+              >
+                닫기
+              </button>
+            </div>
+          )}
         </div>
       )}
     </CrmModal>

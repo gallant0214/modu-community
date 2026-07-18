@@ -38,6 +38,9 @@ export default function CrmAttendancesPage() {
   const [query, setQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "kiosk" | "manual" | "app">("all");
   const [refreshedAt, setRefreshedAt] = useState<string>("");
+  const [month, setMonth] = useState(() => todayKst().slice(0, 7));
+  const [monthDays, setMonthDays] = useState<Record<string, { total: number; unique: number }>>({});
+  const [monthLoading, setMonthLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,6 +66,40 @@ export default function CrmAttendancesPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadMonth = useCallback(async () => {
+    setMonthLoading(true);
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/crm/attendances/monthly?month=${month}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (res.ok) setMonthDays(data.days ?? {});
+    } catch {
+      // 달력은 보조 정보 — 실패해도 상세 조회는 유지
+    } finally {
+      setMonthLoading(false);
+    }
+  }, [getIdToken, month]);
+
+  useEffect(() => {
+    loadMonth();
+  }, [loadMonth]);
+
+  // 선택 날짜가 현재 표시 중인 달과 다르면 달을 맞춤
+  useEffect(() => {
+    const m = date.slice(0, 7);
+    if (m !== month) setMonth(m);
+  }, [date, month]);
+
+  // 오늘 날짜를 새로고침하면 달력의 오늘 카운트도 갱신
+  useEffect(() => {
+    if (refreshedAt && date === todayKst()) loadMonth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshedAt]);
 
   // 오늘 날짜인 경우 20초마다 자동 새로고침
   useEffect(() => {
@@ -119,6 +156,34 @@ export default function CrmAttendancesPage() {
     d.setDate(d.getDate() + delta);
     setDate(d.toISOString().slice(0, 10));
   };
+
+  const shiftMonth = (delta: number) => {
+    const [y, m] = month.split("-").map(Number);
+    const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+    setMonth(d.toISOString().slice(0, 7));
+  };
+
+  // 달력 셀 (일요일 시작 6주 그리드)
+  const calendarCells = useMemo(() => {
+    const [y, m] = month.split("-").map(Number);
+    const first = new Date(Date.UTC(y, m - 1, 1));
+    const startWeekday = first.getUTCDay(); // 0=일
+    const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const cells: ({ ymd: string; day: number } | null)[] = [];
+    for (let i = 0; i < startWeekday; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ymd = `${month}-${String(d).padStart(2, "0")}`;
+      cells.push({ ymd, day: d });
+    }
+    while (cells.length % 7 !== 0) cells.push(null);
+    return cells;
+  }, [month]);
+
+  const monthPeople = useMemo(
+    () => Object.values(monthDays).reduce((s, v) => s + v.unique, 0),
+    [monthDays]
+  );
+  const today = todayKst();
 
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-6xl mx-auto">
@@ -182,6 +247,96 @@ export default function CrmAttendancesPage() {
         <KpiCard label="QR 체크인" value={`${stats.sources.kiosk}회`} tone="olive" />
         <KpiCard label="수동/앱" value={`${stats.sources.manual + stats.sources.app}회`} tone="amber" />
       </div>
+
+      {/* 월간 달력 — 날짜별 출입 인원 수 */}
+      <section className="mb-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            날짜별 출입 인원 <span className="text-[#8C8270] dark:text-zinc-500 font-normal">· 이 달 {monthPeople}명</span>
+          </h2>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => shiftMonth(-1)}
+              className="w-7 h-7 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
+            >
+              ‹
+            </button>
+            <span className="px-1.5 text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100 tabular-nums">
+              {month.replace("-", ". ")}
+            </span>
+            <button
+              onClick={() => shiftMonth(1)}
+              disabled={month >= today.slice(0, 7)}
+              className="w-7 h-7 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ›
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1 mb-1">
+          {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => (
+            <div
+              key={d}
+              className={`text-center text-[11px] font-medium py-1 ${
+                i === 0 ? "text-red-500/80" : i === 6 ? "text-blue-500/80" : "text-[#8C8270] dark:text-zinc-500"
+              }`}
+            >
+              {d}
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-7 gap-1">
+          {calendarCells.map((cell, idx) => {
+            if (!cell) return <div key={`e${idx}`} />;
+            const info = monthDays[cell.ymd];
+            const count = info?.unique ?? 0;
+            const selected = cell.ymd === date;
+            const isFuture = cell.ymd > today;
+            const isTodayCell = cell.ymd === today;
+            return (
+              <button
+                key={cell.ymd}
+                onClick={() => setDate(cell.ymd)}
+                disabled={isFuture}
+                className={`aspect-square rounded-lg border flex flex-col items-center justify-center gap-0.5 transition-colors
+                  ${selected
+                    ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                    : isFuture
+                    ? "border-transparent text-[#C9BFA8] dark:text-zinc-700 cursor-not-allowed"
+                    : count > 0
+                    ? "border-[#6B7B3A]/30 bg-[#6B7B3A]/8 text-[#3A342A] dark:text-zinc-200 hover:border-[#6B7B3A]/60"
+                    : "border-[#E8E0D0] dark:border-zinc-800 text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
+                  }`}
+              >
+                <span
+                  className={`text-[12px] leading-none ${
+                    isTodayCell && !selected ? "font-bold text-[#6B7B3A] dark:text-[#A8B87A]" : "font-medium"
+                  }`}
+                >
+                  {cell.day}
+                </span>
+                {count > 0 ? (
+                  <span
+                    className={`text-[11px] font-bold leading-none tabular-nums ${
+                      selected ? "text-white" : "text-[#6B7B3A] dark:text-[#A8B87A]"
+                    }`}
+                  >
+                    {count}명
+                  </span>
+                ) : (
+                  <span className="text-[11px] leading-none opacity-0">·</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-2 text-[11px] text-[#A89B80] dark:text-zinc-500">
+          숫자는 그 날 출입한 인원(사람) 수예요. 날짜를 누르면 아래에 상세 기록이 표시됩니다.
+          {monthLoading && " · 불러오는 중…"}
+        </div>
+      </section>
 
       {/* 시간대별 분포 */}
       <section className="mb-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4">
