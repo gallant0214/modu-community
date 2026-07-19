@@ -115,8 +115,8 @@ export function CrmSidebar({ role, centerName, isSoloOwner: _isSoloOwner }: Prop
 
 function SidebarHeader({ centerName }: { centerName: string }) {
   return (
-    <div className="px-4 pt-2 pb-2.5 border-b border-[#E8E0D0] dark:border-zinc-800">
-      <div className="text-[11px] text-[#A89B80] dark:text-zinc-500 font-medium leading-tight">
+    <div className="h-14 shrink-0 flex flex-col justify-center px-4 border-b border-[#E8E0D0] dark:border-zinc-800">
+      <div className="text-[11px] text-[#A89B80] dark:text-zinc-500 font-medium leading-none">
         센터명
       </div>
       <div className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate leading-tight mt-0.5">
