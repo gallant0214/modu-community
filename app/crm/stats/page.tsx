@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { ROLE_LABEL, formatWon, parseWon } from "../_components/crm-labels";
+import { TrainerSessionsChart } from "./_components/trainer-sessions-chart";
 
 interface MonthlyResp {
   ym: string;
@@ -322,6 +323,9 @@ function TrainerTab({ data }: { data: MonthlyResp | null }) {
           </tbody>
         </table>
       </section>
+
+      {/* 강사별 월별 수업 진행 수 (12개월, 강사 선택) */}
+      <TrainerSessionsChart />
     </>
   );
 }
@@ -556,7 +560,7 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
       <div className="mt-3 px-4 py-3 rounded-xl bg-[#FBF7EB]/60 dark:bg-zinc-900/40 text-[11.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
         💡 <strong>잠재부채</strong>는 회원이 결제했으나 아직 이용하지 않은 금액이에요. 예) 7월에 60만원 PT 10회를 결제하고 8월부터 시작한다면, 오늘 시점 잠재부채는 60만원. 진행 중인 상품은 남은 일수/횟수 비율로 계산해요.
         <br />
-        💡 <strong>부가세</strong>는 결제 시 상품에 "부가세 포함" 옵션을 체크한 건만 10% 를 제외한 실매출로 환산해요.
+        💡 <strong>부가세</strong>는 결제 시 상품에 &quot;부가세 포함&quot; 옵션을 체크한 건만 10% 를 제외한 실매출로 환산해요.
       </div>
     </>
   );

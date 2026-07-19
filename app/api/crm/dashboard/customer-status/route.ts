@@ -139,6 +139,29 @@ export async function GET(request: Request) {
       if (idx >= 0) newPassSets[idx].add(p.member_id);
     }
 
+    // 신규 vs 재등록 (발급 기준): 회원의 최초 발급월 = 신규, 이후 발급 = 재등록
+    const allIssues: { member_id: number; start: string }[] = [];
+    for (const m of memberships) {
+      if (m.start_date) allIssues.push({ member_id: m.member_id, start: m.start_date.slice(0, 10) });
+    }
+    for (const p of passes) {
+      const s = p.start_date ?? p.issued_at;
+      if (s) allIssues.push({ member_id: p.member_id, start: s.slice(0, 10) });
+    }
+    const memberFirstStart = new Map<number, string>();
+    for (const it of allIssues) {
+      const prev = memberFirstStart.get(it.member_id);
+      if (!prev || it.start < prev) memberFirstStart.set(it.member_id, it.start);
+    }
+    const newReg = months.map(() => 0);
+    const reReg = months.map(() => 0);
+    for (const it of allIssues) {
+      const idx = months.findIndex((mm) => it.start >= mm.start && it.start < mm.endExcl);
+      if (idx < 0) continue;
+      if (memberFirstStart.get(it.member_id) === it.start) newReg[idx] += 1;
+      else reReg[idx] += 1;
+    }
+
     // 월별 방문 고객
     const visitedSets = months.map(() => new Set<number>());
     for (const a of attends) {
@@ -187,6 +210,8 @@ export async function GET(request: Request) {
       age,
       newMembership: newMembershipSets.map((s) => s.size),
       newPass: newPassSets.map((s) => s.size),
+      newReg,
+      reReg,
       visited: visitedSets.map((s) => s.size),
       churn,
     });
