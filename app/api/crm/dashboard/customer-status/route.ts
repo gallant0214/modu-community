@@ -130,21 +130,45 @@ export async function GET(request: Request) {
     // 유효(합집합) — 성별·연령 구성 산출용
     const validSets = months.map((_, i) => new Set<number>([...mbSets[i], ...passSets[i]]));
 
-    // 월별 신규 발급 고객 (start_date 또는 issued_at 이 그 달)
+    // 월별 발급 고객 — 상품별로 신규(첫 발급) vs 재등록(재발급) 분리
     const inMonth = (ymd: string | null): number => {
       if (!ymd) return -1;
       const d = ymd.slice(0, 10);
       return months.findIndex((mm) => d >= mm.start && d < mm.endExcl);
     };
+    // 회원별 상품별 최초 발급일
+    const mbFirst = new Map<number, string>();
+    for (const m of memberships) {
+      if (!m.start_date) continue;
+      const s = m.start_date.slice(0, 10);
+      const prev = mbFirst.get(m.member_id);
+      if (!prev || s < prev) mbFirst.set(m.member_id, s);
+    }
+    const passFirst = new Map<number, string>();
+    for (const p of passes) {
+      const s = (p.start_date ?? p.issued_at)?.slice(0, 10);
+      if (!s) continue;
+      const prev = passFirst.get(p.member_id);
+      if (!prev || s < prev) passFirst.set(p.member_id, s);
+    }
     const newMembershipSets = months.map(() => new Set<number>());
+    const reMembershipSets = months.map(() => new Set<number>());
     const newPassSets = months.map(() => new Set<number>());
+    const rePassSets = months.map(() => new Set<number>());
     for (const m of memberships) {
       const idx = inMonth(m.start_date);
-      if (idx >= 0) newMembershipSets[idx].add(m.member_id);
+      if (idx < 0) continue;
+      const s = m.start_date!.slice(0, 10);
+      if (mbFirst.get(m.member_id) === s) newMembershipSets[idx].add(m.member_id);
+      else reMembershipSets[idx].add(m.member_id);
     }
     for (const p of passes) {
-      const idx = inMonth(p.start_date ?? p.issued_at);
-      if (idx >= 0) newPassSets[idx].add(p.member_id);
+      const raw = p.start_date ?? p.issued_at;
+      const idx = inMonth(raw);
+      if (idx < 0) continue;
+      const s = raw!.slice(0, 10);
+      if (passFirst.get(p.member_id) === s) newPassSets[idx].add(p.member_id);
+      else rePassSets[idx].add(p.member_id);
     }
 
     // 신규 vs 재등록 (발급 기준): 회원의 최초 발급월 = 신규, 이후 발급 = 재등록
@@ -219,7 +243,9 @@ export async function GET(request: Request) {
       ageBuckets: AGE_BUCKETS,
       age,
       newMembership: newMembershipSets.map((s) => s.size),
+      reMembership: reMembershipSets.map((s) => s.size),
       newPass: newPassSets.map((s) => s.size),
+      rePass: rePassSets.map((s) => s.size),
       newReg,
       reReg,
       visited: visitedSets.map((s) => s.size),

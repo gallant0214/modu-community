@@ -13,7 +13,9 @@ interface CustomerStatus {
   ageBuckets: string[];
   age: Record<string, number[]>;
   newMembership: number[];
+  reMembership: number[];
   newPass: number[];
+  rePass: number[];
   newReg: number[];
   reReg: number[];
   visited: number[];
@@ -115,19 +117,37 @@ export function CustomerStatusView() {
         </ChartCard>
       </div>
 
-      {/* 신규 등록 — 회원권 / 수강권 분리 */}
+      {/* 신규 등록 — 회원권 / 수강권 분리 (첫 발급) */}
       <div className="grid gap-3 md:grid-cols-2">
-        <ChartCard title="신규 회원권 고객 수" subtitle="그 달 회원권을 새로 발급받은 고객">
+        <ChartCard title="신규 회원권 고객 수" subtitle="그 달 회원권을 처음 발급받은 고객(첫 등록)">
           <MonthlyStackedBars
             months={data.months}
             series={[{ label: "신규 회원권", color: "#6B7B3A", values: data.newMembership }]}
             mode="count"
           />
         </ChartCard>
-        <ChartCard title="신규 수강권 고객 수" subtitle="그 달 수강권을 새로 발급받은 고객">
+        <ChartCard title="신규 수강권 고객 수" subtitle="그 달 수강권을 처음 발급받은 고객(첫 등록)">
           <MonthlyStackedBars
             months={data.months}
             series={[{ label: "신규 수강권", color: "#B47B2A", values: data.newPass }]}
+            mode="count"
+          />
+        </ChartCard>
+      </div>
+
+      {/* 재등록 — 회원권 / 수강권 분리 (재발급) */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <ChartCard title="재등록 회원권 고객 수" subtitle="그 달 회원권을 다시 발급받은 고객(재등록)">
+          <MonthlyStackedBars
+            months={data.months}
+            series={[{ label: "재등록 회원권", color: "#5A8BB0", values: data.reMembership }]}
+            mode="count"
+          />
+        </ChartCard>
+        <ChartCard title="재등록 수강권 고객 수" subtitle="그 달 수강권을 다시 발급받은 고객(재등록)">
+          <MonthlyStackedBars
+            months={data.months}
+            series={[{ label: "재등록 수강권", color: "#C76C8E", values: data.rePass }]}
             mode="count"
           />
         </ChartCard>
