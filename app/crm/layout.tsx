@@ -105,7 +105,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           centerName={ctx.centerName ?? ""}
           isSoloOwner={ctx.isSoloOwner ?? false}
         />
-        <main className="flex-1 min-w-0">{children}</main>
+        <main className="flex-1 min-w-0 md:ml-60">{children}</main>
       </div>
     </CrmShell>
   );
