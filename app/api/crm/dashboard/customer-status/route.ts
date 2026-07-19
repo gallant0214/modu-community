@@ -49,21 +49,49 @@ export async function GET(request: Request) {
   const ctx = await requireCrmContext(request, { needRole: "manager" });
   if (isCrmError(ctx)) return ctx;
 
-  // 최근 12개월 (KST 기준). months[i] = { ym, start, endExcl }
+  // 기간 옵션: 최근 1년(월,12) / 월단위(월,24) / 최근 30일(일,30) / 연단위(연,5)
+  const period = new URL(request.url).searchParams.get("period") || "1y";
   const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
+  const todayYmd = nowKst.toISOString().slice(0, 10);
+  const ymd = (d: Date) => d.toISOString().slice(0, 10);
+
+  // months[i] = { ym(라벨키), start, endExcl } — 어떤 granularity든 동일 구조
   const months: { ym: string; start: string; endExcl: string }[] = [];
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(Date.UTC(nowKst.getUTCFullYear(), nowKst.getUTCMonth() - i, 1));
-    const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
-    months.push({
-      ym: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`,
-      start: d.toISOString().slice(0, 10),
-      endExcl: next.toISOString().slice(0, 10),
-    });
+  if (period === "30d") {
+    // 최근 30일 (일 단위)
+    const base = new Date(Date.UTC(nowKst.getUTCFullYear(), nowKst.getUTCMonth(), nowKst.getUTCDate()));
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(base);
+      d.setUTCDate(d.getUTCDate() - i);
+      const next = new Date(d);
+      next.setUTCDate(next.getUTCDate() + 1);
+      months.push({ ym: ymd(d), start: ymd(d), endExcl: ymd(next) });
+    }
+  } else if (period === "year") {
+    // 연 단위 (최근 5년)
+    for (let i = 4; i >= 0; i--) {
+      const y = nowKst.getUTCFullYear() - i;
+      months.push({
+        ym: `${y}`,
+        start: `${y}-01-01`,
+        endExcl: `${y + 1}-01-01`,
+      });
+    }
+  } else {
+    // 월 단위: 최근 1년(12) / 월단위(24)
+    const nMonths = period === "month" ? 24 : 12;
+    for (let i = nMonths - 1; i >= 0; i--) {
+      const d = new Date(Date.UTC(nowKst.getUTCFullYear(), nowKst.getUTCMonth() - i, 1));
+      const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
+      months.push({
+        ym: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`,
+        start: ymd(d),
+        endExcl: ymd(next),
+      });
+    }
   }
   const windowStart = months[0].start;
-  const windowEndExcl = months[11].endExcl;
-  const todayYmd = nowKst.toISOString().slice(0, 10);
+  const windowEndExcl = months[months.length - 1].endExcl;
 
   try {
     // 회원 성별·생년 (전체) — 유효 고객 구성 산출용

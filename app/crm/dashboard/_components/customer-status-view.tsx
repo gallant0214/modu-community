@@ -24,11 +24,20 @@ interface CustomerStatus {
 
 const AGE_COLORS = ["#8FB0C9", "#5A8BB0", "#6B7B3A", "#A8B87A", "#B47B2A", "#C76C8E", "#B8AE98"];
 
+type Period = "year" | "month" | "30d" | "1y";
+const PERIOD_OPTIONS: { key: Period; label: string }[] = [
+  { key: "year", label: "연단위" },
+  { key: "month", label: "월단위" },
+  { key: "30d", label: "최근 30일" },
+  { key: "1y", label: "최근 1년" },
+];
+
 export function CustomerStatusView() {
   const { getIdToken } = useAuth();
   const [data, setData] = useState<CustomerStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [period, setPeriod] = useState<Period>("1y");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,7 +45,7 @@ export function CustomerStatusView() {
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch("/api/crm/dashboard/customer-status", {
+      const res = await fetch(`/api/crm/dashboard/customer-status?period=${period}`, {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
@@ -48,11 +57,15 @@ export function CustomerStatusView() {
     } finally {
       setLoading(false);
     }
-  }, [getIdToken]);
+  }, [getIdToken, period]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const periodDropdown = (
+    <PeriodSelect value={period} onChange={setPeriod} />
+  );
 
   if (loading) {
     return <div className="py-16 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>;
@@ -84,19 +97,19 @@ export function CustomerStatusView() {
   return (
     <div className="space-y-3">
       <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-        최근 12개월 고객 현황입니다. 각 막대에 마우스를 올리면 상세 값이 표시돼요.
+        고객 현황입니다. 각 그래프 오른쪽 위에서 기간(연단위·월단위·최근 30일·최근 1년)을 바꿀 수 있고, 막대에 마우스를 올리면 상세 값이 표시돼요.
       </p>
 
       {/* 유효고객 수 — 회원권 보유 / 수강권 보유 분리 */}
       <div className="grid gap-3 md:grid-cols-2">
-        <ChartCard title="회원권 보유 고객 수" subtitle="그 달에 유효한 회원권을 보유한 고객">
+        <ChartCard title="회원권 보유 고객 수" subtitle="그 달에 유효한 회원권을 보유한 고객" right={periodDropdown}>
           <MonthlyStackedBars
             months={data.months}
             series={[{ label: "회원권 보유", color: "#6B7B3A", values: data.validMembership }]}
             mode="count"
           />
         </ChartCard>
-        <ChartCard title="수강권 보유 고객 수" subtitle="그 달에 유효한 수강권을 보유한 고객">
+        <ChartCard title="수강권 보유 고객 수" subtitle="그 달에 유효한 수강권을 보유한 고객" right={periodDropdown}>
           <MonthlyStackedBars
             months={data.months}
             series={[{ label: "수강권 보유", color: "#B47B2A", values: data.validPass }]}
@@ -107,26 +120,26 @@ export function CustomerStatusView() {
 
       <div className="grid gap-3 md:grid-cols-2">
         {/* 성별 구성 */}
-        <ChartCard title="유효고객 성별 구성" subtitle="100% 띠그래프">
+        <ChartCard title="유효고객 성별 구성" subtitle="100% 띠그래프" right={periodDropdown}>
           <MonthlyStackedBars months={data.months} series={genderSeries} mode="percent" />
         </ChartCard>
 
         {/* 연령대 구성 */}
-        <ChartCard title="유효고객 연령대 구성" subtitle="100% 띠그래프">
+        <ChartCard title="유효고객 연령대 구성" subtitle="100% 띠그래프" right={periodDropdown}>
           <MonthlyStackedBars months={data.months} series={ageSeries} mode="percent" />
         </ChartCard>
       </div>
 
       {/* 신규 등록 — 회원권 / 수강권 분리 (첫 발급) */}
       <div className="grid gap-3 md:grid-cols-2">
-        <ChartCard title="신규 회원권 고객 수" subtitle="그 달 회원권을 처음 발급받은 고객(첫 등록)">
+        <ChartCard title="신규 회원권 고객 수" subtitle="그 달 회원권을 처음 발급받은 고객(첫 등록)" right={periodDropdown}>
           <MonthlyStackedBars
             months={data.months}
             series={[{ label: "신규 회원권", color: "#6B7B3A", values: data.newMembership }]}
             mode="count"
           />
         </ChartCard>
-        <ChartCard title="신규 수강권 고객 수" subtitle="그 달 수강권을 처음 발급받은 고객(첫 등록)">
+        <ChartCard title="신규 수강권 고객 수" subtitle="그 달 수강권을 처음 발급받은 고객(첫 등록)" right={periodDropdown}>
           <MonthlyStackedBars
             months={data.months}
             series={[{ label: "신규 수강권", color: "#B47B2A", values: data.newPass }]}
@@ -137,14 +150,14 @@ export function CustomerStatusView() {
 
       {/* 재등록 — 회원권 / 수강권 분리 (재발급) */}
       <div className="grid gap-3 md:grid-cols-2">
-        <ChartCard title="재등록 회원권 고객 수" subtitle="그 달 회원권을 다시 발급받은 고객(재등록)">
+        <ChartCard title="재등록 회원권 고객 수" subtitle="그 달 회원권을 다시 발급받은 고객(재등록)" right={periodDropdown}>
           <MonthlyStackedBars
             months={data.months}
             series={[{ label: "재등록 회원권", color: "#5A8BB0", values: data.reMembership }]}
             mode="count"
           />
         </ChartCard>
-        <ChartCard title="재등록 수강권 고객 수" subtitle="그 달 수강권을 다시 발급받은 고객(재등록)">
+        <ChartCard title="재등록 수강권 고객 수" subtitle="그 달 수강권을 다시 발급받은 고객(재등록)" right={periodDropdown}>
           <MonthlyStackedBars
             months={data.months}
             series={[{ label: "재등록 수강권", color: "#C76C8E", values: data.rePass }]}
@@ -157,12 +170,12 @@ export function CustomerStatusView() {
       <ChartCard
         title="신규 · 재등록 비율"
         subtitle="그 달 발급 중 첫 등록(신규) vs 재등록 비율 · 100% 띠그래프"
-      >
+       right={periodDropdown}>
         <MonthlyStackedBars months={data.months} series={regRatioSeries} mode="percent" />
       </ChartCard>
 
       {/* 이탈 */}
-      <ChartCard title="이탈 고객 수" subtitle="마지막 이용권 만료 후 7일이 지난(이탈 확정) 고객">
+      <ChartCard title="이탈 고객 수" subtitle="마지막 이용권 만료 후 7일이 지난(이탈 확정) 고객" right={periodDropdown}>
         <MonthlyStackedBars
           months={data.months}
           series={[{ label: "이탈고객", color: "#C76C8E", values: data.churn }]}
@@ -171,7 +184,7 @@ export function CustomerStatusView() {
       </ChartCard>
 
       {/* 월별 출석 회원수 (마지막) */}
-      <ChartCard title="월별 출석 회원수" subtitle="그 달 1회 이상 출석(체크인)한 회원 수">
+      <ChartCard title="월별 출석 회원수" subtitle="그 달 1회 이상 출석(체크인)한 회원 수" right={periodDropdown}>
         <MonthlyStackedBars
           months={data.months}
           series={[{ label: "출석회원", color: "#5A8BB0", values: data.visited }]}
@@ -182,13 +195,44 @@ export function CustomerStatusView() {
   );
 }
 
-function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function ChartCard({
+  title,
+  subtitle,
+  right,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div className="px-5 py-4 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm">
-      <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{title}</h3>
-      {subtitle && <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-2">{subtitle}</p>}
-      {!subtitle && <div className="mb-2" />}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{title}</h3>
+          {subtitle && <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-2">{subtitle}</p>}
+          {!subtitle && <div className="mb-2" />}
+        </div>
+        {right && <div className="shrink-0">{right}</div>}
+      </div>
       {children}
     </div>
+  );
+}
+
+function PeriodSelect({ value, onChange }: { value: Period; onChange: (p: Period) => void }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as Period)}
+      className="px-2.5 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[12px] text-[#2A251D] dark:text-zinc-100"
+    >
+      {PERIOD_OPTIONS.map((o) => (
+        <option key={o.key} value={o.key}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   );
 }

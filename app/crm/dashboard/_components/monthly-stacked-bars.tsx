@@ -52,7 +52,13 @@ export function MonthlyStackedBars({ months, series, mode = "count", unit = "명
   const axisMax = mode === "percent" ? 100 : maxTotal;
   const gridTs = [0, 0.25, 0.5, 0.75, 1];
 
-  const monthLabel = (ym: string) => `${Number(ym.slice(5, 7))}월`;
+  // 라벨: "YYYY-MM-DD"→"M/D", "YYYY-MM"→"M월", "YYYY"→"YYYY"
+  const monthLabel = (k: string) => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(k)) return `${Number(k.slice(5, 7))}/${Number(k.slice(8, 10))}`;
+    if (/^\d{4}-\d{2}$/.test(k)) return `${Number(k.slice(5, 7))}월`;
+    if (/^\d{4}$/.test(k)) return `${k}년`;
+    return k;
+  };
 
   return (
     <div className="relative w-full overflow-x-auto">
@@ -105,16 +111,18 @@ export function MonthlyStackedBars({ months, series, mode = "count", unit = "명
                   />
                 );
               })}
-              {/* 총합/값 라벨 (상단) */}
-              {mode === "count" && total > 0 && (
+              {/* 총합/값 라벨 (상단) — 버킷 많으면 생략(툴팁으로 확인) */}
+              {mode === "count" && total > 0 && months.length <= 14 && (
                 <text x={cx} y={padT + innerH - (total / axisMax) * innerH - 3} textAnchor="middle" fontSize={9} fill="#6B5D47">
                   {total}
                 </text>
               )}
-              {/* x축 라벨 */}
-              <text x={cx} y={H - padB + 15} textAnchor="middle" fontSize={9} fill="currentColor">
-                {monthLabel(ym)}
-              </text>
+              {/* x축 라벨 (버킷 많으면 일부만) */}
+              {(months.length <= 14 || i % Math.ceil(months.length / 12) === 0) && (
+                <text x={cx} y={H - padB + 15} textAnchor="middle" fontSize={9} fill="currentColor">
+                  {monthLabel(ym)}
+                </text>
+              )}
             </g>
           );
         })}
