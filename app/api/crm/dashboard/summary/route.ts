@@ -370,6 +370,14 @@ export async function GET(request: Request) {
     else personalClasses.pending += pending;
   }
 
+  // 만료된 락커 (배정됐지만 만료일이 지난 락커)
+  const { count: expiredLockerCount } = await supabase
+    .from("crm_lockers")
+    .select("id", { count: "exact", head: true })
+    .eq("center_id", ctx.centerId)
+    .not("assigned_member_id", "is", null)
+    .lt("expires_at", today);
+
   return NextResponse.json({
     period,
     range: { from, to: today },
@@ -409,6 +417,7 @@ export async function GET(request: Request) {
     action: {
       expiring7d,
       expiring30d,
+      expiredLockers: expiredLockerCount ?? 0,
       outstanding: {
         members: outstandingByMember.size,
         total: lessonOutstanding + membershipOutstanding,

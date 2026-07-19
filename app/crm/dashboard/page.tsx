@@ -82,6 +82,7 @@ interface SummaryResp {
   action?: {
     expiring7d: number;
     expiring30d: number;
+    expiredLockers?: number;
     outstanding: {
       members: number;
       total: number;
@@ -290,6 +291,14 @@ export default function CrmDashboardPage() {
                     value={`${(summary.action?.expiring30d ?? 0).toLocaleString()}명`}
                     hint="이번달 케어 대상"
                     tone="gold"
+                  />
+                </Link>
+                <Link href="/crm/lockers">
+                  <ActionInsightCard
+                    label="만료된 락커"
+                    value={`${(summary.action?.expiredLockers ?? 0).toLocaleString()}개`}
+                    hint="회수·재배정 대상"
+                    tone="warn"
                   />
                 </Link>
                 {canFinance && (
