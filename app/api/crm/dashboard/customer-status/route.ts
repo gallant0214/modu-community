@@ -109,18 +109,26 @@ export async function GET(request: Request) {
         .range(f, t)
     );
 
-    // 월별 유효 고객 집합
-    const validSets = months.map(() => new Set<number>());
-    const addValid = (memberId: number, start: string | null, expires: string | null) => {
+    // 월별 유효 고객 집합 (회원권 보유 / 수강권 보유 분리)
+    const mbSets = months.map(() => new Set<number>());
+    const passSets = months.map(() => new Set<number>());
+    const addTo = (
+      sets: Set<number>[],
+      memberId: number,
+      start: string | null,
+      expires: string | null
+    ) => {
       const s = start ?? windowStart;
       if (!expires) return;
       for (let i = 0; i < months.length; i++) {
         // 겹침: start < monthEnd && expires >= monthStart
-        if (s < months[i].endExcl && expires >= months[i].start) validSets[i].add(memberId);
+        if (s < months[i].endExcl && expires >= months[i].start) sets[i].add(memberId);
       }
     };
-    for (const m of memberships) addValid(m.member_id, m.start_date, m.expires_at);
-    for (const p of passes) addValid(p.member_id, p.start_date ?? p.issued_at, p.expires_at);
+    for (const m of memberships) addTo(mbSets, m.member_id, m.start_date, m.expires_at);
+    for (const p of passes) addTo(passSets, p.member_id, p.start_date ?? p.issued_at, p.expires_at);
+    // 유효(합집합) — 성별·연령 구성 산출용
+    const validSets = months.map((_, i) => new Set<number>([...mbSets[i], ...passSets[i]]));
 
     // 월별 신규 발급 고객 (start_date 또는 issued_at 이 그 달)
     const inMonth = (ymd: string | null): number => {
@@ -205,6 +213,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       months: months.map((m) => m.ym),
       validCount: validSets.map((s) => s.size),
+      validMembership: mbSets.map((s) => s.size),
+      validPass: passSets.map((s) => s.size),
       gender,
       ageBuckets: AGE_BUCKETS,
       age,

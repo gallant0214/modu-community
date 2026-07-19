@@ -7,6 +7,8 @@ import { MonthlyStackedBars, Series } from "./monthly-stacked-bars";
 interface CustomerStatus {
   months: string[];
   validCount: number[];
+  validMembership: number[];
+  validPass: number[];
   gender: { male: number[]; female: number[]; none: number[] };
   ageBuckets: string[];
   age: Record<string, number[]>;
@@ -72,10 +74,6 @@ export function CustomerStatusView() {
     color: AGE_COLORS[i % AGE_COLORS.length],
     values: data.age[b] ?? data.months.map(() => 0),
   }));
-  const newSeries: Series[] = [
-    { label: "회원권", color: "#6B7B3A", values: data.newMembership },
-    { label: "수강권", color: "#B47B2A", values: data.newPass },
-  ];
   const regRatioSeries: Series[] = [
     { label: "신규등록", color: "#6B7B3A", values: data.newReg ?? data.months.map(() => 0) },
     { label: "재등록", color: "#B47B2A", values: data.reReg ?? data.months.map(() => 0) },
@@ -87,14 +85,23 @@ export function CustomerStatusView() {
         최근 12개월 고객 현황입니다. 각 막대에 마우스를 올리면 상세 값이 표시돼요.
       </p>
 
-      {/* 유효고객 수 */}
-      <ChartCard title="유효고객 수" subtitle="그 달에 유효한 회원권·수강권을 보유한 고객">
-        <MonthlyStackedBars
-          months={data.months}
-          series={[{ label: "유효고객", color: "#6B7B3A", values: data.validCount }]}
-          mode="count"
-        />
-      </ChartCard>
+      {/* 유효고객 수 — 회원권 보유 / 수강권 보유 분리 */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <ChartCard title="회원권 보유 고객 수" subtitle="그 달에 유효한 회원권을 보유한 고객">
+          <MonthlyStackedBars
+            months={data.months}
+            series={[{ label: "회원권 보유", color: "#6B7B3A", values: data.validMembership }]}
+            mode="count"
+          />
+        </ChartCard>
+        <ChartCard title="수강권 보유 고객 수" subtitle="그 달에 유효한 수강권을 보유한 고객">
+          <MonthlyStackedBars
+            months={data.months}
+            series={[{ label: "수강권 보유", color: "#B47B2A", values: data.validPass }]}
+            mode="count"
+          />
+        </ChartCard>
+      </div>
 
       <div className="grid gap-3 md:grid-cols-2">
         {/* 성별 구성 */}
@@ -108,10 +115,23 @@ export function CustomerStatusView() {
         </ChartCard>
       </div>
 
-      {/* 신규 등록 */}
-      <ChartCard title="신규 등록 고객 수" subtitle="그 달 회원권·수강권을 새로 발급받은 고객">
-        <MonthlyStackedBars months={data.months} series={newSeries} mode="count" />
-      </ChartCard>
+      {/* 신규 등록 — 회원권 / 수강권 분리 */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <ChartCard title="신규 회원권 고객 수" subtitle="그 달 회원권을 새로 발급받은 고객">
+          <MonthlyStackedBars
+            months={data.months}
+            series={[{ label: "신규 회원권", color: "#6B7B3A", values: data.newMembership }]}
+            mode="count"
+          />
+        </ChartCard>
+        <ChartCard title="신규 수강권 고객 수" subtitle="그 달 수강권을 새로 발급받은 고객">
+          <MonthlyStackedBars
+            months={data.months}
+            series={[{ label: "신규 수강권", color: "#B47B2A", values: data.newPass }]}
+            mode="count"
+          />
+        </ChartCard>
+      </div>
 
       {/* 신규 vs 재등록 비율 */}
       <ChartCard
