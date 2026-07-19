@@ -502,10 +502,11 @@ export default function CrmDashboardPage() {
                   </>
                 }
               />
-              <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <RevenueCard label="이용권" value={summary.revenue.membership} />
                 <RevenueCard label="레슨권" value={summary.revenue.lesson} note="개인 레슨 + 그룹 수업" />
                 <RevenueCard label="락커" value={summary.revenue.locker} />
+                <RevenueCard label="운동복" value={summary.revenue.rental} />
                 <RevenueCard label="운동 용품" value={summary.revenue.goods} />
               </section>
 
