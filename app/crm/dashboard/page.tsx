@@ -276,7 +276,7 @@ export default function CrmDashboardPage() {
           {summary && (
             <>
               <SectionHeader title="운영 알림" subtitle="재등록·수금 우선 확인 대상" />
-              <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <section className={`grid grid-cols-2 gap-2 ${canFinance ? "lg:grid-cols-5" : "lg:grid-cols-3"}`}>
                 <Link href="/crm/members?status=valid&expire=7d">
                   <ActionInsightCard
                     label="7일 이내 만료"
@@ -811,10 +811,10 @@ function ActionInsightCard({
       : "hover:border-[#B47B2A]/45 hover:bg-amber-50/50 dark:hover:bg-amber-950/20";
 
   return (
-    <div className={`h-full px-4 py-3.5 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm transition-colors ${ringCls}`}>
-      <div className="text-[12px] font-semibold text-[#8C8270] dark:text-zinc-500">{label}</div>
-      <div className={`mt-1 text-[22px] font-bold truncate ${toneCls}`}>{value}</div>
-      <div className="mt-1 text-[11.5px] text-[#8C8270] dark:text-zinc-500 truncate">{hint}</div>
+    <div className={`h-full px-3 py-2.5 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm transition-colors ${ringCls}`}>
+      <div className="text-[11.5px] font-semibold text-[#8C8270] dark:text-zinc-500 truncate">{label}</div>
+      <div className={`mt-0.5 text-[18px] font-bold truncate ${toneCls}`}>{value}</div>
+      <div className="mt-0.5 text-[11px] text-[#8C8270] dark:text-zinc-500 truncate">{hint}</div>
     </div>
   );
 }
