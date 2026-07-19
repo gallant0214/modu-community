@@ -1822,6 +1822,29 @@ function LockerActionModal({
   });
   const [password, setPassword] = useState("");
   const [memo, setMemo] = useState("");
+  // 락커 이용권 상품 (crm_products type=locker) — 선택 시 만료일 자동 계산
+  const [lockerProducts, setLockerProducts] = useState<
+    { id: number; name: string; duration_value: number | null; duration_unit: string | null; price_won: number }[]
+  >([]);
+  const [pickedProductId, setPickedProductId] = useState<number | "">("");
+
+  // 시작일 + 기간(duration)으로 만료일 계산
+  const computeExpires = (start: string, dv: number | null, du: string | null): string => {
+    if (!start || !dv || dv <= 0) return "";
+    const d = new Date(`${start}T00:00:00Z`);
+    if (du === "year") d.setUTCFullYear(d.getUTCFullYear() + dv);
+    else if (du === "day") d.setUTCDate(d.getUTCDate() + dv);
+    else d.setUTCMonth(d.getUTCMonth() + dv); // 기본 month
+    return d.toISOString().slice(0, 10);
+  };
+  const applyProduct = (id: number | "", start: string) => {
+    setPickedProductId(id);
+    const prod = lockerProducts.find((p) => p.id === id);
+    if (prod) {
+      const exp = computeExpires(start, prod.duration_value, prod.duration_unit);
+      if (exp) setExpiresAt(exp);
+    }
+  };
 
   useEffect(() => {
     if (!open) {
@@ -1832,6 +1855,7 @@ function LockerActionModal({
       setPickedMember(null);
       setPassword("");
       setMemo("");
+      setPickedProductId("");
       setHistory([]);
       return;
     }
@@ -1841,7 +1865,17 @@ function LockerActionModal({
       if (locker.start_date) setStartDate(locker.start_date);
       if (locker.expires_at) setExpiresAt(locker.expires_at);
     }
-  }, [open, locker]);
+    // 락커 상품 목록 로드 (한 번)
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/products?type=locker", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) setLockerProducts((await res.json()).products ?? []);
+    })();
+  }, [open, locker, getIdToken]);
 
   // 기록 모드 진입 시 history 로드
   useEffect(() => {
@@ -2089,13 +2123,50 @@ function LockerActionModal({
               )}
             </CrmField>
 
+            {/* 락커 이용권 상품 — 선택 시 만료일 자동 계산. 없으면 직접 입력 */}
+            <CrmField label="락커 상품">
+              {lockerProducts.length > 0 ? (
+                <>
+                  <select
+                    className={crmInputClass}
+                    value={pickedProductId}
+                    onChange={(e) =>
+                      applyProduct(e.target.value ? Number(e.target.value) : "", startDate)
+                    }
+                  >
+                    <option value="">상품 선택 안 함 (직접 입력)</option>
+                    {lockerProducts.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                        {p.duration_value
+                          ? ` · ${p.duration_value}${p.duration_unit === "year" ? "년" : p.duration_unit === "day" ? "일" : "개월"}`
+                          : ""}
+                        {p.price_won ? ` · ${p.price_won.toLocaleString()}원` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11.5px] text-[#A89B80]">
+                    상품을 선택하면 만료일이 자동 계산돼요. 필요하면 아래에서 직접 수정할 수 있어요.
+                  </p>
+                </>
+              ) : (
+                <p className="text-[12px] text-[#A89B80] px-1">
+                  등록된 락커 상품이 없어요. 시작일·만료일을 직접 입력해 배정하세요.
+                </p>
+              )}
+            </CrmField>
+
             <div className="grid grid-cols-2 gap-2">
               <CrmField label="시작일" required>
                 <input
                   type="date"
                   className={crmInputClass}
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    // 상품 선택 상태면 시작일 변경 시 만료일 재계산
+                    if (pickedProductId) applyProduct(pickedProductId, e.target.value);
+                  }}
                 />
               </CrmField>
               <CrmField label="만료일" required>
