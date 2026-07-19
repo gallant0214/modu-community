@@ -1988,10 +1988,10 @@ function LockerActionModal({
                 <img
                   src={locker.member.face_image_thumb}
                   alt=""
-                  className="w-6 h-6 rounded-full object-cover border border-[#E8E0D0] dark:border-zinc-700"
+                  className="w-11 h-11 rounded-full object-cover border border-[#E8E0D0] dark:border-zinc-700 shrink-0"
                 />
               ) : (
-                <span className="w-6 h-6 rounded-full flex items-center justify-center bg-[#F5F0E5] dark:bg-zinc-800 text-[#A89B80] text-[11px] shrink-0">
+                <span className="w-11 h-11 rounded-full flex items-center justify-center bg-[#F5F0E5] dark:bg-zinc-800 text-[#A89B80] text-[16px] font-semibold shrink-0">
                   {locker.member.name?.slice(0, 1) ?? "—"}
                 </span>
               )}
