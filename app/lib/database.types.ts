@@ -1676,6 +1676,84 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_sales: {
+        Row: {
+          id: number
+          center_id: number
+          tx_at: string
+          tx_type: string
+          product_type: string | null
+          product_name: string | null
+          category: string | null
+          member_id: number | null
+          customer_name: string | null
+          customer_phone: string | null
+          registration_type: string | null
+          amount_won: number
+          cash_won: number
+          card_won: number
+          culture_won: number
+          payment_channel: string | null
+          seller_name: string | null
+          income_deduction: string | null
+          approval_no: string | null
+          product_memo: string | null
+          order_memo: string | null
+          source: string
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          tx_at: string
+          tx_type: string
+          product_type?: string | null
+          product_name?: string | null
+          category?: string | null
+          member_id?: number | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          registration_type?: string | null
+          amount_won?: number
+          cash_won?: number
+          card_won?: number
+          culture_won?: number
+          payment_channel?: string | null
+          seller_name?: string | null
+          income_deduction?: string | null
+          approval_no?: string | null
+          product_memo?: string | null
+          order_memo?: string | null
+          source?: string
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          tx_at?: string
+          tx_type?: string
+          product_type?: string | null
+          product_name?: string | null
+          category?: string | null
+          member_id?: number | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          registration_type?: string | null
+          amount_won?: number
+          cash_won?: number
+          card_won?: number
+          culture_won?: number
+          payment_channel?: string | null
+          seller_name?: string | null
+          income_deduction?: string | null
+          approval_no?: string | null
+          product_memo?: string | null
+          order_memo?: string | null
+          source?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       crm_rentals: {
         Row: {
           id: number

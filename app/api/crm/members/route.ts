@@ -138,19 +138,37 @@ export async function GET(request: Request) {
 
   // 활성 수강권 + 활성 회원권 + 락커 배정 + 최근 출석
   const [passesData, mbData, lockersData, attData] = await Promise.all([
-    gather<{ member_id: number; lesson_kind: string; remaining_sessions: number | null; total_sessions: number; expires_at: string; start_date: string | null; is_paused: boolean }>(
+    gather<{
+      member_id: number;
+      lesson_kind: string;
+      remaining_sessions: number | null;
+      total_sessions: number;
+      expires_at: string;
+      start_date: string | null;
+      is_paused: boolean;
+      outstanding_won: number | null;
+      payment_status: string | null;
+    }>(
       (c) =>
         supabase
           .from("crm_passes")
-          .select("member_id, lesson_kind, remaining_sessions, total_sessions, expires_at, start_date, is_paused")
+          .select("member_id, lesson_kind, remaining_sessions, total_sessions, expires_at, start_date, is_paused, outstanding_won, payment_status")
           .eq("center_id", ctx.centerId)
           .in("member_id", c)
           .eq("status", "valid")
     ),
-    gather<{ member_id: number; plan_name: string; expires_at: string; start_date: string | null; is_paused: boolean }>((c) =>
+    gather<{
+      member_id: number;
+      plan_name: string;
+      expires_at: string;
+      start_date: string | null;
+      is_paused: boolean;
+      outstanding_won: number | null;
+      payment_status: string | null;
+    }>((c) =>
       supabase
         .from("crm_memberships")
-        .select("member_id, plan_name, expires_at, start_date, is_paused")
+        .select("member_id, plan_name, expires_at, start_date, is_paused, outstanding_won, payment_status")
         .eq("center_id", ctx.centerId)
         .in("member_id", c)
         .eq("status", "valid")
@@ -191,6 +209,12 @@ export async function GET(request: Request) {
   };
 
   const passMap = new Map<number, { kind: string; type: "lesson" | "membership"; remaining: number | null; expires: string }[]>();
+  const outstandingMap = new Map<number, number>();
+  const feedOutstanding = (memberId: number, amount: number | null, paymentStatus: string | null) => {
+    const won = Math.max(0, Number(amount) || 0);
+    if (won <= 0 && paymentStatus !== "unpaid" && paymentStatus !== "partial") return;
+    outstandingMap.set(memberId, (outstandingMap.get(memberId) ?? 0) + won);
+  };
   for (const p of passesData) {
     const arr = passMap.get(p.member_id) ?? [];
     arr.push({
@@ -201,6 +225,7 @@ export async function GET(request: Request) {
     });
     passMap.set(p.member_id, arr);
     classify(p.member_id, p.start_date, p.expires_at, p.is_paused);
+    feedOutstanding(p.member_id, p.outstanding_won, p.payment_status);
   }
   for (const m of mbData) {
     const arr = passMap.get(m.member_id) ?? [];
@@ -212,6 +237,7 @@ export async function GET(request: Request) {
     });
     passMap.set(m.member_id, arr);
     classify(m.member_id, m.start_date, m.expires_at, m.is_paused);
+    feedOutstanding(m.member_id, m.outstanding_won, m.payment_status);
   }
 
   const lockerMap = new Map<number, string>();
@@ -243,6 +269,7 @@ export async function GET(request: Request) {
       last_visit_at: lastVisitMap.get(m.id) ?? null,
       max_expires_at: maxExpires,
       on_hold: holdSet.has(m.id),
+      outstanding_won: outstandingMap.get(m.id) ?? 0,
       // 예정 = 미래 시작 이용권이 있고, 지금 이용중인 이용권은 없는 회원
       scheduled: hasFutureSet.has(m.id) && !hasActiveSet.has(m.id),
     };

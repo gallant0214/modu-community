@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { fetchSales, saleCategory } from "@/app/lib/crm-sales";
 
 export const dynamic = "force-dynamic";
 
@@ -52,51 +53,39 @@ export async function GET(request: Request) {
     nextMonth = new Date(y, m, 1).toISOString().slice(0, 10);
   }
 
-  // 이번 기간 발급된 것 (매출)
-  // 회원권 그룹 = 헬스이용권(crm_memberships) + 락커·운동복(crm_rentals)
-  // 수강권 그룹 = PT·레슨권(crm_passes)
-  const [membershipPeriod, passPeriod, rentalPeriod] = await Promise.all([
-    supabase
-      .from("crm_memberships")
-      .select("price_won, vat_included")
-      .eq("center_id", ctx.centerId)
-      .neq("status", "deleted")
-      .gte("start_date", startDate)
-      .lt("start_date", nextMonth),
-    supabase
-      .from("crm_passes")
-      .select("price_won, vat_included")
-      .eq("center_id", ctx.centerId)
-      .neq("status", "deleted")
-      .gte("issued_at", startDate)
-      .lt("issued_at", nextMonth),
-    supabase
-      .from("crm_rentals")
-      .select("price_won, vat_included")
-      .eq("center_id", ctx.centerId)
-      .neq("status", "deleted")
-      .gte("start_date", startDate)
-      .lt("start_date", nextMonth),
-  ]);
-
-  const exVatOne = (price: number, vatIncluded: boolean) =>
-    vatIncluded ? Math.round(price / (1 + VAT_RATE)) : price;
-  const sumPrice = (rows: { price_won: number | null }[] | null) =>
-    (rows ?? []).reduce((s, x) => s + (x.price_won ?? 0), 0);
-  const sumExVat = (rows: { price_won: number | null; vat_included: boolean | null }[] | null) =>
-    (rows ?? []).reduce((s, x) => s + exVatOne(x.price_won ?? 0, !!x.vat_included), 0);
-
-  // 회원권 그룹 = 헬스이용권 + 락커·운동복
-  const membershipRevenue = sumPrice(membershipPeriod.data) + sumPrice(rentalPeriod.data);
-  const passRevenue = sumPrice(passPeriod.data);
+  // 이번 기간 실제 거래(매출) — 실매출 원장 crm_sales 기준 (환불은 음수)
+  //   회원권 그룹 = 멤버십 + 대여권 + 락커 / 수강권 그룹 = 이용권 + 예약권(PT) / 일반 = goods
+  const periodSales = await fetchSales(ctx.centerId, startDate, nextMonth);
+  let membershipRevenue = 0;
+  let passRevenue = 0;
+  let goodsRevenue = 0;
+  let membershipCount = 0;
+  let passCount = 0;
+  for (const s of periodSales) {
+    const cat = saleCategory(s.product_type);
+    if (cat === "lesson") {
+      passRevenue += s.amount_won;
+      passCount += 1;
+    } else if (cat === "goods") {
+      goodsRevenue += s.amount_won;
+    } else {
+      membershipRevenue += s.amount_won; // membership / rental / locker
+      membershipCount += 1;
+    }
+  }
   const lockerRevenue = 0;
-  const goodsRevenue = 0;
   const etcRevenue = 0;
   const total = membershipRevenue + passRevenue + lockerRevenue + goodsRevenue + etcRevenue;
 
-  const membershipExVat = sumExVat(membershipPeriod.data) + sumExVat(rentalPeriod.data);
-  const passExVat = sumExVat(passPeriod.data);
-  const totalExVat = membershipExVat + passExVat + lockerRevenue + goodsRevenue + etcRevenue;
+  // 잠재부채(발급 기준) 계산용: vat_included 건만 /1.1
+  const exVatOne = (price: number, vatIncluded: boolean) =>
+    vatIncluded ? Math.round(price / (1 + VAT_RATE)) : price;
+  // 실매출은 crm_sales 에 부가세 플래그가 없어 부가세 포함가로 가정(÷1.1)
+  const exVatAll = (v: number) => Math.round(v / (1 + VAT_RATE));
+  const membershipExVat = exVatAll(membershipRevenue);
+  const passExVat = exVatAll(passRevenue);
+  const goodsExVat = exVatAll(goodsRevenue);
+  const totalExVat = membershipExVat + passExVat + lockerRevenue + goodsExVat + etcRevenue;
 
   // 오늘 기준 잠재부채 스냅샷 (기간 무관, 활성 건 전체)
   const today = kstYmd();
@@ -221,8 +210,8 @@ export async function GET(request: Request) {
     total_ex_vat: totalExVat,
     vat_amount: total - totalExVat,
     counts: {
-      memberships: membershipPeriod.data?.length ?? 0,
-      passes: passPeriod.data?.length ?? 0,
+      memberships: membershipCount,
+      passes: passCount,
     },
     categories: {
       membership: membershipRevenue,
@@ -235,7 +224,7 @@ export async function GET(request: Request) {
       membership: membershipExVat,
       pass: passExVat,
       locker: lockerRevenue,
-      goods: goodsRevenue,
+      goods: goodsExVat,
       etc: etcRevenue,
     },
     potential_liability: potentialLiability,

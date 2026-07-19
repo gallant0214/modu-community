@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { fetchSales, saleCategory } from "@/app/lib/crm-sales";
 
 export const dynamic = "force-dynamic";
 
@@ -113,19 +114,31 @@ export async function GET(request: Request) {
 
   // 활성 상품 보유 회원 집합 (정식 pass/membership 이 있으면 우선 사용)
   const [validPasses, validMemberships] = await Promise.all([
-    paginateAll<{ member_id: number; lesson_kind: string | null; remaining_sessions: number | null }>((f, t) =>
+    paginateAll<{
+      member_id: number;
+      lesson_kind: string | null;
+      remaining_sessions: number | null;
+      expires_at: string;
+      outstanding_won: number | null;
+      payment_status: string | null;
+    }>((f, t) =>
       supabase
         .from("crm_passes")
-        .select("member_id, lesson_kind, remaining_sessions")
+        .select("member_id, lesson_kind, remaining_sessions, expires_at, outstanding_won, payment_status")
         .eq("center_id", ctx.centerId)
         .eq("status", "valid")
         .gte("expires_at", today)
         .range(f, t)
     ),
-    paginateAll<{ member_id: number }>((f, t) =>
+    paginateAll<{
+      member_id: number;
+      expires_at: string;
+      outstanding_won: number | null;
+      payment_status: string | null;
+    }>((f, t) =>
       supabase
         .from("crm_memberships")
-        .select("member_id")
+        .select("member_id, expires_at, outstanding_won, payment_status")
         .eq("center_id", ctx.centerId)
         .eq("status", "valid")
         .gte("expires_at", today)
@@ -137,6 +150,27 @@ export async function GET(request: Request) {
     ...validMemberships.map((m) => m.member_id),
   ]);
   const activePassMemberIds = new Set<number>(validPasses.map((p) => p.member_id));
+  const activeExpiryByMember = new Map<number, string>();
+  const feedExpiry = (memberId: number, expiresAt: string | null) => {
+    if (!expiresAt) return;
+    const prev = activeExpiryByMember.get(memberId);
+    if (!prev || expiresAt > prev) activeExpiryByMember.set(memberId, expiresAt);
+  };
+  for (const p of validPasses) feedExpiry(p.member_id, p.expires_at);
+  for (const m of validMemberships) feedExpiry(m.member_id, m.expires_at);
+
+  const outstandingByMember = new Map<number, number>();
+  let lessonOutstanding = 0;
+  let membershipOutstanding = 0;
+  const feedOutstanding = (memberId: number, amount: number | null | undefined, paymentStatus: string | null | undefined, kind: "lesson" | "membership") => {
+    const won = Math.max(0, Number(amount) || 0);
+    if (won <= 0 && paymentStatus !== "unpaid" && paymentStatus !== "partial") return;
+    outstandingByMember.set(memberId, (outstandingByMember.get(memberId) ?? 0) + won);
+    if (kind === "lesson") lessonOutstanding += won;
+    else membershipOutstanding += won;
+  };
+  for (const p of validPasses) feedOutstanding(p.member_id, p.outstanding_won, p.payment_status, "lesson");
+  for (const m of validMemberships) feedOutstanding(m.member_id, m.outstanding_won, m.payment_status, "membership");
 
   // 회원 통계 집계
   const totalMembers = emptyGC();
@@ -153,6 +187,8 @@ export async function GET(request: Request) {
   let activeUnknown = 0;
   let activeLesson = 0;
   let activeMembershipOnly = 0;
+  let expiring7d = 0;
+  let expiring30d = 0;
 
   for (const m of members) {
     addGender(totalMembers, m.gender);
@@ -172,6 +208,12 @@ export async function GET(request: Request) {
 
       if (activePassMemberIds.has(m.id)) activeLesson += 1;
       else activeMembershipOnly += 1;
+
+      const activeExpiry = activeExpiryByMember.get(m.id) ?? m.final_expire_at;
+      if (activeExpiry) {
+        if (activeExpiry <= shiftYmd(today, 7)) expiring7d += 1;
+        if (activeExpiry <= shiftYmd(today, 30)) expiring30d += 1;
+      }
     } else addGender(expiredMembers, m.gender);
 
     // 신규/재등록: POS registered_at 우선(POS 원본 최초 등록일), 없으면 created_at
@@ -278,45 +320,27 @@ export async function GET(request: Request) {
     count: Math.round((wdSum[i] / AVG_WEEKS) * 10) / 10,
   }));
 
-  // 매출 통계 (period 내 발급)
-  // 수강권(personal/group PT/OT etc) — crm_passes
-  // 회원권 — crm_memberships
-  // 락커/운동복/일반 — 아직 매출 추적 미구현 (0)
-  const [passesInPeriod, memshipsInPeriod] = await Promise.all([
-    paginateAll<{ member_id: number; price_won: number; total_sessions: number; lesson_kind: string | null }>(
-      (f, t) =>
-        supabase
-          .from("crm_passes")
-          .select("member_id, price_won, total_sessions, lesson_kind")
-          .eq("center_id", ctx.centerId)
-          .neq("status", "deleted")
-          .gte("issued_at", from)
-          .lt("issued_at", toExcl)
-          .range(f, t)
-    ),
-    paginateAll<{ price_won: number }>((f, t) =>
-      supabase
-        .from("crm_memberships")
-        .select("price_won")
-        .eq("center_id", ctx.centerId)
-        .neq("status", "deleted")
-        .gte("start_date", from)
-        .lt("start_date", toExcl)
-        .range(f, t)
-    ),
-  ]);
-
-  const membershipRevenue = memshipsInPeriod.reduce((s, r) => s + (r.price_won ?? 0), 0);
-  // 레슨권 = 개인 레슨 + 그룹 수업 통합. 그룹 매출 별도 추적은 미구현이라 현재 개인 레슨 합계와 동일
-  const lessonRevenue = passesInPeriod.reduce((s, r) => s + (r.price_won ?? 0), 0);
+  // 매출 통계 (period 내 실제 거래) — 실매출 원장 crm_sales 기준
+  // 회원권=멤버십 / 수강권(lesson)=이용권+예약권 / 대여권 / 락커 / 일반(goods). 환불은 음수.
+  const salesInPeriod = await fetchSales(ctx.centerId, from, toExcl);
+  let membershipRevenue = 0;
+  let lessonRevenue = 0;
+  let lockerRevenue = 0;
+  let goodsRevenue = 0;
+  let rentalRevenue = 0;
   const lessonRevenueByGender: GenderRevenue = { male: 0, female: 0 };
-  for (const p of passesInPeriod) {
-    const gender = genderById.get(p.member_id) ?? null;
-    if (gender === "M") lessonRevenueByGender.male += p.price_won ?? 0;
-    else if (gender === "F") lessonRevenueByGender.female += p.price_won ?? 0;
+  for (const s of salesInPeriod) {
+    const cat = saleCategory(s.product_type);
+    if (cat === "membership") membershipRevenue += s.amount_won;
+    else if (cat === "lesson") {
+      lessonRevenue += s.amount_won;
+      const gender = genderById.get(s.member_id ?? -1) ?? null;
+      if (gender === "M") lessonRevenueByGender.male += s.amount_won;
+      else if (gender === "F") lessonRevenueByGender.female += s.amount_won;
+    } else if (cat === "rental") rentalRevenue += s.amount_won;
+    else if (cat === "locker") lockerRevenue += s.amount_won;
+    else goodsRevenue += s.amount_won;
   }
-  const lockerRevenue = 0;
-  const goodsRevenue = 0;
 
   // 수업 통계 — 그룹/개인/OT
   // period 내 예약 건수 + 신청자 수(unique) + 미진행(시작시각 지났는데 출석 처리 안 된 건: noshow·취소·미출석)
@@ -370,8 +394,8 @@ export async function GET(request: Request) {
       lessonByGender: lessonRevenueByGender,
       locker: lockerRevenue,
       goods: goodsRevenue,
-      rental: 0,
-      total: membershipRevenue + lessonRevenue + lockerRevenue + goodsRevenue,
+      rental: rentalRevenue,
+      total: membershipRevenue + lessonRevenue + lockerRevenue + goodsRevenue + rentalRevenue,
     },
     active_by_type: {
       new: activeNew,
@@ -381,6 +405,16 @@ export async function GET(request: Request) {
     active_by_product: {
       lesson: activeLesson,
       membership: activeMembershipOnly,
+    },
+    action: {
+      expiring7d,
+      expiring30d,
+      outstanding: {
+        members: outstandingByMember.size,
+        total: lessonOutstanding + membershipOutstanding,
+        lesson: lessonOutstanding,
+        membership: membershipOutstanding,
+      },
     },
     classes: {
       group: groupClasses,

@@ -52,6 +52,7 @@ interface MemberRow {
   max_expires_at?: string | null;
   on_hold?: boolean;
   scheduled?: boolean;
+  outstanding_won?: number;
 }
 
 type StatusFilter = "all" | "valid" | "scheduled" | "expired" | "hold" | "expiring";
@@ -59,7 +60,8 @@ type StatusFilter = "all" | "valid" | "scheduled" | "expired" | "hold" | "expiri
 const EXPIRING_DAYS = 7;
 type SignupFilter = "all" | "this_week" | "this_month" | "this_year" | "custom";
 type AbsenceFilter = "all" | "10d" | "15d" | "20d" | "30d" | "60d" | "90d";
-type ExpireFilter = "all" | "this_week" | "this_month" | "expired";
+type ExpireFilter = "all" | "7d" | "30d" | "this_week" | "this_month" | "expired";
+type PaymentFilter = "all" | "outstanding";
 type LockerFilter = "all" | "has" | "none";
 type GoodsFilter = "all" | "has" | "none";
 
@@ -250,7 +252,15 @@ export default function CrmMembersPage() {
       ? v
       : "all";
   });
-  const [fExpire, setFExpire] = useState<ExpireFilter>("all");
+  const [fExpire, setFExpire] = useState<ExpireFilter>(() => {
+    const v = searchParamsHook.get("expire");
+    return v === "7d" || v === "30d" || v === "this_week" || v === "this_month" || v === "expired"
+      ? v
+      : "all";
+  });
+  const [fPayment, setFPayment] = useState<PaymentFilter>(() =>
+    searchParamsHook.get("payment") === "outstanding" ? "outstanding" : "all"
+  );
   const [fLocker, setFLocker] = useState<LockerFilter>("all");
   const [fGoods, setFGoods] = useState<GoodsFilter>("all");
 
@@ -523,6 +533,10 @@ export default function CrmMembersPage() {
         const eff = effExpiry(m);
         if (fExpire === "expired") {
           if (!eff || eff >= todayStr) return false;
+        } else if (fExpire === "7d") {
+          if (!eff || eff < todayStr || eff > addDaysYmd(todayStr, 7)) return false;
+        } else if (fExpire === "30d") {
+          if (!eff || eff < todayStr || eff > addDaysYmd(todayStr, 30)) return false;
         } else if (fExpire === "this_week") {
           if (!eff) return false;
           const d = new Date(eff);
@@ -533,6 +547,8 @@ export default function CrmMembersPage() {
           if (d < startOfMonth || d >= endOfMonth) return false;
         }
       }
+
+      if (fPayment === "outstanding" && (m.outstanding_won ?? 0) <= 0) return false;
 
       // 락커
       if (fLocker !== "all") {
@@ -545,7 +561,7 @@ export default function CrmMembersPage() {
 
       return true;
     });
-  }, [list, query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fLocker, fGoods]);
+  }, [list, query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fPayment, fLocker, fGoods]);
 
   const sorted = useMemo(() => {
     if (!sortKey) return filtered;
@@ -640,7 +656,7 @@ export default function CrmMembersPage() {
   // 필터/검색 변경 시에만 1페이지로. 마운트·정렬변경·StrictMode 이중호출에는 반응하지 않음
   // (ref 시그니처 비교: 실제로 필터가 바뀔 때만 리셋 → 뒤로가기 시 memoPage 유지)
   const filterSig = JSON.stringify([
-    query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fLocker, fGoods,
+    query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fPayment, fLocker, fGoods,
   ]);
   const lastFilterSig = useRef(filterSig);
   useEffect(() => {
@@ -657,6 +673,7 @@ export default function CrmMembersPage() {
     setFSignupTo("");
     setFAbsence("all");
     setFExpire("all");
+    setFPayment("all");
     setFLocker("all");
     setFGoods("all");
   };
@@ -954,9 +971,20 @@ export default function CrmMembersPage() {
           onChange={(v) => setFExpire(v as ExpireFilter)}
           options={[
             { value: "all", label: "전체" },
+            { value: "7d", label: "7일 이내" },
+            { value: "30d", label: "30일 이내" },
             { value: "this_week", label: "이번 주" },
             { value: "this_month", label: "이번 달" },
             { value: "expired", label: "만료됨" },
+          ]}
+        />
+        <FilterChip
+          label="결제 상태"
+          value={fPayment}
+          onChange={(v) => setFPayment(v as PaymentFilter)}
+          options={[
+            { value: "all", label: "전체" },
+            { value: "outstanding", label: "미수 있음" },
           ]}
         />
         <FilterChip

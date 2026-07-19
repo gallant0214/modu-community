@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { fetchSales } from "@/app/lib/crm-sales";
 
 export const dynamic = "force-dynamic";
 
@@ -51,52 +52,23 @@ export async function GET(request: Request) {
   const monthsList = listMonths(startDate, nextMonth);
   const monthsInPeriod = Math.max(1, monthsList.length);
 
-  // ── 매출 (부가세 포함/제외) ─────────────────────────────
-  const [membershipRows, passRows, rentalRows] = await Promise.all([
-    supabase
-      .from("crm_memberships")
-      .select("price_won, vat_included")
-      .eq("center_id", ctx.centerId)
-      .neq("status", "deleted")
-      .gte("start_date", startDate)
-      .lt("start_date", nextMonth),
-    supabase
-      .from("crm_passes")
-      .select("price_won, vat_included, trainer_member_id")
-      .eq("center_id", ctx.centerId)
-      .neq("status", "deleted")
-      .gte("issued_at", startDate)
-      .lt("issued_at", nextMonth),
-    supabase
-      .from("crm_rentals")
-      .select("price_won, vat_included")
-      .eq("center_id", ctx.centerId)
-      .neq("status", "deleted")
-      .gte("start_date", startDate)
-      .lt("start_date", nextMonth),
-  ]);
-
-  const exVatOne = (price: number, vatIncluded: boolean) =>
-    vatIncluded ? Math.round(price / (1 + VAT_RATE)) : price;
-
-  const allRevRows = [
-    ...(membershipRows.data ?? []),
-    ...(passRows.data ?? []),
-    ...(rentalRows.data ?? []),
-  ] as { price_won: number | null; vat_included: boolean | null }[];
-
+  // ── 총매출 ── 실매출 원장 crm_sales 기준 (환불 음수). 부가세는 포함가 가정(÷1.1)
+  const periodSales = await fetchSales(ctx.centerId, startDate, nextMonth);
   let totalRevenue = 0;
-  let totalExVat = 0;
-  for (const r of allRevRows) {
-    const p = r.price_won ?? 0;
-    totalRevenue += p;
-    totalExVat += exVatOne(p, !!r.vat_included);
-  }
+  for (const s of periodSales) totalRevenue += s.amount_won;
+  const totalExVat = Math.round(totalRevenue / (1 + VAT_RATE));
   const vatAmount = totalRevenue - totalExVat;
 
-  // 강사별 기간 매출 (수업료 계산용)
+  // 강사별 기간 매출 (수업료 정산 계산용) — 강사 귀속은 crm_passes 에만 있어 유지
+  const { data: passRowsData } = await supabase
+    .from("crm_passes")
+    .select("price_won, trainer_member_id")
+    .eq("center_id", ctx.centerId)
+    .neq("status", "deleted")
+    .gte("issued_at", startDate)
+    .lt("issued_at", nextMonth);
   const revenueByTrainer = new Map<number, number>();
-  for (const p of (passRows.data ?? []) as { price_won: number | null; trainer_member_id: number | null }[]) {
+  for (const p of (passRowsData ?? []) as { price_won: number | null; trainer_member_id: number | null }[]) {
     if (!p.trainer_member_id) continue;
     revenueByTrainer.set(
       p.trainer_member_id,

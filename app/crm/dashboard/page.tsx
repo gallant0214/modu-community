@@ -77,6 +77,16 @@ interface SummaryResp {
     lesson: number;
     membership: number;
   };
+  action?: {
+    expiring7d: number;
+    expiring30d: number;
+    outstanding: {
+      members: number;
+      total: number;
+      lesson: number;
+      membership: number;
+    };
+  };
   classes: {
     group: { count: number; applicants: number; pending?: number };
     personal: { count: number; applicants: number; pending?: number };
@@ -259,6 +269,51 @@ export default function CrmDashboardPage() {
         <div className="text-[13px] text-[#8C8270] py-8 text-center">불러오는 중…</div>
       ) : (
         <div className="space-y-4">
+          {/* 운영 알림 */}
+          {summary && (
+            <>
+              <SectionHeader title="운영 알림" subtitle="재등록·수금 우선 확인 대상" />
+              <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <Link href="/crm/members?status=valid&expire=7d">
+                  <ActionInsightCard
+                    label="7일 이내 만료"
+                    value={`${(summary.action?.expiring7d ?? 0).toLocaleString()}명`}
+                    hint="재등록 안내 대상"
+                    tone="warn"
+                  />
+                </Link>
+                <Link href="/crm/members?status=valid&expire=30d">
+                  <ActionInsightCard
+                    label="30일 이내 만료"
+                    value={`${(summary.action?.expiring30d ?? 0).toLocaleString()}명`}
+                    hint="이번달 케어 대상"
+                    tone="gold"
+                  />
+                </Link>
+                {canFinance && (
+                  <>
+                    <Link href="/crm/members?payment=outstanding">
+                      <ActionInsightCard
+                        label="미수 회원"
+                        value={`${(summary.action?.outstanding.members ?? 0).toLocaleString()}명`}
+                        hint={`레슨 ${formatWon(summary.action?.outstanding.lesson ?? 0)} · 이용권 ${formatWon(summary.action?.outstanding.membership ?? 0)}`}
+                        tone="red"
+                      />
+                    </Link>
+                    <Link href="/crm/members?payment=outstanding">
+                      <ActionInsightCard
+                        label="미수금"
+                        value={`${formatWon(summary.action?.outstanding.total ?? 0)}원`}
+                        hint="부분결제·미납 합계"
+                        tone="red"
+                      />
+                    </Link>
+                  </>
+                )}
+              </section>
+            </>
+          )}
+
           {/* 회원 통계 */}
           {summary && (
             <SectionHeader
@@ -706,6 +761,37 @@ function RegistrationMixBar({
           <span className="text-[#8C8270]">({rePct.toFixed(1)}%)</span>
         </span>
       </div>
+    </div>
+  );
+}
+
+function ActionInsightCard({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  tone: "warn" | "gold" | "red";
+}) {
+  const toneCls =
+    tone === "red"
+      ? "text-[#B84A3A] dark:text-red-300"
+      : tone === "gold"
+      ? "text-[#8A641D] dark:text-amber-300"
+      : "text-[#B47B2A] dark:text-amber-300";
+  const ringCls =
+    tone === "red"
+      ? "hover:border-[#B84A3A]/45 hover:bg-red-50/50 dark:hover:bg-red-950/20"
+      : "hover:border-[#B47B2A]/45 hover:bg-amber-50/50 dark:hover:bg-amber-950/20";
+
+  return (
+    <div className={`h-full px-4 py-3.5 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm transition-colors ${ringCls}`}>
+      <div className="text-[12px] font-semibold text-[#8C8270] dark:text-zinc-500">{label}</div>
+      <div className={`mt-1 text-[22px] font-bold truncate ${toneCls}`}>{value}</div>
+      <div className="mt-1 text-[11.5px] text-[#8C8270] dark:text-zinc-500 truncate">{hint}</div>
     </div>
   );
 }
