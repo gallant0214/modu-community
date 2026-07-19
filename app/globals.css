@@ -4,9 +4,10 @@
 @variant dark (&:where(.dark, .dark *));
 
 /* 모바일 가로 흔들림/스크롤 방지 — 어느 자식이 overflow 해도 화면 밖으로 안 새 나감.
-   세로 스크롤은 정상 동작. */
+   세로 스크롤은 정상 동작. clip 사용: hidden 과 달리 스크롤 컨테이너를 만들지 않아
+   position: sticky (예: CRM 사이드바) 가 정상 동작함. */
 html, body {
-  overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100vw;
   overscroll-behavior-x: none;
 }
