@@ -620,6 +620,7 @@ export default function CrmDashboardPage() {
                 overlay={trend.map((m) => ({ label: m.ym.slice(2).replace("-", "/"), value: m.revenuePrev ?? 0 }))}
                 overlayLabel="작년 동월"
                 primaryLabel="올해"
+                overlaySolid
                 unit="원"
               />
             </div>
@@ -638,6 +639,7 @@ export default function CrmDashboardPage() {
                 }))}
                 overlayLabel="작년 동월"
                 primaryLabel="올해"
+                overlaySolid
                 unit="원"
               />
             </div>

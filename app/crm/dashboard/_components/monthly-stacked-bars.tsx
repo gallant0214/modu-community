@@ -24,7 +24,7 @@ interface Props {
  * - count 모드: 절대값 누적 막대 (단일 시리즈면 일반 막대)
  */
 export function MonthlyStackedBars({ months, series, mode = "count", unit = "명", height = 200 }: Props) {
-  const [hover, setHover] = useState<{ x: number; y: number; idx: number } | null>(null);
+  const [hover, setHover] = useState<{ x: number; y: number; idx: number; flip: boolean } | null>(null);
 
   if (months.length === 0 || series.length === 0) {
     return (
@@ -87,7 +87,9 @@ export function MonthlyStackedBars({ months, series, mode = "count", unit = "명
               key={ym}
               onMouseMove={(e) => {
                 const rect = e.currentTarget.ownerSVGElement?.getBoundingClientRect();
-                if (rect) setHover({ x: e.clientX - rect.left + 12, y: e.clientY - rect.top + 12, idx: i });
+                if (!rect) return;
+                const mx = e.clientX - rect.left;
+                setHover({ x: mx, y: e.clientY - rect.top + 12, idx: i, flip: mx > rect.width * 0.6 });
               }}
               onMouseLeave={() => setHover(null)}
             >
@@ -143,8 +145,12 @@ export function MonthlyStackedBars({ months, series, mode = "count", unit = "명
       {/* 툴팁 */}
       {hover && (
         <div
-          className="pointer-events-none absolute z-20 rounded-md border border-[#D9CBB5] bg-[#2A251D] px-2.5 py-1.5 text-[11px] font-medium text-white shadow-lg dark:border-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
-          style={{ left: hover.x, top: hover.y }}
+          className="pointer-events-none absolute z-20 whitespace-nowrap rounded-md border border-[#D9CBB5] bg-[#2A251D] px-2.5 py-1.5 text-[11px] font-medium text-white shadow-lg dark:border-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
+          style={{
+            left: hover.flip ? hover.x - 12 : hover.x + 12,
+            top: hover.y,
+            transform: hover.flip ? "translateX(-100%)" : undefined,
+          }}
         >
           <div className="font-semibold mb-0.5">{monthLabel(months[hover.idx])}</div>
           {series.map((ser) => {

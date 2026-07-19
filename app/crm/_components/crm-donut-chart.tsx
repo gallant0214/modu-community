@@ -31,7 +31,7 @@ export function CrmDonutChart({
   showLegendValue = false,
   legendPosition = "side",
 }: Props) {
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; flip: boolean } | null>(null);
   const visibleSlices = slices.filter((s) => s.value > 0);
   const total = visibleSlices.reduce((s, x) => s + x.value, 0);
   if (total === 0) {
@@ -64,9 +64,11 @@ export function CrmDonutChart({
     const rect = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
     if (!rect) return;
     const percent = ((value / total) * 100).toFixed(0);
+    const mx = event.clientX - rect.left;
     setTooltip({
-      x: event.clientX - rect.left + 12,
+      x: mx,
       y: event.clientY - rect.top + 12,
+      flip: mx > rect.width * 0.6,
       text: `${label}: ${formatTooltipValue(value, valueKind)} (${percent}%)`,
     });
   };
@@ -99,8 +101,12 @@ export function CrmDonutChart({
       </svg>
       {tooltip && (
         <div
-          className="pointer-events-none absolute z-20 rounded-md border border-[#D9CBB5] bg-[#2A251D] px-2.5 py-1.5 text-[11.5px] font-semibold text-white shadow-lg dark:border-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
-          style={{ left: tooltip.x, top: tooltip.y }}
+          className="pointer-events-none absolute z-20 whitespace-nowrap rounded-md border border-[#D9CBB5] bg-[#2A251D] px-2.5 py-1.5 text-[11.5px] font-semibold text-white shadow-lg dark:border-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
+          style={{
+            left: tooltip.flip ? tooltip.x - 12 : tooltip.x + 12,
+            top: tooltip.y,
+            transform: tooltip.flip ? "translateX(-100%)" : undefined,
+          }}
         >
           {tooltip.text}
         </div>

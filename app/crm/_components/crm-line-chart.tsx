@@ -24,6 +24,8 @@ interface Props {
   overlayLabel?: string;
   /** 본선 범례 라벨 (overlay 있을 때만 표시). 기본 "이번 주". */
   primaryLabel?: string;
+  /** true = 보조선을 본선과 동일한 실선+점으로(색만 다름). false(기본) = 연한 점선. */
+  overlaySolid?: boolean;
 }
 
 /**
@@ -39,8 +41,9 @@ export function CrmLineChart({
   overlayColor = "#9AA0A6",
   overlayLabel,
   primaryLabel = "이번 주",
+  overlaySolid = false,
 }: Props) {
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; flip: boolean } | null>(null);
   const W = 600;
   const H = height;
   const padL = unit === "원" ? 58 : 40;
@@ -85,9 +88,11 @@ export function CrmLineChart({
       ov !== undefined
         ? ` · ${overlayLabel ?? "평균"} ${formatTooltipValue(ov.value, unit)}`
         : "";
+    const mx = event.clientX - rect.left;
     setTooltip({
-      x: event.clientX - rect.left + 12,
+      x: mx,
       y: event.clientY - rect.top + 12,
+      flip: mx > rect.width * 0.6, // 우측이면 커서 왼쪽으로
       text: `${p.label}: ${formatTooltipValue(p.value, unit)}${avgText}`,
     });
   };
@@ -137,17 +142,50 @@ export function CrmLineChart({
           </text>
         ))}
 
-        {/* 보조선(평균) — 연하게, 점선 */}
-        {overlayPath && (
-          <path
-            d={overlayPath}
-            fill="none"
-            stroke={overlayColor}
-            strokeWidth={1.5}
-            strokeDasharray="4 4"
-            strokeOpacity={0.55}
-          />
-        )}
+        {/* 보조선(예: 작년 동월) */}
+        {overlayPath &&
+          (overlaySolid ? (
+            <path d={overlayPath} fill="none" stroke={overlayColor} strokeWidth={2} />
+          ) : (
+            <path
+              d={overlayPath}
+              fill="none"
+              stroke={overlayColor}
+              strokeWidth={1.5}
+              strokeDasharray="4 4"
+              strokeOpacity={0.55}
+            />
+          ))}
+
+        {/* 보조선 점 + 호버 툴팁 — 실선 모드일 때만 (본선 아래에 먼저 그림) */}
+        {overlaySolid &&
+          overlayPts.map((p, i) => {
+            const x = xAt(i);
+            const py = y(p.value);
+            return (
+              <g key={`ov${i}`}>
+                <circle cx={x} cy={py} r={3.5} fill={overlayColor} />
+                <circle
+                  cx={x}
+                  cy={py}
+                  r={11}
+                  fill="transparent"
+                  onMouseMove={(event) => {
+                    const rect = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
+                    if (!rect) return;
+                    const mx = event.clientX - rect.left;
+                    setTooltip({
+                      x: mx,
+                      y: event.clientY - rect.top + 12,
+                      flip: mx > rect.width * 0.6,
+                      text: `${p.label} · ${overlayLabel ?? ""} ${formatTooltipValue(p.value, unit)}`,
+                    });
+                  }}
+                  onMouseLeave={() => setTooltip(null)}
+                />
+              </g>
+            );
+          })}
 
         {/* 라인 */}
         <path d={path} fill="none" stroke={color} strokeWidth={2} />
@@ -178,18 +216,23 @@ export function CrmLineChart({
             {primaryLabel}
           </span>
           <span className="inline-flex items-center gap-1">
-            <span
-              className="inline-block w-4 h-0 border-t-2 border-dashed"
-              style={{ borderColor: overlayColor }}
-            />
+            {overlaySolid ? (
+              <span className="inline-block w-4 h-0.5 rounded" style={{ background: overlayColor }} />
+            ) : (
+              <span className="inline-block w-4 h-0 border-t-2 border-dashed" style={{ borderColor: overlayColor }} />
+            )}
             {overlayLabel}
           </span>
         </div>
       )}
       {tooltip && (
         <div
-          className="pointer-events-none absolute z-20 rounded-md border border-[#D9CBB5] bg-[#2A251D] px-2.5 py-1.5 text-[11.5px] font-semibold text-white shadow-lg dark:border-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
-          style={{ left: tooltip.x, top: tooltip.y }}
+          className="pointer-events-none absolute z-20 whitespace-nowrap rounded-md border border-[#D9CBB5] bg-[#2A251D] px-2.5 py-1.5 text-[11.5px] font-semibold text-white shadow-lg dark:border-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
+          style={{
+            left: tooltip.flip ? tooltip.x - 12 : tooltip.x + 12,
+            top: tooltip.y,
+            transform: tooltip.flip ? "translateX(-100%)" : undefined,
+          }}
         >
           {tooltip.text}
         </div>
