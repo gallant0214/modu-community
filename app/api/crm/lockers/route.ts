@@ -52,7 +52,7 @@ export async function GET(request: Request) {
     )
   );
   const { data: members } = memberIds.length
-    ? await supabase.from("crm_members").select("id, name, phone").in("id", memberIds)
+    ? await supabase.from("crm_members").select("id, name, phone, face_image_thumb").in("id", memberIds)
     : { data: [] };
   const memberMap = new Map((members ?? []).map((m) => [m.id, m]));
 

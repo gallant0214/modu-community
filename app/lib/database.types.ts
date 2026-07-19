@@ -2541,6 +2541,8 @@ export type Database = {
           current_pass: string | null
           current_rental: string | null
           current_locker: string | null
+          face_image_data: string | null
+          face_image_thumb: string | null
           created_at: string
           updated_at: string
         }
@@ -2574,6 +2576,8 @@ export type Database = {
           current_pass?: string | null
           current_rental?: string | null
           current_locker?: string | null
+          face_image_data?: string | null
+          face_image_thumb?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -2607,6 +2611,8 @@ export type Database = {
           current_pass?: string | null
           current_rental?: string | null
           current_locker?: string | null
+          face_image_data?: string | null
+          face_image_thumb?: string | null
           created_at?: string
           updated_at?: string
         }

@@ -35,7 +35,7 @@ interface Locker {
   memo: string | null;
   layout_row: number | null;
   layout_col: number | null;
-  member: { id: number; name: string; phone: string | null } | null;
+  member: { id: number; name: string; phone: string | null; face_image_thumb?: string | null } | null;
 }
 
 const STATE_FILTERS: { key: "all" | DisplayState; label: string; color: string }[] = [
@@ -1929,14 +1929,28 @@ function LockerActionModal({
             <button
               type="button"
               onClick={() => setQuickMemberId(locker.member!.id)}
-              className="text-[13px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+              className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
             >
-              {locker.member.name}
-              {locker.member.phone && (
-                <span className="ml-1 text-[12px] text-[#8C8270] font-normal">
-                  · {formatPhone(locker.member.phone)}
+              {locker.member.face_image_thumb ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={locker.member.face_image_thumb}
+                  alt=""
+                  className="w-6 h-6 rounded-full object-cover border border-[#E8E0D0] dark:border-zinc-700"
+                />
+              ) : (
+                <span className="w-6 h-6 rounded-full flex items-center justify-center bg-[#F5F0E5] dark:bg-zinc-800 text-[#A89B80] text-[11px] shrink-0">
+                  {locker.member.name?.slice(0, 1) ?? "—"}
                 </span>
               )}
+              <span>
+                {locker.member.name}
+                {locker.member.phone && (
+                  <span className="ml-1 text-[12px] text-[#8C8270] font-normal">
+                    · {formatPhone(locker.member.phone)}
+                  </span>
+                )}
+              </span>
             </button>
           )}
         </div>
@@ -2906,7 +2920,7 @@ function LayoutEditor({
             × 전부 비우기
           </button>
           <span className="text-[11px] text-[#A89B80] ml-1">
-            일부만 원하는 자리에 배치한 뒤 "자동 채우기" 를 누르면 나머지가 자동으로 정렬됩니다.
+            일부만 원하는 자리에 배치한 뒤 &quot;자동 채우기&quot; 를 누르면 나머지가 자동으로 정렬됩니다.
           </span>
         </div>
       )}
