@@ -22,6 +22,8 @@ interface Props {
   overlayColor?: string;
   /** 보조선 범례 라벨 (예: "평균"). */
   overlayLabel?: string;
+  /** 본선 범례 라벨 (overlay 있을 때만 표시). 기본 "이번 주". */
+  primaryLabel?: string;
 }
 
 /**
@@ -36,6 +38,7 @@ export function CrmLineChart({
   overlay,
   overlayColor = "#9AA0A6",
   overlayLabel,
+  primaryLabel = "이번 주",
 }: Props) {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
   const W = 600;
@@ -172,7 +175,7 @@ export function CrmLineChart({
         <div className="mt-1.5 flex items-center gap-3 text-[11px] text-[#8C8270] dark:text-zinc-500">
           <span className="inline-flex items-center gap-1">
             <span className="inline-block w-4 h-0.5 rounded" style={{ background: color }} />
-            이번 주
+            {primaryLabel}
           </span>
           <span className="inline-flex items-center gap-1">
             <span

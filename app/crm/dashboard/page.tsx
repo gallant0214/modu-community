@@ -12,6 +12,8 @@ interface TrendPoint {
   ym: string;
   revenue: number;
   membershipRevenue: number;
+  revenuePrev?: number;
+  membershipRevenuePrev?: number;
 }
 
 interface MonthlyResp {
@@ -615,6 +617,9 @@ export default function CrmDashboardPage() {
               </h3>
               <CrmLineChart
                 points={trend.map((m) => ({ label: m.ym.slice(2).replace("-", "/"), value: m.revenue }))}
+                overlay={trend.map((m) => ({ label: m.ym.slice(2).replace("-", "/"), value: m.revenuePrev ?? 0 }))}
+                overlayLabel="작년 동월"
+                primaryLabel="올해"
                 unit="원"
               />
             </div>
@@ -627,6 +632,12 @@ export default function CrmDashboardPage() {
                   label: m.ym.slice(2).replace("-", "/"),
                   value: m.membershipRevenue ?? 0,
                 }))}
+                overlay={trend.map((m) => ({
+                  label: m.ym.slice(2).replace("-", "/"),
+                  value: m.membershipRevenuePrev ?? 0,
+                }))}
+                overlayLabel="작년 동월"
+                primaryLabel="올해"
                 unit="원"
               />
             </div>

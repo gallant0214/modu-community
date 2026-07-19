@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
  * GET /api/crm/stats/trend
  * 최근 12개월 매출 추이 (대시보드용). 실매출 원장 crm_sales 기준.
  *
- * 응답: [{ ym: "2026-01", revenue(수강권=PT/예약권), membershipRevenue(회원권=멤버십) }, ...] 12개
+ * 응답: [{ ym, revenue(수강권=PT/예약권), membershipRevenue(회원권=멤버십),
+ *          revenuePrev, membershipRevenuePrev(=전년 동월) }, ...] 12개
  *
  * 매출 원장엔 강사 귀속이 없어 재무 권한이 없는 trainer/manager 는 0 반환(데이터 격리).
  */
@@ -16,29 +17,37 @@ export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  // 12개월 윈도우
+  // 12개월 윈도우 (표시용)
   const now = new Date();
-  const months: { ym: string; start: string; end: string; revenue: number; membershipRevenue: number }[] = [];
+  const months: { ym: string; end: string }[] = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const start = `${ym}-01`;
     const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
     const end = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`;
-    months.push({ ym, start, end, revenue: 0, membershipRevenue: 0 });
+    months.push({ ym, end });
   }
+  const prevYm = (ym: string) => {
+    const [y, m] = ym.split("-");
+    return `${Number(y) - 1}-${m}`;
+  };
+  const empty = () => ({ lesson: 0, membership: 0 });
+  const agg = new Map<string, { lesson: number; membership: number }>();
 
   // 재무 = owner/admin 만 (crm_sales 는 강사 귀속 없음)
   if (ctx.role === "owner" || ctx.role === "admin") {
     try {
-      const byYm = new Map(months.map((m) => [m.ym, m]));
-      const sales = await fetchSales(ctx.centerId, months[0].start, months[11].end);
+      // 전년 동월 비교를 위해 24개월(표시 12 + 전년 12) 조회
+      const prevStart = `${prevYm(months[0].ym)}-01`;
+      const sales = await fetchSales(ctx.centerId, prevStart, months[11].end);
       for (const s of sales) {
-        const bucket = byYm.get(saleYm(s.tx_at));
-        if (!bucket) continue;
         const cat = saleCategory(s.product_type);
-        if (cat === "membership") bucket.membershipRevenue += s.amount_won;
-        else if (cat === "lesson") bucket.revenue += s.amount_won;
+        if (cat !== "lesson" && cat !== "membership") continue;
+        const ym = saleYm(s.tx_at);
+        const b = agg.get(ym) ?? empty();
+        if (cat === "lesson") b.lesson += s.amount_won;
+        else b.membership += s.amount_won;
+        agg.set(ym, b);
       }
     } catch (e) {
       return NextResponse.json(
@@ -49,6 +58,16 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    months: months.map(({ ym, revenue, membershipRevenue }) => ({ ym, revenue, membershipRevenue })),
+    months: months.map(({ ym }) => {
+      const cur = agg.get(ym) ?? empty();
+      const prev = agg.get(prevYm(ym)) ?? empty();
+      return {
+        ym,
+        revenue: cur.lesson,
+        membershipRevenue: cur.membership,
+        revenuePrev: prev.lesson,
+        membershipRevenuePrev: prev.membership,
+      };
+    }),
   });
 }
