@@ -1846,27 +1846,35 @@ function LockerActionModal({
     }
   };
 
+  // 열림/락커 전환 시 모든 상태를 초기화 (다른 락커를 누르면 처음처럼)
   useEffect(() => {
-    if (!open) {
+    setError("");
+    setMemberQuery("");
+    setMemberResults([]);
+    setPickedMember(null);
+    setLockerPurchases([]);
+    setPickedProductName("");
+    setHistory([]);
+    if (!open || !locker) {
       setMode("view");
-      setError("");
-      setMemberQuery("");
-      setMemberResults([]);
-      setPickedMember(null);
       setPassword("");
       setMemo("");
-      setLockerPurchases([]);
-      setPickedProductName("");
-      setHistory([]);
       return;
     }
-    if (locker) {
-      setPassword(locker.password ?? "");
-      setMemo(locker.memo ?? "");
-      if (locker.start_date) setStartDate(locker.start_date);
-      if (locker.expires_at) setExpiresAt(locker.expires_at);
-    }
-  }, [open, locker]);
+    setPassword(locker.password ?? "");
+    setMemo(locker.memo ?? "");
+    setStartDate(locker.start_date ?? today);
+    setExpiresAt(
+      locker.expires_at ??
+        (() => {
+          const d = new Date();
+          d.setMonth(d.getMonth() + 1);
+          return d.toISOString().slice(0, 10);
+        })()
+    );
+    // 빈 락커면 버튼 없이 바로 회원 검색(배정) 화면, 배정된 락커면 상세(view)
+    setMode(locker.assigned_member_id ? "view" : "assign");
+  }, [open, locker, today]);
 
   // 회원 선택 시 그 회원이 구매한 락커 상품 조회
   useEffect(() => {
