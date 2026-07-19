@@ -212,11 +212,19 @@ export async function GET(request: Request) {
     };
     for (const m of memberships) feed(m.member_id, m.expires_at);
     for (const p of passes) feed(p.member_id, p.expires_at);
+    // 이탈 기준: 마지막 만료 후 7일 유예. 유예가 지난(만료+7일 < 오늘) 회원만,
+    // '만료+7일' 시점이 속한 달에 이탈로 집계.
+    const addDays = (ymd: string, n: number): string => {
+      const d = new Date(`${ymd}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10);
+    };
+    const CHURN_GRACE_DAYS = 7;
     const churn = months.map(() => 0);
     for (const [, exp] of lastExpiry) {
-      const d = exp.slice(0, 10);
-      if (d >= todayYmd) continue; // 아직 유효 → 이탈 아님
-      const idx = months.findIndex((mm) => d >= mm.start && d < mm.endExcl);
+      const churnDate = addDays(exp.slice(0, 10), CHURN_GRACE_DAYS);
+      if (churnDate >= todayYmd) continue; // 만료 후 7일 안 지남 → 아직 이탈 아님
+      const idx = months.findIndex((mm) => churnDate >= mm.start && churnDate < mm.endExcl);
       if (idx >= 0) churn[idx] += 1;
     }
 

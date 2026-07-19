@@ -162,7 +162,7 @@ export function CustomerStatusView() {
       </ChartCard>
 
       {/* 이탈 */}
-      <ChartCard title="이탈 고객 수" subtitle="마지막 이용권이 그 달에 만료된 고객">
+      <ChartCard title="이탈 고객 수" subtitle="마지막 이용권 만료 후 7일이 지난(이탈 확정) 고객">
         <MonthlyStackedBars
           months={data.months}
           series={[{ label: "이탈고객", color: "#C76C8E", values: data.churn }]}
