@@ -1973,15 +1973,12 @@ function LockerActionModal({
 
   const body = (
       <div className="space-y-3.5">
-        <div className="flex items-center justify-between">
-          <span className={`px-2 py-0.5 rounded text-[11.5px] font-semibold ${STATE_CHIP_CLS[ds]}`}>
-            {STATE_LABEL[ds]}
-          </span>
-          {locker.member && (
+        <div className="flex items-center gap-2">
+          {locker.member ? (
             <button
               type="button"
               onClick={() => setQuickMemberId(locker.member!.id)}
-              className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+              className="inline-flex items-center gap-2 text-[13.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
             >
               {locker.member.face_image_thumb ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -2004,6 +2001,8 @@ function LockerActionModal({
                 )}
               </span>
             </button>
+          ) : (
+            <span className="text-[12.5px] text-[#8C8270] dark:text-zinc-500">{STATE_LABEL[ds]}</span>
           )}
         </div>
 
