@@ -1974,7 +1974,7 @@ function LockerActionModal({
   const body = (
       <div className="space-y-3.5">
         <div className="flex items-center gap-2">
-          {locker.member ? (
+          {locker.member && (
             <button
               type="button"
               onClick={() => setQuickMemberId(locker.member!.id)}
@@ -2001,9 +2001,10 @@ function LockerActionModal({
                 )}
               </span>
             </button>
-          ) : (
-            <span className="text-[12.5px] text-[#8C8270] dark:text-zinc-500">{STATE_LABEL[ds]}</span>
           )}
+          <span className={`ml-auto shrink-0 px-2 py-0.5 rounded text-[11.5px] font-semibold ${STATE_CHIP_CLS[ds]}`}>
+            {STATE_LABEL[ds]}
+          </span>
         </div>
 
         {/* 상세 / 기록 탭 */}
