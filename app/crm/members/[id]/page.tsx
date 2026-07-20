@@ -461,9 +461,40 @@ export default function CrmMemberDetailPage() {
           </div>
         </div>
         {passes.length === 0 ? (
-          <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-            발급된 수강권이 없습니다.
-          </div>
+          member.current_pass ? (
+            <ul className="space-y-2">
+              {splitTopLevel(member.current_pass).map((chunk, i) => {
+                const { name, period } = splitNamePeriod(chunk);
+                return (
+                  <li key={`snap-pass-${i}`}>
+                    <button
+                      onClick={() => onSnapSelect("수강권", name, period)}
+                      className="w-full text-left px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60 hover:border-[#6B7B3A]/50 transition-colors"
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                          {name}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500">
+                          이전 기록
+                        </span>
+                      </div>
+                      {period && (
+                        <div className="mt-1 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">{period}</div>
+                      )}
+                      <div className="mt-0.5 text-[11.5px] text-[#A89B80]">
+                        이전 POS 이관 · 정식 발급하면 잔여 횟수·강사 지정 및 수정이 가능합니다
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+              발급된 수강권이 없습니다.
+            </div>
+          )
         ) : (
           <ul className="space-y-2">
             {passes.map((p) => (
