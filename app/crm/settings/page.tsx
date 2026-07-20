@@ -69,7 +69,35 @@ const ACTION_LABEL: Record<string, string> = {
   "grade.create": "등급 추가",
   "grade.update": "등급 수정",
   "grade.delete": "등급 삭제",
+  "grade_permission.update": "직급 권한 변경",
+  "role_permission.update": "직급 권한 변경",
   "center.transfer": "센터 양도",
+  "member.update": "회원 정보 수정",
+  "membership.update": "회원권 수정",
+  "pass.update": "수강권 수정",
+  "rental.issue": "대여권 발급",
+  "rental.update": "대여권 수정",
+  "payment.create": "결제 기록 추가",
+  "product.create": "상품 추가",
+  "notice.create": "공지 등록",
+  "message.broadcast": "메시지 발송",
+  "schedule_event.create": "일정 등록",
+  "reservation.reschedule": "예약 시간 변경",
+  "pause.create": "홀딩(일시정지) 시작",
+  "pause.cancel": "홀딩 취소",
+  "fixed_expense.create": "고정 지출 추가",
+  "fixed_expense.update": "고정 지출 수정",
+  "fixed_expense.delete": "고정 지출 삭제",
+  "additional_expense.create": "추가 지출 추가",
+  "additional_expense.update": "추가 지출 수정",
+  "additional_expense.delete": "추가 지출 삭제",
+  "locker_layout.save": "락커 배치 저장",
+  "contract.request": "계약서 발송 요청",
+  "contract.sign": "계약서 서명",
+  "contract.void": "계약서 무효화",
+  "members.bulk_extend": "회원 기간 일괄 연장",
+  "members.bulk_hold": "회원 일괄 홀딩",
+  "members.bulk_mileage": "회원 마일리지 일괄 지급",
 };
 
 const BASE_ROLE_LABEL: Record<string, string> = {
@@ -192,7 +220,7 @@ export default function CrmSettingsPage() {
           마일리지
         </TabBtn>
         <TabBtn active={tab === "grades"} onClick={() => setTab("grades")}>
-          등급 관리
+          직원등급설정
         </TabBtn>
         <TabBtn active={tab === "permissions"} onClick={() => setTab("permissions")}>
           직급 권한
@@ -632,7 +660,7 @@ function GradesPanel() {
   return (
     <Card title="직원 등급">
       <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed -mt-1 mb-3">
-        센터에서 사용하는 직원 등급을 관리해요. 기본 4개 등급은 이름을 바꿀 수는 있지만 삭제할 수 없어요. 권한 게이트는 등급의 <strong>기본 분류</strong>(대표자/관리자/팀장/강사)에 따라 동작합니다.
+        센터에서 사용하는 직원 등급을 관리해요. <strong>대표자 등급만 고정</strong>이고, 나머지 등급은 이름 변경·삭제가 가능해요. 여기서 추가한 등급은 <strong>직급 권한</strong> 탭에도 자동으로 나타나요. 권한 게이트는 등급의 <strong>기본 분류</strong>(대표자/관리자/팀장/강사)에 따라 동작합니다.
       </p>
 
       {loading ? (
@@ -692,6 +720,8 @@ function GradesPanel() {
                       취소
                     </button>
                   </>
+                ) : g.base_role === "owner" ? (
+                  <span className="px-2.5 py-1 text-[11.5px] text-[#A89B80]">대표자 등급(고정)</span>
                 ) : (
                   <>
                     <button
@@ -703,14 +733,12 @@ function GradesPanel() {
                     >
                       이름 변경
                     </button>
-                    {!g.is_system && (
-                      <button
-                        onClick={() => deleteGrade(g)}
-                        className="px-2.5 py-1 rounded-md border border-red-200 dark:border-red-900 text-[12px] text-red-700 dark:text-red-300 hover:bg-red-50"
-                      >
-                        삭제
-                      </button>
-                    )}
+                    <button
+                      onClick={() => deleteGrade(g)}
+                      className="px-2.5 py-1 rounded-md border border-red-200 dark:border-red-900 text-[12px] text-red-700 dark:text-red-300 hover:bg-red-50"
+                    >
+                      삭제
+                    </button>
                   </>
                 )}
               </div>

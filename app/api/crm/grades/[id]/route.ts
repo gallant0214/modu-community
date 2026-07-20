@@ -27,6 +27,18 @@ export async function PATCH(
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
+  // 대표자(base_role owner) 등급은 수정 불가
+  const { data: target } = await supabase
+    .from("crm_grades")
+    .select("id, base_role")
+    .eq("id", gradeId)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+  if (!target) return NextResponse.json({ error: "등급을 찾을 수 없습니다" }, { status: 404 });
+  if (target.base_role === "owner") {
+    return NextResponse.json({ error: "대표자 등급은 수정할 수 없습니다" }, { status: 400 });
+  }
+
   const patch: Record<string, unknown> = {};
   if (body.label !== undefined) {
     const v = body.label.trim();
@@ -82,14 +94,14 @@ export async function DELETE(
 
   const { data: grade } = await supabase
     .from("crm_grades")
-    .select("id, is_system, label")
+    .select("id, base_role, label")
     .eq("id", gradeId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
 
   if (!grade) return NextResponse.json({ error: "등급을 찾을 수 없습니다" }, { status: 404 });
-  if (grade.is_system) {
-    return NextResponse.json({ error: "기본 등급은 삭제할 수 없습니다" }, { status: 400 });
+  if (grade.base_role === "owner") {
+    return NextResponse.json({ error: "대표자 등급은 삭제할 수 없습니다" }, { status: 400 });
   }
 
   const { count } = await supabase

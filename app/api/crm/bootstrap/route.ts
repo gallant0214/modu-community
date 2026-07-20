@@ -180,10 +180,9 @@ export async function POST(request: Request) {
     // 기본값은 스키마 DEFAULT로 채워짐
   });
 
-  // 5) 기본 4개 시스템 등급 + 흔히 쓰이는 커스텀 2개 시드
+  // 5) 기본 시스템 등급 + 흔히 쓰이는 커스텀 2개 시드
   const seedGrades: { center_id: number; base_role: string; label: string; is_system: boolean; sort_order: number }[] = [
     { center_id: center.id, base_role: "owner",   label: "대표자",       is_system: true,  sort_order: 0 },
-    { center_id: center.id, base_role: "owner",   label: "공동 대표자", is_system: true,  sort_order: 1 },
     { center_id: center.id, base_role: "admin",   label: "관리자",       is_system: true,  sort_order: 2 },
     { center_id: center.id, base_role: "manager", label: "팀장",         is_system: true,  sort_order: 3 },
     { center_id: center.id, base_role: "trainer", label: "강사",         is_system: true,  sort_order: 4 },
