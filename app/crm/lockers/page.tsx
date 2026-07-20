@@ -538,7 +538,7 @@ export default function CrmLockersPage() {
                   : ds === "expiring"
                   ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300"
                   : ds === "expired"
-                  ? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
+                  ? "border-zinc-300 bg-zinc-300/70 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500"
                   : ds === "broken"
                   ? "border-zinc-500 bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"
                   : "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300";
@@ -1013,6 +1013,8 @@ function LockerCard({
       className={`text-left p-3 rounded-xl border transition-colors h-full w-full flex flex-col overflow-hidden
         ${isEmpty
           ? "border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 hover:border-[#6B7B3A]/40"
+          : ds === "expired"
+          ? "border-zinc-300 dark:border-zinc-700 bg-zinc-300/70 dark:bg-zinc-800 hover:border-[#6B7B3A]/40"
           : "border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
         }`}
     >
@@ -3058,7 +3060,7 @@ function LayoutEditor({
                   : ds === "expiring"
                   ? "border-red-300 bg-red-50 text-red-700"
                   : ds === "expired"
-                  ? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
+                  ? "border-zinc-300 bg-zinc-300/70 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500"
                   : ds === "broken"
                   ? "border-zinc-500 bg-zinc-200 text-zinc-700"
                   : "border-amber-300 bg-amber-50 text-amber-800";
