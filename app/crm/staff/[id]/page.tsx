@@ -11,6 +11,7 @@ import {
   formatPhone,
 } from "../../_components/crm-labels";
 import { crmInputClass } from "../../_components/crm-modal";
+import { StaffContractsSection } from "./_staff-contracts";
 
 interface StaffMember {
   id: number;
@@ -206,6 +207,8 @@ export default function CrmStaffDetailPage() {
       </Section>
 
       <CommissionSection member={member} saving={saving} onSave={(p) => patchMember(p)} />
+
+      <StaffContractsSection staffMemberId={member.id} />
 
       {error && (
         <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">

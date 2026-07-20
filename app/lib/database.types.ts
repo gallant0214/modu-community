@@ -1882,6 +1882,7 @@ export type Database = {
           id: number
           center_id: number
           member_id: number | null
+          staff_member_id: number | null
           pass_id: number | null
           membership_id: number | null
           title: string
@@ -1903,6 +1904,7 @@ export type Database = {
           id?: number
           center_id: number
           member_id?: number | null
+          staff_member_id?: number | null
           pass_id?: number | null
           membership_id?: number | null
           title?: string
@@ -1924,6 +1926,7 @@ export type Database = {
           id?: number
           center_id?: number
           member_id?: number | null
+          staff_member_id?: number | null
           pass_id?: number | null
           membership_id?: number | null
           title?: string

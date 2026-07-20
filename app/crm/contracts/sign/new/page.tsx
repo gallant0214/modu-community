@@ -57,6 +57,8 @@ export default function CrmContractSignNewPage() {
   const router = useRouter();
   const params = useSearchParams();
   const memberId = params.get("member_id") ? Number(params.get("member_id")) : null;
+  const staffMemberId = params.get("staff_member_id") ? Number(params.get("staff_member_id")) : null;
+  const isStaff = !!staffMemberId;
   const passId = params.get("pass_id") ? Number(params.get("pass_id")) : null;
   const membershipId = params.get("membership_id") ? Number(params.get("membership_id")) : null;
   const templateId = params.get("template_id") ? Number(params.get("template_id")) : null;
@@ -111,13 +113,25 @@ export default function CrmContractSignNewPage() {
     ).padStart(2, "0")}일`;
   }, []);
 
-  // 회원/수강권 정보 자동 로드
+  // 회원/직원/수강권 정보 자동 로드
   useEffect(() => {
-    if (!memberId && !passId) return;
+    if (!memberId && !passId && !staffMemberId && !templateId) return;
     (async () => {
       try {
         const token = await getIdToken();
         if (!token) return;
+        if (staffMemberId) {
+          const res = await fetch(`/api/crm/staff/${staffMemberId}`, {
+            headers: { authorization: `Bearer ${token}` },
+            cache: "no-store",
+          });
+          const data = await res.json();
+          if (res.ok && data?.member) {
+            const s = data.member;
+            if (!name) setName(s.display_name ?? "");
+            if (!phone && s.phone) setPhone(formatPhone(s.phone));
+          }
+        }
         if (memberId) {
           const res = await fetch(`/api/crm/members/${memberId}`, {
             headers: { authorization: `Bearer ${token}` },
@@ -174,7 +188,7 @@ export default function CrmContractSignNewPage() {
         // ignore
       }
     })();
-  }, [memberId, passId, membershipId, templateId, getIdToken, name, phone, birth, gender]);
+  }, [memberId, staffMemberId, passId, membershipId, templateId, getIdToken, name, phone, birth, gender]);
 
   // 강사 목록 로드 (활성 trainer/manager)
   useEffect(() => {
@@ -307,8 +321,9 @@ export default function CrmContractSignNewPage() {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify({
-          title: template?.title || "피티 회원가입 계약서",
-          member_id: memberId,
+          title: template?.title || (isStaff ? "근로 계약서" : "피티 회원가입 계약서"),
+          member_id: isStaff ? null : memberId,
+          staff_member_id: staffMemberId,
           pass_id: passId,
           membership_id: membershipId,
           customer_info: {
@@ -379,7 +394,8 @@ export default function CrmContractSignNewPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "저장 실패");
-      if (memberId) router.push(`/crm/members/${memberId}?purchase=done`);
+      if (isStaff) router.push(`/crm/staff/${staffMemberId}`);
+      else if (memberId) router.push(`/crm/members/${memberId}?purchase=done`);
       else router.push(`/crm/contracts`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");

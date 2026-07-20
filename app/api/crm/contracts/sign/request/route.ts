@@ -18,6 +18,7 @@ export async function POST(request: Request) {
 
   let body: {
     member_id?: number;
+    staff_member_id?: number;
     template_id?: number;
     pass_id?: number;
     membership_id?: number;
@@ -28,20 +29,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
-  const memberId = Number(body.member_id);
-  if (!memberId) {
-    return NextResponse.json({ error: "회원을 선택해 주세요" }, { status: 400 });
+  const memberId = Number(body.member_id) || 0;
+  const staffMemberId = Number(body.staff_member_id) || 0;
+  if (!memberId && !staffMemberId) {
+    return NextResponse.json({ error: "대상을 선택해 주세요" }, { status: 400 });
   }
 
-  // 회원 정보
-  const { data: member } = await supabase
-    .from("crm_members")
-    .select("id, name, phone, birth, gender")
-    .eq("id", memberId)
-    .eq("center_id", ctx.centerId)
-    .maybeSingle();
-  if (!member) {
-    return NextResponse.json({ error: "회원을 찾을 수 없어요" }, { status: 404 });
+  // 대상 정보 (회원 또는 직원)
+  let member: { id: number; name: string; phone: string | null; birth: string | null; gender: string | null } | null = null;
+  if (staffMemberId) {
+    const { data: s } = await supabase
+      .from("crm_center_members")
+      .select("id, display_name, phone")
+      .eq("id", staffMemberId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    if (!s) return NextResponse.json({ error: "직원을 찾을 수 없어요" }, { status: 404 });
+    member = { id: s.id, name: s.display_name, phone: s.phone ?? null, birth: null, gender: null };
+  } else {
+    const { data: m } = await supabase
+      .from("crm_members")
+      .select("id, name, phone, birth, gender")
+      .eq("id", memberId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    if (!m) return NextResponse.json({ error: "회원을 찾을 수 없어요" }, { status: 404 });
+    member = m;
   }
 
   // 템플릿 필수 — 회원이 서명 화면에서 계약서 내용을 볼 수 있어야 하므로
@@ -178,7 +191,8 @@ export async function POST(request: Request) {
     .from("crm_signed_contracts")
     .insert({
       center_id: ctx.centerId,
-      member_id: memberId,
+      member_id: staffMemberId ? null : memberId,
+      staff_member_id: staffMemberId || null,
       pass_id: body.pass_id ?? null,
       membership_id: body.membership_id ?? null,
       title,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,18 +15,23 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const memberId = url.searchParams.get("member_id");
+  const staffMemberId = url.searchParams.get("staff_member_id");
+  const scope = url.searchParams.get("scope"); // "staff" = 직원 근로계약만, "member" = 회원계약만
   const q = (url.searchParams.get("q") || "").trim();
 
   let query = supabase
     .from("crm_signed_contracts")
     .select(
-      "id, member_id, pass_id, membership_id, title, customer_info, signed_at, status, signing_token, requested_at, created_at"
+      "id, member_id, staff_member_id, pass_id, membership_id, title, customer_info, signed_at, status, signing_token, requested_at, created_at"
     )
     .eq("center_id", ctx.centerId)
     .neq("status", "voided")
     .order("signed_at", { ascending: false })
     .limit(200);
   if (memberId) query = query.eq("member_id", Number(memberId));
+  if (staffMemberId) query = query.eq("staff_member_id", Number(staffMemberId));
+  if (scope === "staff") query = query.not("staff_member_id", "is", null);
+  if (scope === "member") query = query.is("staff_member_id", null);
 
   const { data, error } = await query;
   if (error) {
@@ -57,6 +63,7 @@ export async function POST(request: Request) {
   let body: {
     title?: string;
     member_id?: number | null;
+    staff_member_id?: number | null;
     pass_id?: number | null;
     membership_id?: number | null;
     customer_info?: Record<string, unknown>;
@@ -72,6 +79,14 @@ export async function POST(request: Request) {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  }
+
+  // 직원 근로계약은 staff_contracts.edit 권한 필요
+  if (body.staff_member_id) {
+    const perms = await loadPermissionsForContext(ctx);
+    if (!perms["staff_contracts.edit"]) {
+      return NextResponse.json({ error: "직원 계약서 작성 권한이 없습니다" }, { status: 403 });
+    }
   }
 
   const name = (body.customer_info?.name as string | undefined)?.trim();
@@ -95,6 +110,7 @@ export async function POST(request: Request) {
   const insertRow = {
     center_id: ctx.centerId,
     member_id: body.member_id ?? null,
+    staff_member_id: body.staff_member_id ?? null,
     pass_id: body.pass_id ?? null,
     membership_id: body.membership_id ?? null,
     title: body.title?.trim() || "피티 회원가입 계약서",
