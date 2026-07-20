@@ -107,6 +107,53 @@ const BASE_ROLE_LABEL: Record<string, string> = {
   trainer: "강사",
 };
 
+// 활동 로그 payload → 사람이 읽는 한 줄 요약
+const FIELD_LABEL: Record<string, string> = {
+  price_won: "금액", discount_won: "할인", vat_included: "부가세포함",
+  payment_method: "결제수단", seller_member_id: "담당자", trainer_member_id: "담당강사",
+  co_trainer_ids: "추가강사", start_date: "시작일", expires_at: "만료일", purchased_at: "구매일",
+  memo: "메모", lesson_kind: "수업종류", total_sessions: "총세션", remaining_sessions: "잔여세션",
+  session_minutes: "수업시간(분)", checkout_mileage_enabled: "퇴실 마일리지", checkout_mileage_earn: "퇴실 적립P",
+  cancel_hours: "취소 가능시간", booking_enabled: "예약", cancel_enabled: "취소",
+  default_columns: "스케줄 열수", booking_unit_min: "예약단위(분)", booking_horizon_days: "예약가능일",
+  notify_cancel: "취소알림", notify_change: "변경알림", notify_attend: "출석알림",
+  notify_register: "등록알림", notify_pass_issue: "발급알림",
+  working_hours_start: "운영시작", working_hours_end: "운영종료",
+  label: "이름", base_role: "기본분류", amount_won: "금액", billing_day: "결제일",
+  role: "등급", grade_id: "등급", access_level: "권한레벨", employment_status: "재직상태",
+  employment_type: "근무형태", display_name: "이름", status: "상태", sort_order: "순서",
+  audience_kind: "대상", recipient_count: "인원", ym: "귀속월", reason: "사유",
+  requested_by: "요청자", days: "기간(일)", plan_name: "플랜", duration_days: "기간(일)",
+  permission_key: "권한", enabled: "허용", role_key: "등급", title: "제목", category: "분류",
+  name: "이름", phone: "연락처", password: "비밀번호", note: "메모",
+};
+function fmtLogVal(k: string, v: unknown): string {
+  if (typeof v === "boolean") return v ? "켬" : "끔";
+  if (Array.isArray(v)) return `${v.length}건`;
+  if (v === null || v === undefined || v === "") return "없음";
+  if (typeof v === "object") return "변경";
+  if (k.endsWith("_id")) return "변경";
+  if (typeof v === "number" && /won|earn|amount|price|paid/i.test(k)) return `${v.toLocaleString()}원`;
+  return String(v);
+}
+function describeLog(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const p = payload as Record<string, unknown>;
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(p)) {
+    if (k === "updated_at") continue;
+    // 락커 등 { from, to } 변경 표기
+    if (v && typeof v === "object" && !Array.isArray(v) && "to" in (v as Record<string, unknown>)) {
+      const t = (v as { to?: unknown }).to;
+      parts.push(`${FIELD_LABEL[k] ?? k} → ${fmtLogVal(k, t)}`);
+    } else {
+      parts.push(`${FIELD_LABEL[k] ?? k} ${fmtLogVal(k, v)}`);
+    }
+    if (parts.length >= 5) break;
+  }
+  return parts.join(", ");
+}
+
 interface BootstrapInfo {
   role: "owner" | "admin" | "manager" | "trainer";
   centerName: string;
@@ -457,8 +504,12 @@ export default function CrmSettingsPage() {
                   key={log.id}
                   className="flex items-baseline justify-between gap-3 py-1.5 border-b border-[#E8E0D0]/40 dark:border-zinc-800/40 last:border-0 text-[12.5px]"
                 >
-                  <span className="text-[#3A342A] dark:text-zinc-300">
-                    {ACTION_LABEL[log.action] ?? log.action}
+                  <span className="min-w-0 text-[#3A342A] dark:text-zinc-300 truncate">
+                    <span className="font-medium">{ACTION_LABEL[log.action] ?? log.action}</span>
+                    {(() => {
+                      const d = describeLog(log.payload);
+                      return d ? <span className="text-[#8C8270] dark:text-zinc-500"> · {d}</span> : null;
+                    })()}
                   </span>
                   <span className="text-[#A89B80] dark:text-zinc-500 shrink-0">
                     {formatDateTime(log.created_at)}

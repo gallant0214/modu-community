@@ -106,6 +106,14 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    key: "staff_contracts",
+    label: "직원 계약서 (근로·아르바이트)",
+    items: [
+      { key: "staff_contracts.view", label: "직원 계약서 열람", defaults: D_ADMIN },
+      { key: "staff_contracts.edit", label: "직원 계약서 작성·수정", defaults: D_OWNER },
+    ],
+  },
+  {
     key: "segments",
     label: "세그먼트 관리",
     items: [
