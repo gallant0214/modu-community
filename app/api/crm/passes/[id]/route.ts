@@ -200,8 +200,13 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+
+  const perms = await loadPermissionsForContext(ctx);
+  if (!perms["passes.refund"]) {
+    return NextResponse.json({ error: "수강권 환불 권한이 없습니다" }, { status: 403 });
+  }
 
   const { id } = await params;
   const passId = Number(id);

@@ -95,3 +95,44 @@ export async function PATCH(
 
   return NextResponse.json({ ok: true });
 }
+
+/**
+ * DELETE /api/crm/rentals/[id] — 대여권 환불 처리 (status='refunded').
+ * sales.refund 권한 필요 (설정 > 권한에서 부여).
+ */
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const ctx = await requireCrmContext(request);
+  if (isCrmError(ctx)) return ctx;
+
+  const perms = await loadPermissionsForContext(ctx);
+  if (!perms["sales.refund"]) {
+    return NextResponse.json({ error: "대여권 환불 권한이 없습니다" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const rid = Number(id);
+  if (!rid) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+
+  const { error } = await supabase
+    .from("crm_rentals")
+    .update({ status: "refunded" } as never)
+    .eq("id", rid)
+    .eq("center_id", ctx.centerId);
+  if (error) {
+    return NextResponse.json({ error: "환불 실패", detail: error.message }, { status: 500 });
+  }
+
+  await supabase.from("crm_audit_logs").insert({
+    center_id: ctx.centerId,
+    actor_uid: ctx.uid,
+    action: "rental.refund",
+    entity_type: "crm_rentals",
+    entity_id: rid,
+    payload: null,
+  });
+
+  return NextResponse.json({ ok: true });
+}

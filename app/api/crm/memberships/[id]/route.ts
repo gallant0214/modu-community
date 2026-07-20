@@ -103,14 +103,20 @@ export async function PATCH(
 }
 
 /**
- * DELETE /api/crm/memberships/[id] — 환불 처리 (status='refunded'). owner/admin.
+ * DELETE /api/crm/memberships/[id] — 환불 처리 (status='refunded').
+ * sales.refund 권한 필요 (설정 > 권한에서 부여).
  */
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+
+  const perms = await loadPermissionsForContext(ctx);
+  if (!perms["sales.refund"]) {
+    return NextResponse.json({ error: "회원권 환불 권한이 없습니다" }, { status: 403 });
+  }
 
   const { id } = await params;
   const mid = Number(id);

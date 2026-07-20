@@ -1554,6 +1554,8 @@ const ACTION_LABEL: Record<string, string> = {
   "membership.issue": "회원권 발급",
   "membership.update": "회원권 수정",
   "membership.refund": "회원권 환불",
+  "rental.update": "대여권 수정",
+  "rental.refund": "대여권 환불",
   "reservation.book": "예약 생성",
   "reservation.update": "예약 상태 변경",
   "reservation.reschedule": "예약 시간 이동",
@@ -2269,8 +2271,10 @@ function HoldingDetailModal({
   const editable = !!detail && detail.source === "record" && !!detail.id && !!detail.kind;
 
   const [canEdit, setCanEdit] = useState(false);
+  const [canRefund, setCanRefund] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [refunding, setRefunding] = useState(false);
   const [error, setError] = useState("");
 
   // 편집 폼 값
@@ -2300,12 +2304,37 @@ function HoldingDetailModal({
         if (res.ok) {
           const data = await res.json();
           setCanEdit(!!data.permissions?.["sales.edit"]);
+          setCanRefund(!!data.permissions?.["sales.refund"]);
         }
       } catch {
         /* ignore */
       }
     })();
   }, [open, getIdToken]);
+
+  const refund = async () => {
+    if (!detail?.id || !detail.kind || refunding) return;
+    const label = detail.kind === "rental" ? "대여권" : "회원권";
+    if (!window.confirm(`이 ${label}을 환불 처리할까요? 환불 후에는 유효 상품 목록에서 제외됩니다.`)) return;
+    setRefunding(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const path = detail.kind === "rental" ? "rentals" : "memberships";
+      const res = await fetch(`/api/crm/${path}/${detail.id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "환불 실패");
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setRefunding(false);
+    }
+  };
 
   const startEdit = () => {
     if (!detail) return;
@@ -2570,6 +2599,15 @@ function HoldingDetailModal({
                     className="flex-1 px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13.5px] font-semibold hover:bg-[#6B7B3A]/5"
                   >
                     수정
+                  </button>
+                )}
+                {editable && canRefund && detail.status === "valid" && (
+                  <button
+                    onClick={refund}
+                    disabled={refunding}
+                    className="flex-1 px-4 py-2.5 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-[13.5px] font-semibold hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {refunding ? "처리 중…" : "환불"}
                   </button>
                 )}
                 <button
@@ -3673,6 +3711,7 @@ function PassDetailModal({
   const [holdOpen, setHoldOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
+  const [canRefund, setCanRefund] = useState(false);
   // 수정 폼 값 (편집 시작 시 detail 로부터 초기화)
   const [editTrainerId, setEditTrainerId] = useState<number | "">("");
   const [editCoTrainerIds, setEditCoTrainerIds] = useState<number[]>([]);
@@ -3698,6 +3737,7 @@ function PassDetailModal({
         if (res.ok) {
           const data = await res.json();
           setCanEdit(!!data?.permissions?.["passes.edit"]);
+          setCanRefund(!!data?.permissions?.["passes.refund"]);
         }
       } catch {
         /* ignore */
@@ -4068,7 +4108,7 @@ function PassDetailModal({
                 {(pass as Pass).is_paused ? "홀딩중" : "홀딩"}
               </button>
             )}
-            {pass.status === "valid" && (
+            {pass.status === "valid" && canRefund && (
               <button
                 onClick={refund}
                 disabled={refunding}
@@ -5091,7 +5131,6 @@ function HoldModal({
   const [startDate, setStartDate] = useState(todayStr);
   const [endDate, setEndDate] = useState(todayStr);
   const [reason, setReason] = useState("");
-  const [requestedBy, setRequestedBy] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -5100,7 +5139,6 @@ function HoldModal({
       setStartDate(todayStr);
       setEndDate(todayStr);
       setReason("");
-      setRequestedBy("");
       setError("");
     }
   }, [open, todayStr]);
@@ -5117,7 +5155,6 @@ function HoldModal({
     if (!passId && !membershipId && !rentalId) return setError("대상이 없습니다");
     if (!startDate || !endDate) return setError("시작일과 종료일을 입력해 주세요");
     if (endDate < startDate) return setError("종료일이 시작일보다 빠를 수 없어요");
-    if (!requestedBy.trim()) return setError("홀딩 요청자(이름)을 입력해 주세요");
     setSubmitting(true);
     try {
       const token = await getIdToken();
@@ -5131,7 +5168,6 @@ function HoldModal({
           start_date: startDate,
           end_date: endDate,
           reason: reason.trim() || undefined,
-          requested_by: requestedBy.trim(),
         }),
       });
       const data = await res.json();
@@ -5172,16 +5208,6 @@ function HoldModal({
             만료일이 자동으로 {days}일 늘어납니다.
           </div>
         )}
-        <CrmField label="홀딩 요청자" required>
-          <input
-            type="text"
-            className={crmInputClass}
-            value={requestedBy}
-            onChange={(e) => setRequestedBy(e.target.value)}
-            placeholder="이름 (예: 본인, 가족)"
-            maxLength={40}
-          />
-        </CrmField>
         <CrmField label="홀딩 사유">
           <textarea
             className={`${crmInputClass} min-h-[72px]`}

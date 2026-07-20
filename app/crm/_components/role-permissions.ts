@@ -57,6 +57,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     items: [
       { key: "sales.view",         label: "매출 열람",             defaults: D_MGR },
       { key: "sales.edit",         label: "매출 수정",             defaults: D_ADMIN },
+      { key: "sales.refund",       label: "회원권·대여권 환불",   defaults: D_ADMIN },
       { key: "sales.delete",       label: "매출 삭제",             defaults: D_ADMIN },
       { key: "sales.excel",        label: "매출 엑셀 추출",       defaults: D_ADMIN },
       { key: "sales.payroll_view", label: "급여 정책 열람",       defaults: D_ADMIN },
