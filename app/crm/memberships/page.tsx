@@ -16,6 +16,7 @@ import { useColumnWidths, ResizableTh } from "../_components/use-column-widths";
 
 const M_COLS = [
   { key: "member", label: "회원" },
+  { key: "phone", label: "연락처" },
   { key: "plan", label: "플랜" },
   { key: "purchased", label: "구매일" },
   { key: "duration", label: "기간(일)" },
@@ -27,7 +28,8 @@ const M_COLS = [
 ] as const;
 type MColKey = (typeof M_COLS)[number]["key"];
 const M_DEFAULT_WIDTHS: Record<MColKey, number> = {
-  member: 190,
+  member: 170,
+  phone: 130,
   plan: 150,
   purchased: 110,
   duration: 84,
@@ -188,17 +190,13 @@ export default function CrmMembershipsPage() {
                           —
                         </span>
                       )}
-                      <span className="min-w-0">
-                        <span className="block font-semibold truncate group-hover:text-[#6B7B3A] dark:group-hover:text-[#A8B87A] group-hover:underline">
-                          {p.member_name || "—"}
-                        </span>
-                        {p.member_phone && (
-                          <span className="block text-[11px] text-[#8C8270] dark:text-zinc-500 truncate">
-                            {formatPhone(p.member_phone)}
-                          </span>
-                        )}
+                      <span className="font-semibold truncate group-hover:text-[#6B7B3A] dark:group-hover:text-[#A8B87A] group-hover:underline">
+                        {p.member_name || "—"}
                       </span>
                     </Link>
+                  </Td>
+                  <Td className="text-[#8C8270]">
+                    {p.member_phone ? formatPhone(p.member_phone) : "—"}
                   </Td>
                   <Td>{p.plan_name}</Td>
                   <Td className="text-[#8C8270]">{p.purchased_at ? p.purchased_at.slice(0, 10) : "—"}</Td>
