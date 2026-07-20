@@ -4786,7 +4786,12 @@ function RequestLinkModal({
         });
         if (res.ok) {
           const data = await res.json();
-          setTemplates(data.contracts ?? []);
+          // 회원 계약 흐름에는 직원(근로) 계약서 양식 제외
+          setTemplates(
+            (data.contracts ?? []).filter(
+              (t: { category: string }) => t.category !== "employment"
+            )
+          );
         }
       } finally {
         setLoading(false);
