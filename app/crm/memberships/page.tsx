@@ -42,6 +42,7 @@ interface Row {
   id: number;
   member_id: number;
   member_name: string;
+  member_phone: string | null;
   member_face_thumb: string | null;
   plan_name: string;
   duration_days: number;
@@ -171,7 +172,10 @@ export default function CrmMembershipsPage() {
                   className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900"
                 >
                   <Td>
-                    <span className="flex items-center gap-2 min-w-0">
+                    <Link
+                      href={`/crm/members/${p.member_id}`}
+                      className="flex items-center gap-2 min-w-0 group"
+                    >
                       {p.member_face_thumb ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -184,8 +188,17 @@ export default function CrmMembershipsPage() {
                           —
                         </span>
                       )}
-                      <span className="font-semibold truncate">{p.member_name || "—"}</span>
-                    </span>
+                      <span className="min-w-0">
+                        <span className="block font-semibold truncate group-hover:text-[#6B7B3A] dark:group-hover:text-[#A8B87A] group-hover:underline">
+                          {p.member_name || "—"}
+                        </span>
+                        {p.member_phone && (
+                          <span className="block text-[11px] text-[#8C8270] dark:text-zinc-500 truncate">
+                            {formatPhone(p.member_phone)}
+                          </span>
+                        )}
+                      </span>
+                    </Link>
                   </Td>
                   <Td>{p.plan_name}</Td>
                   <Td className="text-[#8C8270]">{p.purchased_at ? p.purchased_at.slice(0, 10) : "—"}</Td>
