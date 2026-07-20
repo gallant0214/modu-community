@@ -68,6 +68,7 @@ export default function CrmProductsPage() {
   const [customTypes, setCustomTypes] = useState<CustomType[]>([]);
   const [type, setType] = useState<string>("");
   const [query, setQuery] = useState("");
+  const [metricFilter, setMetricFilter] = useState<"all" | "period" | "lesson">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -169,6 +170,14 @@ export default function CrmProductsPage() {
   ];
   const periodCount = list.filter((p) => p.billing_mode === "period").length;
   const lessonCount = list.filter((p) => p.type === "group" || p.type === "personal").length;
+  // 지표 카드 클릭 필터 (서버 필터 결과 list 위에 클라이언트 세부 필터)
+  const shown = list.filter((p) =>
+    metricFilter === "period"
+      ? p.billing_mode === "period"
+      : metricFilter === "lesson"
+      ? p.type === "group" || p.type === "personal"
+      : true
+  );
 
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-7xl mx-auto">
@@ -198,9 +207,29 @@ export default function CrmProductsPage() {
         </div>
 
         <div className="mt-5 grid grid-cols-2 lg:grid-cols-3 gap-2">
-          <ProductMetric label="등록 상품" value={`${list.length}개`} hint={type ? typeLabelOf(type) : "전체 유형"} />
-          <ProductMetric label="기간제" value={`${periodCount}개`} hint={`횟수제 ${Math.max(0, list.length - periodCount)}개`} tone="green" />
-          <ProductMetric label="수업 상품" value={`${lessonCount}개`} hint="그룹·개인 레슨" tone="blue" />
+          <ProductMetric
+            label="등록 상품"
+            value={`${list.length}개`}
+            hint={type ? typeLabelOf(type) : "전체 유형"}
+            active={metricFilter === "all"}
+            onClick={() => setMetricFilter("all")}
+          />
+          <ProductMetric
+            label="기간제"
+            value={`${periodCount}개`}
+            hint={`횟수제 ${Math.max(0, list.length - periodCount)}개`}
+            tone="green"
+            active={metricFilter === "period"}
+            onClick={() => setMetricFilter((f) => (f === "period" ? "all" : "period"))}
+          />
+          <ProductMetric
+            label="수업 상품"
+            value={`${lessonCount}개`}
+            hint="그룹·개인 레슨"
+            tone="blue"
+            active={metricFilter === "lesson"}
+            onClick={() => setMetricFilter((f) => (f === "lesson" ? "all" : "lesson"))}
+          />
         </div>
       </header>
 
@@ -244,16 +273,18 @@ export default function CrmProductsPage() {
 
       {loading ? (
         <Msg>불러오는 중…</Msg>
-      ) : list.length === 0 ? (
+      ) : shown.length === 0 ? (
         <Msg>
-          {type || query
+          {metricFilter !== "all"
+            ? `${metricFilter === "period" ? "기간제" : "수업"} 상품이 없어요.`
+            : type || query
             ? "일치하는 상품이 없어요."
             : '등록된 상품이 없어요. "+ 상품 추가"로 첫 상품을 만들어 보세요.'}
         </Msg>
       ) : (
         <section>
           <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {list.map((p) => (
+            {shown.map((p) => (
               <li key={p.id}>
                 <div
                   role="button"
@@ -387,11 +418,15 @@ function ProductMetric({
   value,
   hint,
   tone = "default",
+  onClick,
+  active = false,
 }: {
   label: string;
   value: string;
   hint: string;
   tone?: "default" | "green" | "blue" | "gold";
+  onClick?: () => void;
+  active?: boolean;
 }) {
   const toneClass =
     tone === "green"
@@ -403,13 +438,21 @@ function ProductMetric({
       : "text-[#241F18] dark:text-zinc-100";
 
   return (
-    <div className="rounded-xl border border-[#E8E0D0]/80 dark:border-zinc-800 bg-[#FFFEFB] dark:bg-zinc-950/40 px-3 py-2.5 min-w-0">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left rounded-xl border px-3 py-2.5 min-w-0 transition-colors ${
+        active
+          ? "border-[#6B7B3A] bg-[#6B7B3A]/8 ring-1 ring-[#6B7B3A]/40"
+          : "border-[#E8E0D0]/80 dark:border-zinc-800 bg-[#FFFEFB] dark:bg-zinc-950/40 hover:border-[#6B7B3A]/50"
+      }`}
+    >
       <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">{label}</div>
       <div className={`mt-1 text-[16px] md:text-[17px] font-bold truncate ${toneClass}`}>
         {value}
       </div>
       <div className="mt-0.5 text-[11px] text-[#A89B80] dark:text-zinc-500 truncate">{hint}</div>
-    </div>
+    </button>
   );
 }
 
