@@ -16,6 +16,8 @@ interface Props {
   mode?: "count" | "percent";
   unit?: string;
   height?: number;
+  /** 툴팁 하단에 추가로 보여줄 문구 (예: 인원수) */
+  hoverNote?: (idx: number) => string;
 }
 
 /**
@@ -23,7 +25,7 @@ interface Props {
  * - percent 모드: 각 달을 100%로 채우는 구성 비율 띠그래프
  * - count 모드: 절대값 누적 막대 (단일 시리즈면 일반 막대)
  */
-export function MonthlyStackedBars({ months, series, mode = "count", unit = "명", height = 200 }: Props) {
+export function MonthlyStackedBars({ months, series, mode = "count", unit = "명", height = 200, hoverNote }: Props) {
   const [hover, setHover] = useState<{ x: number; y: number; idx: number; flip: boolean } | null>(null);
 
   if (months.length === 0 || series.length === 0) {
@@ -168,6 +170,11 @@ export function MonthlyStackedBars({ months, series, mode = "count", unit = "명
               </div>
             );
           })}
+          {hoverNote && (
+            <div className="mt-0.5 text-[10.5px] opacity-80 whitespace-nowrap">
+              {hoverNote(hover.idx)}
+            </div>
+          )}
         </div>
       )}
     </div>

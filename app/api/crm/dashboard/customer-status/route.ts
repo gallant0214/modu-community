@@ -199,40 +199,57 @@ export async function GET(request: Request) {
       else rePassSets[idx].add(p.member_id);
     }
 
-    // 신규 vs 재등록 (발급 기준): 회원의 최초 발급월 = 신규, 이후 발급 = 재등록
-    const allIssues: { member_id: number; start: string }[] = [];
+    // 신규 vs 재등록 (발급 기준): 회원의 최초 발급 = 신규, 이후 발급 = 재등록
+    const allIssues: { member_id: number; start: string; expires: string | null }[] = [];
     for (const m of memberships) {
-      if (m.start_date) allIssues.push({ member_id: m.member_id, start: m.start_date.slice(0, 10) });
+      if (m.start_date)
+        allIssues.push({
+          member_id: m.member_id,
+          start: m.start_date.slice(0, 10),
+          expires: m.expires_at ? m.expires_at.slice(0, 10) : null,
+        });
     }
     for (const p of passes) {
       const s = p.start_date ?? p.issued_at;
-      if (s) allIssues.push({ member_id: p.member_id, start: s.slice(0, 10) });
+      if (s)
+        allIssues.push({
+          member_id: p.member_id,
+          start: s.slice(0, 10),
+          expires: p.expires_at ? p.expires_at.slice(0, 10) : null,
+        });
     }
-    const memberFirstStart = new Map<number, string>();
+    // 회원별 '첫 발급(신규)' 의 시작일 + 만료일
+    const memberFirst = new Map<number, { start: string; expires: string | null }>();
     for (const it of allIssues) {
-      const prev = memberFirstStart.get(it.member_id);
-      if (!prev || it.start < prev) memberFirstStart.set(it.member_id, it.start);
+      const prev = memberFirst.get(it.member_id);
+      if (!prev || it.start < prev.start) memberFirst.set(it.member_id, { start: it.start, expires: it.expires });
     }
     const newReg = months.map(() => 0);
     const reReg = months.map(() => 0);
     for (const it of allIssues) {
       const idx = months.findIndex((mm) => it.start >= mm.start && it.start < mm.endExcl);
       if (idx < 0) continue;
-      if (memberFirstStart.get(it.member_id) === it.start) newReg[idx] += 1;
+      if (memberFirst.get(it.member_id)?.start === it.start) newReg[idx] += 1;
       else reReg[idx] += 1;
     }
 
-    // 신규→재등록 전환: 그 달 '첫 등록(신규)'한 회원 중, 이후 재발급(재등록)한 비율
+    // 재등록 여부: 첫 발급 이후 또 발급(재등록)이 있으면 전환
     const memberHasLater = new Map<number, boolean>();
     for (const it of allIssues) {
-      const first = memberFirstStart.get(it.member_id);
-      if (first && it.start > first) memberHasLater.set(it.member_id, true);
+      const f = memberFirst.get(it.member_id);
+      if (f && it.start > f.start) memberHasLater.set(it.member_id, true);
     }
-    const convertedFromNew = months.map(() => 0); // 코호트(그 달 신규) 중 재등록 전환 인원
-    for (const [mid, first] of memberFirstStart) {
-      const idx = months.findIndex((mm) => first >= mm.start && first < mm.endExcl);
+    // 신규→재등록 전환률: 그 달에 '신규(첫) 회원권이 만료'된 회원 중 재등록한 비율
+    //  - expireCohort[M] = 첫 회원권 만료월이 M 인 회원 수 (분모)
+    //  - expireConverted[M] = 그 중 재등록한 회원 수 (분자)
+    const expireCohort = months.map(() => 0);
+    const expireConverted = months.map(() => 0);
+    for (const [mid, f] of memberFirst) {
+      if (!f.expires) continue;
+      const idx = months.findIndex((mm) => f.expires! >= mm.start && f.expires! < mm.endExcl);
       if (idx < 0) continue;
-      if (memberHasLater.get(mid)) convertedFromNew[idx] += 1;
+      expireCohort[idx] += 1;
+      if (memberHasLater.get(mid)) expireConverted[idx] += 1;
     }
 
     // 월별 방문 고객
@@ -297,7 +314,8 @@ export async function GET(request: Request) {
       rePass: rePassSets.map((s) => s.size),
       newReg,
       reReg,
-      convertedFromNew,
+      expireCohort,
+      expireConverted,
       visited: visitedSets.map((s) => s.size),
       churn,
     });
