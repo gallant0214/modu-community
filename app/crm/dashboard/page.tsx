@@ -7,6 +7,7 @@ import { CrmLineChart } from "../_components/crm-line-chart";
 import { CrmDonutChart } from "../_components/crm-donut-chart";
 import { PAYMENT_METHOD_LABEL, formatWon } from "../_components/crm-labels";
 import { CustomerStatusView } from "./_components/customer-status-view";
+import { MemberConversionCard } from "./_components/member-conversion-card";
 
 interface TrendPoint {
   ym: string;
@@ -364,6 +365,9 @@ export default function CrmDashboardPage() {
                   reregistered={summary.members.reregistered.count}
                 />
               )}
+
+              {/* 신규 → 재등록 전환률 (월별) */}
+              {canCustomers && <MemberConversionCard />}
 
               {/* 유효 회원 신규/재등록 구성 도넛 (전체 스냅샷) */}
               {(summary.active_by_type.new + summary.active_by_type.renewal + summary.active_by_type.unknown) > 0 && (

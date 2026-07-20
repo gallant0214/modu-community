@@ -222,6 +222,19 @@ export async function GET(request: Request) {
       else reReg[idx] += 1;
     }
 
+    // 신규→재등록 전환: 그 달 '첫 등록(신규)'한 회원 중, 이후 재발급(재등록)한 비율
+    const memberHasLater = new Map<number, boolean>();
+    for (const it of allIssues) {
+      const first = memberFirstStart.get(it.member_id);
+      if (first && it.start > first) memberHasLater.set(it.member_id, true);
+    }
+    const convertedFromNew = months.map(() => 0); // 코호트(그 달 신규) 중 재등록 전환 인원
+    for (const [mid, first] of memberFirstStart) {
+      const idx = months.findIndex((mm) => first >= mm.start && first < mm.endExcl);
+      if (idx < 0) continue;
+      if (memberHasLater.get(mid)) convertedFromNew[idx] += 1;
+    }
+
     // 월별 방문 고객
     const visitedSets = months.map(() => new Set<number>());
     for (const a of attends) {
@@ -284,6 +297,7 @@ export async function GET(request: Request) {
       rePass: rePassSets.map((s) => s.size),
       newReg,
       reReg,
+      convertedFromNew,
       visited: visitedSets.map((s) => s.size),
       churn,
     });
