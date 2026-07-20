@@ -39,6 +39,8 @@ interface AuditLog {
   entity_id: number | null;
   payload: unknown;
   created_at: string;
+  /** 대상 회원 이름 (회원권/수강권/대여권/예약/회원 관련 로그) */
+  subject_name?: string | null;
 }
 
 const ACTION_LABEL: Record<string, string> = {
@@ -506,6 +508,9 @@ export default function CrmSettingsPage() {
                 >
                   <span className="min-w-0 text-[#3A342A] dark:text-zinc-300 truncate">
                     <span className="font-medium">{ACTION_LABEL[log.action] ?? log.action}</span>
+                    {log.subject_name && (
+                      <span className="font-semibold text-[#6B7B3A] dark:text-[#A8B87A]"> · {log.subject_name}</span>
+                    )}
                     {(() => {
                       const d = describeLog(log.payload);
                       return d ? <span className="text-[#8C8270] dark:text-zinc-500"> · {d}</span> : null;

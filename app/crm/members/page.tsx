@@ -2220,6 +2220,7 @@ interface AuditLog {
   entity_id: number | null;
   payload: Record<string, unknown> | null;
   created_at: string;
+  subject_name?: string | null;
 }
 
 /** 회원 관리 '수정 기록' — 센터 전체 변동 이력(등록·수정·삭제 등) 조회. */
@@ -2253,6 +2254,7 @@ function MemberLogModal({ open, onClose }: { open: boolean; onClose: () => void 
   }, [open, getIdToken]);
 
   const logName = (log: AuditLog): string => {
+    if (log.subject_name && log.subject_name.trim()) return log.subject_name.trim();
     const p = log.payload;
     const raw = p && (p.member_name ?? p.name ?? p.title);
     return typeof raw === "string" && raw.trim() ? raw.trim() : "";

@@ -135,6 +135,9 @@ export function NavBar() {
   const userInitial = (nickname || user?.displayName || "U")[0].toUpperCase();
   const userDisplayName = nickname || user?.displayName || "사용자";
 
+  // 터치출석 화면(새 창)은 커뮤니티 상단바 없이 센터명만 — NavBar 숨김
+  if (pathname === "/crm/touch-attendance") return null;
+
   return (
     <nav
       className="fixed top-0 left-0 right-0 z-50 bg-[#F8F4EC]/85 dark:bg-zinc-950/85 backdrop-blur-md border-b border-[#E8E0D0]/70 dark:border-zinc-800"

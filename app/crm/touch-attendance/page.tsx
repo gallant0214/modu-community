@@ -25,6 +25,27 @@ export default function TouchAttendancePage() {
   const [candidates, setCandidates] = useState<MemberLite[] | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState(false);
+  const [centerName, setCenterName] = useState("");
+
+  // 센터명 로드 (상단 표시용)
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/bootstrap", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCenterName(data.centerName ?? "");
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [getIdToken]);
 
   const reset = useCallback(() => {
     setNum("");
@@ -124,7 +145,21 @@ export default function TouchAttendancePage() {
   };
 
   return (
-    <div className="min-h-dvh flex flex-col items-center justify-center px-5 py-8 bg-[#FEFCF7] dark:bg-zinc-950">
+    <div
+      className="min-h-dvh flex flex-col items-center px-5 pb-8 bg-[#FEFCF7] dark:bg-zinc-950"
+      // 루트 레이아웃 body 의 상단 NavBar 여백(56px) 상쇄 → 상단부터 센터명만 표시
+      style={{ marginTop: "calc(-1 * (env(safe-area-inset-top, 0px) + 56px))" }}
+    >
+      {/* 센터명 상단바 */}
+      <div
+        className="w-full border-b border-[#E8E0D0] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 text-center py-3 mb-6"
+        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
+      >
+        <span className="text-[16px] font-bold text-[#2A251D] dark:text-zinc-100">
+          {centerName || " "}
+        </span>
+      </div>
+
       <header className="mb-6 text-center">
         <h1 className="text-[26px] md:text-[30px] font-bold text-[#2A251D] dark:text-zinc-100">
           터치 출석
