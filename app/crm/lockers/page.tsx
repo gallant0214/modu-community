@@ -532,7 +532,7 @@ export default function CrmLockersPage() {
               const cellCls = (l: Locker) => {
                 const ds = getDisplayState(l, today);
                 return ds === "unassigned"
-                  ? "border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[#A89B80] hover:border-[#6B7B3A]/40"
+                  ? "border-yellow-400 bg-yellow-200 text-yellow-800 hover:bg-yellow-300 dark:border-yellow-500/60 dark:bg-yellow-400/20 dark:text-yellow-200"
                   : ds === "active"
                   ? "border-emerald-500 bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-500"
                   : ds === "expiring"
@@ -1011,7 +1011,9 @@ function LockerCard({
     <button
       onClick={onClick}
       className={`text-left p-3 rounded-xl border transition-colors h-full w-full flex flex-col overflow-hidden
-        ${isEmpty
+        ${ds === "unassigned"
+          ? "border-yellow-400 bg-yellow-200 dark:border-yellow-500/60 dark:bg-yellow-400/20 hover:bg-yellow-300"
+          : isEmpty
           ? "border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 hover:border-[#6B7B3A]/40"
           : ds === "expired"
           ? "border-zinc-300 dark:border-zinc-700 bg-zinc-300/70 dark:bg-zinc-800 hover:border-[#6B7B3A]/40"
