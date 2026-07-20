@@ -532,7 +532,7 @@ export default function CrmLockersPage() {
               const cellCls = (l: Locker) => {
                 const ds = getDisplayState(l, today);
                 return ds === "unassigned"
-                  ? "border-yellow-400 bg-yellow-200 text-yellow-800 hover:bg-yellow-300 dark:border-yellow-500/60 dark:bg-yellow-400/20 dark:text-yellow-200"
+                  ? "border-yellow-300 bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:border-yellow-500/40 dark:bg-yellow-400/10 dark:text-yellow-200"
                   : ds === "active"
                   ? "border-emerald-500 bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-500"
                   : ds === "expiring"
@@ -1012,7 +1012,7 @@ function LockerCard({
       onClick={onClick}
       className={`text-left p-3 rounded-xl border transition-colors h-full w-full flex flex-col overflow-hidden
         ${ds === "unassigned"
-          ? "border-yellow-400 bg-yellow-200 dark:border-yellow-500/60 dark:bg-yellow-400/20 hover:bg-yellow-300"
+          ? "border-yellow-300 bg-yellow-100 dark:border-yellow-500/40 dark:bg-yellow-400/10 hover:bg-yellow-200"
           : isEmpty
           ? "border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 hover:border-[#6B7B3A]/40"
           : ds === "expired"
@@ -2754,10 +2754,10 @@ function buildLayoutMap(
 function LayoutLegend() {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
-      <LegendChip className="border-dashed border-[#E8E0D0] bg-[#FBF7EB]/40 text-[#A89B80]" label="미배정" />
+      <LegendChip className="border-yellow-300 bg-yellow-100 text-yellow-700" label="미배정" />
       <LegendChip className="border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#3A342A] dark:text-zinc-100" label="활성" />
       <LegendChip className="border-red-300 bg-red-50 text-red-700" label="임박" />
-      <LegendChip className="border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]" label="만료" />
+      <LegendChip className="border-zinc-300 bg-zinc-300/70 text-zinc-500" label="만료" />
       <LegendChip className="border-zinc-500 bg-zinc-200 text-zinc-700" label="고장" />
     </div>
   );
@@ -2767,13 +2767,13 @@ function LockerTile({ locker, today }: { locker: Locker; today: string }) {
   const ds = getDisplayState(locker, today);
   const cls =
     ds === "unassigned"
-      ? "border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[#A89B80]"
+      ? "border-yellow-300 bg-yellow-100 text-yellow-700 dark:border-yellow-500/40 dark:bg-yellow-400/10 dark:text-yellow-200"
       : ds === "active"
       ? "border-emerald-500 bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-500"
       : ds === "expiring"
       ? "border-red-300 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
       : ds === "expired"
-      ? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
+      ? "border-zinc-300 bg-zinc-300/70 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-500"
       : ds === "broken"
       ? "border-zinc-500 bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"
       : "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300";
@@ -3056,7 +3056,7 @@ function LayoutEditor({
               const ds = getDisplayState(l, today);
               const tileCls =
                 ds === "unassigned"
-                  ? "border-dashed border-[#E8E0D0] bg-[#FBF7EB]/40 text-[#A89B80]"
+                  ? "border-yellow-300 bg-yellow-100 text-yellow-700 dark:border-yellow-500/40 dark:bg-yellow-400/10 dark:text-yellow-200"
                   : ds === "active"
                   ? "border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[#3A342A]"
                   : ds === "expiring"
