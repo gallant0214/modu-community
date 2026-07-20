@@ -130,6 +130,18 @@ export default function RichEditor({ content = "", onChange, placeholder }: Prop
     <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-800 relative">
       {/* 툴바 */}
       <div className="flex flex-wrap items-center gap-1 px-2 py-2 border-b border-[#E8E0D0] dark:border-zinc-700 bg-white/80 dark:bg-zinc-900/80">
+        {/* 실행취소 / 다시실행 */}
+        <button type="button" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="실행취소"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 14L4 9l5-5"/><path strokeLinecap="round" strokeLinejoin="round" d="M4 9h11a5 5 0 015 5v0a5 5 0 01-5 5H9"/></svg>
+        </button>
+        <button type="button" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="다시실행"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 14l5-5-5-5"/><path strokeLinecap="round" strokeLinejoin="round" d="M20 9H9a5 5 0 00-5 5v0a5 5 0 005 5h6"/></svg>
+        </button>
+
+        <div className="w-px h-6 bg-[#E8E0D0] dark:bg-zinc-700 mx-0.5" />
+
         {/* 서체 */}
         <div className="relative">
           <button type="button" onClick={() => { setShowFontMenu(!showFontMenu); setShowSizeMenu(false); setShowColorMenu(false); setShowBgMenu(false); }}
@@ -240,6 +252,27 @@ export default function RichEditor({ content = "", onChange, placeholder }: Prop
         <button type="button" onClick={() => editor.chain().focus().setTextAlign("right").run()} title="오른쪽 정렬"
           className={`w-8 h-8 flex flex-col items-center justify-center gap-[2px] rounded-lg transition-colors ${editor.isActive({ textAlign: "right" }) ? "bg-[#6B7B3A] text-white" : "text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"}`}>
           <span className="w-4 h-[2px] bg-current rounded self-end" /><span className="w-3 h-[2px] bg-current rounded self-end" /><span className="w-4 h-[2px] bg-current rounded self-end" />
+        </button>
+
+        <div className="w-px h-6 bg-[#E8E0D0] dark:bg-zinc-700 mx-0.5" />
+
+        {/* 글머리 기호 목록 */}
+        <button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()} title="글머리 기호"
+          className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${editor.isActive("bulletList") ? "bg-[#6B7B3A] text-white" : "text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"}`}>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="4" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/><path strokeLinecap="round" d="M9 6h11M9 12h11M9 18h11"/></svg>
+        </button>
+        {/* 번호 매기기 목록 */}
+        <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()} title="번호 매기기"
+          className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${editor.isActive("orderedList") ? "bg-[#6B7B3A] text-white" : "text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"}`}>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><text x="1.5" y="8" fontSize="7" fill="currentColor" stroke="none">1</text><text x="1.5" y="14" fontSize="7" fill="currentColor" stroke="none">2</text><text x="1.5" y="20" fontSize="7" fill="currentColor" stroke="none">3</text><path strokeLinecap="round" d="M9 6h11M9 12h11M9 18h11"/></svg>
+        </button>
+
+        <div className="w-px h-6 bg-[#E8E0D0] dark:bg-zinc-700 mx-0.5" />
+
+        {/* 서식 지우기 */}
+        <button type="button" onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()} title="서식 지우기"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 5h12M9 5l-2 14M13 5l-1 7"/><path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6 6M21 15l-6 6"/></svg>
         </button>
       </div>
 

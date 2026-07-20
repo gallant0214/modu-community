@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatWon } from "../../../_components/crm-labels";
+import { contractBodyHtml } from "@/app/lib/contract-body";
 
 interface TermSnapshot {
   key: string;
@@ -198,9 +199,10 @@ export default function SignedContractDetailPage() {
 
         {contract.terms_snapshot.map((t) => (
           <Section key={t.key} title={`[${t.title}]`}>
-            <pre className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-[#3A342A] font-sans">
-              {t.body}
-            </pre>
+            <div
+              className="prose prose-sm max-w-none text-[12.5px] leading-relaxed text-[#3A342A]"
+              dangerouslySetInnerHTML={{ __html: contractBodyHtml(t.body) }}
+            />
             <div
               className={`mt-3 text-[12.5px] font-semibold ${contract.terms_accepted?.[t.key]
                 ? "text-[#6B7B3A]"

@@ -1,5 +1,8 @@
 "use client";
 
+import RichEditor from "@/app/components/rich-editor";
+import { contractBodyHtml } from "@/app/lib/contract-body";
+
 export interface ContractSection {
   key: string;
   title: string;
@@ -101,11 +104,10 @@ export function ContractSectionsEditor({
                 </div>
               </div>
 
-              <textarea
-                value={s.body}
-                onChange={(e) => update(idx, { body: e.target.value })}
+              <RichEditor
+                content={contractBodyHtml(s.body)}
+                onChange={(html) => update(idx, { body: html })}
                 placeholder="이 섹션의 약관 본문을 입력해 주세요."
-                className="w-full min-h-[140px] px-3 py-2 rounded-md border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-200 font-sans resize-y"
               />
 
               {/* 서명 시 실제로 보이는 체크박스 미리보기 */}

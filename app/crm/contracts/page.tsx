@@ -9,6 +9,7 @@ import {
 } from "../_components/contract-sections-editor";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 import { CONTRACT_CATEGORY_LABEL } from "../_components/crm-labels";
+import { contractBodyHtml } from "@/app/lib/contract-body";
 
 type Category = "purchase" | "transfer" | "refund" | "employment" | "etc";
 type Sort = "newest" | "oldest" | "name_asc" | "name_desc";
@@ -734,9 +735,16 @@ function DetailModal({
             </div>
           </div>
 
-          <pre className="whitespace-pre-wrap text-[12.5px] text-[#2A251D] dark:text-zinc-200 leading-relaxed px-3.5 py-3 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60 max-h-[360px] overflow-y-auto font-sans">
-            {data.body || <span className="text-[#A89B80]">본문이 비어있습니다.</span>}
-          </pre>
+          {data.body ? (
+            <div
+              className="prose prose-sm max-w-none text-[12.5px] text-[#2A251D] dark:text-zinc-200 leading-relaxed px-3.5 py-3 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60 max-h-[360px] overflow-y-auto"
+              dangerouslySetInnerHTML={{ __html: contractBodyHtml(data.body) }}
+            />
+          ) : (
+            <div className="text-[12.5px] px-3.5 py-3 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60 text-[#A89B80]">
+              본문이 비어있습니다.
+            </div>
+          )}
 
           {error && (
             <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">

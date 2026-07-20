@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import { contractBodyHtml } from "@/app/lib/contract-body";
 
 interface TermsSection {
   key: string;
@@ -358,9 +359,16 @@ export default function ContractSignPublicPage() {
 
         {(c.terms_snapshot ?? []).map((s, i) => (
           <Section key={s.key || i} title={`[${s.title || `섹션 ${i + 1}`}]`} note={s.required ? "필수" : "선택"}>
-            <pre className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-[#3A342A] font-sans max-h-[280px] overflow-y-auto px-3 py-3 border border-[#E8E0D0]/70 rounded-lg bg-[#FBF7EB]/40">
-              {s.body || "(본문이 비어 있습니다)"}
-            </pre>
+            {s.body ? (
+              <div
+                className="prose prose-sm max-w-none text-[12.5px] leading-relaxed text-[#3A342A] max-h-[280px] overflow-y-auto px-3 py-3 border border-[#E8E0D0]/70 rounded-lg bg-[#FBF7EB]/40"
+                dangerouslySetInnerHTML={{ __html: contractBodyHtml(s.body) }}
+              />
+            ) : (
+              <div className="text-[12.5px] text-[#A89B80] px-3 py-3 border border-[#E8E0D0]/70 rounded-lg bg-[#FBF7EB]/40">
+                (본문이 비어 있습니다)
+              </div>
+            )}
             <label className="mt-3 flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"

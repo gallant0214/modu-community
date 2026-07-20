@@ -7,6 +7,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../../../_components/crm-modal";
 import { formatPhone, formatWon } from "../../../_components/crm-labels";
 import { DEFAULT_PT_CONTRACT_TERMS } from "../../../_components/pt-contract-terms";
+import { contractBodyHtml } from "@/app/lib/contract-body";
 
 interface TemplateSection {
   key: string;
@@ -559,9 +560,10 @@ export default function CrmContractSignNewPage() {
             headerNote={s.required ? "필수" : "선택"}
             noteColor={s.required ? "warn" : "info"}
           >
-            <pre className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-300 font-sans max-h-[320px] overflow-y-auto px-3 py-3 border border-[#E8E0D0]/70 dark:border-zinc-800 rounded-lg bg-[#FBF7EB]/40 dark:bg-zinc-900/40">
-              {s.body || "(본문이 비어 있습니다)"}
-            </pre>
+            <div
+              className="prose prose-sm max-w-none text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-300 max-h-[320px] overflow-y-auto px-3 py-3 border border-[#E8E0D0]/70 dark:border-zinc-800 rounded-lg bg-[#FBF7EB]/40 dark:bg-zinc-900/40"
+              dangerouslySetInnerHTML={{ __html: contractBodyHtml(s.body) || "(본문이 비어 있습니다)" }}
+            />
             <label className="mt-3 flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -581,9 +583,10 @@ export default function CrmContractSignNewPage() {
           headerNote="필수"
           noteColor="warn"
         >
-          <pre className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-300 font-sans max-h-[420px] overflow-y-auto px-3 py-3 border border-[#E8E0D0]/70 dark:border-zinc-800 rounded-lg bg-[#FBF7EB]/40 dark:bg-zinc-900/40">
-            {template.body || "(본문이 비어 있습니다)"}
-          </pre>
+          <div
+            className="prose prose-sm max-w-none text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-300 max-h-[420px] overflow-y-auto px-3 py-3 border border-[#E8E0D0]/70 dark:border-zinc-800 rounded-lg bg-[#FBF7EB]/40 dark:bg-zinc-900/40"
+            dangerouslySetInnerHTML={{ __html: contractBodyHtml(template.body) || "(본문이 비어 있습니다)" }}
+          />
           <label className="mt-3 flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -604,9 +607,10 @@ export default function CrmContractSignNewPage() {
             headerNote={t.required ? "필수" : "선택"}
             noteColor={t.required ? "warn" : "info"}
           >
-            <pre className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-300 font-sans max-h-[260px] overflow-y-auto px-3 py-3 border border-[#E8E0D0]/70 dark:border-zinc-800 rounded-lg bg-[#FBF7EB]/40 dark:bg-zinc-900/40">
-              {t.body}
-            </pre>
+            <div
+              className="prose prose-sm max-w-none text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-300 max-h-[260px] overflow-y-auto px-3 py-3 border border-[#E8E0D0]/70 dark:border-zinc-800 rounded-lg bg-[#FBF7EB]/40 dark:bg-zinc-900/40"
+              dangerouslySetInnerHTML={{ __html: contractBodyHtml(t.body) }}
+            />
             <label className="mt-3 flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
