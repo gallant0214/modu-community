@@ -167,8 +167,6 @@ export default function CrmProductsPage() {
     ...BUILT_IN_KEYS,
     ...customTypes.filter((t) => !BUILT_IN_KEYS.includes(t.key)).map((t) => t.key),
   ];
-  const totalPrice = list.reduce((sum, p) => sum + (p.price_won ?? 0), 0);
-  const averagePrice = list.length > 0 ? Math.round(totalPrice / list.length) : 0;
   const periodCount = list.filter((p) => p.billing_mode === "period").length;
   const lessonCount = list.filter((p) => p.type === "group" || p.type === "personal").length;
 
@@ -199,11 +197,10 @@ export default function CrmProductsPage() {
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <div className="mt-5 grid grid-cols-2 lg:grid-cols-3 gap-2">
           <ProductMetric label="등록 상품" value={`${list.length}개`} hint={type ? typeLabelOf(type) : "전체 유형"} />
           <ProductMetric label="기간제" value={`${periodCount}개`} hint={`횟수제 ${Math.max(0, list.length - periodCount)}개`} tone="green" />
           <ProductMetric label="수업 상품" value={`${lessonCount}개`} hint="그룹·개인 레슨" tone="blue" />
-          <ProductMetric label="평균 가격" value={`${formatWon(averagePrice)}원`} hint="현재 목록 기준" tone="gold" />
         </div>
       </header>
 

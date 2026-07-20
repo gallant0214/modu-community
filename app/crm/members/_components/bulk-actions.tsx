@@ -20,6 +20,7 @@ export function BulkActionBar({
   selectedIds,
   onDone,
   onCancel,
+  onDelete,
   onExportExcel,
   onToggleAllOnPage,
   allOnPageSelected,
@@ -28,6 +29,8 @@ export function BulkActionBar({
   /** 작업 성공 후 호출 (요약 메시지 전달). 리스트 새로고침 용도. */
   onDone: (summary: string) => void;
   onCancel: () => void;
+  /** 선택 회원 삭제. */
+  onDelete: () => void;
   /** 선택 회원 엑셀(CSV) 다운로드. */
   onExportExcel: () => void;
   /** 현재 페이지 회원 전체 선택/해제 토글. */
@@ -55,6 +58,13 @@ export function BulkActionBar({
       <BulkBtn disabled={count === 0} onClick={() => setAction("message")}>메시지 보내기</BulkBtn>
       <BulkBtn disabled={count === 0} onClick={() => setAction("mileage")}>마일리지</BulkBtn>
       <BulkBtn disabled={count === 0} onClick={onExportExcel}>엑셀 다운로드</BulkBtn>
+      <button
+        onClick={onDelete}
+        disabled={count === 0}
+        className="px-3 py-1.5 rounded-full text-[12.5px] font-semibold border border-red-300 dark:border-red-800 bg-white dark:bg-zinc-900 text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        회원 삭제
+      </button>
       <button
         onClick={onCancel}
         className="ml-auto px-3 py-1.5 rounded-full text-[12.5px] font-medium border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:border-[#6B7B3A]/40"

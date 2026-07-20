@@ -440,12 +440,11 @@ export default function CrmMembersPage() {
     (k) => columnWidths[k] !== DEFAULT_COL_WIDTHS[k]
   );
 
-  // 액션 모드 (회원 삭제 / 일괄 작업)
-  const [deleteMode, setDeleteMode] = useState(false);
-  const [bulkMode, setBulkMode] = useState(false);
+  // 선택 기반 일괄 작업 (체크박스 상시 표시, 선택 시 작업 바 노출)
   const [bulkFlash, setBulkFlash] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -697,28 +696,8 @@ export default function CrmMembersPage() {
     });
   };
 
-  const enterDeleteMode = () => {
-    setDeleteMode(true);
-    setBulkMode(false);
-    setSelected(new Set());
-  };
-  const cancelDeleteMode = () => {
-    setDeleteMode(false);
-    setSelected(new Set());
-  };
-
-  const enterBulkMode = () => {
-    setBulkMode(true);
-    setDeleteMode(false);
-    setBulkFlash("");
-    setSelected(new Set());
-  };
-  const cancelBulkMode = () => {
-    setBulkMode(false);
-    setSelected(new Set());
-  };
+  const clearSelection = () => setSelected(new Set());
   const handleBulkDone = (summary: string) => {
-    setBulkMode(false);
     setSelected(new Set());
     setBulkFlash(summary);
     load();
@@ -738,7 +717,8 @@ export default function CrmMembersPage() {
         })
       )
     );
-    cancelDeleteMode();
+    setSelected(new Set());
+    setBulkFlash(`${ids.length}명 삭제 완료`);
     load();
   };
 
@@ -857,36 +837,17 @@ export default function CrmMembersPage() {
 
       {/* 액션 툴바 */}
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
-        <ActionBtn active={!deleteMode && !bulkMode} onClick={() => { cancelDeleteMode(); cancelBulkMode(); }}>회원 정보</ActionBtn>
-        <ActionBtn active={bulkMode} onClick={bulkMode ? cancelBulkMode : enterBulkMode}>
-          {bulkMode ? `일괄 작업 (${selected.size})` : "일괄 작업"}
-        </ActionBtn>
-        <ActionBtn
-          active={deleteMode}
-          onClick={deleteMode ? confirmDelete : enterDeleteMode}
-          tone={deleteMode ? "danger" : undefined}
-        >
-          {deleteMode ? `삭제 (${selected.size})` : "회원 삭제"}
-        </ActionBtn>
-        {deleteMode && (
-          <button
-            onClick={cancelDeleteMode}
-            className="px-3 py-1.5 rounded-full text-[12.5px] font-medium border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:border-[#6B7B3A]/40"
-          >
-            취소
-          </button>
-        )}
         <ActionBtn onClick={() => showNotReady("미수 관리")}>미수 관리</ActionBtn>
-        <ActionBtn onClick={() => showNotReady("취소/환불")}>취소/환불</ActionBtn>
-        <ActionBtn onClick={() => showNotReady("수정 기록")}>수정 기록</ActionBtn>
+        <ActionBtn onClick={() => setLogOpen(true)}>수정 기록</ActionBtn>
       </div>
 
-      {/* 일괄 작업 바 */}
-      {bulkMode && (
+      {/* 일괄 작업 바 — 회원 선택 시 노출 */}
+      {selected.size > 0 && (
         <BulkActionBar
           selectedIds={Array.from(selected)}
           onDone={handleBulkDone}
-          onCancel={cancelBulkMode}
+          onCancel={clearSelection}
+          onDelete={confirmDelete}
           onExportExcel={() => {
             const picked = filtered.filter((m) => selected.has(m.id));
             if (picked.length === 0) {
@@ -1077,7 +1038,7 @@ export default function CrmMembersPage() {
       ) : (
         <MembersTable
           rows={pageRows}
-          deleteMode={deleteMode || bulkMode}
+          selectable
           selected={selected}
           onToggle={toggleSelect}
           onToggleAll={toggleSelectAllOnPage}
@@ -1119,6 +1080,8 @@ export default function CrmMembersPage() {
           load();
         }}
       />
+
+      <MemberLogModal open={logOpen} onClose={() => setLogOpen(false)} />
     </div>
   );
 }
@@ -1539,7 +1502,7 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
 
 function MembersTable({
   rows,
-  deleteMode,
+  selectable,
   selected,
   onToggle,
   onToggleAll,
@@ -1552,7 +1515,7 @@ function MembersTable({
   onResize,
 }: {
   rows: MemberRow[];
-  deleteMode: boolean;
+  selectable: boolean;
   selected: Set<number>;
   onToggle: (id: number) => void;
   onToggleAll: () => void;
@@ -1591,20 +1554,20 @@ function MembersTable({
 
   const cols = order.map((k) => COLUMN_DEFS[k]);
   const totalWidth =
-    (deleteMode ? 36 : 0) + cols.reduce((sum, c) => sum + (widths[c.key] ?? 120), 0);
+    (selectable ? 36 : 0) + cols.reduce((sum, c) => sum + (widths[c.key] ?? 120), 0);
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800">
       <table className="text-[13px] table-fixed" style={{ width: totalWidth }}>
         <colgroup>
-          {deleteMode && <col style={{ width: 36 }} />}
+          {selectable && <col style={{ width: 36 }} />}
           {cols.map((c) => (
             <col key={c.key} style={{ width: widths[c.key] ?? 120 }} />
           ))}
         </colgroup>
         <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
           <tr>
-            {deleteMode && (
+            {selectable && (
               <Th className="pl-3">
                 <input
                   type="checkbox"
@@ -1688,7 +1651,7 @@ function MembersTable({
               key={m.id}
               className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#FBF7EB] dark:hover:bg-zinc-900/60"
             >
-              {deleteMode && (
+              {selectable && (
                 <Td className="pl-3">
                   <input
                     type="checkbox"
@@ -2193,4 +2156,144 @@ function formatDateTime(iso: string) {
   } catch {
     return iso;
   }
+}
+
+const LOG_ACTION_LABEL: Record<string, string> = {
+  "member.create": "회원 등록",
+  "member.update": "회원 정보 수정",
+  "member.delete": "회원 삭제",
+  "members.bulk_hold": "회원 일괄 홀딩",
+  "members.bulk_extend": "회원 일괄 기간 연장",
+  "members.bulk_mileage": "회원 일괄 마일리지",
+  "pass.issue": "수강권 발급",
+  "pass.update": "수강권 수정",
+  "pass.refund": "수강권 환불",
+  "membership.issue": "회원권 발급",
+  "membership.update": "회원권 수정",
+  "membership.refund": "회원권 환불",
+  "rental.update": "대여권 수정",
+  "rental.refund": "대여권 환불",
+  "pause.create": "홀딩 등록",
+  "pause.cancel": "홀딩 취소",
+  "reservation.book": "예약 생성",
+  "reservation.update": "예약 상태 변경",
+  "reservation.reschedule": "예약 시간 이동",
+  "reservation.cancel": "예약 취소",
+  "reservation.attended": "출석 처리",
+  "locker.assign": "락커 배정",
+  "locker.return": "락커 회수",
+  "locker_zone.update": "락커룸 수정",
+  "locker_layout.save": "락커 배치 저장",
+  "message.send": "메시지 발송",
+  "reservation.cancelled": "예약 취소",
+  "product.create": "상품 추가",
+  "product.update": "상품 수정",
+  "product.delete": "상품 삭제",
+  "staff.add": "직원 추가",
+  "staff.update": "직원 정보 수정",
+  "staff.remove": "직원 삭제",
+  "contract.create": "계약서 작성",
+  "contract.request": "계약서 발송",
+  "contract.void": "계약서 무효화",
+  "settings.update": "설정 변경",
+  "role_permission.update": "권한 변경",
+  "grade_permission.update": "직급 권한 변경",
+};
+
+const LOG_ENTITY_LABEL: Record<string, string> = {
+  member: "회원",
+  crm_members: "회원",
+  pass: "수강권",
+  crm_memberships: "회원권",
+  crm_rentals: "대여권",
+  membership: "회원권",
+  rental: "대여권",
+  reservation: "예약",
+  locker: "락커",
+  message: "메시지",
+};
+
+interface AuditLog {
+  id: number;
+  action: string;
+  entity_type: string | null;
+  entity_id: number | null;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+}
+
+/** 회원 관리 '수정 기록' — 센터 전체 변동 이력(등록·수정·삭제 등) 조회. */
+function MemberLogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { getIdToken } = useAuth();
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setError("");
+    setLoading(true);
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/audit-logs?limit=200", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "조회 실패");
+        setLogs(data.logs ?? []);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "네트워크 오류");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [open, getIdToken]);
+
+  const logName = (log: AuditLog): string => {
+    const p = log.payload;
+    const raw = p && (p.member_name ?? p.name ?? p.title);
+    return typeof raw === "string" && raw.trim() ? raw.trim() : "";
+  };
+
+  return (
+    <CrmModal open={open} onClose={onClose} title="수정 기록" size="lg">
+      {loading ? (
+        <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : error ? (
+        <div className="py-8 text-center text-[13px] text-red-700 dark:text-red-300">{error}</div>
+      ) : logs.length === 0 ? (
+        <div className="py-8 text-center text-[13px] text-[#8C8270]">아직 기록이 없습니다.</div>
+      ) : (
+        <ul className="max-h-[60vh] overflow-y-auto -mx-1 px-1">
+          {logs.map((log) => {
+            const name = logName(log);
+            const entity = log.entity_type ? LOG_ENTITY_LABEL[log.entity_type] ?? "" : "";
+            return (
+              <li
+                key={log.id}
+                className="flex items-baseline justify-between gap-3 py-2 border-b border-[#E8E0D0]/50 dark:border-zinc-800/50 last:border-0 text-[12.5px]"
+              >
+                <span className="text-[#3A342A] dark:text-zinc-300 min-w-0">
+                  <span className="font-medium">
+                    {LOG_ACTION_LABEL[log.action] ?? log.action}
+                  </span>
+                  {(name || entity) && (
+                    <span className="ml-1.5 text-[#8C8270] dark:text-zinc-500 truncate">
+                      · {name || entity}
+                    </span>
+                  )}
+                </span>
+                <span className="text-[#A89B80] dark:text-zinc-500 shrink-0">
+                  {formatDateTime(log.created_at)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </CrmModal>
+  );
 }
