@@ -46,7 +46,7 @@ export function CrmLineChart({
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; flip: boolean } | null>(null);
   const W = 600;
   const H = height;
-  const padL = unit === "원" ? 58 : 40;
+  const padL = unit === "원" ? 72 : 40;
   const padR = 12;
   const padT = 16;
   const padB = 28;
@@ -249,9 +249,8 @@ function formatAxisValue(n: number, unit: string) {
 }
 
 function formatWonAxis(n: number) {
-  if (n >= 100_000_000) return `${trimDecimal(n / 100_000_000)}억`;
-  if (n >= 10_000) return `${trimDecimal(n / 10_000)}만`;
-  return n.toLocaleString();
+  // 1단위(원 전체)로 표시 — '1.1만' 같은 만 단위 소수 표기 제거
+  return Math.round(n).toLocaleString();
 }
 
 function formatTooltipValue(value: number, unit: string) {
@@ -260,6 +259,3 @@ function formatTooltipValue(value: number, unit: string) {
   return value.toLocaleString();
 }
 
-function trimDecimal(value: number) {
-  return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
-}
