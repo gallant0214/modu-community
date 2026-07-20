@@ -12,6 +12,19 @@ export function useColumnWidths<K extends string>(
   defaults: Record<K, number>
 ) {
   const [widths, setWidths] = useState<Record<K, number>>(defaults);
+  // 최신 widths 를 마우스업 시점에 바로 저장하기 위한 ref
+  const widthsRef = useRef(widths);
+  useEffect(() => {
+    widthsRef.current = widths;
+  }, [widths]);
+
+  const flush = useCallback(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(widthsRef.current));
+    } catch {
+      /* ignore */
+    }
+  }, [storageKey]);
 
   useEffect(() => {
     try {
@@ -52,8 +65,14 @@ export function useColumnWidths<K extends string>(
       setWidth(r.key, Math.max(56, r.startW + (e.clientX - r.startX)));
     };
     const onUp = () => {
+      const wasResizing = resizing.current !== null;
       resizing.current = null;
       document.body.style.cursor = "";
+      // 드래그를 놓는 즉시 최종 너비를 저장 (디바운스 누락 방지)
+      if (wasResizing) {
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        flush();
+      }
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -61,7 +80,17 @@ export function useColumnWidths<K extends string>(
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [setWidth]);
+  }, [setWidth, flush]);
+
+  // 언마운트(페이지 이동) 시 대기 중이던 저장을 즉시 반영
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        flush();
+      }
+    };
+  }, [flush]);
 
   const startResize = useCallback(
     (key: K, e: React.MouseEvent) => {
