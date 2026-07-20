@@ -742,7 +742,7 @@ export default function CrmMembersPage() {
     load();
   };
 
-  const downloadExcel = () => {
+  const downloadExcel = (list: MemberRow[] = filtered) => {
     const header = [
       "이름",
       "성별",
@@ -773,7 +773,7 @@ export default function CrmMembersPage() {
       "광고성 수신",
     ];
     const todayStr = today().toISOString().slice(0, 10);
-    const rows = filtered.map((m) => {
+    const rows = list.map((m) => {
       const eff = effExpiry(m);
       const holdings =
         m.items && m.items.length > 0
@@ -887,6 +887,16 @@ export default function CrmMembersPage() {
           selectedIds={Array.from(selected)}
           onDone={handleBulkDone}
           onCancel={cancelBulkMode}
+          onExportExcel={() => {
+            const picked = filtered.filter((m) => selected.has(m.id));
+            if (picked.length === 0) {
+              window.alert("선택한 회원이 없습니다.");
+              return;
+            }
+            downloadExcel(picked);
+          }}
+          onToggleAllOnPage={toggleSelectAllOnPage}
+          allOnPageSelected={pageRows.length > 0 && pageRows.every((r) => selected.has(r.id))}
         />
       )}
 
@@ -1093,7 +1103,7 @@ export default function CrmMembersPage() {
         <Pagination page={page} totalPages={totalPages} onChange={setPage} />
 
         <button
-          onClick={downloadExcel}
+          onClick={() => downloadExcel()}
           disabled={filtered.length === 0}
           className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] font-medium text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-900 disabled:opacity-50"
         >

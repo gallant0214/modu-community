@@ -20,17 +20,32 @@ export function BulkActionBar({
   selectedIds,
   onDone,
   onCancel,
+  onExportExcel,
+  onToggleAllOnPage,
+  allOnPageSelected,
 }: {
   selectedIds: number[];
   /** 작업 성공 후 호출 (요약 메시지 전달). 리스트 새로고침 용도. */
   onDone: (summary: string) => void;
   onCancel: () => void;
+  /** 선택 회원 엑셀(CSV) 다운로드. */
+  onExportExcel: () => void;
+  /** 현재 페이지 회원 전체 선택/해제 토글. */
+  onToggleAllOnPage: () => void;
+  /** 현재 페이지 회원이 모두 선택돼 있는지. */
+  allOnPageSelected: boolean;
 }) {
   const [action, setAction] = useState<Action | null>(null);
   const count = selectedIds.length;
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[#6B7B3A]/40 bg-[#6B7B3A]/8 px-3 py-2">
+      <button
+        onClick={onToggleAllOnPage}
+        className="px-3 py-1.5 rounded-full text-[12.5px] font-medium border border-[#6B7B3A]/50 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/10"
+      >
+        {allOnPageSelected ? "페이지 전체 해제" : "페이지 전체 선택"}
+      </button>
       <span className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">
         {count}명 선택됨
       </span>
@@ -39,6 +54,7 @@ export function BulkActionBar({
       <BulkBtn disabled={count === 0} onClick={() => setAction("extend")}>기간 연장</BulkBtn>
       <BulkBtn disabled={count === 0} onClick={() => setAction("message")}>메시지 보내기</BulkBtn>
       <BulkBtn disabled={count === 0} onClick={() => setAction("mileage")}>마일리지</BulkBtn>
+      <BulkBtn disabled={count === 0} onClick={onExportExcel}>엑셀 다운로드</BulkBtn>
       <button
         onClick={onCancel}
         className="ml-auto px-3 py-1.5 rounded-full text-[12.5px] font-medium border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400 hover:border-[#6B7B3A]/40"
