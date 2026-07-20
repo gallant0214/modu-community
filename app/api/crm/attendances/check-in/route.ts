@@ -73,7 +73,8 @@ export async function POST(request: Request) {
     });
   }
 
-  const source = body.source === "manual" ? "manual" : "kiosk";
+  const source =
+    body.source === "manual" ? "manual" : body.source === "touch" ? "touch" : "kiosk";
 
   const { data: created, error } = await supabase
     .from("crm_attendances")

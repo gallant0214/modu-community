@@ -267,7 +267,7 @@ export default function CrmKioskPage() {
                 </div>
                 <div className="text-[11.5px] text-[#8C8270]">
                   {formatTimeKST(a.checked_in_at)}{" "}
-                  <span className="ml-1 text-[#A89B80]">· {a.source === "kiosk" ? "QR" : a.source === "manual" ? "검색" : "앱"}</span>
+                  <span className="ml-1 text-[#A89B80]">· {a.source === "kiosk" ? "QR" : a.source === "manual" ? "검색" : a.source === "touch" ? "터치" : "앱"}</span>
                 </div>
               </li>
             ))}

@@ -16,12 +16,14 @@ interface Attendance {
 const SOURCE_LABEL: Record<string, string> = {
   kiosk: "QR",
   manual: "검색",
+  touch: "터치",
   app: "앱",
 };
 
 const SOURCE_STYLE: Record<string, string> = {
   kiosk: "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/30 dark:text-[#A8B87A]",
   manual: "bg-[#B47B2A]/10 text-[#B47B2A] dark:bg-amber-900/40 dark:text-amber-300",
+  touch: "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/30 dark:text-[#A8B87A]",
   app: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
 };
 

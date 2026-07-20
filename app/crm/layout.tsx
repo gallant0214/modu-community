@@ -25,6 +25,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState("");
 
   const isOnboarding = pathname === "/crm/onboarding";
+  const isTouch = pathname === "/crm/touch-attendance";
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +44,9 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
         const data: BootstrapResp = await res.json();
         if (cancelled) return;
         setCtx(data);
-        if (!data.onboarded && !isOnboarding) {
+        if (isTouch) {
+          // 터치출석은 독립 화면 — 온보딩 리다이렉트 대상 아님
+        } else if (!data.onboarded && !isOnboarding) {
           router.replace("/crm/onboarding");
         } else if (data.onboarded && isOnboarding) {
           router.replace("/crm/dashboard");
@@ -55,7 +58,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [loading, user, isOnboarding, pathname, router, getIdToken]);
+  }, [loading, user, isOnboarding, isTouch, pathname, router, getIdToken]);
 
   // 1) 로그인 상태 확인 중
   if (loading) {
@@ -81,8 +84,8 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // 3) onboarding 페이지는 사이드바 없이 children 만 렌더
-  if (isOnboarding) {
+  // 3) onboarding·터치출석 은 사이드바 없이 children 만 렌더 (독립 화면)
+  if (isOnboarding || isTouch) {
     return <CrmShell>{children}</CrmShell>;
   }
 

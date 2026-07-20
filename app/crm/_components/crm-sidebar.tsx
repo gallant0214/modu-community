@@ -11,6 +11,8 @@ interface MenuItem {
   label: string;
   /** owner / admin 만 보임 (직원관리·설정). manager/trainer 숨김. */
   staffOnly?: boolean;
+  /** true 면 새 창(팝업)으로 열기 (터치출석 등 독립 화면). */
+  newWindow?: boolean;
   icon: (props: { className?: string }) => React.ReactElement;
 }
 
@@ -30,6 +32,7 @@ const MENU: MenuItem[] = [
   { href: "/crm/payroll",     label: "직원 급여",     staffOnly: true, icon: IconPayroll },
   { href: "/crm/stats",       label: "통계",          icon: IconStats },
   { href: "/crm/settings",    label: "센터설정",       staffOnly: true, icon: IconSettings },
+  { href: "/crm/touch-attendance", label: "터치출석", staffOnly: true, newWindow: true, icon: IconTouch },
 ];
 
 interface Props {
@@ -51,16 +54,34 @@ export function CrmSidebar({ role, centerName, isSoloOwner: _isSoloOwner }: Prop
       {visible.map((item) => {
         const active = pathname?.startsWith(item.href);
         const Icon = item.icon;
+        const cls = `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] transition-colors w-full text-left
+          ${active && !item.newWindow
+            ? "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A] font-semibold"
+            : "text-[#3A342A] hover:bg-[#F5F0E5] dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+          }`;
+        // 새 창으로 여는 항목(터치출석)
+        if (item.newWindow) {
+          return (
+            <button
+              key={item.href}
+              type="button"
+              onClick={() => {
+                window.open(item.href, "_blank", "noopener,noreferrer,width=480,height=760");
+                setMobileOpen(false);
+              }}
+              className={cls}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span>{item.label}</span>
+            </button>
+          );
+        }
         return (
           <Link
             key={item.href}
             href={item.href}
             onClick={() => setMobileOpen(false)}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] transition-colors
-              ${active
-                ? "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A] font-semibold"
-                : "text-[#3A342A] hover:bg-[#F5F0E5] dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-              }`}
+            className={cls}
           >
             <Icon className="w-4 h-4 shrink-0" />
             <span>{item.label}</span>
@@ -228,6 +249,13 @@ function IconKiosk({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-7a2 2 0 00-2-2H6a2 2 0 00-2 2v7a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+    </svg>
+  );
+}
+function IconTouch({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 11V6a2 2 0 114 0v5m0 0V4a2 2 0 114 0v7m0 0V9a2 2 0 114 0v6a6 6 0 01-6 6h-2.5a5 5 0 01-4-2l-3.5-4.5a2 2 0 013-2.5L9 15V11z" />
     </svg>
   );
 }
