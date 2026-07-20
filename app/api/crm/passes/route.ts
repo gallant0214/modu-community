@@ -49,12 +49,12 @@ export async function GET(request: Request) {
   }
 
   // 회원 이름 + 얼굴 썸네일 join (Supabase 단순화: 한 번 더 쿼리)
-  type MemberLite = { id: number; name: string; face_image_thumb: string | null };
+  type MemberLite = { id: number; name: string; phone: string | null; face_image_thumb: string | null };
   const memberIds = Array.from(new Set((data ?? []).map((p) => p.member_id)));
   const membersRes = memberIds.length
     ? await supabase
         .from("crm_members")
-        .select("id, name, face_image_thumb")
+        .select("id, name, phone, face_image_thumb")
         .in("id", memberIds)
     : { data: [] };
   const members = (membersRes.data ?? []) as unknown as MemberLite[];
@@ -64,6 +64,7 @@ export async function GET(request: Request) {
     passes: (data ?? []).map((p) => ({
       ...p,
       member_name: memberMap.get(p.member_id)?.name ?? "",
+      member_phone: memberMap.get(p.member_id)?.phone ?? null,
       member_face_thumb: memberMap.get(p.member_id)?.face_image_thumb ?? null,
     })),
   });

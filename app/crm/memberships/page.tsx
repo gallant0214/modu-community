@@ -444,6 +444,7 @@ function IssueModal({
   const [priceWon, setPriceWon] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "etc">("card");
   const [paymentCustom, setPaymentCustom] = useState("");
+  const [purchasedAt, setPurchasedAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [expiresAt, setExpiresAt] = useState(() => {
     const d = new Date();
@@ -465,6 +466,7 @@ function IssueModal({
       setPriceWon(0);
       setPaymentMethod("card");
       setPaymentCustom("");
+      setPurchasedAt(new Date().toISOString().slice(0, 10));
       setMemo("");
       setError("");
       return;
@@ -544,6 +546,7 @@ function IssueModal({
           price_won: priceWon,
           payment_method: paymentMethod,
           payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
+          purchased_at: purchasedAt,
           start_date: startDate,
           expires_at: expiresAt,
           memo: memo || undefined,
@@ -709,7 +712,15 @@ function IssueModal({
           )}
         </CrmField>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
+          <CrmField label="구매일" required>
+            <input
+              type="date"
+              className={crmInputClass}
+              value={purchasedAt}
+              onChange={(e) => setPurchasedAt(e.target.value)}
+            />
+          </CrmField>
           <CrmField label="시작일" required>
             <input
               type="date"
@@ -727,6 +738,9 @@ function IssueModal({
             />
           </CrmField>
         </div>
+        <p className="-mt-1 text-[11.5px] text-[#A89B80]">
+          구매일은 결제한 날, 시작일은 이용을 시작하는 날이에요. 나중에 시작하려면 시작일만 다르게 지정하세요.
+        </p>
 
         <CrmField label="메모">
           <textarea
@@ -756,7 +770,7 @@ function StatusChip({ status }: { status: string }) {
   const label = PASS_STATUS_LABEL[status] ?? status;
   const cls =
     status === "valid"
-      ? "bg-[#EFE7D5] text-[#6B7B3A] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A]"
+      ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
       : status === "expired"
       ? "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500"
       : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";

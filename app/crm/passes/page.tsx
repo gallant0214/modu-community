@@ -8,30 +8,35 @@ import {
   PAYMENT_METHOD_LABEL,
   PASS_STATUS_LABEL,
   formatWon,
+  formatPhone,
 } from "../_components/crm-labels";
 import { crmInputClass } from "../_components/crm-modal";
 import { useColumnWidths, ResizableTh } from "../_components/use-column-widths";
 
 const P_COLS = [
   { key: "member", label: "회원" },
+  { key: "phone", label: "연락처" },
   { key: "lesson", label: "수업" },
   { key: "remaining", label: "잔여" },
   { key: "price", label: "금액" },
   { key: "payment", label: "결제" },
   { key: "trainer", label: "강사" },
   { key: "purchased", label: "구매일" },
+  { key: "start", label: "시작" },
   { key: "expires", label: "만료" },
   { key: "status", label: "상태" },
 ] as const;
 type PColKey = (typeof P_COLS)[number]["key"];
 const P_DEFAULT_WIDTHS: Record<PColKey, number> = {
-  member: 190,
+  member: 170,
+  phone: 130,
   lesson: 160,
   remaining: 72,
   price: 104,
   payment: 96,
   trainer: 110,
   purchased: 110,
+  start: 110,
   expires: 110,
   status: 90,
 };
@@ -40,6 +45,7 @@ interface PassRow {
   id: number;
   member_id: number;
   member_name: string;
+  member_phone: string | null;
   member_face_thumb: string | null;
   trainer_member_id: number;
   seller_member_id: number;
@@ -52,6 +58,7 @@ interface PassRow {
   payment_method: string;
   payment_method_custom: string | null;
   issued_at: string;
+  start_date: string | null;
   expires_at: string;
   status: string;
 }
@@ -230,6 +237,9 @@ export default function CrmPassesPage() {
                       <span className="truncate">{p.member_name || "—"}</span>
                     </Link>
                   </Td>
+                  <Td className="text-[#8C8270]">
+                    {p.member_phone ? formatPhone(p.member_phone) : "—"}
+                  </Td>
                   <Td>
                     {p.lesson_kind}
                     <span className="ml-1 text-[11.5px] text-[#A89B80]">
@@ -252,6 +262,7 @@ export default function CrmPassesPage() {
                     {staffMap.get(p.trainer_member_id) ?? "—"}
                   </Td>
                   <Td className="text-[#8C8270] dark:text-zinc-500">{p.issued_at}</Td>
+                  <Td className="text-[#8C8270] dark:text-zinc-500">{p.start_date ?? "—"}</Td>
                   <Td className="text-[#8C8270] dark:text-zinc-500">{p.expires_at}</Td>
                   <Td>
                     <StatusChip status={p.status} />
@@ -270,7 +281,7 @@ function StatusChip({ status }: { status: string }) {
   const label = PASS_STATUS_LABEL[status] ?? status;
   const cls =
     status === "valid"
-      ? "bg-[#EFE7D5] text-[#6B7B3A] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A]"
+      ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
       : status === "expired"
       ? "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500"
       : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
