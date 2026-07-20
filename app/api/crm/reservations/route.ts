@@ -150,7 +150,7 @@ export async function POST(request: Request) {
   // session_minutes 까지 조회 → 예약 종료 시각 서버측 파생
   const { data: pass } = await supabase
     .from("crm_passes")
-    .select("id, center_id, member_id, trainer_member_id, remaining_sessions, status, session_minutes")
+    .select("id, center_id, member_id, trainer_member_id, co_trainer_ids, remaining_sessions, status, session_minutes")
     .eq("id", passId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -162,14 +162,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "잔여 세션이 없습니다" }, { status: 400 });
   }
 
-  // trainer/manager 는 본인 담당 수강권만 (단 can_manage_all_schedules 있으면 예외)
-  if (
-    !canManageAll &&
-    (ctx.role === "trainer" || ctx.role === "manager") &&
-    pass.trainer_member_id !== ctx.centerMemberId
-  ) {
+  // 담당 강사 = 주강사 + 추가강사(co_trainer_ids). 이들만 예약 가능
+  const coTrainerIds = Array.isArray(pass.co_trainer_ids)
+    ? (pass.co_trainer_ids as number[])
+    : [];
+  const isAssignedTrainer =
+    ctx.centerMemberId != null &&
+    (pass.trainer_member_id === ctx.centerMemberId || coTrainerIds.includes(ctx.centerMemberId));
+
+  // trainer/manager 는 본인이 (주강사 또는 추가강사로) 지정된 수강권만
+  // (can_manage_all_schedules 있으면 예외)
+  if (!canManageAll && (ctx.role === "trainer" || ctx.role === "manager") && !isAssignedTrainer) {
     return NextResponse.json({ error: "이 수강권의 담당이 아닙니다" }, { status: 403 });
   }
+
+  // 예약을 실제로 진행하는 강사에 귀속: 예약자가 지정 강사(주/추가)면 본인, 아니면 주강사
+  const reservationTrainerId = isAssignedTrainer
+    ? (ctx.centerMemberId as number)
+    : pass.trainer_member_id;
 
   // 종료 시각: 수강권 session_minutes 로 서버측 파생 (웹·앱 공통 규칙).
   // 유효값 없으면 클라이언트 ends_at 폴백 → 그것도 없으면 50분 기본
@@ -197,7 +207,7 @@ export async function POST(request: Request) {
       center_id: ctx.centerId,
       pass_id: passId,
       member_id: pass.member_id,
-      trainer_member_id: pass.trainer_member_id,
+      trainer_member_id: reservationTrainerId,
       starts_at: startsAt.toISOString(),
       ends_at: endsAtIso,
       status: "booked",

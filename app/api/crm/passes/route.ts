@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_passes")
     .select(
-      "id, member_id, trainer_member_id, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, payment_method, payment_method_custom, issued_at, start_date, expires_at, status, created_at"
+      "id, member_id, trainer_member_id, co_trainer_ids, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, payment_method, payment_method_custom, issued_at, start_date, expires_at, status, created_at"
     )
     .eq("center_id", ctx.centerId)
     .order("issued_at", { ascending: false, nullsFirst: false })
@@ -34,12 +34,16 @@ export async function GET(request: Request) {
     .limit(limit);
 
   if (status) query = query.eq("status", status);
-  if (trainerId) query = query.eq("trainer_member_id", Number(trainerId));
+  // 담당 강사 = 주강사(trainer_member_id) 또는 추가강사(co_trainer_ids 배열 포함)
+  if (trainerId) {
+    const tid = Number(trainerId);
+    query = query.or(`trainer_member_id.eq.${tid},co_trainer_ids.cs.{${tid}}`);
+  }
   if (paymentMethod) query = query.eq("payment_method", paymentMethod);
 
   if (ctx.role === "trainer" || ctx.role === "manager") {
     query = query.or(
-      `trainer_member_id.eq.${ctx.centerMemberId},seller_member_id.eq.${ctx.centerMemberId}`
+      `trainer_member_id.eq.${ctx.centerMemberId},seller_member_id.eq.${ctx.centerMemberId},co_trainer_ids.cs.{${ctx.centerMemberId}}`
     );
   }
 
