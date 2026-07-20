@@ -27,6 +27,8 @@ interface Settings {
   working_hours_start: string;
   working_hours_end: string;
   default_columns: number;
+  checkout_mileage_enabled: boolean;
+  checkout_mileage_earn: number;
 }
 
 interface AuditLog {
@@ -86,7 +88,7 @@ interface BootstrapInfo {
 export default function CrmSettingsPage() {
   const router = useRouter();
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<"reservation" | "alerts" | "notices" | "grades" | "permissions" | "logs" | "expenses" | "danger">("reservation");
+  const [tab, setTab] = useState<"reservation" | "alerts" | "notices" | "mileage" | "grades" | "permissions" | "logs" | "expenses" | "danger">("reservation");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [info, setInfo] = useState<BootstrapInfo | null>(null);
@@ -185,6 +187,9 @@ export default function CrmSettingsPage() {
         </TabBtn>
         <TabBtn active={tab === "notices"} onClick={() => setTab("notices")}>
           공지 설정
+        </TabBtn>
+        <TabBtn active={tab === "mileage"} onClick={() => setTab("mileage")}>
+          마일리지
         </TabBtn>
         <TabBtn active={tab === "grades"} onClick={() => setTab("grades")}>
           등급 관리
@@ -343,6 +348,69 @@ export default function CrmSettingsPage() {
       )}
 
       {tab === "notices" && <NoticesPanel />}
+
+      {settings && tab === "mileage" && (
+        <div className="space-y-4">
+          <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
+            회원용 앱에서 <strong>퇴실(체크아웃)</strong> 시 자동으로 적립할 마일리지를 설정해요.
+          </p>
+
+          <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5 space-y-4">
+            <label className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                  퇴실 시 마일리지 적립
+                </div>
+                <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500">
+                  앱에서 퇴실할 때마다 아래 금액이 적립돼요.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  save({ checkout_mileage_enabled: !settings.checkout_mileage_enabled })
+                }
+                disabled={saving}
+                className={`relative inline-flex w-11 h-6 rounded-full transition-colors shrink-0 disabled:opacity-60
+                  ${settings.checkout_mileage_enabled ? "bg-[#6B7B3A]" : "bg-[#E8E0D0] dark:bg-zinc-700"}`}
+                aria-pressed={settings.checkout_mileage_enabled}
+              >
+                <span
+                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform
+                    ${settings.checkout_mileage_enabled ? "translate-x-[22px]" : "translate-x-0.5"}`}
+                />
+              </button>
+            </label>
+
+            {settings.checkout_mileage_enabled && (
+              <div>
+                <label className="block text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+                  퇴실 시 적립 마일리지 (P)
+                </label>
+                <div className="relative max-w-[200px]">
+                  <input
+                    type="number"
+                    min={0}
+                    defaultValue={settings.checkout_mileage_earn ?? 0}
+                    key={`cm-${settings.checkout_mileage_earn}`}
+                    onBlur={(e) => {
+                      const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                      if (v !== settings.checkout_mileage_earn) save({ checkout_mileage_earn: v });
+                    }}
+                    className={`${crmInputClass} pr-9`}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+                    P
+                  </span>
+                </div>
+                <p className="mt-1.5 text-[11.5px] text-[#A89B80] dark:text-zinc-500">
+                  입력 후 다른 곳을 클릭하면 저장돼요. 1P = 1원 기준으로 회원 마일리지에 적립됩니다.
+                </p>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
       {tab === "grades" && <GradesPanel />}
 

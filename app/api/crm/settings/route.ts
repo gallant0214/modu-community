@@ -67,6 +67,8 @@ export async function PATCH(request: Request) {
     "working_hours_start",
     "working_hours_end",
     "default_columns",
+    "checkout_mileage_enabled",
+    "checkout_mileage_earn",
   ];
   const patch: Record<string, unknown> = {};
   for (const key of allowed) {
@@ -100,6 +102,15 @@ export async function PATCH(request: Request) {
     if (Number.isNaN(n) || n < 1 || n > 10)
       return NextResponse.json({ error: "스케줄 컬럼 수는 1~10" }, { status: 400 });
     patch.default_columns = n;
+  }
+  if (patch.checkout_mileage_enabled !== undefined) {
+    patch.checkout_mileage_enabled = !!patch.checkout_mileage_enabled;
+  }
+  if (patch.checkout_mileage_earn !== undefined) {
+    const n = Math.floor(Number(patch.checkout_mileage_earn));
+    if (Number.isNaN(n) || n < 0 || n > 1000000)
+      return NextResponse.json({ error: "퇴실 적립 마일리지는 0~1,000,000P" }, { status: 400 });
+    patch.checkout_mileage_earn = n;
   }
 
   // upsert 패턴 (혹시 GET 한 번 안 한 케이스)
