@@ -29,7 +29,7 @@ const MENU: MenuItem[] = [
   { href: "/crm/staff",       label: "직원 관리",     staffOnly: true, icon: IconStaff },
   { href: "/crm/payroll",     label: "직원 급여",     staffOnly: true, icon: IconPayroll },
   { href: "/crm/stats",       label: "통계",          icon: IconStats },
-  { href: "/crm/settings",    label: "설정",          staffOnly: true, icon: IconSettings },
+  { href: "/crm/settings",    label: "센터설정",       staffOnly: true, icon: IconSettings },
 ];
 
 interface Props {
