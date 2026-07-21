@@ -621,14 +621,15 @@ function Hint({ children }: { children: React.ReactNode }) {
 }
 function EmploymentStatusChip({ status }: { status: string }) {
   const label = EMPLOYMENT_STATUS_LABEL[status] ?? status;
-  const cls =
-    status === "working"
-      ? "bg-[#EFE7D5] text-[#6B7B3A] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A]"
-      : status === "on_leave"
-      ? "bg-[#F5E4C8] text-[#B47B2A] dark:bg-amber-950/40 dark:text-amber-300"
-      : "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500";
+  const working = status === "working";
+  const cls = working
+    ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+    : status === "on_leave"
+    ? "bg-[#F5E4C8] text-[#B47B2A] dark:bg-amber-950/40 dark:text-amber-300"
+    : "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500";
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${cls}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${cls}`}>
+      {working && <span className="w-1.5 h-1.5 rounded-full bg-green-500 dark:bg-green-400" />}
       {label}
     </span>
   );
