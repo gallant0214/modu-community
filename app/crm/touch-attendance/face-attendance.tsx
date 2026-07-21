@@ -49,10 +49,13 @@ export default function FaceAttendance() {
   const cooldownRef = useRef<Map<number, number>>(new Map());
   const runningRef = useRef(false);
   const busyRef = useRef(false);
+  const faceApiRef = useRef<any>(null);
+  const optRef = useRef<any>(null);
 
   const [stage, setStage] = useState<Stage>("init");
   const [progress, setProgress] = useState({ done: 0, total: 0, skipped: 0 });
   const [error, setError] = useState("");
+  const [camError, setCamError] = useState("");
   const [status, setStatus] = useState("준비 중…");
   const [lastHit, setLastHit] = useState<{ name: string; at: number } | null>(null);
 
@@ -75,100 +78,6 @@ export default function FaceAttendance() {
     },
     [getIdToken]
   );
-
-  // 초기화: 라이브러리 + 모델 + 등록 얼굴 디스크립터
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setStage("models");
-        setStatus("얼굴인식 모델 불러오는 중…");
-        const faceapi = await loadFaceApi();
-        await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-        ]);
-        if (cancelled) return;
-
-        setStage("faces");
-        setStatus("등록된 얼굴 불러오는 중…");
-        const token = await getIdToken();
-        const res = await fetch("/api/crm/members/faces", {
-          headers: { authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "등록 얼굴 조회 실패");
-        const faces: FaceRow[] = (data.faces ?? []).filter((f: FaceRow) => f.face_image_data);
-        if (cancelled) return;
-
-        const opt = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 });
-        const labeled: any[] = [];
-        let skipped = 0;
-        setProgress({ done: 0, total: faces.length, skipped: 0 });
-        for (let i = 0; i < faces.length; i++) {
-          if (cancelled) return;
-          const f = faces[i];
-          try {
-            const img = new Image();
-            img.src = f.face_image_data as string;
-            await img.decode();
-            const det = await faceapi
-              .detectSingleFace(img, opt)
-              .withFaceLandmarks()
-              .withFaceDescriptor();
-            if (det?.descriptor) {
-              labeled.push(new faceapi.LabeledFaceDescriptors(String(f.id), [det.descriptor]));
-              nameMapRef.current.set(f.id, f.name);
-            } else {
-              skipped++;
-            }
-          } catch {
-            skipped++;
-          }
-          setProgress({ done: i + 1, total: faces.length, skipped });
-        }
-        if (cancelled) return;
-        if (labeled.length === 0) {
-          throw new Error("사진에서 얼굴을 추출하지 못했습니다. 등록 사진 품질을 확인해 주세요.");
-        }
-        matcherRef.current = new faceapi.FaceMatcher(labeled, MATCH_THRESHOLD);
-
-        // 카메라 시작
-        setStatus("카메라 준비 중…");
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
-          audio: false,
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play().catch(() => {});
-        }
-        setStage("ready");
-        setStatus("얼굴을 카메라에 비춰 주세요");
-        runningRef.current = true;
-        loop(faceapi, opt);
-      } catch (e) {
-        if (cancelled) return;
-        setStage("error");
-        setError(e instanceof Error ? e.message : "초기화 실패");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      runningRef.current = false;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getIdToken]);
 
   // 인식 루프
   const loop = useCallback(
@@ -216,6 +125,131 @@ export default function FaceAttendance() {
     [checkin]
   );
 
+  // 카메라 시작 (권한 요청). 성공 시 preview 표시 + 준비되면 루프 시작.
+  const startCamera = useCallback(async (): Promise<boolean> => {
+    setCamError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+      // 모델·매처가 이미 준비됐으면 루프 시작
+      if (matcherRef.current && faceApiRef.current && optRef.current && !runningRef.current) {
+        runningRef.current = true;
+        setStage("ready");
+        setStatus("얼굴을 카메라에 비춰 주세요");
+        loop(faceApiRef.current, optRef.current);
+      }
+      return true;
+    } catch (e: any) {
+      const name = e?.name || "";
+      setCamError(
+        name === "NotAllowedError" || name === "SecurityError"
+          ? "카메라 권한이 거부되었어요. 주소창의 카메라 아이콘(또는 브라우저 설정)에서 '허용'으로 바꾼 뒤 다시 시도해 주세요."
+          : name === "NotFoundError" || name === "OverconstrainedError"
+          ? "카메라를 찾을 수 없어요. 카메라 연결을 확인해 주세요."
+          : name === "NotReadableError"
+          ? "다른 앱이 카메라를 사용 중이에요. 해당 앱을 닫고 다시 시도해 주세요."
+          : e?.message || "카메라를 열 수 없어요."
+      );
+      return false;
+    }
+  }, [loop]);
+
+  // 초기화: 카메라 먼저 → 모델 → 등록 얼굴 디스크립터
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // 1) 카메라 먼저 켜서 즉시 프리뷰 + 권한 요청
+      await startCamera();
+      if (cancelled) return;
+      try {
+        // 2) 라이브러리 + 모델
+        setStage("models");
+        setStatus("얼굴인식 모델 불러오는 중…");
+        const faceapi = await loadFaceApi();
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+        ]);
+        if (cancelled) return;
+        faceApiRef.current = faceapi;
+
+        // 3) 등록 얼굴 → 디스크립터
+        setStage("faces");
+        setStatus("등록된 얼굴 불러오는 중…");
+        const token = await getIdToken();
+        const res = await fetch("/api/crm/members/faces", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "등록 얼굴 조회 실패");
+        const faces: FaceRow[] = (data.faces ?? []).filter((f: FaceRow) => f.face_image_data);
+        if (cancelled) return;
+
+        const opt = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 });
+        optRef.current = opt;
+        const labeled: any[] = [];
+        let skipped = 0;
+        setProgress({ done: 0, total: faces.length, skipped: 0 });
+        for (let i = 0; i < faces.length; i++) {
+          if (cancelled) return;
+          const f = faces[i];
+          try {
+            const img = new Image();
+            img.src = f.face_image_data as string;
+            await img.decode();
+            const det = await faceapi
+              .detectSingleFace(img, opt)
+              .withFaceLandmarks()
+              .withFaceDescriptor();
+            if (det?.descriptor) {
+              labeled.push(new faceapi.LabeledFaceDescriptors(String(f.id), [det.descriptor]));
+              nameMapRef.current.set(f.id, f.name);
+            } else {
+              skipped++;
+            }
+          } catch {
+            skipped++;
+          }
+          setProgress({ done: i + 1, total: faces.length, skipped });
+        }
+        if (cancelled) return;
+        if (labeled.length === 0) {
+          throw new Error("사진에서 얼굴을 추출하지 못했습니다. 등록 사진 품질을 확인해 주세요.");
+        }
+        matcherRef.current = new faceapi.FaceMatcher(labeled, MATCH_THRESHOLD);
+
+        // 4) 카메라가 켜져 있으면 루프 시작 (아니면 재시도 성공 시 startCamera 가 시작)
+        if (streamRef.current && !runningRef.current) {
+          runningRef.current = true;
+          setStage("ready");
+          setStatus("얼굴을 카메라에 비춰 주세요");
+          loop(faceapi, opt);
+        }
+      } catch (e) {
+        if (cancelled) return;
+        setStage("error");
+        setError(e instanceof Error ? e.message : "초기화 실패");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      runningRef.current = false;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getIdToken, startCamera]);
+
   // 인식 성공 배너 자동 사라짐
   useEffect(() => {
     if (!lastHit) return;
@@ -235,8 +269,8 @@ export default function FaceAttendance() {
           playsInline
           className="w-full h-full object-cover scale-x-[-1]"
         />
-        {stage !== "ready" && stage !== "error" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-white text-center px-6">
+        {!camError && stage !== "ready" && stage !== "error" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white text-center px-6">
             <div className="text-[15px] font-semibold mb-2">{status}</div>
             {stage === "faces" && progress.total > 0 && (
               <>
@@ -251,7 +285,18 @@ export default function FaceAttendance() {
             )}
           </div>
         )}
-        {stage === "error" && (
+        {camError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 text-center px-6 gap-3">
+            <div className="text-[14px] font-semibold text-red-300 leading-relaxed">{camError}</div>
+            <button
+              onClick={() => startCamera()}
+              className="px-5 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[14px] font-bold hover:bg-[#5a6932]"
+            >
+              카메라 다시 시도
+            </button>
+          </div>
+        )}
+        {!camError && stage === "error" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-center px-6">
             <div className="text-[14px] font-semibold text-red-300">{error}</div>
           </div>
