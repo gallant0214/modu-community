@@ -64,7 +64,7 @@ export async function GET(
   // 강사 개인 수업료(정산) 설정
   const { data: trainer } = await supabase
     .from("crm_center_members")
-    .select("commission_type, commission_rate, commission_tiers, base_salary, employment_type")
+    .select("commission_type, commission_rate, commission_tiers, base_salary, employment_type, cash_pay_enabled, cash_pay_won, commission_bonuses")
     .eq("id", trainerId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -139,13 +139,30 @@ export async function GET(
   }
   const commissionPayout = Math.round((revenue * effectiveRate) / 100);
   const baseSalary = Math.max(0, Number(trainer?.base_salary ?? 0));
-  const totalPay = baseSalary + commissionPayout;
 
-  // 프리랜서(사업소득)는 3.3% 원천징수 후 실지급
+  // 커미션(성과급): 조건 달성 시 보너스 가산 (metric: revenue=월매출 / sessions=이번달 진행세션)
+  type Bonus = { metric: string; gte: number; bonus_won: number };
+  const bonuses: Bonus[] = Array.isArray(trainer?.commission_bonuses)
+    ? (trainer!.commission_bonuses as Bonus[])
+    : [];
+  const achievedBonuses = bonuses.filter((b) => {
+    const actual = b.metric === "sessions" ? sessionCount : revenue;
+    return actual >= (Number(b.gte) || 0);
+  });
+  const bonusPayout = achievedBonuses.reduce((s, b) => s + Math.max(0, Number(b.bonus_won) || 0), 0);
+
+  // 현금 지급 (3.3% 원천징수 대상 아님)
+  const cashEnabled = !!trainer?.cash_pay_enabled;
+  const cashPay = cashEnabled ? Math.max(0, Number(trainer?.cash_pay_won ?? 0)) : 0;
+
+  const totalPay = baseSalary + commissionPayout + bonusPayout + cashPay;
+
+  // 프리랜서(사업소득)는 3.3% 원천징수 후 실지급. 단 현금 지급분은 원천징수 제외
   const employmentType = (trainer?.employment_type as string) ?? null;
   const isFreelance = employmentType === "freelance";
   const WITHHOLDING_RATE = 0.033; // 소득세 3% + 지방소득세 0.3%
-  const withholdingTax = isFreelance ? Math.round(totalPay * WITHHOLDING_RATE) : 0;
+  const taxableForWithholding = Math.max(0, totalPay - cashPay);
+  const withholdingTax = isFreelance ? Math.round(taxableForWithholding * WITHHOLDING_RATE) : 0;
   const netPay = totalPay - withholdingTax;
 
   return NextResponse.json({
@@ -164,6 +181,11 @@ export async function GET(
       payout: commissionPayout,
     },
     base_salary: baseSalary,
+    bonuses,
+    achieved_bonuses: achievedBonuses,
+    bonus_payout: bonusPayout,
+    cash_pay_enabled: cashEnabled,
+    cash_pay: cashPay,
     total_pay: totalPay,
     employment_type: employmentType,
     is_freelance: isFreelance,

@@ -1264,6 +1264,9 @@ export type Database = {
           commission_rate: number
           commission_tiers: unknown
           base_salary: number
+          cash_pay_enabled: boolean
+          cash_pay_won: number
+          commission_bonuses: Json
           created_at: string
           updated_at: string
         }
@@ -1288,6 +1291,9 @@ export type Database = {
           commission_rate?: number
           commission_tiers?: unknown
           base_salary?: number
+          cash_pay_enabled?: boolean
+          cash_pay_won?: number
+          commission_bonuses?: Json
           created_at?: string
           updated_at?: string
         }
@@ -1312,6 +1318,9 @@ export type Database = {
           commission_rate?: number
           commission_tiers?: unknown
           base_salary?: number
+          cash_pay_enabled?: boolean
+          cash_pay_won?: number
+          commission_bonuses?: Json
           created_at?: string
           updated_at?: string
         }

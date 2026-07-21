@@ -26,7 +26,7 @@ export async function GET(
   const { data: member, error } = await supabase
     .from("crm_center_members")
     .select(
-      "id, firebase_uid, role, grade_id, display_name, phone, email, address, employment_status, employment_type, access_level, is_solo_owner, status, joined_at, left_at, commission_type, commission_rate, commission_tiers, base_salary"
+      "id, firebase_uid, role, grade_id, display_name, phone, email, address, employment_status, employment_type, access_level, is_solo_owner, status, joined_at, left_at, commission_type, commission_rate, commission_tiers, base_salary, cash_pay_enabled, cash_pay_won, commission_bonuses"
     )
     .eq("id", memberId)
     .eq("center_id", ctx.centerId)
@@ -81,6 +81,9 @@ export async function PATCH(
     commission_rate?: number;
     commission_tiers?: { upTo: number | null; rate: number }[];
     base_salary?: number;
+    cash_pay_enabled?: boolean;
+    cash_pay_won?: number;
+    commission_bonuses?: { metric: string; gte: number; bonus_won: number }[];
   };
   try {
     body = await request.json();
@@ -95,11 +98,31 @@ export async function PATCH(
     body.commission_type !== undefined ||
     body.commission_rate !== undefined ||
     body.commission_tiers !== undefined ||
-    body.base_salary !== undefined;
+    body.base_salary !== undefined ||
+    body.cash_pay_enabled !== undefined ||
+    body.cash_pay_won !== undefined ||
+    body.commission_bonuses !== undefined;
   if (touchesCommission) {
     const perms = await loadPermissionsForContext(ctx);
     if (!perms["sales.commission_edit"]) {
       return NextResponse.json({ error: "수업료 설정 권한이 없습니다" }, { status: 403 });
+    }
+    if (body.cash_pay_enabled !== undefined) {
+      patch.cash_pay_enabled = !!body.cash_pay_enabled;
+    }
+    if (body.cash_pay_won !== undefined) {
+      patch.cash_pay_won = Math.max(0, Math.floor(Number(body.cash_pay_won) || 0));
+    }
+    if (body.commission_bonuses !== undefined) {
+      const arr = Array.isArray(body.commission_bonuses) ? body.commission_bonuses : [];
+      patch.commission_bonuses = arr
+        .filter((b) => b && (b.metric === "revenue" || b.metric === "sessions"))
+        .map((b) => ({
+          metric: b.metric === "sessions" ? "sessions" : "revenue",
+          gte: Math.max(0, Math.floor(Number(b.gte) || 0)),
+          bonus_won: Math.max(0, Math.floor(Number(b.bonus_won) || 0)),
+        }))
+        .slice(0, 20);
     }
     if (body.base_salary !== undefined) {
       const s = Math.max(0, Math.floor(Number(body.base_salary) || 0));

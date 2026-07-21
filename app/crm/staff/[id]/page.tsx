@@ -33,6 +33,9 @@ interface StaffMember {
   commission_rate: number;
   commission_tiers: { upTo: number | null; rate: number }[];
   base_salary: number;
+  cash_pay_enabled?: boolean;
+  cash_pay_won?: number;
+  commission_bonuses?: { metric: string; gte: number; bonus_won: number }[];
 }
 
 interface Grade {
@@ -404,10 +407,52 @@ function CommissionSection({
   const addTier = () => setTiers((prev) => [...prev, { upToMan: "", rate: "" }]);
   const removeTier = (i: number) => setTiers((prev) => prev.filter((_, idx) => idx !== i));
 
+  // 현금 지급 (3.3% 원천징수 대상 아님)
+  const [cashEnabled, setCashEnabled] = useState(!!member.cash_pay_enabled);
+  const [cashWon, setCashWon] = useState(String(member.cash_pay_won ?? 0));
+
+  // 커미션(성과급) 조건 — 달성 시 급여 가산
+  interface BonusInput {
+    metric: "revenue" | "sessions";
+    gte: string; // revenue=만원 / sessions=건
+    bonusWon: string; // 원
+  }
+  const [bonuses, setBonuses] = useState<BonusInput[]>(() =>
+    (member.commission_bonuses ?? []).map((b) => ({
+      metric: b.metric === "sessions" ? "sessions" : "revenue",
+      gte:
+        b.metric === "sessions"
+          ? String(b.gte)
+          : String(Math.round((b.gte || 0) / 10000)),
+      bonusWon: String(b.bonus_won ?? 0),
+    }))
+  );
+  const setBonus = (i: number, patch: Partial<BonusInput>) =>
+    setBonuses((prev) => prev.map((b, idx) => (idx === i ? { ...b, ...patch } : b)));
+  const addBonus = () =>
+    setBonuses((prev) => [...prev, { metric: "revenue", gte: "", bonusWon: "" }]);
+  const removeBonus = (i: number) => setBonuses((prev) => prev.filter((_, idx) => idx !== i));
+
   const save = () => {
     const base = hasBase ? Math.max(0, Number(baseSalary) || 0) : 0;
+    const bonusPayload = bonuses
+      .filter((b) => b.gte.trim() !== "" && b.bonusWon.trim() !== "")
+      .map((b) => ({
+        metric: b.metric,
+        gte:
+          b.metric === "sessions"
+            ? Math.max(0, Math.floor(Number(b.gte) || 0))
+            : Math.round((Number(b.gte) || 0) * 10000),
+        bonus_won: Math.max(0, Math.floor(Number(b.bonusWon) || 0)),
+      }));
+    const common = {
+      base_salary: base,
+      cash_pay_enabled: cashEnabled,
+      cash_pay_won: cashEnabled ? Math.max(0, Number(cashWon) || 0) : 0,
+      commission_bonuses: bonusPayload,
+    };
     if (type === "fixed") {
-      onSave({ commission_type: "fixed", commission_rate: Number(rate) || 0, base_salary: base });
+      onSave({ ...common, commission_type: "fixed", commission_rate: Number(rate) || 0 });
     } else {
       const parsed = tiers
         .filter((t) => t.rate.trim() !== "")
@@ -415,7 +460,7 @@ function CommissionSection({
           upTo: t.upToMan.trim() === "" ? null : Math.round((Number(t.upToMan) || 0) * 10000),
           rate: Number(t.rate) || 0,
         }));
-      onSave({ commission_type: "tiered", commission_tiers: parsed, base_salary: base });
+      onSave({ ...common, commission_type: "tiered", commission_tiers: parsed });
     }
   };
 
@@ -544,6 +589,98 @@ function CommissionSection({
           </p>
         </div>
       )}
+
+      {/* 커미션(성과급) 조건 — 달성 시 급여 가산 */}
+      <div className="mt-4 pt-4 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+        <div className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-300 mb-1">
+          커미션 (성과급)
+        </div>
+        <p className="text-[11.5px] text-[#A89B80] mb-2.5">
+          조건을 달성하면 그 달 급여에 보너스가 더해져요. (예: 월 매출 1,000만원 이상 → +30만원)
+        </p>
+        <div className="space-y-2">
+          {bonuses.map((b, i) => (
+            <div key={i} className="flex items-center gap-1.5 flex-wrap">
+              <select
+                value={b.metric}
+                onChange={(e) => setBonus(i, { metric: e.target.value as "revenue" | "sessions" })}
+                className={`${crmInputClass} max-w-[120px]`}
+              >
+                <option value="revenue">월 매출</option>
+                <option value="sessions">진행 세션</option>
+              </select>
+              <input
+                type="number"
+                min={0}
+                value={b.gte}
+                onChange={(e) => setBonus(i, { gte: e.target.value })}
+                placeholder="0"
+                className={`${crmInputClass} max-w-[90px]`}
+              />
+              <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap">
+                {b.metric === "sessions" ? "건 이상 →" : "만원 이상 →"}
+              </span>
+              <div className="flex items-center gap-1">
+                <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">+</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={b.bonusWon ? Number(b.bonusWon).toLocaleString() : ""}
+                  onChange={(e) => setBonus(i, { bonusWon: e.target.value.replace(/[^\d]/g, "") })}
+                  placeholder="0"
+                  className={`${crmInputClass} max-w-[110px]`}
+                />
+                <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">원</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeBonus(i)}
+                className="ml-auto shrink-0 px-2 py-0.5 rounded-md border border-red-200 dark:border-red-900/60 text-[12px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
+              >
+                삭제
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={addBonus}
+          className="mt-2 text-[12.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+        >
+          + 커미션 조건 추가
+        </button>
+      </div>
+
+      {/* 현금 지급 — 3.3% 원천징수 대상 아님 */}
+      <div className="mt-4 pt-4 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+        <label className="flex items-center gap-2 cursor-pointer mb-2">
+          <input
+            type="checkbox"
+            checked={cashEnabled}
+            onChange={(e) => setCashEnabled(e.target.checked)}
+            className="w-4 h-4 accent-[#6B7B3A]"
+          />
+          <span className="text-[13px] font-medium text-[#3A342A] dark:text-zinc-300">
+            현금 지급 있음 (월)
+          </span>
+        </label>
+        {cashEnabled && (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={cashWon ? Number(cashWon).toLocaleString() : ""}
+              onChange={(e) => setCashWon(e.target.value.replace(/[^\d]/g, ""))}
+              placeholder="0"
+              className={`${crmInputClass} max-w-[180px]`}
+            />
+            <span className="text-[14px] text-[#6B5D47] dark:text-zinc-400">원 / 월</span>
+          </div>
+        )}
+        <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
+          현금 지급액은 <strong>3.3% 원천징수 대상이 아니에요</strong>. 총 지급액에는 더해지고, 세금 계산에서는 제외됩니다.
+        </p>
+      </div>
 
       <button
         onClick={save}
