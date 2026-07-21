@@ -83,7 +83,13 @@ export async function PATCH(
     base_salary?: number;
     cash_pay_enabled?: boolean;
     cash_pay_won?: number;
-    commission_bonuses?: { metric: string; gte: number; bonus_won: number }[];
+    commission_bonuses?: {
+      metric: string;
+      gte: number;
+      reward_type?: string;
+      bonus_won?: number;
+      bonus_percent?: number;
+    }[];
   };
   try {
     body = await request.json();
@@ -117,11 +123,19 @@ export async function PATCH(
       const arr = Array.isArray(body.commission_bonuses) ? body.commission_bonuses : [];
       patch.commission_bonuses = arr
         .filter((b) => b && (b.metric === "revenue" || b.metric === "sessions"))
-        .map((b) => ({
-          metric: b.metric === "sessions" ? "sessions" : "revenue",
-          gte: Math.max(0, Math.floor(Number(b.gte) || 0)),
-          bonus_won: Math.max(0, Math.floor(Number(b.bonus_won) || 0)),
-        }))
+        .map((b) => {
+          const rewardType = b.reward_type === "percent" ? "percent" : "won";
+          return {
+            metric: b.metric === "sessions" ? "sessions" : "revenue",
+            gte: Math.max(0, Math.floor(Number(b.gte) || 0)),
+            reward_type: rewardType,
+            bonus_won: rewardType === "won" ? Math.max(0, Math.floor(Number(b.bonus_won) || 0)) : 0,
+            bonus_percent:
+              rewardType === "percent"
+                ? Math.max(0, Math.min(1000, Number(b.bonus_percent) || 0))
+                : 0,
+          };
+        })
         .slice(0, 20);
     }
     if (body.base_salary !== undefined) {

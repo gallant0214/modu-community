@@ -35,7 +35,13 @@ interface StaffMember {
   base_salary: number;
   cash_pay_enabled?: boolean;
   cash_pay_won?: number;
-  commission_bonuses?: { metric: string; gte: number; bonus_won: number }[];
+  commission_bonuses?: {
+    metric: string;
+    gte: number;
+    reward_type?: string;
+    bonus_won?: number;
+    bonus_percent?: number;
+  }[];
 }
 
 interface Grade {
@@ -411,11 +417,13 @@ function CommissionSection({
   const [cashEnabled, setCashEnabled] = useState(!!member.cash_pay_enabled);
   const [cashWon, setCashWon] = useState(String(member.cash_pay_won ?? 0));
 
-  // 커미션(성과급) 조건 — 달성 시 급여 가산
+  // 커미션(성과급) 조건 — 달성 시 급여 가산 (정액 원 또는 수업료의 %)
   interface BonusInput {
     metric: "revenue" | "sessions";
     gte: string; // revenue=만원 / sessions=건
+    rewardType: "won" | "percent";
     bonusWon: string; // 원
+    bonusPercent: string; // 수업료 대비 %
   }
   const [bonuses, setBonuses] = useState<BonusInput[]>(() =>
     (member.commission_bonuses ?? []).map((b) => ({
@@ -424,26 +432,38 @@ function CommissionSection({
         b.metric === "sessions"
           ? String(b.gte)
           : String(Math.round((b.gte || 0) / 10000)),
+      rewardType: b.reward_type === "percent" ? "percent" : "won",
       bonusWon: String(b.bonus_won ?? 0),
+      bonusPercent: String(b.bonus_percent ?? 0),
     }))
   );
   const setBonus = (i: number, patch: Partial<BonusInput>) =>
     setBonuses((prev) => prev.map((b, idx) => (idx === i ? { ...b, ...patch } : b)));
   const addBonus = () =>
-    setBonuses((prev) => [...prev, { metric: "revenue", gte: "", bonusWon: "" }]);
+    setBonuses((prev) => [
+      ...prev,
+      { metric: "revenue", gte: "", rewardType: "won", bonusWon: "", bonusPercent: "" },
+    ]);
   const removeBonus = (i: number) => setBonuses((prev) => prev.filter((_, idx) => idx !== i));
 
   const save = () => {
     const base = hasBase ? Math.max(0, Number(baseSalary) || 0) : 0;
     const bonusPayload = bonuses
-      .filter((b) => b.gte.trim() !== "" && b.bonusWon.trim() !== "")
+      .filter(
+        (b) =>
+          b.gte.trim() !== "" &&
+          (b.rewardType === "percent" ? b.bonusPercent.trim() !== "" : b.bonusWon.trim() !== "")
+      )
       .map((b) => ({
         metric: b.metric,
         gte:
           b.metric === "sessions"
             ? Math.max(0, Math.floor(Number(b.gte) || 0))
             : Math.round((Number(b.gte) || 0) * 10000),
-        bonus_won: Math.max(0, Math.floor(Number(b.bonusWon) || 0)),
+        reward_type: b.rewardType,
+        bonus_won: b.rewardType === "won" ? Math.max(0, Math.floor(Number(b.bonusWon) || 0)) : 0,
+        bonus_percent:
+          b.rewardType === "percent" ? Math.max(0, Math.min(1000, Number(b.bonusPercent) || 0)) : 0,
       }));
     const common = {
       base_salary: base,
@@ -596,7 +616,9 @@ function CommissionSection({
           커미션 (성과급)
         </div>
         <p className="text-[11.5px] text-[#A89B80] mb-2.5">
-          조건을 달성하면 그 달 급여에 보너스가 더해져요. (예: 월 매출 1,000만원 이상 → +30만원)
+          조건을 달성하면 그 달 급여에 보너스가 더해져요. 정액(원) 또는 수업료의 % 중 선택.
+          <br />
+          예: 진행 세션 100건 이상 → 수업료 +10% · 월 매출 1,000만원 이상 → +30만원
         </p>
         <div className="space-y-2">
           {bonuses.map((b, i) => (
@@ -604,7 +626,7 @@ function CommissionSection({
               <select
                 value={b.metric}
                 onChange={(e) => setBonus(i, { metric: e.target.value as "revenue" | "sessions" })}
-                className={`${crmInputClass} max-w-[120px]`}
+                className={`${crmInputClass} max-w-[110px]`}
               >
                 <option value="revenue">월 매출</option>
                 <option value="sessions">진행 세션</option>
@@ -615,23 +637,44 @@ function CommissionSection({
                 value={b.gte}
                 onChange={(e) => setBonus(i, { gte: e.target.value })}
                 placeholder="0"
-                className={`${crmInputClass} max-w-[90px]`}
+                className={`${crmInputClass} max-w-[80px]`}
               />
               <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap">
                 {b.metric === "sessions" ? "건 이상 →" : "만원 이상 →"}
               </span>
-              <div className="flex items-center gap-1">
-                <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">+</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={b.bonusWon ? Number(b.bonusWon).toLocaleString() : ""}
-                  onChange={(e) => setBonus(i, { bonusWon: e.target.value.replace(/[^\d]/g, "") })}
-                  placeholder="0"
-                  className={`${crmInputClass} max-w-[110px]`}
-                />
-                <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">원</span>
-              </div>
+              <select
+                value={b.rewardType}
+                onChange={(e) => setBonus(i, { rewardType: e.target.value as "won" | "percent" })}
+                className={`${crmInputClass} max-w-[110px]`}
+              >
+                <option value="won">+ 정액(원)</option>
+                <option value="percent">+ 수업료 %</option>
+              </select>
+              {b.rewardType === "percent" ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    value={b.bonusPercent}
+                    onChange={(e) => setBonus(i, { bonusPercent: e.target.value })}
+                    placeholder="0"
+                    className={`${crmInputClass} max-w-[80px]`}
+                  />
+                  <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">%</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={b.bonusWon ? Number(b.bonusWon).toLocaleString() : ""}
+                    onChange={(e) => setBonus(i, { bonusWon: e.target.value.replace(/[^\d]/g, "") })}
+                    placeholder="0"
+                    className={`${crmInputClass} max-w-[110px]`}
+                  />
+                  <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">원</span>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => removeBonus(i)}

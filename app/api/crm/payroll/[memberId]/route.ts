@@ -140,8 +140,15 @@ export async function GET(
   const commissionPayout = Math.round((revenue * effectiveRate) / 100);
   const baseSalary = Math.max(0, Number(trainer?.base_salary ?? 0));
 
-  // 커미션(성과급): 조건 달성 시 보너스 가산 (metric: revenue=월매출 / sessions=이번달 진행세션)
-  type Bonus = { metric: string; gte: number; bonus_won: number };
+  // 커미션(성과급): 조건 달성 시 보너스 가산.
+  // metric: revenue=월매출 / sessions=이번달 진행세션. reward_type: won=정액 / percent=수업료의 %
+  type Bonus = {
+    metric: string;
+    gte: number;
+    reward_type?: string;
+    bonus_won?: number;
+    bonus_percent?: number;
+  };
   const bonuses: Bonus[] = Array.isArray(trainer?.commission_bonuses)
     ? (trainer!.commission_bonuses as Bonus[])
     : [];
@@ -149,7 +156,12 @@ export async function GET(
     const actual = b.metric === "sessions" ? sessionCount : revenue;
     return actual >= (Number(b.gte) || 0);
   });
-  const bonusPayout = achievedBonuses.reduce((s, b) => s + Math.max(0, Number(b.bonus_won) || 0), 0);
+  const bonusPayout = achievedBonuses.reduce((s, b) => {
+    if (b.reward_type === "percent") {
+      return s + Math.round((commissionPayout * (Number(b.bonus_percent) || 0)) / 100);
+    }
+    return s + Math.max(0, Number(b.bonus_won) || 0);
+  }, 0);
 
   // 현금 지급 (3.3% 원천징수 대상 아님)
   const cashEnabled = !!trainer?.cash_pay_enabled;
