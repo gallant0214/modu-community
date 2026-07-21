@@ -390,7 +390,7 @@ export default function CrmMemberDetailPage() {
         <DetailSection title="기본 정보">
           <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="name" label="이름" value={member.name} type="text" onSaved={load} />
           <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="phone" label="연락처" value={member.phone} type="text" formatDisplay={(v) => (v ? formatPhone(String(v)) : "—")} onSaved={load} />
-          <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="gender" label="성별" value={member.gender} type="select" options={[{ v: "M", l: "남" }, { v: "F", l: "여" }, { v: "N", l: "기타" }]} formatDisplay={(v) => (v ? GENDER_LABEL[v as "M" | "F" | "N"] ?? String(v) : "—")} onSaved={load} />
+          <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="gender" label="성별" value={member.gender} type="select" options={[{ v: "M", l: "남" }, { v: "F", l: "여" }]} formatDisplay={(v) => (v ? GENDER_LABEL[v as "M" | "F" | "N"] ?? String(v) : "—")} onSaved={load} />
           <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="birth" label="생년월일" value={member.birth} type="date" onSaved={load} />
           <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="email" label="이메일" value={member.email} type="text" onSaved={load} />
           <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="address" label="주소" value={member.address} type="text" onSaved={load} />

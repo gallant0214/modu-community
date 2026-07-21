@@ -52,7 +52,7 @@ interface MemberInfo {
   gender: string | null;
 }
 
-const GENDER_OPT = ["남", "여", "기타"] as const;
+const GENDER_OPT = ["남", "여"] as const;
 
 export default function CrmContractSignNewPage() {
   const router = useRouter();
@@ -146,7 +146,7 @@ export default function CrmContractSignNewPage() {
             if (!phone && m.phone) setPhone(formatPhone(m.phone));
             if (!birth && m.birth) setBirth(m.birth);
             if (!gender && m.gender) {
-              setGender(m.gender === "M" ? "남" : m.gender === "F" ? "여" : "기타");
+              setGender(m.gender === "M" ? "남" : m.gender === "F" ? "여" : "");
             }
           }
         }
