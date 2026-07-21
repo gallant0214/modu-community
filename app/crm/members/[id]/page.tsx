@@ -938,8 +938,9 @@ function FacePhotoUpload({
           aria-label="사진 확대 보기"
           className="relative w-full aspect-square rounded-lg overflow-hidden border-2 border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center cursor-zoom-in hover:border-[#6B7B3A]/60 transition-colors"
         >
+          {/* absolute → 이미지 실제 크기가 박스 폭 계산에 영향 못 주게. 박스는 w-full(버튼행 폭)로만 결정 */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={current} alt="얼굴" className="w-full h-full object-cover" />
+          <img src={current} alt="얼굴" className="absolute inset-0 w-full h-full object-cover" />
           {busy && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-[10px]">
               처리중…
