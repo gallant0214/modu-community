@@ -2991,7 +2991,7 @@ function UsageIssueModal({
   const [attendanceMileageEarn, setAttendanceMileageEarn] = useState(0);
   const [mileageUse, setMileageUse] = useState(0);
   const [discountWon, setDiscountWon] = useState(0);
-  const [vatIncluded, setVatIncluded] = useState(false);
+  const [vatIncluded, setVatIncluded] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "etc">("card");
   const [paymentCustom, setPaymentCustom] = useState("");
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -3024,7 +3024,7 @@ function UsageIssueModal({
       setMileageEarn(0);
       setMileageUsable(true);
       setMileageUse(0);
-      setVatIncluded(false);
+      setVatIncluded(true);
       setPaymentMethod("card");
       setPaymentCustom("");
       setStartDate(new Date().toISOString().slice(0, 10));
@@ -3544,7 +3544,7 @@ function PassIssueModal({
   const [totalSessions, setTotalSessions] = useState(10);
   const [sessionMinutes, setSessionMinutes] = useState(50);
   const [priceWon, setPriceWon] = useState(0);
-  const [vatIncluded, setVatIncluded] = useState(false);
+  const [vatIncluded, setVatIncluded] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "etc">("card");
   const [paymentCustom, setPaymentCustom] = useState("");
   const [issuedAt, setIssuedAt] = useState(() => new Date().toISOString().slice(0, 10));
