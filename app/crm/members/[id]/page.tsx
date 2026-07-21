@@ -961,7 +961,7 @@ function FacePhotoUpload({
         <FaceZoomModal src={current} onClose={() => setZoomOpen(false)} />
       )}
       {canEdit && (
-        <div className="flex items-center gap-1">
+        <div className="flex flex-col items-center gap-1 w-full">
           <input
             ref={inputRef}
             type="file"
@@ -974,6 +974,8 @@ function FacePhotoUpload({
               e.target.value = "";
             }}
           />
+          {/* 기본 버튼 2개가 사진 박스 폭을 결정 → 사진 유무와 무관하게 동일 크기 유지 */}
+          <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
@@ -1016,12 +1018,13 @@ function FacePhotoUpload({
             </svg>
             얼굴 촬영
           </button>
+          </div>
           {current && (
             <button
               type="button"
               onClick={remove}
               disabled={busy}
-              className="px-2 py-1 rounded-full text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+              className="px-2 py-0.5 rounded-full text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
             >
               삭제
             </button>
