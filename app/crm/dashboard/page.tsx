@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
-import { CrmLineChart } from "../_components/crm-line-chart";
 import { CrmDonutChart } from "../_components/crm-donut-chart";
 import { PAYMENT_METHOD_LABEL, formatWon } from "../_components/crm-labels";
 import { CustomerStatusView } from "./_components/customer-status-view";
 import { MemberConversionCard } from "./_components/member-conversion-card";
 import { WeeklyAttendanceChart } from "./_components/weekly-attendance-chart";
+import { DualLineChart } from "./_components/dual-line-chart";
 
 interface TrendPoint {
   ym: string;
@@ -618,14 +618,18 @@ export default function CrmDashboardPage() {
               <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
                 월별 PT매출 추이 (12개월)
               </h3>
-              <CrmLineChart
-                points={trend.map((m) => ({ label: m.ym.slice(2).replace("-", "/"), value: m.revenue }))}
-                overlay={trend.map((m) => ({ label: m.ym.slice(2).replace("-", "/"), value: m.revenuePrev ?? 0 }))}
-                dates={trend.map((m) => m.ym)}
-                overlayDates={trend.map((m) => `${Number(m.ym.slice(0, 4)) - 1}${m.ym.slice(4)}`)}
-                overlayLabel="작년 동월"
-                primaryLabel="올해"
-                overlaySolid
+              <DualLineChart
+                xLabels={trend.map((m) => m.ym.slice(2).replace("-", "/"))}
+                primary={{
+                  label: "올해",
+                  values: trend.map((m) => m.revenue),
+                  dates: trend.map((m) => m.ym),
+                }}
+                secondary={{
+                  label: "작년 동월",
+                  values: trend.map((m) => m.revenuePrev ?? 0),
+                  dates: trend.map((m) => `${Number(m.ym.slice(0, 4)) - 1}${m.ym.slice(4)}`),
+                }}
                 unit="원"
               />
             </div>
@@ -633,20 +637,18 @@ export default function CrmDashboardPage() {
               <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
                 월별 이용권 매출 추이 (12개월)
               </h3>
-              <CrmLineChart
-                points={trend.map((m) => ({
-                  label: m.ym.slice(2).replace("-", "/"),
-                  value: m.membershipRevenue ?? 0,
-                }))}
-                overlay={trend.map((m) => ({
-                  label: m.ym.slice(2).replace("-", "/"),
-                  value: m.membershipRevenuePrev ?? 0,
-                }))}
-                dates={trend.map((m) => m.ym)}
-                overlayDates={trend.map((m) => `${Number(m.ym.slice(0, 4)) - 1}${m.ym.slice(4)}`)}
-                overlayLabel="작년 동월"
-                primaryLabel="올해"
-                overlaySolid
+              <DualLineChart
+                xLabels={trend.map((m) => m.ym.slice(2).replace("-", "/"))}
+                primary={{
+                  label: "올해",
+                  values: trend.map((m) => m.membershipRevenue ?? 0),
+                  dates: trend.map((m) => m.ym),
+                }}
+                secondary={{
+                  label: "작년 동월",
+                  values: trend.map((m) => m.membershipRevenuePrev ?? 0),
+                  dates: trend.map((m) => `${Number(m.ym.slice(0, 4)) - 1}${m.ym.slice(4)}`),
+                }}
                 unit="원"
               />
             </div>
