@@ -161,14 +161,14 @@ export default function TouchAttendancePage() {
   };
 
   const display = (
-    <div className="h-[76px] rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 flex items-center justify-center">
-      <span className="text-[40px] font-bold tracking-[0.2em] text-[#2A251D] dark:text-zinc-100">
-        {num || <span className="text-[#C9BEA6] tracking-normal text-[20px] font-medium">출석번호</span>}
+    <div className="h-[clamp(66px,11vmin,140px)] rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 flex items-center justify-center">
+      <span className="text-[clamp(32px,6.5vmin,80px)] font-bold tracking-[0.2em] text-[#2A251D] dark:text-zinc-100">
+        {num || <span className="text-[#C9BEA6] tracking-normal text-[clamp(18px,3vmin,34px)] font-medium">출석번호</span>}
       </span>
     </div>
   );
   const keypad = (
-    <div className="grid grid-cols-3 gap-2.5">
+    <div className="grid grid-cols-3 gap-[clamp(8px,1.6vmin,20px)]">
       {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
         <KeyBtn key={d} onClick={() => press(d)}>{d}</KeyBtn>
       ))}
@@ -181,8 +181,8 @@ export default function TouchAttendancePage() {
     <button
       onClick={submit}
       disabled={busy || !num.trim()}
-      className={`w-full rounded-2xl bg-[#6B7B3A] text-white text-[20px] font-bold hover:bg-[#5a6932] disabled:opacity-40 ${
-        landscape ? "flex-1 py-6" : "py-5"
+      className={`w-full rounded-2xl bg-[#6B7B3A] text-white text-[clamp(18px,3.4vmin,38px)] font-bold hover:bg-[#5a6932] disabled:opacity-40 ${
+        landscape ? "flex-1 py-[clamp(20px,5vmin,60px)]" : "py-[clamp(16px,2.8vmin,34px)]"
       }`}
     >
       {busy ? "처리 중…" : "출석하기"}
@@ -225,7 +225,7 @@ export default function TouchAttendancePage() {
       {/* 결과 토스트 */}
       {result && (
         <div
-          className={`mb-5 w-full px-5 py-4 rounded-2xl border-2 text-center ${landscape ? "max-w-[760px]" : "max-w-[420px]"}
+          className={`mb-5 w-full px-5 py-4 rounded-2xl border-2 text-center ${landscape ? "max-w-[min(96vw,1120px)]" : "max-w-[min(92vw,560px)]"}
             ${result.kind === "success"
               ? result.duplicate
                 ? "border-[#B47B2A] bg-amber-50 text-[#B47B2A]"
@@ -253,7 +253,7 @@ export default function TouchAttendancePage() {
 
       {candidates ? (
         /* 동일 번호 여러 명 → 이름 선택 */
-        <div className={`w-full ${landscape ? "max-w-[640px]" : "max-w-[420px]"}`}>
+        <div className={`w-full ${landscape ? "max-w-[min(96vw,900px)]" : "max-w-[min(92vw,560px)]"}`}>
           <div className="mb-3 text-center text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
             본인 이름을 선택해 주세요
           </div>
@@ -282,19 +282,19 @@ export default function TouchAttendancePage() {
         </div>
       ) : landscape ? (
         /* 가로형: 좌 키패드 / 우 표시·출석하기 */
-        <div className="w-full max-w-[760px] flex flex-row items-stretch gap-6">
-          <div className="w-[320px] shrink-0">{keypad}</div>
-          <div className="flex-1 flex flex-col justify-center gap-4">
+        <div className="w-full max-w-[min(96vw,1120px)] flex flex-row items-stretch gap-[clamp(16px,4vmin,56px)]">
+          <div className="w-[min(46vw,520px)] shrink-0">{keypad}</div>
+          <div className="flex-1 flex flex-col justify-center gap-[clamp(12px,2.5vmin,28px)]">
             {display}
             {submitBtn}
           </div>
         </div>
       ) : (
         /* 세로형: 표시 → 키패드 → 출석하기 */
-        <div className="w-full max-w-[420px]">
-          <div className="mb-4">{display}</div>
+        <div className="w-full max-w-[min(92vw,560px)]">
+          <div className="mb-[clamp(12px,2vmin,24px)]">{display}</div>
           {keypad}
-          <div className="mt-3">{submitBtn}</div>
+          <div className="mt-[clamp(10px,1.8vmin,22px)]">{submitBtn}</div>
         </div>
       )}
     </div>
@@ -325,9 +325,9 @@ function KeyBtn({
   return (
     <button
       onClick={onClick}
-      className={`h-[68px] rounded-2xl text-[26px] font-bold select-none active:scale-95 transition-transform
+      className={`h-[clamp(56px,10vmin,128px)] rounded-2xl text-[clamp(22px,4.2vmin,46px)] font-bold select-none active:scale-95 transition-transform
         ${variant === "muted"
-          ? "bg-[#F1EADB] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-300 text-[18px]"
+          ? "bg-[#F1EADB] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-300 !text-[clamp(15px,2.8vmin,30px)]"
           : "bg-white dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 text-[#2A251D] dark:text-zinc-100 hover:border-[#6B7B3A]"
         }`}
     >
