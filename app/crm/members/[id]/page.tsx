@@ -1034,6 +1034,7 @@ function FaceCameraModal({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const aliveRef = useRef(true);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   // "blocked": 권한 차단 / "insecure": HTTPS 아님 / "notfound": 카메라 없음 / "other"
@@ -1044,10 +1045,20 @@ function FaceCameraModal({
     streamRef.current = null;
   }, []);
 
+  const attachToVideo = useCallback((stream: MediaStream) => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.srcObject = stream;
+    // autoPlay 로도 붙지만, 명시적 play + 성공/실패 모두 ready 처리로 확실히 미리보기 표시
+    v.play().then(() => setReady(true)).catch(() => setReady(true));
+  }, []);
+
   const startCamera = useCallback(async () => {
     setError("");
     setErrKind("");
     setReady(false);
+    // 이전 스트림이 남아 있으면 먼저 정리 (재시도/StrictMode 재실행 대비)
+    stopStream();
     // 보안 컨텍스트(HTTPS 또는 localhost)가 아니면 브라우저가 카메라 API 자체를 막는다
     if (typeof window !== "undefined" && window.isSecureContext === false) {
       setErrKind("insecure");
@@ -1064,12 +1075,13 @@ function FaceCameraModal({
         video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 1280 } },
         audio: false,
       });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+      // await 사이에 모달이 닫혔거나(StrictMode 재실행 포함) 하면 즉시 스트림 반납
+      if (!aliveRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
       }
-      setReady(true);
+      streamRef.current = stream;
+      attachToVideo(stream);
     } catch (e) {
       const name = e instanceof DOMException ? e.name : "";
       if (name === "NotAllowedError" || name === "SecurityError") {
@@ -1083,15 +1095,17 @@ function FaceCameraModal({
         setError("카메라를 열 수 없어요");
       }
     }
-  }, []);
+  }, [stopStream, attachToVideo]);
 
   useEffect(() => {
+    aliveRef.current = true;
     startCamera();
     const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      aliveRef.current = false;
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
       stopStream();
@@ -1136,8 +1150,10 @@ function FaceCameraModal({
             {/* 셀피처럼 좌우반전 미리보기 */}
             <video
               ref={videoRef}
+              autoPlay
               playsInline
               muted
+              onLoadedMetadata={() => setReady(true)}
               className="w-full h-full object-cover"
               style={{ transform: "scaleX(-1)" }}
             />
