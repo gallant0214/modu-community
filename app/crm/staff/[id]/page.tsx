@@ -525,7 +525,7 @@ function CommissionSection({
                 <button
                   type="button"
                   onClick={() => removeTier(i)}
-                  className="ml-auto text-[12px] text-red-600 hover:underline shrink-0"
+                  className="ml-auto shrink-0 px-2 py-0.5 rounded-md border border-red-200 dark:border-red-900/60 text-[12px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
                 >
                   삭제
                 </button>

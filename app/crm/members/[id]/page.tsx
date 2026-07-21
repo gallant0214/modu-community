@@ -698,7 +698,7 @@ function MemoSection({
                 onClick={() => {
                   if (confirm("메모를 삭제할까요?")) save("");
                 }}
-                className="text-[11.5px] text-red-600 dark:text-red-400 hover:underline"
+                className="px-2 py-0.5 rounded-md border border-red-200 dark:border-red-900/60 text-[11.5px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
               >
                 삭제
               </button>

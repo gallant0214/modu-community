@@ -587,7 +587,7 @@ function AutoMessageEditor({
                   <button
                     type="button"
                     onClick={() => { setCouponName(""); setCouponLink(""); }}
-                    className="text-[11.5px] font-semibold text-red-500 hover:underline"
+                    className="px-2 py-0.5 rounded-md border border-red-200 dark:border-red-900/60 text-[11.5px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
                   >
                     쿠폰 제거
                   </button>
