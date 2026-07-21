@@ -95,7 +95,6 @@ type ColKey =
   | "app"
   | "phone"
   | "registration_type"
-  | "registered_at"
   | "first_use_at"
   | "created_at"
   | "status"
@@ -116,7 +115,6 @@ const DEFAULT_COL_ORDER: ColKey[] = [
   "age",
   "phone",
   "registration_type",
-  "registered_at",
   "last_purchase_at",
   "last_attended_at",
   "status",
@@ -141,7 +139,6 @@ const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
   app: 72,
   phone: 132,
   registration_type: 96,
-  registered_at: 108,
   first_use_at: 108,
   created_at: 108,
   status: 78,
@@ -1355,14 +1352,6 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
       </span>
     ),
   },
-  registered_at: {
-    key: "registered_at",
-    label: "최근 등록일",
-    sortKey: "registered_at",
-    render: (m) => (
-      <span className="text-[#8C8270] dark:text-zinc-500">{m.registered_at ?? "—"}</span>
-    ),
-  },
   created_at: {
     key: "created_at",
     label: "가입일",
@@ -2186,7 +2175,6 @@ const LOG_ACTION_LABEL: Record<string, string> = {
   "member.update": "회원 정보 수정",
   "member.delete": "회원 삭제",
   "attendance.cancel": "출석 취소",
-  "member.face_register": "얼굴 등록",
   "members.bulk_hold": "회원 일괄 홀딩",
   "members.bulk_extend": "회원 일괄 기간 연장",
   "members.bulk_mileage": "회원 일괄 마일리지",
