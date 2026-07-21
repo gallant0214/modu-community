@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
+import FaceAttendance from "./face-attendance";
 
 interface MemberLite {
   id: number;
@@ -28,6 +29,7 @@ export default function TouchAttendancePage() {
   const [busy, setBusy] = useState(false);
   const [centerName, setCenterName] = useState("");
   const [mode, setMode] = useState<"portrait" | "landscape">("portrait");
+  const [recogMode, setRecogMode] = useState<"number" | "face">("number");
 
   // 가로/세로 레이아웃 기억
   useEffect(() => {
@@ -213,15 +215,38 @@ export default function TouchAttendancePage() {
         </button>
       </div>
 
-      <header className="mb-6 text-center">
+      <header className="mb-4 text-center">
         <h1 className="text-[26px] md:text-[30px] font-bold text-[#2A251D] dark:text-zinc-100">
           터치 출석
         </h1>
         <p className="mt-1.5 text-[14px] text-[#6B5D47] dark:text-zinc-400">
-          출석번호를 누르고 <strong>출석하기</strong>를 눌러 주세요.
+          {recogMode === "number"
+            ? "출석번호를 누르고 출석하기를 눌러 주세요."
+            : "얼굴을 카메라에 비추면 자동으로 출석돼요."}
         </p>
       </header>
 
+      {/* 번호 / 얼굴 인식 방식 전환 */}
+      <div className="mb-6 inline-flex rounded-xl border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden bg-white dark:bg-zinc-900">
+        {(["number", "face"] as const).map((r) => (
+          <button
+            key={r}
+            onClick={() => setRecogMode(r)}
+            className={`px-5 py-2.5 text-[14px] font-semibold ${
+              recogMode === r
+                ? "bg-[#6B7B3A] text-white"
+                : "text-[#6B5D47] dark:text-zinc-300"
+            }`}
+          >
+            {r === "number" ? "번호 입력" : "얼굴 인식"}
+          </button>
+        ))}
+      </div>
+
+      {recogMode === "face" ? (
+        <FaceAttendance />
+      ) : (
+        <>
       {/* 결과 토스트 */}
       {result && (
         <div
@@ -296,6 +321,8 @@ export default function TouchAttendancePage() {
           {keypad}
           <div className="mt-[clamp(10px,1.8vmin,22px)]">{submitBtn}</div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

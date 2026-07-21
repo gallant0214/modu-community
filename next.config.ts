@@ -41,8 +41,9 @@ const securityHeaders = [
     value: "max-age=63072000; includeSubDomains; preload",
   },
   {
+    // 터치출석 얼굴인식은 same-origin 카메라 사용 → camera=(self) 허용. mic/geo 는 계속 차단.
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+    value: "camera=(self), microphone=(), geolocation=(), interest-cohort=()",
   },
   // Report-Only: 실제 차단하지 않고 위반만 브라우저 콘솔에 리포트. 안정화 후 enforcing 전환.
   { key: "Content-Security-Policy-Report-Only", value: cspReportOnly },
