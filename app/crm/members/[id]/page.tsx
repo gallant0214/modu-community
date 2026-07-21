@@ -930,13 +930,13 @@ function FacePhotoUpload({
   };
 
   return (
-    <div className="flex flex-col items-center gap-1 shrink-0">
+    <div className="flex flex-col items-center gap-1 shrink-0 min-w-[7rem]">
       {current ? (
         <button
           type="button"
           onClick={() => setZoomOpen(true)}
           aria-label="사진 확대 보기"
-          className="relative w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center cursor-zoom-in hover:border-[#6B7B3A]/60 transition-colors"
+          className="relative w-full aspect-square rounded-lg overflow-hidden border-2 border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center cursor-zoom-in hover:border-[#6B7B3A]/60 transition-colors"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={current} alt="얼굴" className="w-full h-full object-cover" />
@@ -947,7 +947,7 @@ function FacePhotoUpload({
           )}
         </button>
       ) : (
-        <div className="relative w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
+        <div className="relative w-full aspect-square rounded-lg overflow-hidden border-2 border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
           <span className="text-[10px] text-[#A89B80]">사진 없음</span>
           {busy && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-[10px]">
