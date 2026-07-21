@@ -470,24 +470,12 @@ export default function CrmDashboardPage() {
                 subtitle="출석 흐름과 장기 미출석 유효회원"
               />
               <section className="grid gap-3">
-                {/* 주간(월~일) 출석 그래프 — 매출 그래프와 동일 스타일 */}
+                {/* 주간 입장 출석 고객 수 — 저번 주 vs 이번 주 (요일별) */}
                 <div className="px-5 py-4 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm">
-                  <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
-                    주간 출석 (월~일)
+                  <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
+                    주간 입장 출석 고객 수
                   </h3>
-                  <CrmLineChart
-                    points={(summary.attendance.weekly ?? []).map((w) => ({
-                      label: w.label,
-                      value: w.count,
-                    }))}
-                    unit="명"
-                    color="#5A8BB0"
-                    overlay={(summary.attendance.weeklyAvg ?? []).map((w) => ({
-                      label: w.label,
-                      value: w.count,
-                    }))}
-                    overlayLabel="평균(최근 12주)"
-                  />
+                  <WeeklyAttendanceChart />
                 </div>
                 <Link href="/crm/members?status=valid&absence=15d" className="block md:max-w-xs">
                   <GenderStatCard
@@ -632,6 +620,8 @@ export default function CrmDashboardPage() {
               <CrmLineChart
                 points={trend.map((m) => ({ label: m.ym.slice(2).replace("-", "/"), value: m.revenue }))}
                 overlay={trend.map((m) => ({ label: m.ym.slice(2).replace("-", "/"), value: m.revenuePrev ?? 0 }))}
+                dates={trend.map((m) => m.ym)}
+                overlayDates={trend.map((m) => `${Number(m.ym.slice(0, 4)) - 1}${m.ym.slice(4)}`)}
                 overlayLabel="작년 동월"
                 primaryLabel="올해"
                 overlaySolid
@@ -651,6 +641,8 @@ export default function CrmDashboardPage() {
                   label: m.ym.slice(2).replace("-", "/"),
                   value: m.membershipRevenuePrev ?? 0,
                 }))}
+                dates={trend.map((m) => m.ym)}
+                overlayDates={trend.map((m) => `${Number(m.ym.slice(0, 4)) - 1}${m.ym.slice(4)}`)}
                 overlayLabel="작년 동월"
                 primaryLabel="올해"
                 overlaySolid

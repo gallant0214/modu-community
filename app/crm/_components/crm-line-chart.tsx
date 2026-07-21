@@ -26,6 +26,17 @@ interface Props {
   primaryLabel?: string;
   /** true = 보조선을 본선과 동일한 실선+점으로(색만 다름). false(기본) = 연한 점선. */
   overlaySolid?: boolean;
+  /** 본선 각 점의 날짜/기간 텍스트 (툴팁에 표시, 예: "2026-07"). points 와 인덱스 정렬. */
+  dates?: string[];
+  /** 보조선 각 점의 날짜/기간 텍스트 (툴팁에 표시, 예: "2025-07"). */
+  overlayDates?: string[];
+}
+
+interface TooltipRow {
+  color: string;
+  label: string;
+  date?: string;
+  value: string;
 }
 
 /**
@@ -42,8 +53,16 @@ export function CrmLineChart({
   overlayLabel,
   primaryLabel = "이번 주",
   overlaySolid = false,
+  dates,
+  overlayDates,
 }: Props) {
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; flip: boolean } | null>(null);
+  const [tooltip, setTooltip] = useState<{
+    x: number;
+    y: number;
+    flip: boolean;
+    title: string;
+    rows: TooltipRow[];
+  } | null>(null);
   const W = 600;
   const H = height;
   const padL = unit === "원" ? 72 : 40;
@@ -80,20 +99,35 @@ export function CrmLineChart({
   const gridYs = [0, 0.25, 0.5, 0.75, 1].map((t) => padT + innerH * (1 - t));
   const gridValues = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(max * t));
 
-  const showTooltip = (event: MouseEvent<SVGCircleElement>, p: Point, i: number) => {
+  // 본선/보조선 어느 점에 올려도 두 시리즈를 함께 보여주는 카드 툴팁
+  const buildTip = (event: MouseEvent<SVGCircleElement>, i: number) => {
     const rect = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
     if (!rect) return;
+    const p = points[i];
     const ov = overlayPts[i];
-    const avgText =
-      ov !== undefined
-        ? ` · ${overlayLabel ?? "평균"} ${formatTooltipValue(ov.value, unit)}`
-        : "";
+    const rows: TooltipRow[] = [
+      {
+        color,
+        label: primaryLabel,
+        date: dates?.[i],
+        value: formatTooltipValue(p.value, unit),
+      },
+    ];
+    if (ov !== undefined && overlayLabel) {
+      rows.push({
+        color: overlayColor,
+        label: overlayLabel,
+        date: overlayDates?.[i],
+        value: formatTooltipValue(ov.value, unit),
+      });
+    }
     const mx = event.clientX - rect.left;
     setTooltip({
       x: mx,
       y: event.clientY - rect.top + 12,
       flip: mx > rect.width * 0.6, // 우측이면 커서 왼쪽으로
-      text: `${p.label}: ${formatTooltipValue(p.value, unit)}${avgText}`,
+      title: p.label,
+      rows,
     });
   };
 
@@ -170,17 +204,7 @@ export function CrmLineChart({
                   cy={py}
                   r={11}
                   fill="transparent"
-                  onMouseMove={(event) => {
-                    const rect = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
-                    if (!rect) return;
-                    const mx = event.clientX - rect.left;
-                    setTooltip({
-                      x: mx,
-                      y: event.clientY - rect.top + 12,
-                      flip: mx > rect.width * 0.6,
-                      text: `${p.label} · ${overlayLabel ?? ""} ${formatTooltipValue(p.value, unit)}`,
-                    });
-                  }}
+                  onMouseMove={(event) => buildTip(event, i)}
                   onMouseLeave={() => setTooltip(null)}
                 />
               </g>
@@ -202,7 +226,7 @@ export function CrmLineChart({
                 cy={py}
                 r={11}
                 fill="transparent"
-                onMouseMove={(event) => showTooltip(event, p, i)}
+                onMouseMove={(event) => buildTip(event, i)}
                 onMouseLeave={() => setTooltip(null)}
               />
             </g>
@@ -227,14 +251,24 @@ export function CrmLineChart({
       )}
       {tooltip && (
         <div
-          className="pointer-events-none absolute z-20 whitespace-nowrap rounded-md border border-[#D9CBB5] bg-[#2A251D] px-2.5 py-1.5 text-[11.5px] font-semibold text-white shadow-lg dark:border-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
+          className="pointer-events-none absolute z-20 whitespace-nowrap rounded-lg border border-[#D9CBB5]/40 bg-[#2A251D]/95 px-3 py-2 text-white shadow-xl dark:border-zinc-700 dark:bg-zinc-100/95 dark:text-zinc-900"
           style={{
             left: tooltip.flip ? tooltip.x - 12 : tooltip.x + 12,
             top: tooltip.y,
             transform: tooltip.flip ? "translateX(-100%)" : undefined,
           }}
         >
-          {tooltip.text}
+          <div className="text-[13px] font-bold mb-1">{tooltip.title}</div>
+          <div className="space-y-0.5">
+            {tooltip.rows.map((r, idx) => (
+              <div key={idx} className="flex items-center gap-2 text-[11.5px]">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: r.color }} />
+                <span className="opacity-90">{r.label}</span>
+                {r.date && <span className="opacity-60">{r.date}</span>}
+                <span className="ml-auto pl-3 font-bold">{r.value}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
