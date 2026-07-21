@@ -4,11 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
 import FaceAttendance from "./face-attendance";
+import FaceEnroll from "./face-enroll";
 
 interface MemberLite {
   id: number;
   name: string;
   phone: string | null;
+  birth?: string | null;
+  has_face?: boolean;
 }
 
 type Result =
@@ -25,6 +28,7 @@ export default function TouchAttendancePage() {
   const { getIdToken } = useAuth();
   const [num, setNum] = useState("");
   const [candidates, setCandidates] = useState<MemberLite[] | null>(null);
+  const [enrollTarget, setEnrollTarget] = useState<MemberLite | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState(false);
   const [centerName, setCenterName] = useState("");
@@ -68,6 +72,7 @@ export default function TouchAttendancePage() {
   const reset = useCallback(() => {
     setNum("");
     setCandidates(null);
+    setEnrollTarget(null);
     setBusy(false);
   }, []);
 
@@ -82,18 +87,19 @@ export default function TouchAttendancePage() {
   }, [result, reset]);
 
   const press = (d: string) => {
-    if (busy || candidates) return;
+    if (busy || candidates || enrollTarget) return;
     setResult(null);
     setNum((v) => (v.length >= 10 ? v : v + d));
   };
   const backspace = () => {
-    if (busy || candidates) return;
+    if (busy || candidates || enrollTarget) return;
     setNum((v) => v.slice(0, -1));
   };
   const clearAll = () => {
     if (busy) return;
     setNum("");
     setCandidates(null);
+    setEnrollTarget(null);
     setResult(null);
   };
 
@@ -150,7 +156,14 @@ export default function TouchAttendancePage() {
         setBusy(false);
         setNum("");
       } else if (members.length === 1) {
-        await checkin(members[0]);
+        const m = members[0];
+        if (m.has_face) {
+          await checkin(m);
+        } else {
+          // 얼굴 미등록 → 촬영/동의 플로우
+          setEnrollTarget(m);
+          setBusy(false);
+        }
       } else {
         // 동명(같은 번호) 여러 명 → 이름 선택
         setCandidates(members);
@@ -276,7 +289,18 @@ export default function TouchAttendancePage() {
         </div>
       )}
 
-      {candidates ? (
+      {enrollTarget ? (
+        /* 얼굴 미등록 단일 회원 → 동의·촬영 */
+        <FaceEnroll
+          member={enrollTarget}
+          onCancel={clearAll}
+          onDone={async () => {
+            const m = enrollTarget;
+            setEnrollTarget(null);
+            await checkin(m);
+          }}
+        />
+      ) : candidates ? (
         /* 동일 번호 여러 명 → 이름 선택 */
         <div className={`w-full ${landscape ? "max-w-[min(96vw,900px)]" : "max-w-[min(92vw,560px)]"}`}>
           <div className="mb-3 text-center text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
@@ -291,9 +315,10 @@ export default function TouchAttendancePage() {
                   className="w-full px-5 py-4 rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-left hover:border-[#6B7B3A] disabled:opacity-50"
                 >
                   <div className="text-[19px] font-bold text-[#2A251D] dark:text-zinc-100">{m.name}</div>
-                  {m.phone && (
-                    <div className="text-[13px] text-[#A89B80] mt-0.5">{maskPhone(m.phone)}</div>
-                  )}
+                  <div className="mt-0.5 text-[13px] text-[#A89B80] flex flex-wrap gap-x-2">
+                    {m.phone && <span>{maskPhone(m.phone)}</span>}
+                    {m.birth && <span>· 생년월일 {m.birth}</span>}
+                  </div>
                 </button>
               </li>
             ))}

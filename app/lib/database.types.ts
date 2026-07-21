@@ -2546,6 +2546,7 @@ export type Database = {
           current_locker: string | null
           face_image_data: string | null
           face_image_thumb: string | null
+          face_consent_at: string | null
           created_at: string
           updated_at: string
         }
@@ -2581,6 +2582,7 @@ export type Database = {
           current_locker?: string | null
           face_image_data?: string | null
           face_image_thumb?: string | null
+          face_consent_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -2616,6 +2618,7 @@ export type Database = {
           current_locker?: string | null
           face_image_data?: string | null
           face_image_thumb?: string | null
+          face_consent_at?: string | null
           created_at?: string
           updated_at?: string
         }

@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("crm_members")
-    .select("id, name, phone")
+    .select("id, name, phone, birth, face_image_data")
     .eq("center_id", ctx.centerId)
     .eq("status", "active")
     .eq("attendance_no", no)
@@ -33,5 +33,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ members: data ?? [] });
+  // face_image_data 는 크므로 클라이언트엔 등록여부(has_face)만 전달
+  const members = (data ?? []).map(
+    (m: { id: number; name: string; phone: string | null; birth: string | null; face_image_data: string | null }) => ({
+      id: m.id,
+      name: m.name,
+      phone: m.phone,
+      birth: m.birth,
+      has_face: !!m.face_image_data,
+    })
+  );
+
+  return NextResponse.json({ members });
 }
