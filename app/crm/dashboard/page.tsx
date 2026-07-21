@@ -8,6 +8,7 @@ import { CrmDonutChart } from "../_components/crm-donut-chart";
 import { PAYMENT_METHOD_LABEL, formatWon } from "../_components/crm-labels";
 import { CustomerStatusView } from "./_components/customer-status-view";
 import { MemberConversionCard } from "./_components/member-conversion-card";
+import { WeeklyAttendanceChart } from "./_components/weekly-attendance-chart";
 
 interface TrendPoint {
   ym: string;
