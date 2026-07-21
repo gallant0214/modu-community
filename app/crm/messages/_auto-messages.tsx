@@ -86,6 +86,50 @@ export function AutoMessagesTab() {
   const [error, setError] = useState("");
   const [editKey, setEditKey] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [scanSet, setScanSet] = useState<Set<string>>(new Set());
+  const [running, setRunning] = useState(false);
+  const [runMsg, setRunMsg] = useState("");
+
+  const loadMatches = useCallback(async () => {
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/auto-messages/matches", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setCounts(data.counts ?? {});
+      setScanSet(new Set<string>(data.scanTriggers ?? []));
+    } catch {
+      /* ignore */
+    }
+  }, [getIdToken]);
+
+  const runNow = useCallback(async () => {
+    setRunning(true);
+    setRunMsg("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/auto-messages/run", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "실행 실패");
+      setRunMsg(
+        data.total > 0
+          ? `평가 완료 · 조건에 맞는 ${data.total}명을 발송 대기열에 적재했어요. (실제 발송은 회원 앱 연동 후)`
+          : "평가 완료 · 지금 조건에 해당하는 회원이 없어요."
+      );
+      loadMatches();
+    } catch (e) {
+      setRunMsg(e instanceof Error ? e.message : "실행 중 오류가 발생했어요.");
+    } finally {
+      setRunning(false);
+    }
+  }, [getIdToken, loadMatches]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,7 +158,8 @@ export function AutoMessagesTab() {
 
   useEffect(() => {
     load();
-  }, [load]);
+    loadMatches();
+  }, [load, loadMatches]);
 
   const patch = useCallback(
     async (payload: Partial<SettingRow> & { trigger_key: string }): Promise<SettingRow | null> => {
@@ -166,11 +211,24 @@ export function AutoMessagesTab() {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/50 dark:bg-zinc-900/50 px-4 py-3 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
-        상황별 자동 메세지를 켜 두면 조건이 충족될 때 회원에게 자동으로 발송됩니다.
-        각 항목의 <span className="font-semibold text-[#3A342A] dark:text-zinc-200">설정</span>에서 발송 시점·문구를 정할 수 있어요.
-        <br />
-        <span className="text-[11.5px] text-[#A89B80]">실제 발송 채널(문자·앱 푸시·알림톡) 연동은 회원용 앱 출시와 함께 순차 적용됩니다.</span>
+      <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/50 dark:bg-zinc-900/50 px-4 py-3">
+        <div className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
+          상황별 자동 메세지를 켜 두면 조건이 충족될 때 회원에게 자동으로 발송됩니다.
+          각 항목의 <span className="font-semibold text-[#3A342A] dark:text-zinc-200">설정</span>에서 발송 시점·문구를 정할 수 있어요.
+          <br />
+          <span className="text-[11.5px] text-[#A89B80]">실제 발송(회원 앱 푸시 등)은 회원용 앱 연동 시점에 대기열을 소비합니다. 지금은 대상 회원 매칭까지 동작해요.</span>
+        </div>
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={runNow}
+            disabled={running}
+            className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
+          >
+            {running ? "평가 중…" : "지금 평가 실행"}
+          </button>
+          {runMsg && <span className="text-[11.5px] text-[#4d5a29] dark:text-[#A8B87A]">{runMsg}</span>}
+        </div>
       </div>
 
       {AUTO_MESSAGE_CATEGORIES.map((cat) => (
@@ -195,7 +253,9 @@ export function AutoMessagesTab() {
                     </div>
                     <div className="text-[11px] text-[#8C8270] dark:text-zinc-500 mt-0.5">
                       {on ? "사용 중" : "꺼짐"}
-                      {row && ` · ${SEND_BASIS_LABEL[(row.send_basis as SendBasis) ?? "immediate"]}`}
+                      {scanSet.has(t.key)
+                        ? ` · 대상 ${counts[t.key] ?? 0}명`
+                        : " · 이벤트 기반"}
                     </div>
                   </div>
                   <button

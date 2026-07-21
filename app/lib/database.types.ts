@@ -2915,6 +2915,48 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_auto_message_queue: {
+        Row: {
+          id: number
+          center_id: number
+          trigger_key: string
+          member_id: number
+          message: string
+          methods: Json
+          status: string
+          dedupe_key: string
+          scheduled_for: string | null
+          created_at: string
+          sent_at: string | null
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          trigger_key: string
+          member_id: number
+          message?: string
+          methods?: Json
+          status?: string
+          dedupe_key: string
+          scheduled_for?: string | null
+          created_at?: string
+          sent_at?: string | null
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          trigger_key?: string
+          member_id?: number
+          message?: string
+          methods?: Json
+          status?: string
+          dedupe_key?: string
+          scheduled_for?: string | null
+          created_at?: string
+          sent_at?: string | null
+        }
+        Relationships: []
+      }
       crm_audit_logs: {
         Row: {
           id: number
