@@ -95,6 +95,8 @@ export default function CrmMemberDetailPage() {
   const [tab, setTab] = useState<"info" | "reservations" | "payments" | "logs">("info");
   // 현재 유저 권한 (members.edit_basic / members.edit_usage / members.delete)
   const [perms, setPerms] = useState<Record<string, boolean>>({});
+  // 로그인 직원 본인 center_member_id — 발급 시 판매자 기본값
+  const [myMemberId, setMyMemberId] = useState<number | null>(null);
 
   // 결제 후 흐름 (계약서 작성 선택)
   const [pendingPassId, setPendingPassId] = useState<number | null>(null);
@@ -163,6 +165,7 @@ export default function CrmMemberDetailPage() {
         if (res.ok) {
           const data = await res.json();
           setPerms(data.permissions ?? {});
+          setMyMemberId(data.centerMemberId ?? null);
         }
       } catch {
         /* ignore */
@@ -576,6 +579,7 @@ export default function CrmMemberDetailPage() {
         onClose={() => setPassOpen(false)}
         memberId={member.id}
         staffList={staffList}
+        myMemberId={myMemberId}
         onSuccess={(passId) => {
           setPassOpen(false);
           setPendingPassId(passId);
@@ -589,6 +593,7 @@ export default function CrmMemberDetailPage() {
         memberId={member.id}
         memberMileage={member.mileage}
         staffList={staffList}
+        myMemberId={myMemberId}
         onSuccess={() => {
           setUsageOpen(false);
           setUsageReload((n) => n + 1);
@@ -2977,6 +2982,7 @@ function UsageIssueModal({
   memberId,
   memberMileage,
   staffList,
+  myMemberId,
   onSuccess,
 }: {
   open: boolean;
@@ -2984,6 +2990,7 @@ function UsageIssueModal({
   memberId: number;
   memberMileage: number;
   staffList: { id: number; display_name: string; role: string; status: string }[];
+  myMemberId?: number | null;
   onSuccess: () => void;
 }) {
   const { getIdToken } = useAuth();
@@ -3041,11 +3048,14 @@ function UsageIssueModal({
     }
   }, [open]);
 
-  // 담당 직원 기본값
+  // 판매자 기본값 = 로그인 직원(본인). 없으면 목록 첫 직원
   useEffect(() => {
-    if (open && staffList.length > 0 && sellerId === "") setSellerId(staffList[0].id);
+    if (open && staffList.length > 0 && sellerId === "") {
+      const mine = myMemberId && staffList.some((s) => s.id === myMemberId) ? myMemberId : staffList[0].id;
+      setSellerId(mine);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, staffList]);
+  }, [open, staffList, myMemberId]);
 
   // 타입별 상품 카탈로그 로드 (프리필용)
   useEffect(() => {
@@ -3105,7 +3115,7 @@ function UsageIssueModal({
     }
     if (type === "locker" && !lockerId) return setError("배정할 빈 자리를 선택해 주세요");
     if (!startDate || !expiresAt) return setError("기간을 확인해 주세요");
-    if (!sellerId) return setError("담당 직원을 선택해 주세요");
+    if (!sellerId) return setError("판매자를 선택해 주세요");
     setSubmitting(true);
     try {
       const token = await getIdToken();
@@ -3370,7 +3380,7 @@ function UsageIssueModal({
           만료일: <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{expiresAt || "—"}</strong>
         </div>
 
-        <CrmField label="담당 직원" required>
+        <CrmField label="판매자" required>
           <select
             className={crmInputClass}
             value={sellerId}
@@ -3383,6 +3393,9 @@ function UsageIssueModal({
               </option>
             ))}
           </select>
+          <p className="mt-1 text-[11px] text-[#A89B80]">
+            기본은 로그인한 본인이에요. 실제 판매 직원이 다르면 바꿔 주세요.
+          </p>
         </CrmField>
 
         <div className="grid grid-cols-2 gap-2">
@@ -3531,12 +3544,14 @@ function PassIssueModal({
   onClose,
   memberId,
   staffList,
+  myMemberId,
   onSuccess,
 }: {
   open: boolean;
   onClose: () => void;
   memberId: number;
   staffList: { id: number; display_name: string; role: string; status: string }[];
+  myMemberId?: number | null;
   onSuccess: (passId: number) => void;
 }) {
   const { getIdToken } = useAuth();
@@ -3565,16 +3580,21 @@ function PassIssueModal({
   const [memo, setMemo] = useState("");
   const [trainerId, setTrainerId] = useState<number | "">("");
   const [coTrainerIds, setCoTrainerIds] = useState<number[]>([]);
+  const [sellerId, setSellerId] = useState<number | "">("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // 첫 직원을 기본 강사로 (오픈 시점에 staffList 가 채워져 있다면)
+  // 첫 직원을 기본 강사로, 판매자 기본값은 로그인 직원(본인)
   useEffect(() => {
-    if (open && staffList.length > 0 && trainerId === "") {
-      setTrainerId(staffList[0].id);
+    if (open && staffList.length > 0) {
+      if (trainerId === "") setTrainerId(staffList[0].id);
+      if (sellerId === "") {
+        const mine = myMemberId && staffList.some((s) => s.id === myMemberId) ? myMemberId : staffList[0].id;
+        setSellerId(mine);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, staffList]);
+  }, [open, staffList, myMemberId]);
 
   // 열릴 때 수업 종류 목록 + 수강권 상품(개인/그룹) 로드
   useEffect(() => {
@@ -3634,7 +3654,7 @@ function PassIssueModal({
           member_id: memberId,
           trainer_member_id: Number(trainerId),
           co_trainer_ids: coTrainerIds,
-          seller_member_id: Number(trainerId),
+          seller_member_id: Number(sellerId) || Number(trainerId),
           issue_type: issueType,
           lesson_kind: `${lessonKind}(${totalSessions}회)`,
           total_sessions: totalSessions,
@@ -3754,6 +3774,23 @@ function PassIssueModal({
           value={coTrainerIds}
           onChange={setCoTrainerIds}
         />
+        <CrmField label="판매자">
+          <select
+            className={crmInputClass}
+            value={sellerId}
+            onChange={(e) => setSellerId(e.target.value ? Number(e.target.value) : "")}
+          >
+            <option value="">선택해주세요</option>
+            {staffList.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.display_name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-[#A89B80]">
+            기본은 로그인한 본인이에요. 실제로 판매한 직원이 다르면 바꿔 주세요. (담당 강사와 달라도 됩니다)
+          </p>
+        </CrmField>
         <CrmField label="발급 유형">
           <div className="grid grid-cols-4 gap-2">
             {(["new", "renewal", "trial", "service"] as const).map((t) => (

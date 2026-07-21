@@ -36,6 +36,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     onboarded: true,
     centerId: ctx.centerId,
+    centerMemberId: ctx.centerMemberId ?? null,
     centerName: ctx.centerName,
     centerKind: ctx.centerKind,
     role: ctx.role,
