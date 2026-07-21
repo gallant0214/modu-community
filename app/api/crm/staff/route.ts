@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
 
@@ -77,6 +78,8 @@ export async function POST(request: Request) {
     address?: string;
     employment_status?: string;
     employment_type?: string;
+    /** true 면 앱 회원가입 없이 직접 등록 — 합성 firebase_uid 부여 */
+    direct?: boolean;
   };
   try {
     body = await request.json();
@@ -84,7 +87,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
-  const uid = body.firebase_uid?.trim();
+  const direct = body.direct === true;
+  // 직접 등록은 계정이 없으므로 합성 uid 부여(NOT NULL·UNIQUE 충족, 실사용자와 구분되는 manual: 접두)
+  const uid = direct ? `manual:${ctx.centerId}:${randomUUID()}` : body.firebase_uid?.trim();
   if (!uid) return NextResponse.json({ error: "사용자를 선택해주세요" }, { status: 400 });
 
   // grade_id 가 있으면 role 을 grade.base_role 로 sync. 없으면 role 직접 사용.
@@ -115,14 +120,16 @@ export async function POST(request: Request) {
   const displayName = body.display_name?.trim();
   if (!displayName) return NextResponse.json({ error: "표시명을 입력해주세요" }, { status: 400 });
 
-  // 닉네임이 실제 존재하는지 확인 (안전망)
-  const { data: nick } = await supabase
-    .from("nicknames")
-    .select("name")
-    .eq("firebase_uid", uid)
-    .maybeSingle();
-  if (!nick) {
-    return NextResponse.json({ error: "사용자를 찾을 수 없습니다" }, { status: 404 });
+  // 검색 등록만 닉네임 존재 확인 (직접 등록은 계정이 없음)
+  if (!direct) {
+    const { data: nick } = await supabase
+      .from("nicknames")
+      .select("name")
+      .eq("firebase_uid", uid)
+      .maybeSingle();
+    if (!nick) {
+      return NextResponse.json({ error: "사용자를 찾을 수 없습니다" }, { status: 404 });
+    }
   }
 
   // 기존 멤버십 확인

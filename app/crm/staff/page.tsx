@@ -133,6 +133,7 @@ function AddStaffModal({
   onSuccess: () => void;
 }) {
   const { getIdToken } = useAuth();
+  const [mode, setMode] = useState<"search" | "direct">("search");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<LookupUser[]>([]);
   const [searching, setSearching] = useState(false);
@@ -175,6 +176,7 @@ function AddStaffModal({
 
   useEffect(() => {
     if (!open) {
+      setMode("search");
       setQuery("");
       setResults([]);
       setSearched(false);
@@ -233,9 +235,9 @@ function AddStaffModal({
   };
 
   const submit = async () => {
-    if (!picked) return;
     setError("");
-    if (!displayName.trim()) return setError("표시명을 입력해주세요");
+    if (mode === "search" && !picked) return;
+    if (!displayName.trim()) return setError("이름(표시명)을 입력해주세요");
     if (!gradeId) return setError("등급을 선택해주세요");
     setSubmitting(true);
     try {
@@ -244,7 +246,9 @@ function AddStaffModal({
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify({
-          firebase_uid: picked.firebase_uid,
+          ...(mode === "direct"
+            ? { direct: true }
+            : { firebase_uid: picked!.firebase_uid }),
           display_name: displayName.trim(),
           grade_id: gradeId,
           access_level: accessLevel,
@@ -267,7 +271,30 @@ function AddStaffModal({
 
   return (
     <CrmModal open={open} onClose={onClose} title="직원 추가" size="lg">
-      {!picked ? (
+      {/* 등록 방식 토글 */}
+      <div className="mb-4 inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
+        {(["search", "direct"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => {
+              setMode(m);
+              setPicked(null);
+              setError("");
+              if (m === "direct") setDisplayName("");
+            }}
+            className={`px-4 py-2 text-[13px] font-semibold ${
+              mode === m
+                ? "bg-[#6B7B3A] text-white"
+                : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300"
+            }`}
+          >
+            {m === "search" ? "사용자 검색" : "회원가입 없이 직접 등록"}
+          </button>
+        ))}
+      </div>
+
+      {mode === "search" && !picked ? (
         <>
           <CrmField label="사용자 검색">
             <div className="flex gap-2">
@@ -346,26 +373,33 @@ function AddStaffModal({
         </>
       ) : (
         <>
-          <div className="mb-3 px-3 py-2 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#3A342A] dark:text-zinc-300">
-            <strong>{picked.name}</strong> 님을 직원으로 추가합니다.
-            <button
-              onClick={() => setPicked(null)}
-              className="ml-2 text-[#6B7B3A] hover:underline"
-            >
-              다시 선택
-            </button>
-          </div>
+          {mode === "search" && picked ? (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#3A342A] dark:text-zinc-300">
+              <strong>{picked.name}</strong> 님을 직원으로 추가합니다.
+              <button
+                onClick={() => setPicked(null)}
+                className="ml-2 text-[#6B7B3A] hover:underline"
+              >
+                다시 선택
+              </button>
+            </div>
+          ) : (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+              앱 회원가입 없이 직원을 직접 등록해요. 나중에 본인이 커뮤니티에 가입하면 별도로 연동할 수 있어요.
+            </div>
+          )}
 
           <div className="space-y-3">
-            <CrmField label="센터 표시명 (실명)" required>
+            <CrmField label="이름 (센터 표시명)" required>
               <input
                 className={crmInputClass}
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="실명을 입력해 주세요"
+                autoFocus={mode === "direct"}
               />
               <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
-                센터 안에서만 보이는 이름이에요. 모두의 지도사 커뮤니티 닉네임은 그대로 유지돼요. 닉네임만으로는 누가 누군지 알기 어려우니 실명으로 입력하세요.
+                센터 안에서만 보이는 이름이에요. 실명으로 입력하세요.
               </p>
             </CrmField>
 
