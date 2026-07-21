@@ -22,7 +22,6 @@ const MENU: MenuItem[] = [
   { href: "/crm/products",    label: "상품 관리",     icon: IconProduct },
   { href: "/crm/lockers",     label: "락커 관리",     icon: IconLocker },
   { href: "/crm/schedule",    label: "스케줄 관리",   icon: IconCalendar },
-  { href: "/crm/kiosk",       label: "출석 체크",     icon: IconKiosk },
   { href: "/crm/attendances", label: "출석 현황",     icon: IconAttendance },
   { href: "/crm/messages",    label: "메세지 전송",   icon: IconMessage },
   { href: "/crm/contracts",   label: "전자계약서",     icon: IconContract },
@@ -242,13 +241,6 @@ function IconProduct({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0v10l-8 4m8-14l-8 4m0 0L4 7m8 4v10M4 7v10l8 4" />
-    </svg>
-  );
-}
-function IconKiosk({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-7a2 2 0 00-2-2H6a2 2 0 00-2 2v7a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
     </svg>
   );
 }
