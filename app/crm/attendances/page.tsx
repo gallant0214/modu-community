@@ -10,7 +10,15 @@ interface Attendance {
   member_id: number;
   checked_in_at: string;
   source: string;
-  member: { id: number; name: string; phone: string | null } | null;
+  member: {
+    id: number;
+    name: string;
+    phone: string | null;
+    face_thumb: string | null;
+    status: "active" | "expired";
+    membership: { plan_name: string; expires_at: string; days_left: number } | null;
+    expired_items: { type: "rental" | "locker"; name: string; expires_at: string }[];
+  } | null;
 }
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -68,6 +76,30 @@ export default function CrmAttendancesPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const [cancelingId, setCancelingId] = useState<number | null>(null);
+  const cancelAttendance = useCallback(
+    async (a: Attendance) => {
+      if (cancelingId) return;
+      if (!window.confirm(`${a.member?.name ?? "회원"}님의 출석을 취소할까요?`)) return;
+      setCancelingId(a.id);
+      try {
+        const token = await getIdToken();
+        const res = await fetch(`/api/crm/attendances/${a.id}`, {
+          method: "DELETE",
+          headers: { authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "취소 실패");
+        setRows((prev) => prev.filter((r) => r.id !== a.id));
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : "네트워크 오류");
+      } finally {
+        setCancelingId(null);
+      }
+    },
+    [getIdToken, cancelingId]
+  );
 
   const loadMonth = useCallback(async () => {
     setMonthLoading(true);
@@ -250,8 +282,163 @@ export default function CrmAttendancesPage() {
         <KpiCard label="수동/앱" value={`${stats.sources.manual + stats.sources.app}회`} tone="amber" />
       </div>
 
+      {/* 필터 */}
+      <div className="mb-3 flex items-center gap-2 flex-wrap">
+        {(["all", "kiosk", "manual", "app"] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setSourceFilter(s)}
+            className={`px-2.5 py-1 rounded-full text-[12px] font-semibold border transition-colors
+              ${sourceFilter === s
+                ? "bg-[#6B7B3A] text-white border-[#6B7B3A]"
+                : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
+              }`}
+          >
+            {s === "all"
+              ? `전체 ${stats.total}`
+              : `${SOURCE_LABEL[s]} ${stats.sources[s as "kiosk" | "manual" | "app"] ?? 0}`}
+          </button>
+        ))}
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="이름 또는 연락처 검색"
+          className={`${crmInputClass} ml-auto`}
+          style={{ maxWidth: 260 }}
+        />
+      </div>
+
+      {error && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      {/* 리스트 */}
+      {loading && rows.length === 0 ? (
+        <div className="py-10 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : filtered.length === 0 ? (
+        <div className="py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          {rows.length === 0
+            ? "이 날짜에는 출석 기록이 없어요."
+            : "조건에 맞는 기록이 없어요."}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
+          <table className="w-full text-[13px]">
+            <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium whitespace-nowrap">시간</th>
+                <th className="px-3 py-2 text-left font-medium whitespace-nowrap">상태</th>
+                <th className="px-3 py-2 text-left font-medium">회원</th>
+                <th className="px-3 py-2 text-left font-medium">회원권</th>
+                <th className="px-3 py-2 text-left font-medium">만료 이용권</th>
+                <th className="px-3 py-2 text-left font-medium whitespace-nowrap">경로</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((a) => (
+                <tr
+                  key={a.id}
+                  className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 align-top"
+                >
+                  <td className="px-3 py-2.5 text-[#2A251D] dark:text-zinc-100 font-semibold whitespace-nowrap">
+                    {formatTimeKST(a.checked_in_at)}
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {a.member?.status === "active" ? (
+                      <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                        활성
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500">
+                        만료
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {a.member?.face_thumb ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={a.member.face_thumb}
+                          alt=""
+                          className="w-9 h-9 rounded-full object-cover border border-[#E8E0D0] dark:border-zinc-700 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-[#EFE7D5] dark:bg-zinc-800 flex items-center justify-center text-[13px] font-bold text-[#A89B80] shrink-0">
+                          {a.member?.name?.[0] ?? "?"}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
+                          {a.member?.name ?? "—"}
+                        </div>
+                        <div className="text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+                          {a.member?.phone ? formatPhone(a.member.phone) : "—"}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {a.member?.membership ? (
+                      <div className="min-w-0">
+                        <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                          {a.member.membership.plan_name}
+                        </div>
+                        <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+                          {a.member.membership.expires_at} ·{" "}
+                          <span className={a.member.membership.days_left <= 7 ? "text-[#B47B2A] dark:text-amber-300 font-semibold" : ""}>
+                            {a.member.membership.days_left}일 남음
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-[#C9BEA6]">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {a.member?.expired_items && a.member.expired_items.length > 0 ? (
+                      <div className="flex flex-col gap-1">
+                        {a.member.expired_items.map((it, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 w-fit"
+                          >
+                            {it.name} 만료
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-[#C9BEA6]">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[11px] font-semibold ${SOURCE_STYLE[a.source] ?? "bg-zinc-200 text-zinc-700"}`}
+                      >
+                        {SOURCE_LABEL[a.source] ?? a.source}
+                      </span>
+                      <button
+                        onClick={() => cancelAttendance(a)}
+                        disabled={cancelingId === a.id}
+                        className="px-2 py-1 rounded-md border border-red-200 dark:border-red-900 text-red-600 dark:text-red-300 text-[11.5px] font-semibold hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50"
+                      >
+                        {cancelingId === a.id ? "취소 중…" : "출석 취소"}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* 월간 달력 — 날짜별 출입 인원 수 */}
-      <section className="mb-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4">
+      <section className="mt-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
             날짜별 출입 인원 <span className="text-[#8C8270] dark:text-zinc-500 font-normal">· 이 달 {monthPeople}명</span>
@@ -302,7 +489,7 @@ export default function CrmAttendancesPage() {
                 key={cell.ymd}
                 onClick={() => setDate(cell.ymd)}
                 disabled={isFuture}
-                className={`aspect-square rounded-lg border flex flex-col items-center justify-center gap-0.5 transition-colors
+                className={`aspect-square min-h-[52px] rounded-lg border flex flex-col items-center pt-1.5 pb-1 transition-colors
                   ${selected
                     ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
                     : isFuture
@@ -312,36 +499,42 @@ export default function CrmAttendancesPage() {
                     : "border-[#E8E0D0] dark:border-zinc-800 text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
                   }`}
               >
+                {/* 날짜 (위) */}
                 <span
-                  className={`text-[12px] leading-none ${
-                    isTodayCell && !selected ? "font-bold text-[#6B7B3A] dark:text-[#A8B87A]" : "font-medium"
+                  className={`text-[13px] leading-none ${
+                    isTodayCell && !selected ? "font-bold text-[#6B7B3A] dark:text-[#A8B87A]" : "font-semibold"
                   }`}
                 >
                   {cell.day}
                 </span>
-                {count > 0 ? (
-                  <span
-                    className={`text-[11px] font-bold leading-none tabular-nums ${
-                      selected ? "text-white" : "text-[#6B7B3A] dark:text-[#A8B87A]"
-                    }`}
-                  >
-                    {count}명
-                  </span>
-                ) : (
-                  <span className="text-[11px] leading-none opacity-0">·</span>
-                )}
+                {/* 인원 배지 (아래, 확실히 구분) */}
+                <span className="mt-auto">
+                  {count > 0 ? (
+                    <span
+                      className={`inline-block px-1.5 py-[3px] rounded-full text-[10.5px] font-bold leading-none tabular-nums ${
+                        selected
+                          ? "bg-white/25 text-white"
+                          : "bg-[#6B7B3A]/15 text-[#6B7B3A] dark:bg-[#6B7B3A]/30 dark:text-[#A8B87A]"
+                      }`}
+                    >
+                      {count}명
+                    </span>
+                  ) : (
+                    <span className="inline-block h-[16px]" />
+                  )}
+                </span>
               </button>
             );
           })}
         </div>
         <div className="mt-2 text-[11px] text-[#A89B80] dark:text-zinc-500">
-          숫자는 그 날 출입한 인원(사람) 수예요. 날짜를 누르면 아래에 상세 기록이 표시됩니다.
+          숫자는 그 날 출입한 인원(사람) 수예요. 날짜를 누르면 위 목록이 그 날짜로 바뀝니다.
           {monthLoading && " · 불러오는 중…"}
         </div>
       </section>
 
       {/* 시간대별 분포 */}
-      <section className="mb-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4">
+      <section className="mt-5 mb-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4">
         <h2 className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
           시간대별 분포 (KST)
         </h2>
@@ -371,88 +564,6 @@ export default function CrmAttendancesPage() {
           </div>
         )}
       </section>
-
-      {/* 필터 */}
-      <div className="mb-3 flex items-center gap-2 flex-wrap">
-        {(["all", "kiosk", "manual", "app"] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setSourceFilter(s)}
-            className={`px-2.5 py-1 rounded-full text-[12px] font-semibold border transition-colors
-              ${sourceFilter === s
-                ? "bg-[#6B7B3A] text-white border-[#6B7B3A]"
-                : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
-              }`}
-          >
-            {s === "all"
-              ? `전체 ${stats.total}`
-              : `${SOURCE_LABEL[s]} ${stats.sources[s as "kiosk" | "manual" | "app"] ?? 0}`}
-          </button>
-        ))}
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="이름 또는 연락처 검색"
-          className={`${crmInputClass} ml-auto`}
-          style={{ maxWidth: 260 }}
-        />
-      </div>
-
-      {error && (
-        <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
-
-      {/* 리스트 */}
-      {loading && rows.length === 0 ? (
-        <div className="py-10 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
-      ) : filtered.length === 0 ? (
-        <div className="py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-          {rows.length === 0
-            ? "이 날짜에는 출석 기록이 없어요."
-            : "조건에 맞는 기록이 없어요."}
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
-          <table className="w-full text-[13px]">
-            <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium">시간</th>
-                <th className="px-3 py-2 text-left font-medium">회원</th>
-                <th className="px-3 py-2 text-left font-medium">연락처</th>
-                <th className="px-3 py-2 text-left font-medium">경로</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((a) => (
-                <tr
-                  key={a.id}
-                  className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900"
-                >
-                  <td className="px-3 py-2.5 text-[#2A251D] dark:text-zinc-100 font-semibold">
-                    {formatTimeKST(a.checked_in_at)}
-                  </td>
-                  <td className="px-3 py-2.5 text-[#3A342A] dark:text-zinc-200">
-                    {a.member?.name ?? "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-[#8C8270] dark:text-zinc-500">
-                    {a.member?.phone ? formatPhone(a.member.phone) : "—"}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[11px] font-semibold ${SOURCE_STYLE[a.source] ?? "bg-zinc-200 text-zinc-700"}`}
-                    >
-                      {SOURCE_LABEL[a.source] ?? a.source}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }

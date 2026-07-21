@@ -2162,6 +2162,7 @@ const LOG_ACTION_LABEL: Record<string, string> = {
   "member.create": "회원 등록",
   "member.update": "회원 정보 수정",
   "member.delete": "회원 삭제",
+  "attendance.cancel": "출석 취소",
   "members.bulk_hold": "회원 일괄 홀딩",
   "members.bulk_extend": "회원 일괄 기간 연장",
   "members.bulk_mileage": "회원 일괄 마일리지",

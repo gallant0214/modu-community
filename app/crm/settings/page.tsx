@@ -50,6 +50,7 @@ const ACTION_LABEL: Record<string, string> = {
   "staff.reactivate": "직원 재등록",
   "member.create": "회원 등록",
   "member.delete": "회원 삭제",
+  "attendance.cancel": "출석 취소",
   "pass.issue": "수강권 발급",
   "pass.refund": "수강권 환불",
   "reservation.cancelled": "예약 취소",
