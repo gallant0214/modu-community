@@ -252,6 +252,30 @@ export async function GET(request: Request) {
       if (memberHasLater.get(mid)) expireConverted[idx] += 1;
     }
 
+    // 재등록→재등록 전환률: 그 달에 '재등록(2번째 이후) 이용권이 만료'된 건 중, 그 뒤 또 재등록한 비율
+    //  - 회원별 발급을 시작일 순 정렬 → index 0=신규, 1이상=재등록
+    //  - reExpireCohort[M] = 재등록 만료월이 M 인 재등록 건수 (분모)
+    //  - reExpireConverted[M] = 그 재등록 이후 또 발급이 있는 건수 (분자)
+    const issuesByMember = new Map<number, { start: string; expires: string | null }[]>();
+    for (const it of allIssues) {
+      const arr = issuesByMember.get(it.member_id) ?? [];
+      arr.push({ start: it.start, expires: it.expires });
+      issuesByMember.set(it.member_id, arr);
+    }
+    const reExpireCohort = months.map(() => 0);
+    const reExpireConverted = months.map(() => 0);
+    for (const [, arr] of issuesByMember) {
+      arr.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
+      for (let i = 1; i < arr.length; i++) {
+        const e = arr[i].expires;
+        if (!e) continue;
+        const idx = months.findIndex((mm) => e >= mm.start && e < mm.endExcl);
+        if (idx < 0) continue;
+        reExpireCohort[idx] += 1;
+        if (i + 1 < arr.length) reExpireConverted[idx] += 1;
+      }
+    }
+
     // 월별 방문 고객
     const visitedSets = months.map(() => new Set<number>());
     for (const a of attends) {
@@ -316,6 +340,8 @@ export async function GET(request: Request) {
       reReg,
       expireCohort,
       expireConverted,
+      reExpireCohort,
+      reExpireConverted,
       visited: visitedSets.map((s) => s.size),
       churn,
     });
