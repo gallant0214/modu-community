@@ -165,6 +165,19 @@ const PAGE_SIZE = 25;
 let memoPage = 1;
 let memoScroll = 0;
 let memoScrollTs = 0;
+// 필터/검색도 페이지처럼 모듈 스코프에 유지 → 상세 갔다 뒤로가기 시 직전 필터·페이지 그대로 복원.
+let memoUi: {
+  query: string;
+  fStatus: StatusFilter;
+  fSignup: SignupFilter;
+  fSignupFrom: string;
+  fSignupTo: string;
+  fAbsence: AbsenceFilter;
+  fExpire: ExpireFilter;
+  fPayment: PaymentFilter;
+  fLocker: LockerFilter;
+  fGoods: GoodsFilter;
+} | null = null;
 
 const today = () => {
   const d = new Date();
@@ -235,34 +248,44 @@ export default function CrmMembersPage() {
   const [list, setList] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => (memoUi ? memoUi.query : ""));
 
-  // 필터
+  // 필터 (memoUi 있으면 직전 상태 복원 → 뒤로가기 유지. 없으면 URL/기본값)
   const [fStatus, setFStatus] = useState<StatusFilter>(() => {
+    if (memoUi) return memoUi.fStatus;
     const v = searchParamsHook.get("status");
     const allowed: StatusFilter[] = ["valid", "scheduled", "expired", "hold", "expiring"];
     return allowed.includes(v as StatusFilter) ? (v as StatusFilter) : "all";
   });
-  const [fSignup, setFSignup] = useState<SignupFilter>("all");
-  const [fSignupFrom, setFSignupFrom] = useState("");
-  const [fSignupTo, setFSignupTo] = useState("");
+  const [fSignup, setFSignup] = useState<SignupFilter>(() => (memoUi ? memoUi.fSignup : "all"));
+  const [fSignupFrom, setFSignupFrom] = useState(() => (memoUi ? memoUi.fSignupFrom : ""));
+  const [fSignupTo, setFSignupTo] = useState(() => (memoUi ? memoUi.fSignupTo : ""));
   const [fAbsence, setFAbsence] = useState<AbsenceFilter>(() => {
+    if (memoUi) return memoUi.fAbsence;
     const v = searchParamsHook.get("absence");
     return v === "10d" || v === "15d" || v === "20d" || v === "30d" || v === "60d" || v === "90d"
       ? v
       : "all";
   });
   const [fExpire, setFExpire] = useState<ExpireFilter>(() => {
+    if (memoUi) return memoUi.fExpire;
     const v = searchParamsHook.get("expire");
     return v === "7d" || v === "30d" || v === "this_week" || v === "this_month" || v === "expired"
       ? v
       : "all";
   });
   const [fPayment, setFPayment] = useState<PaymentFilter>(() =>
-    searchParamsHook.get("payment") === "outstanding" ? "outstanding" : "all"
+    memoUi ? memoUi.fPayment : searchParamsHook.get("payment") === "outstanding" ? "outstanding" : "all"
   );
-  const [fLocker, setFLocker] = useState<LockerFilter>("all");
-  const [fGoods, setFGoods] = useState<GoodsFilter>("all");
+  const [fLocker, setFLocker] = useState<LockerFilter>(() => (memoUi ? memoUi.fLocker : "all"));
+  const [fGoods, setFGoods] = useState<GoodsFilter>(() => (memoUi ? memoUi.fGoods : "all"));
+
+  // 필터/검색 변경 시 모듈 스코프에 저장 → 상세 갔다 뒤로가기 시 그대로 복원 (F5 시 초기화)
+  useEffect(() => {
+    memoUi = {
+      query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fPayment, fLocker, fGoods,
+    };
+  }, [query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fPayment, fLocker, fGoods]);
 
   // 페이지 유지: URL ?page= 우선(브라우저 뒤로가기/새로고침 복원) → 없으면 모듈 스코프 memoPage
   const [page, setPageState] = useState(() => {
@@ -2163,6 +2186,7 @@ const LOG_ACTION_LABEL: Record<string, string> = {
   "member.update": "회원 정보 수정",
   "member.delete": "회원 삭제",
   "attendance.cancel": "출석 취소",
+  "member.face_register": "얼굴 등록",
   "members.bulk_hold": "회원 일괄 홀딩",
   "members.bulk_extend": "회원 일괄 기간 연장",
   "members.bulk_mileage": "회원 일괄 마일리지",
