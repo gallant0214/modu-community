@@ -85,8 +85,9 @@ export function proxy(req: NextRequest) {
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   res.headers.set(
+    // 터치출석 얼굴인식 = same-origin 카메라 사용 → camera=(self) 허용. mic/geo 는 계속 차단.
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+    "camera=(self), microphone=(), geolocation=(), interest-cohort=()",
   );
   res.headers.set("X-DNS-Prefetch-Control", "off");
 
