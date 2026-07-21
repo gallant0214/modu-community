@@ -7,8 +7,14 @@ import { useAuth } from "@/app/components/auth-provider";
 // face-api.js (@vladmandic/face-api) CDN — 런타임 로드(번들 미포함)
 const FACEAPI_SRC = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js";
 const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/";
-// 매칭 거리 임계값(작을수록 엄격). 저해상도 1장 등록 기준 보수적으로 0.52
-const MATCH_THRESHOLD = 0.52;
+// 매칭 거리 기본 임계값(작을수록 엄격). UI 슬라이더로 실시간 조절
+const DEFAULT_THRESHOLD = 0.45;
+// 1등이 2등(다른 사람)보다 이만큼 더 가까워야 인정 — 애매하면 거부(오인식 방지)
+const MARGIN = 0.05;
+// 연속 N프레임 동일 인물로 확인돼야 출석 처리 — 순간 오인식 차단
+const REQUIRED_FRAMES = 3;
+// 얼굴 박스 최소 너비(px). 너무 작으면(멀면) 디스크립터 품질 낮아 스킵
+const MIN_FACE_PX = 110;
 // 같은 회원 재인식 무시 시간(ms)
 const COOLDOWN_MS = 60_000;
 
@@ -44,7 +50,10 @@ export default function FaceAttendance() {
   const { getIdToken } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const matcherRef = useRef<any>(null);
+  const labeledRef = useRef<{ id: number; descriptor: Float32Array }[]>([]);
+  const readyRef = useRef(false);
+  const pendingRef = useRef<{ id: number; count: number }>({ id: 0, count: 0 });
+  const thresholdRef = useRef(DEFAULT_THRESHOLD);
   const nameMapRef = useRef<Map<number, string>>(new Map());
   const cooldownRef = useRef<Map<number, number>>(new Map());
   const runningRef = useRef(false);
@@ -57,7 +66,12 @@ export default function FaceAttendance() {
   const [error, setError] = useState("");
   const [camError, setCamError] = useState("");
   const [status, setStatus] = useState("준비 중…");
+  const [threshold, setThreshold] = useState(DEFAULT_THRESHOLD);
   const [lastHit, setLastHit] = useState<{ name: string; at: number } | null>(null);
+
+  useEffect(() => {
+    thresholdRef.current = threshold;
+  }, [threshold]);
 
   const checkin = useCallback(
     async (memberId: number, name: string) => {
@@ -85,7 +99,7 @@ export default function FaceAttendance() {
       const tick = async () => {
         if (!runningRef.current) return;
         const video = videoRef.current;
-        if (video && video.readyState >= 2 && matcherRef.current && !busyRef.current) {
+        if (video && video.readyState >= 2 && readyRef.current && !busyRef.current) {
           busyRef.current = true;
           try {
             const det = await faceapi
@@ -93,23 +107,55 @@ export default function FaceAttendance() {
               .withFaceLandmarks()
               .withFaceDescriptor();
             if (det?.descriptor) {
-              const best = matcherRef.current.findBestMatch(det.descriptor);
-              if (best.label !== "unknown") {
-                const memberId = Number(best.label);
-                const now = Date.now();
-                const last = cooldownRef.current.get(memberId) ?? 0;
-                const name = nameMapRef.current.get(memberId) ?? "회원";
-                if (now - last > COOLDOWN_MS) {
-                  cooldownRef.current.set(memberId, now);
-                  setStatus(`${name} 인식 (거리 ${best.distance.toFixed(2)})`);
-                  await checkin(memberId, name);
-                } else {
-                  setStatus(`${name} · 이미 출석 처리됨`);
-                }
+              // 얼굴이 너무 작으면(멀면) 스킵 — 저품질 디스크립터 오인식 방지
+              const boxW = det.detection?.box?.width ?? 0;
+              if (boxW < MIN_FACE_PX) {
+                pendingRef.current = { id: 0, count: 0 };
+                setStatus("얼굴을 카메라에 더 가까이 대주세요");
               } else {
-                setStatus(`미등록 얼굴 (거리 ${best.distance.toFixed(2)})`);
+                // 전체 등록 얼굴과 거리 계산 → 1등·2등
+                const q = det.descriptor;
+                const dists = labeledRef.current.map((l) => ({
+                  id: l.id,
+                  dist: faceapi.euclideanDistance(q, l.descriptor) as number,
+                }));
+                dists.sort((a, b) => a.dist - b.dist);
+                const best = dists[0];
+                const second = dists[1] ?? { id: -1, dist: Infinity };
+                const th = thresholdRef.current;
+                const gap = second.dist - best.dist;
+                const passes = best.dist < th && gap >= MARGIN;
+                const name = nameMapRef.current.get(best.id) ?? "회원";
+
+                if (passes) {
+                  const p = pendingRef.current;
+                  const nextCount = p.id === best.id ? p.count + 1 : 1;
+                  pendingRef.current = { id: best.id, count: nextCount };
+                  const now = Date.now();
+                  const last = cooldownRef.current.get(best.id) ?? 0;
+                  if (nextCount >= REQUIRED_FRAMES) {
+                    if (now - last > COOLDOWN_MS) {
+                      cooldownRef.current.set(best.id, now);
+                      pendingRef.current = { id: 0, count: 0 };
+                      setStatus(`${name} 출석! (거리 ${best.dist.toFixed(2)})`);
+                      await checkin(best.id, name);
+                    } else {
+                      setStatus(`${name} · 이미 출석 처리됨`);
+                    }
+                  } else {
+                    setStatus(`${name} 확인 중… ${nextCount}/${REQUIRED_FRAMES} (거리 ${best.dist.toFixed(2)})`);
+                  }
+                } else {
+                  pendingRef.current = { id: 0, count: 0 };
+                  setStatus(
+                    best.dist >= th
+                      ? `일치하는 회원 없음 (거리 ${best.dist.toFixed(2)})`
+                      : `판별 애매 — 다시 시도 (차이 ${gap.toFixed(2)})`
+                  );
+                }
               }
             } else {
+              pendingRef.current = { id: 0, count: 0 };
               setStatus("얼굴을 카메라에 비춰 주세요");
             }
           } catch {
@@ -118,7 +164,7 @@ export default function FaceAttendance() {
             busyRef.current = false;
           }
         }
-        if (runningRef.current) setTimeout(tick, 500);
+        if (runningRef.current) setTimeout(tick, 400);
       };
       tick();
     },
@@ -138,8 +184,8 @@ export default function FaceAttendance() {
         videoRef.current.srcObject = stream;
         await videoRef.current.play().catch(() => {});
       }
-      // 모델·매처가 이미 준비됐으면 루프 시작
-      if (matcherRef.current && faceApiRef.current && optRef.current && !runningRef.current) {
+      // 모델·디스크립터가 이미 준비됐으면 루프 시작
+      if (readyRef.current && faceApiRef.current && optRef.current && !runningRef.current) {
         runningRef.current = true;
         setStage("ready");
         setStatus("얼굴을 카메라에 비춰 주세요");
@@ -194,9 +240,11 @@ export default function FaceAttendance() {
         const faces: FaceRow[] = (data.faces ?? []).filter((f: FaceRow) => f.face_image_data);
         if (cancelled) return;
 
-        const opt = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 });
+        // 등록 사진은 inputSize 크게(정확도 우선), 실시간 루프는 별도 opt(속도 우선)
+        const enrollOpt = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 });
+        const opt = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 });
         optRef.current = opt;
-        const labeled: any[] = [];
+        const built: { id: number; descriptor: Float32Array }[] = [];
         let skipped = 0;
         setProgress({ done: 0, total: faces.length, skipped: 0 });
         for (let i = 0; i < faces.length; i++) {
@@ -207,11 +255,11 @@ export default function FaceAttendance() {
             img.src = f.face_image_data as string;
             await img.decode();
             const det = await faceapi
-              .detectSingleFace(img, opt)
+              .detectSingleFace(img, enrollOpt)
               .withFaceLandmarks()
               .withFaceDescriptor();
             if (det?.descriptor) {
-              labeled.push(new faceapi.LabeledFaceDescriptors(String(f.id), [det.descriptor]));
+              built.push({ id: f.id, descriptor: det.descriptor });
               nameMapRef.current.set(f.id, f.name);
             } else {
               skipped++;
@@ -222,10 +270,11 @@ export default function FaceAttendance() {
           setProgress({ done: i + 1, total: faces.length, skipped });
         }
         if (cancelled) return;
-        if (labeled.length === 0) {
+        if (built.length === 0) {
           throw new Error("사진에서 얼굴을 추출하지 못했습니다. 등록 사진 품질을 확인해 주세요.");
         }
-        matcherRef.current = new faceapi.FaceMatcher(labeled, MATCH_THRESHOLD);
+        labeledRef.current = built;
+        readyRef.current = true;
 
         // 4) 카메라가 켜져 있으면 루프 시작 (아니면 재시도 성공 시 startCamera 가 시작)
         if (streamRef.current && !runningRef.current) {
@@ -311,11 +360,35 @@ export default function FaceAttendance() {
       </div>
 
       {stage === "ready" && (
-        <div className="mt-3 text-center">
+        <div className="mt-3 w-full text-center">
           <div className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{status}</div>
           <div className="mt-0.5 text-[12px] text-[#A89B80]">
             등록 얼굴 {progress.total - progress.skipped}명 학습됨
             {progress.skipped > 0 && ` · 사진 인식불가 ${progress.skipped}명`}
+          </div>
+
+          {/* 정밀도(임계값) 조절 — 낮출수록 엄격(오인식 감소), 높일수록 관대 */}
+          <div className="mt-3 mx-auto max-w-[420px] px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900">
+            <div className="flex items-center justify-between text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+              <span>인식 정밀도(임계값)</span>
+              <span className="tabular-nums text-[#6B7B3A] dark:text-[#A8B87A]">{threshold.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min={0.35}
+              max={0.6}
+              step={0.01}
+              value={threshold}
+              onChange={(e) => setThreshold(Number(e.target.value))}
+              className="mt-2 w-full accent-[#6B7B3A]"
+            />
+            <div className="mt-1 flex justify-between text-[11px] text-[#A89B80]">
+              <span>← 엄격 (오인식 ↓)</span>
+              <span>관대 (본인 인식 ↑) →</span>
+            </div>
+            <p className="mt-1.5 text-[11px] text-[#A89B80] leading-relaxed">
+              다른 사람이 출석되면 값을 <strong>낮추고</strong>, 본인이 인식 안 되면 <strong>올리세요</strong>. (권장 0.42~0.48)
+            </p>
           </div>
         </div>
       )}
