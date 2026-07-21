@@ -452,11 +452,43 @@ function IssueModal({
     return d.toISOString().slice(0, 10);
   });
   const [memo, setMemo] = useState("");
+  const [staffList, setStaffList] = useState<{ id: number; display_name: string }[]>([]);
+  const [sellerId, setSellerId] = useState<number | "">("");
+  const [myMemberId, setMyMemberId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // 직원 목록 + 로그인 본인 로드 (판매자 기본값용)
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const h = { authorization: `Bearer ${token}` };
+      const [sRes, bRes] = await Promise.all([
+        fetch("/api/crm/staff", { headers: h }),
+        fetch("/api/crm/bootstrap", { headers: h, cache: "no-store" }),
+      ]);
+      if (sRes.ok) {
+        const d = await sRes.json();
+        setStaffList((d.staff ?? []).filter((s: { status: string }) => s.status === "active"));
+      }
+      if (bRes.ok) setMyMemberId((await bRes.json()).centerMemberId ?? null);
+    })();
+  }, [open, getIdToken]);
+
+  // 판매자 기본값 = 로그인 본인
+  useEffect(() => {
+    if (open && staffList.length > 0 && sellerId === "") {
+      const mine = myMemberId && staffList.some((s) => s.id === myMemberId) ? myMemberId : staffList[0].id;
+      setSellerId(mine);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, staffList, myMemberId]);
+
   useEffect(() => {
     if (!open) {
+      setSellerId("");
       setMemberQuery("");
       setMemberResults([]);
       setPicked(null);
@@ -546,6 +578,7 @@ function IssueModal({
           price_won: priceWon,
           payment_method: paymentMethod,
           payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
+          seller_member_id: sellerId || undefined,
           purchased_at: purchasedAt,
           start_date: startDate,
           expires_at: expiresAt,
@@ -710,6 +743,24 @@ function IssueModal({
               placeholder="결제 수단을 직접 입력하세요"
             />
           )}
+        </CrmField>
+
+        <CrmField label="판매자">
+          <select
+            className={crmInputClass}
+            value={sellerId}
+            onChange={(e) => setSellerId(e.target.value ? Number(e.target.value) : "")}
+          >
+            <option value="">선택해 주세요</option>
+            {staffList.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.display_name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-[#A89B80]">
+            기본은 로그인한 본인이에요. 실제 판매 직원이 다르면 바꿔 주세요.
+          </p>
         </CrmField>
 
         <div className="grid grid-cols-3 gap-2">
