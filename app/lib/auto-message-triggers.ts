@@ -76,6 +76,17 @@ export const SEND_BASIS_LABEL: Record<SendBasis, string> = {
   count: "횟수 기준",
 };
 
+/** 수신 대상 세그먼트 (최대 3개 선택, 미선택 시 조건 해당 전체) */
+export const SEGMENT_OPTIONS: { key: string; label: string }[] = [
+  { key: "all", label: "전체 고객" },
+  { key: "valid", label: "유효 회원" },
+  { key: "expiring", label: "만료 임박" },
+  { key: "expired", label: "만료 회원" },
+  { key: "dormant", label: "장기 미출석(휴면)" },
+  { key: "new", label: "신규 회원" },
+  { key: "birthday", label: "생일자" },
+];
+
 /** 메세지 입력에 쓰는 치환 변수 (클릭 시 자동 입력) */
 export const MESSAGE_VARIABLES: { token: string; desc: string }[] = [
   { token: "#센터명#", desc: "센터 이름" },
