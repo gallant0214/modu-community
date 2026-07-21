@@ -18,6 +18,7 @@ type Result =
  * /crm/touch-attendance — 출석번호 입력식 터치 출석 화면 (새 창).
  * 회원이 본인 출석번호를 누르고 '출석하기' → 체크인.
  * 동일 번호가 여러 명이면 이름을 골라 체크인.
+ * 태블릿용 가로형/세로형 레이아웃 전환 지원.
  */
 export default function TouchAttendancePage() {
   const { getIdToken } = useAuth();
@@ -26,6 +27,21 @@ export default function TouchAttendancePage() {
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState(false);
   const [centerName, setCenterName] = useState("");
+  const [mode, setMode] = useState<"portrait" | "landscape">("portrait");
+
+  // 가로/세로 레이아웃 기억
+  useEffect(() => {
+    const saved = localStorage.getItem("crm_touch_orientation");
+    if (saved === "landscape" || saved === "portrait") setMode(saved);
+  }, []);
+  const toggleMode = () => {
+    setMode((m) => {
+      const next = m === "portrait" ? "landscape" : "portrait";
+      localStorage.setItem("crm_touch_orientation", next);
+      return next;
+    });
+  };
+  const landscape = mode === "landscape";
 
   // 센터명 로드 (상단 표시용)
   useEffect(() => {
@@ -144,20 +160,57 @@ export default function TouchAttendancePage() {
     }
   };
 
+  const display = (
+    <div className="h-[76px] rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 flex items-center justify-center">
+      <span className="text-[40px] font-bold tracking-[0.2em] text-[#2A251D] dark:text-zinc-100">
+        {num || <span className="text-[#C9BEA6] tracking-normal text-[20px] font-medium">출석번호</span>}
+      </span>
+    </div>
+  );
+  const keypad = (
+    <div className="grid grid-cols-3 gap-2.5">
+      {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
+        <KeyBtn key={d} onClick={() => press(d)}>{d}</KeyBtn>
+      ))}
+      <KeyBtn onClick={backspace} variant="muted">←</KeyBtn>
+      <KeyBtn onClick={() => press("0")}>0</KeyBtn>
+      <KeyBtn onClick={clearAll} variant="muted">지움</KeyBtn>
+    </div>
+  );
+  const submitBtn = (
+    <button
+      onClick={submit}
+      disabled={busy || !num.trim()}
+      className={`w-full rounded-2xl bg-[#6B7B3A] text-white text-[20px] font-bold hover:bg-[#5a6932] disabled:opacity-40 ${
+        landscape ? "flex-1 py-6" : "py-5"
+      }`}
+    >
+      {busy ? "처리 중…" : "출석하기"}
+    </button>
+  );
+
   return (
     <div
       className="min-h-dvh flex flex-col items-center px-5 pb-8 bg-[#FEFCF7] dark:bg-zinc-950"
-      // 루트 레이아웃 body 의 상단 NavBar 여백(56px) 상쇄 → 상단부터 센터명만 표시
+      // 루트 레이아웃 body 의 상단 NavBar 여백(56px) 상쇄 - 상단부터 센터명만 표시
       style={{ marginTop: "calc(-1 * (env(safe-area-inset-top, 0px) + 56px))" }}
     >
-      {/* 센터명 상단바 */}
+      {/* 센터명 상단바 + 가로/세로 전환 */}
       <div
-        className="w-full border-b border-[#E8E0D0] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 text-center py-3 mb-6"
+        className="relative w-full border-b border-[#E8E0D0] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 text-center py-3 mb-6"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
       >
         <span className="text-[16px] font-bold text-[#2A251D] dark:text-zinc-100">
           {centerName || " "}
         </span>
+        <button
+          onClick={toggleMode}
+          className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[12.5px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:border-[#6B7B3A]/50"
+          title="가로형 / 세로형 전환"
+        >
+          <OrientationIcon landscape={landscape} />
+          {landscape ? "세로형" : "가로형"}
+        </button>
       </div>
 
       <header className="mb-6 text-center">
@@ -172,7 +225,7 @@ export default function TouchAttendancePage() {
       {/* 결과 토스트 */}
       {result && (
         <div
-          className={`mb-5 w-full max-w-[420px] px-5 py-4 rounded-2xl border-2 text-center
+          className={`mb-5 w-full px-5 py-4 rounded-2xl border-2 text-center ${landscape ? "max-w-[760px]" : "max-w-[420px]"}
             ${result.kind === "success"
               ? result.duplicate
                 ? "border-[#B47B2A] bg-amber-50 text-[#B47B2A]"
@@ -200,11 +253,11 @@ export default function TouchAttendancePage() {
 
       {candidates ? (
         /* 동일 번호 여러 명 → 이름 선택 */
-        <div className="w-full max-w-[420px]">
+        <div className={`w-full ${landscape ? "max-w-[640px]" : "max-w-[420px]"}`}>
           <div className="mb-3 text-center text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
             본인 이름을 선택해 주세요
           </div>
-          <ul className="space-y-2.5">
+          <ul className={landscape ? "grid grid-cols-2 gap-2.5" : "space-y-2.5"}>
             {candidates.map((m) => (
               <li key={m.id}>
                 <button
@@ -227,34 +280,36 @@ export default function TouchAttendancePage() {
             취소
           </button>
         </div>
+      ) : landscape ? (
+        /* 가로형: 좌 표시·출석하기 / 우 키패드 */
+        <div className="w-full max-w-[760px] flex flex-row items-stretch gap-6">
+          <div className="flex-1 flex flex-col justify-center gap-4">
+            {display}
+            {submitBtn}
+          </div>
+          <div className="w-[320px] shrink-0">{keypad}</div>
+        </div>
       ) : (
-        /* 숫자 키패드 */
+        /* 세로형: 표시 → 키패드 → 출석하기 */
         <div className="w-full max-w-[420px]">
-          <div className="mb-4 h-[76px] rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 flex items-center justify-center">
-            <span className="text-[40px] font-bold tracking-[0.2em] text-[#2A251D] dark:text-zinc-100">
-              {num || <span className="text-[#C9BEA6] tracking-normal text-[20px] font-medium">출석번호</span>}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2.5">
-            {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
-              <KeyBtn key={d} onClick={() => press(d)}>{d}</KeyBtn>
-            ))}
-            <KeyBtn onClick={backspace} variant="muted">←</KeyBtn>
-            <KeyBtn onClick={() => press("0")}>0</KeyBtn>
-            <KeyBtn onClick={clearAll} variant="muted">지움</KeyBtn>
-          </div>
-
-          <button
-            onClick={submit}
-            disabled={busy || !num.trim()}
-            className="mt-3 w-full py-5 rounded-2xl bg-[#6B7B3A] text-white text-[20px] font-bold hover:bg-[#5a6932] disabled:opacity-40"
-          >
-            {busy ? "처리 중…" : "출석하기"}
-          </button>
+          <div className="mb-4">{display}</div>
+          {keypad}
+          <div className="mt-3">{submitBtn}</div>
         </div>
       )}
     </div>
+  );
+}
+
+function OrientationIcon({ landscape }: { landscape: boolean }) {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      {landscape ? (
+        <rect x="3" y="6" width="18" height="12" rx="2" />
+      ) : (
+        <rect x="6" y="3" width="12" height="18" rx="2" />
+      )}
+    </svg>
   );
 }
 
