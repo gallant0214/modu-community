@@ -856,6 +856,28 @@ function FacePhotoUpload({
   const [error, setError] = useState("");
   const [zoomOpen, setZoomOpen] = useState(false);
   const [camOpen, setCamOpen] = useState(false);
+  const [camStream, setCamStream] = useState<MediaStream | null>(null);
+  const [camErr, setCamErr] = useState<{ kind: CamErrKind; msg: string } | null>(null);
+
+  // 카메라 요청은 반드시 버튼 클릭(사용자 제스처) 안에서 즉시 호출해야
+  // 크롬이 권한 팝업을 띄운다. 모달을 먼저 열고 요청하면 팝업이 안 뜬다.
+  const openCamera = async () => {
+    setError("");
+    const r = await requestFaceCamera();
+    if (r.stream) {
+      setCamStream(r.stream);
+      setCamErr(null);
+    } else {
+      setCamStream(null);
+      setCamErr({ kind: r.errKind || "other", msg: r.errMsg || "카메라를 열 수 없어요" });
+    }
+    setCamOpen(true);
+  };
+  const closeCamera = () => {
+    setCamOpen(false);
+    setCamStream(null);
+    setCamErr(null);
+  };
 
   const onFile = async (file: File) => {
     setError("");
@@ -975,7 +997,7 @@ function FacePhotoUpload({
           </button>
           <button
             type="button"
-            onClick={() => { setError(""); setCamOpen(true); }}
+            onClick={openCamera}
             disabled={busy}
             title="카메라로 촬영"
             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold shadow-sm border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
@@ -1007,8 +1029,10 @@ function FacePhotoUpload({
       )}
       {camOpen && (
         <FaceCameraModal
-          onClose={() => setCamOpen(false)}
-          onCapture={(file) => { setCamOpen(false); onFile(file); }}
+          initialStream={camStream}
+          initialErr={camErr}
+          onClose={closeCamera}
+          onCapture={(file) => { closeCamera(); onFile(file); }}
         />
       )}
       {error && (
@@ -1018,16 +1042,55 @@ function FacePhotoUpload({
   );
 }
 
+type CamErrKind = "blocked" | "insecure" | "notfound" | "busy" | "other";
+
+/**
+ * 카메라 스트림 요청. 반드시 사용자 클릭(제스처) 안에서 호출해야 권한 팝업이 뜬다.
+ * 성공 시 { stream }, 실패 시 { errKind, errMsg } 반환.
+ */
+async function requestFaceCamera(): Promise<{ stream?: MediaStream; errKind?: CamErrKind; errMsg?: string }> {
+  if (typeof window !== "undefined" && window.isSecureContext === false) {
+    return { errKind: "insecure", errMsg: "보안 연결(HTTPS/localhost)에서만 카메라를 쓸 수 있어요" };
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return { errKind: "insecure", errMsg: "이 주소에서는 카메라를 쓸 수 없어요 (HTTPS 필요)" };
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 1280 } },
+      audio: false,
+    });
+    return { stream };
+  } catch (e) {
+    const name = e instanceof DOMException ? e.name : "";
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      return { errKind: "blocked", errMsg: "카메라 권한이 차단되어 있어요" };
+    }
+    if (name === "NotFoundError" || name === "OverconstrainedError") {
+      return { errKind: "notfound", errMsg: "연결된 카메라를 찾을 수 없어요" };
+    }
+    if (name === "NotReadableError" || name === "TrackStartError" || name === "AbortError") {
+      return { errKind: "busy", errMsg: "다른 앱/탭이 카메라를 사용 중이에요" };
+    }
+    return { errKind: "other", errMsg: "카메라를 열 수 없어요" };
+  }
+}
+
 /**
  * 웹캠으로 회원 얼굴을 실시간 촬영하는 모달.
- * • getUserMedia(전면 카메라) 스트림을 미리보기 (셀피처럼 좌우반전 표시)
+ * • 초기 스트림(initialStream)은 부모의 버튼 클릭 시점에 이미 요청됨(권한 팝업 목적)
+ * • 스트림을 미리보기 (셀피처럼 좌우반전 표시)
  * • "촬영" → 캔버스로 캡처 → 좌우반전 없는 자연스러운 JPEG File 로 반환
  * • 반환된 File 은 얼굴 등록과 동일한 압축/저장 경로(onFile)를 탄다.
  */
 function FaceCameraModal({
+  initialStream,
+  initialErr,
   onClose,
   onCapture,
 }: {
+  initialStream: MediaStream | null;
+  initialErr: { kind: CamErrKind; msg: string } | null;
   onClose: () => void;
   onCapture: (file: File) => void;
 }) {
@@ -1036,9 +1099,8 @@ function FaceCameraModal({
   const fileRef = useRef<HTMLInputElement | null>(null);
   const aliveRef = useRef(true);
   const [ready, setReady] = useState(false);
-  const [error, setError] = useState("");
-  // "blocked": 권한 차단 / "insecure": HTTPS 아님 / "notfound": 카메라 없음 / "other"
-  const [errKind, setErrKind] = useState<"" | "blocked" | "insecure" | "notfound" | "other">("");
+  const [error, setError] = useState(initialErr?.msg ?? "");
+  const [errKind, setErrKind] = useState<"" | CamErrKind>(initialErr?.kind ?? "");
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -1046,6 +1108,7 @@ function FaceCameraModal({
   }, []);
 
   const attachToVideo = useCallback((stream: MediaStream) => {
+    streamRef.current = stream;
     const v = videoRef.current;
     if (!v) return;
     v.srcObject = stream;
@@ -1053,53 +1116,35 @@ function FaceCameraModal({
     v.play().then(() => setReady(true)).catch(() => setReady(true));
   }, []);
 
-  const startCamera = useCallback(async () => {
+  // 재획득 (재시도 버튼 클릭 등 사용자 제스처 or 권한 이미 허용된 상태에서 호출)
+  const acquire = useCallback(async () => {
     setError("");
     setErrKind("");
     setReady(false);
-    // 이전 스트림이 남아 있으면 먼저 정리 (재시도/StrictMode 재실행 대비)
     stopStream();
-    // 보안 컨텍스트(HTTPS 또는 localhost)가 아니면 브라우저가 카메라 API 자체를 막는다
-    if (typeof window !== "undefined" && window.isSecureContext === false) {
-      setErrKind("insecure");
-      setError("보안 연결(HTTPS)에서만 카메라를 쓸 수 있어요");
+    const r = await requestFaceCamera();
+    if (!aliveRef.current) {
+      r.stream?.getTracks().forEach((t) => t.stop());
       return;
     }
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setErrKind("insecure");
-      setError("이 주소에서는 카메라를 쓸 수 없어요 (HTTPS 필요)");
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 1280 } },
-        audio: false,
-      });
-      // await 사이에 모달이 닫혔거나(StrictMode 재실행 포함) 하면 즉시 스트림 반납
-      if (!aliveRef.current) {
-        stream.getTracks().forEach((t) => t.stop());
-        return;
-      }
-      streamRef.current = stream;
-      attachToVideo(stream);
-    } catch (e) {
-      const name = e instanceof DOMException ? e.name : "";
-      if (name === "NotAllowedError" || name === "SecurityError") {
-        setErrKind("blocked");
-        setError("카메라 권한이 차단되어 있어요");
-      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
-        setErrKind("notfound");
-        setError("연결된 카메라를 찾을 수 없어요");
-      } else {
-        setErrKind("other");
-        setError("카메라를 열 수 없어요");
-      }
+    if (r.stream) {
+      attachToVideo(r.stream);
+    } else {
+      setErrKind(r.errKind || "other");
+      setError(r.errMsg || "카메라를 열 수 없어요");
     }
   }, [stopStream, attachToVideo]);
 
   useEffect(() => {
     aliveRef.current = true;
-    startCamera();
+    // 초기 스트림이 살아있으면 그대로 사용. StrictMode 재마운트 등으로 죽었거나 없고
+    // 에러도 아니면(=권한은 이미 허용됨) 조용히 재획득한다.
+    const live = !!initialStream && initialStream.getVideoTracks().some((t) => t.readyState === "live");
+    if (live && initialStream) {
+      attachToVideo(initialStream);
+    } else if (!initialErr) {
+      acquire();
+    }
     const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
@@ -1110,7 +1155,9 @@ function FaceCameraModal({
       document.body.style.overflow = prevOverflow;
       stopStream();
     };
-  }, [startCamera, stopStream, onClose]);
+    // 마운트 시 1회 — initialStream/initialErr 는 이 모달 인스턴스 동안 고정
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const capture = () => {
     const video = videoRef.current;
@@ -1187,6 +1234,11 @@ function FaceCameraModal({
                   다른 앱이 카메라를 쓰고 있지 않은지 확인하고 다시 시도해 주세요.
                 </p>
               )}
+              {errKind === "busy" && (
+                <p className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed text-center">
+                  줌·팀즈·다른 브라우저 탭 등 카메라를 쓰는 앱/탭을 모두 닫고 다시 시도해 주세요.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -1224,7 +1276,7 @@ function FaceCameraModal({
               </button>
               <button
                 type="button"
-                onClick={startCamera}
+                onClick={acquire}
                 className="flex-1 px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932]"
               >
                 다시 시도
