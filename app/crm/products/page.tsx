@@ -359,7 +359,7 @@ export default function CrmProductsPage() {
                     <button
                       type="button"
                       onClick={() => remove(p.id)}
-                      className="px-2.5 py-1.5 rounded-md text-[12px] font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                      className="px-2.5 py-1.5 rounded-md border border-red-300 dark:border-red-800/60 text-[12px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
                     >
                       삭제
                     </button>
@@ -692,7 +692,7 @@ function TypeManagerModal({
                       setEditingKey(row.key);
                       setEditLabel(row.label);
                     }}
-                    className="text-[12px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+                    className="px-2 py-0.5 rounded-md border border-[#D9CDB8] dark:border-zinc-700 text-[12px] text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
                   >
                     수정
                   </button>
@@ -700,7 +700,7 @@ function TypeManagerModal({
                     <button
                       type="button"
                       onClick={() => deleteType(row)}
-                      className="text-[12px] text-red-600 hover:underline"
+                      className="px-2 py-0.5 rounded-md border border-red-300 dark:border-red-800/60 text-[12px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
                     >
                       {row.isBuiltin ? "복원" : "삭제"}
                     </button>
