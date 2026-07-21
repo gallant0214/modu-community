@@ -2861,6 +2861,60 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_auto_message_settings: {
+        Row: {
+          id: number
+          center_id: number
+          trigger_key: string
+          enabled: boolean
+          name: string | null
+          send_basis: string
+          send_days: number | null
+          send_count: number | null
+          methods: Json
+          audience: Json
+          message_body: string
+          coupon_id: number | null
+          config: Json
+          updated_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          trigger_key: string
+          enabled?: boolean
+          name?: string | null
+          send_basis?: string
+          send_days?: number | null
+          send_count?: number | null
+          methods?: Json
+          audience?: Json
+          message_body?: string
+          coupon_id?: number | null
+          config?: Json
+          updated_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          trigger_key?: string
+          enabled?: boolean
+          name?: string | null
+          send_basis?: string
+          send_days?: number | null
+          send_count?: number | null
+          methods?: Json
+          audience?: Json
+          message_body?: string
+          coupon_id?: number | null
+          config?: Json
+          updated_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       crm_audit_logs: {
         Row: {
           id: number

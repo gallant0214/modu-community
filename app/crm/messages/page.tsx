@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../_components/crm-modal";
 import { formatPhone } from "../_components/crm-labels";
+import { AutoMessagesTab } from "./_auto-messages";
 
 type AudienceKind = "all" | "active" | "dormant" | "expiring" | "expired" | "unassigned" | "individual";
 
@@ -42,6 +43,7 @@ const AUDIENCE_LABEL = Object.fromEntries(
 export default function CrmMessagesPage() {
   const { getIdToken } = useAuth();
 
+  const [activeTab, setActiveTab] = useState<"send" | "auto">("send");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState<AudienceKind>("all");
@@ -213,6 +215,31 @@ export default function CrmMessagesPage() {
         </p>
       </header>
 
+      {/* 탭 */}
+      <div className="mb-5 flex items-center gap-1 border-b border-[#E8E0D0] dark:border-zinc-800">
+        {([
+          { key: "send", label: "메세지 전송" },
+          { key: "auto", label: "자동 메세지 전송" },
+        ] as const).map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-3.5 py-2 -mb-px text-[13.5px] font-semibold border-b-2 transition-colors ${
+              activeTab === tab.key
+                ? "border-[#6B7B3A] text-[#3A342A] dark:text-zinc-100"
+                : "border-transparent text-[#8C8270] dark:text-zinc-500 hover:text-[#3A342A] dark:hover:text-zinc-300"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "auto" && <AutoMessagesTab />}
+
+      {activeTab === "send" && (
+       <>
       {/* 대상 선택 */}
       <Section title="1. 발송 대상">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -444,6 +471,8 @@ export default function CrmMessagesPage() {
           </ul>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
