@@ -281,13 +281,13 @@ export default function TouchAttendancePage() {
           </button>
         </div>
       ) : landscape ? (
-        /* 가로형: 좌 표시·출석하기 / 우 키패드 */
+        /* 가로형: 좌 키패드 / 우 표시·출석하기 */
         <div className="w-full max-w-[760px] flex flex-row items-stretch gap-6">
+          <div className="w-[320px] shrink-0">{keypad}</div>
           <div className="flex-1 flex flex-col justify-center gap-4">
             {display}
             {submitBtn}
           </div>
-          <div className="w-[320px] shrink-0">{keypad}</div>
         </div>
       ) : (
         /* 세로형: 표시 → 키패드 → 출석하기 */
