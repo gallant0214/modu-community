@@ -855,6 +855,7 @@ function FacePhotoUpload({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [zoomOpen, setZoomOpen] = useState(false);
+  const [camOpen, setCamOpen] = useState(false);
 
   const onFile = async (file: File) => {
     setError("");
@@ -972,6 +973,26 @@ function FacePhotoUpload({
             </svg>
             {current ? "사진 변경" : "얼굴 등록"}
           </button>
+          <button
+            type="button"
+            onClick={() => { setError(""); setCamOpen(true); }}
+            disabled={busy}
+            title="카메라로 촬영"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold shadow-sm border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+          >
+            <svg
+              className="w-3 h-3"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              viewBox="0 0 24 24"
+            >
+              <rect x="3" y="7" width="18" height="13" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7l1.2-2h5.6L16 7" />
+              <circle cx="12" cy="13.5" r="3.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            얼굴 촬영
+          </button>
           {current && (
             <button
               type="button"
@@ -984,9 +1005,158 @@ function FacePhotoUpload({
           )}
         </div>
       )}
+      {camOpen && (
+        <FaceCameraModal
+          onClose={() => setCamOpen(false)}
+          onCapture={(file) => { setCamOpen(false); onFile(file); }}
+        />
+      )}
       {error && (
         <div className="text-[10px] text-red-600 max-w-[90px] text-center">{error}</div>
       )}
+    </div>
+  );
+}
+
+/**
+ * 웹캠으로 회원 얼굴을 실시간 촬영하는 모달.
+ * • getUserMedia(전면 카메라) 스트림을 미리보기 (셀피처럼 좌우반전 표시)
+ * • "촬영" → 캔버스로 캡처 → 좌우반전 없는 자연스러운 JPEG File 로 반환
+ * • 반환된 File 은 얼굴 등록과 동일한 압축/저장 경로(onFile)를 탄다.
+ */
+function FaceCameraModal({
+  onClose,
+  onCapture,
+}: {
+  onClose: () => void;
+  onCapture: (file: File) => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError("이 브라우저에서는 카메라를 사용할 수 없어요");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 1280 } },
+          audio: false,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
+        }
+        setReady(true);
+      } catch (e) {
+        const name = e instanceof DOMException ? e.name : "";
+        if (name === "NotAllowedError") setError("카메라 권한이 거부되었어요. 브라우저 설정에서 허용해 주세요");
+        else if (name === "NotFoundError") setError("연결된 카메라를 찾을 수 없어요");
+        else setError("카메라를 열 수 없어요");
+      }
+    })();
+
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    };
+  }, [onClose]);
+
+  const capture = () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return;
+    // 중앙 정사각형 crop → 얼굴이 중앙에 크게 담기도록
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const side = Math.min(vw, vh);
+    const sx = (vw - side) / 2;
+    const sy = (vh - side) / 2;
+    const canvas = document.createElement("canvas");
+    canvas.width = side;
+    canvas.height = side;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, sx, sy, side, side, 0, 0, side, side);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        const file = new File([blob], `face-${Date.now()}.jpg`, { type: "image/jpeg" });
+        onCapture(file);
+      },
+      "image/jpeg",
+      0.92,
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
+      <div className="relative w-full max-w-sm rounded-2xl bg-[#FEFCF7] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 shadow-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#E8E0D0] dark:border-zinc-800 text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+          얼굴 촬영
+        </div>
+        <div className="p-4">
+          <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-black flex items-center justify-center">
+            {/* 셀피처럼 좌우반전 미리보기 */}
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              className="w-full h-full object-cover"
+              style={{ transform: "scaleX(-1)" }}
+            />
+            {!ready && !error && (
+              <div className="absolute inset-0 flex items-center justify-center text-white text-[12px]">
+                카메라 준비중…
+              </div>
+            )}
+            {/* 얼굴 가이드 원 */}
+            {ready && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="w-[62%] h-[78%] rounded-full border-2 border-white/60" />
+              </div>
+            )}
+          </div>
+          {error && (
+            <div className="mt-3 text-[12px] text-red-600 text-center">{error}</div>
+          )}
+        </div>
+        <div className="px-4 pb-4 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={capture}
+            disabled={!ready}
+            className="flex-1 px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-40"
+          >
+            촬영
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
