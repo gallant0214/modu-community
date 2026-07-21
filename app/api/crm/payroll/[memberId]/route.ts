@@ -39,7 +39,7 @@ export async function GET(
   const [{ data: passes }, { data: overrideRules }, { data: defaultRules }] = await Promise.all([
     supabase
       .from("crm_passes")
-      .select("id, issue_type, price_won, total_sessions, issued_at, status")
+      .select("id, issue_type, price_won, total_sessions, issued_at, status, vat_included")
       .eq("center_id", ctx.centerId)
       .eq("trainer_member_id", trainerId)
       .neq("status", "deleted")
@@ -90,9 +90,13 @@ export async function GET(
   const breakdown = { new: 0, renewal: 0, trial: 0, service: 0, total: 0 };
   const payout = { new: 0, renewal: 0, trial: 0, total: 0 };
   let sessionCount = 0;
+  // 커미션 기준 = 부가세 제외 수업료 합. vat_included 면 price/1.1, 아니면 그대로.
+  let revenueExVat = 0;
 
   for (const p of passes ?? []) {
-    breakdown.total += p.price_won ?? 0;
+    const price = p.price_won ?? 0;
+    breakdown.total += price;
+    revenueExVat += (p as { vat_included?: boolean }).vat_included ? Math.round(price / 1.1) : price;
     sessionCount += p.total_sessions ?? 0;
     if (p.issue_type === "new") breakdown.new += p.price_won ?? 0;
     else if (p.issue_type === "renewal") breakdown.renewal += p.price_won ?? 0;
@@ -128,7 +132,8 @@ export async function GET(
   const commissionTiers: Tier[] = Array.isArray(trainer?.commission_tiers)
     ? (trainer!.commission_tiers as Tier[])
     : [];
-  const revenue = breakdown.total;
+  // 커미션 % 는 부가세 제외 수업료 기준 (구간 판정·보너스 매출 조건도 동일 기준)
+  const revenue = revenueExVat;
   let effectiveRate = commissionRate;
   if (commissionType === "tiered") {
     const sorted = [...commissionTiers].sort(
@@ -190,6 +195,7 @@ export async function GET(
       rate: commissionRate,
       tiers: commissionTiers,
       effective_rate: effectiveRate,
+      base: revenue, // 부가세 제외 수업료 기준
       payout: commissionPayout,
     },
     base_salary: baseSalary,

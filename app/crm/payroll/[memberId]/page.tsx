@@ -122,6 +122,7 @@ function RevenueTab({ memberId }: { memberId: number }) {
       rate: number;
       tiers: { upTo: number | null; rate: number }[];
       effective_rate: number;
+      base?: number;
       payout: number;
     };
     base_salary: number;
@@ -223,7 +224,7 @@ function RevenueTab({ memberId }: { memberId: number }) {
         )}
 
         <p className="mt-3 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
-          고정 {formatWon(data?.base_salary ?? 0)}원 + 수업료(매출 {formatWon(data?.breakdown.total ?? 0)}원 × {data?.commission.effective_rate ?? 0}%)
+          고정 {formatWon(data?.base_salary ?? 0)}원 + 수업료(부가세 제외 {formatWon(data?.commission.base ?? data?.breakdown.total ?? 0)}원 × {data?.commission.effective_rate ?? 0}%)
           {!!(data?.bonus_payout) && data.bonus_payout > 0 && ` + 커미션 ${formatWon(data.bonus_payout)}원`}
           {!!(data?.cash_pay) && data.cash_pay > 0 && ` + 현금 ${formatWon(data.cash_pay)}원`}
           {" = "}
