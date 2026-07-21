@@ -25,7 +25,7 @@ const PLOT_W = W - PAD_L - PAD_R;
 const PLOT_H = H - PAD_T - PAD_B;
 
 const LAST_COLOR = "#B8AC93";
-const THIS_COLOR = "#E8863B";
+const THIS_COLOR = "#6B7B3A";
 
 function niceMax(v: number): number {
   if (v <= 10) return 10;

@@ -14,7 +14,7 @@ const PAD_R = 14;
 const PAD_T = 16;
 const PAD_B = 26;
 
-const PRIMARY_COLOR = "#E8863B";
+const PRIMARY_COLOR = "#6B7B3A";
 const SECONDARY_COLOR = "#B8AC93";
 
 function niceMax(v: number): number {
