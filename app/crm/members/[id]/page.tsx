@@ -1033,52 +1033,70 @@ function FaceCameraModal({
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
+  // "blocked": 권한 차단 / "insecure": HTTPS 아님 / "notfound": 카메라 없음 / "other"
+  const [errKind, setErrKind] = useState<"" | "blocked" | "insecure" | "notfound" | "other">("");
+
+  const stopStream = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    setError("");
+    setErrKind("");
+    setReady(false);
+    // 보안 컨텍스트(HTTPS 또는 localhost)가 아니면 브라우저가 카메라 API 자체를 막는다
+    if (typeof window !== "undefined" && window.isSecureContext === false) {
+      setErrKind("insecure");
+      setError("보안 연결(HTTPS)에서만 카메라를 쓸 수 있어요");
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setErrKind("insecure");
+      setError("이 주소에서는 카메라를 쓸 수 없어요 (HTTPS 필요)");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 1280 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+      setReady(true);
+    } catch (e) {
+      const name = e instanceof DOMException ? e.name : "";
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        setErrKind("blocked");
+        setError("카메라 권한이 차단되어 있어요");
+      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+        setErrKind("notfound");
+        setError("연결된 카메라를 찾을 수 없어요");
+      } else {
+        setErrKind("other");
+        setError("카메라를 열 수 없어요");
+      }
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setError("이 브라우저에서는 카메라를 사용할 수 없어요");
-        return;
-      }
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 1280 } },
-          audio: false,
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play().catch(() => {});
-        }
-        setReady(true);
-      } catch (e) {
-        const name = e instanceof DOMException ? e.name : "";
-        if (name === "NotAllowedError") setError("카메라 권한이 거부되었어요. 브라우저 설정에서 허용해 주세요");
-        else if (name === "NotFoundError") setError("연결된 카메라를 찾을 수 없어요");
-        else setError("카메라를 열 수 없어요");
-      }
-    })();
-
+    startCamera();
     const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-
     return () => {
-      cancelled = true;
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
+      stopStream();
     };
-  }, [onClose]);
+  }, [startCamera, stopStream, onClose]);
 
   const capture = () => {
     const video = videoRef.current;
@@ -1136,9 +1154,41 @@ function FaceCameraModal({
             )}
           </div>
           {error && (
-            <div className="mt-3 text-[12px] text-red-600 text-center">{error}</div>
+            <div className="mt-3 space-y-1.5">
+              <div className="text-[12.5px] font-semibold text-red-600 text-center">{error}</div>
+              {errKind === "blocked" && (
+                <p className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed text-center">
+                  주소창 왼쪽의 <span className="font-semibold">🔒 / 카메라 아이콘</span> → <span className="font-semibold">카메라 허용</span> → 페이지 새로고침 후 다시 시도해 주세요.
+                </p>
+              )}
+              {errKind === "insecure" && (
+                <p className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed text-center">
+                  브라우저 보안 정책상 카메라는 <span className="font-semibold">https 주소</span>에서만 열려요. 아래 <span className="font-semibold">사진으로 등록</span>을 이용하시면 휴대폰에서는 카메라가 바로 열립니다.
+                </p>
+              )}
+              {errKind === "notfound" && (
+                <p className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed text-center">
+                  다른 앱이 카메라를 쓰고 있지 않은지 확인하고 다시 시도해 주세요.
+                </p>
+              )}
+            </div>
           )}
         </div>
+
+        {/* 카메라가 막혀도 항상 쓸 수 있는 파일/기기카메라 대체 경로 */}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          capture="user"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (f) onCapture(f);
+          }}
+        />
+
         <div className="px-4 pb-4 flex items-center gap-2">
           <button
             type="button"
@@ -1147,14 +1197,33 @@ function FaceCameraModal({
           >
             취소
           </button>
-          <button
-            type="button"
-            onClick={capture}
-            disabled={!ready}
-            className="flex-1 px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-40"
-          >
-            촬영
-          </button>
+          {error ? (
+            <>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex-1 px-3 py-2 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] text-[13px] font-semibold hover:bg-[#6B7B3A]/5"
+              >
+                사진으로 등록
+              </button>
+              <button
+                type="button"
+                onClick={startCamera}
+                className="flex-1 px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932]"
+              >
+                다시 시도
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={capture}
+              disabled={!ready}
+              className="flex-1 px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-40"
+            >
+              촬영
+            </button>
+          )}
         </div>
       </div>
     </div>
