@@ -19,6 +19,24 @@ export async function GET(request: Request) {
 
   const ctx = await loadCrmContextForUid(user.uid);
   if (!ctx) {
+    // 승인 대기중(pending)인 센터 가입 요청이 있으면 앱에 알려서 "승인 대기 중" 표시.
+    const { data: pending } = await supabase
+      .from("crm_center_members")
+      .select("center_id, crm_centers!inner(name)")
+      .eq("firebase_uid", user.uid)
+      .eq("status", "pending")
+      .order("requested_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (pending) {
+      const c = Array.isArray(pending.crm_centers)
+        ? pending.crm_centers[0]
+        : (pending.crm_centers as { name?: string } | null);
+      return NextResponse.json({
+        onboarded: false,
+        pending: { centerId: pending.center_id, centerName: c?.name ?? "" },
+      });
+    }
     return NextResponse.json({ onboarded: false });
   }
   const { data: centerInfo } = await supabase

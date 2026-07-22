@@ -74,8 +74,39 @@ export async function POST(request: Request) {
     .maybeSingle();
   const displayName = nick?.name || user.email?.split("@")[0] || "사용자";
 
-  // trainer 멤버십 생성
-  const { data: member, error: memberErr } = await supabase
+  // status='pending' 으로 가입 요청 생성 → 센터장이 직원관리에서 수락해야 active.
+  // 이미 이 센터에 row 가 있으면(거절/퇴사 포함) 재사용해서 다시 pending 으로.
+  const nowIso = new Date().toISOString();
+  const { data: existingRow } = await supabase
+    .from("crm_center_members")
+    .select("id, status")
+    .eq("center_id", center.id)
+    .eq("firebase_uid", user.uid)
+    .maybeSingle();
+
+  if (existingRow) {
+    if (existingRow.status === "pending") {
+      // 이미 요청함 — 멱등 응답
+      return NextResponse.json({ pending: true, centerId: center.id, centerName: center.name });
+    }
+    const { error: reErr } = await supabase
+      .from("crm_center_members")
+      .update({
+        status: "pending",
+        role: "trainer",
+        access_level: "none",
+        requested_at: nowIso,
+        display_name: displayName,
+        email: user.email ?? null,
+      } as never)
+      .eq("id", existingRow.id);
+    if (reErr) {
+      return NextResponse.json({ error: "요청 실패", detail: reErr.message }, { status: 500 });
+    }
+    return NextResponse.json({ pending: true, centerId: center.id, centerName: center.name });
+  }
+
+  const { error: memberErr } = await supabase
     .from("crm_center_members")
     .insert({
       center_id: center.id,
@@ -83,38 +114,19 @@ export async function POST(request: Request) {
       role: "trainer",
       display_name: displayName,
       email: user.email ?? null,
-      access_level: "none",          // 🚨 사장님이 권한 올리기 전까지 데이터 접근 0
+      access_level: "none",
       is_solo_owner: false,
-      status: "active",
-    })
-    .select("id")
-    .single();
+      status: "pending",        // 🚨 승인 대기. 수락 전까지 CRM 컨텍스트에 안 잡힘.
+      requested_at: nowIso,
+    } as never);
 
-  if (memberErr || !member) {
+  if (memberErr) {
     return NextResponse.json(
-      { error: "가입 실패", detail: memberErr?.message },
+      { error: "요청 실패", detail: memberErr.message },
       { status: 500 }
     );
   }
 
-  // PDF 2-3 기본 권한 — 모두 true 디폴트. 사장님이 직원관리에서 끌 수 있음.
-  await supabase.from("crm_trainer_permissions").insert({
-    center_member_id: member.id,
-    can_create_reservation: true,
-    can_modify_reservation: true,
-    can_cancel_reservation: true,
-    attendance_mode: "trainer",
-    can_cancel_attendance: true,
-    can_issue_pass: true,
-  });
-
-  return NextResponse.json({
-    onboarded: true,
-    centerId: center.id,
-    centerName: center.name,
-    centerKind: "center" as const,
-    role: "trainer" as const,
-    accessLevel: "none" as const,
-    isSoloOwner: false,
-  });
+  // 강사 권한 row 는 승인 시점(staff/requests approve)에 생성한다.
+  return NextResponse.json({ pending: true, centerId: center.id, centerName: center.name });
 }

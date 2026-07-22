@@ -216,18 +216,23 @@ export default function CrmSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const load = useCallback(async () => {
     setError("");
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const [a, b] = await Promise.all([
+      const [a, b, c] = await Promise.all([
         fetch("/api/crm/settings", {
           headers: { authorization: `Bearer ${token}` },
           cache: "no-store",
         }),
         fetch("/api/crm/bootstrap", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }),
+        fetch("/api/crm/staff/requests?count=1", {
           headers: { authorization: `Bearer ${token}` },
           cache: "no-store",
         }),
@@ -239,12 +244,33 @@ export default function CrmSettingsPage() {
         const bi = await b.json();
         setInfo({ role: bi.role, centerName: bi.centerName, businessNo: bi.businessNo ?? null });
       }
+      if (c.ok) {
+        const cc = await c.json();
+        setPendingCount(cc.count ?? 0);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
       setLoading(false);
     }
   }, [getIdToken]);
+
+  // 직원관리 탭으로 이동하면 요청을 처리했을 수 있으니 배지 카운트 재조회
+  useEffect(() => {
+    if (tab !== "staff") return;
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/staff/requests?count=1", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setPendingCount(d.count ?? 0);
+      }
+    })();
+  }, [tab, getIdToken]);
 
   useEffect(() => {
     load();
@@ -347,6 +373,7 @@ export default function CrmSettingsPage() {
               desc={item.desc}
               icon={item.icon}
               danger={item.danger}
+              badge={item.key === "staff" ? pendingCount : 0}
             />
           ))}
         </div>
@@ -2452,6 +2479,7 @@ function TabBtn({
   desc,
   icon,
   danger,
+  badge = 0,
 }: {
   active: boolean;
   onClick: () => void;
@@ -2459,6 +2487,7 @@ function TabBtn({
   desc: string;
   icon: (typeof SETTINGS_TABS)[number]["icon"];
   danger?: boolean;
+  badge?: number;
 }) {
   const activeCls = danger
     ? "border-red-300 bg-red-50 text-red-700 shadow-sm dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-300"
@@ -2478,8 +2507,13 @@ function TabBtn({
       onClick={onClick}
       className={`group flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-all ${active ? activeCls : inactiveCls}`}
     >
-      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${iconCls}`}>
+      <span className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${iconCls}`}>
         <SettingsTabIcon kind={icon} className="h-4 w-4" />
+        {badge > 0 && (
+          <span className="absolute -right-1.5 -top-1.5 inline-flex min-w-[16px] h-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+            {badge}
+          </span>
+        )}
       </span>
       <span className="min-w-0">
         <span className="block truncate text-[13px] font-bold">{label}</span>

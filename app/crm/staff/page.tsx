@@ -29,25 +29,47 @@ interface StaffRow {
   left_at: string | null;
 }
 
+interface JoinRequest {
+  id: number;
+  firebase_uid: string;
+  display_name: string;
+  email: string | null;
+  phone: string | null;
+  requested_at: string | null;
+  created_at: string;
+}
+
 export default function CrmStaffPage() {
   const { getIdToken } = useAuth();
   const [list, setList] = useState<StaffRow[]>([]);
+  const [requests, setRequests] = useState<JoinRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [actingId, setActingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setError("");
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch("/api/crm/staff", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      const [staffRes, reqRes] = await Promise.all([
+        fetch("/api/crm/staff", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }),
+        fetch("/api/crm/staff/requests", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }),
+      ]);
+      const data = await staffRes.json();
+      if (!staffRes.ok) throw new Error(data?.error || "조회 실패");
       setList(data.staff ?? []);
+      if (reqRes.ok) {
+        const reqData = await reqRes.json();
+        setRequests(reqData.requests ?? []);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -58,6 +80,33 @@ export default function CrmStaffPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleRequest = useCallback(
+    async (id: number, action: "approve" | "reject") => {
+      setActingId(id);
+      setError("");
+      try {
+        const token = await getIdToken();
+        if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+        const res = await fetch(`/api/crm/staff/requests/${id}`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ action }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "처리 실패");
+        await load();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "네트워크 오류");
+      } finally {
+        setActingId(null);
+      }
+    },
+    [getIdToken, load]
+  );
 
   const active = list.filter((s) => s.status === "active");
   const inactive = list.filter((s) => s.status !== "active");
@@ -91,6 +140,14 @@ export default function CrmStaffPage() {
         <ListMessage>불러오는 중…</ListMessage>
       ) : (
         <>
+          {requests.length > 0 && (
+            <JoinRequests
+              requests={requests}
+              actingId={actingId}
+              onApprove={(id) => handleRequest(id, "approve")}
+              onReject={(id) => handleRequest(id, "reject")}
+            />
+          )}
           <StaffTable rows={active} label="재직 중" />
           {inactive.length > 0 && (
             <div className="mt-8">
@@ -101,7 +158,7 @@ export default function CrmStaffPage() {
       )}
 
       <Hint>
-        강사가 직접 가입하려면 onboarding에서 센터를 검색해 가입할 수 있어요. 가입 직후엔 권한이 없으니 여기서 등급과 권한을 조정해 주세요.
+        강사가 앱에서 센터를 검색해 가입을 요청하면 위 &lsquo;강사 등록 요청&rsquo;에 표시돼요. 수락하면 직원으로 등록되고, 등급·권한은 여기서 조정할 수 있어요.
       </Hint>
 
       <AddStaffModal
@@ -519,6 +576,62 @@ function ListMsg({ children }: { children: React.ReactNode }) {
   return (
     <div className="px-4 py-6 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
       {children}
+    </div>
+  );
+}
+
+function JoinRequests({
+  requests,
+  actingId,
+  onApprove,
+  onReject,
+}: {
+  requests: JoinRequest[];
+  actingId: number | null;
+  onApprove: (id: number) => void;
+  onReject: (id: number) => void;
+}) {
+  return (
+    <div className="mb-8">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-[12px] font-medium text-[#A89B80] dark:text-zinc-500">
+          강사 등록 요청
+        </span>
+        <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[11px] font-bold">
+          {requests.length}
+        </span>
+      </div>
+      <div className="rounded-2xl border border-[#E8D6B8] bg-[#FFFBF2] dark:border-amber-900/40 dark:bg-amber-950/20 divide-y divide-[#EFE3CB] dark:divide-amber-900/30">
+        {requests.map((r) => {
+          const busy = actingId === r.id;
+          return (
+            <div key={r.id} className="flex items-center gap-3 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
+                  {r.display_name}
+                </div>
+                <div className="text-[12px] text-[#8C8270] dark:text-zinc-400 truncate">
+                  {[r.phone ? formatPhone(r.phone) : null, r.email].filter(Boolean).join(" · ") || "정보 없음"}
+                </div>
+              </div>
+              <button
+                onClick={() => onApprove(r.id)}
+                disabled={busy}
+                className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-50 transition-colors whitespace-nowrap"
+              >
+                {busy ? "처리 중…" : "수락"}
+              </button>
+              <button
+                onClick={() => onReject(r.id)}
+                disabled={busy}
+                className="px-3 py-1.5 rounded-lg border border-[#E0C3C3] text-red-600 dark:text-red-400 dark:border-red-900/50 text-[12.5px] font-semibold hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50 transition-colors whitespace-nowrap"
+              >
+                거절
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
