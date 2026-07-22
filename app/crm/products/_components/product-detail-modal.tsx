@@ -29,6 +29,7 @@ export interface ProductDetail {
   session_minutes: number;
   daily_check_in_limit?: number;
   daily_time_limit_enabled?: boolean;
+  components?: import("./product-form").BundleComponent[];
   status: string;
 }
 
@@ -141,6 +142,27 @@ export function ProductDetailModal({ product, typeLabel, onClose, onEdit, onDele
           )}
           <Field label="마일리지 사용">{p.mileage_usable === false ? "불가" : "가능"}</Field>
         </div>
+
+        {/* 묶음 구성 상품 */}
+        {Array.isArray(p.components) && p.components.length > 0 && (
+          <div>
+            <div className="text-[12.5px] font-medium text-[#6B5D47] mb-1">묶음 구성 상품</div>
+            <ul className="space-y-1">
+              {p.components.map((c, i) => (
+                <li
+                  key={i}
+                  className="text-[13px] text-[#3A342A] dark:text-zinc-200 flex items-center gap-2 border border-[#E8E0D0] dark:border-zinc-800 rounded-lg px-3 py-1.5 bg-[#FBF7EB]/50 dark:bg-zinc-900/50"
+                >
+                  <span className="font-semibold">[{TYPE_LABEL[c.type] ?? c.type}]</span>
+                  <span>{c.billing_mode === "count" ? `${c.total_sessions ?? 0}회` : `${c.duration_value ?? 0}일`}</span>
+                  {(c.type === "personal" || c.type === "group") && c.session_minutes ? (
+                    <span className="text-[#8C8270]">· {c.session_minutes}분</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* 설명 */}
         {p.description && (

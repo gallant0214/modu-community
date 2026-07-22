@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { sanitizeComponents } from "../route";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +87,7 @@ export async function PATCH(
   for (const k of allowed) {
     if (k in body) patch[k] = body[k];
   }
+  if ("components" in body) patch.components = sanitizeComponents(body.components);
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
   }

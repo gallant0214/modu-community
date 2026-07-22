@@ -1485,6 +1485,7 @@ export type Database = {
           session_minutes: number
           daily_check_in_limit: number
           daily_time_limit_enabled: boolean
+          components: Json
           status: string
           created_at: string
           updated_at: string
@@ -1516,6 +1517,7 @@ export type Database = {
           session_minutes?: number
           daily_check_in_limit?: number
           daily_time_limit_enabled?: boolean
+          components?: Json
           status?: string
           created_at?: string
           updated_at?: string
@@ -1547,6 +1549,7 @@ export type Database = {
           session_minutes?: number
           daily_check_in_limit?: number
           daily_time_limit_enabled?: boolean
+          components?: Json
           status?: string
           created_at?: string
           updated_at?: string
