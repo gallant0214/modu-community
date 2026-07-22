@@ -321,9 +321,26 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
                 ) : (
                   <span>
                     {formatWon(pass.price_won)}원
-                    {pass.vat_included && <span className="ml-1 text-[11.5px] text-[#A89B80]">부가세 포함</span>}
+                    <span className="ml-1 text-[11.5px] text-[#A89B80]">
+                      {pass.vat_included ? "부가세 포함" : "부가세 별도"}
+                    </span>
                   </span>
                 )}
+              </ModalField>
+              <ModalField label="회당 수업료">
+                {(() => {
+                  const price = editMode ? priceWon : pass.price_won;
+                  const sessions = editMode ? totalSessions : pass.total_sessions;
+                  const per = sessions > 0 ? Math.round(price / sessions) : price;
+                  return (
+                    <span>
+                      {formatWon(per)}원
+                      <span className="ml-1 text-[11.5px] text-[#A89B80]">
+                        {pass.vat_included ? "부가세 포함" : "부가세 별도"}
+                      </span>
+                    </span>
+                  );
+                })()}
               </ModalField>
               <ModalField label="결제 수단">
                 {editMode ? (
