@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
-import { residentHash, residentBirth, residentEncrypt } from "@/app/lib/crm-identity";
+import { residentHash, residentBirth, residentEncrypt, isResidentEncryptionConfigured } from "@/app/lib/crm-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -117,12 +117,19 @@ export async function PATCH(
     if (trimmed && !hash) {
       return NextResponse.json({ error: "주민번호 13자리를 정확히 입력해 주세요" }, { status: 400 });
     }
+    // 서버 환경변수 RESIDENT_ENC_KEY 필수 (미설정 시 원본을 복구 불가 → 저장 자체 거부)
+    if (trimmed && !isResidentEncryptionConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            "서버에 주민번호 암호화 키(RESIDENT_ENC_KEY)가 설정돼 있지 않아요. 관리자에게 환경변수 설정을 요청해 주세요.",
+        },
+        { status: 500 }
+      );
+    }
     patch.resident_hash = hash;
-    // 원본은 AES-256-GCM 으로 암호화해서 저장 (본인/대표자만 조회 가능)
-    // RESIDENT_ENC_KEY 미설정 시 encrypted 는 null → 이 경우 눈 아이콘으로 원본 조회 불가
-    // supabase-js 는 bytea 컬럼에 hex 문자열(\x prefix)로 전달해야 함
-    const enc = trimmed ? residentEncrypt(trimmed) : null;
-    patch.resident_encrypted = enc ? `\\x${enc.toString("hex")}` : null;
+    // 원본은 AES-256-GCM 으로 암호화해서 hex 문자열로 text 컬럼에 저장 (본인/대표자만 조회 가능)
+    patch.resident_encrypted = trimmed ? residentEncrypt(trimmed) : null;
     // 생년월일 미입력 시 주민번호 앞 6자리로 자동 채움
     const yymmdd = residentBirth(trimmed);
     if (yymmdd && body.birth === undefined) {

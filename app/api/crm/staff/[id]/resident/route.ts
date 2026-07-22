@@ -48,7 +48,7 @@ export async function GET(
     return NextResponse.json({ error: "직원을 찾을 수 없어요" }, { status: 404 });
   }
 
-  const encField = (row as unknown as { resident_encrypted: unknown }).resident_encrypted;
+  const encField = (row as unknown as { resident_encrypted: string | null }).resident_encrypted;
   if (!encField) {
     return NextResponse.json(
       { error: "암호화된 원본이 저장돼 있지 않아요. 다시 입력해 저장해 주세요." },
@@ -56,18 +56,7 @@ export async function GET(
     );
   }
 
-  // supabase-js 는 bytea 를 hex 문자열(\x prefix) 로 반환
-  let buf: Buffer;
-  if (typeof encField === "string") {
-    const hex = encField.startsWith("\\x") ? encField.slice(2) : encField;
-    buf = Buffer.from(hex, "hex");
-  } else if (encField instanceof Uint8Array) {
-    buf = Buffer.from(encField);
-  } else {
-    return NextResponse.json({ error: "저장 데이터 형식 오류" }, { status: 500 });
-  }
-
-  const plain = residentDecrypt(buf);
+  const plain = residentDecrypt(encField);
   if (!plain) {
     return NextResponse.json(
       { error: "복호화 실패. 관리자에게 문의해 주세요 (환경변수 확인 필요)." },
