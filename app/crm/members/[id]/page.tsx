@@ -289,10 +289,20 @@ export default function CrmMemberDetailPage() {
                   {isMemberActive(member) ? "이용중" : "확인 필요"}
                 </span>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-                <span>{member.phone ? formatPhone(member.phone) : "연락처 없음"}</span>
-                {member.email && <span>{member.email}</span>}
-                {member.attendance_no && <span>출석번호 {member.attendance_no}</span>}
+              <div className="mt-2 space-y-1">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                    {member.phone ? formatPhone(member.phone) : "연락처 없음"}
+                  </span>
+                  {member.email && (
+                    <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">{member.email}</span>
+                  )}
+                </div>
+                {member.attendance_no && (
+                  <div className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                    출석번호 <span className="tabular-nums">{member.attendance_no}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -338,7 +348,7 @@ export default function CrmMemberDetailPage() {
       </div>
 
       {tab === "logs" ? (
-        <MemberLogsSection memberId={member.id} />
+        <MemberLogsSection memberId={member.id} staffList={staffList} />
       ) : tab === "payments" ? (
         <MemberPaymentsSection memberId={member.id} />
       ) : tab === "reservations" ? (
@@ -1890,9 +1900,38 @@ const ACTION_LABEL: Record<string, string> = {
   "pause.create": "홀딩 시작",
   "pause.update": "홀딩 수정",
   "message.broadcast": "메시지 발송",
+  "attendance.cancel": "출석 취소",
+  "member.face_register": "얼굴 등록",
 };
 
-function MemberLogsSection({ memberId }: { memberId: number }) {
+// 로그 payload 필드 → 한글 라벨
+const LOG_FIELD_LABEL: Record<string, string> = {
+  name: "이름", phone: "연락처", email: "이메일", birth: "생년월일", gender: "성별",
+  address: "주소", counselor: "상담사", visit_route: "방문 경로", workout_goal: "운동 목적",
+  memo: "메모", note: "메모", registration_type: "신규/재등록", registered_at: "등록일",
+  first_use_at: "이용 시작일", final_expire_at: "최종 만료일", last_purchase_at: "마지막 구매일",
+  last_attended_at: "마지막 출석일", total_paid_won: "누적 결제", attendance_no: "출석번호",
+  mileage: "마일리지", marketing_consent: "광고 수신", member_type: "회원 유형",
+  face_image_data: "얼굴 사진", face_image_thumb: "얼굴 사진",
+  price_won: "금액", amount_won: "금액", discount_won: "할인", expires_at: "만료일",
+  start_date: "시작일", purchased_at: "구매일", issued_at: "발급일", vat_included: "부가세",
+  payment_method: "결제 수단", payment_method_custom: "결제 수단(기타)", seller_member_id: "판매자",
+  trainer_member_id: "담당 강사", plan_name: "플랜", duration_days: "기간", item_name: "상품",
+  total_sessions: "총 세션", remaining_sessions: "잔여 세션", session_minutes: "수업 시간",
+  issue_type: "발급 유형", lesson_kind: "수업 종류", mileage_earned: "적립 마일리지",
+  mileage_used: "사용 마일리지", co_trainer_ids: "추가 강사", reason: "사유", requested_by: "요청자",
+};
+const LOG_MONEY_FIELDS = new Set(["price_won", "amount_won", "discount_won", "total_paid_won"]);
+const LOG_IMAGE_FIELDS = new Set(["face_image_data", "face_image_thumb"]);
+const LOG_ISSUE_TYPE: Record<string, string> = { new: "신규", renewal: "재등록", trial: "체험", service: "서비스" };
+
+function MemberLogsSection({
+  memberId,
+  staffList = [],
+}: {
+  memberId: number;
+  staffList?: { id: number; display_name: string }[];
+}) {
   const { getIdToken } = useAuth();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1936,71 +1975,85 @@ function MemberLogsSection({ memberId }: { memberId: number }) {
     );
   }
 
+  const nameOf = (id: unknown): string => {
+    const n = Number(id);
+    return staffList.find((s) => s.id === n)?.display_name ?? (n ? `직원 #${n}` : "없음");
+  };
+
   return (
     <div className="space-y-2">
       <div className="text-[11.5px] text-[#8C8270]">최근 {logs.length}건 · 최신순</div>
       <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
-        {logs.map((l) => (
-          <li key={l.id} className="px-4 py-3">
-            <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]">
-                  {ACTION_LABEL[l.action] ?? l.action}
-                </span>
-                <span className="text-[12px] text-[#8C8270] truncate">
-                  {l.actor_name ?? "—"}
+        {logs.map((l) => {
+          const summary = summarizeLog(l, nameOf);
+          return (
+            <li key={l.id} className="px-4 py-2.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="min-w-0 flex items-baseline gap-2 flex-wrap">
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A] shrink-0">
+                    {ACTION_LABEL[l.action] ?? l.action}
+                  </span>
+                  {summary && (
+                    <span className="text-[12.5px] text-[#3A342A] dark:text-zinc-200">{summary}</span>
+                  )}
+                </div>
+                <span className="text-[11px] text-[#A89B80] shrink-0 whitespace-nowrap">
+                  {formatLogTime(l.created_at)}
                 </span>
               </div>
-              <span className="text-[11px] text-[#A89B80] shrink-0">
-                {formatLogTime(l.created_at)}
-              </span>
-            </div>
-            {renderPayload(l)}
-          </li>
-        ))}
+              <div className="mt-0.5 text-[11px] text-[#A89B80]">{l.actor_name ?? "—"}</div>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
 }
 
-function renderPayload(l: AuditLog): React.ReactNode {
-  if (!l.payload || typeof l.payload !== "object") return null;
+/** 로그 payload → 사람이 읽는 한 줄 한글 요약 */
+function summarizeLog(l: AuditLog, nameOf: (id: unknown) => string): string {
+  if (!l.payload || typeof l.payload !== "object") return "";
   const p = l.payload as Record<string, unknown>;
-  // 회원 정보 수정: changes: { field: {from, to} }
+  const fmt = (field: string, v: unknown): string => {
+    if (LOG_IMAGE_FIELDS.has(field)) return v ? "등록" : "삭제";
+    if (v === null || v === undefined || v === "") return "없음";
+    if (field.endsWith("_member_id")) return nameOf(v);
+    if (LOG_MONEY_FIELDS.has(field)) return `${Number(v).toLocaleString()}원`;
+    if (field === "vat_included") return v ? "포함" : "미포함";
+    if (field === "marketing_consent") return v ? "동의" : "미동의";
+    if (field === "payment_method") return PAYMENT_METHOD_LABEL[String(v)] ?? String(v);
+    if (field === "issue_type") return LOG_ISSUE_TYPE[String(v)] ?? String(v);
+    if (field === "gender") return GENDER_LABEL[String(v) as "M" | "F" | "N"] ?? String(v);
+    if (typeof v === "boolean") return v ? "예" : "아니오";
+    if (typeof v === "number") return v.toLocaleString();
+    if (typeof v === "string") {
+      if (v.startsWith("data:image")) return "등록";
+      return v.length > 30 ? v.slice(0, 30) + "…" : v;
+    }
+    if (Array.isArray(v)) return `${v.length}명`;
+    return "";
+  };
+
+  // 회원 정보 수정: changes { field: {from, to} }
   const changes = p.changes as Record<string, { from: unknown; to: unknown }> | undefined;
   if (changes && Object.keys(changes).length > 0) {
-    return (
-      <ul className="mt-1.5 space-y-0.5 text-[12px] text-[#6B5D47] dark:text-zinc-400">
-        {Object.entries(changes).map(([k, v]) => (
-          <li key={k} className="flex items-baseline gap-2">
-            <span className="text-[#8C8270] shrink-0">{k}</span>
-            <span className="text-[#A89B80] line-through">{fmtVal(v.from)}</span>
-            <span className="text-[#A89B80]">→</span>
-            <span className="text-[#3A342A] dark:text-zinc-200 font-medium">{fmtVal(v.to)}</span>
-          </li>
-        ))}
-      </ul>
-    );
+    return Object.entries(changes)
+      .map(([k, v]) => {
+        const label = LOG_FIELD_LABEL[k] ?? k;
+        if (LOG_IMAGE_FIELDS.has(k)) return `${label} ${v.to ? "변경" : "삭제"}`;
+        return `${label} ${fmt(k, v.from)}→${fmt(k, v.to)}`;
+      })
+      .join(" · ");
   }
-  // 기타 payload 요약
-  const summary = Object.entries(p)
-    .filter(([k]) => k !== "member_id")
-    .map(([k, v]) => `${k}: ${fmtVal(v)}`)
-    .join(" · ");
-  if (!summary) return null;
-  return (
-    <div className="mt-1 text-[11.5px] text-[#8C8270] dark:text-zinc-500 truncate">
-      {summary}
-    </div>
-  );
-}
-
-function fmtVal(v: unknown): string {
-  if (v === null || v === undefined) return "—";
-  if (typeof v === "boolean") return v ? "true" : "false";
-  if (typeof v === "string") return v.length > 40 ? v.slice(0, 40) + "…" : v;
-  if (typeof v === "number") return v.toLocaleString();
-  return JSON.stringify(v).slice(0, 40);
+  // 그 외 payload: 한글 라벨 요약 (핵심 필드만, 최대 5개)
+  const parts = Object.entries(p)
+    .filter(([k]) => k !== "member_id" && k !== "id")
+    .map(([k, v]) => {
+      if (LOG_IMAGE_FIELDS.has(k)) return `${LOG_FIELD_LABEL[k] ?? k} ${v ? "변경" : "삭제"}`;
+      return `${LOG_FIELD_LABEL[k] ?? k} ${fmt(k, v)}`;
+    })
+    .filter(Boolean);
+  return parts.slice(0, 5).join(" · ");
 }
 
 function formatLogTime(iso: string): string {
