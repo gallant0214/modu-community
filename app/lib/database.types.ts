@@ -1200,6 +1200,48 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_vendors: {
+        Row: {
+          id: number
+          center_id: number
+          name: string
+          phone: string | null
+          category: string | null
+          memo: string | null
+          sort_order: number
+          status: string
+          created_by_uid: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          name: string
+          phone?: string | null
+          category?: string | null
+          memo?: string | null
+          sort_order?: number
+          status?: string
+          created_by_uid?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          name?: string
+          phone?: string | null
+          category?: string | null
+          memo?: string | null
+          sort_order?: number
+          status?: string
+          created_by_uid?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_centers: {
         Row: {
           id: number

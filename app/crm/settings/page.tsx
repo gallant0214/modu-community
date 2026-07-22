@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmModal } from "../_components/crm-modal";
 import { crmInputClass } from "../_components/crm-modal";
-import { formatWon, parseWon } from "../_components/crm-labels";
+import { formatWon, parseWon, formatPhone } from "../_components/crm-labels";
 import {
   PERMISSION_GROUPS,
   buildGradePermissionMatrix,
@@ -90,6 +90,7 @@ const ACTION_LABEL: Record<string, string> = {
   "pause.create": "홀딩(일시정지) 시작",
   "pause.cancel": "홀딩 취소",
   "fixed_expense.create": "고정 지출 추가",
+  "vendor.create": "거래처 등록",
   "fixed_expense.update": "고정 지출 수정",
   "fixed_expense.delete": "고정 지출 삭제",
   "additional_expense.create": "추가 지출 추가",
@@ -167,7 +168,7 @@ interface BootstrapInfo {
 export default function CrmSettingsPage() {
   const router = useRouter();
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<"reservation" | "alerts" | "notices" | "mileage" | "grades" | "permissions" | "logs" | "expenses" | "danger">("reservation");
+  const [tab, setTab] = useState<"reservation" | "alerts" | "notices" | "mileage" | "grades" | "permissions" | "logs" | "expenses" | "vendors" | "danger">("reservation");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [info, setInfo] = useState<BootstrapInfo | null>(null);
@@ -281,6 +282,9 @@ export default function CrmSettingsPage() {
         </TabBtn>
         <TabBtn active={tab === "expenses"} onClick={() => setTab("expenses")}>
           고정 지출
+        </TabBtn>
+        <TabBtn active={tab === "vendors"} onClick={() => setTab("vendors")}>
+          거래처
         </TabBtn>
         <TabBtn active={tab === "danger"} onClick={() => setTab("danger")} danger>
           센터 탈퇴
@@ -529,6 +533,8 @@ export default function CrmSettingsPage() {
       )}
 
       {tab === "expenses" && <FixedExpensesPanel />}
+
+      {tab === "vendors" && <VendorsPanel />}
 
       {tab === "danger" && (
         <section className="px-4 py-4 rounded-2xl border-2 border-red-200 dark:border-red-900/60 bg-red-50/40 dark:bg-red-950/20">
@@ -1673,6 +1679,235 @@ interface Notice {
   is_published: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/* ─── 거래처 패널 ──────────────────────── */
+interface Vendor {
+  id: number;
+  name: string;
+  phone: string | null;
+  category: string | null;
+  memo: string | null;
+}
+
+function VendorsPanel() {
+  const { getIdToken } = useAuth();
+  const [list, setList] = useState<Vendor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const [nName, setNName] = useState("");
+  const [nPhone, setNPhone] = useState("");
+  const [nCategory, setNCategory] = useState("");
+  const [nMemo, setNMemo] = useState("");
+
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [eName, setEName] = useState("");
+  const [ePhone, setEPhone] = useState("");
+  const [eCategory, setECategory] = useState("");
+  const [eMemo, setEMemo] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch("/api/crm/vendors", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setList(data.items ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const add = async () => {
+    setError("");
+    if (!nName.trim()) return setError("상호를 입력해 주세요");
+    setAdding(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/vendors", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          name: nName.trim(),
+          phone: nPhone.trim() || null,
+          category: nCategory.trim() || null,
+          memo: nMemo.trim() || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "추가 실패");
+      setNName("");
+      setNPhone("");
+      setNCategory("");
+      setNMemo("");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const startEdit = (v: Vendor) => {
+    setEditingId(v.id);
+    setEName(v.name);
+    setEPhone(v.phone ?? "");
+    setECategory(v.category ?? "");
+    setEMemo(v.memo ?? "");
+  };
+  const saveEdit = async () => {
+    if (!editingId) return;
+    if (!eName.trim()) return setError("상호를 입력해 주세요");
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/vendors/${editingId}`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        name: eName.trim(),
+        phone: ePhone.trim() || null,
+        category: eCategory.trim() || null,
+        memo: eMemo.trim() || null,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data?.error || "수정 실패");
+      return;
+    }
+    setEditingId(null);
+    load();
+  };
+
+  const remove = async (id: number) => {
+    if (!window.confirm("이 거래처를 삭제할까요?")) return;
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/vendors/${id}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (res.ok) load();
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
+        거래하는 업체(납품·수리·용품·세탁 등)를 등록해요. 상호·전화번호와 무슨 가게인지(거래 내용)를 적어두면 필요할 때 바로 연락할 수 있어요.
+      </p>
+
+      {/* 신규 입력 */}
+      <div className="p-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 space-y-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <input
+            className={crmInputClass}
+            value={nName}
+            onChange={(e) => setNName(e.target.value.slice(0, 60))}
+            placeholder="상호 (예: OO스포츠용품)"
+            maxLength={60}
+          />
+          <input
+            className={crmInputClass}
+            value={nPhone}
+            onChange={(e) => setNPhone(formatPhone(e.target.value))}
+            inputMode="numeric"
+            placeholder="전화번호"
+          />
+        </div>
+        <input
+          className={crmInputClass}
+          value={nCategory}
+          onChange={(e) => setNCategory(e.target.value.slice(0, 80))}
+          placeholder="무슨 가게 / 어떤 거래인지 (예: 운동복 납품, 락커 수리)"
+          maxLength={80}
+        />
+        <input
+          className={crmInputClass}
+          value={nMemo}
+          onChange={(e) => setNMemo(e.target.value.slice(0, 200))}
+          placeholder="메모 (선택)"
+          maxLength={200}
+        />
+        <button
+          onClick={add}
+          disabled={adding}
+          className="w-full sm:w-auto px-4 py-2 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932]"
+        >
+          {adding ? "추가 중…" : "+ 거래처 추가"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      {/* 목록 */}
+      {loading ? (
+        <div className="py-6 text-center text-[12.5px] text-[#8C8270]">불러오는 중…</div>
+      ) : list.length === 0 ? (
+        <div className="px-4 py-8 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          등록된 거래처가 없습니다.
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {list.map((v) => (
+            <li
+              key={v.id}
+              className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 px-3.5 py-3"
+            >
+              {editingId === v.id ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input className={crmInputClass} value={eName} onChange={(e) => setEName(e.target.value.slice(0, 60))} placeholder="상호" />
+                    <input className={crmInputClass} value={ePhone} onChange={(e) => setEPhone(formatPhone(e.target.value))} placeholder="전화번호" inputMode="numeric" />
+                  </div>
+                  <input className={crmInputClass} value={eCategory} onChange={(e) => setECategory(e.target.value.slice(0, 80))} placeholder="무슨 가게 / 어떤 거래" />
+                  <input className={crmInputClass} value={eMemo} onChange={(e) => setEMemo(e.target.value.slice(0, 200))} placeholder="메모" />
+                  <div className="flex gap-2">
+                    <button onClick={saveEdit} className="px-3.5 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]">저장</button>
+                    <button onClick={() => setEditingId(null)} className="px-3.5 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#6B5D47] dark:text-zinc-300">취소</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{v.name}</span>
+                      {v.phone && (
+                        <a href={`tel:${v.phone.replace(/[^0-9]/g, "")}`} className="text-[12.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline">
+                          {formatPhone(v.phone)}
+                        </a>
+                      )}
+                    </div>
+                    {v.category && <div className="mt-0.5 text-[12.5px] text-[#3A342A] dark:text-zinc-300">{v.category}</div>}
+                    {v.memo && <div className="mt-0.5 text-[11.5px] text-[#A89B80]">{v.memo}</div>}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button onClick={() => startEdit(v)} className="px-2.5 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800">수정</button>
+                    <button onClick={() => remove(v.id)} className="px-2.5 py-1 rounded-md border border-red-200 dark:border-red-900/60 text-[12px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30">삭제</button>
+                  </div>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function NoticesPanel() {
