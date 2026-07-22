@@ -13,11 +13,12 @@ import {
   formatPhone,
 } from "../_components/crm-labels";
 import { useColumnWidths, ResizableTh } from "../_components/use-column-widths";
+import { MembershipDetailModal } from "./_components/membership-detail-modal";
 
 const M_COLS = [
   { key: "member", label: "회원" },
   { key: "phone", label: "연락처" },
-  { key: "plan", label: "플랜" },
+  { key: "plan", label: "상품명" },
   { key: "purchased", label: "구매일" },
   { key: "duration", label: "기간(일)" },
   { key: "start", label: "시작" },
@@ -64,6 +65,9 @@ export default function CrmMembershipsPage() {
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [issueOpen, setIssueOpen] = useState(false);
+  const [perms, setPerms] = useState<Record<string, boolean>>({});
+  const [detailRow, setDetailRow] = useState<Row | null>(null);
+  const canEdit = !!perms["memberships.edit"];
   const { widths, startResize, reset, changed, totalWidth } = useColumnWidths<MColKey>(
     "crm_memberships_col_widths_v1",
     M_DEFAULT_WIDTHS
@@ -99,6 +103,26 @@ export default function CrmMembershipsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 권한 로드 (memberships.edit)
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/bootstrap", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPerms(data.permissions ?? {});
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [getIdToken]);
 
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-7xl mx-auto">
@@ -171,11 +195,13 @@ export default function CrmMembershipsPage() {
               {list.map((p) => (
                 <tr
                   key={p.id}
-                  className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900"
+                  onClick={() => setDetailRow(p)}
+                  className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 cursor-pointer hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
                 >
                   <Td>
                     <Link
                       href={`/crm/members/${p.member_id}`}
+                      onClick={(e) => e.stopPropagation()}
                       className="flex items-center gap-2 min-w-0 group"
                     >
                       {p.member_face_thumb ? (
@@ -258,6 +284,13 @@ export default function CrmMembershipsPage() {
       />
 
       <PurchaseDoneBanner open={purchaseDone} onClose={() => setPurchaseDone(false)} />
+
+      <MembershipDetailModal
+        row={detailRow}
+        canEdit={canEdit}
+        onClose={() => setDetailRow(null)}
+        onSaved={load}
+      />
     </div>
   );
 }
@@ -563,7 +596,7 @@ function IssueModal({
   const submit = async () => {
     setError("");
     if (!picked) return setError("회원을 선택해 주세요");
-    if (!planName.trim()) return setError("플랜명을 입력해 주세요");
+    if (!planName.trim()) return setError("상품명을 입력해 주세요");
     if (duration < 1) return setError("기간은 1일 이상이어야 해요");
     setSubmitting(true);
     try {
@@ -688,7 +721,7 @@ function IssueModal({
           )}
         </CrmField>
 
-        <CrmField label="플랜명" required>
+        <CrmField label="상품명" required>
           <input
             className={crmInputClass}
             value={planName}

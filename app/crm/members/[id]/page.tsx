@@ -85,6 +85,7 @@ export default function CrmMemberDetailPage() {
   const [usageOpen, setUsageOpen] = useState(false);
   const [usageReload, setUsageReload] = useState(0);
   const [paymentDetail, setPaymentDetail] = useState<PaymentDetail | null>(null);
+  const [lockerOpen, setLockerOpen] = useState(false);
   const [holdTarget, setHoldTarget] = useState<{ kind: "membership" | "rental"; id: number } | null>(null);
   const [detailPassId, setDetailPassId] = useState<number | null>(null);
   // 현재 보유(상단 요약) 편집용 실제 레코드
@@ -395,8 +396,20 @@ export default function CrmMemberDetailPage() {
                 />
               ))
             : holdingCards("대여권", member.current_rental, onSnapSelect)}
-          {/* 락커는 별도 관리(락커 관리 페이지) — 스냅샷 표시만 */}
-          {holdingCards("락커", member.current_locker, onSnapSelect)}
+          {/* 락커: 클릭 시 전용 상세(락커 결제·위치 이동) */}
+          {member.current_locker &&
+            splitTopLevel(member.current_locker).map((chunk, i) => {
+              const { name, period } = splitNamePeriod(chunk);
+              return (
+                <SnapHoldingCard
+                  key={`locker-${i}`}
+                  tag="락커"
+                  name={name}
+                  period={period}
+                  onClick={() => setLockerOpen(true)}
+                />
+              );
+            })}
           </div>
         </section>
       )}
@@ -560,6 +573,16 @@ export default function CrmMemberDetailPage() {
         onHold={(t) => {
           setPaymentDetail(null);
           setHoldTarget(t);
+        }}
+      />
+
+      <LockerDetailModal
+        open={lockerOpen}
+        memberId={member.id}
+        onClose={() => setLockerOpen(false)}
+        onSaved={() => {
+          setLockerOpen(false);
+          load();
         }}
       />
 
@@ -1916,7 +1939,7 @@ const LOG_FIELD_LABEL: Record<string, string> = {
   price_won: "금액", amount_won: "금액", discount_won: "할인", expires_at: "만료일",
   start_date: "시작일", purchased_at: "구매일", issued_at: "발급일", vat_included: "부가세",
   payment_method: "결제 수단", payment_method_custom: "결제 수단(기타)", seller_member_id: "판매자",
-  trainer_member_id: "담당 강사", plan_name: "플랜", duration_days: "기간", item_name: "상품",
+  trainer_member_id: "담당 강사", plan_name: "상품명", duration_days: "기간", item_name: "상품",
   total_sessions: "총 세션", remaining_sessions: "잔여 세션", session_minutes: "수업 시간",
   issue_type: "발급 유형", lesson_kind: "수업 종류", mileage_earned: "적립 마일리지",
   mileage_used: "사용 마일리지", co_trainer_ids: "추가 강사", reason: "사유", requested_by: "요청자",
@@ -2341,6 +2364,203 @@ function holdingCards(
       />
     );
   });
+}
+
+interface MemberLocker {
+  id: number;
+  zone_id: number;
+  zone_name: string;
+  number: number | string;
+  start_date: string | null;
+  expires_at: string | null;
+  password: string | null;
+  memo: string | null;
+}
+interface LockerMoveTarget {
+  id: number;
+  zone_id: number;
+  zone_name: string;
+  number: number | string;
+}
+
+/** 회원 상세 '현재 보유' 락커 상세 — 락커 결제(락커만)·위치, 수정 시 락커 이동 */
+function LockerDetailModal({
+  open,
+  memberId,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  memberId: number;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [lockers, setLockers] = useState<MemberLocker[]>([]);
+  const [payment, setPayment] = useState<{ total_won: number; last_at: string | null; count: number }>({
+    total_won: 0,
+    last_at: null,
+    count: 0,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  // 이동 편집
+  const [editId, setEditId] = useState<number | null>(null);
+  const [vacant, setVacant] = useState<LockerMoveTarget[]>([]);
+  const [targetId, setTargetId] = useState<number | "">("");
+  const [moving, setMoving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/lockers/of-member?member_id=${memberId}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setLockers(data.lockers ?? []);
+      setPayment(data.payment ?? { total_won: 0, last_at: null, count: 0 });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken, memberId]);
+
+  useEffect(() => {
+    if (!open) return;
+    setEditId(null);
+    setTargetId("");
+    load();
+  }, [open, load]);
+
+  const startMove = async (lockerId: number) => {
+    setEditId(lockerId);
+    setTargetId("");
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/lockers/vacant", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) setVacant((await res.json()).lockers ?? []);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const move = async () => {
+    if (!editId || !targetId || moving) return;
+    setMoving(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/lockers/${editId}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ action: "move", to_locker_id: Number(targetId) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "이동 실패");
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+      setMoving(false);
+    }
+  };
+
+  return (
+    <CrmModal open={open} onClose={onClose} title="락커 상세" size="lg">
+      {loading ? (
+        <div className="py-6 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : lockers.length === 0 ? (
+        <div className="py-6 text-center text-[13px] text-[#8C8270]">배정된 락커가 없습니다.</div>
+      ) : (
+        <div className="space-y-4">
+          {lockers.map((l) => (
+            <div
+              key={l.id}
+              className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/50 dark:bg-zinc-900/40 px-4 py-3"
+            >
+              <div className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">
+                {l.zone_name} · {l.number}번
+              </div>
+              <DetailGrid
+                rows={[
+                  ["이용 기간", `${l.start_date ?? "—"} ~ ${l.expires_at ?? "—"}`],
+                  ["락커 대여료", `${formatWon(payment.total_won)}원`],
+                  ["마지막 구매일", payment.last_at ?? "—"],
+                  ...(l.password ? [["비밀번호", l.password] as [string, string]] : []),
+                  ...(l.memo ? [["메모", l.memo] as [string, string]] : []),
+                ]}
+              />
+
+              {editId === l.id ? (
+                <div className="mt-3 rounded-xl border-2 border-[#6B7B3A]/40 bg-white dark:bg-zinc-900 p-3">
+                  <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200 mb-2">
+                    이동할 빈 락커 선택
+                  </div>
+                  <select
+                    value={targetId}
+                    onChange={(e) => setTargetId(e.target.value ? Number(e.target.value) : "")}
+                    className={crmInputClass}
+                  >
+                    <option value="">빈 락커 선택</option>
+                    {vacant.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.zone_name} · {v.number}번
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
+                    현재 락커의 회원·기간·비밀번호가 선택한 빈 락커로 옮겨지고, 지금 락커는 비워집니다.
+                  </p>
+                  {error && <div className="mt-2 text-[12px] text-red-600">{error}</div>}
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={move}
+                      disabled={moving || !targetId}
+                      className="flex-1 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
+                    >
+                      {moving ? "이동 중…" : "이 락커로 이동"}
+                    </button>
+                    <button
+                      onClick={() => setEditId(null)}
+                      className="px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] text-[#6B5D47] dark:text-zinc-300"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => startMove(l.id)}
+                  className="mt-3 px-4 py-2 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13px] font-semibold hover:bg-[#6B7B3A]/8"
+                >
+                  수정 (락커 위치 이동)
+                </button>
+              )}
+            </div>
+          ))}
+
+          {error && !editId && <div className="text-[12px] text-red-600">{error}</div>}
+
+          <div className="flex justify-end pt-1">
+            <button
+              onClick={onClose}
+              className="px-5 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
+    </CrmModal>
+  );
 }
 
 function PassStatusChip({ status }: { status: string }) {
@@ -4302,15 +4522,14 @@ function PassDetailModal({
             ]}
           />
 
-          {canEdit && !editing && pass.status === "valid" && (
+          {!editing && pass.status === "valid" && detail.member && (
             <div>
-              <button
-                type="button"
-                onClick={startEdit}
-                className="px-3 py-1.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/5"
+              <Link
+                href={`/crm/contracts/sign/new?member_id=${detail.member.id}&pass_id=${pass.id}`}
+                className="inline-flex px-3 py-1.5 rounded-lg border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 text-[12.5px] font-semibold hover:bg-amber-50/60"
               >
-                수강권 수정
-              </button>
+                전자 계약서
+              </Link>
             </div>
           )}
 
@@ -4485,20 +4704,14 @@ function PassDetailModal({
           )}
 
           <div className="flex flex-wrap gap-2 pt-1">
-            <button
-              onClick={onClose}
-              disabled={refunding}
-              className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-50"
-            >
-              닫기
-            </button>
-            {pass.status === "valid" && detail.member && (
-              <Link
-                href={`/crm/contracts/sign/new?member_id=${detail.member.id}&pass_id=${pass.id}`}
-                className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 text-[13.5px] font-semibold text-center hover:bg-amber-50/60"
+            {canEdit && !editing && pass.status === "valid" && (
+              <button
+                onClick={startEdit}
+                disabled={refunding}
+                className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13.5px] font-semibold hover:bg-[#6B7B3A]/8 disabled:opacity-50"
               >
-                전자 계약서
-              </Link>
+                수강권 수정
+              </button>
             )}
             {pass.status === "valid" && (
               <button
@@ -4522,6 +4735,14 @@ function PassDetailModal({
                 {refunding ? "처리 중…" : "환불 처리"}
               </button>
             )}
+            {/* 닫기: 항상 맨 오른쪽 */}
+            <button
+              onClick={onClose}
+              disabled={refunding}
+              className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-50"
+            >
+              닫기
+            </button>
           </div>
         </div>
       )}

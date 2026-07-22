@@ -12,11 +12,12 @@ import {
 } from "../_components/crm-labels";
 import { crmInputClass } from "../_components/crm-modal";
 import { useColumnWidths, ResizableTh } from "../_components/use-column-widths";
+import { PassDetailModal } from "./_components/pass-detail-modal";
 
 const P_COLS = [
   { key: "member", label: "회원" },
   { key: "phone", label: "연락처" },
-  { key: "lesson", label: "수업" },
+  { key: "lesson", label: "수강권" },
   { key: "remaining", label: "잔여" },
   { key: "price", label: "금액" },
   { key: "payment", label: "결제" },
@@ -76,6 +77,9 @@ export default function CrmPassesPage() {
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [perms, setPerms] = useState<Record<string, boolean>>({});
+  const [detailPassId, setDetailPassId] = useState<number | null>(null);
+  const canEdit = !!perms["passes.edit"];
 
   // 필터
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -123,6 +127,26 @@ export default function CrmPassesPage() {
       if (res.ok) {
         const data = await res.json();
         setStaff((data.staff ?? []).filter((s: StaffOption) => s.status === "active"));
+      }
+    })();
+  }, [getIdToken]);
+
+  // 권한 로드 (passes.edit)
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/bootstrap", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPerms(data.permissions ?? {});
+        }
+      } catch {
+        /* ignore */
       }
     })();
   }, [getIdToken]);
@@ -216,10 +240,15 @@ export default function CrmPassesPage() {
             </thead>
             <tbody>
               {list.map((p) => (
-                <tr key={p.id} className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+                <tr
+                  key={p.id}
+                  onClick={() => setDetailPassId(p.id)}
+                  className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 cursor-pointer hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
+                >
                   <Td>
                     <Link
                       href={`/crm/members/${p.member_id}`}
+                      onClick={(e) => e.stopPropagation()}
                       className="flex items-center gap-2 min-w-0 font-semibold text-[#2A251D] dark:text-zinc-100 hover:text-[#6B7B3A]"
                     >
                       {p.member_face_thumb ? (
@@ -272,6 +301,16 @@ export default function CrmPassesPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {detailPassId !== null && (
+        <PassDetailModal
+          passId={detailPassId}
+          staff={staff}
+          canEdit={canEdit}
+          onClose={() => setDetailPassId(null)}
+          onSaved={load}
+        />
       )}
     </div>
   );
