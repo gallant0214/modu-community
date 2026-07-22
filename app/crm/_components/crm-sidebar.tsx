@@ -139,7 +139,7 @@ function SidebarHeader({ centerName }: { centerName: string }) {
       <div className="text-[10.5px] text-[#A89B80] dark:text-zinc-500 font-medium leading-none">
         센터명
       </div>
-      <div className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate leading-none mt-1">
+      <div className="text-[16.5px] font-bold text-[#2A251D] dark:text-zinc-100 truncate leading-tight mt-1">
         {centerName || "CRM"}
       </div>
     </div>
