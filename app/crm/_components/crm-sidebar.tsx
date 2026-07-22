@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 type Role = "owner" | "admin" | "manager" | "trainer";
 
 interface MenuItem {
   href: string;
   label: string;
+  group: "main" | "sales" | "engage" | "admin";
   /** owner / admin 만 보임 (직원관리·설정). manager/trainer 숨김. */
   staffOnly?: boolean;
   /** true 면 새 창(팝업)으로 열기 (터치출석 등 독립 화면). */
@@ -17,20 +18,27 @@ interface MenuItem {
 }
 
 const MENU: MenuItem[] = [
-  { href: "/crm/dashboard",   label: "대시보드",     icon: IconDashboard },
-  { href: "/crm/members",     label: "회원 관리",     icon: IconMembers },
-  { href: "/crm/products",    label: "상품 관리",     icon: IconProduct },
-  { href: "/crm/lockers",     label: "락커 관리",     icon: IconLocker },
-  { href: "/crm/schedule",    label: "스케줄 관리",   icon: IconCalendar },
-  { href: "/crm/attendances", label: "출석 현황",     icon: IconAttendance },
-  { href: "/crm/messages",    label: "메세지 전송",   icon: IconMessage },
-  { href: "/crm/contracts",   label: "전자계약서",     icon: IconContract },
-  { href: "/crm/passes",      label: "수강권 관리",   icon: IconPass },
-  { href: "/crm/memberships", label: "회원권 관리",   icon: IconMembership },
-  { href: "/crm/staff",       label: "직원 관리",     staffOnly: true, icon: IconStaff },
-  { href: "/crm/stats",       label: "통계",          icon: IconStats },
-  { href: "/crm/settings",    label: "센터설정",       staffOnly: true, icon: IconSettings },
-  { href: "/crm/touch-attendance", label: "터치출석", staffOnly: true, newWindow: true, icon: IconTouch },
+  { href: "/crm/dashboard",   label: "대시보드",     group: "main", icon: IconDashboard },
+  { href: "/crm/members",     label: "회원 관리",     group: "main", icon: IconMembers },
+  { href: "/crm/schedule",    label: "스케줄 관리",   group: "main", icon: IconCalendar },
+  { href: "/crm/attendances", label: "출석 현황",     group: "main", icon: IconAttendance },
+  { href: "/crm/products",    label: "상품 관리",     group: "sales", icon: IconProduct },
+  { href: "/crm/passes",      label: "수강권 관리",   group: "sales", icon: IconPass },
+  { href: "/crm/memberships", label: "회원권 관리",   group: "sales", icon: IconMembership },
+  { href: "/crm/lockers",     label: "락커 관리",     group: "sales", icon: IconLocker },
+  { href: "/crm/contracts",   label: "전자계약서",     group: "sales", icon: IconContract },
+  { href: "/crm/messages",    label: "메세지 전송",   group: "engage", icon: IconMessage },
+  { href: "/crm/stats",       label: "통계",          group: "admin", icon: IconStats },
+  { href: "/crm/staff",       label: "직원 관리",     group: "admin", staffOnly: true, icon: IconStaff },
+  { href: "/crm/settings",    label: "센터설정",       group: "admin", staffOnly: true, icon: IconSettings },
+  { href: "/crm/touch-attendance", label: "터치출석", group: "admin", staffOnly: true, newWindow: true, icon: IconTouch },
+];
+
+const MENU_GROUPS: MenuItem["group"][] = [
+  "main",
+  "sales",
+  "engage",
+  "admin",
 ];
 
 interface Props {
@@ -39,51 +47,78 @@ interface Props {
   isSoloOwner: boolean;
 }
 
-export function CrmSidebar({ role, centerName, isSoloOwner: _isSoloOwner }: Props) {
+export function CrmSidebar({ role, centerName }: Props) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // 직원관리·설정 메뉴는 owner/admin 만 노출. manager/trainer 는 숨김.
   const isStaffLevel = role === "owner" || role === "admin";
   const visible = MENU.filter((m) => !m.staffOnly || isStaffLevel);
+  const isActive = (href: string) => pathname === href || pathname?.startsWith(`${href}/`);
 
   const links = (
     <>
-      {visible.map((item) => {
-        const active = pathname?.startsWith(item.href);
-        const Icon = item.icon;
-        const cls = `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] transition-colors w-full text-left
-          ${active && !item.newWindow
-            ? "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A] font-semibold"
-            : "text-[#3A342A] hover:bg-[#F5F0E5] dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-          }`;
-        // 새 창으로 여는 항목(터치출석)
-        if (item.newWindow) {
-          return (
-            <button
-              key={item.href}
-              type="button"
-              onClick={() => {
-                window.open(item.href, "_blank", "noopener,noreferrer,width=480,height=760");
-                setMobileOpen(false);
-              }}
-              className={cls}
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              <span>{item.label}</span>
-            </button>
-          );
-        }
+      {MENU_GROUPS.map((group) => {
+        const items = visible.filter((item) => item.group === group);
+        if (items.length === 0) return null;
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => setMobileOpen(false)}
-            className={cls}
-          >
-            <Icon className="w-4 h-4 shrink-0" />
-            <span>{item.label}</span>
-          </Link>
+          <div key={group} className="space-y-1 pt-2 first:pt-1">
+            {items.map((item) => {
+              const active = isActive(item.href);
+              const Icon = item.icon;
+              const cls = `group relative flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13.5px] transition-all w-full text-left
+                ${active && !item.newWindow
+                  ? "bg-[#2F3A2B] text-white shadow-sm dark:bg-[#A8B87A] dark:text-zinc-950 font-semibold"
+                  : "text-[#3A342A] hover:bg-[#F5F0E5] dark:text-zinc-300 dark:hover:bg-zinc-800/70"
+                }`;
+              const iconCls = `flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors
+                ${active && !item.newWindow
+                  ? "bg-white/14 text-white dark:bg-zinc-950/12 dark:text-zinc-950"
+                  : "bg-[#EFE7D5]/70 text-[#6B5D47] group-hover:bg-white dark:bg-zinc-800 dark:text-zinc-400 dark:group-hover:bg-zinc-700"
+                }`;
+              const body = (
+                <>
+                  {active && !item.newWindow && (
+                    <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r bg-[#D6C38D] dark:bg-zinc-950/50" />
+                  )}
+                  <span className={iconCls}>
+                    <Icon className="w-4 h-4" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  {item.newWindow && (
+                    <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-[#EFE7D5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-500">
+                      새창
+                    </span>
+                  )}
+                </>
+              );
+              if (item.newWindow) {
+                return (
+                  <button
+                    key={item.href}
+                    type="button"
+                    onClick={() => {
+                      window.open(item.href, "_blank", "noopener,noreferrer,width=480,height=760");
+                      setMobileOpen(false);
+                    }}
+                    className={cls}
+                  >
+                    {body}
+                  </button>
+                );
+              }
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={cls}
+                >
+                  {body}
+                </Link>
+              );
+            })}
+          </div>
         );
       })}
     </>
@@ -108,9 +143,9 @@ export function CrmSidebar({ role, centerName, isSoloOwner: _isSoloOwner }: Prop
       </div>
 
       {/* 데스크탑 사이드바 — navbar(56px) 아래 완전 고정(fixed). 스크롤·overflow 무관하게 항상 고정 */}
-      <aside className="hidden md:flex flex-col w-60 border-r border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 fixed top-14 left-0 z-30 h-[calc(100dvh-3.5rem)]">
+      <aside className="hidden md:flex flex-col w-60 border-r border-[#E1D5C0] dark:border-zinc-800 bg-[#FBF7EB]/82 dark:bg-zinc-950/88 backdrop-blur fixed top-14 left-0 z-30 h-[calc(100dvh-3.5rem)]">
         <SidebarHeader centerName={centerName} />
-        <nav className="flex-1 min-h-0 overflow-y-auto px-3 pt-1.5 pb-2 space-y-1">{links}</nav>
+        <nav className="flex-1 min-h-0 overflow-y-auto px-3 pt-1 pb-3 space-y-1">{links}</nav>
         <SidebarFooter />
       </aside>
 
@@ -121,9 +156,9 @@ export function CrmSidebar({ role, centerName, isSoloOwner: _isSoloOwner }: Prop
             className="absolute inset-0 bg-black/40"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="absolute left-0 top-0 bottom-0 w-72 flex flex-col bg-[#FEFCF7] dark:bg-zinc-950 border-r border-[#E8E0D0] dark:border-zinc-800 shadow-xl">
+          <aside className="absolute left-0 top-0 bottom-0 w-72 flex flex-col bg-[#FEFCF7] dark:bg-zinc-950 border-r border-[#E1D5C0] dark:border-zinc-800 shadow-xl">
             <SidebarHeader centerName={centerName} />
-            <nav className="flex-1 px-3 pt-1.5 pb-2 space-y-1 overflow-y-auto">{links}</nav>
+            <nav className="flex-1 px-3 pt-1 pb-3 space-y-1 overflow-y-auto">{links}</nav>
             <SidebarFooter />
           </aside>
         </div>
@@ -133,13 +168,81 @@ export function CrmSidebar({ role, centerName, isSoloOwner: _isSoloOwner }: Prop
 }
 
 function SidebarHeader({ centerName }: { centerName: string }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const initial = (centerName || "C").trim().slice(0, 1).toUpperCase();
+  const storageKey = `crm-sidebar-logo:${centerName || "default"}`;
+  const [logoSrc, setLogoSrc] = useState(() => {
+    if (typeof window === "undefined") return "/logo.png";
+    try {
+      return localStorage.getItem(storageKey) || "/logo.png";
+    } catch {
+      return "/logo.png";
+    }
+  });
+  const [logoBroken, setLogoBroken] = useState(false);
+
+  const handleLogoFile = (file: File | undefined) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const next = String(reader.result ?? "");
+      if (!next) return;
+      try {
+        localStorage.setItem(storageKey, next);
+      } catch {
+        window.alert("이미지 용량이 커서 저장할 수 없어요. 더 작은 로고 이미지를 선택해주세요.");
+        return;
+      }
+      setLogoSrc(next);
+      setLogoBroken(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
-    <div className="shrink-0 px-4 py-1.5 border-b border-[#E8E0D0] dark:border-zinc-800">
-      <div className="text-[10.5px] text-[#A89B80] dark:text-zinc-500 font-medium leading-none">
-        센터명
-      </div>
-      <div className="text-[16.5px] font-bold text-[#2A251D] dark:text-zinc-100 truncate leading-tight mt-1">
-        {centerName || "CRM"}
+    <div className="shrink-0 px-4 py-3 border-b border-[#E1D5C0] dark:border-zinc-800">
+      <div className="flex items-center gap-3 min-w-0">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="group relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#E4D9C6] bg-white shadow-sm transition-colors hover:border-[#6B7B3A]/50 dark:border-zinc-800 dark:bg-zinc-900"
+          aria-label="사이드바 로고 이미지 변경"
+        >
+          {!logoBroken && logoSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoSrc}
+              alt=""
+              className="h-7 w-7 rounded-md object-contain"
+              onError={() => setLogoBroken(true)}
+            />
+          ) : (
+            <span className="text-[14px] font-bold text-[#2F3A2B] dark:text-[#A8B87A]">
+              {initial}
+            </span>
+          )}
+          <span className="absolute inset-0 hidden items-center justify-center bg-[#2F3A2B]/82 px-1 text-center text-[10px] font-bold leading-tight text-white group-hover:flex dark:bg-zinc-950/82">
+            로고 변경
+          </span>
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(event) => {
+            handleLogoFile(event.target.files?.[0]);
+            event.currentTarget.value = "";
+          }}
+        />
+        <div className="min-w-0">
+          <div className="text-[10.5px] text-[#A89B80] dark:text-zinc-500 font-semibold leading-none">
+            CENTER
+          </div>
+          <div className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 truncate leading-tight mt-1">
+            {centerName || "CRM"}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -147,10 +250,10 @@ function SidebarHeader({ centerName }: { centerName: string }) {
 
 function SidebarFooter() {
   return (
-    <div className="px-3 py-3 border-t border-[#E8E0D0] dark:border-zinc-800">
+    <div className="px-3 py-3 border-t border-[#E1D5C0] dark:border-zinc-800">
       <Link
         href="/"
-        className="flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
+        className="flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />

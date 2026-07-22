@@ -547,6 +547,18 @@ export default function CrmSettingsPage() {
         </Card>
       )}
 
+      {tab === "staff" && (
+        <div className="-mx-5 md:-mx-8 -mt-2">
+          <CrmStaffPage />
+        </div>
+      )}
+
+      {tab === "contracts" && (
+        <div className="-mx-5 md:-mx-8 -mt-2">
+          <CrmContractsPage />
+        </div>
+      )}
+
       {tab === "expenses" && <FixedExpensesPanel />}
 
       {tab === "vendors" && <VendorsPanel />}
