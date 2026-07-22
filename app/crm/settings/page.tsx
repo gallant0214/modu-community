@@ -12,6 +12,7 @@ import {
 } from "../_components/role-permissions";
 import CrmStaffPage from "../staff/page";
 import CrmContractsPage from "../contracts/page";
+import { useCrmTheme } from "../_components/crm-theme";
 
 interface Settings {
   center_id: number;
@@ -202,6 +203,7 @@ const SETTINGS_TABS: {
 export default function CrmSettingsPage() {
   const { getIdToken } = useAuth();
   const [tab, setTab] = useState<SettingsTab>("reservation");
+  const { theme, setTheme } = useCrmTheme();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [info, setInfo] = useState<BootstrapInfo | null>(null);
@@ -280,13 +282,43 @@ export default function CrmSettingsPage() {
 
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-5xl mx-auto">
-      <header className="mb-5">
-        <h1 className="text-[18px] md:text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
-          설정
-        </h1>
-        <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-          예약·취소 정책, 알림, 활동 로그를 관리해요.
-        </p>
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[18px] md:text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
+            설정
+          </h1>
+          <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+            예약·취소 정책, 알림, 활동 로그를 관리해요.
+          </p>
+        </div>
+        {/* CRM 화면 테마 (화이트/블랙) — 기기별 저장 */}
+        <div className="shrink-0">
+          <div className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-1 text-right">CRM 테마</div>
+          <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setTheme("light")}
+              className={`px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                theme === "light"
+                  ? "bg-[#6B7B3A] text-white"
+                  : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+              }`}
+            >
+              ☀ 화이트
+            </button>
+            <button
+              type="button"
+              onClick={() => setTheme("dark")}
+              className={`px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                theme === "dark"
+                  ? "bg-[#6B7B3A] text-white"
+                  : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+              }`}
+            >
+              ☾ 블랙
+            </button>
+          </div>
+        </div>
       </header>
 
       <div className="mb-5 overflow-x-auto">

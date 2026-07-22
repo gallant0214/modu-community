@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmSidebar } from "./_components/crm-sidebar";
+import { CrmThemeProvider } from "./_components/crm-theme";
 
 type Role = "owner" | "admin" | "manager" | "trainer";
 
@@ -115,12 +116,8 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
 }
 
 function CrmShell({ children }: { children: React.ReactNode }) {
-  // body 에 이미 NavBar(56px) 만큼 padding-top 이 들어가 있어 여기선 추가하지 않는다.
-  return (
-    <div className="bg-[#FEFCF7] dark:bg-zinc-950 min-h-dvh text-[#2A251D] dark:text-zinc-100">
-      {children}
-    </div>
-  );
+  // CrmThemeProvider 가 화이트/블랙 테마(.dark) 래퍼 + 배경/글자색을 담당.
+  return <CrmThemeProvider>{children}</CrmThemeProvider>;
 }
 
 function CenterMessage({ children }: { children: React.ReactNode }) {
