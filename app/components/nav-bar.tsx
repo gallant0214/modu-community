@@ -159,6 +159,7 @@ export function NavBar() {
           <NavLink href="/jobs" active={isActive("/jobs")}>스포츠 구인</NavLink>
           <NavLink href="/trade" active={isActive("/trade")}>거래</NavLink>
           <NavLink href="/#faq" active={false}>FAQ</NavLink>
+          <NavLink href="/crm/members" active={isActive("/crm")}>회원관리</NavLink>
           <NavLink href="/my" active={isActive("/my")}>MY</NavLink>
         </div>
 
@@ -350,6 +351,7 @@ export function NavBar() {
               <MobileNavLink href="/jobs" active={isActive("/jobs")} onClick={() => setMenuOpen(false)} icon="briefcase">스포츠 구인</MobileNavLink>
               <MobileNavLink href="/trade" active={isActive("/trade")} onClick={() => setMenuOpen(false)} icon="trade">거래</MobileNavLink>
               <MobileNavLink href="/#faq" active={false} onClick={() => setMenuOpen(false)} icon="help">FAQ</MobileNavLink>
+              <MobileNavLink href="/crm/members" active={isActive("/crm")} onClick={() => setMenuOpen(false)} icon="members">회원관리</MobileNavLink>
               <MobileNavLink href="/my" active={isActive("/my")} onClick={() => setMenuOpen(false)} icon="user">MY</MobileNavLink>
             </div>
 
@@ -633,7 +635,7 @@ function MobileNavLink({
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
-  icon?: "home" | "book" | "chat" | "briefcase" | "trade" | "help" | "user";
+  icon?: "home" | "book" | "chat" | "briefcase" | "trade" | "help" | "user" | "members";
 }) {
   const iconPath = {
     home: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",
@@ -643,6 +645,7 @@ function MobileNavLink({
     trade: "M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z",
     help: "M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
     user: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
+    members: "M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4 0m8-4a3 3 0 11-2 5.24M7 7a3 3 0 11-2 5.24",
   }[icon || "home"];
 
   const router = useRouter();
