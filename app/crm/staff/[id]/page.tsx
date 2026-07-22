@@ -952,12 +952,6 @@ function ContactSection({
         cache: "no-store",
       });
       const data = await res.json();
-      if (res.status === 404) {
-        // 암호화 원본 미저장 상태 — 안내만, 편집 모드 자동 전환 X
-        // 사용자가 재입력하려면 [변경] 버튼을 명시적으로 눌러야 함
-        setRevealError("이전에 저장된 주민번호는 해시만 남아 원본을 복구할 수 없어요. 확인·수정하려면 오른쪽 [변경] 버튼으로 재입력해 주세요.");
-        return;
-      }
       if (!res.ok) throw new Error(data?.error || "조회 실패");
       const digits = String(data.resident_no || "").replace(/[^0-9]/g, "");
       if (digits.length !== 13) throw new Error("응답 형식 오류");
@@ -1081,7 +1075,7 @@ function ContactSection({
               </div>
             )}
           <p className="mt-1.5 text-[11px] text-[#A89B80]">
-            저장하면 원본은 AES-256으로 암호화 저장되고, 눈 아이콘으로 확인할 수 있어요. 조회는 본인·대표자만 가능하며 감사 로그에 기록됩니다.
+            저장된 값은 마스킹되어 표시되고, 눈 아이콘을 눌러 원본을 확인할 수 있어요. 조회는 본인·대표자만 가능하며 감사 로그에 기록됩니다.
           </p>
         </div>
         <div>

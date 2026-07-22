@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
-import { residentDecrypt } from "@/app/lib/crm-identity";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/crm/staff/[id]/resident
- * 직원의 주민번호 원문을 복호화해서 반환. 조회 정책:
+ * 직원의 주민번호 원문 반환. 조회 정책:
  *  - 본인 (ctx.centerMemberId === 대상 id)
  *  - 대표자 (ctx.role === "owner")
  * 그 외는 403. 성공 시 crm_audit_logs 에 조회 로그 기록.
- * RESIDENT_ENC_KEY 미설정 또는 encrypted 컬럼 미저장이면 404 반환.
+ * 저장된 원본이 없으면 404 (재입력 필요).
+ *
+ * 저장 방식: crm_center_members.resident_encrypted 에 평문 문자열 그대로 저장.
+ * (컬럼명은 마이그 이력상 이름만 encrypted, 실제 데이터는 평문)
  */
 export async function GET(
   request: Request,
@@ -26,7 +28,6 @@ export async function GET(
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
-  // 조회 권한: 본인 또는 대표자
   const isSelf = ctx.centerMemberId === targetId;
   const isOwner = ctx.role === "owner";
   if (!isSelf && !isOwner) {
@@ -35,7 +36,7 @@ export async function GET(
 
   const { data: row, error } = await supabase
     .from("crm_center_members")
-    // types 캐시에 아직 없어서 unknown 캐스팅으로 우회. 마이그 실행 후 재생성 시 정리.
+    // types 캐시에 아직 없어서 unknown 캐스팅으로 우회
     .select("id, resident_encrypted" as unknown as "*")
     .eq("id", targetId)
     .eq("center_id", ctx.centerId)
@@ -48,23 +49,19 @@ export async function GET(
     return NextResponse.json({ error: "직원을 찾을 수 없어요" }, { status: 404 });
   }
 
-  const encField = (row as unknown as { resident_encrypted: string | null }).resident_encrypted;
-  if (!encField) {
+  const stored = (row as unknown as { resident_encrypted: string | null }).resident_encrypted;
+  if (!stored) {
     return NextResponse.json(
-      { error: "암호화된 원본이 저장돼 있지 않아요. 다시 입력해 저장해 주세요." },
+      { error: "저장된 주민번호가 없어요. 오른쪽 [변경] 버튼으로 입력해 주세요." },
       { status: 404 }
     );
   }
 
-  const plain = residentDecrypt(encField);
-  if (!plain) {
-    return NextResponse.json(
-      { error: "복호화 실패. 관리자에게 문의해 주세요 (환경변수 확인 필요)." },
-      { status: 500 }
-    );
+  const digits = stored.replace(/[^0-9]/g, "");
+  if (digits.length !== 13) {
+    return NextResponse.json({ error: "저장 데이터 형식 오류" }, { status: 500 });
   }
 
-  // 감사 로그: 누가 언제 누구의 주민번호를 조회했는지
   await supabase.from("crm_audit_logs").insert({
     center_id: ctx.centerId,
     actor_uid: ctx.uid,
@@ -74,5 +71,5 @@ export async function GET(
     payload: { self: isSelf, viewer_role: ctx.role } as never,
   });
 
-  return NextResponse.json({ resident_no: plain });
+  return NextResponse.json({ resident_no: digits });
 }
