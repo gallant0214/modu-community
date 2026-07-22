@@ -289,7 +289,7 @@ export default function CrmMemberDetailPage() {
                   {isMemberActive(member) ? "이용중" : "확인 필요"}
                 </span>
               </div>
-              <div className="mt-2 space-y-1">
+              <div className="mt-3.5 space-y-1.5">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
                     {member.phone ? formatPhone(member.phone) : "연락처 없음"}
