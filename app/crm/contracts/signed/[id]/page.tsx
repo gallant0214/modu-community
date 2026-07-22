@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatWon } from "../../../_components/crm-labels";
@@ -65,6 +64,10 @@ export default function SignedContractDetailPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
   const { getIdToken } = useAuth();
+  const goBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/crm/settings?tab=contracts");
+  };
 
   const [contract, setContract] = useState<SignedContract | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,7 +101,7 @@ export default function SignedContractDetailPage() {
       method: "DELETE",
       headers: { authorization: `Bearer ${token}` },
     });
-    if (res.ok) router.push("/crm/contracts");
+    if (res.ok) goBack();
   };
 
   if (loading) {
@@ -108,9 +111,9 @@ export default function SignedContractDetailPage() {
     return (
       <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-3xl mx-auto">
         <div className="text-[13px] text-red-700">{error || "계약서를 찾을 수 없습니다"}</div>
-        <Link href="/crm/contracts" className="mt-3 inline-block text-[13px] text-[#6B7B3A] underline">
+        <button onClick={goBack} className="mt-3 inline-block text-[13px] text-[#6B7B3A] underline">
           ← 계약서 목록
-        </Link>
+        </button>
       </div>
     );
   }
@@ -124,9 +127,9 @@ export default function SignedContractDetailPage() {
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-3xl mx-auto">
       <div className="mb-3 flex items-center justify-between gap-2 print:hidden">
-        <Link href="/crm/contracts" className="text-[13px] text-[#6B5D47] hover:text-[#3A342A]">
+        <button onClick={goBack} className="text-[13px] text-[#6B5D47] hover:text-[#3A342A]">
           ← 계약서 목록
-        </Link>
+        </button>
         <div className="flex items-center gap-2">
           <button
             onClick={() => window.print()}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { ROLE_LABEL, formatWon, formatPhone } from "../../_components/crm-labels";
 import { crmInputClass } from "../../_components/crm-modal";
@@ -42,9 +42,14 @@ interface StaffMember {
 
 export default function TrainerStatsDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const trainerId = Number(params.trainerId);
   const { getIdToken } = useAuth();
   const searchParams = useSearchParams();
+  const goBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/crm/stats?tab=trainer");
+  };
   const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "cancel" ? "cancel" : "revenue");
   const [member, setMember] = useState<StaffMember | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,15 +80,16 @@ export default function TrainerStatsDetailPage() {
 
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-6xl mx-auto">
-      <Link
-        href="/crm/stats"
+      <button
+        type="button"
+        onClick={goBack}
         className="inline-flex items-center gap-1 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:text-[#3A342A]"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
         통계 목록
-      </Link>
+      </button>
 
       <header className="mt-3 mb-5">
         {loading ? (

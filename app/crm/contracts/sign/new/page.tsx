@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../../../_components/crm-modal";
@@ -56,6 +55,10 @@ const GENDER_OPT = ["남", "여"] as const;
 
 export default function CrmContractSignNewPage() {
   const router = useRouter();
+  const goBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/crm/settings?tab=contracts");
+  };
   const params = useSearchParams();
   const memberId = params.get("member_id") ? Number(params.get("member_id")) : null;
   const staffMemberId = params.get("staff_member_id") ? Number(params.get("staff_member_id")) : null;
@@ -397,7 +400,7 @@ export default function CrmContractSignNewPage() {
       if (!res.ok) throw new Error(data?.error || "저장 실패");
       if (isStaff) router.push(`/crm/staff/${staffMemberId}`);
       else if (memberId) router.push(`/crm/members/${memberId}?purchase=done`);
-      else router.push(`/crm/contracts`);
+      else goBack();
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
       setSubmitting(false);
@@ -734,12 +737,13 @@ export default function CrmContractSignNewPage() {
       )}
 
       <div className="flex items-center justify-end gap-2 pt-2 pb-10">
-        <Link
-          href="/crm/contracts"
+        <button
+          type="button"
+          onClick={goBack}
           className="px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-medium text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-900"
         >
           돌아가기
-        </Link>
+        </button>
         <button
           type="button"
           onClick={submit}

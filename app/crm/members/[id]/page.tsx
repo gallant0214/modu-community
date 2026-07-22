@@ -5520,7 +5520,7 @@ function RequestLinkModal({
               ) : templates.length === 0 ? (
                 <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 text-[12.5px] text-[#8C8270]">
                   등록된 양식이 없어요.{" "}
-                  <Link href="/crm/contracts" className="text-[#6B7B3A] hover:underline font-medium">
+                  <Link href="/crm/settings?tab=contracts" className="text-[#6B7B3A] hover:underline font-medium">
                     양식 만들러 가기 →
                   </Link>
                 </div>
@@ -5703,7 +5703,7 @@ function TemplatePickerModal({
         <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl space-y-3">
           <div>등록된 계약서 양식이 없어요.</div>
           <Link
-            href="/crm/contracts"
+            href="/crm/settings?tab=contracts"
             className="inline-block px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#6B7B3A] text-white hover:bg-[#5a6932]"
           >
             계약서 페이지로 이동해 양식 만들기

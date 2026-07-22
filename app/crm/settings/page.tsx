@@ -202,7 +202,11 @@ const SETTINGS_TABS: {
 
 export default function CrmSettingsPage() {
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<SettingsTab>("reservation");
+  const [tab, setTab] = useState<SettingsTab>(() => {
+    if (typeof window === "undefined") return "reservation";
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t && SETTINGS_TABS.some((x) => x.key === t) ? (t as SettingsTab) : "reservation";
+  });
   const { theme, setTheme } = useCrmTheme();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -243,6 +247,15 @@ export default function CrmSettingsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 현재 탭을 URL(?tab=)에 반영 → 상세(직원·계약서 등)에서 뒤로가기 시 같은 탭으로 복귀
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (tab === "reservation") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", tab);
+    window.history.replaceState(null, "", url.toString());
+  }, [tab]);
 
   useEffect(() => {
     if (tab !== "logs") return;

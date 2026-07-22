@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import {
   ROLE_LABEL,
@@ -294,9 +293,10 @@ export default function CrmStaffDetailPage() {
             disabled={saving || member.is_solo_owner}
             onClick={() => {
               if (confirm("이 직원을 퇴사 처리할까요? CRM 접근이 차단됩니다.")) {
-                patchMember({ employment_status: "resigned", status: "inactive" }).then(() =>
-                  router.push("/crm/staff")
-                );
+                patchMember({ employment_status: "resigned", status: "inactive" }).then(() => {
+                  if (typeof window !== "undefined" && window.history.length > 1) router.back();
+                  else router.push("/crm/settings?tab=staff");
+                });
               }
             }}
             danger
@@ -1058,9 +1058,16 @@ function ContactSection({
 }
 
 function BackLink() {
+  const router = useRouter();
+  const goBack = () => {
+    // 진짜 직전 페이지로 복귀 (센터설정 직원관리 탭 / 독립 목록 등 어디서 왔든)
+    if (typeof window !== "undefined" && window.history.length > 1) router.back();
+    else router.push("/crm/settings?tab=staff");
+  };
   return (
-    <Link
-      href="/crm/staff"
+    <button
+      type="button"
+      onClick={goBack}
       className="inline-flex items-center gap-1.5 pl-2 pr-3.5 py-2 rounded-full border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200 shadow-sm hover:border-[#6B7B3A]/60 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
     >
       <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#6B7B3A]/12 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]">
@@ -1069,6 +1076,6 @@ function BackLink() {
         </svg>
       </span>
       직원 목록으로
-    </Link>
+    </button>
   );
 }
