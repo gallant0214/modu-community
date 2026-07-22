@@ -48,6 +48,7 @@ interface PassRow {
   member_phone: string | null;
   member_face_thumb: string | null;
   trainer_member_id: number;
+  co_trainer_ids: number[] | null;
   seller_member_id: number;
   issue_type: string;
   lesson_kind: string;
@@ -351,7 +352,11 @@ export default function CrmPassesPage() {
                       : PAYMENT_METHOD_LABEL[p.payment_method] ?? p.payment_method}
                   </Td>
                   <Td className="text-[#6B5D47] dark:text-zinc-400">
-                    {staffMap.get(p.trainer_member_id) ?? "—"}
+                    {(() => {
+                      const primary = staffMap.get(p.trainer_member_id) ?? "—";
+                      const extra = (p.co_trainer_ids ?? []).length;
+                      return extra > 0 ? `${primary} 외 ${extra}명` : primary;
+                    })()}
                   </Td>
                   <Td className="text-[#8C8270] dark:text-zinc-500">{p.issued_at}</Td>
                   <Td className="text-[#8C8270] dark:text-zinc-500">{p.start_date ?? "—"}</Td>
