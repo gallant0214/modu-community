@@ -32,7 +32,13 @@ type DateMode = "year" | "month" | "range";
 
 export default function CrmStatsPage() {
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<Tab>("center");
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window === "undefined") return "center";
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t === "payroll" || t === "trainer" || t === "settlement" || t === "center"
+      ? (t as Tab)
+      : "center";
+  });
   const [dateMode, setDateMode] = useState<DateMode>("month");
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [ym, setYm] = useState(() => new Date().toISOString().slice(0, 7));
@@ -84,6 +90,15 @@ export default function CrmStatsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 현재 탭을 URL(?tab=)에 반영 → 강사 급여 상세에서 뒤로가기 시 같은 탭으로 복귀
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (tab === "center") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", tab);
+    window.history.replaceState(null, "", url.toString());
+  }, [tab]);
 
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-6xl mx-auto">

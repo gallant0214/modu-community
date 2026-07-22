@@ -53,7 +53,7 @@ export default function PayrollDetailPage() {
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-6xl mx-auto">
       <Link
-        href="/crm/payroll"
+        href="/crm/stats?tab=payroll"
         className="inline-flex items-center gap-1 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:text-[#3A342A]"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
