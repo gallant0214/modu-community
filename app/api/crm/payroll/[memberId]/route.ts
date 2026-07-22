@@ -157,10 +157,18 @@ export async function GET(
   const bonuses: Bonus[] = Array.isArray(trainer?.commission_bonuses)
     ? (trainer!.commission_bonuses as Bonus[])
     : [];
-  const achievedBonuses = bonuses.filter((b) => {
+  const achieved = bonuses.filter((b) => {
     const actual = b.metric === "sessions" ? sessionCount : revenue;
     return actual >= (Number(b.gte) || 0);
   });
+  // 같은 지표(sessions/revenue)끼리는 '가장 높은 달성 구간 1개'만 적용 (누적 합산 X).
+  // 예: 진행세션 100/150/200건 구간에서 201건이면 200건 구간(최고)만 적용.
+  const bestByMetric = new Map<string, Bonus>();
+  for (const b of achieved) {
+    const cur = bestByMetric.get(b.metric);
+    if (!cur || (Number(b.gte) || 0) > (Number(cur.gte) || 0)) bestByMetric.set(b.metric, b);
+  }
+  const achievedBonuses = [...bestByMetric.values()];
   const bonusPayout = achievedBonuses.reduce((s, b) => {
     if (b.reward_type === "percent") {
       return s + Math.round((commissionPayout * (Number(b.bonus_percent) || 0)) / 100);
