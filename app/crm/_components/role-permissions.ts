@@ -6,7 +6,7 @@
  */
 
 export interface RoleOption {
-  key: "owner" | "admin" | "manager" | "trainer";
+  key: "owner" | "admin" | "manager" | "trainer" | "fc" | "alba";
   label: string;
 }
 
@@ -30,12 +30,17 @@ export interface PermissionGroup {
   items: PermissionItem[];
 }
 
-const D_ALL = { owner: true, admin: true, manager: true, trainer: true };
-const D_ADMIN = { owner: true, admin: true, manager: false, trainer: false };
-const D_MGR = { owner: true, admin: true, manager: true, trainer: false };
+// 기본 권한 프로필 (6개 기반: 대표자/관리자/팀장/강사/FC/아르바이트)
+// - 강사(trainer): 본인 담당 회원·수업 위주 최소 권한
+// - FC(fc): 영업·상담·회원 등록/판매 담당 → 회원·판매 권한은 팀장 수준, 재무·설정·삭제는 차단
+// - 아르바이트(alba): 프런트 조회 위주 최소(열람) 권한
+const D_ALL = { owner: true, admin: true, manager: true, trainer: true, fc: true, alba: true };
+const D_ADMIN = { owner: true, admin: true, manager: false, trainer: false, fc: false, alba: false };
+const D_MGR = { owner: true, admin: true, manager: true, trainer: false, fc: false, alba: false };
 // D_OWNER: 정책상 owner 전용. 그러나 "관리자는 기본적으로 모든 권한 보유" 원칙에 맞춰 admin 도 true.
-// 필요 시 사장님이 설정 > 권한 페이지에서 개별 관리자 토글로 끌 수 있음.
-const D_OWNER = { owner: true, admin: true, manager: false, trainer: false };
+const D_OWNER = { owner: true, admin: true, manager: false, trainer: false, fc: false, alba: false };
+// FC 에게 부여하는 팀장급 회원·판매 권한 (D_MGR + fc)
+const D_MGR_FC = { owner: true, admin: true, manager: true, trainer: false, fc: true, alba: false };
 
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
@@ -44,18 +49,18 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     items: [
       { key: "members.view",       label: "회원 관리 열람",       defaults: D_ALL },
       { key: "members.excel",      label: "회원 엑셀 추출",       defaults: D_MGR },
-      { key: "members.create",     label: "회원 추가",             defaults: D_MGR },
-      { key: "members.edit_basic", label: "회원 기본정보 수정",   defaults: D_MGR },
-      { key: "members.edit_usage", label: "회원 이용정보 수정",   defaults: D_MGR },
+      { key: "members.create",     label: "회원 추가",             defaults: D_MGR_FC },
+      { key: "members.edit_basic", label: "회원 기본정보 수정",   defaults: D_MGR_FC },
+      { key: "members.edit_usage", label: "회원 이용정보 수정",   defaults: D_MGR_FC },
       { key: "members.delete",     label: "회원 삭제",             defaults: D_ADMIN },
-      { key: "members.mileage",    label: "마일리지 적립/사용",   defaults: D_MGR },
+      { key: "members.mileage",    label: "마일리지 적립/사용",   defaults: D_MGR_FC },
     ],
   },
   {
     key: "sales",
     label: "매출 관리",
     items: [
-      { key: "sales.view",         label: "매출 열람",             defaults: D_MGR },
+      { key: "sales.view",         label: "매출 열람",             defaults: D_MGR_FC },
       { key: "sales.edit",         label: "매출 수정",             defaults: D_ADMIN },
       { key: "sales.refund",       label: "회원권·대여권 환불",   defaults: D_ADMIN },
       { key: "sales.delete",       label: "매출 삭제",             defaults: D_ADMIN },
@@ -84,7 +89,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "products.create",       label: "상품 추가",             defaults: D_ADMIN },
       { key: "products.edit",         label: "상품 수정",             defaults: D_ADMIN },
       { key: "products.delete",       label: "상품 삭제",             defaults: D_ADMIN },
-      { key: "products.sell",         label: "상품 판매",             defaults: D_MGR },
+      { key: "products.sell",         label: "상품 판매",             defaults: D_MGR_FC },
     ],
   },
   {
@@ -94,7 +99,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "lockers.zone_create", label: "락커룸 추가", defaults: D_ADMIN },
       { key: "lockers.zone_edit",   label: "락커룸 수정", defaults: D_ADMIN },
       { key: "lockers.zone_delete", label: "락커룸 삭제", defaults: D_OWNER },
-      { key: "lockers.edit",        label: "락커 수정",   defaults: D_MGR },
+      { key: "lockers.edit",        label: "락커 수정",   defaults: D_MGR_FC },
     ],
   },
   {
@@ -117,8 +122,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     key: "segments",
     label: "세그먼트 관리",
     items: [
-      { key: "segments.create", label: "세그먼트 추가", defaults: D_MGR },
-      { key: "segments.edit",   label: "세그먼트 수정", defaults: D_MGR },
+      { key: "segments.create", label: "세그먼트 추가", defaults: D_MGR_FC },
+      { key: "segments.edit",   label: "세그먼트 수정", defaults: D_MGR_FC },
       { key: "segments.delete", label: "세그먼트 삭제", defaults: D_ADMIN },
     ],
   },
@@ -157,14 +162,11 @@ export const ALL_PERMISSION_KEYS = PERMISSION_GROUPS.flatMap((g) =>
   g.items.map((i) => i.key)
 );
 
-/** 등급의 기본 분류. fc(FC)·alba(아르바이트)는 권한/역할상 강사(trainer) 기준으로 동작하되 별도 라벨. */
+/**
+ * 등급의 기본 분류. fc(FC)·alba(아르바이트)는 권한 기본값을 각자 프로필로 갖는다.
+ * (역할/접근 게이트는 별도로 강사(trainer) 로 매핑 — staff API 참고)
+ */
 export type GradeBaseRole = "owner" | "admin" | "manager" | "trainer" | "fc" | "alba";
-
-/** 권한 기본값 계산용 실효 역할: fc·alba → trainer 로 매핑 */
-export function effectiveDefaultRole(base: GradeBaseRole): RoleOption["key"] {
-  if (base === "fc" || base === "alba") return "trainer";
-  return base;
-}
 
 export interface GradeMeta {
   id: number;
@@ -184,11 +186,10 @@ export function buildGradePermissionMatrix(
   const map: Record<number, Record<string, boolean>> = {};
   for (const grade of grades) {
     const row: Record<string, boolean> = {};
-    const eff = effectiveDefaultRole(grade.base_role);
     for (const g of PERMISSION_GROUPS) {
       for (const it of g.items) {
         row[it.key] =
-          grade.base_role === "owner" ? true : it.defaults[eff] ?? false;
+          grade.base_role === "owner" ? true : it.defaults[grade.base_role] ?? false;
       }
     }
     map[grade.id] = row;
