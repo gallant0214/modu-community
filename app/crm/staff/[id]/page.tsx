@@ -935,6 +935,7 @@ function ContactSection({
   }, [memberId, hasResident]);
 
   // 눈 아이콘 클릭 → 서버에 복호화 요청 → 원본 표시
+  // 원본이 저장 안 돼 있으면(404) 자동으로 편집 모드로 전환
   const revealResident = async () => {
     if (revealed) {
       setRevealed(null);
@@ -951,6 +952,12 @@ function ContactSection({
         cache: "no-store",
       });
       const data = await res.json();
+      if (res.status === 404) {
+        // 암호화 원본 미저장 → 재입력 모드로 자동 전환
+        setEditingResident(true);
+        setRevealError("이전에 저장된 주민번호는 해시만 남아 원본을 복구할 수 없어요. 아래에 다시 입력해 주세요.");
+        return;
+      }
       if (!res.ok) throw new Error(data?.error || "조회 실패");
       const digits = String(data.resident_no || "").replace(/[^0-9]/g, "");
       if (digits.length !== 13) throw new Error("응답 형식 오류");
