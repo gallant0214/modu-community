@@ -28,7 +28,6 @@ const MENU: MenuItem[] = [
   { href: "/crm/passes",      label: "수강권 관리",   icon: IconPass },
   { href: "/crm/memberships", label: "회원권 관리",   icon: IconMembership },
   { href: "/crm/staff",       label: "직원 관리",     staffOnly: true, icon: IconStaff },
-  { href: "/crm/payroll",     label: "직원 급여",     staffOnly: true, icon: IconPayroll },
   { href: "/crm/stats",       label: "통계",          icon: IconStats },
   { href: "/crm/settings",    label: "센터설정",       staffOnly: true, icon: IconSettings },
   { href: "/crm/touch-attendance", label: "터치출석", staffOnly: true, newWindow: true, icon: IconTouch },
@@ -262,13 +261,6 @@ function IconAttendance({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M8 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2h-3M8 3v4h8V3M8 3h8" />
-    </svg>
-  );
-}
-function IconPayroll({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   );
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { ROLE_LABEL, formatWon, parseWon } from "../_components/crm-labels";
 import { TrainerSessionsChart } from "./_components/trainer-sessions-chart";
+import { PayrollList } from "../payroll/_payroll-list";
 
 interface MonthlyResp {
   ym: string;
@@ -25,7 +26,7 @@ interface MonthlyResp {
   }[];
 }
 
-type Tab = "trainer" | "center" | "settlement";
+type Tab = "trainer" | "center" | "settlement" | "payroll";
 
 type DateMode = "year" | "month" | "range";
 
@@ -92,13 +93,16 @@ export default function CrmStatsPage() {
             통계
           </h1>
           <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-            {tab === "trainer"
+            {tab === "payroll"
+              ? "강사를 선택하면 매출·담당 회원·수업 내역·급여를 확인할 수 있어요."
+              : tab === "trainer"
               ? `강사별 매출과 수업 현황을 ${dateMode === "year" ? "연 단위" : dateMode === "month" ? "월 단위" : "지정 기간"}로 확인해요.`
               : tab === "center"
               ? `센터 매출(회원권·운동복·락커·기타)을 ${dateMode === "year" ? "연 단위" : dateMode === "month" ? "월 단위" : "지정 기간"}로 확인해요.`
               : `총매출에서 고정지출·부가세·직원급여·추가지출을 뺀 순이익을 ${dateMode === "year" ? "연 단위" : dateMode === "month" ? "월 단위" : "지정 기간"}로 정산해요.`}
           </p>
         </div>
+        {tab !== "payroll" && (
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
             <ModeBtn active={dateMode === "year"} onClick={() => setDateMode("year")}>
@@ -150,6 +154,7 @@ export default function CrmStatsPage() {
             </div>
           )}
         </div>
+        )}
       </header>
 
       <div className="mb-5 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800">
@@ -162,6 +167,9 @@ export default function CrmStatsPage() {
         <TabBtn active={tab === "settlement"} onClick={() => setTab("settlement")}>
           정산
         </TabBtn>
+        <TabBtn active={tab === "payroll"} onClick={() => setTab("payroll")}>
+          직원 급여
+        </TabBtn>
       </div>
 
       {error && (
@@ -170,7 +178,9 @@ export default function CrmStatsPage() {
         </div>
       )}
 
-      {loading ? (
+      {tab === "payroll" ? (
+        <PayrollList />
+      ) : loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : tab === "trainer" ? (
         <TrainerTab data={data} />
