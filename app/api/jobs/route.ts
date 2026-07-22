@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
+import { isExcludedJobTitle } from "@/app/lib/job-title-filter";
 import { sendKeywordAlerts } from "@/app/lib/notifications";
 import { invalidateCache } from "@/app/lib/cache";
 import { fetchJobsPage } from "@/app/lib/jobs-query";
@@ -70,6 +71,16 @@ export async function POST(request: Request) {
 
   if (!title?.trim() || !description?.trim() || !center_name?.trim() || !contact?.trim() || !sport?.trim()) {
     return NextResponse.json({ error: "필수 항목을 입력해주세요" }, { status: 400 });
+  }
+
+  // 스포츠 무관 업종(청소·경비·조리·시설·환경관리·요양 등) 등록 차단.
+  // 자동 임포트(fetch-jobs) 와 동일한 EXCLUDE_TITLE 룰 적용.
+  const titleCheck = isExcludedJobTitle(title.trim());
+  if (titleCheck.excluded) {
+    return NextResponse.json(
+      { error: "스포츠지도자 관련이 아닌 구인글은 등록할 수 없습니다. (감지 키워드: " + titleCheck.matched + ")" },
+      { status: 400 },
+    );
   }
 
   const h = await headers();
