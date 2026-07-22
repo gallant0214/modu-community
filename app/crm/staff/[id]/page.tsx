@@ -193,9 +193,12 @@ export default function CrmStaffDetailPage() {
       </header>
 
       <ContactSection
+        birth={member.birth ?? null}
         phone={member.phone}
         email={member.email}
         address={member.address}
+        isOwner={member.role === "owner"}
+        hasResident={!!member.has_resident}
         saving={saving}
         onSave={(p) => patchMember(p)}
       />
@@ -216,8 +219,6 @@ export default function CrmStaffDetailPage() {
           </select>
         </div>
       </Section>
-
-      <IdentitySection member={member} saving={saving} onSave={(p) => patchMember(p)} />
 
       <CommissionSection member={member} saving={saving} onSave={(p) => patchMember(p)} />
 
@@ -374,51 +375,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       </h2>
       {children}
     </section>
-  );
-}
-
-/* ─── 생년월일 (본인 확인 정보) ─────────── */
-function IdentitySection({
-  member,
-  saving,
-  onSave,
-}: {
-  member: StaffMember;
-  saving: boolean;
-  onSave: (p: Record<string, unknown>) => void;
-}) {
-  const [birth, setBirth] = useState(member.birth ?? "");
-
-  useEffect(() => {
-    setBirth(member.birth ?? "");
-  }, [member.birth]);
-
-  const saveBirth = () => onSave({ birth: birth.trim() || null });
-
-  return (
-    <Section title="생년월일">
-      <div className="space-y-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 max-w-[200px]"
-              value={birth}
-              onChange={(e) => setBirth(e.target.value)}
-            />
-            {birth !== (member.birth ?? "") && (
-              <button
-                onClick={saveBirth}
-                disabled={saving}
-                className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
-              >
-                저장
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </Section>
   );
 }
 
@@ -899,47 +855,142 @@ function DisplayNameSection({
 }
 
 function ContactSection({
+  birth,
   phone,
   email,
   address,
+  isOwner,
+  hasResident,
   saving,
   onSave,
 }: {
+  birth: string | null;
   phone: string | null;
   email: string | null;
   address: string | null;
+  isOwner: boolean;
+  hasResident: boolean;
   saving: boolean;
-  onSave: (patch: { phone?: string | null; email?: string | null; address?: string | null }) => void;
+  onSave: (patch: { birth?: string | null; phone?: string | null; email?: string | null; address?: string | null; resident_no?: string }) => void;
 }) {
+  const [b, setB] = useState(birth ?? "");
   const [p, setP] = useState(formatPhone(phone ?? ""));
   const [e, setE] = useState(email ?? "");
   const [a, setA] = useState(address ?? "");
+  const [resident, setResident] = useState("");
+  const [editingResident, setEditingResident] = useState(false);
 
   useEffect(() => {
+    setB(birth ?? "");
     setP(formatPhone(phone ?? ""));
     setE(email ?? "");
     setA(address ?? "");
-  }, [phone, email, address]);
+  }, [birth, phone, email, address]);
 
+  const dirtyBirth = b !== (birth ?? "");
   const dirtyPhone = p !== formatPhone(phone ?? "");
   const dirtyEmail = e !== (email ?? "");
   const dirtyAddress = a !== (address ?? "");
-  const dirty = dirtyPhone || dirtyEmail || dirtyAddress;
+  const dirty = dirtyBirth || dirtyPhone || dirtyEmail || dirtyAddress;
 
   const save = () => {
-    const patch: { phone?: string | null; email?: string | null; address?: string | null } = {};
+    const patch: { birth?: string | null; phone?: string | null; email?: string | null; address?: string | null } = {};
+    if (dirtyBirth) patch.birth = b.trim() || null;
     if (dirtyPhone) patch.phone = p.trim() || null;
     if (dirtyEmail) patch.email = e.trim() || null;
     if (dirtyAddress) patch.address = a.trim() || null;
     onSave(patch);
   };
 
+  // 주민번호 별도 저장 (해시 저장이라 다른 필드와 함께 patch 안 함)
+  const saveResident = () => {
+    const digits = resident.replace(/[^0-9]/g, "");
+    if (digits.length !== 13) return;
+    onSave({ resident_no: digits });
+    setResident("");
+    setEditingResident(false);
+  };
+
+  // 등록된 주민번호 마스킹 표시: 생년월일(YYMMDD)-*******
+  const maskedResident = (() => {
+    if (!hasResident) return null;
+    const d = (birth ?? "").replace(/[^0-9]/g, "");
+    const yymmdd = d.length >= 8 ? d.slice(2, 8) : d.slice(0, 6);
+    return `${yymmdd || "******"}-*******`;
+  })();
+
   return (
     <section className="mb-6 px-4 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
       <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-        연락처 / 이메일 / 주소
+        생년월일 / 연락처 / 이메일 / 주소
       </h2>
       <div className="space-y-3">
+        <div>
+          <div className="text-[12.5px] text-[#A89B80] mb-1.5">생년월일</div>
+          <input
+            type="date"
+            className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A] max-w-[220px]"
+            value={b}
+            onChange={(ev) => setB(ev.target.value)}
+          />
+        </div>
+
+        {isOwner && (
+          <div>
+            <div className="text-[12.5px] text-[#A89B80] mb-1.5">
+              주민등록번호 <span className="text-[#B47B2A]">(대표자 전용 · 본인 확인용)</span>
+            </div>
+            {maskedResident && !editingResident ? (
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 text-[14px] font-medium text-[#3A342A] dark:text-zinc-200 tabular-nums">
+                  {maskedResident}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setEditingResident(true)}
+                  className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                >
+                  변경
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 max-w-[220px] tracking-wider"
+                  value={resident}
+                  onChange={(ev) => setResident(ev.target.value.replace(/[^0-9]/g, "").slice(0, 13))}
+                  placeholder="숫자 13자리"
+                  maxLength={13}
+                />
+                <button
+                  type="button"
+                  onClick={saveResident}
+                  disabled={saving || resident.replace(/[^0-9]/g, "").length !== 13}
+                  className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
+                >
+                  저장
+                </button>
+                {maskedResident && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingResident(false);
+                      setResident("");
+                    }}
+                    className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#6B5D47] dark:text-zinc-300"
+                  >
+                    취소
+                  </button>
+                )}
+              </div>
+            )}
+            <p className="mt-1.5 text-[11px] text-[#A89B80]">
+              대표자만 볼 수 있어요. 저장하면 원본은 저장되지 않고 안전하게 암호화(해시)되며 뒷 7자리는 화면에 표시되지 않아요.
+            </p>
+          </div>
+        )}
         <div>
           <div className="text-[12.5px] text-[#A89B80] mb-1.5">연락처</div>
           <input
