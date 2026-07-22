@@ -277,9 +277,6 @@ export default function CrmSettingsPage() {
         <TabBtn active={tab === "permissions"} onClick={() => setTab("permissions")}>
           직급 권한
         </TabBtn>
-        <TabBtn active={tab === "logs"} onClick={() => setTab("logs")}>
-          활동 로그
-        </TabBtn>
         <TabBtn active={tab === "expenses"} onClick={() => setTab("expenses")}>
           고정 지출
         </TabBtn>
@@ -288,6 +285,9 @@ export default function CrmSettingsPage() {
         </TabBtn>
         <TabBtn active={tab === "danger"} onClick={() => setTab("danger")} danger>
           센터 탈퇴
+        </TabBtn>
+        <TabBtn active={tab === "logs"} onClick={() => setTab("logs")}>
+          활동 로그
         </TabBtn>
       </div>
 
