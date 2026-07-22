@@ -193,6 +193,7 @@ export default function CrmStaffDetailPage() {
 
       <ContactSection
         memberId={member.id}
+        name={member.display_name}
         birth={member.birth ?? null}
         phone={member.phone}
         email={member.email}
@@ -856,6 +857,7 @@ function DisplayNameSection({
 
 function ContactSection({
   memberId,
+  name,
   birth,
   phone,
   email,
@@ -865,15 +867,17 @@ function ContactSection({
   onSave,
 }: {
   memberId: number;
+  name: string;
   birth: string | null;
   phone: string | null;
   email: string | null;
   address: string | null;
   hasResident: boolean;
   saving: boolean;
-  onSave: (patch: { birth?: string | null; phone?: string | null; email?: string | null; address?: string | null; resident_no?: string }) => void;
+  onSave: (patch: { display_name?: string; birth?: string | null; phone?: string | null; email?: string | null; address?: string | null; resident_no?: string }) => void;
 }) {
   const { getIdToken } = useAuth();
+  const [n, setN] = useState(name ?? "");
   const [b, setB] = useState(birth ?? "");
   const [p, setP] = useState(formatPhone(phone ?? ""));
   const [e, setE] = useState(email ?? "");
@@ -887,20 +891,23 @@ function ContactSection({
   const [revealError, setRevealError] = useState("");
 
   useEffect(() => {
+    setN(name ?? "");
     setB(birth ?? "");
     setP(formatPhone(phone ?? ""));
     setE(email ?? "");
     setA(address ?? "");
-  }, [birth, phone, email, address]);
+  }, [name, birth, phone, email, address]);
 
+  const dirtyName = n.trim() !== (name ?? "").trim();
   const dirtyBirth = b !== (birth ?? "");
   const dirtyPhone = p !== formatPhone(phone ?? "");
   const dirtyEmail = e !== (email ?? "");
   const dirtyAddress = a !== (address ?? "");
-  const dirty = dirtyBirth || dirtyPhone || dirtyEmail || dirtyAddress;
+  const dirty = dirtyName || dirtyBirth || dirtyPhone || dirtyEmail || dirtyAddress;
 
   const save = () => {
-    const patch: { birth?: string | null; phone?: string | null; email?: string | null; address?: string | null } = {};
+    const patch: { display_name?: string; birth?: string | null; phone?: string | null; email?: string | null; address?: string | null } = {};
+    if (dirtyName && n.trim()) patch.display_name = n.trim();
     if (dirtyBirth) patch.birth = b.trim() || null;
     if (dirtyPhone) patch.phone = p.trim() || null;
     if (dirtyEmail) patch.email = e.trim() || null;
@@ -966,7 +973,7 @@ function ContactSection({
   return (
     <section className="mb-6 px-4 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
       <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-        생년월일 / 연락처 / 이메일 / 주소
+        이름 / 생년월일 / 연락처 / 이메일 / 주소
       </h2>
       <div className="space-y-3">
         <div>
@@ -976,6 +983,17 @@ function ContactSection({
             className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A] max-w-[220px]"
             value={b}
             onChange={(ev) => setB(ev.target.value)}
+          />
+        </div>
+
+        <div>
+          <div className="text-[12.5px] text-[#A89B80] mb-1.5">이름</div>
+          <input
+            type="text"
+            className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A] max-w-[220px]"
+            value={n}
+            onChange={(ev) => setN(ev.target.value)}
+            placeholder="이름"
           />
         </div>
 
