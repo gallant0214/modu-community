@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { residentHash, residentBirth } from "@/app/lib/crm-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export async function GET(
   const { data: member, error } = await supabase
     .from("crm_center_members")
     .select(
-      "id, firebase_uid, role, grade_id, display_name, phone, email, address, employment_status, employment_type, access_level, is_solo_owner, status, joined_at, left_at, commission_type, commission_rate, commission_tiers, base_salary, cash_pay_enabled, cash_pay_won, commission_bonuses"
+      "id, firebase_uid, role, grade_id, display_name, phone, email, address, employment_status, employment_type, access_level, is_solo_owner, status, joined_at, left_at, commission_type, commission_rate, commission_tiers, base_salary, cash_pay_enabled, cash_pay_won, commission_bonuses, birth, resident_hash"
     )
     .eq("id", memberId)
     .eq("center_id", ctx.centerId)
@@ -39,6 +40,11 @@ export async function GET(
     return NextResponse.json({ error: "직원을 찾을 수 없습니다" }, { status: 404 });
   }
 
+  // 주민번호 해시는 절대 노출 금지 → 등록 여부(has_resident)만 전달
+  const m = member as typeof member & { resident_hash?: string | null };
+  const safeMember = { ...m, has_resident: !!m.resident_hash };
+  delete (safeMember as { resident_hash?: unknown }).resident_hash;
+
   const { data: perms } = await supabase
     .from("crm_trainer_permissions")
     .select(
@@ -47,7 +53,7 @@ export async function GET(
     .eq("center_member_id", memberId)
     .maybeSingle();
 
-  return NextResponse.json({ member, permissions: perms ?? null });
+  return NextResponse.json({ member: safeMember, permissions: perms ?? null });
 }
 
 /**
@@ -90,6 +96,8 @@ export async function PATCH(
       bonus_won?: number;
       bonus_percent?: number;
     }[];
+    birth?: string | null;
+    resident_no?: string; // 주민번호 원문 → 해시로만 저장
   };
   try {
     body = await request.json();
@@ -98,6 +106,25 @@ export async function PATCH(
   }
 
   const patch: Record<string, unknown> = {};
+
+  // 본인 확인 정보(생년월일·주민번호) — 센터 탈퇴/양도 방지용
+  if (body.birth !== undefined) {
+    patch.birth = body.birth?.trim() || null;
+  }
+  if (body.resident_no !== undefined) {
+    const hash = residentHash(body.resident_no);
+    if (body.resident_no.trim() && !hash) {
+      return NextResponse.json({ error: "주민번호 13자리를 정확히 입력해 주세요" }, { status: 400 });
+    }
+    patch.resident_hash = hash; // 원문 저장 안 함(해시만)
+    // 생년월일 미입력 시 주민번호 앞 6자리로 자동 채움
+    const yymmdd = residentBirth(body.resident_no);
+    if (yymmdd && body.birth === undefined) {
+      const yy = Number(yymmdd.slice(0, 2));
+      const yyyy = yy <= 30 ? 2000 + yy : 1900 + yy;
+      patch.birth = `${yyyy}-${yymmdd.slice(2, 4)}-${yymmdd.slice(4, 6)}`;
+    }
+  }
 
   // 수업료(정산) 설정은 sales.commission_edit 권한 필요
   const touchesCommission =

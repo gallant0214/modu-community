@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { verifyCenterIdentity } from "@/app/lib/crm-center-verify";
 
 export const dynamic = "force-dynamic";
 
@@ -49,22 +50,22 @@ export async function DELETE(request: Request) {
     );
   }
 
-  // 사업자 등록번호 확인 (등록돼 있는 센터만)
-  if (center.business_no) {
-    let body: { business_no?: string } = {};
-    try {
-      body = await request.json();
-    } catch {
-      // body 없음 — 아래에서 차단
-    }
-    const provided = (body.business_no ?? "").replace(/[\s-]/g, "");
-    const stored = center.business_no.replace(/[\s-]/g, "");
-    if (!provided || provided !== stored) {
-      return NextResponse.json(
-        { error: "사업자 등록번호가 일치하지 않습니다" },
-        { status: 400 }
-      );
-    }
+  // 본인 확인: 센터명·대표자명·대표자 휴대폰·사업자번호·대표자 주민번호 전부 일치해야 함
+  let body: {
+    center_name?: string;
+    owner_name?: string;
+    owner_phone?: string;
+    business_no?: string;
+    resident_no?: string;
+  } = {};
+  try {
+    body = await request.json();
+  } catch {
+    /* 아래 검증에서 차단 */
+  }
+  const verifyError = await verifyCenterIdentity(ctx.centerId, ctx.uid, body);
+  if (verifyError) {
+    return NextResponse.json({ error: verifyError }, { status: 400 });
   }
 
   const { error } = await supabase

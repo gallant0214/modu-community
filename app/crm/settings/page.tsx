@@ -575,7 +575,7 @@ export default function CrmSettingsPage() {
         centerName={info?.centerName ?? ""}
         businessNo={info?.businessNo ?? null}
         onClose={() => setWithdrawOpen(false)}
-        onConfirm={async (typedBusinessNo) => {
+        onConfirm={async (identity) => {
           const token = await getIdToken();
           if (!token) {
             alert("로그인 정보를 확인할 수 없습니다");
@@ -584,9 +584,7 @@ export default function CrmSettingsPage() {
           const res = await fetch("/api/crm/centers/me", {
             method: "DELETE",
             headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-            body: JSON.stringify(
-              typedBusinessNo !== null ? { business_no: typedBusinessNo } : {}
-            ),
+            body: JSON.stringify(identity),
           });
           const data = await res.json();
           if (!res.ok) {
@@ -600,6 +598,7 @@ export default function CrmSettingsPage() {
       <TransferModal
         open={transferOpen}
         centerName={info?.centerName ?? ""}
+        businessNo={info?.businessNo ?? null}
         onClose={() => setTransferOpen(false)}
         onTransferred={(newOwnerName) => {
           setTransferOpen(false);
@@ -861,15 +860,25 @@ function GradesPanel() {
 function TransferModal({
   open,
   centerName,
+  businessNo,
   onClose,
   onTransferred,
 }: {
   open: boolean;
   centerName: string;
+  businessNo?: string | null;
   onClose: () => void;
   onTransferred: (newOwnerName: string) => void;
 }) {
   const { getIdToken } = useAuth();
+  const [vals, setVals] = useState<CenterIdentity>({
+    center_name: "",
+    owner_name: "",
+    owner_phone: "",
+    business_no: "",
+    resident_no: "",
+  });
+  const requireBiz = !!(businessNo && businessNo.replace(/[\s-]/g, "").length > 0);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<
     { firebase_uid: string; name: string; email: string | null }[]
@@ -892,8 +901,16 @@ function TransferModal({
       setSearched(false);
       setError("");
       setSubmitting(false);
+      setVals({ center_name: "", owner_name: "", owner_phone: "", business_no: "", resident_no: "" });
     }
   }, [open]);
+
+  const identityFilled =
+    vals.center_name.trim() &&
+    vals.owner_name.trim() &&
+    vals.owner_phone.replace(/[^0-9]/g, "").length >= 10 &&
+    (!requireBiz || vals.business_no.replace(/[^0-9]/g, "").length >= 8) &&
+    vals.resident_no.replace(/[^0-9]/g, "").length === 13;
 
   const search = async () => {
     const q = query.trim();
@@ -933,7 +950,7 @@ function TransferModal({
       const res = await fetch("/api/crm/centers/me/transfer", {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ firebase_uid: picked.firebase_uid }),
+        body: JSON.stringify({ firebase_uid: picked.firebase_uid, ...vals }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "양도 실패");
@@ -1031,6 +1048,15 @@ function TransferModal({
           </>
         )}
 
+        {picked && (
+          <div className="pt-1 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+            <p className="text-[12.5px] text-[#3A342A] dark:text-zinc-300 mt-3 mb-2">
+              본인 확인을 위해 아래 정보를 모두 정확히 입력해 주세요.
+            </p>
+            <IdentityVerifyFields vals={vals} set={(p) => setVals((v) => ({ ...v, ...p }))} requireBiz={requireBiz} />
+          </div>
+        )}
+
         {error && (
           <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
             {error}
@@ -1039,18 +1065,18 @@ function TransferModal({
 
         <div className="flex gap-2 pt-1">
           <button
+            onClick={confirm}
+            disabled={!picked || !identityFilled || submitting}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:bg-[#A8B87A]/40 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+          >
+            {submitting ? "양도 중…" : "센터 양도"}
+          </button>
+          <button
             onClick={onClose}
             disabled={submitting}
             className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-50"
           >
             취소
-          </button>
-          <button
-            onClick={confirm}
-            disabled={!picked || submitting}
-            className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:bg-[#A8B87A]/40 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
-          >
-            {submitting ? "양도 중…" : "센터 양도"}
           </button>
         </div>
       </div>
@@ -1058,9 +1084,74 @@ function TransferModal({
   );
 }
 
+export interface CenterIdentity {
+  center_name: string;
+  owner_name: string;
+  owner_phone: string;
+  business_no: string;
+  resident_no: string;
+}
+const emptyIdentity: CenterIdentity = {
+  center_name: "",
+  owner_name: "",
+  owner_phone: "",
+  business_no: "",
+  resident_no: "",
+};
+
+/** 탈퇴/양도 본인 확인 5개 입력 (센터명·대표자명·대표자 휴대폰·사업자번호·대표자 주민번호) */
+function IdentityVerifyFields({
+  vals,
+  set,
+  requireBiz,
+}: {
+  vals: CenterIdentity;
+  set: (patch: Partial<CenterIdentity>) => void;
+  requireBiz: boolean;
+}) {
+  return (
+    <div className="space-y-2.5">
+      <div>
+        <label className="block text-[12px] text-[#3A342A] dark:text-zinc-300 mb-1">센터 이름</label>
+        <input className={crmInputClass} value={vals.center_name} onChange={(e) => set({ center_name: e.target.value })} placeholder="센터 이름" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <div>
+          <label className="block text-[12px] text-[#3A342A] dark:text-zinc-300 mb-1">대표자 이름</label>
+          <input className={crmInputClass} value={vals.owner_name} onChange={(e) => set({ owner_name: e.target.value })} placeholder="실명" />
+        </div>
+        <div>
+          <label className="block text-[12px] text-[#3A342A] dark:text-zinc-300 mb-1">대표자 휴대폰번호</label>
+          <input className={crmInputClass} inputMode="numeric" value={vals.owner_phone} onChange={(e) => set({ owner_phone: formatPhone(e.target.value) })} placeholder="010-0000-0000" />
+        </div>
+      </div>
+      {requireBiz && (
+        <div>
+          <label className="block text-[12px] text-[#3A342A] dark:text-zinc-300 mb-1">사업자 등록번호</label>
+          <input className={crmInputClass} inputMode="numeric" value={vals.business_no} onChange={(e) => set({ business_no: e.target.value })} placeholder="000-00-00000" />
+        </div>
+      )}
+      <div>
+        <label className="block text-[12px] text-[#3A342A] dark:text-zinc-300 mb-1">대표자 주민등록번호</label>
+        <input
+          className={`${crmInputClass} tracking-wider`}
+          type="password"
+          inputMode="numeric"
+          maxLength={13}
+          value={vals.resident_no}
+          onChange={(e) => set({ resident_no: e.target.value.replace(/[^0-9]/g, "").slice(0, 13) })}
+          placeholder="숫자 13자리"
+        />
+        <p className="mt-1 text-[11px] text-[#A89B80]">
+          직원 관리 &gt; 대표자 상세에 등록한 주민번호와 일치해야 진행됩니다.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function WithdrawModal({
   open,
-  centerName,
   businessNo,
   onClose,
   onConfirm,
@@ -1069,34 +1160,31 @@ function WithdrawModal({
   centerName: string;
   businessNo: string | null;
   onClose: () => void;
-  onConfirm: (typedBusinessNo: string | null) => Promise<void>;
+  onConfirm: (identity: CenterIdentity) => Promise<void>;
 }) {
-  const [typedName, setTypedName] = useState("");
-  const [typedBiz, setTypedBiz] = useState("");
+  const [vals, setVals] = useState<CenterIdentity>(emptyIdentity);
   const [submitting, setSubmitting] = useState(false);
+  const requireBiz = !!(businessNo && businessNo.replace(/[\s-]/g, "").length > 0);
 
   useEffect(() => {
     if (!open) {
-      setTypedName("");
-      setTypedBiz("");
+      setVals(emptyIdentity);
       setSubmitting(false);
     }
   }, [open]);
 
-  const expectedName = (centerName || "").trim();
-  const expectedBiz = (businessNo || "").replace(/[\s-]/g, "");
-  const requireBiz = expectedBiz.length > 0;
-
-  const nameMatches = expectedName.length > 0 && typedName.trim() === expectedName;
-  const bizMatches =
-    !requireBiz || typedBiz.replace(/[\s-]/g, "") === expectedBiz;
-  const matches = nameMatches && bizMatches;
+  const filled =
+    vals.center_name.trim() &&
+    vals.owner_name.trim() &&
+    vals.owner_phone.replace(/[^0-9]/g, "").length >= 10 &&
+    (!requireBiz || vals.business_no.replace(/[^0-9]/g, "").length >= 8) &&
+    vals.resident_no.replace(/[^0-9]/g, "").length === 13;
 
   const handleConfirm = async () => {
-    if (!matches || submitting) return;
+    if (!filled || submitting) return;
     setSubmitting(true);
     try {
-      await onConfirm(requireBiz ? typedBiz.trim() : null);
+      await onConfirm(vals);
     } finally {
       setSubmitting(false);
     }
@@ -1107,72 +1195,28 @@ function WithdrawModal({
       <div className="space-y-3.5">
         <div className="px-3.5 py-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200/60 dark:border-red-900/40">
           <p className="text-[13px] font-semibold text-red-700 dark:text-red-300">
-            탈퇴하면 아래 정보가 모두 영구 삭제됩니다.
-          </p>
-          <ul className="mt-2 space-y-0.5 text-[12.5px] text-red-700/80 dark:text-red-300/80 list-disc list-inside">
-            <li>회원 명단과 메모</li>
-            <li>발급한 모든 수강권 내역</li>
-            <li>예약·출석·노쇼 기록</li>
-            <li>가입한 강사·직원 정보</li>
-            <li>센터 설정과 정산 규칙</li>
-            <li>활동 로그</li>
-          </ul>
-          <p className="mt-2 text-[12.5px] text-red-700 dark:text-red-300 font-semibold">
-            이 작업은 되돌릴 수 없어요.
+            탈퇴하면 회원·수강권·예약·직원·설정 등 모든 정보가 영구 삭제됩니다. 되돌릴 수 없어요.
           </p>
         </div>
-
-        <div>
-          <label className="block text-[12.5px] text-[#3A342A] dark:text-zinc-300 mb-1.5">
-            확인을 위해 센터 이름{" "}
-            <span className="font-semibold text-red-700 dark:text-red-300">
-              &ldquo;{expectedName}&rdquo;
-            </span>{" "}
-            을(를) 입력해 주세요.
-          </label>
-          <input
-            type="text"
-            value={typedName}
-            onChange={(e) => setTypedName(e.target.value)}
-            placeholder={expectedName}
-            className={crmInputClass}
-            autoFocus
-          />
-        </div>
-
-        {requireBiz && (
-          <div>
-            <label className="block text-[12.5px] text-[#3A342A] dark:text-zinc-300 mb-1.5">
-              사업자 등록번호도 정확히 입력해 주세요.
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={typedBiz}
-              onChange={(e) => setTypedBiz(e.target.value)}
-              placeholder="000-00-00000"
-              className={crmInputClass}
-            />
-            <p className="mt-1 text-[11.5px] text-[#A89B80]">
-              하이픈은 있어도 없어도 OK. 등록된 번호와 일치해야 탈퇴됩니다.
-            </p>
-          </div>
-        )}
+        <p className="text-[12.5px] text-[#3A342A] dark:text-zinc-300">
+          본인 확인을 위해 아래 정보를 모두 정확히 입력해 주세요.
+        </p>
+        <IdentityVerifyFields vals={vals} set={(p) => setVals((v) => ({ ...v, ...p }))} requireBiz={requireBiz} />
 
         <div className="flex gap-2 pt-1">
+          <button
+            onClick={handleConfirm}
+            disabled={!filled || submitting}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 disabled:bg-red-300 dark:disabled:bg-red-900/40 text-white text-[13.5px] font-semibold hover:bg-red-700"
+          >
+            {submitting ? "탈퇴 중…" : "센터 탈퇴"}
+          </button>
           <button
             onClick={onClose}
             disabled={submitting}
             className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-50"
           >
             취소
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!matches || submitting}
-            className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 disabled:bg-red-300 dark:disabled:bg-red-900/40 text-white text-[13.5px] font-semibold hover:bg-red-700"
-          >
-            {submitting ? "탈퇴 중…" : "센터 탈퇴"}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { verifyCenterIdentity } from "@/app/lib/crm-center-verify";
 import { getFirebaseAdmin } from "@/app/lib/firebase-admin";
 import { getAuth } from "firebase-admin/auth";
 
@@ -50,11 +51,24 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { firebase_uid?: string };
+  let body: {
+    firebase_uid?: string;
+    center_name?: string;
+    owner_name?: string;
+    owner_phone?: string;
+    business_no?: string;
+    resident_no?: string;
+  };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  }
+
+  // 본인 확인: 센터명·대표자명·대표자 휴대폰·사업자번호·대표자 주민번호 전부 일치
+  const verifyError = await verifyCenterIdentity(ctx.centerId, ctx.uid, body);
+  if (verifyError) {
+    return NextResponse.json({ error: verifyError }, { status: 400 });
   }
 
   const targetUid = body.firebase_uid?.trim();
