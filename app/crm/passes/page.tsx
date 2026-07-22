@@ -307,14 +307,12 @@ export default function CrmPassesPage() {
               {visibleList.map((p) => (
                 <tr
                   key={p.id}
-                  onClick={() => setDetailPassId(p.id)}
-                  className="bg-[#FEFCF7] dark:bg-zinc-900 cursor-pointer hover:bg-[#FAF5EA] dark:hover:bg-zinc-800/55 transition-colors"
+                  className="bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#FAF5EA] dark:hover:bg-zinc-800/55 transition-colors"
                 >
                   <Td>
                     <Link
                       href={`/crm/members/${p.member_id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex items-center gap-2 min-w-0 font-semibold text-[#2A251D] dark:text-zinc-100 hover:text-[#6B7B3A]"
+                      className="flex items-center gap-2 min-w-0 font-semibold text-[#2A251D] dark:text-zinc-100 hover:text-[#6B7B3A] cursor-pointer"
                     >
                       {p.member_face_thumb ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -335,10 +333,17 @@ export default function CrmPassesPage() {
                     {p.member_phone ? formatPhone(p.member_phone) : "—"}
                   </Td>
                   <Td>
-                    <div className="font-semibold text-[#2A251D] dark:text-zinc-100 truncate">{p.lesson_kind}</div>
-                    <div className="mt-0.5 text-[11.5px] text-[#A89B80]">
-                      {ISSUE_TYPE_LABEL[p.issue_type] ?? p.issue_type} · {p.session_minutes}분
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDetailPassId(p.id)}
+                      title="수강권 상세 보기"
+                      className="group text-left w-full cursor-pointer"
+                    >
+                      <div className="font-semibold text-[#2A251D] dark:text-zinc-100 truncate group-hover:text-[#6B7B3A] group-hover:underline">{p.lesson_kind}</div>
+                      <div className="mt-0.5 text-[11.5px] text-[#A89B80]">
+                        {ISSUE_TYPE_LABEL[p.issue_type] ?? p.issue_type} · {p.session_minutes}분
+                      </div>
+                    </button>
                   </Td>
                   <Td>
                     <SessionProgress remaining={p.remaining_sessions} total={p.total_sessions} />
