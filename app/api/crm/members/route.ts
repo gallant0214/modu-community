@@ -42,7 +42,8 @@ export async function GET(request: Request) {
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 50), 1), 5000);
 
   let allowedMemberIds: number[] | null = null;
-  if (ctx.role === "trainer" || ctx.role === "manager") {
+  // 1인 강사(solo owner)는 본인 센터 전체를 보는 대표자와 동일하게 취급 → 격리 미적용.
+  if ((ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner) {
     const { data: passes } = await supabase
       .from("crm_passes")
       .select("member_id")
@@ -289,8 +290,15 @@ export async function GET(request: Request) {
  * owner/admin 만 진입 (trainer/manager 는 본인 회원 등록 불가).
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+
+  // owner/admin 또는 1인 강사(solo owner)만 회원 등록 가능.
+  // 일반 trainer/manager 는 본인 회원 등록 불가 ([[feedback-crm-data-isolation]]).
+  const isAdminRole = ctx.role === "owner" || ctx.role === "admin";
+  if (!isAdminRole && !ctx.isSoloOwner) {
+    return NextResponse.json({ error: "회원 등록 권한이 없습니다" }, { status: 403 });
+  }
 
   let body: {
     member_type?: string;

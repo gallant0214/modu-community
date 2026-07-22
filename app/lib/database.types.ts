@@ -2786,6 +2786,11 @@ export type Database = {
           created_by_uid: string
           created_at: string
           updated_at: string
+          source: string
+          requested_at: string | null
+          approved_at: string | null
+          approved_by_uid: string | null
+          rejected_reason: string | null
         }
         Insert: {
           id?: number
@@ -2804,6 +2809,11 @@ export type Database = {
           created_by_uid: string
           created_at?: string
           updated_at?: string
+          source?: string
+          requested_at?: string | null
+          approved_at?: string | null
+          approved_by_uid?: string | null
+          rejected_reason?: string | null
         }
         Update: {
           id?: number
@@ -2820,6 +2830,41 @@ export type Database = {
           cancelled_at?: string | null
           attended_at?: string | null
           created_by_uid?: string
+          created_at?: string
+          updated_at?: string
+          source?: string
+          requested_at?: string | null
+          approved_at?: string | null
+          approved_by_uid?: string | null
+          rejected_reason?: string | null
+        }
+        Relationships: []
+      }
+      crm_member_device_tokens: {
+        Row: {
+          id: number
+          member_id: number
+          firebase_uid: string
+          token: string
+          platform: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          member_id: number
+          firebase_uid: string
+          token: string
+          platform?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          member_id?: number
+          firebase_uid?: string
+          token?: string
+          platform?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -2874,6 +2919,8 @@ export type Database = {
         Row: {
           center_id: number
           cancel_hours: number
+          cancel_enabled: boolean
+          booking_enabled: boolean
           member_can_self_cancel_consumed: boolean
           booking_unit_min: number
           booking_horizon_days: number

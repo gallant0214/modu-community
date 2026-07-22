@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { sendPushToMember, formatKstSlot } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +40,7 @@ export async function PATCH(
     starts_at?: string;
     ends_at?: string;
     trainer_member_id?: number;
+    action?: string;
   };
   try {
     body = await request.json();
@@ -45,11 +48,14 @@ export async function PATCH(
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
+  // 회원 앱 예약요청 승인/거절 액션 (requested → booked / rejected)
+  const action = body.action === "approve" || body.action === "reject" ? body.action : null;
+
   // reschedule 모드: starts_at/ends_at 이 있으면 시간·강사 이동 처리
   const isReschedule = Boolean(body.starts_at || body.ends_at || body.trainer_member_id);
 
   const newStatus = body.status as ReservationStatus;
-  if (!isReschedule && !["booked", "attended", "cancelled", "noshow"].includes(newStatus)) {
+  if (!action && !isReschedule && !["booked", "attended", "cancelled", "noshow"].includes(newStatus)) {
     return NextResponse.json({ error: "상태 값이 잘못됨" }, { status: 400 });
   }
 
@@ -57,7 +63,7 @@ export async function PATCH(
   const { data: cur, error: curErr } = await supabase
     .from("crm_reservations")
     .select(
-      "id, center_id, pass_id, trainer_member_id, status, consumed, starts_at, ends_at"
+      "id, center_id, pass_id, member_id, trainer_member_id, status, consumed, starts_at, ends_at"
     )
     .eq("id", reservationId)
     .eq("center_id", ctx.centerId)
@@ -67,6 +73,91 @@ export async function PATCH(
     return NextResponse.json({ error: "조회 실패", detail: curErr.message }, { status: 500 });
   }
   if (!cur) return NextResponse.json({ error: "예약을 찾을 수 없습니다" }, { status: 404 });
+
+  /* ── 회원 예약요청 승인/거절 ─────────────────────────────────── */
+  if (action) {
+    // 담당 트레이너(또는 전체관리 권한)만 처리 가능
+    if (ctx.role === "trainer" || ctx.role === "manager") {
+      const { data: perm } = await supabase
+        .from("crm_trainer_permissions")
+        .select("can_manage_all_schedules")
+        .eq("center_member_id", ctx.centerMemberId)
+        .maybeSingle();
+      if (!perm?.can_manage_all_schedules && cur.trainer_member_id !== ctx.centerMemberId) {
+        return NextResponse.json({ error: "본인 담당 예약요청만 처리할 수 있어요" }, { status: 403 });
+      }
+    }
+    if (cur.status !== "requested") {
+      return NextResponse.json({ error: "이미 처리된 예약요청이에요" }, { status: 409 });
+    }
+
+    if (action === "approve") {
+      // 승인 시점에 트레이너 시간 충돌 재확인
+      const { data: conflicts } = await supabase
+        .from("crm_reservations")
+        .select("id")
+        .eq("center_id", ctx.centerId)
+        .eq("trainer_member_id", cur.trainer_member_id)
+        .in("status", ["booked", "attended"])
+        .lt("starts_at", cur.ends_at)
+        .gt("ends_at", cur.starts_at);
+      if (conflicts && conflicts.length > 0) {
+        return NextResponse.json({ error: "해당 시간에 이미 확정된 예약이 있어요" }, { status: 409 });
+      }
+
+      const { error: upErr } = await supabase
+        .from("crm_reservations")
+        .update({
+          status: "booked",
+          approved_at: new Date().toISOString(),
+          approved_by_uid: ctx.uid,
+        } as never)
+        .eq("id", reservationId)
+        .eq("center_id", ctx.centerId)
+        .eq("status", "requested"); // 경합 방지
+      if (upErr) {
+        return NextResponse.json({ error: "승인 실패", detail: upErr.message }, { status: 500 });
+      }
+
+      after(async () => {
+        await sendPushToMember(
+          cur.member_id,
+          "reservation_approved",
+          "예약이 확정됐어요 ✅",
+          `${formatKstSlot(cur.starts_at)} 수업 예약이 확정됐어요`,
+          { reservationId: String(reservationId) }
+        ).catch(() => {});
+      });
+      return NextResponse.json({ ok: true, status: "booked" });
+    }
+
+    // reject
+    const { error: upErr } = await supabase
+      .from("crm_reservations")
+      .update({
+        status: "rejected",
+        rejected_reason: body.reason?.trim() || null,
+        cancelled_by_uid: ctx.uid,
+        cancelled_at: new Date().toISOString(),
+      } as never)
+      .eq("id", reservationId)
+      .eq("center_id", ctx.centerId)
+      .eq("status", "requested");
+    if (upErr) {
+      return NextResponse.json({ error: "거절 실패", detail: upErr.message }, { status: 500 });
+    }
+
+    after(async () => {
+      await sendPushToMember(
+        cur.member_id,
+        "reservation_rejected",
+        "예약요청이 반려됐어요",
+        `${formatKstSlot(cur.starts_at)} 수업 예약이 어려워요.${body.reason ? " 사유: " + body.reason.trim() : " 다른 시간을 선택해주세요."}`,
+        { reservationId: String(reservationId) }
+      ).catch(() => {});
+    });
+    return NextResponse.json({ ok: true, status: "rejected" });
+  }
 
   // trainer 권한 게이트
   if (ctx.role === "trainer") {

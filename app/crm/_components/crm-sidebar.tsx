@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/app/components/auth-provider";
 
 type Role = "owner" | "admin" | "manager" | "trainer";
 
@@ -47,10 +48,34 @@ interface Props {
 
 export function CrmSidebar({ role, centerName }: Props) {
   const pathname = usePathname();
+  const { getIdToken } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   // 직원관리·설정 메뉴는 owner/admin 만 노출. manager/trainer 는 숨김.
   const isStaffLevel = role === "owner" || role === "admin";
+
+  // 강사 가입 요청 대기 수 → 센터설정 배지. owner/admin 만. 라우트 이동마다 갱신.
+  useEffect(() => {
+    if (!isStaffLevel) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/staff/requests?count=1", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const d = await res.json();
+        if (!cancelled) setPendingCount(d.count ?? 0);
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isStaffLevel, getIdToken, pathname]);
   const visible = MENU.filter((m) => !m.staffOnly || isStaffLevel);
   const isActive = (href: string) => pathname === href || pathname?.startsWith(`${href}/`);
 
@@ -60,11 +85,14 @@ export function CrmSidebar({ role, centerName }: Props) {
         const items = visible.filter((item) => item.group === group);
         if (items.length === 0) return null;
         return (
-          <div key={group} className="space-y-1 pt-2 first:pt-1">
+          <div
+            key={group}
+            className="space-y-1.5 border-t border-[#E8E0D0]/70 pt-2 mt-2 first:mt-0 first:border-t-0 first:pt-0 dark:border-zinc-800/80"
+          >
             {items.map((item) => {
               const active = isActive(item.href);
               const Icon = item.icon;
-              const cls = `group relative flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13.5px] transition-all w-full text-left
+              const cls = `group relative flex h-10 items-center gap-2.5 px-2.5 rounded-lg text-[13.5px] transition-all w-full text-left
                 ${active && !item.newWindow
                   ? "bg-[#2F3A2B] text-white shadow-sm dark:bg-[#A8B87A] dark:text-zinc-950 font-semibold"
                   : "text-[#3A342A] hover:bg-[#F5F0E5] dark:text-zinc-300 dark:hover:bg-zinc-800/70"
@@ -83,8 +111,13 @@ export function CrmSidebar({ role, centerName }: Props) {
                     <Icon className="w-4 h-4" />
                   </span>
                   <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  {item.href === "/crm/settings" && pendingCount > 0 && (
+                    <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold leading-none text-white">
+                      {pendingCount}
+                    </span>
+                  )}
                   {item.newWindow && (
-                    <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-[#EFE7D5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-500">
+                    <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold leading-none bg-[#EFE7D5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-500">
                       새창
                     </span>
                   )}
@@ -143,7 +176,7 @@ export function CrmSidebar({ role, centerName }: Props) {
       {/* 데스크탑 사이드바 — navbar(56px) 아래 완전 고정(fixed). 스크롤·overflow 무관하게 항상 고정 */}
       <aside className="hidden md:flex flex-col w-60 border-r border-[#E1D5C0] dark:border-zinc-800 bg-[#FBF7EB]/82 dark:bg-zinc-950/88 backdrop-blur fixed top-14 left-0 z-30 h-[calc(100dvh-3.5rem)]">
         <SidebarHeader centerName={centerName} />
-        <nav className="flex-1 min-h-0 overflow-y-auto px-3 pt-1 pb-3 space-y-1">{links}</nav>
+        <nav className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-3">{links}</nav>
         <SidebarFooter />
       </aside>
 
@@ -156,7 +189,7 @@ export function CrmSidebar({ role, centerName }: Props) {
           />
           <aside className="absolute left-0 top-0 bottom-0 w-72 flex flex-col bg-[#FEFCF7] dark:bg-zinc-950 border-r border-[#E1D5C0] dark:border-zinc-800 shadow-xl">
             <SidebarHeader centerName={centerName} />
-            <nav className="flex-1 px-3 pt-1 pb-3 space-y-1 overflow-y-auto">{links}</nav>
+            <nav className="flex-1 px-3 pt-2 pb-3 overflow-y-auto">{links}</nav>
             <SidebarFooter />
           </aside>
         </div>
@@ -390,13 +423,6 @@ function IconDashboard({ className }: { className?: string }) {
     </svg>
   );
 }
-function IconStaff({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-    </svg>
-  );
-}
 function IconMembers({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -446,14 +472,6 @@ function IconMembership({ className }: { className?: string }) {
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h4" />
-    </svg>
-  );
-}
-function IconContract({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h6l5 5v11a2 2 0 01-2 2z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13 3v5h5" />
     </svg>
   );
 }

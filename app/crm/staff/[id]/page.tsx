@@ -1132,14 +1132,14 @@ function BackLink() {
     <button
       type="button"
       onClick={goBack}
-      className="inline-flex items-center gap-1.5 pl-2 pr-3.5 py-2 rounded-full border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200 shadow-sm hover:border-[#6B7B3A]/60 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors"
+      className="group inline-flex h-8 items-center gap-1.5 rounded-md px-1.5 text-[13px] font-semibold text-[#7A6B51] transition-colors hover:text-[#2F3A2B] dark:text-zinc-400 dark:hover:text-zinc-100"
     >
-      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#6B7B3A]/12 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+      <span className="inline-flex h-5 w-5 items-center justify-center transition-transform group-hover:-translate-x-0.5">
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
       </span>
-      직원 목록으로
+      뒤로가기
     </button>
   );
 }

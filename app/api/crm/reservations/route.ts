@@ -44,6 +44,8 @@ export async function GET(request: Request) {
     .eq("center_id", ctx.centerId)
     .gte("starts_at", startUtc.toISOString())
     .lt("starts_at", endUtc.toISOString())
+    // 회원 앱 예약요청(requested)/반려(rejected)는 확정 그리드에서 제외 — 승인 대기함은 별도 조회
+    .not("status", "in", "(requested,rejected)")
     .order("starts_at", { ascending: true });
 
   // 권한:

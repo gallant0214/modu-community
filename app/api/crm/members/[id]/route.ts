@@ -48,14 +48,17 @@ export async function GET(
     .neq("status", "deleted")
     .order("issued_at", { ascending: false });
 
-  if (ctx.role === "trainer" || ctx.role === "manager") {
+  // 1인 강사(solo owner)는 본인 센터 전체 접근 → 격리 미적용.
+  const restricted =
+    (ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner;
+  if (restricted) {
     passQuery = passQuery.eq("trainer_member_id", ctx.centerMemberId);
   }
 
   const { data: passes } = await passQuery;
 
   // trainer/manager 는 본인 담당 회원이 아닐 때 차단
-  if ((ctx.role === "trainer" || ctx.role === "manager") && (passes ?? []).length === 0) {
+  if (restricted && (passes ?? []).length === 0) {
     return NextResponse.json({ error: "이 회원에 대한 접근 권한이 없습니다" }, { status: 403 });
   }
 

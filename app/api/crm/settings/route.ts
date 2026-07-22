@@ -9,8 +9,12 @@ export const dynamic = "force-dynamic";
  * 본인 센터 설정. owner/admin 만 진입.
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // owner/admin, 또는 1인 강사(solo owner)만. 일반 trainer/manager 는 불가.
+  if (ctx.role !== "owner" && ctx.role !== "admin" && !ctx.isSoloOwner) {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  }
 
   const { data, error } = await supabase
     .from("crm_center_settings")
@@ -43,8 +47,12 @@ export async function GET(request: Request) {
  * 센터 설정 변경. owner/admin 만.
  */
 export async function PATCH(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // owner/admin, 또는 1인 강사(solo owner)만. 일반 trainer/manager 는 불가.
+  if (ctx.role !== "owner" && ctx.role !== "admin" && !ctx.isSoloOwner) {
+    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  }
 
   let body: Record<string, unknown>;
   try {
