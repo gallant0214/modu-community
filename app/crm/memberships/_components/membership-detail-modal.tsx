@@ -7,6 +7,7 @@ import {
   PAYMENT_METHOD_LABEL,
   PASS_STATUS_LABEL,
   formatWon,
+  parseWon,
   formatPhone,
 } from "../../_components/crm-labels";
 
@@ -165,7 +166,15 @@ export function MembershipDetailModal({ row, canEdit, onClose, onSaved }: Props)
           <InfoPanel title="결제 정보">
             <ModalField label="금액">
               {editMode ? (
-                <input type="number" min={0} value={priceWon} onChange={(e) => setPriceWon(Number(e.target.value))} className={crmInputClass} />
+                <div className="relative">
+                  <input
+                    inputMode="numeric"
+                    value={priceWon ? formatWon(priceWon) : ""}
+                    onChange={(e) => setPriceWon(parseWon(e.target.value))}
+                    className={`${crmInputClass} pr-9`}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] text-[#A89B80]">원</span>
+                </div>
               ) : (
                 `${formatWon(row.price_won)}원`
               )}

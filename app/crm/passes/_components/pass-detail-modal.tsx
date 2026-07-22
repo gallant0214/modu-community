@@ -8,6 +8,7 @@ import {
   PAYMENT_METHOD_LABEL,
   PASS_STATUS_LABEL,
   formatWon,
+  parseWon,
   formatPhone,
 } from "../../_components/crm-labels";
 
@@ -298,7 +299,10 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
               </div>
               <ModalField label="회당 시간">
                 {editMode ? (
-                  <input type="number" min={0} value={sessionMinutes} onChange={(e) => setSessionMinutes(Number(e.target.value))} className={crmInputClass} />
+                  <div className="relative">
+                    <input type="number" min={0} step={5} value={sessionMinutes} onChange={(e) => setSessionMinutes(Number(e.target.value))} className={`${crmInputClass} pr-9`} />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] text-[#A89B80]">분</span>
+                  </div>
                 ) : (
                   `${pass.session_minutes}분`
                 )}
@@ -308,7 +312,15 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
             <InfoPanel title="결제 및 만료">
               <ModalField label="금액">
                 {editMode ? (
-                  <input type="number" min={0} value={priceWon} onChange={(e) => setPriceWon(Number(e.target.value))} className={crmInputClass} />
+                  <div className="relative">
+                    <input
+                      inputMode="numeric"
+                      value={priceWon ? formatWon(priceWon) : ""}
+                      onChange={(e) => setPriceWon(parseWon(e.target.value))}
+                      className={`${crmInputClass} pr-9`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] text-[#A89B80]">원</span>
+                  </div>
                 ) : (
                   <span>
                     {formatWon(pass.price_won)}원
