@@ -5,6 +5,99 @@ import { verifyCenterIdentity } from "@/app/lib/crm-center-verify";
 
 export const dynamic = "force-dynamic";
 
+const PROFILE_COLUMNS =
+  "id, name, kind, region_sido, region_sigungu, phone, business_no, address, naver_url, google_url, instagram_id, youtube_url, status" as unknown as "*";
+
+/**
+ * GET /api/crm/centers/me — 센터 프로필 조회 (센터 정보 탭용)
+ * 센터 소속 모든 role 접근 가능 (조회만).
+ */
+export async function GET(request: Request) {
+  const ctx = await requireCrmContext(request);
+  if (isCrmError(ctx)) return ctx;
+
+  const { data, error } = await supabase
+    .from("crm_centers")
+    .select(PROFILE_COLUMNS)
+    .eq("id", ctx.centerId)
+    .maybeSingle();
+  if (error) {
+    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+  }
+  if (!data) return NextResponse.json({ error: "센터를 찾을 수 없어요" }, { status: 404 });
+  return NextResponse.json({ center: data });
+}
+
+/**
+ * PATCH /api/crm/centers/me — 센터 프로필 수정
+ * 권한: owner 또는 admin 만.
+ */
+export async function PATCH(request: Request) {
+  const ctx = await requireCrmContext(request);
+  if (isCrmError(ctx)) return ctx;
+
+  if (ctx.role !== "owner" && ctx.role !== "admin") {
+    return NextResponse.json({ error: "센터 정보 수정 권한이 없어요" }, { status: 403 });
+  }
+
+  let body: {
+    name?: string;
+    phone?: string | null;
+    address?: string | null;
+    naver_url?: string | null;
+    google_url?: string | null;
+    instagram_id?: string | null;
+    youtube_url?: string | null;
+  };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  }
+
+  const patch: Record<string, unknown> = {};
+  if (body.name !== undefined) {
+    const v = String(body.name).trim();
+    if (!v) return NextResponse.json({ error: "센터명을 입력해 주세요" }, { status: 400 });
+    patch.name = v;
+  }
+  const setNullable = (key: string, val: string | null | undefined) => {
+    if (val === undefined) return;
+    const trimmed = val === null ? "" : String(val).trim();
+    patch[key] = trimmed || null;
+  };
+  setNullable("phone", body.phone ?? undefined);
+  setNullable("address", body.address ?? undefined);
+  setNullable("naver_url", body.naver_url ?? undefined);
+  setNullable("google_url", body.google_url ?? undefined);
+  setNullable("instagram_id", (body.instagram_id ?? undefined) ?
+    body.instagram_id!.replace(/^@/, "") : body.instagram_id);
+  setNullable("youtube_url", body.youtube_url ?? undefined);
+
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from("crm_centers")
+    .update(patch as never)
+    .eq("id", ctx.centerId);
+  if (error) {
+    return NextResponse.json({ error: "수정 실패", detail: error.message }, { status: 500 });
+  }
+
+  await supabase.from("crm_audit_logs").insert({
+    center_id: ctx.centerId,
+    actor_uid: ctx.uid,
+    action: "center.profile.update",
+    entity_type: "crm_centers",
+    entity_id: ctx.centerId,
+    payload: patch as never,
+  });
+
+  return NextResponse.json({ ok: true });
+}
+
 /**
  * DELETE /api/crm/centers/me — 센터 탈퇴 (영구 삭제)
  *

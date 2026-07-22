@@ -174,6 +174,7 @@ type SettingsTab =
   | "alerts"
   | "notices"
   | "mileage"
+  | "center"
   | "permissions"
   | "staff"
   | "contracts"
@@ -188,6 +189,7 @@ const SETTINGS_TABS: {
   icon: "calendar" | "bell" | "notice" | "point" | "badge" | "shield" | "card" | "vendor" | "danger" | "log";
   danger?: boolean;
 }[] = [
+  { key: "center", label: "센터 정보", desc: "주소·연락처·SNS", icon: "notice" },
   { key: "reservation", label: "예약 정책", desc: "예약·취소 기준", icon: "calendar" },
   { key: "alerts", label: "알림", desc: "채팅 알림", icon: "bell" },
   { key: "notices", label: "공지 설정", desc: "센터 공지", icon: "notice" },
@@ -554,6 +556,8 @@ export default function CrmSettingsPage() {
         </div>
       )}
 
+      {tab === "center" && <CenterProfilePanel role={info?.role ?? "trainer"} />}
+
       {tab === "permissions" && (
         <div className="space-y-6">
           <GradesPanel />
@@ -622,6 +626,181 @@ interface Grade {
   label: string;
   is_system: boolean;
   sort_order: number;
+}
+
+/* ─── 센터 정보 패널 ─────────── */
+interface CenterProfile {
+  id: number;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  naver_url: string | null;
+  google_url: string | null;
+  instagram_id: string | null;
+  youtube_url: string | null;
+}
+
+function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "trainer" }) {
+  const { getIdToken } = useAuth();
+  const [profile, setProfile] = useState<CenterProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [msg, setMsg] = useState("");
+  const canEdit = role === "owner" || role === "admin";
+
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [naverUrl, setNaverUrl] = useState("");
+  const [googleUrl, setGoogleUrl] = useState("");
+  const [instagramId, setInstagramId] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없어요");
+      const res = await fetch("/api/crm/centers/me", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      const c: CenterProfile = data.center;
+      setProfile(c);
+      setName(c.name ?? "");
+      setPhone(c.phone ?? "");
+      setAddress(c.address ?? "");
+      setNaverUrl(c.naver_url ?? "");
+      setGoogleUrl(c.google_url ?? "");
+      setInstagramId(c.instagram_id ?? "");
+      setYoutubeUrl(c.youtube_url ?? "");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const dirty =
+    !!profile &&
+    (name !== (profile.name ?? "") ||
+      phone !== (profile.phone ?? "") ||
+      address !== (profile.address ?? "") ||
+      naverUrl !== (profile.naver_url ?? "") ||
+      googleUrl !== (profile.google_url ?? "") ||
+      instagramId !== (profile.instagram_id ?? "") ||
+      youtubeUrl !== (profile.youtube_url ?? ""));
+
+  const save = async () => {
+    if (!canEdit || !dirty || saving) return;
+    setSaving(true);
+    setError("");
+    setMsg("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/centers/me", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          phone: phone.trim(),
+          address: address.trim(),
+          naver_url: naverUrl.trim(),
+          google_url: googleUrl.trim(),
+          instagram_id: instagramId.trim().replace(/^@/, ""),
+          youtube_url: youtubeUrl.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "저장 실패");
+      setMsg("저장했어요.");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="px-4 py-6 text-[12.5px] text-[#8C8270]">불러오는 중…</div>;
+  }
+  if (!profile) {
+    return <div className="px-4 py-6 text-[12.5px] text-red-600">{error || "센터 정보를 찾을 수 없어요"}</div>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <Card title="센터 정보">
+        <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">
+          센터 대표 정보 · 회원 앱과 계약서에 노출됩니다. 수정은 {canEdit ? "가능합니다" : "대표자/관리자만 가능해요"}.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <ProfileField label="센터명" value={name} onChange={setName} disabled={!canEdit} placeholder="예: 모두짐 강남점" />
+          <ProfileField label="센터 전화번호" value={phone} onChange={setPhone} disabled={!canEdit} placeholder="02-1234-5678" />
+          <div className="md:col-span-2">
+            <ProfileField label="센터 주소" value={address} onChange={setAddress} disabled={!canEdit} placeholder="서울시 강남구 테헤란로 1길 1, 3층" />
+          </div>
+          <ProfileField label="네이버 링크" value={naverUrl} onChange={setNaverUrl} disabled={!canEdit} placeholder="https://map.naver.com/..." type="url" />
+          <ProfileField label="구글 링크" value={googleUrl} onChange={setGoogleUrl} disabled={!canEdit} placeholder="https://g.co/kgs/..." type="url" />
+          <ProfileField label="인스타 아이디" value={instagramId} onChange={setInstagramId} disabled={!canEdit} placeholder="moducm_gangnam (@ 제외)" />
+          <ProfileField label="유튜브 링크" value={youtubeUrl} onChange={setYoutubeUrl} disabled={!canEdit} placeholder="https://youtube.com/@..." type="url" />
+        </div>
+
+        {error && <div className="text-[12.5px] text-red-600">{error}</div>}
+        {msg && !error && <div className="text-[12.5px] text-[#6B7B3A] dark:text-[#A8B87A]">{msg}</div>}
+
+        {canEdit && (
+          <div className="flex justify-end">
+            <button
+              onClick={save}
+              disabled={!dirty || saving}
+              className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
+            >
+              {saving ? "저장 중…" : "저장"}
+            </button>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function ProfileField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  type?: string;
+}) {
+  return (
+    <div>
+      <div className="text-[12.5px] text-[#A89B80] mb-1.5">{label}</div>
+      <input
+        type={type}
+        className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A] disabled:opacity-60"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+      />
+    </div>
+  );
 }
 
 function GradesPanel() {
