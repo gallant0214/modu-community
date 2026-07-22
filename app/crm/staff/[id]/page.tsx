@@ -953,9 +953,9 @@ function ContactSection({
       });
       const data = await res.json();
       if (res.status === 404) {
-        // 암호화 원본 미저장 → 재입력 모드로 자동 전환
-        setEditingResident(true);
-        setRevealError("이전에 저장된 주민번호는 해시만 남아 원본을 복구할 수 없어요. 아래에 다시 입력해 주세요.");
+        // 암호화 원본 미저장 상태 — 안내만, 편집 모드 자동 전환 X
+        // 사용자가 재입력하려면 [변경] 버튼을 명시적으로 눌러야 함
+        setRevealError("이전에 저장된 주민번호는 해시만 남아 원본을 복구할 수 없어요. 확인·수정하려면 오른쪽 [변경] 버튼으로 재입력해 주세요.");
         return;
       }
       if (!res.ok) throw new Error(data?.error || "조회 실패");
