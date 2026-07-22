@@ -346,12 +346,14 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
                   const price = editMode ? priceWon : pass.price_won;
                   const sessions = editMode ? totalSessions : pass.total_sessions;
                   const vat = editMode ? vatIncluded : pass.vat_included;
-                  const per = sessions > 0 ? Math.round(price / sessions) : price;
+                  // 부가세 포함 결제면 10% 제외한 실수업료 기준으로 회당 단가 계산
+                  const base = vat ? price / 1.1 : price;
+                  const per = sessions > 0 ? Math.round(base / sessions) : Math.round(base);
                   return (
                     <span>
                       {formatWon(per)}원
                       <span className="ml-1 text-[11.5px] text-[#A89B80]">
-                        {vat ? "부가세 포함" : "부가세 별도"}
+                        {vat ? "부가세 제외" : "부가세 별도"}
                       </span>
                     </span>
                   );
