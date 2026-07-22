@@ -373,7 +373,24 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
               <ModalField label="구매일">{pass.issued_at}</ModalField>
               <ModalField label="만료일">
                 {editMode ? (
-                  <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className={crmInputClass} />
+                  <div className="space-y-1.5">
+                    <input
+                      type="date"
+                      value={expiresAt === "9999-12-31" ? "" : expiresAt}
+                      disabled={expiresAt === "9999-12-31"}
+                      onChange={(e) => setExpiresAt(e.target.value)}
+                      className={`${crmInputClass} disabled:opacity-50`}
+                    />
+                    <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={expiresAt === "9999-12-31"}
+                        onChange={(e) => setExpiresAt(e.target.checked ? "9999-12-31" : "")}
+                        className="w-4 h-4 accent-[#6B7B3A]"
+                      />
+                      <span className="text-[12.5px] text-[#3A342A] dark:text-zinc-300">무기한</span>
+                    </label>
+                  </div>
                 ) : (
                   <span className="inline-flex items-center gap-2">
                     {pass.expires_at === "9999-12-31" ? "무기한" : pass.expires_at}
