@@ -27,9 +27,10 @@ export async function GET(request: Request) {
   }
 
   // 부분 일치 (이름 기준). 너무 광범위한 결과 방지를 위해 limit 20.
+  // 센터 정보 탭(crm_centers)의 지역/전화/주소를 노출 (대표자 개인정보 아님).
   const { data, error } = await supabase
     .from("crm_centers")
-    .select("id, name, region_sido, region_sigungu, phone")
+    .select("id, name, region_sido, region_sigungu, phone, address")
     .eq("kind", "center")
     .eq("status", "active")
     .ilike("name", `%${q}%`)
