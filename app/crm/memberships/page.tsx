@@ -285,14 +285,12 @@ export default function CrmMembershipsPage() {
               {visibleList.map((p) => (
                 <tr
                   key={p.id}
-                  onClick={() => setDetailRow(p)}
-                  className="bg-[#FEFCF7] dark:bg-zinc-900 cursor-pointer hover:bg-[#FAF5EA] dark:hover:bg-zinc-800/55 transition-colors"
+                  className="bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#FAF5EA] dark:hover:bg-zinc-800/55 transition-colors"
                 >
                   <Td>
                     <Link
                       href={`/crm/members/${p.member_id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex items-center gap-2 min-w-0 group"
+                      className="flex items-center gap-2 min-w-0 group cursor-pointer"
                     >
                       {p.member_face_thumb ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -315,8 +313,15 @@ export default function CrmMembershipsPage() {
                     {p.member_phone ? formatPhone(p.member_phone) : "—"}
                   </Td>
                   <Td>
-                    <div className="font-semibold text-[#2A251D] dark:text-zinc-100 truncate">{p.plan_name}</div>
-                    <div className="mt-0.5 text-[11.5px] text-[#A89B80]">기간 {p.duration_days}일</div>
+                    <button
+                      type="button"
+                      onClick={() => setDetailRow(p)}
+                      title="회원권 상세 보기"
+                      className="group text-left w-full cursor-pointer"
+                    >
+                      <div className="font-semibold text-[#2A251D] dark:text-zinc-100 truncate group-hover:text-[#6B7B3A] group-hover:underline">{p.plan_name}</div>
+                      <div className="mt-0.5 text-[11.5px] text-[#A89B80]">기간 {p.duration_days}일</div>
+                    </button>
                   </Td>
                   <Td className="text-[#8C8270]">{p.purchased_at ? p.purchased_at.slice(0, 10) : "—"}</Td>
                   <Td>

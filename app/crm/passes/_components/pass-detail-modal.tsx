@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmModal, crmInputClass } from "../../_components/crm-modal";
 import {
@@ -78,51 +78,48 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
   const [memo, setMemo] = useState("");
   const [coTrainers, setCoTrainers] = useState<{ id: number; name: string }[]>([]);
 
-  useEffect(() => {
+  const loadPass = useCallback(async () => {
     if (!passId) return;
-    let alive = true;
-    (async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const token = await getIdToken();
-        const res = await fetch(`/api/crm/passes/${passId}`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        const data = await res.json();
-        if (!alive) return;
-        if (!res.ok) throw new Error(data.error || "조회 실패");
-        setPass(data.pass);
-        setMember(data.member);
-        setCoTrainers(data.co_trainers ?? []);
-        // 편집 필드 초기화
-        const p: PassDetail = data.pass;
-        setLessonKind(p.lesson_kind ?? "");
-        setTotalSessions(p.total_sessions ?? 0);
-        setRemainingSessions(p.remaining_sessions ?? 0);
-        setSessionMinutes(p.session_minutes ?? 0);
-        setPriceWon(p.price_won ?? 0);
-        setPaymentMethod(p.payment_method ?? "cash");
-        setPaymentMethodCustom(p.payment_method_custom ?? "");
-        setTrainerMemberId(p.trainer_member_id ?? 0);
-        setCoTrainerIds(
-          (data.co_trainers ?? []).map((c: { id: number }) => c.id).length
-            ? (data.co_trainers ?? []).map((c: { id: number }) => c.id)
-            : p.co_trainer_ids ?? []
-        );
-        setSellerMemberId(p.seller_member_id ?? 0);
-        setExpiresAt(p.expires_at ?? "");
-        setMemo(p.memo ?? "");
-      } catch (e) {
-        if (alive) setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+    setLoading(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/passes/${passId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "조회 실패");
+      setPass(data.pass);
+      setMember(data.member);
+      setCoTrainers(data.co_trainers ?? []);
+      // 편집 필드 초기화
+      const p: PassDetail = data.pass;
+      setLessonKind(p.lesson_kind ?? "");
+      setTotalSessions(p.total_sessions ?? 0);
+      setRemainingSessions(p.remaining_sessions ?? 0);
+      setSessionMinutes(p.session_minutes ?? 0);
+      setPriceWon(p.price_won ?? 0);
+      setPaymentMethod(p.payment_method ?? "cash");
+      setPaymentMethodCustom(p.payment_method_custom ?? "");
+      setTrainerMemberId(p.trainer_member_id ?? 0);
+      setCoTrainerIds(
+        (data.co_trainers ?? []).map((c: { id: number }) => c.id).length
+          ? (data.co_trainers ?? []).map((c: { id: number }) => c.id)
+          : p.co_trainer_ids ?? []
+      );
+      setSellerMemberId(p.seller_member_id ?? 0);
+      setExpiresAt(p.expires_at ?? "");
+      setMemo(p.memo ?? "");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
   }, [passId, getIdToken]);
+
+  useEffect(() => {
+    loadPass();
+  }, [loadPass]);
 
   async function handleSave() {
     if (!passId) return;
@@ -154,9 +151,9 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "수정 실패");
-      setEditMode(false);
       onSaved();
-      onClose();
+      await loadPass();
+      setEditMode(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

@@ -35,11 +35,13 @@ interface Props {
   onSaved: () => void;
 }
 
-export function MembershipDetailModal({ row, canEdit, onClose, onSaved }: Props) {
+export function MembershipDetailModal({ row: initialRow, canEdit, onClose, onSaved }: Props) {
   const { getIdToken } = useAuth();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [editMode, setEditMode] = useState(false);
+  // 저장 후 모달을 닫지 않고 보기 모드로 복귀시키기 위해 로컬 상태로 보관
+  const [row, setRow] = useState<MembershipRow | null>(initialRow);
 
   const [priceWon, setPriceWon] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -50,17 +52,18 @@ export function MembershipDetailModal({ row, canEdit, onClose, onSaved }: Props)
   const [memo, setMemo] = useState("");
 
   useEffect(() => {
-    if (!row) return;
-    setPriceWon(row.price_won ?? 0);
-    setPaymentMethod(row.payment_method ?? "cash");
-    setPaymentMethodCustom(row.payment_method_custom ?? "");
-    setStartDate(row.start_date ?? "");
-    setExpiresAt(row.expires_at ?? "");
-    setPurchasedAt(row.purchased_at ?? "");
+    setRow(initialRow);
+    if (!initialRow) return;
+    setPriceWon(initialRow.price_won ?? 0);
+    setPaymentMethod(initialRow.payment_method ?? "cash");
+    setPaymentMethodCustom(initialRow.payment_method_custom ?? "");
+    setStartDate(initialRow.start_date ?? "");
+    setExpiresAt(initialRow.expires_at ?? "");
+    setPurchasedAt(initialRow.purchased_at ?? "");
     setMemo("");
     setEditMode(false);
     setError("");
-  }, [row]);
+  }, [initialRow]);
 
   async function handleSave() {
     if (!row) return;
@@ -87,9 +90,22 @@ export function MembershipDetailModal({ row, canEdit, onClose, onSaved }: Props)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "수정 실패");
-      setEditMode(false);
+      // 목록 갱신 + 모달은 닫지 않고 갱신된 값으로 보기 모드 복귀
+      setRow((prev) =>
+        prev
+          ? {
+              ...prev,
+              price_won: priceWon,
+              payment_method: paymentMethod,
+              payment_method_custom: paymentMethod === "etc" ? paymentMethodCustom.trim() || null : null,
+              start_date: startDate || prev.start_date,
+              expires_at: expiresAt || prev.expires_at,
+              purchased_at: purchasedAt || prev.purchased_at,
+            }
+          : prev
+      );
       onSaved();
-      onClose();
+      setEditMode(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
