@@ -197,6 +197,9 @@ const calcAge = (birth: string | null): number | null => {
 
 // 유효 만료일: 실제 수강권/회원권(max_expires_at) 우선, 없으면 POS 스냅샷(final_expire_at)
 const effExpiry = (m: MemberRow): string | null => m.max_expires_at ?? m.final_expire_at ?? null;
+// 무기한(9999-12-31) 만료일은 "무기한" 으로 표시
+const fmtExpiry = (ymd: string | null | undefined): string =>
+  !ymd ? "—" : ymd === "9999-12-31" ? "무기한" : ymd;
 // 보유 상품 여부: 실제 items 또는 POS 스냅샷 보유(멤버십/이용권/대여권)
 const hasHoldings = (m: MemberRow): boolean =>
   (m.items?.length ?? 0) > 0 ||
@@ -793,7 +796,8 @@ export default function CrmMembersPage() {
             ]
               .filter(Boolean)
               .join(";");
-      const daysLeft = eff ? daysBetween(new Date(eff), new Date(todayStr)) : null;
+      const unlimited = eff === "9999-12-31";
+      const daysLeft = eff && !unlimited ? daysBetween(new Date(eff), new Date(todayStr)) : null;
       const age = calcAge(m.birth);
       return [
         m.name,
@@ -809,8 +813,8 @@ export default function CrmMembersPage() {
         eff && eff >= todayStr ? "유효" : hasHoldings(m) ? "만료" : "미보유",
         MEMBER_TYPE_LABEL[m.member_type] ?? m.member_type,
         holdings,
-        eff ?? "",
-        daysLeft === null ? "" : daysLeft >= 0 ? `${daysLeft}일 남음` : `${-daysLeft}일 지남`,
+        unlimited ? "무기한" : eff ?? "",
+        unlimited ? "무기한" : daysLeft === null ? "" : daysLeft >= 0 ? `${daysLeft}일 남음` : `${-daysLeft}일 지남`,
         m.last_visit_at ? formatDateTime(m.last_visit_at) : m.last_attended_at ?? "",
         m.last_attended_at ?? "",
         m.last_purchase_at ?? "",
@@ -1457,6 +1461,7 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
     render: (m, todayStr) => {
       const eff = effExpiry(m);
       if (!eff) return <span className="text-[#A89B80]">—</span>;
+      if (eff === "9999-12-31") return <span className="text-[#6B7B3A] dark:text-[#A8B87A]">무기한</span>;
       const days = daysBetween(new Date(eff), new Date(todayStr));
       return (
         <span className={days >= 0 ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#B47B2A] dark:text-amber-300"}>
@@ -1478,7 +1483,7 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
                 key={idx}
                 tag={it.type === "membership" ? "회원권" : "수강권"}
                 name={it.kind}
-                period={`~ ${it.expires}`}
+                period={it.expires === "9999-12-31" ? "무기한" : `~ ${it.expires}`}
                 extra={it.remaining !== null ? `잔여 ${it.remaining}회` : null}
               />
             ))}
@@ -1507,7 +1512,7 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
     label: "최종 만료일",
     sortKey: "max_expires_at",
     render: (m) => (
-      <span className="text-[#3A342A] dark:text-zinc-300">{effExpiry(m) ?? "—"}</span>
+      <span className="text-[#3A342A] dark:text-zinc-300">{fmtExpiry(effExpiry(m))}</span>
     ),
   },
 };

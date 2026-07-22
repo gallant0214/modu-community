@@ -178,6 +178,8 @@ function SidebarHeader({ centerName }: { centerName: string }) {
     }
   });
   const [logoBroken, setLogoBroken] = useState(false);
+  const [pendingLogoSrc, setPendingLogoSrc] = useState("");
+  const [logoScale, setLogoScale] = useState(100);
 
   const handleLogoFile = (file: File | undefined) => {
     if (!file || !file.type.startsWith("image/")) return;
@@ -185,6 +187,35 @@ function SidebarHeader({ centerName }: { centerName: string }) {
     reader.onload = () => {
       const next = String(reader.result ?? "");
       if (!next) return;
+      setPendingLogoSrc(next);
+      setLogoScale(100);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const saveEditedLogo = () => {
+    if (!pendingLogoSrc) return;
+    const img = new Image();
+    img.onload = () => {
+      const size = 192;
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, size, size);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+
+      const base = Math.min(size / img.width, size / img.height);
+      const scale = base * (logoScale / 100);
+      const drawW = img.width * scale;
+      const drawH = img.height * scale;
+      const x = (size - drawW) / 2;
+      const y = (size - drawH) / 2;
+      ctx.drawImage(img, x, y, drawW, drawH);
+
+      const next = canvas.toDataURL("image/png");
       try {
         localStorage.setItem(storageKey, next);
       } catch {
@@ -193,8 +224,20 @@ function SidebarHeader({ centerName }: { centerName: string }) {
       }
       setLogoSrc(next);
       setLogoBroken(false);
+      setPendingLogoSrc("");
     };
-    reader.readAsDataURL(file);
+    img.src = pendingLogoSrc;
+  };
+
+  const resetLogo = () => {
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {
+      /* ignore */
+    }
+    setLogoSrc("/logo.png");
+    setLogoBroken(false);
+    setPendingLogoSrc("");
   };
 
   return (
@@ -233,6 +276,83 @@ function SidebarHeader({ centerName }: { centerName: string }) {
             event.currentTarget.value = "";
           }}
         />
+        {pendingLogoSrc && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
+            <div className="w-full max-w-sm rounded-xl border border-[#E4D9C6] bg-[#FEFCF7] p-4 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">
+                    로고 이미지 편집
+                  </h2>
+                  <p className="mt-1 text-[12px] text-[#8C8270] dark:text-zinc-500">
+                    사이드바 로고 영역에 맞게 크기를 조절하세요.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPendingLogoSrc("")}
+                  className="rounded-md px-2 py-1 text-[12px] font-semibold text-[#8C8270] hover:bg-[#F5F0E5] dark:text-zinc-400 dark:hover:bg-zinc-800"
+                >
+                  닫기
+                </button>
+              </div>
+
+              <div className="mt-4 flex justify-center">
+                <div className="relative flex h-44 w-44 items-center justify-center overflow-hidden rounded-2xl border border-[#D9CDB8] bg-white shadow-inner dark:border-zinc-700 dark:bg-zinc-900">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={pendingLogoSrc}
+                    alt=""
+                    className="max-h-full max-w-full object-contain"
+                    style={{ transform: `scale(${logoScale / 100})` }}
+                  />
+                  <div className="pointer-events-none absolute inset-4 rounded-xl border border-dashed border-[#B7A98E] dark:border-zinc-600" />
+                </div>
+              </div>
+
+              <label className="mt-4 block">
+                <div className="mb-1.5 flex items-center justify-between text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400">
+                  <span>로고 크기</span>
+                  <span>{logoScale}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={45}
+                  max={180}
+                  value={logoScale}
+                  onChange={(event) => setLogoScale(Number(event.target.value))}
+                  className="w-full accent-[#6B7B3A]"
+                />
+              </label>
+
+              <div className="mt-4 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={resetLogo}
+                  className="rounded-lg border border-[#D9CDB8] px-3 py-2 text-[12.5px] font-semibold text-[#6B5D47] hover:bg-[#F5F0E5] dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                >
+                  기본 로고
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPendingLogoSrc("")}
+                    className="rounded-lg border border-[#D9CDB8] px-3 py-2 text-[12.5px] font-semibold text-[#6B5D47] hover:bg-[#F5F0E5] dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveEditedLogo}
+                    className="rounded-lg bg-[#2F3A2B] px-3.5 py-2 text-[12.5px] font-semibold text-white hover:bg-[#263121] dark:bg-[#A8B87A] dark:text-zinc-950"
+                  >
+                    적용
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="min-w-0">
           <div className="text-[10.5px] text-[#A89B80] dark:text-zinc-500 font-semibold leading-none">
             CENTER

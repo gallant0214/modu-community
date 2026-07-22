@@ -321,7 +321,7 @@ export default function CrmMemberDetailPage() {
               </div>
             )}
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 h-full">
-              <SummaryMetric label="최종 만료" value={member.final_expire_at ?? "—"} hint={expireHint(member.final_expire_at)} tone={expireTone(member.final_expire_at)} />
+              <SummaryMetric label="최종 만료" value={fmtExp(member.final_expire_at)} hint={expireHint(member.final_expire_at)} tone={expireTone(member.final_expire_at)} />
               <SummaryMetric label="누적 결제" value={`${formatWon(member.total_paid_won)}원`} hint={member.last_purchase_at ? `최근 ${member.last_purchase_at}` : "결제 기록 없음"} tone="money" />
               <SummaryMetric label="마지막 출석" value={member.last_attended_at ?? "—"} hint={attendanceHint(member.last_attended_at)} />
               <SummaryMetric label="보유 상품" value={`${currentHoldings}종`} hint={member.current_pass || member.current_membership ? "보유 내역 있음" : "보유 내역 없음"} />
@@ -367,7 +367,7 @@ export default function CrmMemberDetailPage() {
                   key={`hm${m.id}`}
                   tag="회원권"
                   name={m.plan_name}
-                  period={`${m.start_date} ~ ${m.expires_at}`}
+                  period={fmtPeriod(m.start_date, m.expires_at)}
                   onClick={() => setPaymentDetail(membershipToDetail(m, staffName))}
                 />
               ))
@@ -379,7 +379,7 @@ export default function CrmMemberDetailPage() {
                   key={`hp${p.id}`}
                   tag="수강권"
                   name={p.lesson_kind}
-                  period={`잔여 ${p.remaining_sessions}/${p.total_sessions}회 · ~${p.expires_at}`}
+                  period={`잔여 ${p.remaining_sessions}/${p.total_sessions}회 · ${p.expires_at === "9999-12-31" ? "무기한" : `~${p.expires_at}`}`}
                   onClick={() => setDetailPassId(p.id)}
                 />
               ))
@@ -391,7 +391,7 @@ export default function CrmMemberDetailPage() {
                   key={`hr${r.id}`}
                   tag="대여권"
                   name={r.item_name}
-                  period={`${r.start_date} ~ ${r.expires_at}`}
+                  period={fmtPeriod(r.start_date, r.expires_at)}
                   onClick={() => setPaymentDetail(rentalToDetail(r, staffName))}
                 />
               ))
@@ -845,11 +845,24 @@ function expireTone(date: string | null): "default" | "good" | "warn" {
 
 function expireHint(date: string | null): string {
   if (!date) return "만료일 없음";
+  if (date.slice(0, 10) === "9999-12-31") return "무기한";
   const days = daysFromToday(date);
   if (days === null) return "날짜 확인 필요";
   if (days < 0) return `${Math.abs(days)}일 지남`;
   if (days === 0) return "오늘 만료";
   return `${days}일 남음`;
+}
+
+// 무기한(9999-12-31) 만료일은 "무기한" 으로 표시
+function fmtExp(date: string | null | undefined): string {
+  if (!date) return "—";
+  return date.slice(0, 10) === "9999-12-31" ? "무기한" : date;
+}
+
+// "시작일 ~ 만료일" 표기. 만료일이 무기한이면 "시작일 ~ 무기한"
+function fmtPeriod(start: string | null | undefined, end: string | null | undefined): string {
+  const s = start ?? "—";
+  return `${s} ~ ${fmtExp(end)}`;
 }
 
 function attendanceHint(date: string | null): string {
@@ -2491,7 +2504,7 @@ function LockerDetailModal({
               </div>
               <DetailGrid
                 rows={[
-                  ["이용 기간", `${l.start_date ?? "—"} ~ ${l.expires_at ?? "—"}`],
+                  ["이용 기간", fmtPeriod(l.start_date, l.expires_at)],
                   ["락커 대여료", `${formatWon(payment.total_won)}원`],
                   ["마지막 구매일", payment.last_at ?? "—"],
                   ...(l.password ? [["비밀번호", l.password] as [string, string]] : []),
@@ -2652,7 +2665,7 @@ function membershipToDetail(
   return {
     tag: "회원권",
     name: m.plan_name,
-    period: `${m.start_date} ~ ${m.expires_at}`,
+    period: fmtPeriod(m.start_date, m.expires_at),
     source: "record",
     id: m.id,
     kind: "membership",
@@ -2683,7 +2696,7 @@ function rentalToDetail(
   return {
     tag: "대여권",
     name: r.item_name,
-    period: `${r.start_date} ~ ${r.expires_at}`,
+    period: fmtPeriod(r.start_date, r.expires_at),
     source: "record",
     id: r.id,
     kind: "rental",
@@ -2765,7 +2778,7 @@ function UsageSection({
               tag="회원권"
               name={m.plan_name}
               price={m.price_won}
-              period={`${m.start_date} ~ ${m.expires_at}`}
+              period={fmtPeriod(m.start_date, m.expires_at)}
               valid={isValid(m.status, m.expires_at)}
               paused={m.is_paused}
               onClick={() => onOpenDetail(membershipToDetail(m, sellerName))}
@@ -2777,7 +2790,7 @@ function UsageSection({
               tag="대여권"
               name={r.item_name}
               price={r.price_won}
-              period={`${r.start_date} ~ ${r.expires_at}`}
+              period={fmtPeriod(r.start_date, r.expires_at)}
               valid={isValid(r.status, r.expires_at)}
               paused={r.is_paused}
               onClick={() => onOpenDetail(rentalToDetail(r, sellerName))}

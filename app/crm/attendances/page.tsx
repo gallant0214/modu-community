@@ -46,7 +46,7 @@ export default function CrmAttendancesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<"all" | "kiosk" | "manual" | "app">("all");
+  const [sourceFilter, setSourceFilter] = useState<"all" | "kiosk" | "manual" | "touch" | "app">("all");
   const [refreshedAt, setRefreshedAt] = useState<string>("");
   const [month, setMonth] = useState(() => todayKst().slice(0, 7));
   const [monthDays, setMonthDays] = useState<Record<string, { total: number; unique: number }>>({});
@@ -158,10 +158,10 @@ export default function CrmAttendancesPage() {
 
   const stats = useMemo(() => {
     const uniqueMembers = new Set(rows.map((a) => a.member_id));
-    const sources = { kiosk: 0, manual: 0, app: 0 };
+    const sources = { kiosk: 0, manual: 0, touch: 0, app: 0 };
     for (const a of rows) {
       const k = (a.source as keyof typeof sources) ?? "kiosk";
-      sources[k] = (sources[k] ?? 0) + 1;
+      if (k in sources) sources[k] = (sources[k] ?? 0) + 1;
     }
     return {
       total: rows.length,
@@ -183,6 +183,10 @@ export default function CrmAttendancesPage() {
   }, [rows]);
 
   const maxHourly = Math.max(1, ...hourly);
+  const peakHour = hourly.reduce(
+    (best, count, hour) => (count > best.count ? { hour, count } : best),
+    { hour: 0, count: 0 }
+  );
   const isToday = date === todayKst();
 
   const shift = (delta: number) => {
@@ -220,71 +224,73 @@ export default function CrmAttendancesPage() {
   const today = todayKst();
 
   return (
-    <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-6xl mx-auto">
-      <header className="mb-5 flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-[18px] md:text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
-            출석 현황
-          </h1>
-          <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-            날짜별 회원 출석 기록을 확인해요. 오늘은 20초마다 자동 갱신됩니다.
-          </p>
+    <div className="px-5 md:px-8 pt-3 pb-8 max-w-7xl mx-auto">
+      <header className="mb-4 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950/60 px-5 py-4 shadow-sm">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <p className="text-[11.5px] font-semibold text-[#8C8270] dark:text-zinc-500">
+              ATTENDANCE CONTROL
+            </p>
+            <h1 className="mt-1 text-[22px] md:text-[26px] font-bold text-[#241F18] dark:text-zinc-100">
+              출석 현황
+            </h1>
+            <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+              {date} 기준 출석 흐름과 회원별 체크인 상태를 확인합니다.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <button
+              onClick={() => shift(-1)}
+              className="h-9 px-3 rounded-lg border border-[#D9CDB8] dark:border-zinc-700 text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
+            >
+              이전
+            </button>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className={`${crmInputClass} !h-9 !w-auto`}
+            />
+            <button
+              onClick={() => shift(1)}
+              disabled={date >= todayKst()}
+              className="h-9 px-3 rounded-lg border border-[#D9CDB8] dark:border-zinc-700 text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              다음
+            </button>
+            <button
+              onClick={() => setDate(todayKst())}
+              disabled={isToday}
+              className="h-9 px-3.5 rounded-lg bg-[#2F3A2B] text-white text-[13px] font-semibold disabled:opacity-40 hover:bg-[#263121] dark:bg-[#A8B87A] dark:text-zinc-950"
+            >
+              오늘
+            </button>
+            <button
+              onClick={load}
+              disabled={loading}
+              className="h-9 px-3.5 rounded-lg border border-[#D9CDB8] dark:border-zinc-700 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-50"
+            >
+              {loading ? "갱신 중" : "새로고침"}
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-2 lg:grid-cols-5 gap-2.5">
+          <KpiCard label="총 출석" value={`${stats.total}회`} hint="전체 체크인" />
+          <KpiCard label="출석 회원" value={`${stats.unique}명`} hint="중복 제외" tone="olive" />
+          <KpiCard label="피크 시간" value={peakHour.count > 0 ? `${peakHour.hour}시` : "—"} hint={peakHour.count > 0 ? `${peakHour.count}회 집중` : "기록 없음"} tone="blue" />
+          <KpiCard label="터치/QR" value={`${stats.sources.touch + stats.sources.kiosk}회`} hint={`터치 ${stats.sources.touch} · QR ${stats.sources.kiosk}`} tone="olive" />
+          <KpiCard label="수동/앱" value={`${stats.sources.manual + stats.sources.app}회`} hint={`수동 ${stats.sources.manual} · 앱 ${stats.sources.app}`} tone="amber" />
         </div>
         {refreshedAt && (
-          <div className="text-[11px] text-[#A89B80] dark:text-zinc-500 self-end">
+          <div className="mt-3 text-right text-[11.5px] text-[#A89B80] dark:text-zinc-500">
             최근 갱신 {formatTimeKST(refreshedAt)}
           </div>
         )}
       </header>
 
-      {/* 날짜 이동 */}
-      <div className="mb-4 flex items-center gap-2 flex-wrap">
-        <button
-          onClick={() => shift(-1)}
-          className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
-        >
-          ← 이전
-        </button>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className={`${crmInputClass} !w-auto`}
-        />
-        <button
-          onClick={() => shift(1)}
-          disabled={date >= todayKst()}
-          className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          다음 →
-        </button>
-        <button
-          onClick={() => setDate(todayKst())}
-          disabled={isToday}
-          className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold disabled:opacity-40 hover:bg-[#5a6932]"
-        >
-          오늘
-        </button>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="ml-auto px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] hover:bg-[#F5F0E5] disabled:opacity-50"
-        >
-          {loading ? "새로고침 중…" : "새로고침"}
-        </button>
-      </div>
-
-      {/* KPI 4개 */}
-      <div className="mb-5 grid grid-cols-2 md:grid-cols-4 gap-2.5">
-        <KpiCard label="총 출석" value={`${stats.total}회`} />
-        <KpiCard label="출석 회원" value={`${stats.unique}명`} />
-        <KpiCard label="QR 체크인" value={`${stats.sources.kiosk}회`} tone="olive" />
-        <KpiCard label="수동/앱" value={`${stats.sources.manual + stats.sources.app}회`} tone="amber" />
-      </div>
-
-      {/* 필터 */}
-      <div className="mb-3 flex items-center gap-2 flex-wrap">
-        {(["all", "kiosk", "manual", "app"] as const).map((s) => (
+      <section className="mb-4 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-4 py-3 shadow-sm">
+        <div className="flex items-center gap-2 flex-wrap">
+        {(["all", "kiosk", "manual", "touch", "app"] as const).map((s) => (
           <button
             key={s}
             onClick={() => setSourceFilter(s)}
@@ -296,7 +302,7 @@ export default function CrmAttendancesPage() {
           >
             {s === "all"
               ? `전체 ${stats.total}`
-              : `${SOURCE_LABEL[s]} ${stats.sources[s as "kiosk" | "manual" | "app"] ?? 0}`}
+              : `${SOURCE_LABEL[s]} ${stats.sources[s as "kiosk" | "manual" | "touch" | "app"] ?? 0}`}
           </button>
         ))}
         <input
@@ -307,7 +313,8 @@ export default function CrmAttendancesPage() {
           className={`${crmInputClass} ml-auto`}
           style={{ maxWidth: 260 }}
         />
-      </div>
+        </div>
+      </section>
 
       {error && (
         <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
@@ -315,7 +322,161 @@ export default function CrmAttendancesPage() {
         </div>
       )}
 
-      {/* 리스트 */}
+      <div className="mb-5 grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <section className="rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-5 py-4 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                시간대별 출석 흐름
+              </h2>
+              <p className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+                KST 기준 24시간 체크인 분포
+              </p>
+            </div>
+            <span className="text-[11.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">
+              {peakHour.count > 0 ? `피크 ${peakHour.hour}시 · ${peakHour.count}회` : "출석 없음"}
+            </span>
+          </div>
+          {rows.length === 0 ? (
+            <div className="py-12 text-center text-[12.5px] text-[#8C8270]">
+              데이터가 없어요.
+            </div>
+          ) : (
+            <div className="flex items-end gap-1.5 h-28">
+              {hourly.map((count, h) => {
+                const ratio = count / maxHourly;
+                return (
+                  <div key={h} className="flex-1 flex flex-col items-center gap-1 min-w-0">
+                    <div className="w-full flex items-end justify-center h-full rounded-t bg-[#F7F2E8] dark:bg-zinc-950/50">
+                      <div
+                        className={`w-full rounded-t transition-all ${
+                          count === 0
+                            ? "bg-[#EDE4D4] dark:bg-zinc-800"
+                            : h === peakHour.hour
+                            ? "bg-[#B47B2A]"
+                            : "bg-[#6B7B3A]"
+                        }`}
+                        style={{ height: `${Math.max(4, ratio * 100)}%` }}
+                        title={`${h}시 ${count}건`}
+                      />
+                    </div>
+                    <div className="h-3 text-[9px] text-[#A89B80] dark:text-zinc-500 leading-none">
+                      {h % 3 === 0 ? `${h}` : ""}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-4 py-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                날짜별 출입 인원
+              </h2>
+              <p className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+                이 달 누적 {monthPeople.toLocaleString()}명
+              </p>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => shiftMonth(-1)}
+                className="w-7 h-7 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
+              >
+                ‹
+              </button>
+              <span className="px-1.5 text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100 tabular-nums">
+                {month.replace("-", ". ")}
+              </span>
+              <button
+                onClick={() => shiftMonth(1)}
+                disabled={month >= today.slice(0, 7)}
+                className="w-7 h-7 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ›
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 mb-1">
+            {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => (
+              <div
+                key={d}
+                className={`text-center text-[11px] font-medium py-1 ${
+                  i === 0 ? "text-red-500/80" : i === 6 ? "text-blue-500/80" : "text-[#8C8270] dark:text-zinc-500"
+                }`}
+              >
+                {d}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-1">
+            {calendarCells.map((cell, idx) => {
+              if (!cell) return <div key={`e${idx}`} />;
+              const info = monthDays[cell.ymd];
+              const count = info?.unique ?? 0;
+              const selected = cell.ymd === date;
+              const isFuture = cell.ymd > today;
+              const isTodayCell = cell.ymd === today;
+              return (
+                <button
+                  key={cell.ymd}
+                  onClick={() => setDate(cell.ymd)}
+                  disabled={isFuture}
+                  className={`aspect-square min-h-[64px] rounded-lg border flex flex-col items-center pt-2.5 pb-2 transition-colors
+                    ${selected
+                      ? "border-[#2F3A2B] bg-[#2F3A2B] text-white dark:border-[#A8B87A] dark:bg-[#A8B87A] dark:text-zinc-950"
+                      : isFuture
+                      ? "border-transparent text-[#C9BFA8] dark:text-zinc-700 cursor-not-allowed"
+                      : count > 0
+                      ? "border-[#6B7B3A]/30 bg-[#6B7B3A]/8 text-[#3A342A] dark:text-zinc-200 hover:border-[#6B7B3A]/60"
+                      : "border-[#E8E0D0] dark:border-zinc-800 text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
+                    }`}
+                >
+                  <span
+                    className={`text-[14px] leading-none ${
+                      isTodayCell && !selected ? "font-bold text-[#6B7B3A] dark:text-[#A8B87A]" : "font-semibold"
+                    }`}
+                  >
+                    {cell.day}
+                  </span>
+                  <span className="mt-auto">
+                    {count > 0 ? (
+                      <span
+                        className={`inline-block min-w-[38px] px-2 py-1 rounded-full text-[11px] font-bold leading-none tabular-nums ${
+                          selected
+                            ? "bg-white/25 text-white dark:bg-zinc-950/20 dark:text-zinc-950"
+                            : "bg-[#6B7B3A]/15 text-[#6B7B3A] dark:bg-[#6B7B3A]/30 dark:text-[#A8B87A]"
+                        }`}
+                      >
+                        {count}명
+                      </span>
+                    ) : (
+                      <span className="inline-block h-[16px]" />
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {monthLoading && (
+            <div className="mt-2 text-[11px] text-[#A89B80] dark:text-zinc-500">달력 불러오는 중…</div>
+          )}
+        </section>
+      </div>
+
+      <div className="mb-2 flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-[15px] font-bold text-[#241F18] dark:text-zinc-100">출석 기록</h2>
+          <p className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+            필터 적용 {filtered.length.toLocaleString()}건 · 전체 {rows.length.toLocaleString()}건
+          </p>
+        </div>
+      </div>
+
       {loading && rows.length === 0 ? (
         <div className="py-10 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : filtered.length === 0 ? (
@@ -325,39 +486,39 @@ export default function CrmAttendancesPage() {
             : "조건에 맞는 기록이 없어요."}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
+        <div className="overflow-x-auto rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm">
           <table className="w-full text-[13px]">
-            <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+            <thead className="bg-[#F6F0E5] dark:bg-zinc-950/80 text-[#6B5D47] dark:text-zinc-400">
               <tr>
-                <th className="px-3 py-2 text-left font-medium whitespace-nowrap">시간</th>
-                <th className="px-3 py-2 text-left font-medium whitespace-nowrap">상태</th>
-                <th className="px-3 py-2 text-left font-medium">회원</th>
-                <th className="px-3 py-2 text-left font-medium">회원권</th>
-                <th className="px-3 py-2 text-left font-medium">만료 이용권</th>
-                <th className="px-3 py-2 text-left font-medium whitespace-nowrap">경로</th>
+                <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">시간</th>
+                <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">상태</th>
+                <th className="px-4 py-2.5 text-left font-semibold">회원</th>
+                <th className="px-4 py-2.5 text-left font-semibold">회원권</th>
+                <th className="px-4 py-2.5 text-left font-semibold">만료 이용권</th>
+                <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">경로</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
               {filtered.map((a) => (
                 <tr
                   key={a.id}
-                  className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 align-top"
+                  className="bg-[#FEFCF7] dark:bg-zinc-900 align-top hover:bg-[#FAF5EA] dark:hover:bg-zinc-800/55 transition-colors"
                 >
-                  <td className="px-3 py-2.5 text-[#2A251D] dark:text-zinc-100 font-semibold whitespace-nowrap">
+                  <td className="px-4 py-3 text-[#2A251D] dark:text-zinc-100 font-bold whitespace-nowrap tabular-nums">
                     {formatTimeKST(a.checked_in_at)}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     {a.member?.status === "active" ? (
-                      <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
                         활성
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500">
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500">
                         만료
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-4 py-3">
                     <div className="flex items-center gap-2 min-w-0">
                       {a.member?.face_thumb ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -381,24 +542,30 @@ export default function CrmAttendancesPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-4 py-3">
                     {a.member?.membership ? (
                       <div className="min-w-0">
                         <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
                           {a.member.membership.plan_name}
                         </div>
                         <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
-                          {a.member.membership.expires_at} ·{" "}
-                          <span className={a.member.membership.days_left <= 7 ? "text-[#B47B2A] dark:text-amber-300 font-semibold" : ""}>
-                            {a.member.membership.days_left}일 남음
-                          </span>
+                          {a.member.membership.expires_at === "9999-12-31" ? (
+                            <span className="text-[#6B7B3A] dark:text-[#A8B87A] font-semibold">무기한</span>
+                          ) : (
+                            <>
+                              {a.member.membership.expires_at} ·{" "}
+                              <span className={a.member.membership.days_left <= 7 ? "text-[#B47B2A] dark:text-amber-300 font-semibold" : ""}>
+                                {a.member.membership.days_left}일 남음
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     ) : (
                       <span className="text-[#C9BEA6]">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-4 py-3">
                     {a.member?.expired_items && a.member.expired_items.length > 0 ? (
                       <div className="flex flex-col gap-1">
                         {a.member.expired_items.map((it, i) => (
@@ -414,7 +581,7 @@ export default function CrmAttendancesPage() {
                       <span className="text-[#C9BEA6]">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <span
                         className={`px-2 py-0.5 rounded text-[11px] font-semibold ${SOURCE_STYLE[a.source] ?? "bg-zinc-200 text-zinc-700"}`}
@@ -437,133 +604,6 @@ export default function CrmAttendancesPage() {
         </div>
       )}
 
-      {/* 월간 달력 — 날짜별 출입 인원 수 */}
-      <section className="mt-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
-            날짜별 출입 인원 <span className="text-[#8C8270] dark:text-zinc-500 font-normal">· 이 달 {monthPeople}명</span>
-          </h2>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => shiftMonth(-1)}
-              className="w-7 h-7 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
-            >
-              ‹
-            </button>
-            <span className="px-1.5 text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100 tabular-nums">
-              {month.replace("-", ". ")}
-            </span>
-            <button
-              onClick={() => shiftMonth(1)}
-              disabled={month >= today.slice(0, 7)}
-              className="w-7 h-7 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#3A342A] dark:text-zinc-200 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              ›
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => (
-            <div
-              key={d}
-              className={`text-center text-[11px] font-medium py-1 ${
-                i === 0 ? "text-red-500/80" : i === 6 ? "text-blue-500/80" : "text-[#8C8270] dark:text-zinc-500"
-              }`}
-            >
-              {d}
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-7 gap-1">
-          {calendarCells.map((cell, idx) => {
-            if (!cell) return <div key={`e${idx}`} />;
-            const info = monthDays[cell.ymd];
-            const count = info?.unique ?? 0;
-            const selected = cell.ymd === date;
-            const isFuture = cell.ymd > today;
-            const isTodayCell = cell.ymd === today;
-            return (
-              <button
-                key={cell.ymd}
-                onClick={() => setDate(cell.ymd)}
-                disabled={isFuture}
-                className={`aspect-square min-h-[52px] rounded-lg border flex flex-col items-center pt-1.5 pb-1 transition-colors
-                  ${selected
-                    ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
-                    : isFuture
-                    ? "border-transparent text-[#C9BFA8] dark:text-zinc-700 cursor-not-allowed"
-                    : count > 0
-                    ? "border-[#6B7B3A]/30 bg-[#6B7B3A]/8 text-[#3A342A] dark:text-zinc-200 hover:border-[#6B7B3A]/60"
-                    : "border-[#E8E0D0] dark:border-zinc-800 text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
-                  }`}
-              >
-                {/* 날짜 (위) */}
-                <span
-                  className={`text-[13px] leading-none ${
-                    isTodayCell && !selected ? "font-bold text-[#6B7B3A] dark:text-[#A8B87A]" : "font-semibold"
-                  }`}
-                >
-                  {cell.day}
-                </span>
-                {/* 인원 배지 (아래, 확실히 구분) */}
-                <span className="mt-auto">
-                  {count > 0 ? (
-                    <span
-                      className={`inline-block px-1.5 py-[3px] rounded-full text-[10.5px] font-bold leading-none tabular-nums ${
-                        selected
-                          ? "bg-white/25 text-white"
-                          : "bg-[#6B7B3A]/15 text-[#6B7B3A] dark:bg-[#6B7B3A]/30 dark:text-[#A8B87A]"
-                      }`}
-                    >
-                      {count}명
-                    </span>
-                  ) : (
-                    <span className="inline-block h-[16px]" />
-                  )}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="mt-2 text-[11px] text-[#A89B80] dark:text-zinc-500">
-          숫자는 그 날 출입한 인원(사람) 수예요. 날짜를 누르면 위 목록이 그 날짜로 바뀝니다.
-          {monthLoading && " · 불러오는 중…"}
-        </div>
-      </section>
-
-      {/* 시간대별 분포 */}
-      <section className="mt-5 mb-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4">
-        <h2 className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-          시간대별 분포 (KST)
-        </h2>
-        {rows.length === 0 ? (
-          <div className="py-6 text-center text-[12.5px] text-[#8C8270]">
-            데이터가 없어요.
-          </div>
-        ) : (
-          <div className="flex items-end gap-1 h-24">
-            {hourly.map((count, h) => {
-              const ratio = count / maxHourly;
-              return (
-                <div key={h} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-                  <div className="w-full flex items-end justify-center h-full">
-                    <div
-                      className={`w-full rounded-t ${count === 0 ? "bg-[#F5F0E5] dark:bg-zinc-800" : "bg-[#6B7B3A]"}`}
-                      style={{ height: `${Math.max(2, ratio * 100)}%` }}
-                      title={`${h}시 ${count}건`}
-                    />
-                  </div>
-                  <div className="text-[9px] text-[#A89B80] dark:text-zinc-500 leading-none">
-                    {h % 3 === 0 ? `${h}` : ""}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
     </div>
   );
 }
@@ -571,22 +611,27 @@ export default function CrmAttendancesPage() {
 function KpiCard({
   label,
   value,
+  hint,
   tone,
 }: {
   label: string;
   value: string;
-  tone?: "olive" | "amber";
+  hint?: string;
+  tone?: "olive" | "amber" | "blue";
 }) {
   const toneCls =
     tone === "olive"
       ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+      : tone === "blue"
+      ? "text-[#315F7D] dark:text-sky-300"
       : tone === "amber"
       ? "text-[#B47B2A] dark:text-amber-300"
       : "text-[#2A251D] dark:text-zinc-100";
   return (
-    <div className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 px-4 py-3">
-      <div className="text-[11.5px] text-[#8C8270] dark:text-zinc-500">{label}</div>
-      <div className={`mt-0.5 text-[20px] font-bold ${toneCls}`}>{value}</div>
+    <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-white/75 dark:bg-zinc-900/70 px-4 py-3 min-w-0">
+      <div className="text-[11.5px] font-semibold text-[#8C8270] dark:text-zinc-500">{label}</div>
+      <div className={`mt-0.5 text-[20px] font-bold truncate ${toneCls}`}>{value}</div>
+      {hint && <div className="mt-0.5 text-[11px] text-[#A89B80] dark:text-zinc-500 truncate">{hint}</div>}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import {
@@ -85,6 +85,7 @@ export default function CrmPassesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [trainerFilter, setTrainerFilter] = useState<string>("");
   const [paymentFilter, setPaymentFilter] = useState<string>("");
+  const [query, setQuery] = useState("");
   const { widths, startResize, reset, changed, totalWidth } = useColumnWidths<PColKey>(
     "crm_passes_col_widths_v1",
     P_DEFAULT_WIDTHS
@@ -151,55 +152,119 @@ export default function CrmPassesPage() {
     })();
   }, [getIdToken]);
 
-  const staffMap = new Map(staff.map((s) => [s.id, s.display_name]));
+  const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s.display_name])), [staff]);
+  const visibleList = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((p) =>
+      [p.member_name, p.member_phone, p.lesson_kind, staffMap.get(p.trainer_member_id)]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
+    );
+  }, [list, query, staffMap]);
+  const stats = useMemo(() => {
+    const valid = list.filter((p) => p.status === "valid");
+    const expiring = valid.filter((p) => daysUntil(p.expires_at) <= 7).length;
+    return {
+      total: list.length,
+      valid: valid.length,
+      remaining: valid.reduce((sum, p) => sum + (Number(p.remaining_sessions) || 0), 0),
+      expiring,
+      revenue: list.reduce((sum, p) => sum + (Number(p.price_won) || 0), 0),
+    };
+  }, [list]);
+  const filtersActive = !!statusFilter || !!trainerFilter || !!paymentFilter || !!query.trim();
+  const resetFilters = () => {
+    setStatusFilter("");
+    setTrainerFilter("");
+    setPaymentFilter("");
+    setQuery("");
+  };
 
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-7xl mx-auto">
-      <header className="mb-5">
-        <h1 className="text-[18px] md:text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
-          수강권 관리
-        </h1>
-        <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-          발급된 모든 수강권을 한 화면에서 확인해요.
-        </p>
+      <header className="mb-4 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950/60 px-5 py-4 shadow-sm">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-[11.5px] font-semibold text-[#8C8270] dark:text-zinc-500">
+              LESSON PASS CONTROL
+            </p>
+            <h1 className="mt-1 text-[22px] md:text-[26px] font-bold text-[#241F18] dark:text-zinc-100">
+              수강권 관리
+            </h1>
+            <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+              발급된 레슨권의 잔여 세션, 만료일, 결제 상태를 한 화면에서 확인합니다.
+            </p>
+          </div>
+          <div className="rounded-lg border border-[#D9CDB8] bg-white/70 px-3 py-2 text-right dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">현재 결과</div>
+            <div className="mt-0.5 text-[18px] font-bold text-[#2F3A2B] dark:text-[#A8B87A]">
+              {visibleList.length.toLocaleString()}건
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-2 lg:grid-cols-5 gap-2.5">
+          <MetricCard label="전체 수강권" value={`${stats.total.toLocaleString()}건`} hint="조회 결과 기준" />
+          <MetricCard label="유효 수강권" value={`${stats.valid.toLocaleString()}건`} hint="사용 가능한 권한" tone="green" />
+          <MetricCard label="잔여 세션" value={`${stats.remaining.toLocaleString()}회`} hint="유효권 잔여 합계" tone="blue" />
+          <MetricCard label="7일 내 만료" value={`${stats.expiring.toLocaleString()}건`} hint="재등록 안내 대상" tone="gold" />
+          <MetricCard label="수강권 매출" value={`${formatWon(stats.revenue)}원`} hint="현재 필터 합계" tone="dark" />
+        </div>
       </header>
 
-      <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-2">
-        <select
-          className={crmInputClass}
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="">모든 상태</option>
-          <option value="valid">유효</option>
-          <option value="expired">만료</option>
-          <option value="refunded">환불</option>
-        </select>
-        <select
-          className={crmInputClass}
-          value={trainerFilter}
-          onChange={(e) => setTrainerFilter(e.target.value)}
-        >
-          <option value="">모든 강사</option>
-          {staff.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.display_name}
-            </option>
-          ))}
-        </select>
-        <select
-          className={crmInputClass}
-          value={paymentFilter}
-          onChange={(e) => setPaymentFilter(e.target.value)}
-        >
-          <option value="">모든 결제 수단</option>
-          {Object.entries(PAYMENT_METHOD_LABEL).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </select>
-      </div>
+      <section className="mb-4 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-4 py-3 shadow-sm">
+        <div className="flex items-center gap-2 flex-wrap">
+          <SegmentedFilter
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { value: "", label: "전체" },
+              { value: "valid", label: "유효" },
+              { value: "expired", label: "만료" },
+              { value: "refunded", label: "환불" },
+            ]}
+          />
+          <select
+            className={`${crmInputClass} !w-auto min-w-[140px]`}
+            value={trainerFilter}
+            onChange={(e) => setTrainerFilter(e.target.value)}
+          >
+            <option value="">모든 강사</option>
+            {staff.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.display_name}
+              </option>
+            ))}
+          </select>
+          <select
+            className={`${crmInputClass} !w-auto min-w-[150px]`}
+            value={paymentFilter}
+            onChange={(e) => setPaymentFilter(e.target.value)}
+          >
+            <option value="">모든 결제 수단</option>
+            {Object.entries(PAYMENT_METHOD_LABEL).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+          <input
+            className={`${crmInputClass} ml-auto max-w-[280px]`}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="회원, 연락처, 수강권 검색"
+          />
+          {filtersActive && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="px-3 py-2 rounded-lg border border-[#D9CDB8] dark:border-zinc-700 text-[12.5px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+            >
+              필터 초기화
+            </button>
+          )}
+        </div>
+      </section>
 
       {error && (
         <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
@@ -207,7 +272,7 @@ export default function CrmPassesPage() {
         </div>
       )}
 
-      {changed && !loading && list.length > 0 && (
+      {changed && !loading && visibleList.length > 0 && (
         <div className="mb-2 flex justify-end">
           <button
             type="button"
@@ -221,29 +286,29 @@ export default function CrmPassesPage() {
 
       {loading ? (
         <Msg>불러오는 중…</Msg>
-      ) : list.length === 0 ? (
+      ) : visibleList.length === 0 ? (
         <Msg>일치하는 수강권이 없습니다.</Msg>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800">
+        <div className="overflow-x-auto rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm">
           <table className="text-[13px] table-fixed" style={{ width: totalWidth }}>
             <colgroup>
               {P_COLS.map((c) => (
                 <col key={c.key} style={{ width: widths[c.key] }} />
               ))}
             </colgroup>
-            <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+            <thead className="bg-[#F6F0E5] dark:bg-zinc-950/80 text-[#6B5D47] dark:text-zinc-400">
               <tr>
                 {P_COLS.map((c) => (
                   <ResizableTh key={c.key} colKey={c.key} label={c.label} onStart={startResize} />
                 ))}
               </tr>
             </thead>
-            <tbody>
-              {list.map((p) => (
+            <tbody className="divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
+              {visibleList.map((p) => (
                 <tr
                   key={p.id}
                   onClick={() => setDetailPassId(p.id)}
-                  className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 cursor-pointer hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
+                  className="bg-[#FEFCF7] dark:bg-zinc-900 cursor-pointer hover:bg-[#FAF5EA] dark:hover:bg-zinc-800/55 transition-colors"
                 >
                   <Td>
                     <Link
@@ -270,18 +335,15 @@ export default function CrmPassesPage() {
                     {p.member_phone ? formatPhone(p.member_phone) : "—"}
                   </Td>
                   <Td>
-                    {p.lesson_kind}
-                    <span className="ml-1 text-[11.5px] text-[#A89B80]">
-                      · {ISSUE_TYPE_LABEL[p.issue_type] ?? p.issue_type}
-                    </span>
+                    <div className="font-semibold text-[#2A251D] dark:text-zinc-100 truncate">{p.lesson_kind}</div>
+                    <div className="mt-0.5 text-[11.5px] text-[#A89B80]">
+                      {ISSUE_TYPE_LABEL[p.issue_type] ?? p.issue_type} · {p.session_minutes}분
+                    </div>
                   </Td>
                   <Td>
-                    <span className="font-medium">
-                      {p.remaining_sessions}
-                    </span>
-                    <span className="text-[#A89B80]"> / {p.total_sessions}</span>
+                    <SessionProgress remaining={p.remaining_sessions} total={p.total_sessions} />
                   </Td>
-                  <Td>{formatWon(p.price_won)}원</Td>
+                  <Td className="font-semibold text-[#2A251D] dark:text-zinc-100">{formatWon(p.price_won)}원</Td>
                   <Td>
                     {p.payment_method === "etc" && p.payment_method_custom
                       ? p.payment_method_custom
@@ -292,7 +354,9 @@ export default function CrmPassesPage() {
                   </Td>
                   <Td className="text-[#8C8270] dark:text-zinc-500">{p.issued_at}</Td>
                   <Td className="text-[#8C8270] dark:text-zinc-500">{p.start_date ?? "—"}</Td>
-                  <Td className="text-[#8C8270] dark:text-zinc-500">{p.expires_at}</Td>
+                  <Td>
+                    <ExpiryCell expiresAt={p.expires_at} status={p.status} />
+                  </Td>
                   <Td>
                     <StatusChip status={p.status} />
                   </Td>
@@ -325,10 +389,127 @@ function StatusChip({ status }: { status: string }) {
       ? "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500"
       : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
   return (
-    <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${cls}`}>
+    <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${cls}`}>
       {label}
     </span>
   );
+}
+
+function MetricCard({
+  label,
+  value,
+  hint,
+  tone = "green",
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  tone?: "green" | "blue" | "gold" | "dark";
+}) {
+  const toneClass =
+    tone === "blue"
+      ? "text-[#315F7A] bg-[#EFF7F8] border-[#D7E7EA]"
+      : tone === "gold"
+      ? "text-[#826424] bg-[#FFF8E6] border-[#EAD9AA]"
+      : tone === "dark"
+      ? "text-[#2A251D] bg-[#F4F1EA] border-[#DDD3C2]"
+      : "text-[#3E5D2D] bg-[#F3F7EA] border-[#DDE8C5]";
+
+  return (
+    <div className={`rounded-lg border px-3 py-3 ${toneClass} dark:bg-zinc-900 dark:border-zinc-800`}>
+      <div className="text-[11px] font-semibold opacity-75">{label}</div>
+      <div className="mt-1 text-[18px] font-bold tracking-normal whitespace-nowrap">{value}</div>
+      <div className="mt-1 text-[11.5px] opacity-70 whitespace-nowrap">{hint}</div>
+    </div>
+  );
+}
+
+function SegmentedFilter({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <div className="inline-flex rounded-lg border border-[#D9CDB8] dark:border-zinc-700 bg-[#F7F2E8] dark:bg-zinc-950 p-1">
+      {options.map((option) => {
+        const active = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            className={`h-8 px-3 rounded-md text-[12.5px] font-semibold transition-colors ${
+              active
+                ? "bg-[#2F3A2B] text-white shadow-sm dark:bg-[#A8B87A] dark:text-zinc-950"
+                : "text-[#6B5D47] hover:bg-white/80 dark:text-zinc-400 dark:hover:bg-zinc-900"
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SessionProgress({ remaining, total }: { remaining: number; total: number }) {
+  const safeTotal = Math.max(1, Number(total) || 0);
+  const safeRemaining = Math.max(0, Number(remaining) || 0);
+  const pct = Math.max(0, Math.min(100, (safeRemaining / safeTotal) * 100));
+  const danger = safeRemaining <= 2 || pct <= 20;
+
+  return (
+    <div className="min-w-0">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className={`font-bold ${danger ? "text-red-600 dark:text-red-300" : "text-[#2F3A2B] dark:text-[#A8B87A]"}`}>
+          {safeRemaining}회
+        </span>
+        <span className="text-[11px] text-[#A89B80]">/ {safeTotal}</span>
+      </div>
+      <div className="mt-1 h-1.5 rounded-full bg-[#ECE3D2] dark:bg-zinc-800 overflow-hidden">
+        <div
+          className={`h-full rounded-full ${danger ? "bg-red-500" : "bg-[#6B7B3A]"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ExpiryCell({ expiresAt, status }: { expiresAt: string; status: string }) {
+  const unlimited = expiresAt === "9999-12-31";
+  const dDay = daysUntil(expiresAt);
+  const urgent = !unlimited && status === "valid" && dDay <= 7;
+  const label = status !== "valid" ? "종료" : dDay < 0 ? "만료" : dDay === 0 ? "오늘" : `D-${dDay}`;
+
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="text-[#8C8270] dark:text-zinc-500 truncate">{unlimited ? "무기한" : expiresAt}</span>
+      {!unlimited && (
+        <span
+          className={`px-1.5 py-0.5 rounded-md text-[10.5px] font-bold ${
+            urgent
+              ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+              : "bg-[#F5F0E5] text-[#7A6B51] dark:bg-zinc-800 dark:text-zinc-400"
+          }`}
+        >
+          {label}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function daysUntil(ymd: string) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(`${ymd}T00:00:00`);
+  target.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / 86400000);
 }
 
 function Td({ children, className }: { children: React.ReactNode; className?: string }) {
