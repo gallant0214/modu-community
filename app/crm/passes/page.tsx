@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import {
-  ISSUE_TYPE_LABEL,
   PAYMENT_METHOD_LABEL,
   PASS_STATUS_LABEL,
   formatWon,
@@ -340,9 +339,6 @@ export default function CrmPassesPage() {
                       className="group text-left w-full cursor-pointer"
                     >
                       <div className="font-semibold text-[#2A251D] dark:text-zinc-100 truncate group-hover:text-[#6B7B3A] group-hover:underline">{p.lesson_kind}</div>
-                      <div className="mt-0.5 text-[11.5px] text-[#A89B80]">
-                        {ISSUE_TYPE_LABEL[p.issue_type] ?? p.issue_type} · {p.session_minutes}분
-                      </div>
                     </button>
                   </Td>
                   <Td>
