@@ -949,9 +949,14 @@ function ContactSection({
                 <button
                   type="button"
                   onClick={() => setEditingResident(true)}
-                  className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                  title="주민번호는 해시로만 저장돼 원본 조회가 불가해요. 확인·수정하려면 재입력이 필요합니다."
+                  aria-label="주민번호 재입력"
+                  className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
                 >
-                  변경
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4.5 h-4.5" aria-hidden>
+                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
                 </button>
               </div>
             ) : (
@@ -973,12 +978,12 @@ function ContactSection({
                 <span className="text-[16px] font-semibold text-[#A89B80]">-</span>
                 <input
                   ref={residentBackRef}
-                  type="password"
+                  type="text"
                   inputMode="numeric"
-                  className="w-[130px] px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 tracking-wider focus:outline-none focus:border-[#6B7B3A]"
+                  className="w-[130px] px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 tracking-wider tabular-nums focus:outline-none focus:border-[#6B7B3A]"
                   value={residentBack}
                   onChange={(ev) => setResidentBack(ev.target.value.replace(/[^0-9]/g, "").slice(0, 7))}
-                  placeholder="●●●●●●●"
+                  placeholder="0000000"
                   maxLength={7}
                   aria-label="주민번호 뒤 7자리"
                 />
