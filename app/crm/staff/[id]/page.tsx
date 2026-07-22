@@ -192,6 +192,7 @@ export default function CrmStaffDetailPage() {
       </header>
 
       <ContactSection
+        memberId={member.id}
         birth={member.birth ?? null}
         phone={member.phone}
         email={member.email}
@@ -854,6 +855,7 @@ function DisplayNameSection({
 }
 
 function ContactSection({
+  memberId,
   birth,
   phone,
   email,
@@ -862,6 +864,7 @@ function ContactSection({
   saving,
   onSave,
 }: {
+  memberId: number;
   birth: string | null;
   phone: string | null;
   email: string | null;
@@ -870,6 +873,7 @@ function ContactSection({
   saving: boolean;
   onSave: (patch: { birth?: string | null; phone?: string | null; email?: string | null; address?: string | null; resident_no?: string }) => void;
 }) {
+  const { getIdToken } = useAuth();
   const [b, setB] = useState(birth ?? "");
   const [p, setP] = useState(formatPhone(phone ?? ""));
   const [e, setE] = useState(email ?? "");
@@ -878,6 +882,9 @@ function ContactSection({
   const [residentBack, setResidentBack] = useState(""); // 뒤 7자리
   const [editingResident, setEditingResident] = useState(false);
   const residentBackRef = useRef<HTMLInputElement | null>(null);
+  const [revealed, setRevealed] = useState<string | null>(null); // 눈 아이콘 클릭 시 원본
+  const [revealLoading, setRevealLoading] = useState(false);
+  const [revealError, setRevealError] = useState("");
 
   useEffect(() => {
     setB(birth ?? "");
@@ -921,6 +928,40 @@ function ContactSection({
     return `${yymmdd || "******"}-*******`;
   })();
 
+  // birth 또는 hasResident 바뀌면 노출 상태 초기화 (다른 직원 페이지로 이동 등)
+  useEffect(() => {
+    setRevealed(null);
+    setRevealError("");
+  }, [memberId, hasResident]);
+
+  // 눈 아이콘 클릭 → 서버에 복호화 요청 → 원본 표시
+  const revealResident = async () => {
+    if (revealed) {
+      setRevealed(null);
+      setRevealError("");
+      return;
+    }
+    setRevealLoading(true);
+    setRevealError("");
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없어요");
+      const res = await fetch(`/api/crm/staff/${memberId}/resident`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      const digits = String(data.resident_no || "").replace(/[^0-9]/g, "");
+      if (digits.length !== 13) throw new Error("응답 형식 오류");
+      setRevealed(`${digits.slice(0, 6)}-${digits.slice(6)}`);
+    } catch (err) {
+      setRevealError(err instanceof Error ? err.message : "조회 실패");
+    } finally {
+      setRevealLoading(false);
+    }
+  };
+
   return (
     <section className="mb-6 px-4 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
       <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
@@ -942,22 +983,44 @@ function ContactSection({
             주민등록번호 <span className="text-[#A89B80]">(선택 · 본인 확인용)</span>
           </div>
             {maskedResident && !editingResident ? (
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 text-[14px] font-medium text-[#3A342A] dark:text-zinc-200 tabular-nums">
-                  {maskedResident}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setEditingResident(true)}
-                  title="주민번호는 해시로만 저장돼 원본 조회가 불가해요. 확인·수정하려면 재입력이 필요합니다."
-                  aria-label="주민번호 재입력"
-                  className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4.5 h-4.5" aria-hidden>
-                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                </button>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 text-[14px] font-medium text-[#3A342A] dark:text-zinc-200 tabular-nums">
+                    {revealed ?? maskedResident}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={revealResident}
+                    disabled={revealLoading}
+                    title={revealed ? "숨기기" : "주민번호 원본 보기 (본인·대표자만 · 조회 기록 남습니다)"}
+                    aria-label={revealed ? "주민번호 숨기기" : "주민번호 보기"}
+                    className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-60"
+                  >
+                    {revealLoading ? (
+                      <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden />
+                    ) : revealed ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4.5 h-4.5" aria-hidden>
+                        <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.06 20.06 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.13 20.13 0 0 1-3.17 4.19M1 1l22 22" />
+                        <path d="M9.53 9.53a3 3 0 0 0 4.24 4.24" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4.5 h-4.5" aria-hidden>
+                        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingResident(true)}
+                    className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                  >
+                    변경
+                  </button>
+                </div>
+                {revealError && (
+                  <div className="text-[11.5px] text-red-600">{revealError}</div>
+                )}
               </div>
             ) : (
               <div className="flex items-center gap-2 flex-wrap">
@@ -1011,7 +1074,7 @@ function ContactSection({
               </div>
             )}
           <p className="mt-1.5 text-[11px] text-[#A89B80]">
-            저장하면 원본은 저장되지 않고 안전하게 암호화(해시)되며 뒷 7자리는 화면에 표시되지 않아요.
+            저장하면 원본은 AES-256으로 암호화 저장되고, 눈 아이콘으로 확인할 수 있어요. 조회는 본인·대표자만 가능하며 감사 로그에 기록됩니다.
           </p>
         </div>
         <div>

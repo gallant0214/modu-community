@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
-import { residentHash, residentBirth } from "@/app/lib/crm-identity";
+import { residentHash, residentBirth, residentEncrypt } from "@/app/lib/crm-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -112,13 +112,19 @@ export async function PATCH(
     patch.birth = body.birth?.trim() || null;
   }
   if (body.resident_no !== undefined) {
-    const hash = residentHash(body.resident_no);
-    if (body.resident_no.trim() && !hash) {
+    const trimmed = body.resident_no.trim();
+    const hash = residentHash(trimmed);
+    if (trimmed && !hash) {
       return NextResponse.json({ error: "주민번호 13자리를 정확히 입력해 주세요" }, { status: 400 });
     }
-    patch.resident_hash = hash; // 원문 저장 안 함(해시만)
+    patch.resident_hash = hash;
+    // 원본은 AES-256-GCM 으로 암호화해서 저장 (본인/대표자만 조회 가능)
+    // RESIDENT_ENC_KEY 미설정 시 encrypted 는 null → 이 경우 눈 아이콘으로 원본 조회 불가
+    // supabase-js 는 bytea 컬럼에 hex 문자열(\x prefix)로 전달해야 함
+    const enc = trimmed ? residentEncrypt(trimmed) : null;
+    patch.resident_encrypted = enc ? `\\x${enc.toString("hex")}` : null;
     // 생년월일 미입력 시 주민번호 앞 6자리로 자동 채움
-    const yymmdd = residentBirth(body.resident_no);
+    const yymmdd = residentBirth(trimmed);
     if (yymmdd && body.birth === undefined) {
       const yy = Number(yymmdd.slice(0, 2));
       const yyyy = yy <= 30 ? 2000 + yy : 1900 + yy;
