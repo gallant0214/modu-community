@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmModal } from "../_components/crm-modal";
 import { crmInputClass } from "../_components/crm-modal";
@@ -11,6 +10,8 @@ import {
   buildGradePermissionMatrix,
   type GradeMeta,
 } from "../_components/role-permissions";
+import CrmStaffPage from "../staff/page";
+import CrmContractsPage from "../contracts/page";
 
 interface Settings {
   center_id: number;
@@ -165,18 +166,46 @@ interface BootstrapInfo {
   businessNo: string | null;
 }
 
+type SettingsTab =
+  | "reservation"
+  | "alerts"
+  | "notices"
+  | "mileage"
+  | "permissions"
+  | "staff"
+  | "contracts"
+  | "logs"
+  | "expenses"
+  | "vendors";
+
+const SETTINGS_TABS: {
+  key: SettingsTab;
+  label: string;
+  desc: string;
+  icon: "calendar" | "bell" | "notice" | "point" | "badge" | "shield" | "card" | "vendor" | "danger" | "log";
+  danger?: boolean;
+}[] = [
+  { key: "reservation", label: "예약 정책", desc: "예약·취소 기준", icon: "calendar" },
+  { key: "alerts", label: "알림", desc: "채팅 알림", icon: "bell" },
+  { key: "notices", label: "공지 설정", desc: "센터 공지", icon: "notice" },
+  { key: "mileage", label: "마일리지", desc: "적립 정책", icon: "point" },
+  { key: "permissions", label: "직급 권한", desc: "직원 등급·기능 접근", icon: "shield" },
+  { key: "staff", label: "직원 관리", desc: "직원 등록·정산", icon: "badge" },
+  { key: "contracts", label: "전자계약서", desc: "계약서 작성·발송", icon: "notice" },
+  { key: "expenses", label: "고정 지출", desc: "월 지출", icon: "card" },
+  { key: "vendors", label: "거래처", desc: "업체 관리", icon: "vendor" },
+  { key: "logs", label: "활동 로그", desc: "변경 기록", icon: "log" },
+];
+
 export default function CrmSettingsPage() {
-  const router = useRouter();
   const { getIdToken } = useAuth();
-  const [tab, setTab] = useState<"reservation" | "alerts" | "notices" | "mileage" | "grades" | "permissions" | "logs" | "expenses" | "vendors" | "danger">("reservation");
+  const [tab, setTab] = useState<SettingsTab>("reservation");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [info, setInfo] = useState<BootstrapInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
-  const [transferOpen, setTransferOpen] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -258,37 +287,20 @@ export default function CrmSettingsPage() {
         </p>
       </header>
 
-      <div className="mb-5 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800 overflow-x-auto">
-        <TabBtn active={tab === "reservation"} onClick={() => setTab("reservation")}>
-          예약 정책
-        </TabBtn>
-        <TabBtn active={tab === "alerts"} onClick={() => setTab("alerts")}>
-          알림
-        </TabBtn>
-        <TabBtn active={tab === "notices"} onClick={() => setTab("notices")}>
-          공지 설정
-        </TabBtn>
-        <TabBtn active={tab === "mileage"} onClick={() => setTab("mileage")}>
-          마일리지
-        </TabBtn>
-        <TabBtn active={tab === "grades"} onClick={() => setTab("grades")}>
-          직원등급설정
-        </TabBtn>
-        <TabBtn active={tab === "permissions"} onClick={() => setTab("permissions")}>
-          직급 권한
-        </TabBtn>
-        <TabBtn active={tab === "expenses"} onClick={() => setTab("expenses")}>
-          고정 지출
-        </TabBtn>
-        <TabBtn active={tab === "vendors"} onClick={() => setTab("vendors")}>
-          거래처
-        </TabBtn>
-        <TabBtn active={tab === "danger"} onClick={() => setTab("danger")} danger>
-          센터 탈퇴
-        </TabBtn>
-        <TabBtn active={tab === "logs"} onClick={() => setTab("logs")}>
-          활동 로그
-        </TabBtn>
+      <div className="mb-5 overflow-x-auto">
+        <div className="grid min-w-[860px] grid-cols-5 gap-2 rounded-xl border border-[#E4D9C6] bg-white/80 p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          {SETTINGS_TABS.map((item) => (
+            <TabBtn
+              key={item.key}
+              active={tab === item.key}
+              onClick={() => setTab(item.key)}
+              label={item.label}
+              desc={item.desc}
+              icon={item.icon}
+              danger={item.danger}
+            />
+          ))}
+        </div>
       </div>
 
       {error && (
@@ -495,9 +507,12 @@ export default function CrmSettingsPage() {
         </div>
       )}
 
-      {tab === "grades" && <GradesPanel />}
-
-      {tab === "permissions" && <RolePermissionsPanel />}
+      {tab === "permissions" && (
+        <div className="space-y-6">
+          <GradesPanel />
+          <RolePermissionsPanel />
+        </div>
+      )}
 
       {tab === "logs" && (
         <Card title="최근 활동 (최대 80건)">
@@ -536,76 +551,8 @@ export default function CrmSettingsPage() {
 
       {tab === "vendors" && <VendorsPanel />}
 
-      {tab === "danger" && (
-        <section className="px-4 py-4 rounded-2xl border-2 border-red-200 dark:border-red-900/60 bg-red-50/40 dark:bg-red-950/20">
-          <h2 className="text-[14.5px] font-bold text-red-700 dark:text-red-300 mb-1.5">
-            센터 탈퇴 / 양도
-          </h2>
-          <p className="text-[12.5px] text-red-700/80 dark:text-red-300/80 leading-relaxed">
-            <strong>센터 탈퇴</strong>는 모든 회원·수강권·예약·직원·설정 정보를 영구 삭제하고 되돌릴 수 없어요.
-            <br />
-            <strong>센터 양도</strong>는 다른 분께 운영권을 넘기는 거예요. 양도하면 본인은 관리자로 강등됩니다.
-          </p>
-
-          {info?.role === "owner" ? (
-            <div className="mt-3.5 flex flex-wrap gap-2">
-              <button
-                onClick={() => setWithdrawOpen(true)}
-                className="px-4 py-2.5 rounded-lg bg-red-600 text-white text-[13.5px] font-semibold hover:bg-red-700 transition-colors"
-              >
-                센터 탈퇴
-              </button>
-              <button
-                onClick={() => setTransferOpen(true)}
-                className="px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932] transition-colors"
-              >
-                센터 양도
-              </button>
-            </div>
-          ) : (
-            <div className="mt-3.5 px-3 py-2.5 rounded-lg bg-white/60 dark:bg-zinc-900/60 border border-red-200/60 dark:border-red-900/40 text-[12.5px] text-red-700/80 dark:text-red-300/80">
-              대표자만 센터를 탈퇴·양도할 수 있어요.
-            </div>
-          )}
-        </section>
-      )}
-
-      <WithdrawModal
-        open={withdrawOpen}
-        centerName={info?.centerName ?? ""}
-        businessNo={info?.businessNo ?? null}
-        onClose={() => setWithdrawOpen(false)}
-        onConfirm={async (identity) => {
-          const token = await getIdToken();
-          if (!token) {
-            alert("로그인 정보를 확인할 수 없습니다");
-            return;
-          }
-          const res = await fetch("/api/crm/centers/me", {
-            method: "DELETE",
-            headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-            body: JSON.stringify(identity),
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            alert(data?.error || "탈퇴 실패");
-            return;
-          }
-          router.replace("/crm");
-        }}
-      />
-
-      <TransferModal
-        open={transferOpen}
-        centerName={info?.centerName ?? ""}
-        businessNo={info?.businessNo ?? null}
-        onClose={() => setTransferOpen(false)}
-        onTransferred={(newOwnerName) => {
-          setTransferOpen(false);
-          alert(`${newOwnerName} 님께 센터 운영권을 양도했습니다. 본인은 관리자로 강등되었어요.`);
-          router.replace("/crm/dashboard");
-        }}
-      />
+      {/* 센터 탈퇴 / 양도 는 위험 작업이라 UI 에서 숨김.
+          수정이 필요하면 관리자에게 문의. WithdrawModal/TransferModal 컴포넌트 정의는 유지. */}
     </div>
   );
 }
@@ -2218,27 +2165,130 @@ function NoticesPanel() {
 function TabBtn({
   active,
   onClick,
-  children,
+  label,
+  desc,
+  icon,
   danger,
 }: {
   active: boolean;
   onClick: () => void;
-  children: React.ReactNode;
+  label: string;
+  desc: string;
+  icon: (typeof SETTINGS_TABS)[number]["icon"];
   danger?: boolean;
 }) {
-  const activeColor = danger
-    ? "border-red-500 text-red-600 dark:text-red-400"
-    : "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A]";
-  const inactiveColor = danger
-    ? "border-transparent text-red-500/70 hover:text-red-600 dark:text-red-400/70 dark:hover:text-red-300"
-    : "border-transparent text-[#8C8270] dark:text-zinc-500 hover:text-[#3A342A] dark:hover:text-zinc-300";
+  const activeCls = danger
+    ? "border-red-300 bg-red-50 text-red-700 shadow-sm dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-300"
+    : "border-[#6B7B3A]/45 bg-[#F6F1E7] text-[#2F3A2B] shadow-sm dark:border-[#A8B87A]/40 dark:bg-[#A8B87A]/10 dark:text-[#DCE7B9]";
+  const inactiveCls = danger
+    ? "border-transparent text-red-500/80 hover:border-red-200 hover:bg-red-50/60 dark:text-red-400/80 dark:hover:border-red-900/70 dark:hover:bg-red-950/20"
+    : "border-transparent text-[#6B5D47] hover:border-[#E4D9C6] hover:bg-[#FAF6EE] dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/70";
+  const iconCls = active
+    ? danger
+      ? "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300"
+      : "bg-[#2F3A2B] text-white dark:bg-[#A8B87A] dark:text-zinc-950"
+    : danger
+    ? "bg-red-50 text-red-500 dark:bg-red-950/30 dark:text-red-400"
+    : "bg-[#EFE7D5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-500";
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-2 -mb-px text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap ${active ? activeColor : inactiveColor}`}
+      className={`group flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-all ${active ? activeCls : inactiveCls}`}
     >
-      {children}
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${iconCls}`}>
+        <SettingsTabIcon kind={icon} className="h-4 w-4" />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-[13px] font-bold">{label}</span>
+        <span className={`mt-0.5 block truncate text-[11px] ${active ? "opacity-70" : "text-[#A89B80] dark:text-zinc-600"}`}>
+          {desc}
+        </span>
+      </span>
     </button>
+  );
+}
+
+function SettingsTabIcon({
+  kind,
+  className,
+}: {
+  kind: (typeof SETTINGS_TABS)[number]["icon"];
+  className?: string;
+}) {
+  const common = {
+    className,
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    viewBox: "0 0 24 24",
+  };
+  if (kind === "calendar") {
+    return (
+      <svg {...common}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3M5 11h14M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
+      </svg>
+    );
+  }
+  if (kind === "bell") {
+    return (
+      <svg {...common}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 01-6 0" />
+      </svg>
+    );
+  }
+  if (kind === "notice") {
+    return (
+      <svg {...common}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h10M4 18h16" />
+      </svg>
+    );
+  }
+  if (kind === "point") {
+    return (
+      <svg {...common}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-2.2 0-4 1.3-4 3s1.8 3 4 3 4 1.3 4 3-1.8 3-4 3m0-12V5m0 15v-3" />
+      </svg>
+    );
+  }
+  if (kind === "badge") {
+    return (
+      <svg {...common}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l3 5 6 1-4 4 1 6-6-3-6 3 1-6-4-4 6-1 3-5z" />
+      </svg>
+    );
+  }
+  if (kind === "shield") {
+    return (
+      <svg {...common}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z" />
+      </svg>
+    );
+  }
+  if (kind === "card") {
+    return (
+      <svg {...common}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18v10H3V7zm0 3h18M7 15h4" />
+      </svg>
+    );
+  }
+  if (kind === "vendor") {
+    return (
+      <svg {...common}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 10h16l-2-5H6l-2 5zm1 0v9h14v-9M9 19v-5h6v5" />
+      </svg>
+    );
+  }
+  if (kind === "danger") {
+    return (
+      <svg {...common}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 4.3L2.8 18a2 2 0 001.7 3h15a2 2 0 001.7-3L13.7 4.3a2 2 0 00-3.4 0z" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 5h12M6 12h12M6 19h12" />
+    </svg>
   );
 }
 

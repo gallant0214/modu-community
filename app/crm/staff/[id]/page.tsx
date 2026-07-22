@@ -377,7 +377,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-/* ─── 본인 확인 정보 (센터 탈퇴·양도 방지용) ─────────── */
+/* ─── 생년월일 (본인 확인 정보) ─────────── */
 function IdentitySection({
   member,
   saving,
@@ -387,42 +387,18 @@ function IdentitySection({
   saving: boolean;
   onSave: (p: Record<string, unknown>) => void;
 }) {
-  const isOwner = member.role === "owner";
   const [birth, setBirth] = useState(member.birth ?? "");
-  const [resident, setResident] = useState("");
-  const [editingResident, setEditingResident] = useState(false);
 
   useEffect(() => {
     setBirth(member.birth ?? "");
   }, [member.birth]);
 
-  // 등록된 주민번호 마스킹 표시: 생년월일(YYMMDD)-*******
-  const maskedResident = (() => {
-    if (!member.has_resident) return null;
-    const d = (member.birth ?? "").replace(/[^0-9]/g, "");
-    const yymmdd = d.length >= 8 ? d.slice(2, 8) : d.slice(0, 6);
-    return `${yymmdd || "******"}-*******`;
-  })();
-
   const saveBirth = () => onSave({ birth: birth.trim() || null });
-  const saveResident = () => {
-    const digits = resident.replace(/[^0-9]/g, "");
-    if (digits.length !== 13) return;
-    onSave({ resident_no: digits });
-    setResident("");
-    setEditingResident(false);
-  };
 
   return (
-    <Section title="본인 확인 정보">
-      <p className="text-[12px] text-[#A89B80] mb-3 leading-relaxed">
-        센터 <strong>탈퇴·양도를 방지</strong>하기 위한 본인 확인용 정보예요. 대표자의 주민번호가 등록돼 있어야
-        탈퇴·양도 시 본인 확인을 통과할 수 있어요. 입력 후 주민번호 <strong>뒷자리는 안전하게 가려집니다</strong>(해시로만 보관).
-      </p>
-
+    <Section title="생년월일">
       <div className="space-y-3">
         <div>
-          <div className="text-[12.5px] text-[#A89B80] mb-1.5">생년월일</div>
           <div className="flex items-center gap-2">
             <input
               type="date"
@@ -441,60 +417,6 @@ function IdentitySection({
             )}
           </div>
         </div>
-
-        {isOwner && (
-          <div>
-            <div className="text-[12.5px] text-[#A89B80] mb-1.5">
-              주민등록번호 <span className="text-[#B47B2A]">(대표자 · 탈퇴/양도 확인용)</span>
-            </div>
-            {maskedResident && !editingResident ? (
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 text-[14px] font-medium text-[#3A342A] dark:text-zinc-200 tabular-nums">
-                  {maskedResident}
-                </span>
-                <button
-                  onClick={() => setEditingResident(true)}
-                  className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-                >
-                  변경
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 max-w-[220px] tracking-wider"
-                  value={resident}
-                  onChange={(e) => setResident(e.target.value.replace(/[^0-9]/g, "").slice(0, 13))}
-                  placeholder="숫자 13자리"
-                  maxLength={13}
-                />
-                <button
-                  onClick={saveResident}
-                  disabled={saving || resident.replace(/[^0-9]/g, "").length !== 13}
-                  className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
-                >
-                  저장
-                </button>
-                {maskedResident && (
-                  <button
-                    onClick={() => {
-                      setEditingResident(false);
-                      setResident("");
-                    }}
-                    className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#6B5D47] dark:text-zinc-300"
-                  >
-                    취소
-                  </button>
-                )}
-              </div>
-            )}
-            <p className="mt-1.5 text-[11px] text-[#A89B80]">
-              저장하면 원본은 저장되지 않고 안전하게 암호화(해시)돼요. 뒷 7자리는 화면에 표시되지 않습니다.
-            </p>
-          </div>
-        )}
       </div>
     </Section>
   );
