@@ -164,17 +164,17 @@ export function ProductDetailModal({ product, typeLabel, onClose, onEdit, onDele
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] font-medium text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
-            >
-              닫기
-            </button>
-            <button
-              type="button"
               onClick={onEdit}
               className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932]"
             >
               수정
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] font-medium text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+            >
+              닫기
             </button>
           </div>
         </div>
