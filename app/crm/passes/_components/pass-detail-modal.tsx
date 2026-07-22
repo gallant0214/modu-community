@@ -153,6 +153,9 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
 
   const staffName = pass ? staff.find((s) => s.id === pass.trainer_member_id)?.display_name ?? "—" : "—";
   const activeStaff = staff.filter((s) => s.status === "active" || s.id === pass?.trainer_member_id);
+  const remainingPct = pass
+    ? Math.max(0, Math.min(100, (Number(pass.remaining_sessions || 0) / Math.max(1, Number(pass.total_sessions || 0))) * 100))
+    : 0;
 
   return (
     <CrmModal open={!!passId} onClose={onClose} title={editMode ? "수강권 수정" : "수강권 상세"} size="lg">
@@ -166,113 +169,151 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
             <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">{error}</div>
           )}
 
-          {/* 요약 */}
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="px-2 py-0.5 rounded-full text-[11.5px] font-semibold bg-[#6B7B3A]/15 text-[#6B7B3A] border border-[#6B7B3A]/30">
-              {ISSUE_TYPE_LABEL[pass.issue_type] ?? pass.issue_type}
-            </span>
-            <StatusChip status={pass.status} />
-            {member && (
-              <span className="text-[13px] text-[#3A342A] dark:text-zinc-200">
-                <span className="font-semibold">{member.name}</span>
-                <span className="ml-2 text-[#8C8270]">{member.phone ? formatPhone(member.phone) : ""}</span>
-              </span>
-            )}
-          </div>
+          <section className="rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/75 dark:bg-zinc-900 px-4 py-3.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2 py-0.5 rounded-md text-[11.5px] font-bold bg-[#EFF5E2] text-[#4D622C] border border-[#DDE8C5]">
+                    {ISSUE_TYPE_LABEL[pass.issue_type] ?? pass.issue_type}
+                  </span>
+                  <StatusChip status={pass.status} />
+                </div>
+                <h3 className="mt-2 text-[19px] font-bold text-[#241F18] dark:text-zinc-100 truncate">
+                  {pass.lesson_kind || "수강권"}
+                </h3>
+                {member && (
+                  <div className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400 truncate">
+                    <span className="font-semibold text-[#2A251D] dark:text-zinc-200">{member.name}</span>
+                    {member.phone && <span className="ml-2">{formatPhone(member.phone)}</span>}
+                  </div>
+                )}
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">담당 강사</div>
+                <div className="mt-1 text-[14px] font-bold text-[#2F3A2B] dark:text-[#A8B87A]">{staffName}</div>
+              </div>
+            </div>
 
-          {/* 필드 그리드 */}
-          <div className="grid grid-cols-2 gap-3">
-            <ModalField label="수강권">
-              {editMode ? (
-                <input value={lessonKind} onChange={(e) => setLessonKind(e.target.value)} className={crmInputClass} />
-              ) : (
-                pass.lesson_kind || "—"
-              )}
-            </ModalField>
-            <ModalField label="담당 강사">
-              {editMode ? (
-                <select value={trainerMemberId} onChange={(e) => setTrainerMemberId(Number(e.target.value))} className={crmInputClass}>
-                  <option value={0}>선택</option>
-                  {activeStaff.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.display_name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                staffName
-              )}
-            </ModalField>
-            <ModalField label="총 세션">
-              {editMode ? (
-                <input type="number" min={0} value={totalSessions} onChange={(e) => setTotalSessions(Number(e.target.value))} className={crmInputClass} />
-              ) : (
-                `${pass.total_sessions}회`
-              )}
-            </ModalField>
-            <ModalField label="잔여 세션">
-              {editMode ? (
-                <input type="number" min={0} value={remainingSessions} onChange={(e) => setRemainingSessions(Number(e.target.value))} className={crmInputClass} />
-              ) : (
-                `${pass.remaining_sessions} / ${pass.total_sessions}`
-              )}
-            </ModalField>
-            <ModalField label="회당 시간">
-              {editMode ? (
-                <input type="number" min={0} value={sessionMinutes} onChange={(e) => setSessionMinutes(Number(e.target.value))} className={crmInputClass} />
-              ) : (
-                `${pass.session_minutes}분`
-              )}
-            </ModalField>
-            <ModalField label="금액">
-              {editMode ? (
-                <input type="number" min={0} value={priceWon} onChange={(e) => setPriceWon(Number(e.target.value))} className={crmInputClass} />
-              ) : (
-                <span>
-                  {formatWon(pass.price_won)}원
-                  {pass.vat_included && <span className="ml-1 text-[11.5px] text-[#A89B80]">부가세 포함</span>}
-                </span>
-              )}
-            </ModalField>
-            <ModalField label="결제 수단">
-              {editMode ? (
-                <div className="space-y-1">
-                  <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className={crmInputClass}>
-                    {Object.entries(PAYMENT_METHOD_LABEL).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <SummaryTile label="잔여 세션" value={`${pass.remaining_sessions}회`} hint={`총 ${pass.total_sessions}회`} tone={pass.remaining_sessions <= 2 ? "red" : "green"} />
+              <SummaryTile label="결제 금액" value={`${formatWon(pass.price_won)}원`} hint={pass.vat_included ? "부가세 포함" : "부가세 별도"} tone="dark" />
+              <SummaryTile label="만료일" value={pass.expires_at === "9999-12-31" ? "무기한" : pass.expires_at} hint={pass.expires_at === "9999-12-31" ? "" : expiryLabel(pass.expires_at, pass.status)} tone={pass.expires_at !== "9999-12-31" && daysUntil(pass.expires_at) <= 7 ? "gold" : "blue"} />
+            </div>
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+                <span>수강 가능 잔여율</span>
+                <span>{Math.round(remainingPct)}%</span>
+              </div>
+              <div className="mt-1.5 h-2 rounded-full bg-[#ECE3D2] dark:bg-zinc-800 overflow-hidden">
+                <div className="h-full rounded-full bg-[#6B7B3A]" style={{ width: `${remainingPct}%` }} />
+              </div>
+            </div>
+          </section>
+
+          <SectionTitle title={editMode ? "수정 정보" : "상세 정보"} />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <InfoPanel title="이용 정보">
+              <ModalField label="수강권">
+                {editMode ? (
+                  <input value={lessonKind} onChange={(e) => setLessonKind(e.target.value)} className={crmInputClass} />
+                ) : (
+                  pass.lesson_kind || "—"
+                )}
+              </ModalField>
+              <ModalField label="담당 강사">
+                {editMode ? (
+                  <select value={trainerMemberId} onChange={(e) => setTrainerMemberId(Number(e.target.value))} className={crmInputClass}>
+                    <option value={0}>선택</option>
+                    {activeStaff.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.display_name}
+                      </option>
                     ))}
                   </select>
-                  {paymentMethod === "etc" && (
-                    <input value={paymentMethodCustom} onChange={(e) => setPaymentMethodCustom(e.target.value)} className={crmInputClass} placeholder="결제 수단 직접 입력" />
+                ) : (
+                  staffName
+                )}
+              </ModalField>
+              <div className="grid grid-cols-2 gap-3">
+                <ModalField label="총 세션">
+                  {editMode ? (
+                    <input type="number" min={0} value={totalSessions} onChange={(e) => setTotalSessions(Number(e.target.value))} className={crmInputClass} />
+                  ) : (
+                    `${pass.total_sessions}회`
                   )}
-                </div>
-              ) : pass.payment_method === "etc" && pass.payment_method_custom ? (
-                pass.payment_method_custom
-              ) : (
-                PAYMENT_METHOD_LABEL[pass.payment_method] ?? pass.payment_method
-              )}
-            </ModalField>
-            <ModalField label="구매일">{pass.issued_at}</ModalField>
-            <ModalField label="만료일">
-              {editMode ? (
-                <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className={crmInputClass} />
-              ) : (
-                pass.expires_at
-              )}
-            </ModalField>
+                </ModalField>
+                <ModalField label="잔여 세션">
+                  {editMode ? (
+                    <input type="number" min={0} value={remainingSessions} onChange={(e) => setRemainingSessions(Number(e.target.value))} className={crmInputClass} />
+                  ) : (
+                    `${pass.remaining_sessions} / ${pass.total_sessions}`
+                  )}
+                </ModalField>
+              </div>
+              <ModalField label="회당 시간">
+                {editMode ? (
+                  <input type="number" min={0} value={sessionMinutes} onChange={(e) => setSessionMinutes(Number(e.target.value))} className={crmInputClass} />
+                ) : (
+                  `${pass.session_minutes}분`
+                )}
+              </ModalField>
+            </InfoPanel>
+
+            <InfoPanel title="결제 및 만료">
+              <ModalField label="금액">
+                {editMode ? (
+                  <input type="number" min={0} value={priceWon} onChange={(e) => setPriceWon(Number(e.target.value))} className={crmInputClass} />
+                ) : (
+                  <span>
+                    {formatWon(pass.price_won)}원
+                    {pass.vat_included && <span className="ml-1 text-[11.5px] text-[#A89B80]">부가세 포함</span>}
+                  </span>
+                )}
+              </ModalField>
+              <ModalField label="결제 수단">
+                {editMode ? (
+                  <div className="space-y-1">
+                    <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className={crmInputClass}>
+                      {Object.entries(PAYMENT_METHOD_LABEL).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </select>
+                    {paymentMethod === "etc" && (
+                      <input value={paymentMethodCustom} onChange={(e) => setPaymentMethodCustom(e.target.value)} className={crmInputClass} placeholder="결제 수단 직접 입력" />
+                    )}
+                  </div>
+                ) : pass.payment_method === "etc" && pass.payment_method_custom ? (
+                  pass.payment_method_custom
+                ) : (
+                  PAYMENT_METHOD_LABEL[pass.payment_method] ?? pass.payment_method
+                )}
+              </ModalField>
+              <ModalField label="구매일">{pass.issued_at}</ModalField>
+              <ModalField label="만료일">
+                {editMode ? (
+                  <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className={crmInputClass} />
+                ) : (
+                  <span className="inline-flex items-center gap-2">
+                    {pass.expires_at === "9999-12-31" ? "무기한" : pass.expires_at}
+                    {pass.expires_at !== "9999-12-31" && (
+                      <ExpiryBadge expiresAt={pass.expires_at} status={pass.status} />
+                    )}
+                  </span>
+                )}
+              </ModalField>
+            </InfoPanel>
           </div>
 
-          {/* 메모 */}
-          <div>
-            <div className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-0.5">메모</div>
+          <InfoPanel title="메모">
             {editMode ? (
               <textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={3} className={crmInputClass} />
             ) : (
-              <div className="whitespace-pre-wrap text-[13.5px] text-[#3A342A] dark:text-zinc-200 border border-[#E8E0D0] dark:border-zinc-800 rounded-lg px-3 py-2 bg-[#FEFCF7] dark:bg-zinc-900 min-h-[40px]">
+              <div className="whitespace-pre-wrap text-[13.5px] text-[#3A342A] dark:text-zinc-200 min-h-[40px]">
                 {pass.memo || <span className="text-[#A89B80]">—</span>}
               </div>
             )}
-          </div>
+          </InfoPanel>
 
           {/* 액션 */}
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8E0D0] dark:border-zinc-800">
@@ -324,11 +365,93 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
 
 function ModalField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <div className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-0.5">{label}</div>
-      <div className="text-[14px] font-medium text-[#2A251D] dark:text-zinc-100">{children}</div>
+    <div className="min-w-0">
+      <div className="text-[11.5px] font-semibold text-[#8C8270] dark:text-zinc-500 mb-1">{label}</div>
+      <div className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 min-w-0">{children}</div>
     </div>
   );
+}
+
+function SectionTitle({ title }: { title: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-px flex-1 bg-[#E8E0D0] dark:bg-zinc-800" />
+      <div className="text-[11px] font-bold text-[#8C8270] dark:text-zinc-500">{title}</div>
+      <div className="h-px flex-1 bg-[#E8E0D0] dark:bg-zinc-800" />
+    </div>
+  );
+}
+
+function InfoPanel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950/40 px-4 py-3">
+      <h4 className="mb-3 text-[12.5px] font-bold text-[#6B5D47] dark:text-zinc-300">{title}</h4>
+      <div className="space-y-3">{children}</div>
+    </section>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  hint,
+  tone = "green",
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  tone?: "green" | "blue" | "gold" | "dark" | "red";
+}) {
+  const cls =
+    tone === "blue"
+      ? "bg-[#EFF7F8] text-[#315F7A] border-[#D7E7EA]"
+      : tone === "gold"
+      ? "bg-[#FFF8E6] text-[#826424] border-[#EAD9AA]"
+      : tone === "dark"
+      ? "bg-[#F4F1EA] text-[#2A251D] border-[#DDD3C2]"
+      : tone === "red"
+      ? "bg-red-50 text-red-700 border-red-100"
+      : "bg-[#F3F7EA] text-[#3E5D2D] border-[#DDE8C5]";
+
+  return (
+    <div className={`rounded-lg border px-3 py-2.5 min-w-0 ${cls} dark:bg-zinc-950 dark:border-zinc-800`}>
+      <div className="text-[10.5px] font-bold opacity-70 whitespace-nowrap">{label}</div>
+      <div className="mt-1 text-[15px] font-bold tracking-normal truncate">{value}</div>
+      <div className="mt-0.5 text-[11px] opacity-70 truncate">{hint}</div>
+    </div>
+  );
+}
+
+function ExpiryBadge({ expiresAt, status }: { expiresAt: string; status: string }) {
+  const urgent = status === "valid" && daysUntil(expiresAt) <= 7;
+  return (
+    <span
+      className={`px-1.5 py-0.5 rounded-md text-[10.5px] font-bold ${
+        urgent
+          ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+          : "bg-[#F5F0E5] text-[#7A6B51] dark:bg-zinc-800 dark:text-zinc-400"
+      }`}
+    >
+      {expiryLabel(expiresAt, status)}
+    </span>
+  );
+}
+
+function expiryLabel(expiresAt: string, status: string) {
+  if (expiresAt === "9999-12-31") return "무기한";
+  const dDay = daysUntil(expiresAt);
+  if (status !== "valid") return "종료";
+  if (dDay < 0) return "만료";
+  if (dDay === 0) return "오늘";
+  return `D-${dDay}`;
+}
+
+function daysUntil(ymd: string) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(`${ymd}T00:00:00`);
+  target.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / 86400000);
 }
 
 function StatusChip({ status }: { status: string }) {
@@ -339,5 +462,5 @@ function StatusChip({ status }: { status: string }) {
       : status === "expired"
       ? "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500"
       : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
-  return <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${cls}`}>{label}</span>;
+  return <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${cls}`}>{label}</span>;
 }
