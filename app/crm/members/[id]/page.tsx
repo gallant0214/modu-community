@@ -264,54 +264,58 @@ export default function CrmMemberDetailPage() {
       <BackLink />
 
       <header className="mt-3 mb-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-white/75 dark:bg-zinc-900 px-4 py-4 md:px-5 md:py-5 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-          <div className="min-w-0 flex items-start gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-stretch gap-4">
+          {/* 사진 + 이름 + 연락처 */}
+          <div className="min-w-0 flex items-start gap-3 lg:shrink-0">
             <FacePhotoUpload
               memberId={member.id}
               current={member.face_image_data}
               canEdit={canEditBasic}
               onSaved={load}
             />
-            <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-[24px] md:text-[28px] leading-tight font-bold text-[#2A251D] dark:text-zinc-100">
-                {member.name}
-              </h1>
-              <span className="px-2 py-1 rounded-full bg-[#6B7B3A]/10 text-[11.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">
-                {MEMBER_TYPE_LABEL[member.member_type] ?? member.member_type}
-              </span>
-              <span className={`px-2 py-1 rounded-full text-[11.5px] font-semibold ${
-                isMemberActive(member)
-                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-                  : "bg-[#F5F0E5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-400"
-              }`}>
-                {isMemberActive(member) ? "이용중" : "확인 필요"}
-              </span>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-              <span>{member.phone ? formatPhone(member.phone) : "연락처 없음"}</span>
-              {member.email && <span>{member.email}</span>}
-              {member.attendance_no && <span>출석번호 {member.attendance_no}</span>}
-            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-[22px] md:text-[26px] leading-tight font-bold text-[#2A251D] dark:text-zinc-100">
+                  {member.name}
+                </h1>
+                <span className="px-2 py-1 rounded-full bg-[#6B7B3A]/10 text-[11.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">
+                  {MEMBER_TYPE_LABEL[member.member_type] ?? member.member_type}
+                </span>
+                <span className={`px-2 py-1 rounded-full text-[11.5px] font-semibold ${
+                  isMemberActive(member)
+                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                    : "bg-[#F5F0E5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-400"
+                }`}>
+                  {isMemberActive(member) ? "이용중" : "확인 필요"}
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+                <span>{member.phone ? formatPhone(member.phone) : "연락처 없음"}</span>
+                {member.email && <span>{member.email}</span>}
+                {member.attendance_no && <span>출석번호 {member.attendance_no}</span>}
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {canDelete && (
-              <button
-                onClick={remove}
-                className="px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900 text-[12.5px] text-red-700 dark:text-red-300 hover:bg-red-50"
-              >
-                회원 삭제
-              </button>
-            )}
-          </div>
-        </div>
 
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
-          <SummaryMetric label="최종 만료" value={member.final_expire_at ?? "—"} hint={expireHint(member.final_expire_at)} tone={expireTone(member.final_expire_at)} />
-          <SummaryMetric label="누적 결제" value={`${formatWon(member.total_paid_won)}원`} hint={member.last_purchase_at ? `최근 ${member.last_purchase_at}` : "결제 기록 없음"} tone="money" />
-          <SummaryMetric label="마지막 출석" value={member.last_attended_at ?? "—"} hint={attendanceHint(member.last_attended_at)} />
-          <SummaryMetric label="보유 상품" value={`${currentHoldings}종`} hint={member.current_pass || member.current_membership ? "보유 내역 있음" : "보유 내역 없음"} />
+          {/* 요약 통계 — 사진/이름 옆 남는 공간 채움 */}
+          <div className="flex-1 min-w-0 flex flex-col gap-2">
+            {canDelete && (
+              <div className="flex justify-end">
+                <button
+                  onClick={remove}
+                  className="px-3 py-1 rounded-lg border border-red-200 dark:border-red-900 text-[12px] text-red-700 dark:text-red-300 hover:bg-red-50"
+                >
+                  회원 삭제
+                </button>
+              </div>
+            )}
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 h-full">
+              <SummaryMetric label="최종 만료" value={member.final_expire_at ?? "—"} hint={expireHint(member.final_expire_at)} tone={expireTone(member.final_expire_at)} />
+              <SummaryMetric label="누적 결제" value={`${formatWon(member.total_paid_won)}원`} hint={member.last_purchase_at ? `최근 ${member.last_purchase_at}` : "결제 기록 없음"} tone="money" />
+              <SummaryMetric label="마지막 출석" value={member.last_attended_at ?? "—"} hint={attendanceHint(member.last_attended_at)} />
+              <SummaryMetric label="보유 상품" value={`${currentHoldings}종`} hint={member.current_pass || member.current_membership ? "보유 내역 있음" : "보유 내역 없음"} />
+            </div>
+          </div>
         </div>
       </header>
 
