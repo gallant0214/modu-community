@@ -69,6 +69,7 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
   const [remainingSessions, setRemainingSessions] = useState<number>(0);
   const [sessionMinutes, setSessionMinutes] = useState<number>(0);
   const [priceWon, setPriceWon] = useState<number>(0);
+  const [vatIncluded, setVatIncluded] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentMethodCustom, setPaymentMethodCustom] = useState("");
   const [trainerMemberId, setTrainerMemberId] = useState<number>(0);
@@ -99,6 +100,7 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
       setRemainingSessions(p.remaining_sessions ?? 0);
       setSessionMinutes(p.session_minutes ?? 0);
       setPriceWon(p.price_won ?? 0);
+      setVatIncluded(!!p.vat_included);
       setPaymentMethod(p.payment_method ?? "cash");
       setPaymentMethodCustom(p.payment_method_custom ?? "");
       setTrainerMemberId(p.trainer_member_id ?? 0);
@@ -133,6 +135,7 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
         remaining_sessions: remainingSessions,
         session_minutes: sessionMinutes,
         price_won: priceWon,
+        vat_included: vatIncluded,
         payment_method: paymentMethod,
         payment_method_custom: paymentMethod === "etc" ? paymentMethodCustom.trim() || null : null,
         trainer_member_id: trainerMemberId || undefined,
@@ -309,14 +312,25 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
             <InfoPanel title="결제 및 만료">
               <ModalField label="금액">
                 {editMode ? (
-                  <div className="relative">
-                    <input
-                      inputMode="numeric"
-                      value={priceWon ? formatWon(priceWon) : ""}
-                      onChange={(e) => setPriceWon(parseWon(e.target.value))}
-                      className={`${crmInputClass} pr-9`}
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] text-[#A89B80]">원</span>
+                  <div className="space-y-1.5">
+                    <div className="relative">
+                      <input
+                        inputMode="numeric"
+                        value={priceWon ? formatWon(priceWon) : ""}
+                        onChange={(e) => setPriceWon(parseWon(e.target.value))}
+                        className={`${crmInputClass} pr-9`}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] text-[#A89B80]">원</span>
+                    </div>
+                    <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={vatIncluded}
+                        onChange={(e) => setVatIncluded(e.target.checked)}
+                        className="w-4 h-4 accent-[#6B7B3A]"
+                      />
+                      <span className="text-[12.5px] text-[#3A342A] dark:text-zinc-300">부가세 포함 금액</span>
+                    </label>
                   </div>
                 ) : (
                   <span>
@@ -331,12 +345,13 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
                 {(() => {
                   const price = editMode ? priceWon : pass.price_won;
                   const sessions = editMode ? totalSessions : pass.total_sessions;
+                  const vat = editMode ? vatIncluded : pass.vat_included;
                   const per = sessions > 0 ? Math.round(price / sessions) : price;
                   return (
                     <span>
                       {formatWon(per)}원
                       <span className="ml-1 text-[11.5px] text-[#A89B80]">
-                        {pass.vat_included ? "부가세 포함" : "부가세 별도"}
+                        {vat ? "부가세 포함" : "부가세 별도"}
                       </span>
                     </span>
                   );

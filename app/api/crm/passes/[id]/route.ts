@@ -96,6 +96,7 @@ export async function PATCH(
     memo?: string;
     expires_at?: string;
     price_won?: number;
+    vat_included?: boolean;
     payment_method?: string;
     payment_method_custom?: string;
     trainer_member_id?: number;
@@ -116,6 +117,7 @@ export async function PATCH(
   if (body.memo !== undefined) patch.memo = body.memo?.trim() || null;
   if (body.expires_at) patch.expires_at = body.expires_at;
   if (body.price_won !== undefined && body.price_won >= 0) patch.price_won = body.price_won;
+  if (body.vat_included !== undefined) patch.vat_included = !!body.vat_included;
   if (body.payment_method) {
     patch.payment_method = body.payment_method;
     if (body.payment_method === "etc") {
