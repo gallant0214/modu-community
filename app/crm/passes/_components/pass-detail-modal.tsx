@@ -71,8 +71,11 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentMethodCustom, setPaymentMethodCustom] = useState("");
   const [trainerMemberId, setTrainerMemberId] = useState<number>(0);
+  const [coTrainerIds, setCoTrainerIds] = useState<number[]>([]);
+  const [sellerMemberId, setSellerMemberId] = useState<number>(0);
   const [expiresAt, setExpiresAt] = useState("");
   const [memo, setMemo] = useState("");
+  const [coTrainers, setCoTrainers] = useState<{ id: number; name: string }[]>([]);
 
   useEffect(() => {
     if (!passId) return;
@@ -90,6 +93,7 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
         if (!res.ok) throw new Error(data.error || "조회 실패");
         setPass(data.pass);
         setMember(data.member);
+        setCoTrainers(data.co_trainers ?? []);
         // 편집 필드 초기화
         const p: PassDetail = data.pass;
         setLessonKind(p.lesson_kind ?? "");
@@ -100,6 +104,12 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
         setPaymentMethod(p.payment_method ?? "cash");
         setPaymentMethodCustom(p.payment_method_custom ?? "");
         setTrainerMemberId(p.trainer_member_id ?? 0);
+        setCoTrainerIds(
+          (data.co_trainers ?? []).map((c: { id: number }) => c.id).length
+            ? (data.co_trainers ?? []).map((c: { id: number }) => c.id)
+            : p.co_trainer_ids ?? []
+        );
+        setSellerMemberId(p.seller_member_id ?? 0);
         setExpiresAt(p.expires_at ?? "");
         setMemo(p.memo ?? "");
       } catch (e) {
@@ -128,6 +138,8 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
         payment_method: paymentMethod,
         payment_method_custom: paymentMethod === "etc" ? paymentMethodCustom.trim() || null : null,
         trainer_member_id: trainerMemberId || undefined,
+        co_trainer_ids: coTrainerIds,
+        seller_member_id: sellerMemberId || undefined,
         expires_at: expiresAt || undefined,
         memo: memo.trim() || null,
       };
@@ -153,6 +165,13 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
 
   const staffName = pass ? staff.find((s) => s.id === pass.trainer_member_id)?.display_name ?? "—" : "—";
   const activeStaff = staff.filter((s) => s.status === "active" || s.id === pass?.trainer_member_id);
+  const sellerName = pass
+    ? staff.find((s) => s.id === pass.seller_member_id)?.display_name ?? "—"
+    : "—";
+  const coTrainerNames = coTrainers
+    .map((c) => c.name || staff.find((s) => s.id === c.id)?.display_name || "")
+    .filter(Boolean)
+    .join(", ");
   const remainingPct = pass
     ? Math.max(0, Math.min(100, (Number(pass.remaining_sessions || 0) / Math.max(1, Number(pass.total_sessions || 0))) * 100))
     : 0;
@@ -233,6 +252,32 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
                   </select>
                 ) : (
                   staffName
+                )}
+              </ModalField>
+              <ModalField label="추가 강사">
+                {editMode ? (
+                  <CoTrainerPicker
+                    staffList={staff}
+                    primaryId={trainerMemberId || ""}
+                    value={coTrainerIds}
+                    onChange={setCoTrainerIds}
+                  />
+                ) : (
+                  coTrainerNames || "—"
+                )}
+              </ModalField>
+              <ModalField label="판매자">
+                {editMode ? (
+                  <select value={sellerMemberId} onChange={(e) => setSellerMemberId(Number(e.target.value))} className={crmInputClass}>
+                    <option value={0}>선택</option>
+                    {activeStaff.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.display_name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  sellerName
                 )}
               </ModalField>
               <div className="grid grid-cols-2 gap-3">
@@ -434,6 +479,66 @@ function ExpiryBadge({ expiresAt, status }: { expiresAt: string; status: string 
     >
       {expiryLabel(expiresAt, status)}
     </span>
+  );
+}
+
+/** 추가 강사(공동 진행) 다중 선택 — 칩 + 드롭다운으로 추가/삭제 */
+function CoTrainerPicker({
+  staffList,
+  primaryId,
+  value,
+  onChange,
+}: {
+  staffList: { id: number; display_name: string; role: string; status: string }[];
+  primaryId: number | "";
+  value: number[];
+  onChange: (ids: number[]) => void;
+}) {
+  const nameOf = (id: number) => staffList.find((s) => s.id === id)?.display_name ?? `#${id}`;
+  const selectable = staffList.filter(
+    (s) => s.status === "active" && s.id !== primaryId && !value.includes(s.id)
+  );
+  return (
+    <div>
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {value.map((id) => (
+            <span
+              key={id}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[#6B7B3A]/12 text-[#4d5a28] dark:text-[#A8B87A] text-[12px]"
+            >
+              {nameOf(id)}
+              <button
+                type="button"
+                onClick={() => onChange(value.filter((v) => v !== id))}
+                className="text-[#8C8270] hover:text-red-600"
+                title="제거"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <select
+        value=""
+        onChange={(e) => {
+          const id = Number(e.target.value);
+          if (id) onChange([...value, id]);
+        }}
+        className={crmInputClass}
+        disabled={selectable.length === 0}
+      >
+        <option value="">
+          {selectable.length === 0 ? "추가할 강사 없음" : "+ 추가 강사 선택"}
+        </option>
+        {selectable.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.display_name} ({s.role})
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 
