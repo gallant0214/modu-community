@@ -671,7 +671,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       const c: CenterProfile = data.center;
       setProfile(c);
       setName(c.name ?? "");
-      setPhone(c.phone ?? "");
+      setPhone(formatPhone(c.phone ?? ""));
       setAddress(c.address ?? "");
       setNaverUrl(c.naver_url ?? "");
       setGoogleUrl(c.google_url ?? "");
@@ -691,7 +691,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
   const dirty =
     !!profile &&
     (name !== (profile.name ?? "") ||
-      phone !== (profile.phone ?? "") ||
+      phone !== formatPhone(profile.phone ?? "") ||
       address !== (profile.address ?? "") ||
       naverUrl !== (profile.naver_url ?? "") ||
       googleUrl !== (profile.google_url ?? "") ||
@@ -744,7 +744,14 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <ProfileField label="센터명" value={name} onChange={setName} disabled={!canEdit} placeholder="예: 모두짐 강남점" />
-          <ProfileField label="센터 전화번호" value={phone} onChange={setPhone} disabled={!canEdit} placeholder="02-1234-5678" />
+          <ProfileField
+            label="센터 전화번호"
+            value={phone}
+            onChange={(v) => setPhone(formatPhone(v))}
+            disabled={!canEdit}
+            placeholder="02-1234-5678"
+            inputMode="numeric"
+          />
           <div className="md:col-span-2">
             <ProfileField label="센터 주소" value={address} onChange={setAddress} disabled={!canEdit} placeholder="서울시 강남구 테헤란로 1길 1, 3층" />
           </div>
@@ -780,6 +787,7 @@ function ProfileField({
   placeholder,
   disabled,
   type = "text",
+  inputMode,
 }: {
   label: string;
   value: string;
@@ -787,12 +795,14 @@ function ProfileField({
   placeholder?: string;
   disabled?: boolean;
   type?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
 }) {
   return (
     <div>
       <div className="text-[12.5px] text-[#A89B80] mb-1.5">{label}</div>
       <input
         type={type}
+        inputMode={inputMode}
         className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A] disabled:opacity-60"
         value={value}
         onChange={(e) => onChange(e.target.value)}
