@@ -4,7 +4,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 
 export const dynamic = "force-dynamic";
 
-const BASE_ROLES = ["owner", "admin", "manager", "trainer"] as const;
+const BASE_ROLES = ["owner", "admin", "manager", "trainer", "fc", "alba"] as const;
 
 /**
  * GET /api/crm/grades

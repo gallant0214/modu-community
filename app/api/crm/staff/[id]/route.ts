@@ -206,8 +206,11 @@ export async function PATCH(
       return NextResponse.json({ error: "등급을 찾을 수 없습니다" }, { status: 400 });
     }
     patch.grade_id = g.id;
-    patch.role = g.base_role;
-    patch.access_level = accessForRole(g.base_role);
+    // fc(FC)·alba(아르바이트) 기반 등급은 역할·접근권한상 강사(trainer)로 매핑.
+    // (권한은 등급별 설정을 그대로 사용, 메뉴/접근 게이트만 강사 기준)
+    const effRole = g.base_role === "fc" || g.base_role === "alba" ? "trainer" : g.base_role;
+    patch.role = effRole;
+    patch.access_level = accessForRole(effRole);
   } else if (body.role !== undefined) {
     if (!ALLOWED_ROLES.includes(body.role as CrmRole)) {
       return NextResponse.json({ error: "등급 값이 잘못됨" }, { status: 400 });

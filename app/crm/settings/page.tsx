@@ -111,6 +111,8 @@ const BASE_ROLE_LABEL: Record<string, string> = {
   admin: "관리자",
   manager: "팀장",
   trainer: "강사",
+  fc: "FC",
+  alba: "아르바이트",
 };
 
 // 활동 로그 payload → 사람이 읽는 한 줄 요약
@@ -585,7 +587,7 @@ function GradesPanel() {
 
   // 신규 등급 폼
   const [newLabel, setNewLabel] = useState("");
-  const [newBase, setNewBase] = useState<"owner" | "admin" | "manager" | "trainer">("trainer");
+  const [newBase, setNewBase] = useState<GradeMeta["base_role"]>("trainer");
   const [adding, setAdding] = useState(false);
 
   // 라벨 인라인 편집
@@ -681,20 +683,36 @@ function GradesPanel() {
 
   return (
     <Card title="직원 등급">
-      <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed -mt-1 mb-3">
-        센터에서 사용하는 직원 등급을 관리해요. <strong>대표자 등급만 고정</strong>이고, 나머지 등급은 이름 변경·삭제가 가능해요. 여기서 추가한 등급은 <strong>직급 권한</strong> 탭에도 자동으로 나타나요. 권한 게이트는 등급의 <strong>기본 분류</strong>(대표자/관리자/팀장/강사)에 따라 동작합니다.
-      </p>
+      <div className="-mt-1 mb-4 rounded-xl border border-[#E4D9C6] bg-[#FAF6EE] px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/45">
+        <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">
+          센터에서 사용하는 직원 등급을 관리합니다
+        </div>
+        <p className="mt-1 text-[12px] leading-relaxed text-[#6B5D47] dark:text-zinc-400">
+          대표자 등급만 고정이고, 나머지 등급은 이름 변경·삭제가 가능해요. 추가한 등급은 직급 권한 탭에도 자동으로 나타나며, 권한 게이트는 기본 분류에 따라 동작합니다.
+        </p>
+      </div>
 
       {loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="grid gap-2">
           {grades.map((g) => (
             <li
               key={g.id}
-              className="flex items-center justify-between gap-2 py-1.5 border-b border-[#E8E0D0]/40 dark:border-zinc-800/40 last:border-0"
+              className="flex items-center justify-between gap-3 rounded-xl border border-[#E4D9C6] bg-white/80 px-3.5 py-3 shadow-sm transition-colors hover:bg-[#FFFCF6] dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/55"
             >
-              <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="flex flex-1 items-center gap-3 min-w-0">
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[12px] font-bold ${
+                  g.base_role === "owner"
+                    ? "bg-[#2F3A2B] text-white dark:bg-[#A8B87A] dark:text-zinc-950"
+                    : g.base_role === "admin"
+                    ? "bg-[#5A8BB0]/12 text-[#315F7D] dark:bg-sky-950/40 dark:text-sky-300"
+                    : g.base_role === "manager"
+                    ? "bg-[#B47B2A]/12 text-[#8A641D] dark:bg-amber-950/35 dark:text-amber-300"
+                    : "bg-[#8B6BAA]/12 text-[#6E548B] dark:bg-purple-950/35 dark:text-purple-300"
+                }`}>
+                  {(g.label || "?").slice(0, 1)}
+                </div>
                 {editingId === g.id ? (
                   <>
                     <input
@@ -712,18 +730,17 @@ function GradesPanel() {
                     />
                   </>
                 ) : (
-                  <>
-                    <span className="text-[13.5px] font-medium text-[#2A251D] dark:text-zinc-100 truncate">
+                  <div className="min-w-0">
+                    <div className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 truncate">
                       {g.label}
-                    </span>
-                    <span className="text-[11px] text-[#A89B80] shrink-0">
+                    </div>
+                    <div className="mt-0.5 text-[11.5px] font-medium text-[#8C8270] dark:text-zinc-500">
                       {BASE_ROLE_LABEL[g.base_role] ?? g.base_role} 기반
-                      {g.is_system && <span className="ml-1 text-[#6B7B3A]">· 기본</span>}
-                    </span>
-                  </>
+                    </div>
+                  </div>
                 )}
               </div>
-              <div className="flex gap-1.5 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
                 {editingId === g.id ? (
                   <>
                     <button
@@ -743,21 +760,35 @@ function GradesPanel() {
                     </button>
                   </>
                 ) : g.base_role === "owner" ? (
-                  <span className="px-2.5 py-1 text-[11.5px] text-[#A89B80]">대표자 등급(고정)</span>
+                  <>
+                    {g.is_system && (
+                      <span className="px-2.5 py-1 rounded-md bg-[#6B7B3A]/10 text-[11.5px] font-semibold text-[#6B7B3A] dark:bg-[#A8B87A]/15 dark:text-[#A8B87A]">
+                        기본
+                      </span>
+                    )}
+                    <span className="px-2.5 py-1 text-[11.5px] font-semibold text-[#A89B80]">
+                      대표자 등급(고정)
+                    </span>
+                  </>
                 ) : (
                   <>
+                    {g.is_system && (
+                      <span className="px-2.5 py-1 rounded-md bg-[#6B7B3A]/10 text-[11.5px] font-semibold text-[#6B7B3A] dark:bg-[#A8B87A]/15 dark:text-[#A8B87A]">
+                        기본
+                      </span>
+                    )}
                     <button
                       onClick={() => {
                         setEditingId(g.id);
                         setEditingLabel(g.label);
                       }}
-                      className="px-2.5 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                      className="px-2.5 py-1 rounded-md border border-[#D9CDB8] bg-[#FEFCF7] text-[12px] font-semibold text-[#3A342A] hover:bg-[#F5F0E5] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     >
                       이름 변경
                     </button>
                     <button
                       onClick={() => deleteGrade(g)}
-                      className="px-2.5 py-1 rounded-md border border-red-200 dark:border-red-900 text-[12px] text-red-700 dark:text-red-300 hover:bg-red-50"
+                      className="px-2.5 py-1 rounded-md border border-red-200 bg-white text-[12px] font-semibold text-red-700 hover:bg-red-50 dark:border-red-900 dark:bg-zinc-950 dark:text-red-300 dark:hover:bg-red-950/35"
                     >
                       삭제
                     </button>
@@ -769,9 +800,16 @@ function GradesPanel() {
         </ul>
       )}
 
-      <div className="mt-4 pt-3 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
-        <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
-          새 등급 추가
+      <div className="mt-4 rounded-xl border border-[#E4D9C6] bg-[#FEFCF7] px-4 py-3.5 dark:border-zinc-800 dark:bg-zinc-900/80">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div>
+            <div className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100">
+              새 등급 추가
+            </div>
+            <p className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+              이름은 자유롭게 만들고, 권한 기준은 기반 등급으로 정합니다.
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <input
@@ -793,18 +831,17 @@ function GradesPanel() {
             <option value="admin">관리자 기반</option>
             <option value="manager">팀장 기반</option>
             <option value="trainer">강사 기반</option>
+            <option value="fc">FC 기반</option>
+            <option value="alba">아르바이트 기반</option>
           </select>
           <button
             onClick={addGrade}
             disabled={adding || !newLabel.trim()}
-            className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932] whitespace-nowrap"
+            className="px-4 rounded-lg bg-[#2F3A2B] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#263121] whitespace-nowrap dark:bg-[#A8B87A] dark:text-zinc-950"
           >
             {adding ? "추가 중…" : "추가"}
           </button>
         </div>
-        <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
-          기반 등급에 따라 권한이 결정돼요. 이름은 자유롭게 지을 수 있고, 같은 이름은 중복으로 추가할 수 없어요.
-        </p>
       </div>
 
       {error && (

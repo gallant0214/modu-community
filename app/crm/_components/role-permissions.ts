@@ -157,9 +157,18 @@ export const ALL_PERMISSION_KEYS = PERMISSION_GROUPS.flatMap((g) =>
   g.items.map((i) => i.key)
 );
 
+/** 등급의 기본 분류. fc(FC)·alba(아르바이트)는 권한/역할상 강사(trainer) 기준으로 동작하되 별도 라벨. */
+export type GradeBaseRole = "owner" | "admin" | "manager" | "trainer" | "fc" | "alba";
+
+/** 권한 기본값 계산용 실효 역할: fc·alba → trainer 로 매핑 */
+export function effectiveDefaultRole(base: GradeBaseRole): RoleOption["key"] {
+  if (base === "fc" || base === "alba") return "trainer";
+  return base;
+}
+
 export interface GradeMeta {
   id: number;
-  base_role: "owner" | "admin" | "manager" | "trainer";
+  base_role: GradeBaseRole;
   label: string;
 }
 
@@ -175,12 +184,11 @@ export function buildGradePermissionMatrix(
   const map: Record<number, Record<string, boolean>> = {};
   for (const grade of grades) {
     const row: Record<string, boolean> = {};
+    const eff = effectiveDefaultRole(grade.base_role);
     for (const g of PERMISSION_GROUPS) {
       for (const it of g.items) {
         row[it.key] =
-          grade.base_role === "owner"
-            ? true
-            : it.defaults[grade.base_role] ?? false;
+          grade.base_role === "owner" ? true : it.defaults[eff] ?? false;
       }
     }
     map[grade.id] = row;
