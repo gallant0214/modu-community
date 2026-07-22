@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
@@ -197,7 +197,6 @@ export default function CrmStaffDetailPage() {
         phone={member.phone}
         email={member.email}
         address={member.address}
-        isOwner={member.role === "owner"}
         hasResident={!!member.has_resident}
         saving={saving}
         onSave={(p) => patchMember(p)}
@@ -859,7 +858,6 @@ function ContactSection({
   phone,
   email,
   address,
-  isOwner,
   hasResident,
   saving,
   onSave,
@@ -868,7 +866,6 @@ function ContactSection({
   phone: string | null;
   email: string | null;
   address: string | null;
-  isOwner: boolean;
   hasResident: boolean;
   saving: boolean;
   onSave: (patch: { birth?: string | null; phone?: string | null; email?: string | null; address?: string | null; resident_no?: string }) => void;
@@ -877,8 +874,10 @@ function ContactSection({
   const [p, setP] = useState(formatPhone(phone ?? ""));
   const [e, setE] = useState(email ?? "");
   const [a, setA] = useState(address ?? "");
-  const [resident, setResident] = useState("");
+  const [residentFront, setResidentFront] = useState(""); // 앞 6자리
+  const [residentBack, setResidentBack] = useState(""); // 뒤 7자리
   const [editingResident, setEditingResident] = useState(false);
+  const residentBackRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setB(birth ?? "");
@@ -903,11 +902,14 @@ function ContactSection({
   };
 
   // 주민번호 별도 저장 (해시 저장이라 다른 필드와 함께 patch 안 함)
+  const residentFrontDigits = residentFront.replace(/[^0-9]/g, "");
+  const residentBackDigits = residentBack.replace(/[^0-9]/g, "");
+  const residentReady = residentFrontDigits.length === 6 && residentBackDigits.length === 7;
   const saveResident = () => {
-    const digits = resident.replace(/[^0-9]/g, "");
-    if (digits.length !== 13) return;
-    onSave({ resident_no: digits });
-    setResident("");
+    if (!residentReady) return;
+    onSave({ resident_no: residentFrontDigits + residentBackDigits });
+    setResidentFront("");
+    setResidentBack("");
     setEditingResident(false);
   };
 
@@ -935,11 +937,10 @@ function ContactSection({
           />
         </div>
 
-        {isOwner && (
-          <div>
-            <div className="text-[12.5px] text-[#A89B80] mb-1.5">
-              주민등록번호 <span className="text-[#B47B2A]">(대표자 전용 · 본인 확인용)</span>
-            </div>
+        <div>
+          <div className="text-[12.5px] text-[#A89B80] mb-1.5">
+            주민등록번호 <span className="text-[#A89B80]">(선택 · 본인 확인용)</span>
+          </div>
             {maskedResident && !editingResident ? (
               <div className="flex items-center gap-2">
                 <span className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 text-[14px] font-medium text-[#3A342A] dark:text-zinc-200 tabular-nums">
@@ -956,18 +957,35 @@ function ContactSection({
             ) : (
               <div className="flex items-center gap-2 flex-wrap">
                 <input
+                  type="text"
+                  inputMode="numeric"
+                  className="w-[120px] px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 tracking-wider tabular-nums focus:outline-none focus:border-[#6B7B3A]"
+                  value={residentFront}
+                  onChange={(ev) => {
+                    const v = ev.target.value.replace(/[^0-9]/g, "").slice(0, 6);
+                    setResidentFront(v);
+                    if (v.length === 6) residentBackRef.current?.focus();
+                  }}
+                  placeholder="YYMMDD"
+                  maxLength={6}
+                  aria-label="주민번호 앞 6자리"
+                />
+                <span className="text-[16px] font-semibold text-[#A89B80]">-</span>
+                <input
+                  ref={residentBackRef}
                   type="password"
                   inputMode="numeric"
-                  className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 max-w-[220px] tracking-wider"
-                  value={resident}
-                  onChange={(ev) => setResident(ev.target.value.replace(/[^0-9]/g, "").slice(0, 13))}
-                  placeholder="숫자 13자리"
-                  maxLength={13}
+                  className="w-[130px] px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 tracking-wider focus:outline-none focus:border-[#6B7B3A]"
+                  value={residentBack}
+                  onChange={(ev) => setResidentBack(ev.target.value.replace(/[^0-9]/g, "").slice(0, 7))}
+                  placeholder="●●●●●●●"
+                  maxLength={7}
+                  aria-label="주민번호 뒤 7자리"
                 />
                 <button
                   type="button"
                   onClick={saveResident}
-                  disabled={saving || resident.replace(/[^0-9]/g, "").length !== 13}
+                  disabled={saving || !residentReady}
                   className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
                 >
                   저장
@@ -977,7 +995,8 @@ function ContactSection({
                     type="button"
                     onClick={() => {
                       setEditingResident(false);
-                      setResident("");
+                      setResidentFront("");
+                      setResidentBack("");
                     }}
                     className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#6B5D47] dark:text-zinc-300"
                   >
@@ -986,11 +1005,10 @@ function ContactSection({
                 )}
               </div>
             )}
-            <p className="mt-1.5 text-[11px] text-[#A89B80]">
-              대표자만 볼 수 있어요. 저장하면 원본은 저장되지 않고 안전하게 암호화(해시)되며 뒷 7자리는 화면에 표시되지 않아요.
-            </p>
-          </div>
-        )}
+          <p className="mt-1.5 text-[11px] text-[#A89B80]">
+            저장하면 원본은 저장되지 않고 안전하게 암호화(해시)되며 뒷 7자리는 화면에 표시되지 않아요.
+          </p>
+        </div>
         <div>
           <div className="text-[12.5px] text-[#A89B80] mb-1.5">연락처</div>
           <input
