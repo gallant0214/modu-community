@@ -201,7 +201,7 @@ export function ProductForm({ mode, initial, onSaved, onCancel }: Props) {
   );
   const [vatIncluded, setVatIncluded] = useState(initial?.vat_included ?? false);
   const [capacity, setCapacity] = useState(initial?.capacity ?? 10);
-  const [sessionMinutes, setSessionMinutes] = useState(initial?.session_minutes ?? 60);
+  const [sessionMinutes, setSessionMinutes] = useState(initial?.session_minutes ?? 50);
   const [dailyCheckInLimit, setDailyCheckInLimit] = useState(initial?.daily_check_in_limit ?? 1);
   const [dailyTimeLimitEnabled, setDailyTimeLimitEnabled] = useState(
     initial?.daily_time_limit_enabled ?? false

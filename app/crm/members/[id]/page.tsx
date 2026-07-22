@@ -4154,7 +4154,7 @@ function PassDetailModal({
     setEditCoTrainerIds((detail.co_trainers ?? []).map((c) => c.id));
     setEditSellerId(p.seller_member_id);
     setEditLessonKind(p.lesson_kind ?? "");
-    setEditSessionMinutes(p.session_minutes ?? 60);
+    setEditSessionMinutes(p.session_minutes ?? 50);
     setEditTotal(p.total_sessions ?? 0);
     setEditRemaining(p.remaining_sessions ?? 0);
     setEditExpires(p.expires_at ?? "");
