@@ -67,7 +67,8 @@ export default function CrmMembershipsPage() {
   const [issueOpen, setIssueOpen] = useState(false);
   const [perms, setPerms] = useState<Record<string, boolean>>({});
   const [detailRow, setDetailRow] = useState<Row | null>(null);
-  const canEdit = !!perms["memberships.edit"];
+  // memberships PATCH 는 결제 항목 변경 시 sales.edit 권한 필요 (금액/결제/기간)
+  const canEdit = !!perms["sales.edit"];
   const { widths, startResize, reset, changed, totalWidth } = useColumnWidths<MColKey>(
     "crm_memberships_col_widths_v1",
     M_DEFAULT_WIDTHS
