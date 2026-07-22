@@ -688,7 +688,7 @@ function CommissionSection({
         <button
           type="button"
           onClick={addBonus}
-          className="mt-2 text-[12.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+          className="mt-2.5 inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/8"
         >
           + 커미션 조건 추가
         </button>
