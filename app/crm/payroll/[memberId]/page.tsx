@@ -102,7 +102,7 @@ export default function PayrollDetailPage() {
 
       {tab === "revenue" && <RevenueTab memberId={memberId} />}
       {tab === "members" && <MembersTab />}
-      {tab === "sessions" && <SessionsTab />}
+      {tab === "sessions" && <SessionsTab memberId={memberId} />}
     </div>
   );
 }
@@ -406,13 +406,51 @@ function MembersTab() {
   );
 }
 
-/* ─── 수업 내역 탭 ────────────────────────────── */
+/* ─── 수업 내역 탭 (개인·그룹 통합) ────────────────── */
 
-type SessionKind = "personal" | "group";
+interface SessionRow {
+  id: number;
+  member_name: string;
+  age: number | null;
+  gender: string | null;
+  phone: string | null;
+  product: string;
+  total: number;
+  used: number;
+  remaining: number;
+  per_session_won: number;
+}
 
-function SessionsTab() {
-  const [kind, setKind] = useState<SessionKind>("personal");
+function SessionsTab({ memberId }: { memberId: number }) {
+  const { getIdToken } = useAuth();
   const [period, setPeriod] = useState<Period>("this_month");
+  const [rows, setRows] = useState<SessionRow[]>([]);
+  const [totalSessions, setTotalSessions] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/crm/payroll/${memberId}/sessions?period=${period}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const d = await res.json();
+      setRows(d.sessions ?? []);
+      setTotalSessions(d.total_sessions ?? 0);
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken, memberId, period]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const genderLabel = (g: string | null) => (g === "M" ? "남" : g === "F" ? "여" : "-");
 
   return (
     <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
@@ -420,28 +458,9 @@ function SessionsTab() {
         수업 내역
       </h2>
 
-      <div className="flex gap-1.5 mb-4 border-b border-[#E8E0D0]/60 dark:border-zinc-800">
-        {[
-          { key: "personal" as const, label: "개인 레슨" },
-          { key: "group" as const, label: "그룹 수업" },
-        ].map((k) => (
-          <button
-            key={k.key}
-            onClick={() => setKind(k.key)}
-            className={`px-3 py-1.5 -mb-px text-[12.5px] font-medium border-b-2 transition-colors
-              ${kind === k.key
-                ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A]"
-                : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
-              }`}
-          >
-            {k.label}
-          </button>
-        ))}
-      </div>
-
       <div className="flex flex-wrap items-center gap-3 mb-3">
         <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
-          총 수업 횟수 (0회)
+          총 수업 횟수 ({totalSessions}회)
         </span>
         <div className="ml-auto flex items-center gap-2">
           <span className="text-[11.5px] text-[#A89B80]">필터</span>
@@ -454,10 +473,6 @@ function SessionsTab() {
             <option value="this_month">이번 달</option>
             <option value="last_month">지난 달</option>
             <option value="this_year">올해</option>
-            <option value="custom">직접 선택</option>
-          </select>
-          <select className={crmInputClass} style={{ width: 130 }}>
-            <option>{kind === "personal" ? "개인 레슨 전체" : "그룹 수업 전체"}</option>
           </select>
         </div>
       </div>
@@ -472,32 +487,46 @@ function SessionsTab() {
               <Th>성별</Th>
               <Th>연락처</Th>
               <Th>상품명</Th>
-              <Th>계약 수 + 서비스 수 (총 계약)</Th>
+              <Th>계약 수</Th>
               <Th>사용 완료</Th>
               <Th>잔여</Th>
-              <Th>수업 횟수</Th>
-              <Th>세부사항</Th>
+              <Th>회당 수업료<span className="text-[10.5px] text-[#A89B80] ml-0.5">(부가세 제외)</span></Th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td colSpan={11} className="px-3 py-12 text-center">
-                <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">
-                  데이터가 없어요
-                </div>
-                <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
-                  수업 내역이 존재하지 않아요.
-                  <br />
-                  필터를 다시 설정해 보세요.
-                </div>
-              </td>
-            </tr>
+            {loading ? (
+              <tr>
+                <td colSpan={10} className="px-3 py-12 text-center text-[13px] text-[#8C8270]">불러오는 중…</td>
+              </tr>
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan={10} className="px-3 py-12 text-center">
+                  <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">데이터가 없어요</div>
+                  <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
+                    해당 기간에 발급된 수업 내역이 없어요.
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              rows.map((r, i) => (
+                <tr key={r.id} className="border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400">{i + 1}</td>
+                  <td className="px-3 py-2.5 font-medium text-[#2A251D] dark:text-zinc-100 whitespace-nowrap">{r.member_name}</td>
+                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400">{r.age ?? "-"}</td>
+                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400">{genderLabel(r.gender)}</td>
+                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap">{r.phone ? formatPhone(r.phone) : "-"}</td>
+                  <td className="px-3 py-2.5 text-[#3A342A] dark:text-zinc-300 whitespace-nowrap">{r.product}</td>
+                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400">{r.total}회</td>
+                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400">{r.used}회</td>
+                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400">{r.remaining}회</td>
+                  <td className="px-3 py-2.5 font-semibold text-[#2A251D] dark:text-zinc-100 whitespace-nowrap">
+                    {formatWon(r.per_session_won)}원
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
-      </div>
-
-      <div className="mt-4 flex items-center justify-center gap-3 text-[12.5px] text-[#3A342A] dark:text-zinc-300">
-        <span className="font-medium">1</span>
       </div>
     </section>
   );
