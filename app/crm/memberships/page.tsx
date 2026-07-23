@@ -576,6 +576,8 @@ function IssueModal({
   const [pickedProductId, setPickedProductId] = useState<number | "">("");
   const [planName, setPlanName] = useState("1개월 헬스 이용권");
   const [duration, setDuration] = useState(30);
+  const [serviceDays, setServiceDays] = useState(0);
+  const [showServiceDays, setShowServiceDays] = useState(false);
   const [priceWon, setPriceWon] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "etc">("card");
   const [paymentCustom, setPaymentCustom] = useState("");
@@ -630,6 +632,8 @@ function IssueModal({
       setPickedProductId("");
       setPlanName("1개월 헬스 이용권");
       setDuration(30);
+      setServiceDays(0);
+      setShowServiceDays(false);
       setPriceWon(0);
       setPaymentMethod("card");
       setPaymentCustom("");
@@ -674,13 +678,13 @@ function IssueModal({
     }
   };
 
-  // duration 변경 시 expires_at 자동 계산
+  // duration/서비스일수 변경 시 expires_at 자동 계산
   useEffect(() => {
     if (!startDate || !duration) return;
     const d = new Date(startDate);
-    d.setDate(d.getDate() + Number(duration));
+    d.setDate(d.getDate() + Number(duration) + Number(serviceDays || 0));
     setExpiresAt(d.toISOString().slice(0, 10));
-  }, [startDate, duration]);
+  }, [startDate, duration, serviceDays]);
 
   const search = async () => {
     const q = memberQuery.trim();
@@ -709,7 +713,7 @@ function IssueModal({
         body: JSON.stringify({
           member_id: picked.id,
           plan_name: planName.trim(),
-          duration_days: duration,
+          duration_days: duration + (serviceDays || 0),
           price_won: priceWon,
           payment_method: paymentMethod,
           payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
@@ -853,6 +857,47 @@ function IssueModal({
             />
           </CrmField>
         </div>
+
+        {!showServiceDays ? (
+          <button
+            type="button"
+            onClick={() => setShowServiceDays(true)}
+            className="text-[12.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline font-medium"
+          >
+            + 서비스 일 수 추가하기
+          </button>
+        ) : (
+          <CrmField label="서비스 일 수">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="number"
+                  min={0}
+                  className={`${crmInputClass} pr-9`}
+                  value={serviceDays}
+                  onChange={(e) => setServiceDays(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="0"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] text-[#A89B80]">
+                  일
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowServiceDays(false);
+                  setServiceDays(0);
+                }}
+                className="text-[12px] text-[#8C8270] hover:underline"
+              >
+                제거
+              </button>
+            </div>
+            <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
+              서비스 일 수는 결제 금액에 포함되지 않습니다. 유효 기간에 무료로 얹어져요.
+            </p>
+          </CrmField>
+        )}
 
         <CrmField label="결제 수단">
           <div className="grid grid-cols-4 gap-1.5">

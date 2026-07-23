@@ -3856,6 +3856,8 @@ function PassIssueModal({
   const [passProducts, setPassProducts] = useState<PassProduct[]>([]);
   const [showKindList, setShowKindList] = useState(false);
   const [totalSessions, setTotalSessions] = useState(10);
+  const [serviceSessions, setServiceSessions] = useState(0);
+  const [showServiceSessions, setShowServiceSessions] = useState(false);
   const [sessionMinutes, setSessionMinutes] = useState(50);
   const [priceWon, setPriceWon] = useState(0);
   const [vatIncluded, setVatIncluded] = useState(true);
@@ -3951,8 +3953,8 @@ function PassIssueModal({
           co_trainer_ids: coTrainerIds,
           seller_member_id: Number(sellerId) || Number(trainerId),
           issue_type: issueType,
-          lesson_kind: `${lessonKind}(${totalSessions}회)`,
-          total_sessions: totalSessions,
+          lesson_kind: `${lessonKind}(${totalSessions + (serviceSessions || 0)}회)`,
+          total_sessions: totalSessions + (serviceSessions || 0),
           session_minutes: sessionMinutes,
           price_won: priceWon,
           vat_included: vatIncluded,
@@ -4124,6 +4126,48 @@ function PassIssueModal({
             />
           </CrmField>
         </div>
+
+        {!showServiceSessions ? (
+          <button
+            type="button"
+            onClick={() => setShowServiceSessions(true)}
+            className="text-[12.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline font-medium"
+          >
+            + 서비스 섹션 수 추가하기
+          </button>
+        ) : (
+          <CrmField label="서비스 섹션 수">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="number"
+                  min={0}
+                  className={`${crmInputClass} pr-9`}
+                  value={serviceSessions}
+                  onChange={(e) => setServiceSessions(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="0"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] text-[#A89B80]">
+                  회
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowServiceSessions(false);
+                  setServiceSessions(0);
+                }}
+                className="text-[12px] text-[#8C8270] hover:underline"
+              >
+                제거
+              </button>
+            </div>
+            <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
+              서비스 섹션은 수업료에 포함되지 않습니다. 총 세션에 무료로 얹어져요.
+            </p>
+          </CrmField>
+        )}
+
         <CrmField label="결제 금액 (원)">
           <input
             type="text"
