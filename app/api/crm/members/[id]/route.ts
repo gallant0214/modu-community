@@ -65,7 +65,27 @@ export async function GET(
     return NextResponse.json({ error: "이 회원에 대한 접근 권한이 없습니다" }, { status: 403 });
   }
 
-  return NextResponse.json({ member, passes: passes ?? [] });
+  // 수강권별 "이미 잡힌 예약 수"(취소·거절 제외) → 예약 가능 슬롯 계산용.
+  // 예약은 잔여횟수를 즉시 줄이지 않으므로, 총 횟수 - reserved_count 로 남은 예약 가능 수를 판단.
+  const passIds = (passes ?? []).map((p) => p.id);
+  const reservedMap = new Map<number, number>();
+  if (passIds.length > 0) {
+    const { data: resv } = await supabase
+      .from("crm_reservations")
+      .select("pass_id")
+      .eq("center_id", ctx.centerId)
+      .in("pass_id", passIds)
+      .not("status", "in", "(cancelled,rejected)");
+    for (const r of resv ?? []) {
+      if (r.pass_id != null) reservedMap.set(r.pass_id, (reservedMap.get(r.pass_id) ?? 0) + 1);
+    }
+  }
+  const passesOut = (passes ?? []).map((p) => ({
+    ...p,
+    reserved_count: reservedMap.get(p.id) ?? 0,
+  }));
+
+  return NextResponse.json({ member, passes: passesOut });
 }
 
 // 회원 필드 그룹 — 권한 매트릭스와 매핑

@@ -152,7 +152,7 @@ export async function POST(request: Request) {
   // session_minutes 까지 조회 → 예약 종료 시각 서버측 파생
   const { data: pass } = await supabase
     .from("crm_passes")
-    .select("id, center_id, member_id, trainer_member_id, co_trainer_ids, remaining_sessions, status, session_minutes")
+    .select("id, center_id, member_id, trainer_member_id, co_trainer_ids, remaining_sessions, total_sessions, status, session_minutes")
     .eq("id", passId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -162,6 +162,16 @@ export async function POST(request: Request) {
   }
   if (pass.remaining_sessions <= 0) {
     return NextResponse.json({ error: "잔여 세션이 없습니다" }, { status: 400 });
+  }
+  // 이미 잡힌 예약(취소·거절 제외)이 총 횟수 이상이면 더 예약 불가 → 모든 예약 완료 상태.
+  const { count: reservedCount } = await supabase
+    .from("crm_reservations")
+    .select("id", { count: "exact", head: true })
+    .eq("center_id", ctx.centerId)
+    .eq("pass_id", passId)
+    .not("status", "in", "(cancelled,rejected)");
+  if ((reservedCount ?? 0) >= (pass.total_sessions ?? 0)) {
+    return NextResponse.json({ error: "이미 모든 예약이 완료된 수강권입니다" }, { status: 400 });
   }
 
   // 담당 강사 = 주강사 + 추가강사(co_trainer_ids). 이들만 예약 가능
