@@ -24,6 +24,7 @@ export interface PassDetail {
   lesson_kind: string;
   total_sessions: number;
   remaining_sessions: number;
+  service_sessions: number;
   session_minutes: number;
   price_won: number;
   vat_included: boolean;
@@ -70,6 +71,7 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
   const [lessonKind, setLessonKind] = useState("");
   const [totalSessions, setTotalSessions] = useState<number>(0);
   const [remainingSessions, setRemainingSessions] = useState<number>(0);
+  const [serviceSessions, setServiceSessions] = useState<number>(0);
   const [sessionMinutes, setSessionMinutes] = useState<number>(0);
   const [priceWon, setPriceWon] = useState<number>(0);
   const [vatIncluded, setVatIncluded] = useState(false);
@@ -103,6 +105,7 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
       setLessonKind(p.lesson_kind ?? "");
       setTotalSessions(p.total_sessions ?? 0);
       setRemainingSessions(p.remaining_sessions ?? 0);
+      setServiceSessions(p.service_sessions ?? 0);
       setSessionMinutes(p.session_minutes ?? 0);
       setPriceWon(p.price_won ?? 0);
       setVatIncluded(!!p.vat_included);
@@ -138,6 +141,7 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
         lesson_kind: lessonKind.trim(),
         total_sessions: totalSessions,
         remaining_sessions: remainingSessions,
+        service_sessions: serviceSessions,
         session_minutes: sessionMinutes,
         price_won: priceWon,
         vat_included: vatIncluded,
@@ -381,6 +385,22 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
                   )}
                 </ModalField>
               </div>
+              <ModalField label="서비스 세션">
+                {editMode ? (
+                  <>
+                    <input
+                      type="number"
+                      min={0}
+                      value={serviceSessions}
+                      onChange={(e) => setServiceSessions(Math.max(0, Number(e.target.value) || 0))}
+                      className={crmInputClass}
+                    />
+                    <p className="mt-1 text-[11.5px] text-[#A89B80]">무료 보너스 세션 · 수업료에는 포함되지 않아요.</p>
+                  </>
+                ) : (
+                  `${pass.service_sessions ?? 0}회`
+                )}
+              </ModalField>
               <ModalField label="회당 시간">
                 {editMode ? (
                   <div className="relative">

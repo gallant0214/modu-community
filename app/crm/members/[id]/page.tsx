@@ -55,6 +55,7 @@ interface Pass {
   lesson_kind: string;
   total_sessions: number;
   remaining_sessions: number;
+  service_sessions?: number;
   session_minutes: number;
   price_won: number;
   vat_included: boolean;
@@ -4362,6 +4363,7 @@ function PassDetailModal({
   const [editSessionMinutes, setEditSessionMinutes] = useState(60);
   const [editTotal, setEditTotal] = useState(0);
   const [editRemaining, setEditRemaining] = useState(0);
+  const [editService, setEditService] = useState(0);
   const [editIssuedAt, setEditIssuedAt] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
   const [editExpires, setEditExpires] = useState("");
@@ -4453,6 +4455,7 @@ function PassDetailModal({
     setEditSessionMinutes(p.session_minutes ?? 50);
     setEditTotal(p.total_sessions ?? 0);
     setEditRemaining(p.remaining_sessions ?? 0);
+    setEditService(p.service_sessions ?? 0);
     setEditIssuedAt(p.issued_at ?? "");
     setEditStartDate((p as Pass & { start_date?: string | null }).start_date ?? "");
     setEditExpires(p.expires_at === "9999-12-31" ? "" : (p.expires_at ?? ""));
@@ -4482,6 +4485,7 @@ function PassDetailModal({
           session_minutes: editSessionMinutes,
           total_sessions: editTotal,
           remaining_sessions: Math.min(editRemaining, editTotal),
+          service_sessions: editService,
           issued_at: editIssuedAt || undefined,
           start_date: editStartDate || undefined,
           expires_at: editExpires || undefined,
@@ -4658,6 +4662,16 @@ function PassDetailModal({
                     }
                     className={crmInputClass}
                   />
+                </CrmField>
+                <CrmField label="서비스 세션">
+                  <input
+                    type="number"
+                    min={0}
+                    value={editService}
+                    onChange={(e) => setEditService(Math.max(0, Number(e.target.value) || 0))}
+                    className={crmInputClass}
+                  />
+                  <p className="mt-1 text-[11.5px] text-[#A89B80]">무료 보너스 세션 · 수업료 미포함</p>
                 </CrmField>
                 <CrmField label="발급일">
                   <input

@@ -2696,6 +2696,7 @@ export type Database = {
           lesson_kind: string
           total_sessions: number
           remaining_sessions: number
+          service_sessions: number
           session_minutes: number
           price_won: number
           vat_included: boolean
@@ -2723,6 +2724,7 @@ export type Database = {
           lesson_kind: string
           total_sessions: number
           remaining_sessions: number
+          service_sessions?: number
           session_minutes: number
           price_won?: number
           vat_included?: boolean
@@ -2750,6 +2752,7 @@ export type Database = {
           lesson_kind?: string
           total_sessions?: number
           remaining_sessions?: number
+          service_sessions?: number
           session_minutes?: number
           price_won?: number
           vat_included?: boolean
