@@ -52,7 +52,7 @@ export async function GET(
     (v): v is number => !!v
   );
   const [{ data: member }, { data: reservations }, { data: coRows }] = await Promise.all([
-    supabase.from("crm_members").select("id, name, phone").eq("id", pass.member_id).maybeSingle(),
+    supabase.from("crm_members").select("id, name, phone, face_image_thumb").eq("id", pass.member_id).maybeSingle(),
     supabase
       .from("crm_reservations")
       .select("id, starts_at, ends_at, status, consumed, cancelled_reason, cancelled_at")

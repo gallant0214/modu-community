@@ -40,6 +40,7 @@ interface Member {
   id: number;
   name: string;
   phone: string | null;
+  face_image_thumb?: string | null;
 }
 
 interface StaffOption {
@@ -251,22 +252,33 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
 
           <section className="rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/75 dark:bg-zinc-900 px-4 py-3.5">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2 py-0.5 rounded-md text-[11.5px] font-bold bg-[#EFF5E2] text-[#4D622C] border border-[#DDE8C5]">
-                    {ISSUE_TYPE_LABEL[pass.issue_type] ?? pass.issue_type}
-                  </span>
-                  <StatusChip status={pass.status} />
+              <div className="flex items-start gap-3 min-w-0">
+                {/* 회원 얼굴 */}
+                <div className="shrink-0 w-14 h-14 rounded-xl overflow-hidden border border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
+                  {member?.face_image_thumb ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={member.face_image_thumb} alt="회원 얼굴" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-[10px] text-[#A89B80]">사진 없음</span>
+                  )}
                 </div>
-                <h3 className="mt-2 text-[19px] font-bold text-[#241F18] dark:text-zinc-100 truncate">
-                  {pass.lesson_kind || "수강권"}
-                </h3>
-                {member && (
-                  <div className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400 truncate">
-                    <span className="font-semibold text-[#2A251D] dark:text-zinc-200">{member.name}</span>
-                    {member.phone && <span className="ml-2">{formatPhone(member.phone)}</span>}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2 py-0.5 rounded-md text-[11.5px] font-bold bg-[#EFF5E2] text-[#4D622C] border border-[#DDE8C5]">
+                      {ISSUE_TYPE_LABEL[pass.issue_type] ?? pass.issue_type}
+                    </span>
+                    <StatusChip status={pass.status} />
                   </div>
-                )}
+                  <h3 className="mt-2 text-[19px] font-bold text-[#241F18] dark:text-zinc-100 truncate">
+                    {pass.lesson_kind || "수강권"}
+                  </h3>
+                  {member && (
+                    <div className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400 truncate">
+                      <span className="font-semibold text-[#2A251D] dark:text-zinc-200">{member.name}</span>
+                      {member.phone && <span className="ml-2">{formatPhone(member.phone)}</span>}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="text-right shrink-0">
                 <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">담당 강사</div>
