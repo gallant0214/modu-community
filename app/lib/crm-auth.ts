@@ -80,7 +80,18 @@ export async function requireCrmContext(
     return NextResponse.json({ error: "DB 오류", detail: error.message }, { status: 500 });
   }
 
-  const membership = rows?.[0];
+  // 다중 센터 지원: ?centerId= 로 특정 센터를 지정하면 그 멤버십을 사용한다
+  // (본인이 active 멤버인 센터만). 없으면 우선순위(solo → 최신) 로 단일 선택.
+  let membership = rows?.[0];
+  try {
+    const wantCenterId = Number(new URL(request.url).searchParams.get("centerId"));
+    if (wantCenterId) {
+      const match = rows?.find((r) => r.center_id === wantCenterId);
+      if (match) membership = match;
+    }
+  } catch {
+    // URL 파싱 실패 시 기본 선택 유지
+  }
   if (!membership) {
     return NextResponse.json({ error: "CRM_NOT_ONBOARDED" }, { status: 409 });
   }
