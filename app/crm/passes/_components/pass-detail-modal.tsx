@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmModal, crmInputClass } from "../../_components/crm-modal";
+import { useCrmToast } from "../../_components/crm-toast";
 import {
   ISSUE_TYPE_LABEL,
   PAYMENT_METHOD_LABEL,
   PASS_STATUS_LABEL,
+  RESERVATION_STATUS_COLOR,
   formatWon,
   parseWon,
   formatPhone,
@@ -56,6 +58,7 @@ interface Props {
 
 export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Props) {
   const { getIdToken } = useAuth();
+  const toast = useCrmToast();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -78,6 +81,7 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
   const [expiresAt, setExpiresAt] = useState("");
   const [memo, setMemo] = useState("");
   const [coTrainers, setCoTrainers] = useState<{ id: number; name: string }[]>([]);
+  const [reservations, setReservations] = useState<{ status: string }[]>([]);
 
   const loadPass = useCallback(async () => {
     if (!passId) return;
@@ -93,6 +97,7 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
       setPass(data.pass);
       setMember(data.member);
       setCoTrainers(data.co_trainers ?? []);
+      setReservations(data.reservations ?? []);
       // 편집 필드 초기화
       const p: PassDetail = data.pass;
       setLessonKind(p.lesson_kind ?? "");
@@ -157,6 +162,7 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
       onSaved();
       await loadPass();
       setEditMode(false);
+      toast.show("저장 되었습니다");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -177,8 +183,58 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
     ? Math.max(0, Math.min(100, (Number(pass.remaining_sessions || 0) / Math.max(1, Number(pass.total_sessions || 0))) * 100))
     : 0;
 
+  const headerActions = (
+    <div className="flex items-center gap-1.5">
+      {editMode ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setEditMode(false)}
+            disabled={saving}
+            className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] font-medium text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-50"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
+          >
+            {saving ? "저장 중…" : "저장"}
+          </button>
+        </>
+      ) : (
+        <>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setEditMode(true)}
+              className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]"
+            >
+              수정
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] font-medium text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+          >
+            닫기
+          </button>
+        </>
+      )}
+    </div>
+  );
+
   return (
-    <CrmModal open={!!passId} onClose={onClose} title={editMode ? "수강권 수정" : "수강권 상세"} size="lg">
+    <CrmModal
+      open={!!passId}
+      onClose={onClose}
+      title={editMode ? "수강권 수정" : "수강권 상세"}
+      size="lg"
+      headerActions={headerActions}
+    >
       {loading ? (
         <div className="py-10 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : !pass ? (
@@ -226,6 +282,34 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
               </div>
               <div className="mt-1.5 h-2 rounded-full bg-[#ECE3D2] dark:bg-zinc-800 overflow-hidden">
                 <div className="h-full rounded-full bg-[#6B7B3A]" style={{ width: `${remainingPct}%` }} />
+              </div>
+            </div>
+
+            {/* 예약·출석 현황 */}
+            <div className="mt-3 pt-3 border-t border-[#EFE7D5] dark:border-zinc-800">
+              <div className="text-[11.5px] font-semibold text-[#8C8270] dark:text-zinc-500 mb-2">
+                예약·출석 현황 (전체 {reservations.length}건)
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ["requested", "예약대기"],
+                  ["booked", "예약완료"],
+                  ["attended", "출석완료"],
+                  ["cancelled", "취소"],
+                  ["noshow", "노쇼"],
+                ] as const).map(([key, label]) => {
+                  const n = reservations.filter((r) => r.status === key).length;
+                  const c = RESERVATION_STATUS_COLOR[key];
+                  return (
+                    <span
+                      key={key}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] font-semibold ${c?.bg ?? "bg-[#F5F0E5] dark:bg-zinc-800"} ${c?.text ?? "text-[#6B5D47] dark:text-zinc-400"}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${c?.dot ?? "bg-zinc-400"}`} />
+                      {label} {n}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           </section>
@@ -413,48 +497,6 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
             )}
           </InfoPanel>
 
-          {/* 액션 */}
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8E0D0] dark:border-zinc-800">
-            {editMode ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setEditMode(false)}
-                  disabled={saving}
-                  className="px-4 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] font-medium text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] disabled:opacity-50"
-                >
-                  취소
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
-                >
-                  {saving ? "저장 중…" : "저장"}
-                </button>
-              </>
-            ) : (
-              <>
-                {canEdit && (
-                  <button
-                    type="button"
-                    onClick={() => setEditMode(true)}
-                    className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932]"
-                  >
-                    수정
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] font-medium text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
-                >
-                  닫기
-                </button>
-              </>
-            )}
-          </div>
         </div>
       )}
     </CrmModal>

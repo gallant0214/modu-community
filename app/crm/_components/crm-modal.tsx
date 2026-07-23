@@ -9,12 +9,14 @@ interface Props {
   children: React.ReactNode;
   /** sm | md | lg */
   size?: "sm" | "md" | "lg";
+  /** 헤더 우측에 기본 X 대신 커스텀 액션(예: [수정][닫기]) 을 넣고 싶을 때 */
+  headerActions?: React.ReactNode;
 }
 
 /**
  * CRM 공통 모달 — 베이지 톤. ESC 닫기, 백드롭 클릭 닫기.
  */
-export function CrmModal({ open, onClose, title, children, size = "md" }: Props) {
+export function CrmModal({ open, onClose, title, children, size = "md", headerActions }: Props) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -57,15 +59,17 @@ export function CrmModal({ open, onClose, title, children, size = "md" }: Props)
           <h2 className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
             {title}
           </h2>
-          <button
-            onClick={onClose}
-            aria-label="닫기"
-            className="p-1 -m-1 text-[#A89B80] hover:text-[#3A342A] dark:hover:text-zinc-200"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          {headerActions ?? (
+            <button
+              onClick={onClose}
+              aria-label="닫기"
+              className="p-1 -m-1 text-[#A89B80] hover:text-[#3A342A] dark:hover:text-zinc-200"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto p-5">{children}</div>
       </div>
