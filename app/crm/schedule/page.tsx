@@ -5,6 +5,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import {
   RESERVATION_STATUS_LABEL,
   RESERVATION_STATUS_COLOR,
+  SCHEDULE_LEGEND,
 } from "../_components/crm-labels";
 import BookingRequestsPanel from "../_components/booking-requests-panel";
 
@@ -19,6 +20,7 @@ interface Reservation {
   status: string;
   consumed: boolean;
   attended_at: string | null;
+  cancelled_reason: string | null;
   session_index: number | null;
   session_total: number | null;
 }
@@ -307,8 +309,19 @@ export default function CrmSchedulePage() {
         </div>
       )}
 
-      <div className="mb-3 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-        {rangeLabel} · 예약 {reservations.length}건 · 일정 {events.length}건
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
+          {rangeLabel} · 예약 {reservations.length}건 · 일정 {events.length}건
+        </span>
+        {/* 상태 색상 범례 */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {SCHEDULE_LEGEND.map((s) => (
+            <span key={s.key} className="inline-flex items-center gap-1.5 text-[12px] text-[#6B5D47] dark:text-zinc-400">
+              <span className={`w-2.5 h-2.5 rounded-full ${RESERVATION_STATUS_COLOR[s.key]?.dot ?? "bg-zinc-400"}`} />
+              {s.label}
+            </span>
+          ))}
+        </div>
       </div>
 
       {error && (
@@ -1452,6 +1465,17 @@ function ReservationDialog({
               총 {reservation.session_total}회 중 {reservation.session_index}회째 수업
             </div>
           )}
+          {(reservation.status === "noshow" || reservation.status === "cancelled") &&
+            reservation.cancelled_reason && (
+              <div className="mt-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 bg-[#F5F0E5]/60 dark:bg-zinc-900 px-2.5 py-1.5">
+                <span className="text-[11.5px] font-semibold text-[#8C8270] dark:text-zinc-500">
+                  {reservation.status === "noshow" ? "노쇼 사유" : "취소 사유"}
+                </span>
+                <div className="mt-0.5 text-[12.5px] text-[#3A342A] dark:text-zinc-200 whitespace-pre-wrap break-words">
+                  {reservation.cancelled_reason}
+                </div>
+              </div>
+            )}
         </div>
 
         <div className="mt-4 space-y-2">
