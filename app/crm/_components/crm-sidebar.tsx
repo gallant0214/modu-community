@@ -10,7 +10,7 @@ type Role = "owner" | "admin" | "manager" | "trainer";
 interface MenuItem {
   href: string;
   label: string;
-  group: "main" | "sales" | "engage" | "admin";
+  group: "main" | "sales" | "engage" | "admin" | "tools";
   /** owner / admin 만 보임 (직원관리·설정). manager/trainer 숨김. */
   staffOnly?: boolean;
   /** true 면 새 창(팝업)으로 열기 (터치출석 등 독립 화면). */
@@ -30,7 +30,7 @@ const MENU: MenuItem[] = [
   { href: "/crm/messages",    label: "메세지 전송",   group: "engage", icon: IconMessage },
   { href: "/crm/stats",       label: "통계",          group: "admin", icon: IconStats },
   { href: "/crm/settings",    label: "센터설정",       group: "admin", staffOnly: true, icon: IconSettings },
-  { href: "/crm/touch-attendance", label: "터치출석", group: "admin", staffOnly: true, newWindow: true, icon: IconTouch },
+  { href: "/crm/touch-attendance", label: "터치출석", group: "tools", staffOnly: true, newWindow: true, icon: IconTouch },
 ];
 
 const MENU_GROUPS: MenuItem["group"][] = [
@@ -38,6 +38,7 @@ const MENU_GROUPS: MenuItem["group"][] = [
   "sales",
   "engage",
   "admin",
+  "tools",
 ];
 
 interface Props {
@@ -426,7 +427,7 @@ function IconDashboard({ className }: { className?: string }) {
 function IconMembers({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
     </svg>
   );
 }
