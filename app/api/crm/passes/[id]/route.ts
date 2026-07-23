@@ -23,7 +23,7 @@ export async function GET(
   const { data: pass, error } = await supabase
     .from("crm_passes")
     .select(
-      "id, member_id, trainer_member_id, co_trainer_ids, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, vat_included, payment_method, payment_method_custom, issued_at, expires_at, status, memo, created_at"
+      "id, member_id, trainer_member_id, co_trainer_ids, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, vat_included, payment_method, payment_method_custom, issued_at, start_date, expires_at, status, memo, created_at"
     )
     .eq("id", passId)
     .eq("center_id", ctx.centerId)
@@ -95,6 +95,8 @@ export async function PATCH(
   let body: {
     memo?: string;
     expires_at?: string;
+    issued_at?: string;
+    start_date?: string;
     price_won?: number;
     vat_included?: boolean;
     payment_method?: string;
@@ -116,6 +118,8 @@ export async function PATCH(
   const patch: Record<string, unknown> = {};
   if (body.memo !== undefined) patch.memo = body.memo?.trim() || null;
   if (body.expires_at) patch.expires_at = body.expires_at;
+  if (body.issued_at) patch.issued_at = body.issued_at;
+  if (body.start_date) patch.start_date = body.start_date;
   if (body.price_won !== undefined && body.price_won >= 0) patch.price_won = body.price_won;
   if (body.vat_included !== undefined) patch.vat_included = !!body.vat_included;
   if (body.payment_method) {

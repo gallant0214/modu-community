@@ -61,9 +61,13 @@ interface Pass {
   payment_method: string;
   payment_method_custom: string | null;
   issued_at: string;
+  start_date?: string | null;
   expires_at: string;
   status: string;
   trainer_member_id: number;
+  seller_member_id?: number;
+  co_trainer_ids?: number[];
+  memo?: string | null;
   is_paused?: boolean;
 }
 
@@ -4358,7 +4362,13 @@ function PassDetailModal({
   const [editSessionMinutes, setEditSessionMinutes] = useState(60);
   const [editTotal, setEditTotal] = useState(0);
   const [editRemaining, setEditRemaining] = useState(0);
+  const [editIssuedAt, setEditIssuedAt] = useState("");
+  const [editStartDate, setEditStartDate] = useState("");
   const [editExpires, setEditExpires] = useState("");
+  const [editPriceWon, setEditPriceWon] = useState(0);
+  const [editVatIncluded, setEditVatIncluded] = useState(false);
+  const [editPaymentMethod, setEditPaymentMethod] = useState<string>("card");
+  const [editPaymentCustom, setEditPaymentCustom] = useState("");
   const [editMemo, setEditMemo] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -4443,7 +4453,13 @@ function PassDetailModal({
     setEditSessionMinutes(p.session_minutes ?? 50);
     setEditTotal(p.total_sessions ?? 0);
     setEditRemaining(p.remaining_sessions ?? 0);
-    setEditExpires(p.expires_at ?? "");
+    setEditIssuedAt(p.issued_at ?? "");
+    setEditStartDate((p as Pass & { start_date?: string | null }).start_date ?? "");
+    setEditExpires(p.expires_at === "9999-12-31" ? "" : (p.expires_at ?? ""));
+    setEditPriceWon(p.price_won ?? 0);
+    setEditVatIncluded(!!p.vat_included);
+    setEditPaymentMethod(p.payment_method || "card");
+    setEditPaymentCustom(p.payment_method_custom ?? "");
     setEditMemo(p.memo ?? "");
     setEditing(true);
     setError("");
@@ -4466,7 +4482,13 @@ function PassDetailModal({
           session_minutes: editSessionMinutes,
           total_sessions: editTotal,
           remaining_sessions: Math.min(editRemaining, editTotal),
+          issued_at: editIssuedAt || undefined,
+          start_date: editStartDate || undefined,
           expires_at: editExpires || undefined,
+          price_won: editPriceWon,
+          vat_included: editVatIncluded,
+          payment_method: editPaymentMethod,
+          payment_method_custom: editPaymentMethod === "etc" ? editPaymentCustom : undefined,
           memo: editMemo,
         }),
       });
@@ -4637,6 +4659,22 @@ function PassDetailModal({
                     className={crmInputClass}
                   />
                 </CrmField>
+                <CrmField label="발급일">
+                  <input
+                    type="date"
+                    value={editIssuedAt}
+                    onChange={(e) => setEditIssuedAt(e.target.value)}
+                    className={crmInputClass}
+                  />
+                </CrmField>
+                <CrmField label="시작일">
+                  <input
+                    type="date"
+                    value={editStartDate}
+                    onChange={(e) => setEditStartDate(e.target.value)}
+                    className={crmInputClass}
+                  />
+                </CrmField>
                 <CrmField label="만료일">
                   <input
                     type="date"
@@ -4645,7 +4683,46 @@ function PassDetailModal({
                     className={crmInputClass}
                   />
                 </CrmField>
+                <CrmField label="결제 금액(원)">
+                  <input
+                    className={`${crmInputClass} text-right`}
+                    value={editPriceWon ? formatWon(editPriceWon) : ""}
+                    onChange={(e) => setEditPriceWon(parseWon(e.target.value))}
+                    inputMode="numeric"
+                  />
+                </CrmField>
+                <CrmField label="결제 수단">
+                  <select
+                    value={editPaymentMethod}
+                    onChange={(e) => setEditPaymentMethod(e.target.value)}
+                    className={crmInputClass}
+                  >
+                    {(["card", "cash", "transfer", "etc"] as const).map((m) => (
+                      <option key={m} value={m}>
+                        {PAYMENT_METHOD_LABEL[m]}
+                      </option>
+                    ))}
+                  </select>
+                </CrmField>
+                {editPaymentMethod === "etc" && (
+                  <CrmField label="결제 수단 직접 입력">
+                    <input
+                      className={crmInputClass}
+                      value={editPaymentCustom}
+                      onChange={(e) => setEditPaymentCustom(e.target.value)}
+                      placeholder="예: 상품권"
+                    />
+                  </CrmField>
+                )}
               </div>
+              <label className="flex items-center gap-2 text-[13px] text-[#3A342A] dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={editVatIncluded}
+                  onChange={(e) => setEditVatIncluded(e.target.checked)}
+                />
+                부가세 포함 금액
+              </label>
               <CrmField label="메모">
                 <textarea
                   value={editMemo}
