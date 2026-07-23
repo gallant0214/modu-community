@@ -99,6 +99,7 @@ export const CONTRACT_CATEGORY_LABEL: Record<string, string> = {
 };
 
 export const RESERVATION_STATUS_LABEL: Record<string, string> = {
+  requested: "예약대기",
   booked: "예약완료",
   attended: "출석완료",
   cancelled: "예약취소",
@@ -123,15 +124,20 @@ export const RESERVATION_STATUS_COLOR: Record<
   string,
   { bg: string; text: string; dot: string }
 > = {
+  requested: {
+    bg: "bg-rose-50 dark:bg-rose-950/40",
+    text: "text-rose-600 dark:text-rose-300",
+    dot: "bg-rose-500",
+  },
   booked: {
     bg: "bg-[#F5E4C8] dark:bg-amber-950/40",
     text: "text-[#B47B2A] dark:text-amber-300",
     dot: "bg-[#B47B2A]",
   },
   attended: {
-    bg: "bg-[#EFE7D5] dark:bg-[#6B7B3A]/20",
-    text: "text-[#6B7B3A] dark:text-[#A8B87A]",
-    dot: "bg-[#6B7B3A]",
+    bg: "bg-emerald-100 dark:bg-emerald-950/40",
+    text: "text-emerald-700 dark:text-emerald-300",
+    dot: "bg-emerald-500",
   },
   cancelled: {
     bg: "bg-[#F5F0E5] dark:bg-zinc-800",
@@ -143,4 +149,18 @@ export const RESERVATION_STATUS_COLOR: Record<
     text: "text-red-700 dark:text-red-300",
     dot: "bg-red-500",
   },
+  // 개인/센터 일정(schedule_events) 표시용 — 예약 상태는 아니지만 범례·블록 색상에 사용
+  personal: {
+    bg: "bg-sky-50 dark:bg-sky-950/40",
+    text: "text-sky-700 dark:text-sky-300",
+    dot: "bg-sky-500",
+  },
 };
+
+/** 스케줄 상태 색상 범례 (예약대기/예약완료/출석완료/개인스케줄) */
+export const SCHEDULE_LEGEND: { key: string; label: string }[] = [
+  { key: "requested", label: "예약대기" },
+  { key: "booked", label: "예약완료" },
+  { key: "attended", label: "출석완료" },
+  { key: "personal", label: "개인스케줄" },
+];
