@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmSidebar } from "./_components/crm-sidebar";
 import { CrmThemeProvider } from "./_components/crm-theme";
+import { CrmToastProvider } from "./_components/crm-toast";
 
 type Role = "owner" | "admin" | "manager" | "trainer";
 
@@ -117,7 +118,11 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
 
 function CrmShell({ children }: { children: React.ReactNode }) {
   // CrmThemeProvider 가 화이트/블랙 테마(.dark) 래퍼 + 배경/글자색을 담당.
-  return <CrmThemeProvider>{children}</CrmThemeProvider>;
+  return (
+    <CrmThemeProvider>
+      <CrmToastProvider>{children}</CrmToastProvider>
+    </CrmThemeProvider>
+  );
 }
 
 function CenterMessage({ children }: { children: React.ReactNode }) {

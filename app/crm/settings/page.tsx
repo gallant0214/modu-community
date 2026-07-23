@@ -13,6 +13,7 @@ import {
 import CrmStaffPage from "../staff/page";
 import CrmContractsPage from "../contracts/page";
 import { useCrmTheme } from "../_components/crm-theme";
+import { useCrmToast } from "../_components/crm-toast";
 
 interface Settings {
   center_id: number;
@@ -210,6 +211,7 @@ export default function CrmSettingsPage() {
     return t && SETTINGS_TABS.some((x) => x.key === t) ? (t as SettingsTab) : "reservation";
   });
   const { theme, setTheme } = useCrmTheme();
+  const toast = useCrmToast();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [info, setInfo] = useState<BootstrapInfo | null>(null);
@@ -314,6 +316,7 @@ export default function CrmSettingsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "저장 실패");
       setSettings((cur) => (cur ? { ...cur, ...patch } : cur));
+      toast.show("저장 완료");
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
