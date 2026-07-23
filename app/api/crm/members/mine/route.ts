@@ -60,11 +60,12 @@ export async function GET(request: Request) {
 
     let allowedIds: number[] | null = null;
     if (restricted) {
+      // 주강사 또는 추가강사(co_trainer_ids)로 배정된 회원
       const { data: passes } = await supabase
         .from("crm_passes")
         .select("member_id")
         .eq("center_id", m.center_id)
-        .eq("trainer_member_id", m.id);
+        .or(`trainer_member_id.eq.${m.id},co_trainer_ids.cs.{${m.id}}`);
       allowedIds = Array.from(new Set((passes ?? []).map((p) => p.member_id)));
       if (allowedIds.length === 0) continue;
     }

@@ -44,11 +44,12 @@ export async function GET(request: Request) {
   let allowedMemberIds: number[] | null = null;
   // 1인 강사(solo owner)는 본인 센터 전체를 보는 대표자와 동일하게 취급 → 격리 미적용.
   if ((ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner) {
+    // 주강사(trainer_member_id) 또는 추가강사(co_trainer_ids 포함) 로 배정된 회원.
     const { data: passes } = await supabase
       .from("crm_passes")
       .select("member_id")
       .eq("center_id", ctx.centerId)
-      .eq("trainer_member_id", ctx.centerMemberId);
+      .or(`trainer_member_id.eq.${ctx.centerMemberId},co_trainer_ids.cs.{${ctx.centerMemberId}}`);
     allowedMemberIds = Array.from(new Set((passes ?? []).map((p) => p.member_id)));
     if (allowedMemberIds.length === 0) {
       return NextResponse.json({ members: [] });

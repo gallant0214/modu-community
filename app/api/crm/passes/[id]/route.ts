@@ -23,7 +23,7 @@ export async function GET(
   const { data: pass, error } = await supabase
     .from("crm_passes")
     .select(
-      "id, member_id, trainer_member_id, co_trainer_ids, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, vat_included, payment_method, payment_method_custom, issued_at, start_date, expires_at, status, memo, created_at"
+      "id, member_id, trainer_member_id, co_trainer_ids, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, service_sessions, session_minutes, price_won, vat_included, payment_method, payment_method_custom, issued_at, start_date, expires_at, status, memo, created_at"
     )
     .eq("id", passId)
     .eq("center_id", ctx.centerId)
@@ -36,11 +36,14 @@ export async function GET(
     return NextResponse.json({ error: "수강권을 찾을 수 없습니다" }, { status: 404 });
   }
 
-  // trainer/manager 는 본인 담당 또는 본인 판매만
+  // trainer/manager 는 본인 담당(주강사/추가강사) 또는 본인 판매만. solo owner 는 예외.
+  const passCoIds = ((pass as { co_trainer_ids?: number[] }).co_trainer_ids ?? []) as number[];
   if (
     (ctx.role === "trainer" || ctx.role === "manager") &&
+    !ctx.isSoloOwner &&
     pass.trainer_member_id !== ctx.centerMemberId &&
-    pass.seller_member_id !== ctx.centerMemberId
+    pass.seller_member_id !== ctx.centerMemberId &&
+    !passCoIds.includes(ctx.centerMemberId as number)
   ) {
     return NextResponse.json({ error: "접근 권한이 없습니다" }, { status: 403 });
   }
@@ -108,6 +111,7 @@ export async function PATCH(
     lesson_kind?: string;
     total_sessions?: number;
     remaining_sessions?: number;
+    service_sessions?: number;
   };
   try {
     body = await request.json();
@@ -169,6 +173,10 @@ export async function PATCH(
   }
   if (body.remaining_sessions !== undefined && body.remaining_sessions >= 0) {
     patch.remaining_sessions = Number(body.remaining_sessions);
+  }
+  // 서비스 섹션(무료 보너스) — 수업료 계산에는 포함되지 않음
+  if (body.service_sessions !== undefined && body.service_sessions >= 0) {
+    patch.service_sessions = Math.max(0, Math.floor(Number(body.service_sessions) || 0));
   }
 
   if (Object.keys(patch).length === 0) {

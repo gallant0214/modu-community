@@ -52,7 +52,10 @@ export async function GET(
   const restricted =
     (ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner;
   if (restricted) {
-    passQuery = passQuery.eq("trainer_member_id", ctx.centerMemberId);
+    // 주강사 또는 추가강사(co_trainer_ids)로 배정된 수강권만
+    passQuery = passQuery.or(
+      `trainer_member_id.eq.${ctx.centerMemberId},co_trainer_ids.cs.{${ctx.centerMemberId}}`
+    );
   }
 
   const { data: passes } = await passQuery;
