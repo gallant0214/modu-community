@@ -39,7 +39,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_reservations")
     .select(
-      "id, pass_id, member_id, trainer_member_id, starts_at, ends_at, status, consumed, attended_at"
+      "id, pass_id, member_id, trainer_member_id, starts_at, ends_at, status, consumed, attended_at, cancelled_reason"
     )
     .eq("center_id", ctx.centerId)
     .gte("starts_at", startUtc.toISOString())
