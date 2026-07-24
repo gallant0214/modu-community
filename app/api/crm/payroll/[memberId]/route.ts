@@ -5,12 +5,16 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/crm/payroll/[memberId]?ym=YYYY-MM
+ * GET /api/crm/payroll/[memberId]?ym=YYYY-MM  또는 ?from=YYYY-MM-DD&to=YYYY-MM-DD
  *
- * 강사 이달 지급액 계산:
- *  - 이번달 강사 매출 (crm_passes 발급분, trainer_member_id = memberId)
+ * 강사 지급액 계산:
+ *  - 기간 내 강사 매출 (crm_passes 발급분, trainer_member_id = memberId)
  *  - 룰 매칭: 강사 override 룰 우선, 없으면 센터 기본 룰
  *  - 룰의 가격 구간(tier)에서 issue_type별 비율/정액 적용
+ *
+ * 접근 권한:
+ *  - admin (owner/admin/manager 등) 은 모든 강사 조회 가능
+ *  - trainer 는 본인(memberId === ctx.centerMemberId) 만 조회 가능
  *
  * 응답:
  *   { passes: [...], rules: [...], breakdown: { new, renewal, trial, service, total },
@@ -20,21 +24,43 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ memberId: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
   const { memberId } = await params;
   const trainerId = Number(memberId);
   if (!trainerId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
+  const isAdmin = ctx.accessLevel === "admin" || ctx.role === "owner" || ctx.role === "admin";
+  const isSelf = trainerId === (ctx.centerMemberId ?? -1);
+  if (!isAdmin && !isSelf) {
+    return NextResponse.json({ error: "본인 수업료만 조회할 수 있습니다" }, { status: 403 });
+  }
+
   const url = new URL(request.url);
+  const fromRaw = url.searchParams.get("from");
+  const toRaw = url.searchParams.get("to");
   const ymRaw = url.searchParams.get("ym");
-  const ym = /^\d{4}-\d{2}$/.test(ymRaw || "")
-    ? (ymRaw as string)
-    : new Date().toISOString().slice(0, 7);
-  const [y, m] = ym.split("-").map(Number);
-  const startDate = `${ym}-01`;
-  const nextMonth = new Date(y, m, 1).toISOString().slice(0, 10);
+
+  const isDate = (s: string | null) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  let startDate: string;
+  let nextMonth: string;
+  let ym: string;
+
+  if (isDate(fromRaw) && isDate(toRaw)) {
+    startDate = fromRaw!;
+    const to = new Date(`${toRaw}T00:00:00Z`);
+    to.setUTCDate(to.getUTCDate() + 1);
+    nextMonth = to.toISOString().slice(0, 10);
+    ym = startDate.slice(0, 7);
+  } else {
+    ym = /^\d{4}-\d{2}$/.test(ymRaw || "")
+      ? (ymRaw as string)
+      : new Date().toISOString().slice(0, 7);
+    const [y, m] = ym.split("-").map(Number);
+    startDate = `${ym}-01`;
+    nextMonth = new Date(y, m, 1).toISOString().slice(0, 10);
+  }
 
   const [{ data: passes }, { data: overrideRules }, { data: defaultRules }] = await Promise.all([
     supabase

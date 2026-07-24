@@ -10,18 +10,28 @@ const ALLOWED_ROLES: CrmRole[] = ["owner", "admin", "manager", "trainer"];
 
 /**
  * GET /api/crm/staff/[id] — 직원 상세 + 권한 row
+ *
+ * 접근:
+ *  - owner/admin/manager 등급 (센터 관리자) 전체 조회 가능
+ *  - trainer 는 본인(id === ctx.centerMemberId) 만 조회 가능
  */
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
   const { id } = await params;
   const memberId = Number(id);
   if (!memberId) {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  }
+
+  const isManagerish = ctx.role === "owner" || ctx.role === "admin" || ctx.role === "manager";
+  const isSelf = memberId === ctx.centerMemberId;
+  if (!isManagerish && !isSelf) {
+    return NextResponse.json({ error: "본인 정보만 조회할 수 있습니다" }, { status: 403 });
   }
 
   const { data: member, error } = await supabase
@@ -59,18 +69,28 @@ export async function GET(
 /**
  * PATCH /api/crm/staff/[id] — 등급/access_level/status/표시명 변경
  *
+ * 접근:
+ *  - owner/admin/manager: 모든 직원 수정
+ *  - trainer(본인): display_name/phone/email/address/birth/resident_no 만 수정 허용
+ *
  * 본인(센터의 마지막 owner) 등급을 trainer 로 내려서 센터가 owner 없는 상태가 되는 것 방지.
  */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
   const { id } = await params;
   const memberId = Number(id);
   if (!memberId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+
+  const isManagerish = ctx.role === "owner" || ctx.role === "admin" || ctx.role === "manager";
+  const isSelf = memberId === ctx.centerMemberId;
+  if (!isManagerish && !isSelf) {
+    return NextResponse.json({ error: "본인 정보만 수정할 수 있습니다" }, { status: 403 });
+  }
 
   let body: {
     role?: string;
@@ -103,6 +123,29 @@ export async function PATCH(
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  }
+
+  // trainer 본인이 관리자 전용 필드를 건드리려 하면 즉시 차단
+  if (!isManagerish) {
+    const adminOnlyKeys = [
+      "role",
+      "grade_id",
+      "access_level",
+      "status",
+      "employment_status",
+      "employment_type",
+      "commission_type",
+      "commission_rate",
+      "commission_tiers",
+      "base_salary",
+      "cash_pay_enabled",
+      "cash_pay_won",
+      "commission_bonuses",
+    ] as const;
+    const blocked = adminOnlyKeys.find((k) => (body as Record<string, unknown>)[k] !== undefined);
+    if (blocked) {
+      return NextResponse.json({ error: "본인이 수정할 수 없는 항목입니다" }, { status: 403 });
+    }
   }
 
   const patch: Record<string, unknown> = {};

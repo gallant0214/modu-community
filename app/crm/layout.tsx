@@ -12,6 +12,7 @@ type Role = "owner" | "admin" | "manager" | "trainer";
 interface BootstrapResp {
   onboarded: boolean;
   centerId?: number;
+  centerMemberId?: number | null;
   centerName?: string;
   centerKind?: "solo" | "center";
   role?: Role;
@@ -109,6 +110,8 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           role={ctx.role ?? "trainer"}
           centerName={ctx.centerName ?? ""}
           isSoloOwner={ctx.isSoloOwner ?? false}
+          centerKind={ctx.centerKind}
+          centerMemberId={ctx.centerMemberId ?? null}
         />
         <main className="flex-1 min-w-0 md:ml-60">{children}</main>
       </div>

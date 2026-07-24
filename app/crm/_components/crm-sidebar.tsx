@@ -10,7 +10,7 @@ type Role = "owner" | "admin" | "manager" | "trainer";
 interface MenuItem {
   href: string;
   label: string;
-  group: "main" | "sales" | "engage" | "admin" | "tools";
+  group: "main" | "sales" | "engage" | "admin" | "tools" | "me";
   /** owner / admin 만 보임 (직원관리·설정). manager/trainer 숨김. */
   staffOnly?: boolean;
   /** true 면 새 창(팝업)으로 열기 (터치출석 등 독립 화면). */
@@ -33,21 +33,64 @@ const MENU: MenuItem[] = [
   { href: "/crm/touch-attendance", label: "터치출석", group: "tools", staffOnly: true, newWindow: true, icon: IconTouch },
 ];
 
+/**
+ * 개인 강사(kind='solo') 전용 축소 메뉴.
+ * 헬스장/센터 관리자용 기능(락커·메세지·통계·센터설정·터치출석)은 숨기고
+ * 강사 본인에게 유용한 항목(수업료·내 정보)만 제공.
+ */
+const SOLO_MENU_HREFS = [
+  "/crm/dashboard",
+  "/crm/members",
+  "/crm/schedule",
+  "/crm/attendances",
+  "/crm/products",
+  "/crm/memberships",
+  "/crm/passes",
+];
+
+function buildSoloMenu(myMemberId: number | null): MenuItem[] {
+  const base = MENU.filter((m) => SOLO_MENU_HREFS.includes(m.href));
+  base.push({
+    href: "/crm/payroll/me",
+    label: "내 수업료",
+    group: "me",
+    icon: IconPayroll,
+  });
+  if (myMemberId) {
+    base.push({
+      href: `/crm/staff/${myMemberId}`,
+      label: "내 정보",
+      group: "me",
+      icon: IconSelf,
+    });
+  }
+  base.push({
+    href: "/crm/settings?tab=center",
+    label: "센터 정보",
+    group: "me",
+    icon: IconCenter,
+  });
+  return base;
+}
+
 const MENU_GROUPS: MenuItem["group"][] = [
   "main",
   "sales",
   "engage",
   "admin",
   "tools",
+  "me",
 ];
 
 interface Props {
   role: Role;
   centerName: string;
   isSoloOwner: boolean;
+  centerKind?: "solo" | "center";
+  centerMemberId?: number | null;
 }
 
-export function CrmSidebar({ role, centerName }: Props) {
+export function CrmSidebar({ role, centerName, centerKind, centerMemberId }: Props) {
   const pathname = usePathname();
   const { getIdToken } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -77,8 +120,15 @@ export function CrmSidebar({ role, centerName }: Props) {
       cancelled = true;
     };
   }, [isStaffLevel, getIdToken, pathname]);
-  const visible = MENU.filter((m) => !m.staffOnly || isStaffLevel);
-  const isActive = (href: string) => pathname === href || pathname?.startsWith(`${href}/`);
+  const isSoloMode = centerKind === "solo";
+  const visible = isSoloMode
+    ? buildSoloMenu(centerMemberId ?? null)
+    : MENU.filter((m) => !m.staffOnly || isStaffLevel);
+  const isActive = (href: string) => {
+    const clean = href.split("?")[0];
+    if (!clean) return false;
+    return pathname === clean || pathname?.startsWith(`${clean}/`);
+  };
 
   const links = (
     <>
@@ -501,6 +551,27 @@ function IconAttendance({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M8 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2h-3M8 3v4h8V3M8 3h8" />
+    </svg>
+  );
+}
+function IconPayroll({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V6m0 10v-2m0 2c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+function IconSelf({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+function IconCenter({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M4 10l8-6 8 6M6 10v11M18 10v11M10 21v-6h4v6" />
     </svg>
   );
 }
