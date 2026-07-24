@@ -6,11 +6,13 @@ import { useAuth } from "@/app/components/auth-provider";
 import { CrmSidebar } from "./_components/crm-sidebar";
 import { CrmThemeProvider } from "./_components/crm-theme";
 import { CrmToastProvider } from "./_components/crm-toast";
+import { getCenterCookie, clearCenterCookie } from "./_components/crm-center-cookie";
 
 type Role = "owner" | "admin" | "manager" | "trainer";
 
 interface BootstrapResp {
   onboarded: boolean;
+  accessDenied?: boolean;
   centerId?: number;
   centerMemberId?: number | null;
   centerName?: string;
@@ -29,11 +31,20 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
 
   const isOnboarding = pathname === "/crm/onboarding";
   const isTouch = pathname === "/crm/touch-attendance";
+  const isSelect = pathname === "/crm/select";
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       if (loading || !user) return;
+      // 진입 선택: 어떤 센터/개인 CRM 으로 들어갈지 아직 안 골랐으면(쿠키 없음) 선택 화면으로.
+      // 선택기·온보딩·터치출석 화면은 예외(무한 리다이렉트 방지).
+      if (!isSelect && !isOnboarding && !isTouch && getCenterCookie() == null) {
+        router.replace("/crm/select");
+        return;
+      }
+      // 선택 화면은 독립 화면 — bootstrap 불필요.
+      if (isSelect) return;
       try {
         const token = await getIdToken();
         if (!token) {
@@ -61,7 +72,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [loading, user, isOnboarding, isTouch, pathname, router, getIdToken]);
+  }, [loading, user, isOnboarding, isTouch, isSelect, pathname, router, getIdToken]);
 
   // 1) 로그인 상태 확인 중
   if (loading) {
@@ -87,8 +98,8 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // 3) onboarding·터치출석 은 사이드바 없이 children 만 렌더 (독립 화면)
-  if (isOnboarding || isTouch) {
+  // 3) onboarding·터치출석·진입선택 은 사이드바 없이 children 만 렌더 (독립 화면)
+  if (isOnboarding || isTouch || isSelect) {
     return <CrmShell>{children}</CrmShell>;
   }
 
@@ -100,6 +111,31 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   // 5) 미가입 → onboarding 으로 이동 중
   if (!ctx.onboarded) {
     return <CrmShell><CenterMessage>설정 페이지로 이동합니다…</CenterMessage></CrmShell>;
+  }
+
+  // 5-1) 직급권한상 이 센터 CRM 접속 차단됨
+  if (ctx.accessDenied) {
+    return (
+      <CrmShell>
+        <CenterMessage>
+          <div className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-1.5">
+            이 센터 CRM에 접근할 권한이 없어요
+          </div>
+          <div className="text-[13px] text-[#8C8270] dark:text-zinc-500">
+            {ctx.centerName ? `'${ctx.centerName}' ` : ""}관리자에게 문의하시거나, 다른 곳으로 전환해 주세요.
+          </div>
+          <button
+            onClick={() => {
+              clearCenterCookie();
+              router.replace("/crm/select");
+            }}
+            className="mt-4 px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[14px] font-medium hover:bg-[#5a6932] transition-colors"
+          >
+            다른 곳으로 전환
+          </button>
+        </CenterMessage>
+      </CrmShell>
+    );
   }
 
   // 6) 정상: 사이드바 + 컨텐츠

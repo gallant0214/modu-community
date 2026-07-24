@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
-import { loadCrmContextForUid } from "@/app/lib/crm-auth";
+import { loadCrmContextForUid, getSelectedCenterId } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
   }
 
-  const ctx = await loadCrmContextForUid(user.uid);
+  // 진입 선택기에서 고른 센터(쿠키)를 우선 로드
+  const ctx = await loadCrmContextForUid(user.uid, getSelectedCenterId(request));
   if (!ctx) {
     // 승인 대기중(pending)인 센터 가입 요청이 있으면 앱에 알려서 "승인 대기 중" 표시.
     const { data: pending } = await supabase
@@ -51,6 +52,19 @@ export async function GET(request: Request) {
     .eq("firebase_uid", ctx.uid)
     .maybeSingle();
   const permissions = await loadPermissionsForContext(ctx);
+  // 직급권한 '센터 CRM 접속' 차단: 센터 컨텍스트 + owner 아님 + 권한 OFF → 진입 차단 신호.
+  // 개인 CRM(solo)·owner 는 항상 허용.
+  if (
+    ctx.centerKind !== "solo" &&
+    ctx.role !== "owner" &&
+    permissions["center.access_crm"] === false
+  ) {
+    return NextResponse.json({
+      onboarded: true,
+      accessDenied: true,
+      centerName: ctx.centerName,
+    });
+  }
   return NextResponse.json({
     onboarded: true,
     centerId: ctx.centerId,

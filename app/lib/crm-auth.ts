@@ -39,6 +39,24 @@ export interface CrmContext {
   centerName: string;
 }
 
+/**
+ * 진입 선택기에서 고른 센터를 저장한 쿠키 `crm_center_id` 를 파싱.
+ * 쿠키는 모든 /api/crm/* 요청에 자동 전송되므로 서버가 선택 컨텍스트를 알 수 있다.
+ * 반환값은 "선호"일 뿐 — 실제 멤버십 검증은 호출측(requireCrmContext)에서 수행하므로 위조 안전.
+ */
+export function getSelectedCenterId(request: Request): number | null {
+  try {
+    const cookie = request.headers.get("cookie");
+    if (!cookie) return null;
+    const m = cookie.match(/(?:^|;\s*)crm_center_id=(\d+)/);
+    if (!m) return null;
+    const n = Number(m[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface RequireCrmOptions {
   /** 이 등급 이상만 통과 (hierarchy: owner > admin > manager > trainer) */
   needRole?: CrmRole;
@@ -80,17 +98,19 @@ export async function requireCrmContext(
     return NextResponse.json({ error: "DB 오류", detail: error.message }, { status: 500 });
   }
 
-  // 다중 센터 지원: ?centerId= 로 특정 센터를 지정하면 그 멤버십을 사용한다
-  // (본인이 active 멤버인 센터만). 없으면 우선순위(solo → 최신) 로 단일 선택.
+  // 다중 센터 지원: 선택 우선순위 = ?centerId= 쿼리 > 쿠키(crm_center_id) > 기본 우선순위(solo → 최신).
+  // 어느 경우든 "본인이 active 멤버인 센터" 일 때만 반영(위조 안전).
   let membership = rows?.[0];
+  let wantCenterId = 0;
   try {
-    const wantCenterId = Number(new URL(request.url).searchParams.get("centerId"));
-    if (wantCenterId) {
-      const match = rows?.find((r) => r.center_id === wantCenterId);
-      if (match) membership = match;
-    }
+    wantCenterId = Number(new URL(request.url).searchParams.get("centerId")) || 0;
   } catch {
-    // URL 파싱 실패 시 기본 선택 유지
+    // URL 파싱 실패 시 무시
+  }
+  if (!wantCenterId) wantCenterId = getSelectedCenterId(request) ?? 0;
+  if (wantCenterId) {
+    const match = rows?.find((r) => r.center_id === wantCenterId);
+    if (match) membership = match;
   }
   if (!membership) {
     return NextResponse.json({ error: "CRM_NOT_ONBOARDED" }, { status: 409 });
@@ -141,7 +161,8 @@ export function isCrmError(
  * Request 가 없는 layout/page 에서 호출. 인증 실패 시 null 반환 — 호출측에서 redirect.
  */
 export async function loadCrmContextForUid(
-  uid: string
+  uid: string,
+  wantCenterId?: number | null
 ): Promise<CrmContext | null> {
   const { data: rows } = await supabase
     .from("crm_center_members")
@@ -153,7 +174,12 @@ export async function loadCrmContextForUid(
     .order("is_solo_owner", { ascending: false })
     .order("joined_at", { ascending: false });
 
-  const membership = rows?.[0];
+  // 선택된 센터(쿠키/파라미터)가 본인 active 멤버십이면 그것을, 아니면 기본 우선순위.
+  let membership = rows?.[0];
+  if (wantCenterId) {
+    const match = rows?.find((r) => r.center_id === wantCenterId);
+    if (match) membership = match;
+  }
   if (!membership) return null;
 
   const role = membership.role as CrmRole;

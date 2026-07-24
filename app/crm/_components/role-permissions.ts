@@ -44,6 +44,13 @@ const D_MGR_FC = { owner: true, admin: true, manager: true, trainer: false, fc: 
 
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
+    key: "center",
+    label: "센터 접근",
+    items: [
+      { key: "center.access_crm", label: "센터 CRM 웹 접속 (끄면 이 등급은 진입 차단)", defaults: D_ALL },
+    ],
+  },
+  {
     key: "members",
     label: "회원 관리",
     items: [

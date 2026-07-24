@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
+import { clearCenterCookie } from "./crm-center-cookie";
 
 type Role = "owner" | "admin" | "manager" | "trainer";
 
@@ -453,6 +454,16 @@ function SidebarHeader({ centerName }: { centerName: string }) {
           <div className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 truncate leading-tight mt-1">
             {centerName || "CRM"}
           </div>
+          <Link
+            href="/crm/select"
+            onClick={() => clearCenterCookie()}
+            className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-[#8C8270] hover:text-[#6B7B3A] dark:text-zinc-500 dark:hover:text-[#A8B87A]"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            센터 전환
+          </Link>
         </div>
       </div>
     </div>
