@@ -48,7 +48,10 @@ const SOLO_MENU_HREFS = [
   "/crm/passes",
 ];
 
-function buildSoloMenu(myMemberId: number | null): MenuItem[] {
+function buildSoloMenu(
+  myMemberId: number | null,
+  opts: { includeCenterInfo: boolean }
+): MenuItem[] {
   const base = MENU.filter((m) => SOLO_MENU_HREFS.includes(m.href));
   base.push({
     href: "/crm/payroll/me",
@@ -64,12 +67,15 @@ function buildSoloMenu(myMemberId: number | null): MenuItem[] {
       icon: IconSelf,
     });
   }
-  base.push({
-    href: "/crm/settings?tab=center",
-    label: "센터 정보",
-    group: "me",
-    icon: IconCenter,
-  });
+  // 센터 정보는 본인 센터(=개인 강사) 일 때만. 센터 소속 강사는 접근 권한 없음(403).
+  if (opts.includeCenterInfo) {
+    base.push({
+      href: "/crm/settings?tab=center",
+      label: "센터 정보",
+      group: "me",
+      icon: IconCenter,
+    });
+  }
   return base;
 }
 
@@ -120,9 +126,12 @@ export function CrmSidebar({ role, centerName, centerKind, centerMemberId }: Pro
       cancelled = true;
     };
   }, [isStaffLevel, getIdToken, pathname]);
-  const isSoloMode = centerKind === "solo";
+  // 축소(개인 강사용) 메뉴 대상:
+  //  - centerKind='solo' (개인 강사 본인 센터)
+  //  - role='trainer' (센터 소속 강사) — 락커/메세지/통계 등 관리 도구 대신 본인 스코프 위주로 표시
+  const isSoloMode = centerKind === "solo" || role === "trainer";
   const visible = isSoloMode
-    ? buildSoloMenu(centerMemberId ?? null)
+    ? buildSoloMenu(centerMemberId ?? null, { includeCenterInfo: centerKind === "solo" })
     : MENU.filter((m) => !m.staffOnly || isStaffLevel);
   const isActive = (href: string) => {
     const clean = href.split("?")[0];
