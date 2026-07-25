@@ -341,8 +341,16 @@ export async function POST(request: Request) {
   }
   const name = body.name?.trim();
   if (!name) return NextResponse.json({ error: "이름을 입력해주세요" }, { status: 400 });
-  const phone = body.phone?.trim();
-  if (!phone) return NextResponse.json({ error: "연락처를 입력해주세요" }, { status: 400 });
+  const phone = body.phone?.trim() || null;
+  const email = body.email?.trim() || null;
+  // 연락처(phone) 또는 이메일 중 최소 1개 필수.
+  // 앱/웹 매칭·안내 채널로 최소 1개는 필요.
+  if (!phone && !email) {
+    return NextResponse.json(
+      { error: "연락처 또는 이메일 중 하나는 입력해주세요" },
+      { status: 400 }
+    );
+  }
 
   if ((memberType === "matched" || memberType === "full") && !body.linked_firebase_uid) {
     return NextResponse.json({ error: "정회원/매칭회원은 사용자 식별자가 필요합니다" }, { status: 400 });
@@ -353,7 +361,7 @@ export async function POST(request: Request) {
     member_type: memberType,
     name,
     phone,
-    email: body.email?.trim() || null,
+    email,
     birth: body.birth || null,
     gender:
       body.gender && GENDERS.includes(body.gender as (typeof GENDERS)[number])

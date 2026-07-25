@@ -2578,7 +2578,7 @@ export type Database = {
           center_id: number
           member_type: string
           name: string
-          phone: string
+          phone: string | null
           email: string | null
           birth: string | null
           gender: string | null
@@ -2615,7 +2615,7 @@ export type Database = {
           center_id: number
           member_type: string
           name: string
-          phone: string
+          phone?: string | null
           email?: string | null
           birth?: string | null
           gender?: string | null

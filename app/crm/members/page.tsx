@@ -1899,9 +1899,15 @@ function RegisterModal({
   const submit = async () => {
     setError("");
     if (!name.trim()) return setError("이름을 입력해주세요");
-    if (!phone.trim()) return setError("연락처를 입력해주세요");
+    // 연락처 또는 이메일 중 하나는 필수 (이메일만으로 등록 가능)
+    if (!phone.trim() && !email.trim()) {
+      return setError("연락처 또는 이메일 중 하나는 입력해주세요");
+    }
+    if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) {
+      return setError("이메일 형식을 확인해 주세요");
+    }
     if ((memberType === "matched" || memberType === "full") && !linkedUid.trim()) {
-      return setError("모두의 지도사 사용자를 닉네임으로 검색해 선택해 주세요");
+      return setError("모두의 지도사 사용자를 닉네임 또는 이메일로 검색해 선택해 주세요");
     }
     setSubmitting(true);
     try {
@@ -1912,7 +1918,7 @@ function RegisterModal({
         body: JSON.stringify({
           member_type: memberType,
           name: name.trim(),
-          phone: phone.trim(),
+          phone: phone.trim() || undefined,
           email: email.trim() || undefined,
           birth: birth || undefined,
           gender: gender || undefined,
@@ -1966,7 +1972,7 @@ function RegisterModal({
         <CrmField label="이름" required>
           <input className={crmInputClass} value={name} onChange={(e) => setName(e.target.value)} />
         </CrmField>
-        <CrmField label="연락처" required>
+        <CrmField label="연락처">
           <input
             className={crmInputClass}
             type="tel"
@@ -1975,6 +1981,9 @@ function RegisterModal({
             onChange={(e) => setPhone(formatPhone(e.target.value))}
             placeholder="010-1234-5678"
           />
+          <p className="mt-1 text-[11.5px] text-[#A89B80]">
+            연락처 또는 아래 이메일 중 <b>하나는 필수</b>예요. 이메일만으로도 등록할 수 있어요.
+          </p>
         </CrmField>
         <div className="grid grid-cols-2 gap-2">
           <CrmField label="성별">
@@ -2009,9 +2018,15 @@ function RegisterModal({
           <input
             className={crmInputClass}
             type="email"
+            inputMode="email"
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@example.com"
           />
+          <p className="mt-1 text-[11.5px] text-[#A89B80]">
+            연락처 대신 이메일만 입력해도 등록돼요.
+          </p>
         </CrmField>
 
         {(memberType === "matched" || memberType === "full") && (
