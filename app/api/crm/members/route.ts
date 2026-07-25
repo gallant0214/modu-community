@@ -343,16 +343,17 @@ export async function POST(request: Request) {
   if (!name) return NextResponse.json({ error: "이름을 입력해주세요" }, { status: 400 });
   const phone = body.phone?.trim() || null;
   const email = body.email?.trim() || null;
-  // 연락처(phone) 또는 이메일 중 최소 1개 필수.
-  // 앱/웹 매칭·안내 채널로 최소 1개는 필요.
-  if (!phone && !email) {
-    return NextResponse.json(
-      { error: "연락처 또는 이메일 중 하나는 입력해주세요" },
-      { status: 400 }
-    );
+  const linkedUid = body.linked_firebase_uid?.trim() || null;
+  // 정책:
+  //  - provisional (커뮤니티 미가입 회원): phone 필수 — 안내 채널 확보
+  //  - matched/full (모두의 지도사 커뮤니티 회원 매칭): linked_firebase_uid 로 식별되므로 phone·email 없이 등록 허용
+  if (memberType === "provisional") {
+    if (!phone) {
+      return NextResponse.json({ error: "연락처를 입력해주세요" }, { status: 400 });
+    }
   }
 
-  if ((memberType === "matched" || memberType === "full") && !body.linked_firebase_uid) {
+  if ((memberType === "matched" || memberType === "full") && !linkedUid) {
     return NextResponse.json({ error: "정회원/매칭회원은 사용자 식별자가 필요합니다" }, { status: 400 });
   }
 
@@ -367,7 +368,7 @@ export async function POST(request: Request) {
       body.gender && GENDERS.includes(body.gender as (typeof GENDERS)[number])
         ? body.gender
         : null,
-    linked_firebase_uid: body.linked_firebase_uid || null,
+    linked_firebase_uid: linkedUid,
     memo: body.memo?.trim() || null,
     address: body.address?.trim() || null,
     visit_route: body.visit_route?.trim() || null,

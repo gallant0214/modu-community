@@ -1876,6 +1876,7 @@ function RegisterModal({
   };
 
   const pickUser = (u: { firebase_uid: string; name: string; email: string | null }) => {
+    setMemberType("matched"); // 커뮤니티 회원 매칭 → 연락처 없이 등록 가능
     setLinkedUid(u.firebase_uid);
     setLinkedNickname(u.name);
     if (!name.trim()) setName(u.name);
@@ -1886,28 +1887,27 @@ function RegisterModal({
   };
 
   const clearLinked = () => {
+    setMemberType("provisional"); // 매칭 해제 → 커뮤니티 미가입(연락처 필수)
     setLinkedUid("");
     setLinkedNickname("");
-    setName("");
     setPhone("");
     setEmail("");
-    setBirth("1990-01-01");
-    setGender("");
-    setMemo("");
+    setNickResults([]);
+    setNickSearched(false);
+    setNickQuery("");
   };
 
   const submit = async () => {
     setError("");
     if (!name.trim()) return setError("이름을 입력해주세요");
-    // 연락처 또는 이메일 중 하나는 필수 (이메일만으로 등록 가능)
-    if (!phone.trim() && !email.trim()) {
-      return setError("연락처 또는 이메일 중 하나는 입력해주세요");
+    // 정책:
+    //  - 커뮤니티 회원 매칭(linkedUid) 됨 → 연락처 없이 등록 가능 (uid 로 식별)
+    //  - 매칭 안 됨(커뮤니티 미가입) → 연락처 필수
+    if (!linkedUid.trim()) {
+      if (!phone.trim()) return setError("연락처를 입력해주세요 (커뮤니티 미가입 회원은 필수)");
     }
     if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) {
       return setError("이메일 형식을 확인해 주세요");
-    }
-    if ((memberType === "matched" || memberType === "full") && !linkedUid.trim()) {
-      return setError("모두의 지도사 사용자를 닉네임 또는 이메일로 검색해 선택해 주세요");
     }
     setSubmitting(true);
     try {
@@ -1946,33 +1946,75 @@ function RegisterModal({
   return (
     <CrmModal open={open} onClose={onClose} title="회원 등록">
       <div className="space-y-3">
-        <CrmField label="회원 유형" required>
-          <div className="grid grid-cols-3 gap-2">
-            {(["provisional", "full", "matched"] as const).map((t) => (
+        <CrmField label="모두의 지도사 커뮤니티 회원 검색">
+          {linkedUid ? (
+            <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-[#6B7B3A]/40 bg-[#6B7B3A]/5 dark:bg-[#6B7B3A]/15">
+              <span className="text-[13.5px] text-[#3A342A] dark:text-zinc-200">
+                커뮤니티 회원 연결됨: <strong className="font-semibold">{linkedNickname}</strong>
+              </span>
               <button
-                key={t}
-                onClick={() => setMemberType(t)}
-                className={`px-3 py-2 rounded-lg text-[13px] font-medium transition-colors
-                  ${memberType === t
-                    ? "border border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
-                    : "border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
-                  }`}
+                onClick={clearLinked}
+                className="text-[12.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
               >
-                {MEMBER_TYPE_LABEL[t]}
+                해제
               </button>
-            ))}
-          </div>
-          <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
-            {memberType === "provisional" && "이름·연락처만으로 미리 등록. 나중에 회원이 가입하면 매칭으로 전환할 수 있어요."}
-            {memberType === "full" && "관리자가 가입을 대행해요. 사용자 식별자(uid)가 필요해요."}
-            {memberType === "matched" && "이미 모두의 지도사를 사용하는 분과 매칭. uid가 필요해요."}
-          </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <input
+                  className={`${crmInputClass} flex-1`}
+                  value={nickQuery}
+                  onChange={(e) => setNickQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      searchNickname();
+                    }
+                  }}
+                  placeholder="이메일(정확히) 또는 닉네임(일부)"
+                />
+                <button
+                  type="button"
+                  onClick={searchNickname}
+                  disabled={nickSearching || !nickQuery.trim()}
+                  className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932] whitespace-nowrap"
+                >
+                  {nickSearching ? "검색 중…" : "검색"}
+                </button>
+              </div>
+              <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
+                커뮤니티 가입 회원을 찾아 연결하면 <b>연락처 없이</b> 등록돼요. 검색되지 않으면(미가입) 아래 <b>연락처를 필수</b>로 입력해 등록하세요.
+              </p>
+              {nickSearched && nickResults.length === 0 && (
+                <div className="mt-2 px-3 py-2 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-lg">
+                  일치하는 커뮤니티 회원이 없어요. 미가입 회원은 연락처로 등록하세요.
+                </div>
+              )}
+              {nickResults.length > 0 && (
+                <ul className="mt-2 space-y-1.5 max-h-[200px] overflow-y-auto">
+                  {nickResults.map((u) => (
+                    <li key={u.firebase_uid}>
+                      <button
+                        type="button"
+                        onClick={() => pickUser(u)}
+                        className="w-full text-left px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50"
+                      >
+                        <div className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">{u.name}</div>
+                        {u.email && <div className="text-[11.5px] text-[#A89B80] truncate">{u.email}</div>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
         </CrmField>
 
         <CrmField label="이름" required>
           <input className={crmInputClass} value={name} onChange={(e) => setName(e.target.value)} />
         </CrmField>
-        <CrmField label="연락처">
+        <CrmField label="연락처" required={!linkedUid}>
           <input
             className={crmInputClass}
             type="tel"
@@ -1981,9 +2023,15 @@ function RegisterModal({
             onChange={(e) => setPhone(formatPhone(e.target.value))}
             placeholder="010-1234-5678"
           />
-          <p className="mt-1 text-[11.5px] text-[#A89B80]">
-            연락처 또는 아래 이메일 중 <b>하나는 필수</b>예요. 이메일만으로도 등록할 수 있어요.
-          </p>
+          {linkedUid ? (
+            <p className="mt-1 text-[11.5px] text-[#A89B80]">
+              커뮤니티 회원으로 연결돼 <b>연락처 없이</b> 등록할 수 있어요. (입력해도 됨)
+            </p>
+          ) : (
+            <p className="mt-1 text-[11.5px] text-[#A89B80]">
+              커뮤니티 미가입 회원은 연락처가 <b>필수</b>예요.
+            </p>
+          )}
         </CrmField>
         <div className="grid grid-cols-2 gap-2">
           <CrmField label="성별">
@@ -2029,78 +2077,6 @@ function RegisterModal({
           </p>
         </CrmField>
 
-        {(memberType === "matched" || memberType === "full") && (
-          <CrmField label="모두의 지도사 사용자 연결" required>
-            {linkedUid ? (
-              <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-[#6B7B3A]/40 bg-[#6B7B3A]/5 dark:bg-[#6B7B3A]/15">
-                <span className="text-[13.5px] text-[#3A342A] dark:text-zinc-200">
-                  연결됨: <strong className="font-semibold">{linkedNickname}</strong>
-                </span>
-                <button
-                  onClick={clearLinked}
-                  className="text-[12.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
-                >
-                  다시 선택
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="flex gap-2">
-                  <input
-                    className={`${crmInputClass} flex-1`}
-                    value={nickQuery}
-                    onChange={(e) => setNickQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        searchNickname();
-                      }
-                    }}
-                    placeholder="닉네임 또는 이메일"
-                  />
-                  <button
-                    type="button"
-                    onClick={searchNickname}
-                    disabled={nickSearching || !nickQuery.trim()}
-                    className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932] whitespace-nowrap"
-                  >
-                    {nickSearching ? "검색 중…" : "검색"}
-                  </button>
-                </div>
-                <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
-                  닉네임은 일부만 입력해도 검색되고, 이메일은 정확히 입력하면 바로 찾을 수 있어요.
-                </p>
-                {nickSearched && nickResults.length === 0 && (
-                  <div className="mt-2 px-3 py-2 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-lg">
-                    일치하는 사용자가 없습니다.
-                  </div>
-                )}
-                {nickResults.length > 0 && (
-                  <ul className="mt-2 space-y-1.5 max-h-[200px] overflow-y-auto">
-                    {nickResults.map((u) => (
-                      <li key={u.firebase_uid}>
-                        <button
-                          type="button"
-                          onClick={() => pickUser(u)}
-                          className="w-full text-left px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50"
-                        >
-                          <div className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">
-                            {u.name}
-                          </div>
-                          {u.email && (
-                            <div className="text-[11.5px] text-[#A89B80] truncate">
-                              {u.email}
-                            </div>
-                          )}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </>
-            )}
-          </CrmField>
-        )}
         <CrmField label="메모">
           <textarea
             className={`${crmInputClass} min-h-[72px]`}
