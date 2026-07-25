@@ -2918,6 +2918,42 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_attendance_voice_rules: {
+        Row: {
+          id: number
+          center_id: number
+          trigger_type: string
+          threshold_int: number | null
+          message: string
+          enabled: boolean
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          trigger_type: string
+          threshold_int?: number | null
+          message: string
+          enabled?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          trigger_type?: string
+          threshold_int?: number | null
+          message?: string
+          enabled?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_center_settings: {
         Row: {
           center_id: number

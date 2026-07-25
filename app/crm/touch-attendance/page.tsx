@@ -5,6 +5,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
 import FaceAttendance from "./face-attendance";
 import FaceEnroll from "./face-enroll";
+import { speakMessages } from "./_speak";
 
 interface MemberLite {
   id: number;
@@ -124,6 +125,8 @@ export default function TouchAttendancePage() {
           duplicate: data.duplicate,
           mileageAwarded: data.mileage_awarded ?? 0,
         });
+        // 서버에서 매칭된 음성 안내(예: 회원권 만료 임박) 재생
+        speakMessages(Array.isArray(data.voice_messages) ? data.voice_messages : []);
       }
     } catch (e) {
       setResult({ kind: "error", message: e instanceof Error ? e.message : "네트워크 오류" });

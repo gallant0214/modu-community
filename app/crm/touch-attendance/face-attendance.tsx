@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
+import { speakMessages } from "./_speak";
 
 // face-api.js (@vladmandic/face-api) CDN — 런타임 로드(번들 미포함)
 const FACEAPI_SRC = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js";
@@ -85,6 +86,8 @@ export default function FaceAttendance() {
         const data = await res.json();
         if (res.ok) {
           setLastHit({ name: data.member?.name ?? name, at: Date.now() });
+          // 서버가 매칭한 안내 음성 재생 (중복 체크인이면 voice_messages=[])
+          speakMessages(Array.isArray(data.voice_messages) ? data.voice_messages : []);
         }
       } catch {
         /* 무시 - 다음 프레임에 재시도 */

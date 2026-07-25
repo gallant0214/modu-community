@@ -173,6 +173,7 @@ interface BootstrapInfo {
 type SettingsTab =
   | "reservation"
   | "alerts"
+  | "voice"
   | "notices"
   | "mileage"
   | "center"
@@ -193,6 +194,7 @@ const SETTINGS_TABS: {
   { key: "center", label: "센터 정보", desc: "주소·연락처·SNS", icon: "notice" },
   { key: "reservation", label: "예약 정책", desc: "예약·취소 기준", icon: "calendar" },
   { key: "alerts", label: "알림", desc: "채팅 알림", icon: "bell" },
+  { key: "voice", label: "출석 알림", desc: "체크인 음성 안내", icon: "bell" },
   { key: "notices", label: "공지 설정", desc: "센터 공지", icon: "notice" },
   { key: "mileage", label: "마일리지", desc: "적립 정책", icon: "point" },
   { key: "permissions", label: "직급 권한", desc: "직원 등급·기능 접근", icon: "shield" },
@@ -588,6 +590,8 @@ export default function CrmSettingsPage() {
 
       {tab === "center" && <CenterProfilePanel role={info?.role ?? "trainer"} />}
 
+      {tab === "voice" && <AttendanceVoicePanel role={info?.role ?? "trainer"} />}
+
       {tab === "permissions" && (
         <div className="space-y-6">
           <GradesPanel />
@@ -804,6 +808,336 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
               {saving ? "저장 중…" : "저장"}
             </button>
           </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/* ---------- 출석 음성 안내 규칙 ---------- */
+
+type VoiceTrigger =
+  | "welcome"
+  | "expiring_membership"
+  | "expiring_pass"
+  | "low_pass_sessions"
+  | "birthday";
+
+interface VoiceRule {
+  id?: number;
+  trigger_type: VoiceTrigger;
+  threshold_int: number | null;
+  message: string;
+  enabled: boolean;
+  sort_order: number;
+}
+
+const VOICE_TRIGGER_OPTIONS: {
+  key: VoiceTrigger;
+  label: string;
+  hint: string;
+  unit?: string;
+  defaultThreshold?: number;
+  defaultMessage: string;
+}[] = [
+  {
+    key: "welcome",
+    label: "환영 인사",
+    hint: "모든 회원 체크인 시 재생",
+    defaultMessage: "{name}님, 환영합니다.",
+  },
+  {
+    key: "expiring_membership",
+    label: "회원권 만료 임박",
+    hint: "회원권 만료일까지 N일 이하",
+    unit: "일 이내",
+    defaultThreshold: 7,
+    defaultMessage: "{name}님, 회원권이 곧 만료 예정입니다.",
+  },
+  {
+    key: "expiring_pass",
+    label: "수강권 만료 임박",
+    hint: "수강권 만료일까지 N일 이하",
+    unit: "일 이내",
+    defaultThreshold: 7,
+    defaultMessage: "{name}님, 수강권이 곧 만료 예정입니다.",
+  },
+  {
+    key: "low_pass_sessions",
+    label: "수강권 잔여 세션 부족",
+    hint: "잔여 수업 횟수 N회 이하",
+    unit: "회 이하",
+    defaultThreshold: 3,
+    defaultMessage: "{name}님, 남은 수업이 얼마 남지 않았어요.",
+  },
+  {
+    key: "birthday",
+    label: "생일 축하",
+    hint: "회원 정보상 오늘이 생일일 때",
+    defaultMessage: "{name}님, 생일 축하합니다.",
+  },
+];
+
+function triggerNeedsThreshold(t: VoiceTrigger) {
+  return t === "expiring_membership" || t === "expiring_pass" || t === "low_pass_sessions";
+}
+
+function findTriggerMeta(t: VoiceTrigger) {
+  return VOICE_TRIGGER_OPTIONS.find((o) => o.key === t)!;
+}
+
+function AttendanceVoicePanel({ role }: { role: "owner" | "admin" | "manager" | "trainer" }) {
+  const { getIdToken } = useAuth();
+  const toast = useCrmToast();
+  const [rules, setRules] = useState<VoiceRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const canEdit = role === "owner" || role === "admin";
+
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없어요");
+      const res = await fetch("/api/crm/attendance-voice/rules", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setRules(
+        (data.rules as VoiceRule[]).map((r, i) => ({
+          ...r,
+          sort_order: r.sort_order ?? i,
+        }))
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const save = async () => {
+    if (!canEdit || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const payload = rules.map((r, i) => ({
+        trigger_type: r.trigger_type,
+        threshold_int: triggerNeedsThreshold(r.trigger_type) ? r.threshold_int ?? 0 : null,
+        message: r.message,
+        enabled: r.enabled,
+        sort_order: i,
+      }));
+      const res = await fetch("/api/crm/attendance-voice/rules", {
+        method: "PUT",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ rules: payload }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "저장 실패");
+      toast.show("저장 완료");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addRule = (t: VoiceTrigger) => {
+    const meta = findTriggerMeta(t);
+    setRules((cur) => [
+      ...cur,
+      {
+        trigger_type: t,
+        threshold_int: triggerNeedsThreshold(t) ? meta.defaultThreshold ?? 7 : null,
+        message: meta.defaultMessage,
+        enabled: true,
+        sort_order: cur.length,
+      },
+    ]);
+  };
+
+  const removeRule = (idx: number) => {
+    setRules((cur) => cur.filter((_, i) => i !== idx));
+  };
+
+  const patchRule = (idx: number, patch: Partial<VoiceRule>) => {
+    setRules((cur) => cur.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  };
+
+  const preview = (msg: string, sampleName = "홍길동") => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      toast.show("이 브라우저는 음성 재생을 지원하지 않아요");
+      return;
+    }
+    const text = msg.replace(/\{name\}/g, sampleName);
+    if (!text.trim()) return;
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "ko-KR";
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utter);
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card title="출석 음성 안내">
+        <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+          회원이 체크인할 때 자동으로 안내 음성이 재생돼요. 예: 회원권 만료 7일 이내라면 <b>&ldquo;회원권이 곧 만료 예정입니다&rdquo;</b>. 문구 안의 <code>{"{name}"}</code>은 회원 이름으로 치환됩니다.
+        </p>
+        <div className="mt-2 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0] dark:border-zinc-800 p-3 text-[12px] text-[#6B5D47] dark:text-zinc-400">
+          <b className="text-[#3A342A] dark:text-zinc-200">참고</b> · 음성은 브라우저 내장 TTS를 사용하며 <b>터치출석 화면</b>에서 재생돼요. 조용해야 하는 환경(예: 프론트 데스크)에서는 규칙을 꺼두세요.
+        </div>
+
+        {error && (
+          <div className="mt-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="mt-4 text-[13px] text-[#8C8270]">불러오는 중…</div>
+        ) : (
+          <>
+            <div className="mt-4 space-y-2.5">
+              {rules.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 p-6 text-center text-[13px] text-[#8C8270]">
+                  등록된 규칙이 없어요. 아래에서 원하는 알림 종류를 추가해 주세요.
+                </div>
+              ) : (
+                rules.map((r, idx) => {
+                  const meta = findTriggerMeta(r.trigger_type);
+                  return (
+                    <div
+                      key={idx}
+                      className={`rounded-xl border p-3 space-y-2 ${
+                        r.enabled
+                          ? "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900"
+                          : "border-[#E8E0D0]/60 dark:border-zinc-800 bg-[#F5F0E5]/40 dark:bg-zinc-900/40 opacity-70"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <div className="text-[13.5px] font-bold text-[#2A251D] dark:text-zinc-100">
+                            {meta.label}
+                          </div>
+                          <div className="text-[11.5px] text-[#A89B80]">{meta.hint}</div>
+                        </div>
+                        <label className="inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={r.enabled}
+                            disabled={!canEdit}
+                            onChange={(e) => patchRule(idx, { enabled: e.target.checked })}
+                            className="w-4 h-4 accent-[#6B7B3A]"
+                          />
+                          <span className="text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                            사용
+                          </span>
+                        </label>
+                      </div>
+
+                      {triggerNeedsThreshold(r.trigger_type) && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap">
+                            임계값
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            disabled={!canEdit}
+                            value={r.threshold_int ?? 0}
+                            onChange={(e) =>
+                              patchRule(idx, {
+                                threshold_int: Math.max(0, Number(e.target.value) || 0),
+                              })
+                            }
+                            className={`${crmInputClass} w-[100px]`}
+                          />
+                          <span className="text-[12px] text-[#A89B80]">{meta.unit}</span>
+                        </div>
+                      )}
+
+                      <div>
+                        <div className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 mb-1">
+                          안내 문구{" "}
+                          <span className="text-[#A89B80]">
+                            (<code>{"{name}"}</code> = 회원 이름)
+                          </span>
+                        </div>
+                        <textarea
+                          disabled={!canEdit}
+                          className={`${crmInputClass} min-h-[54px]`}
+                          value={r.message}
+                          onChange={(e) => patchRule(idx, { message: e.target.value })}
+                          placeholder={meta.defaultMessage}
+                          maxLength={200}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => preview(r.message)}
+                          className="text-[12px] font-semibold text-[#6B7B3A] hover:underline"
+                        >
+                          ▶ 미리 듣기
+                        </button>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => removeRule(idx)}
+                            className="text-[12px] font-semibold text-red-600 hover:underline"
+                          >
+                            삭제
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {canEdit && (
+              <div className="mt-4 space-y-2">
+                <div className="text-[12px] text-[#6B5D47] dark:text-zinc-400">알림 추가</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {VOICE_TRIGGER_OPTIONS.map((o) => (
+                    <button
+                      key={o.key}
+                      type="button"
+                      onClick={() => addRule(o.key)}
+                      className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A] hover:text-[#6B7B3A]"
+                    >
+                      + {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {canEdit && (
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={save}
+                  className="px-4 py-2 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932]"
+                >
+                  {saving ? "저장 중…" : "규칙 저장"}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </Card>
     </div>
