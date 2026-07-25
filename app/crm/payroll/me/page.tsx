@@ -488,15 +488,6 @@ function RevenueTab({ centerId, centerMemberId }: { centerId: number; centerMemb
             ))}
           </div>
         )}
-
-        <div className="mt-4 flex gap-2">
-          <Link
-            href="/crm/passes"
-            className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-          >
-            수강권 관리 →
-          </Link>
-        </div>
       </section>
     </>
   );
