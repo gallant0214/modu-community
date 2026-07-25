@@ -973,7 +973,7 @@ function ContactSection({
   return (
     <section className="mb-6 px-4 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
       <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-        이름 / 생년월일 / 연락처 / 이메일 / 주소
+        실명 / 생년월일 / 연락처 / 이메일 / 주소
       </h2>
       <div className="space-y-3">
         <div>
@@ -987,13 +987,16 @@ function ContactSection({
         </div>
 
         <div>
-          <div className="text-[12.5px] text-[#A89B80] mb-1.5">이름</div>
+          <div className="text-[12.5px] text-[#A89B80] mb-1.5">
+            실명 <span className="text-red-500">*</span>
+          </div>
           <input
             type="text"
+            required
             className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A] max-w-[220px]"
             value={n}
             onChange={(ev) => setN(ev.target.value)}
-            placeholder="이름"
+            placeholder="실명"
           />
         </div>
 
@@ -1097,10 +1100,13 @@ function ContactSection({
           </p>
         </div>
         <div>
-          <div className="text-[12.5px] text-[#A89B80] mb-1.5">연락처</div>
+          <div className="text-[12.5px] text-[#A89B80] mb-1.5">
+            연락처 <span className="text-red-500">*</span>
+          </div>
           <input
             type="tel"
             inputMode="numeric"
+            required
             className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A]"
             value={p}
             onChange={(ev) => setP(formatPhone(ev.target.value))}
@@ -1127,9 +1133,14 @@ function ContactSection({
             placeholder="예: 강남구 강남대로 1길 1-11"
           />
         </div>
+        {(!n.trim() || !p.trim()) && (
+          <p className="text-[12px] text-red-600 dark:text-red-400">
+            실명과 연락처는 필수 항목이에요.
+          </p>
+        )}
         <button
           onClick={save}
-          disabled={!dirty || saving}
+          disabled={!dirty || saving || !n.trim() || !p.trim()}
           className="w-full px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-40 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
         >
           {saving ? "저장 중…" : "저장"}
