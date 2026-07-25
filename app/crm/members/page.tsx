@@ -1972,7 +1972,7 @@ function RegisterModal({
                       searchNickname();
                     }
                   }}
-                  placeholder="이메일(정확히) 또는 닉네임(일부)"
+                  placeholder="이메일 또는 전화번호"
                 />
                 <button
                   type="button"
