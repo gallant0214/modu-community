@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmDonutChart } from "../_components/crm-donut-chart";
 import { PAYMENT_METHOD_LABEL, formatWon } from "../_components/crm-labels";
+import { TrainerDashboard } from "./_trainer-dashboard";
 import { CustomerStatusView } from "./_components/customer-status-view";
 import { MemberConversionCard } from "./_components/member-conversion-card";
 import { WeeklyAttendanceChart } from "./_components/weekly-attendance-chart";
@@ -101,6 +102,7 @@ interface SummaryResp {
 
 interface BootstrapResp {
   role: "owner" | "admin" | "manager" | "trainer";
+  centerKind?: "solo" | "center";
   displayName: string | null;
   centerName: string;
   permissions: Record<string, boolean>;
@@ -134,11 +136,17 @@ export default function CrmDashboardPage() {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
       const auth = { authorization: `Bearer ${token}` };
-      const [a, b, c, d] = await Promise.all([
+      // 먼저 컨텍스트 확인 → 트레이너 모드면 센터 집계 API 는 호출하지 않음(트레이너 대시보드가 자체 조회).
+      const d = await fetch("/api/crm/bootstrap", { headers: auth, cache: "no-store" });
+      const meData: BootstrapResp | null = d.ok ? await d.json() : null;
+      setMe(meData);
+      const isTrainer = meData?.centerKind === "solo" || meData?.role === "trainer";
+      if (isTrainer) return;
+
+      const [a, b, c] = await Promise.all([
         fetch("/api/crm/stats/trend", { headers: auth }),
         fetch("/api/crm/stats/monthly", { headers: auth }),
         fetch(`/api/crm/dashboard/summary?period=${period}`, { headers: auth, cache: "no-store" }),
-        fetch("/api/crm/bootstrap", { headers: auth, cache: "no-store" }),
       ]);
       if (!a.ok || !b.ok || !c.ok) {
         const err = !a.ok ? await a.json() : !b.ok ? await b.json() : await c.json();
@@ -147,7 +155,6 @@ export default function CrmDashboardPage() {
       setTrend(((await a.json()).months ?? []) as TrendPoint[]);
       setMonthly(await b.json());
       setSummary(await c.json());
-      if (d.ok) setMe(await d.json());
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -158,6 +165,19 @@ export default function CrmDashboardPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 개인/프리랜서 트레이너(solo 또는 role='trainer') → 트레이너 전용 대시보드로 분기.
+  if (me && (me.centerKind === "solo" || me.role === "trainer")) {
+    return <TrainerDashboard centerName={me.centerName} displayName={me.displayName} />;
+  }
+  // bootstrap 로딩 중 (센터/트레이너 판정 전) — 잠깐 로딩만 표시해 센터 대시보드 깜빡임 방지.
+  if (loading && !me) {
+    return (
+      <div className="px-5 md:px-8 pt-2 pb-6 max-w-6xl mx-auto py-16 text-center text-[13px] text-[#8C8270]">
+        불러오는 중…
+      </div>
+    );
+  }
 
   // 재무 지표(매출/결제/랭킹) 가시성 — dashboard.finance 권한 기반 (owner 는 서버측에서 항상 true)
   const canFinance = me?.permissions?.["dashboard.finance"] ?? false;
