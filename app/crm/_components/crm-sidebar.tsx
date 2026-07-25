@@ -43,9 +43,6 @@ const SOLO_MENU_HREFS = [
   "/crm/dashboard",
   "/crm/members",
   "/crm/schedule",
-  "/crm/attendances",
-  "/crm/products",
-  "/crm/memberships",
   "/crm/passes",
 ];
 
