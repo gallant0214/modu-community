@@ -53,7 +53,7 @@ function buildSoloMenu(
   const base = MENU.filter((m) => SOLO_MENU_HREFS.includes(m.href));
   base.push({
     href: "/crm/payroll/me",
-    label: "내 수업료",
+    label: "내 급여",
     group: "me",
     icon: IconPayroll,
   });

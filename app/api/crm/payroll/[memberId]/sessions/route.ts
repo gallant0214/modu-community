@@ -28,12 +28,18 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ memberId: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
   const { memberId } = await params;
   const trainerId = Number(memberId);
   if (!trainerId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+
+  const isAdmin = ctx.role === "owner" || ctx.role === "admin";
+  const isSelf = trainerId === ctx.centerMemberId;
+  if (!isAdmin && !isSelf) {
+    return NextResponse.json({ error: "본인 수업 내역만 조회할 수 있습니다" }, { status: 403 });
+  }
 
   const url = new URL(request.url);
   const { start, endExcl } = periodRange(url.searchParams.get("period") || "this_month");
