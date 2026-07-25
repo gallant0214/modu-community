@@ -11,10 +11,26 @@ const ALLOWED_ACCESS_LEVELS = ["none", "schedule", "admin"] as const;
 /**
  * GET /api/crm/staff
  * 본인 센터의 직원 목록. owner/admin 만 진입.
+ * ?scope=names → 이름/직급만 반환(개인정보 제외), 모든 센터 멤버 접근 허용
+ *   (강사용 앱에서 담당강사·판매자·추가강사 선택용)
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const namesOnly = new URL(request.url).searchParams.get("scope") === "names";
+
+  // names 모드는 일반 멤버(trainer 포함)도 접근 가능 — PII 제외
+  const ctx = await requireCrmContext(request, namesOnly ? undefined : { needRole: "admin" });
   if (isCrmError(ctx)) return ctx;
+
+  if (namesOnly) {
+    const { data, error } = await supabase
+      .from("crm_center_members")
+      .select("id, display_name, role, status")
+      .eq("center_id", ctx.centerId)
+      .eq("status", "active")
+      .order("role", { ascending: false });
+    if (error) return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ staff: data ?? [] });
+  }
 
   const { data, error } = await supabase
     .from("crm_center_members")
