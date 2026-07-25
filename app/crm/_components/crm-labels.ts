@@ -157,9 +157,9 @@ export const RESERVATION_STATUS_COLOR: Record<
   },
 };
 
-/** 스케줄 상태 색상 범례 (예약대기/예약완료/출석완료/개인스케줄) */
+/** 스케줄 상태 색상 범례 (노쇼(차감)/예약완료/출석완료/개인스케줄) */
 export const SCHEDULE_LEGEND: { key: string; label: string }[] = [
-  { key: "requested", label: "예약대기" },
+  { key: "requested", label: "노쇼(차감)" },
   { key: "booked", label: "예약완료" },
   { key: "attended", label: "출석완료" },
   { key: "personal", label: "개인스케줄" },
