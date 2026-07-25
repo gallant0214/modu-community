@@ -109,7 +109,7 @@ export async function GET(request: Request) {
         id: mem.id,
         member_type: mem.member_type,
         name: mem.name,
-        phone: mem.phone,
+        phone: mem.phone ?? "",
         birth: mem.birth,
         gender: mem.gender,
         mileage: mem.mileage,

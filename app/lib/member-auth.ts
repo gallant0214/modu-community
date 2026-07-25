@@ -65,7 +65,7 @@ export async function requireMemberContext(
     centerId: member.center_id,
     centerName: center?.name ?? "",
     name: member.name,
-    phone: member.phone,
+    phone: member.phone ?? "",
   };
 }
 
