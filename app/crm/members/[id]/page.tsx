@@ -297,18 +297,35 @@ export default function CrmMemberDetailPage() {
               </div>
               <div className="mt-3.5 space-y-1.5">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
-                    {member.phone ? formatPhone(member.phone) : "연락처 없음"}
-                  </span>
+                  <HeaderInlineEdit
+                    memberId={member.id}
+                    field="phone"
+                    value={member.phone}
+                    placeholder="연락처 없음"
+                    inputMode="tel"
+                    formatDisplay={(v) => (v ? formatPhone(String(v)) : "연락처 없음")}
+                    canEdit={canEditBasic}
+                    onSaved={load}
+                    className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100"
+                  />
                   {member.email && (
                     <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">{member.email}</span>
                   )}
                 </div>
-                {member.attendance_no && (
-                  <div className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
-                    출석번호 <span className="tabular-nums">{member.attendance_no}</span>
-                  </div>
-                )}
+                <div className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                  <span className="text-[13.5px] text-[#8C8270] dark:text-zinc-500 mr-1">출석번호</span>
+                  <HeaderInlineEdit
+                    memberId={member.id}
+                    field="attendance_no"
+                    value={member.attendance_no}
+                    placeholder="미지정"
+                    inputMode="numeric"
+                    numeric
+                    canEdit={canEditUsage}
+                    onSaved={load}
+                    className="tabular-nums"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -2111,6 +2128,134 @@ function formatLogTime(iso: string): string {
  * 인라인 수정 가능한 정보 카드. 필드별 hover 시 '수정' 노출, 클릭하면 인풋으로 전환.
  * 삭제는 없음 (메모 UX 를 정보 필드에 확장 · 사용자 요청).
  */
+/**
+ * 회원 상세 헤더(사진 옆) 인라인 편집.
+ * 표시 텍스트 오른쪽에 연필 아이콘 → 클릭 시 입력창 + 저장/취소 노출.
+ * 권한 없으면 연필 자체가 안 보임.
+ */
+function HeaderInlineEdit({
+  memberId,
+  field,
+  value,
+  placeholder,
+  inputMode,
+  numeric,
+  formatDisplay,
+  canEdit,
+  onSaved,
+  className,
+}: {
+  memberId: number;
+  field: "phone" | "attendance_no";
+  value: string | null;
+  placeholder: string;
+  inputMode?: "tel" | "numeric" | "text";
+  numeric?: boolean;
+  formatDisplay?: (v: string | null) => string;
+  canEdit: boolean;
+  onSaved: () => void;
+  className?: string;
+}) {
+  const { getIdToken } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string>(value ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setDraft(value ?? "");
+  }, [value]);
+
+  const displayText = formatDisplay ? formatDisplay(value) : value ? String(value) : placeholder;
+  const isEmpty = !value;
+
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      let raw = draft.trim();
+      if (numeric) raw = raw.replace(/\D+/g, "");
+      const res = await fetch(`/api/crm/members/${memberId}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ [field]: raw }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "수정 실패");
+      setEditing(false);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <input
+          type="text"
+          inputMode={inputMode}
+          autoFocus
+          className="min-w-[110px] max-w-[180px] px-2 py-1 rounded-md border border-[#6B7B3A] bg-white dark:bg-zinc-900 text-[13.5px] text-[#2A251D] dark:text-zinc-100 focus:outline-none"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+            if (e.key === "Escape") {
+              setDraft(value ?? "");
+              setEditing(false);
+              setError("");
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="px-2 py-1 rounded-md bg-[#6B7B3A] disabled:opacity-60 text-white text-[11.5px] font-semibold hover:bg-[#5a6932]"
+        >
+          {saving ? "저장중" : "저장"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(value ?? "");
+            setEditing(false);
+            setError("");
+          }}
+          className="text-[11.5px] text-[#8C8270] hover:underline"
+        >
+          취소
+        </button>
+        {error && <span className="text-[11px] text-red-600 ml-1">{error}</span>}
+      </span>
+    );
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1 ${className ?? ""}`}>
+      <span className={isEmpty ? "text-[#A89B80] font-normal" : ""}>{displayText}</span>
+      {canEdit && (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="inline-flex items-center justify-center w-5 h-5 rounded-md text-[#A89B80] hover:text-[#6B7B3A] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+          aria-label="수정"
+          title="수정"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+        </button>
+      )}
+    </span>
+  );
+}
+
 function EditableInfoCard({
   memberId,
   field,
