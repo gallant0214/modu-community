@@ -54,9 +54,33 @@ export default function CrmSelectPage() {
     load();
   }, [load]);
 
+  const [creating, setCreating] = useState(false);
+
   const enter = (centerId: number) => {
     setCenterCookie(centerId);
     router.replace("/crm/dashboard");
+  };
+
+  // 개인(solo) CRM 생성 후 바로 진입. 이미 있으면 그걸 반환받아 진입.
+  const createSolo = async () => {
+    if (creating) return;
+    setCreating(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch("/api/crm/bootstrap", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ mode: "solo" }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.centerId) throw new Error(data?.error || "개인 CRM 생성 실패");
+      enter(data.centerId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+      setCreating(false);
+    }
   };
 
   const personal = list.find((c) => c.isSoloOwner || c.centerKind === "solo");
@@ -98,9 +122,10 @@ export default function CrmSelectPage() {
               />
             ) : (
               <ContextCard
-                title="개인 CRM 만들기"
-                sub="아직 개인 CRM이 없어요. 새로 시작할 수 있어요."
-                onClick={() => router.replace("/crm/onboarding")}
+                title={creating ? "개인 CRM 만드는 중…" : "개인 CRM 만들기"}
+                sub="아직 개인 CRM이 없어요. 나 혼자 쓰는 CRM을 바로 만들 수 있어요."
+                onClick={createSolo}
+                disabled={creating}
               />
             )}
           </section>

@@ -95,19 +95,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
   }
 
-  const existing = await loadCrmContextForUid(user.uid);
-  if (existing) {
-    return NextResponse.json({
-      onboarded: true,
-      centerId: existing.centerId,
-      centerName: existing.centerName,
-      centerKind: existing.centerKind,
-      role: existing.role,
-      accessLevel: existing.accessLevel,
-      isSoloOwner: existing.isSoloOwner,
-    });
-  }
-
   let body: {
     mode?: "solo" | "center";
     name?: string;
@@ -125,6 +112,47 @@ export async function POST(request: Request) {
   const mode = body.mode;
   if (mode !== "solo" && mode !== "center") {
     return NextResponse.json({ error: "mode 값이 잘못됨" }, { status: 400 });
+  }
+
+  // 멱등성 처리 (모드별로 다르게):
+  //  - solo: '개인(solo) CRM' 이 이미 있으면 그걸 반환. 센터 가입돼 있어도 개인 CRM 은 새로 만들 수 있게 함.
+  //  - center: 기존 컨텍스트가 있으면 반환(센터 사장 온보딩 중복 방지).
+  if (mode === "solo") {
+    const { data: solo } = await supabase
+      .from("crm_center_members")
+      .select("id, center_id, crm_centers!inner(name)")
+      .eq("firebase_uid", user.uid)
+      .eq("is_solo_owner", true)
+      .eq("status", "active")
+      .maybeSingle();
+    if (solo) {
+      const c = Array.isArray(solo.crm_centers)
+        ? solo.crm_centers[0]
+        : (solo.crm_centers as { name?: string } | null);
+      return NextResponse.json({
+        onboarded: true,
+        centerId: solo.center_id,
+        centerMemberId: solo.id,
+        centerName: c?.name ?? "",
+        centerKind: "solo",
+        role: "trainer",
+        accessLevel: "admin",
+        isSoloOwner: true,
+      });
+    }
+  } else {
+    const existing = await loadCrmContextForUid(user.uid);
+    if (existing) {
+      return NextResponse.json({
+        onboarded: true,
+        centerId: existing.centerId,
+        centerName: existing.centerName,
+        centerKind: existing.centerKind,
+        role: existing.role,
+        accessLevel: existing.accessLevel,
+        isSoloOwner: existing.isSoloOwner,
+      });
+    }
   }
 
   // 닉네임을 표시명 기본값으로 사용

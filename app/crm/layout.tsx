@@ -62,9 +62,9 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           // 터치출석은 독립 화면 — 온보딩 리다이렉트 대상 아님
         } else if (!data.onboarded && !isOnboarding) {
           router.replace("/crm/onboarding");
-        } else if (data.onboarded && isOnboarding) {
-          router.replace("/crm/dashboard");
         }
+        // onboarded 인데 /crm/onboarding 에 있어도 자동으로 튕기지 않음
+        // (기존 가입자가 개인 CRM/다른 센터를 추가하러 온보딩에 올 수 있어야 하므로).
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "네트워크 오류");
       }
