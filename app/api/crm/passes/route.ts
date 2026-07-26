@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_passes")
     .select(
-      "id, member_id, trainer_member_id, co_trainer_ids, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, payment_method, payment_method_custom, issued_at, start_date, expires_at, status, created_at"
+      "id, member_id, trainer_member_id, co_trainer_ids, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, payment_method, payment_method_custom, issued_at, start_date, expires_at, status, product_id, group_capacity, created_at"
     )
     .eq("center_id", ctx.centerId)
     .order("issued_at", { ascending: false, nullsFirst: false })
@@ -115,6 +115,8 @@ export async function POST(request: Request) {
     co_trainer_ids?: number[];
     /** 발급 시점에 받은 금액. 미입력 시 price_won 전액(=완납) 으로 간주. */
     paid_amount_won?: number;
+    /** 발급 소스 상품(있으면 정원·유형 스냅샷용). */
+    product_id?: number;
   };
   try {
     body = await request.json();
@@ -184,6 +186,25 @@ export async function POST(request: Request) {
     coTrainerIds = (validCo ?? []).map((v) => v.id);
   }
 
+  // 상품(선택 시) → 그룹 정원 스냅샷. 개인 레슨/유형 없음 = 1.
+  let productId: number | null = null;
+  let groupCapacity = 1;
+  if (body.product_id) {
+    const { data: prod } = await supabase
+      .from("crm_products")
+      .select("id, type, capacity")
+      .eq("id", Number(body.product_id))
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    if (prod) {
+      productId = prod.id;
+      if ((prod as { type: string }).type === "group") {
+        const cap = Number((prod as { capacity: number | null }).capacity ?? 0);
+        groupCapacity = cap > 1 ? Math.min(cap, 999) : 1;
+      }
+    }
+  }
+
   const totalSessions = Number(body.total_sessions);
   const priceWon = Number(body.price_won) || 0;
   const paidAmount =
@@ -217,6 +238,8 @@ export async function POST(request: Request) {
       memo: body.memo?.trim() || null,
       outstanding_won: outstanding,
       payment_status: paymentStatus,
+      product_id: productId,
+      group_capacity: groupCapacity,
     })
     .select("id")
     .single();

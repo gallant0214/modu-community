@@ -2713,6 +2713,8 @@ export type Database = {
           outstanding_won: number
           payment_status: string
           is_paused: boolean
+          product_id: number | null
+          group_capacity: number
           created_at: string
           updated_at: string
         }
@@ -2741,6 +2743,8 @@ export type Database = {
           outstanding_won?: number
           payment_status?: string
           is_paused?: boolean
+          product_id?: number | null
+          group_capacity?: number
           created_at?: string
           updated_at?: string
         }
@@ -2769,6 +2773,8 @@ export type Database = {
           outstanding_won?: number
           payment_status?: string
           is_paused?: boolean
+          product_id?: number | null
+          group_capacity?: number
           created_at?: string
           updated_at?: string
         }

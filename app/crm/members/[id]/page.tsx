@@ -3414,6 +3414,8 @@ interface PassProduct {
   service_days: number | null;
   duration_value: number | null;
   duration_unit: string | null;
+  type?: string;
+  capacity?: number | null;
 }
 
 function UsageIssueModal({
@@ -3999,6 +4001,7 @@ function PassIssueModal({
   const [lessonKind, setLessonKind] = useState("");
   const [lessonKinds, setLessonKinds] = useState<{ id: number; label: string }[]>([]);
   const [passProducts, setPassProducts] = useState<PassProduct[]>([]);
+  const [pickedProductId, setPickedProductId] = useState<number | null>(null);
   const [showKindList, setShowKindList] = useState(false);
   const [totalSessions, setTotalSessions] = useState(10);
   const [serviceSessions, setServiceSessions] = useState(0);
@@ -4064,6 +4067,7 @@ function PassIssueModal({
 
   // 수강권 상품 선택 → 금액·세션·기간 자동 적용
   const applyPassProduct = (p: PassProduct) => {
+    setPickedProductId(p.id);
     setLessonKind(p.name);
     if (p.total_sessions && p.total_sessions > 0) setTotalSessions(p.total_sessions);
     if (p.session_minutes && p.session_minutes > 0) setSessionMinutes(p.session_minutes);
@@ -4109,6 +4113,7 @@ function PassIssueModal({
           start_date: startDate,
           expires_at: expiresAt,
           memo: memo || undefined,
+          product_id: pickedProductId || undefined,
         }),
       });
       const data = await res.json();

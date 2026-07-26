@@ -1715,6 +1715,7 @@ function NewReservationModal({
     expires_at: string;
     member_id: number;
     member_name: string;
+    group_capacity?: number;
   }
   const [assigned, setAssigned] = useState<AssignedPass[]>([]);
   const [loadingAssigned, setLoadingAssigned] = useState(false);
@@ -1733,6 +1734,27 @@ function NewReservationModal({
     null
   );
   const [passId, setPassId] = useState<number | null>(null);
+  const [pickedPass, setPickedPass] = useState<AssignedPass | null>(null);
+
+  // 그룹 수업 정원이 2명 이상이면 추가 참가 회원(각자 본인의 유효 수강권)을 함께 예약할 수 있다.
+  interface GroupParticipant {
+    memberId: number;
+    memberName: string;
+    passId: number;
+    passLabel: string; // 화면에 표기할 lesson_kind + 잔여 요약
+  }
+  const [groupParticipants, setGroupParticipants] = useState<GroupParticipant[]>([]);
+  const [showAddParticipant, setShowAddParticipant] = useState(false);
+  const [participantQuery, setParticipantQuery] = useState("");
+  const [participantResults, setParticipantResults] = useState<
+    { id: number; name: string; phone: string | null }[]
+  >([]);
+  const [participantPasses, setParticipantPasses] = useState<AssignedPass[]>([]);
+  const [participantMember, setParticipantMember] =
+    useState<{ id: number; name: string; phone: string | null } | null>(null);
+  const [participantSearching, setParticipantSearching] = useState(false);
+  const [participantLoadingPasses, setParticipantLoadingPasses] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -1760,6 +1782,9 @@ function NewReservationModal({
   useEffect(() => {
     setPicked(null);
     setPassId(null);
+    setPickedPass(null);
+    setGroupParticipants([]);
+    setShowAddParticipant(false);
     setOtherResults([]);
     setOtherPasses([]);
     setSearchMode("assigned");
@@ -1848,14 +1873,100 @@ function NewReservationModal({
   const pickAssignedPass = (p: AssignedPass) => {
     setPicked({ id: p.member_id, name: p.member_name, phone: null });
     setPassId(p.id);
+    setPickedPass(p);
+    setGroupParticipants([]);
     if (p.session_minutes) setDuration(p.session_minutes);
   };
 
   const pickOtherMember = (m: { id: number; name: string; phone: string | null }) => {
     setPicked(m);
+    setPickedPass(null);
+    setGroupParticipants([]);
     setOtherResults([]);
     loadPassesForMember(m.id);
   };
+
+  // 다른 회원 검색 후 pass 선택 시에도 pickedPass 저장
+  const pickOtherPass = (p: AssignedPass) => {
+    setPassId(p.id);
+    setPickedPass(p);
+    setGroupParticipants([]);
+    if (p.session_minutes) setDuration(p.session_minutes);
+  };
+
+  // 참가자 추가용: 회원 검색
+  const searchParticipant = async () => {
+    const q = participantQuery.trim();
+    if (!q) return;
+    setParticipantSearching(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members?q=${encodeURIComponent(q)}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (res.ok) setParticipantResults(data.members ?? []);
+    } finally {
+      setParticipantSearching(false);
+    }
+  };
+
+  const loadParticipantPasses = async (memberId: number) => {
+    setParticipantLoadingPasses(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members/${memberId}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) return;
+      const active: AssignedPass[] = (data.passes ?? [])
+        .filter(
+          (p: { status: string; remaining_sessions: number }) =>
+            p.status === "valid" && p.remaining_sessions > 0
+        )
+        .map((p: AssignedPass) => ({
+          ...p,
+          member_id: memberId,
+          member_name: data.member?.name ?? "",
+        }));
+      setParticipantPasses(active);
+    } finally {
+      setParticipantLoadingPasses(false);
+    }
+  };
+
+  const pickParticipantMember = (m: { id: number; name: string; phone: string | null }) => {
+    setParticipantMember(m);
+    setParticipantResults([]);
+    loadParticipantPasses(m.id);
+  };
+
+  const confirmParticipant = (p: AssignedPass) => {
+    if (!participantMember) return;
+    // 중복 방지: 주 참가자 or 이미 추가된 회원과 겹치면 추가 안 함
+    if (picked && picked.id === participantMember.id) return;
+    if (groupParticipants.some((g) => g.memberId === participantMember.id)) return;
+    setGroupParticipants((cur) => [
+      ...cur,
+      {
+        memberId: participantMember.id,
+        memberName: participantMember.name,
+        passId: p.id,
+        passLabel: `${p.lesson_kind} · 잔여 ${p.remaining_sessions}회`,
+      },
+    ]);
+    // 리셋
+    setParticipantMember(null);
+    setParticipantPasses([]);
+    setParticipantQuery("");
+    setShowAddParticipant(false);
+  };
+
+  const removeParticipant = (idx: number) =>
+    setGroupParticipants((cur) => cur.filter((_, i) => i !== idx));
 
   // 필터링된 담당 목록
   const filteredAssigned = (() => {
@@ -1881,15 +1992,28 @@ function NewReservationModal({
       const token = await getIdToken();
       let res: Response;
       if (eventType === "lesson") {
-        res = await fetch("/api/crm/reservations", {
-          method: "POST",
-          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-          body: JSON.stringify({
-            pass_id: passId,
-            starts_at: startsAt,
-            ends_at: endsAt,
-          }),
-        });
+        // 주 pass + 그룹 참가자들 각각 예약 생성 (같은 시간대 공유).
+        const allPassIds = [passId!, ...groupParticipants.map((g) => g.passId)];
+        let lastRes: Response | null = null;
+        const failed: string[] = [];
+        for (const pid of allPassIds) {
+          const r = await fetch("/api/crm/reservations", {
+            method: "POST",
+            headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+            body: JSON.stringify({
+              pass_id: pid,
+              starts_at: startsAt,
+              ends_at: endsAt,
+            }),
+          });
+          lastRes = r;
+          if (!r.ok) {
+            const d = await r.json().catch(() => ({}));
+            failed.push(d?.error || `${pid} 예약 실패`);
+          }
+        }
+        if (failed.length > 0) throw new Error(failed.join(" · "));
+        res = lastRes as Response;
       } else {
         res = await fetch("/api/crm/schedule-events", {
           method: "POST",
@@ -2207,10 +2331,7 @@ function NewReservationModal({
                           <li key={p.id}>
                             <button
                               type="button"
-                              onClick={() => {
-                                setPassId(p.id);
-                                if (p.session_minutes) setDuration(p.session_minutes);
-                              }}
+                              onClick={() => pickOtherPass(p)}
                               className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors
                                 ${passId === p.id
                                   ? "border-[#6B7B3A] bg-[#6B7B3A]/10"
@@ -2299,6 +2420,166 @@ function NewReservationModal({
               </>
             )}
           </div>
+          )}
+
+          {/* 그룹 수업 참가자 추가 — 픽 된 수강권의 group_capacity 가 2 이상이면 노출 */}
+          {eventType === "lesson" && picked && pickedPass && (pickedPass.group_capacity ?? 1) > 1 && (
+            <div className="rounded-lg border border-[#6B7B3A]/40 bg-[#6B7B3A]/5 p-3 space-y-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-100">
+                  그룹 수업 참가자 ({groupParticipants.length + 1}/{pickedPass.group_capacity}명)
+                </div>
+                <span className="text-[11px] text-[#8C8270] dark:text-zinc-500">
+                  같은 시간대에 함께 예약해요
+                </span>
+              </div>
+
+              <ul className="space-y-1">
+                <li className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded bg-white/70 dark:bg-zinc-900/70 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px]">
+                  <span className="truncate">
+                    <strong className="text-[#2A251D] dark:text-zinc-100">{picked.name}</strong>
+                    <span className="ml-2 text-[11px] text-[#8C8270]">{pickedPass.lesson_kind}</span>
+                  </span>
+                  <span className="text-[10.5px] text-[#6B7B3A] dark:text-[#A8B87A]">주 참가자</span>
+                </li>
+                {groupParticipants.map((g, i) => (
+                  <li
+                    key={g.memberId}
+                    className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded bg-white/70 dark:bg-zinc-900/70 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px]"
+                  >
+                    <span className="truncate">
+                      <strong className="text-[#2A251D] dark:text-zinc-100">{g.memberName}</strong>
+                      <span className="ml-2 text-[11px] text-[#8C8270]">{g.passLabel}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeParticipant(i)}
+                      className="text-[11px] text-red-600 hover:underline"
+                    >
+                      제거
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              {groupParticipants.length + 1 < (pickedPass.group_capacity ?? 1) && (
+                showAddParticipant ? (
+                  <div className="space-y-2 mt-1">
+                    {!participantMember ? (
+                      <>
+                        <div className="flex gap-2">
+                          <input
+                            value={participantQuery}
+                            onChange={(e) => setParticipantQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                searchParticipant();
+                              }
+                            }}
+                            placeholder="추가할 회원 이름/연락처"
+                            className="flex-1 px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[12.5px]"
+                          />
+                          <button
+                            type="button"
+                            onClick={searchParticipant}
+                            disabled={participantSearching || !participantQuery.trim()}
+                            className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[12px] font-semibold hover:bg-[#5a6932]"
+                          >
+                            {participantSearching ? "…" : "검색"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAddParticipant(false);
+                              setParticipantQuery("");
+                              setParticipantResults([]);
+                            }}
+                            className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#6B5D47] hover:bg-[#F5F0E5]"
+                          >
+                            취소
+                          </button>
+                        </div>
+                        {participantResults.length > 0 && (
+                          <ul className="space-y-1 max-h-[150px] overflow-y-auto">
+                            {participantResults.map((m) => (
+                              <li key={m.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => pickParticipantMember(m)}
+                                  className="w-full text-left px-2.5 py-1.5 rounded border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-[#6B7B3A]/40 text-[12.5px]"
+                                >
+                                  <div className="font-semibold text-[#2A251D] dark:text-zinc-100">{m.name}</div>
+                                  {m.phone && (
+                                    <div className="text-[11px] text-[#A89B80]">{m.phone}</div>
+                                  )}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded bg-white dark:bg-zinc-900 border border-[#6B7B3A]/40 text-[12.5px]">
+                          <span className="truncate">
+                            <strong className="text-[#2A251D] dark:text-zinc-100">{participantMember.name}</strong>
+                            {participantMember.phone && (
+                              <span className="ml-2 text-[11px] text-[#8C8270]">{participantMember.phone}</span>
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setParticipantMember(null);
+                              setParticipantPasses([]);
+                            }}
+                            className="text-[11px] text-[#6B7B3A] hover:underline"
+                          >
+                            다시 선택
+                          </button>
+                        </div>
+                        <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400">사용할 수강권 선택</div>
+                        {participantLoadingPasses ? (
+                          <div className="text-[12px] text-[#8C8270]">불러오는 중…</div>
+                        ) : participantPasses.length === 0 ? (
+                          <div className="px-2.5 py-1.5 rounded border border-dashed border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#8C8270]">
+                            잔여가 있는 유효 수강권이 없어요.
+                          </div>
+                        ) : (
+                          <ul className="space-y-1 max-h-[160px] overflow-y-auto">
+                            {participantPasses.map((p) => (
+                              <li key={p.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => confirmParticipant(p)}
+                                  className="w-full text-left px-2.5 py-1.5 rounded border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-[#6B7B3A] text-[12px]"
+                                >
+                                  <div className="font-semibold text-[#2A251D] dark:text-zinc-100">
+                                    {p.lesson_kind}
+                                  </div>
+                                  <div className="text-[11px] text-[#6B5D47] dark:text-zinc-400">
+                                    잔여 {p.remaining_sessions}/{p.total_sessions}회 · {p.session_minutes}분
+                                  </div>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddParticipant(true)}
+                    className="w-full px-3 py-1.5 rounded-lg border border-dashed border-[#6B7B3A]/50 text-[12px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/10"
+                  >
+                    + 참가 회원 추가
+                  </button>
+                )
+              )}
+            </div>
           )}
 
           {error && (
