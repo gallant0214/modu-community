@@ -97,17 +97,23 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   const [addTypeError, setAddTypeError] = useState("");
 
   // 기본 유형은 오버라이드 라벨 적용, 나머지는 순수 커스텀만 뒤에 추가
+  // scope='personal' 이면 수강권 유형(개인/그룹)만 노출 — 커스텀 유형 제외.
   const typeOptions: TypeOption[] = useMemo(() => {
     const overrides = new Map(
       customTypes.filter((t) => BUILT_IN_KEYS.has(t.value)).map((t) => [t.value, t.label])
     );
+    if (scope === "personal") {
+      return BUILT_IN_TYPES.filter((bi) => bi.value === "personal" || bi.value === "group").map(
+        (bi) => ({ ...bi, label: overrides.get(bi.value) ?? bi.label })
+      );
+    }
     const builtIn = BUILT_IN_TYPES.map((bi) => ({
       ...bi,
       label: overrides.get(bi.value) ?? bi.label,
     }));
     const purely = customTypes.filter((t) => !BUILT_IN_KEYS.has(t.value));
     return [...builtIn, ...purely];
-  }, [customTypes]);
+  }, [customTypes, scope]);
 
   useEffect(() => {
     (async () => {
@@ -354,7 +360,7 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
               )}
             </span>
           ))}
-          {!showAddType ? (
+          {scope === "personal" ? null : !showAddType ? (
             <button
               type="button"
               onClick={() => {
