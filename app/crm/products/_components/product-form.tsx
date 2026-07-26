@@ -217,7 +217,7 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
     initial?.price_won ? String(initial.price_won) : ""
   );
   const [vatIncluded, setVatIncluded] = useState(initial?.vat_included ?? false);
-  const [capacity, setCapacity] = useState(initial?.capacity ?? 10);
+  const [capacity, setCapacity] = useState(initial?.capacity ?? 2);
   const [sessionMinutes, setSessionMinutes] = useState(initial?.session_minutes ?? 50);
   const [dailyCheckInLimit, setDailyCheckInLimit] = useState(initial?.daily_check_in_limit ?? 1);
   const [dailyTimeLimitEnabled, setDailyTimeLimitEnabled] = useState(
@@ -457,7 +457,7 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
             </span>
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {[5, 8, 10, 12, 15, 20].map((n) => (
+            {[2, 5, 8, 10, 12, 15, 20].map((n) => (
               <button
                 key={n}
                 type="button"
