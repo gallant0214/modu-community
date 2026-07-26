@@ -59,6 +59,7 @@ type StatusFilter = "all" | "valid" | "scheduled" | "expired" | "hold" | "expiri
 /** 만료 임박 기준 일수 */
 const EXPIRING_DAYS = 7;
 type SignupFilter = "all" | "this_week" | "this_month" | "this_year" | "custom";
+type RegistrationTypeFilter = "all" | "new" | "renewal";
 type AbsenceFilter = "all" | "10d" | "15d" | "20d" | "30d" | "60d" | "90d";
 type ExpireFilter = "all" | "7d" | "30d" | "this_week" | "this_month" | "expired";
 type PaymentFilter = "all" | "outstanding";
@@ -169,6 +170,7 @@ let memoUi: {
   fSignup: SignupFilter;
   fSignupFrom: string;
   fSignupTo: string;
+  fRegType: RegistrationTypeFilter;
   fAbsence: AbsenceFilter;
   fExpire: ExpireFilter;
   fPayment: PaymentFilter;
@@ -257,9 +259,18 @@ export default function CrmMembersPage() {
     const allowed: StatusFilter[] = ["valid", "scheduled", "expired", "hold", "expiring"];
     return allowed.includes(v as StatusFilter) ? (v as StatusFilter) : "all";
   });
-  const [fSignup, setFSignup] = useState<SignupFilter>(() => (memoUi ? memoUi.fSignup : "all"));
+  const [fSignup, setFSignup] = useState<SignupFilter>(() => {
+    if (memoUi) return memoUi.fSignup;
+    const v = searchParamsHook.get("signup");
+    return v === "this_week" || v === "this_month" || v === "this_year" ? v : "all";
+  });
   const [fSignupFrom, setFSignupFrom] = useState(() => (memoUi ? memoUi.fSignupFrom : ""));
   const [fSignupTo, setFSignupTo] = useState(() => (memoUi ? memoUi.fSignupTo : ""));
+  const [fRegType, setFRegType] = useState<RegistrationTypeFilter>(() => {
+    if (memoUi) return memoUi.fRegType;
+    const v = searchParamsHook.get("registration_type");
+    return v === "new" || v === "renewal" ? v : "all";
+  });
   const [fAbsence, setFAbsence] = useState<AbsenceFilter>(() => {
     if (memoUi) return memoUi.fAbsence;
     const v = searchParamsHook.get("absence");
@@ -283,9 +294,9 @@ export default function CrmMembersPage() {
   // 필터/검색 변경 시 모듈 스코프에 저장 → 상세 갔다 뒤로가기 시 그대로 복원 (F5 시 초기화)
   useEffect(() => {
     memoUi = {
-      query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fPayment, fLocker, fGoods,
+      query, fStatus, fSignup, fSignupFrom, fSignupTo, fRegType, fAbsence, fExpire, fPayment, fLocker, fGoods,
     };
-  }, [query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fPayment, fLocker, fGoods]);
+  }, [query, fStatus, fSignup, fSignupFrom, fSignupTo, fRegType, fAbsence, fExpire, fPayment, fLocker, fGoods]);
 
   // 페이지 유지: URL ?page= 우선(브라우저 뒤로가기/새로고침 복원) → 없으면 모듈 스코프 memoPage
   const [page, setPageState] = useState(() => {
@@ -518,17 +529,24 @@ export default function CrmMembersPage() {
       // 상태 (상단 카드 = 상태 필터)
       if (fStatus !== "all" && !matchStatus(m, fStatus, todayStr)) return false;
 
-      // 가입일
+      // 가입일 (등록일 우선, 없으면 생성일)
       if (fSignup !== "all") {
-        const created = new Date(m.created_at);
+        const regRaw = m.registered_at ? `${m.registered_at}T00:00:00` : m.created_at;
+        const created = new Date(regRaw);
         if (fSignup === "this_week" && (created < startOfWeek || created >= endOfWeek)) return false;
         if (fSignup === "this_month" && (created < startOfMonth || created >= endOfMonth)) return false;
         if (fSignup === "this_year" && created < startOfYear) return false;
         if (fSignup === "custom") {
-          const createdYmd = m.created_at.slice(0, 10);
+          const createdYmd = (m.registered_at ?? m.created_at).slice(0, 10);
           if (fSignupFrom && createdYmd < fSignupFrom) return false;
           if (fSignupTo && createdYmd > fSignupTo) return false;
         }
+      }
+
+      // 가입 타입 (신규/재등록)
+      if (fRegType !== "all") {
+        const want = fRegType === "new" ? "신규" : "재등록";
+        if (m.registration_type !== want) return false;
       }
 
       // 미방문 기간
@@ -678,7 +696,7 @@ export default function CrmMembersPage() {
   // 필터/검색 변경 시에만 1페이지로. 마운트·정렬변경·StrictMode 이중호출에는 반응하지 않음
   // (ref 시그니처 비교: 실제로 필터가 바뀔 때만 리셋 → 뒤로가기 시 memoPage 유지)
   const filterSig = JSON.stringify([
-    query, fStatus, fSignup, fSignupFrom, fSignupTo, fAbsence, fExpire, fPayment, fLocker, fGoods,
+    query, fStatus, fSignup, fSignupFrom, fSignupTo, fRegType, fAbsence, fExpire, fPayment, fLocker, fGoods,
   ]);
   const lastFilterSig = useRef(filterSig);
   useEffect(() => {
@@ -693,6 +711,7 @@ export default function CrmMembersPage() {
     setFSignup("all");
     setFSignupFrom("");
     setFSignupTo("");
+    setFRegType("all");
     setFAbsence("all");
     setFExpire("all");
     setFPayment("all");
@@ -946,6 +965,16 @@ export default function CrmMembersPage() {
             </div>
           )}
         </div>
+        <FilterChip
+          label="가입 타입"
+          value={fRegType}
+          onChange={(v) => setFRegType(v as RegistrationTypeFilter)}
+          options={[
+            { value: "all", label: "전체" },
+            { value: "new", label: "신규" },
+            { value: "renewal", label: "재등록" },
+          ]}
+        />
         <FilterChip
           label="미방문 기간"
           value={fAbsence}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatWon } from "../_components/crm-labels";
+import { DualLineChart } from "./_components/dual-line-chart";
 
 interface Sess {
   reservationId: number;
@@ -23,6 +24,19 @@ interface TrainerData {
     effectiveRate: number;
     confirmedPayout: number | null;
     expectedPayout: number | null;
+  };
+  metrics: {
+    activeMembers: number;
+    dormant2w: number;
+    attendedThisMonth: number;
+    bookedThisMonth: number;
+    weekRemaining: number;
+    avgPerWeek: number;
+    avgPerDay: number;
+    newThisMonth: number;
+    renewalThisMonth: number;
+    ratioNew: number;
+    ratioRenewal: number;
   };
   today: { remaining: number; sessions: Sess[] };
   week: { days: { date: string; dow: number; count: number; sessions: Sess[] }[] };
@@ -88,6 +102,7 @@ export function TrainerDashboard({
 }) {
   const { getIdToken } = useAuth();
   const [data, setData] = useState<TrainerData | null>(null);
+  const [trend, setTrend] = useState<{ ym: string; salary: number; salaryPrev: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [marking, setMarking] = useState<number | null>(null);
@@ -97,13 +112,15 @@ export function TrainerDashboard({
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch("/api/crm/dashboard/trainer", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
+      const auth = { authorization: `Bearer ${token}` };
+      const [res, tRes] = await Promise.all([
+        fetch("/api/crm/dashboard/trainer", { headers: auth, cache: "no-store" }),
+        fetch("/api/crm/dashboard/trainer/trend", { headers: auth, cache: "no-store" }),
+      ]);
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "조회 실패");
       setData(json);
+      if (tRes.ok) setTrend(((await tRes.json()).months ?? []) as typeof trend);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -189,6 +206,60 @@ export function TrainerDashboard({
               hint="14일 내 만료 또는 잔여 2회 이하"
             />
           </div>
+
+          {/* 운영 지표 — 회원 수(클릭 O) */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-3">
+            <StatCard href="/crm/members?status=valid" label="유효 회원" value={`${data.metrics.activeMembers}명`} tone="green" />
+            <StatCard href="/crm/members?status=valid&absence=15d" label="2주+ 미진행 회원" value={`${data.metrics.dormant2w}명`} tone="red" hint="재방문 관리 대상" />
+            <StatCard href="/crm/members?signup=this_month&registration_type=new" label="이번달 신규" value={`${data.metrics.newThisMonth}명`} />
+            <StatCard href="/crm/members?signup=this_month&registration_type=renewal" label="이번달 재등록" value={`${data.metrics.renewalThisMonth}명`} />
+          </div>
+
+          {/* 운영 지표 — 세션 수(클릭 X) + 재등록/신규 비중 */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-5">
+            <StatCard label="이번달 진행 수업" value={`${data.metrics.attendedThisMonth}회`} />
+            <StatCard label="이번달 미진행 수업" value={`${data.metrics.bookedThisMonth}회`} hint="예약됐지만 아직 진행 전" />
+            <StatCard label="이번주 남은 수업" value={`${data.metrics.weekRemaining}회`} />
+            <StatCard label="주당 / 일당 평균" value={`${data.metrics.avgPerWeek} / ${data.metrics.avgPerDay}회`} hint="최근 4주 기준" />
+          </div>
+
+          {/* 재등록 : 신규 비중 */}
+          {data.metrics.newThisMonth + data.metrics.renewalThisMonth > 0 && (
+            <section className="mb-5 rounded-2xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-4 py-3.5 shadow-sm">
+              <div className="mb-2 flex items-baseline justify-between">
+                <h2 className="text-[14px] font-bold text-[#241F18] dark:text-zinc-100">이번달 등록 비중</h2>
+                <span className="text-[12px] text-[#8C8270]">
+                  재등록 {data.metrics.ratioRenewal}% · 신규 {data.metrics.ratioNew}%
+                </span>
+              </div>
+              <div className="flex h-3 rounded-full overflow-hidden bg-[#EFE7D5] dark:bg-zinc-800">
+                <div className="h-full bg-[#B47B2A]" style={{ width: `${data.metrics.ratioRenewal}%` }} title={`재등록 ${data.metrics.renewalThisMonth}명`} />
+                <div className="h-full bg-[#6B7B3A]" style={{ width: `${data.metrics.ratioNew}%` }} title={`신규 ${data.metrics.newThisMonth}명`} />
+              </div>
+              <div className="mt-1.5 flex gap-3 text-[11px]">
+                <span className="text-[#B47B2A] font-semibold">■ 재등록 {data.metrics.renewalThisMonth}명</span>
+                <span className="text-[#6B7B3A] font-semibold">■ 신규 {data.metrics.newThisMonth}명</span>
+              </div>
+            </section>
+          )}
+
+          {/* 월급(정산액) 12개월 추이 */}
+          <Section title="월급 추이 (12개월)" subtitle="올해 vs 작년 동월">
+            {trend.length === 0 ? (
+              <Empty>표시할 데이터가 없어요.</Empty>
+            ) : (
+              <DualLineChart
+                xLabels={trend.map((t) => t.ym.slice(2).replace("-", "/"))}
+                primary={{ label: "올해", values: trend.map((t) => t.salary), dates: trend.map((t) => t.ym) }}
+                secondary={{
+                  label: "작년 동월",
+                  values: trend.map((t) => t.salaryPrev),
+                  dates: trend.map((t) => `${Number(t.ym.slice(0, 4)) - 1}${t.ym.slice(4)}`),
+                }}
+                unit="원"
+              />
+            )}
+          </Section>
 
           {/* 오늘 일정 타임라인 */}
           <Section title="오늘 일정" subtitle={`${data.today.sessions.length}건`}>
@@ -425,6 +496,49 @@ function BigCard({
       {hint && <div className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">{hint}</div>}
       {sub && <div className="mt-1 text-[11.5px] font-medium text-[#6B7B3A] dark:text-[#A8B87A]">{sub}</div>}
     </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  hint,
+  href,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  href?: string;
+  tone?: "green" | "red";
+}) {
+  const valueCls =
+    tone === "green"
+      ? "text-[#2F3A2B] dark:text-[#A8B87A]"
+      : tone === "red"
+        ? "text-[#B4442A] dark:text-red-300"
+        : "text-[#241F18] dark:text-zinc-100";
+  const inner = (
+    <>
+      <div className="flex items-center gap-1">
+        <span className="text-[11.5px] font-semibold text-[#7F6F55] dark:text-zinc-400 truncate">{label}</span>
+        {href && (
+          <svg className="ml-auto w-3.5 h-3.5 text-[#C9BEA6] group-hover:text-[#6B7B3A]" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        )}
+      </div>
+      <div className={`mt-1 text-[19px] md:text-[21px] font-bold ${valueCls}`}>{value}</div>
+      {hint && <div className="mt-0.5 text-[11px] text-[#8C8270] dark:text-zinc-500 truncate">{hint}</div>}
+    </>
+  );
+  const base = "rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-3.5 py-3 shadow-sm";
+  return href ? (
+    <Link href={href} className={`group block ${base} hover:border-[#6B7B3A]/50 hover:bg-[#F5F0E5]/40 dark:hover:bg-zinc-800/60 transition-colors`}>
+      {inner}
+    </Link>
+  ) : (
+    <div className={base}>{inner}</div>
   );
 }
 

@@ -46,6 +46,7 @@ export async function GET(request: Request) {
   const dow = (new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7; // 0=월
   const weekStart = shiftYmd(today, -dow);
   const weekEndExcl = shiftYmd(weekStart, 7);
+  const rolling28Start = shiftYmd(today, -27); // 최근 28일(오늘 포함) 평균용
 
   // ── 병렬 1차 조회 ──
   const scopeOr = `trainer_member_id.eq.${me},seller_member_id.eq.${me},co_trainer_ids.cs.{${me}}`;
@@ -57,6 +58,7 @@ export async function GET(request: Request) {
     { data: recentRes },
     { data: futureRes },
     { data: scopedMemberships },
+    { count: rolling28Attended },
   ] = await Promise.all([
     // 내 커미션 설정
     supabase
@@ -117,6 +119,15 @@ export async function GET(request: Request) {
       .eq("center_id", centerId)
       .eq("seller_member_id", me)
       .in("payment_status", ["unpaid", "partial"]),
+    // 최근 28일 진행(attended) 수업 수 — 주당/일당 평균용
+    supabase
+      .from("crm_reservations")
+      .select("id", { count: "exact", head: true })
+      .eq("center_id", centerId)
+      .eq("trainer_member_id", me)
+      .eq("status", "attended")
+      .gte("starts_at", kstStart(rolling28Start))
+      .lt("starts_at", kstStart(todayExcl)),
   ]);
 
   // ── pass 사전 (회당 수업료 산출용): month + recent + scoped 의 pass 합집합 ──
@@ -139,9 +150,18 @@ export async function GET(request: Request) {
   const { data: members } = memberIds.size
     ? await supabase
         .from("crm_members")
-        .select("id, name, last_attended_at")
+        .select("id, name, last_attended_at, registered_at, registration_type, created_at")
         .in("id", Array.from(memberIds))
-    : { data: [] as { id: number; name: string; last_attended_at: string | null }[] };
+    : {
+        data: [] as {
+          id: number;
+          name: string;
+          last_attended_at: string | null;
+          registered_at: string | null;
+          registration_type: string | null;
+          created_at: string | null;
+        }[],
+      };
   const memberMap = new Map((members ?? []).map((m) => [m.id, m]));
   const nameOf = (id: number | null | undefined) =>
     (id != null && memberMap.get(id)?.name) || "회원";
@@ -292,8 +312,57 @@ export async function GET(request: Request) {
     };
   });
 
+  // ── 운영 지표 ──
+  // 유효회원 = 내 범위 유효 수강권 보유 distinct 회원
+  const activeMemberIds = new Set<number>();
+  (scopedPasses ?? []).forEach((p) => p.member_id && activeMemberIds.add(p.member_id));
+  const activeMembers = activeMemberIds.size;
+
+  // 2주(15일) 넘게 미진행 = 유효회원 중 마지막 출석이 15일 이전이거나 기록 없음
+  const dormantLimit = shiftYmd(today, -15); // 이 날짜 이하(=15일 이상 지남)면 dormant
+  let dormant2w = 0;
+  for (const mid of activeMemberIds) {
+    const la = memberMap.get(mid)?.last_attended_at;
+    if (!la || la <= dormantLimit) dormant2w += 1;
+  }
+
+  // 세션 수
+  const attendedThisMonth = attendedCount;
+  const bookedThisMonth = bookedCount;
+  const weekRemaining = (weekRes ?? []).filter((r) => r.status === "booked").length;
+  const rolling = rolling28Attended ?? 0;
+  const avgPerWeek = Math.round((rolling / 4) * 10) / 10;
+  const avgPerDay = Math.round((rolling / 28) * 10) / 10;
+
+  // 이번달 신규/재등록 (내 범위 회원 중 registered_at 이번달)
+  let newThisMonth = 0;
+  let renewalThisMonth = 0;
+  for (const m of members ?? []) {
+    // 등록일 우선, 없으면 생성일 (회원관리 페이지 signup 필터와 동일 기준)
+    const reg = m.registered_at ?? (m.created_at ? m.created_at.slice(0, 10) : null);
+    if (!reg || reg < monthStart || reg >= nextMonthStart) continue;
+    if (m.registration_type === "재등록") renewalThisMonth += 1;
+    else if (m.registration_type === "신규") newThisMonth += 1;
+  }
+  const regTotal = newThisMonth + renewalThisMonth;
+  const ratioNew = regTotal > 0 ? Math.round((newThisMonth / regTotal) * 100) : 0;
+  const ratioRenewal = regTotal > 0 ? 100 - ratioNew : 0;
+
   return NextResponse.json({
     month,
+    metrics: {
+      activeMembers,
+      dormant2w,
+      attendedThisMonth,
+      bookedThisMonth,
+      weekRemaining,
+      avgPerWeek,
+      avgPerDay,
+      newThisMonth,
+      renewalThisMonth,
+      ratioNew,
+      ratioRenewal,
+    },
     today: { remaining: todayRemaining, sessions: todaySessions },
     week: { days: weekDays },
     expiring,
