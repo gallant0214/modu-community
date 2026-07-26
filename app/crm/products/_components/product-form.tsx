@@ -423,7 +423,7 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
       {/* 이용 방식 */}
       <Section title="이용 방식" required>
         <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
-          {(["period", "count"] as const).map((m) => (
+          {(["count", "period"] as const).map((m) => (
             <button
               key={m}
               type="button"
