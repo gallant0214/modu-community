@@ -1509,6 +1509,7 @@ export type Database = {
         Row: {
           id: number
           center_id: number
+          trainer_member_id: number | null
           type: string
           billing_mode: string
           category: string | null
@@ -1541,6 +1542,7 @@ export type Database = {
         Insert: {
           id?: number
           center_id: number
+          trainer_member_id?: number | null
           type: string
           billing_mode?: string
           category?: string | null
@@ -1573,6 +1575,7 @@ export type Database = {
         Update: {
           id?: number
           center_id?: number
+          trainer_member_id?: number | null
           type?: string
           billing_mode?: string
           category?: string | null

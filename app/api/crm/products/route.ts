@@ -33,7 +33,10 @@ export function sanitizeComponents(input: unknown): {
 }
 
 /**
- * GET /api/crm/products?type=&q=
+ * GET /api/crm/products?type=&q=&scope=center|personal
+ *
+ * scope 기본값 = 'center' (기존 동작).
+ * scope='personal' → 로그인 강사(ctx.centerMemberId)가 등록한 개인 상품만 반환.
  */
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
@@ -42,15 +45,22 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const type = url.searchParams.get("type");
   const q = (url.searchParams.get("q") || "").trim();
+  const scope = url.searchParams.get("scope") === "personal" ? "personal" : "center";
 
   let query = supabase
     .from("crm_products")
     .select(
-      "id, type, billing_mode, category, name, description, open_time, close_time, operating_days, duration_value, duration_unit, service_days, total_sessions, pause_enabled, pause_days, pause_count, price_won, vat_included, mileage_earn, mileage_usable, attendance_mileage_earn, capacity, session_minutes, daily_check_in_limit, daily_time_limit_enabled, components, status, created_at"
+      "id, type, billing_mode, category, name, description, open_time, close_time, operating_days, duration_value, duration_unit, service_days, total_sessions, pause_enabled, pause_days, pause_count, price_won, vat_included, mileage_earn, mileage_usable, attendance_mileage_earn, capacity, session_minutes, daily_check_in_limit, daily_time_limit_enabled, components, trainer_member_id, status, created_at"
     )
     .eq("center_id", ctx.centerId)
     .eq("status", "active")
     .order("created_at", { ascending: false });
+
+  if (scope === "personal") {
+    query = query.eq("trainer_member_id", ctx.centerMemberId);
+  } else {
+    query = query.is("trainer_member_id", null);
+  }
 
   // 필터 시엔 커스텀 유형도 허용 (센터별로 다르니 문자열 매칭)
   if (type) {
@@ -100,6 +110,7 @@ export async function POST(request: Request) {
     daily_check_in_limit?: number;
     daily_time_limit_enabled?: boolean;
     components?: unknown;
+    scope?: string;
   };
   try {
     body = await request.json();
@@ -141,10 +152,20 @@ export async function POST(request: Request) {
     (d) => Number.isInteger(d) && d >= 0 && d <= 6
   );
 
+  const isPersonalScope = body.scope === "personal";
+  // 개인 상품 등록 시엔 커스텀 유형 이슈 방지 위해 pass 계열만 허용 (수강권 = personal/group)
+  if (isPersonalScope && !(body.type === "personal" || body.type === "group")) {
+    return NextResponse.json(
+      { error: "개인 상품은 개인 레슨 또는 그룹 수업 유형만 등록할 수 있어요" },
+      { status: 400 }
+    );
+  }
+
   const { data: created, error } = await supabase
     .from("crm_products")
     .insert({
       center_id: ctx.centerId,
+      trainer_member_id: isPersonalScope ? ctx.centerMemberId : null,
       type: body.type,
       billing_mode: billingMode,
       category: body.category?.trim() || null,

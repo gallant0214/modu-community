@@ -78,13 +78,15 @@ interface Props {
   initial?: Partial<ProductInitial>;
   onSaved: () => void;
   onCancel: () => void;
+  /** 'personal' 이면 강사 개인 상품 스코프로 저장 (수강권=personal/group 만 허용) */
+  scope?: "center" | "personal";
 }
 
 /**
  * 상품 생성/수정 공용 폼.
  * new/page.tsx 와 상품 관리 페이지의 수정 모달 둘 다 사용.
  */
-export function ProductForm({ mode, initial, onSaved, onCancel }: Props) {
+export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center" }: Props) {
   const { getIdToken } = useAuth();
 
   const [customTypes, setCustomTypes] = useState<TypeOption[]>([]);
@@ -290,6 +292,8 @@ export function ProductForm({ mode, initial, onSaved, onCancel }: Props) {
           total_sessions: c.billing_mode === "count" ? c.total_sessions ?? 0 : 0,
           session_minutes: c.type === "personal" || c.type === "group" ? c.session_minutes ?? 0 : 0,
         })),
+        // create 모드에서만 scope 를 서버로 전송 (edit 는 소유가 이미 정해져 있음)
+        ...(mode === "create" && scope === "personal" ? { scope: "personal" } : {}),
       };
 
       const url =

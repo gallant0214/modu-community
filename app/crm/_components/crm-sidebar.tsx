@@ -52,6 +52,12 @@ function buildSoloMenu(
 ): MenuItem[] {
   const base = MENU.filter((m) => SOLO_MENU_HREFS.includes(m.href));
   base.push({
+    href: "/crm/products/personal",
+    label: "개인 상품 관리",
+    group: "sales",
+    icon: IconProduct,
+  });
+  base.push({
     href: "/crm/payroll/me",
     label: "내 급여",
     group: "me",

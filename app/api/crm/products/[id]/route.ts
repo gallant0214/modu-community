@@ -41,12 +41,27 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
   const { id } = await params;
   const pid = Number(id);
   if (!pid) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+
+  // 개인 상품은 소유 강사만 수정. 센터 공용 상품은 admin 이상.
+  const { data: existing } = await supabase
+    .from("crm_products")
+    .select("trainer_member_id")
+    .eq("id", pid)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+  if (!existing) return NextResponse.json({ error: "상품을 찾을 수 없습니다" }, { status: 404 });
+  const trainerOwnerId = (existing as { trainer_member_id: number | null }).trainer_member_id;
+  const isAdmin = ctx.role === "owner" || ctx.role === "admin";
+  const isPersonalOwner = trainerOwnerId != null && trainerOwnerId === ctx.centerMemberId;
+  if (!isAdmin && !isPersonalOwner) {
+    return NextResponse.json({ error: "수정 권한이 없습니다" }, { status: 403 });
+  }
 
   let body: Record<string, unknown>;
   try {
@@ -113,12 +128,26 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
   const { id } = await params;
   const pid = Number(id);
   if (!pid) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+
+  const { data: existing } = await supabase
+    .from("crm_products")
+    .select("trainer_member_id")
+    .eq("id", pid)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+  if (!existing) return NextResponse.json({ error: "상품을 찾을 수 없습니다" }, { status: 404 });
+  const trainerOwnerId = (existing as { trainer_member_id: number | null }).trainer_member_id;
+  const isAdmin = ctx.role === "owner" || ctx.role === "admin";
+  const isPersonalOwner = trainerOwnerId != null && trainerOwnerId === ctx.centerMemberId;
+  if (!isAdmin && !isPersonalOwner) {
+    return NextResponse.json({ error: "삭제 권한이 없습니다" }, { status: 403 });
+  }
 
   const { error } = await supabase
     .from("crm_products")
