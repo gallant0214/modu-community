@@ -70,7 +70,6 @@ const UNIT_OPTIONS: { value: DurationUnit; label: string }[] = [
 ];
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
-const DESC_MAX = 1000;
 
 interface Props {
   mode: "create" | "edit";
@@ -189,18 +188,21 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
     }
   };
 
+  // 이용 방식 기본 = 횟수제(count)
   const [billingMode, setBillingMode] = useState<BillingMode>(
-    initial?.billing_mode ?? "period"
+    initial?.billing_mode ?? "count"
   );
   const [name, setName] = useState(initial?.name ?? "");
-  const [openTime, setOpenTime] = useState(initial?.open_time ?? "00:00");
-  const [closeTime, setCloseTime] = useState(initial?.close_time ?? "23:59");
+  // 하루 이용 시간 제한 UI 제거됨 — 항상 비활성, 시간값은 기본 보존.
+  const openTime = initial?.open_time ?? "00:00";
+  const closeTime = initial?.close_time ?? "23:59";
   const [days, setDays] = useState<number[]>(
     initial?.operating_days ?? [0, 1, 2, 3, 4, 5, 6]
   );
-  const [durationValue, setDurationValue] = useState(initial?.duration_value ?? 3);
+  // 기간 설정 기본: 일(day) 단위, 40일
+  const [durationValue, setDurationValue] = useState(initial?.duration_value ?? 40);
   const [durationUnit, setDurationUnit] = useState<DurationUnit>(
-    (initial?.duration_unit as DurationUnit) ?? "month"
+    (initial?.duration_unit as DurationUnit) ?? "day"
   );
   const [serviceDays, setServiceDays] = useState(initial?.service_days ?? 0);
   const [totalSessions, setTotalSessions] = useState(initial?.total_sessions ?? 10);
@@ -224,10 +226,10 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   const [sessionMinutes, setSessionMinutes] = useState(initial?.session_minutes ?? 50);
   // 하루 출석 가능 횟수 UI 제거됨 — 항상 기본 1 로 저장.
   const dailyCheckInLimit = initial?.daily_check_in_limit ?? 1;
-  const [dailyTimeLimitEnabled, setDailyTimeLimitEnabled] = useState(
-    initial?.daily_time_limit_enabled ?? false
-  );
-  const [description, setDescription] = useState(initial?.description ?? "");
+  // 하루 이용 시간 제한 UI 제거됨 — 항상 false 로 저장.
+  const dailyTimeLimitEnabled = false;
+  // 상품 설명 UI 제거됨 — 편집 시 기존 값 보존, 신규는 null.
+  const description: string | null = initial?.description ?? null;
   // 묶음 구성 상품 UI 는 제거됨. 기존 묶음 상품은 데이터 보존을 위해 편집 시 그대로 유지(신규는 항상 [] ).
   const components: BundleComponent[] = initial?.components ?? [];
   const [saving, setSaving] = useState(false);
@@ -481,46 +483,6 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
           className={crmInputClass}
           maxLength={60}
         />
-
-        {/* 하루 이용 가능 시간 (체크박스로 활성화) */}
-        <div className="mt-3">
-          <label className="flex items-center gap-2 mb-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={dailyTimeLimitEnabled}
-              onChange={(e) => setDailyTimeLimitEnabled(e.target.checked)}
-              className="w-4 h-4 accent-[#6B7B3A]"
-            />
-            <span className="text-[13px] font-medium text-[#3A342A] dark:text-zinc-300">
-              하루 이용 가능 시간 제한
-            </span>
-            {!dailyTimeLimitEnabled && (
-              <span className="text-[11.5px] text-[#A89B80]">(체크 시 시간대 지정)</span>
-            )}
-          </label>
-          {dailyTimeLimitEnabled && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <FieldLabel>시작 시간</FieldLabel>
-                <input
-                  type="time"
-                  value={openTime}
-                  onChange={(e) => setOpenTime(e.target.value)}
-                  className={crmInputClass}
-                />
-              </div>
-              <div>
-                <FieldLabel>종료 시간</FieldLabel>
-                <input
-                  type="time"
-                  value={closeTime}
-                  onChange={(e) => setCloseTime(e.target.value)}
-                  className={crmInputClass}
-                />
-              </div>
-            </div>
-          )}
-        </div>
 
         <div className="mt-3">
           <div className="flex items-center justify-between mb-1.5">
@@ -808,20 +770,6 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
             이 상품 구매 시 마일리지 사용 허용
           </span>
         </label>
-      </Section>
-
-      {/* 상품 설명 */}
-      <Section title="상품 설명">
-        <textarea
-          value={description ?? ""}
-          onChange={(e) => setDescription(e.target.value.slice(0, DESC_MAX))}
-          placeholder="회원에게 보여줄 안내 문구를 입력해 주세요."
-          rows={5}
-          className={`${crmInputClass} resize-none`}
-        />
-        <div className="mt-1 text-right text-[11.5px] text-[#A89B80]">
-          {(description ?? "").length} / {DESC_MAX}
-        </div>
       </Section>
 
       {error && (
