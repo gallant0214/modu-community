@@ -792,14 +792,12 @@ function DayView({
             const list = reservations.filter(
               (r) => r.trainer_member_id === t.id && r.status !== "cancelled"
             );
-            const evList = events.filter((e) => {
-              if (strictTrainerId != null) {
-                // 특정 강사 필터: 그 강사의 개인 일정만. 센터 일정/다른 강사 개인 일정 제외.
-                return e.trainer_member_id === strictTrainerId;
-              }
-              // 전체 모드: 센터 일정은 모든 컬럼에, 개인 일정은 해당 강사 컬럼에.
-              return e.type === "center" || e.trainer_member_id === t.id;
-            });
+            // 서버가 trainer_id 로 이미 필터함 (특정 강사 지정 시 그 강사가 만든 센터 일정만 포함).
+            // 클라이언트는 컬럼당 표시 규칙만: 센터 일정=모든 컬럼, 개인 일정=담당 강사 컬럼.
+            const evList = events.filter(
+              (e) => e.type === "center" || e.trainer_member_id === t.id
+            );
+            void strictTrainerId;
             return (
               <div
                 key={t.id}
@@ -1191,14 +1189,9 @@ function WeekView({
             const list = reservations.filter(
               (r) => kstDateKey(r.starts_at) === key && r.status !== "cancelled"
             );
-            const evList = events.filter((e) => {
-              if (kstDateKey(e.starts_at) !== key) return false;
-              if (strictTrainerId != null) {
-                // 특정 강사 필터: 그 강사의 개인 일정만.
-                return e.trainer_member_id === strictTrainerId;
-              }
-              return true;
-            });
+            // 서버가 trainer_id 로 이미 필터함. 클라이언트는 날짜 매칭만.
+            const evList = events.filter((e) => kstDateKey(e.starts_at) === key);
+            void strictTrainerId;
             const defaultTrainer = trainers[0] ?? null;
             const now = nowKst();
             const isTodayCol = now.ymd === key;

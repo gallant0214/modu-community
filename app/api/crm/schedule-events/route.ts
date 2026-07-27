@@ -29,6 +29,19 @@ export async function GET(request: Request) {
     personalTrainerId = Number(trainerParam);
   }
 
+  // 특정 강사로 필터 시엔 그 강사의 firebase_uid 로 만든 센터 일정도 함께 포함시킨다.
+  // (센터 일정은 trainer_member_id=null 이라 personal 조건으로만은 잡히지 않음)
+  let filterTrainerUid: string | null = null;
+  if (personalTrainerId) {
+    const { data: tm } = await supabase
+      .from("crm_center_members")
+      .select("firebase_uid")
+      .eq("id", personalTrainerId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    filterTrainerUid = tm?.firebase_uid ?? null;
+  }
+
   let query = supabase
     .from("crm_schedule_events")
     .select(
@@ -41,7 +54,13 @@ export async function GET(request: Request) {
     .order("starts_at", { ascending: true });
 
   if (personalTrainerId) {
-    query = query.or(`type.eq.center,trainer_member_id.eq.${personalTrainerId}`);
+    // 개인 일정: 그 강사가 소유
+    // 센터 일정: 그 강사가 만든 것만 (uid 못 찾으면 센터 일정 제외)
+    const orParts = [`trainer_member_id.eq.${personalTrainerId}`];
+    if (filterTrainerUid) {
+      orParts.push(`and(type.eq.center,created_by_uid.eq.${filterTrainerUid})`);
+    }
+    query = query.or(orParts.join(","));
   }
 
   const { data, error } = await query;
