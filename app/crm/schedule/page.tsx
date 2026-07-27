@@ -648,17 +648,29 @@ function EditReservationModal({
             <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
               담당 강사
             </div>
-            <select
-              value={trainerId}
-              onChange={(e) => setTrainerId(Number(e.target.value))}
-              className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px]"
-            >
-              {trainers.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.display_name}
-                </option>
-              ))}
-            </select>
+            {(() => {
+              // 담당 강사 후보는 role='trainer' 인 실제 강사만.
+              // 현재 예약의 담당이 trainer 가 아닌 다른 role(예: owner) 이면 그 사람도 후보에 유지 (자기 자신 유지 위해).
+              const trainerOnly = trainers.filter((t) => t.role === "trainer");
+              const current = trainers.find((t) => t.id === trainerId);
+              const list =
+                current && current.role !== "trainer"
+                  ? [current, ...trainerOnly.filter((t) => t.id !== current.id)]
+                  : trainerOnly;
+              return (
+                <select
+                  value={trainerId}
+                  onChange={(e) => setTrainerId(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px]"
+                >
+                  {list.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.display_name}
+                    </option>
+                  ))}
+                </select>
+              );
+            })()}
           </div>
 
           <div className="grid grid-cols-2 gap-2">
