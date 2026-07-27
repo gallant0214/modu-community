@@ -479,7 +479,7 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="10회 PT 이용권"
+          placeholder="예시: 10회 PT 이용권"
           className={crmInputClass}
           maxLength={60}
         />
