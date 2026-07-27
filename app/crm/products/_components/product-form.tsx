@@ -90,7 +90,9 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   const { getIdToken } = useAuth();
 
   const [customTypes, setCustomTypes] = useState<TypeOption[]>([]);
-  const [type, setType] = useState<string>(initial?.type || "membership");
+  const [type, setType] = useState<string>(
+    initial?.type || (scope === "personal" ? "personal" : "membership")
+  );
   const [showAddType, setShowAddType] = useState(false);
   const [newTypeLabel, setNewTypeLabel] = useState("");
   const [addingType, setAddingType] = useState(false);
@@ -103,9 +105,10 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
       customTypes.filter((t) => BUILT_IN_KEYS.has(t.value)).map((t) => [t.value, t.label])
     );
     if (scope === "personal") {
-      return BUILT_IN_TYPES.filter((bi) => bi.value === "personal" || bi.value === "group").map(
-        (bi) => ({ ...bi, label: overrides.get(bi.value) ?? bi.label })
-      );
+      // 개인 상품: 개인 레슨을 1순위로, 그 다음 그룹 수업.
+      return (["personal", "group"] as const)
+        .map((v) => BUILT_IN_TYPES.find((bi) => bi.value === v)!)
+        .map((bi) => ({ ...bi, label: overrides.get(bi.value) ?? bi.label }));
     }
     const builtIn = BUILT_IN_TYPES.map((bi) => ({
       ...bi,
@@ -219,24 +222,16 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   const [vatIncluded, setVatIncluded] = useState(initial?.vat_included ?? false);
   const [capacity, setCapacity] = useState(initial?.capacity ?? 2);
   const [sessionMinutes, setSessionMinutes] = useState(initial?.session_minutes ?? 50);
-  const [dailyCheckInLimit, setDailyCheckInLimit] = useState(initial?.daily_check_in_limit ?? 1);
+  // 하루 출석 가능 횟수 UI 제거됨 — 항상 기본 1 로 저장.
+  const dailyCheckInLimit = initial?.daily_check_in_limit ?? 1;
   const [dailyTimeLimitEnabled, setDailyTimeLimitEnabled] = useState(
     initial?.daily_time_limit_enabled ?? false
   );
   const [description, setDescription] = useState(initial?.description ?? "");
-  const [components, setComponents] = useState<BundleComponent[]>(initial?.components ?? []);
+  // 묶음 구성 상품 UI 는 제거됨. 기존 묶음 상품은 데이터 보존을 위해 편집 시 그대로 유지(신규는 항상 [] ).
+  const components: BundleComponent[] = initial?.components ?? [];
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  const addComponent = () =>
-    setComponents((prev) => [
-      ...prev,
-      { type: "personal", billing_mode: "count", total_sessions: 10, duration_value: 0, session_minutes: 50 },
-    ]);
-  const updateComponent = (i: number, patch: Partial<BundleComponent>) =>
-    setComponents((prev) => prev.map((c, x) => (x === i ? { ...c, ...patch } : c)));
-  const removeComponent = (i: number) =>
-    setComponents((prev) => prev.filter((_, x) => x !== i));
 
   const priceWon = useMemo(() => parseWon(priceText), [priceText]);
 
@@ -482,43 +477,10 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="예: 3개월 헬스 회원권"
+          placeholder="10회 PT 이용권"
           className={crmInputClass}
           maxLength={60}
         />
-
-        {/* 하루 출석 가능 횟수 (기본 1) */}
-        <div className="mt-3">
-          <FieldLabel>하루 출석 가능 횟수</FieldLabel>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setDailyCheckInLimit(n)}
-                className={`px-2.5 py-1 rounded-full text-[12px] font-medium border
-                  ${dailyCheckInLimit === n
-                    ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
-                    : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
-                  }`}
-              >
-                {n}회
-              </button>
-            ))}
-            <input
-              type="number"
-              min={1}
-              max={99}
-              value={dailyCheckInLimit}
-              onChange={(e) =>
-                setDailyCheckInLimit(Math.max(1, Math.min(99, Number(e.target.value) || 1)))
-              }
-              className="w-16 px-2 py-1 rounded-full text-[12px] border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 bg-white dark:bg-zinc-900 text-center focus:outline-none ml-1"
-              aria-label="하루 출석 가능 횟수 직접 입력"
-            />
-            <span className="text-[11.5px] text-[#A89B80]">회</span>
-          </div>
-        </div>
 
         {/* 하루 이용 가능 시간 (체크박스로 활성화) */}
         <div className="mt-3">
@@ -860,91 +822,6 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
         <div className="mt-1 text-right text-[11.5px] text-[#A89B80]">
           {(description ?? "").length} / {DESC_MAX}
         </div>
-      </Section>
-
-      {/* 묶음 구성 상품 — 여러 상품을 하나로 판매 (예: [피티]24회 + [헬스]100일) */}
-      <Section title="묶음 구성 상품">
-        <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 mb-2 leading-relaxed">
-          위 상품에 <b>함께 발급될 다른 상품</b>을 추가하면 하나의 묶음 상품으로 판매돼요.
-          <br />예: 위를 <b>[헬스]100일</b>로 만들고 아래에 <b>[피티]24회</b>를 추가 → “[피티]24회 + [헬스]100일” 묶음.
-        </p>
-        {components.length > 0 && (
-          <ul className="space-y-2 mb-2">
-            {components.map((c, i) => (
-              <li
-                key={i}
-                className="flex flex-wrap items-center gap-2 px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/50 dark:bg-zinc-900/50"
-              >
-                <select
-                  value={c.type}
-                  onChange={(e) => updateComponent(i, { type: e.target.value })}
-                  className="px-2 py-1.5 rounded-md border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-[#2A251D] dark:text-zinc-100"
-                >
-                  {BUILT_IN_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
-                  ))}
-                </select>
-                <select
-                  value={c.billing_mode}
-                  onChange={(e) => updateComponent(i, { billing_mode: e.target.value as BillingMode })}
-                  className="px-2 py-1.5 rounded-md border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-[#2A251D] dark:text-zinc-100"
-                >
-                  <option value="period">기간제</option>
-                  <option value="count">횟수제</option>
-                </select>
-                {c.billing_mode === "period" ? (
-                  <span className="inline-flex items-center gap-1">
-                    <input
-                      type="number"
-                      min={0}
-                      value={c.duration_value ?? 0}
-                      onChange={(e) => updateComponent(i, { duration_value: Math.max(0, Number(e.target.value) || 0) })}
-                      className="w-20 px-2 py-1.5 rounded-md border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-right"
-                    />
-                    <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">일</span>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1">
-                    <input
-                      type="number"
-                      min={0}
-                      value={c.total_sessions ?? 0}
-                      onChange={(e) => updateComponent(i, { total_sessions: Math.max(0, Number(e.target.value) || 0) })}
-                      className="w-20 px-2 py-1.5 rounded-md border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-right"
-                    />
-                    <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">회</span>
-                  </span>
-                )}
-                {(c.type === "personal" || c.type === "group") && (
-                  <span className="inline-flex items-center gap-1">
-                    <input
-                      type="number"
-                      min={0}
-                      value={c.session_minutes ?? 0}
-                      onChange={(e) => updateComponent(i, { session_minutes: Math.max(0, Number(e.target.value) || 0) })}
-                      className="w-16 px-2 py-1.5 rounded-md border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-right"
-                    />
-                    <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">분</span>
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => removeComponent(i)}
-                  className="ml-auto shrink-0 px-2 py-0.5 rounded-md border border-red-200 dark:border-red-900/60 text-[12px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
-                >
-                  삭제
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <button
-          type="button"
-          onClick={addComponent}
-          className="px-3.5 py-2 rounded-full text-[13px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
-        >
-          + 상품 추가하기
-        </button>
       </Section>
 
       {error && (
