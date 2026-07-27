@@ -160,18 +160,22 @@ export async function POST(request: Request) {
   if (pass.status !== "valid") {
     return NextResponse.json({ error: "사용할 수 없는 수강권입니다" }, { status: 400 });
   }
-  if (pass.remaining_sessions <= 0) {
-    return NextResponse.json({ error: "잔여 세션이 없습니다" }, { status: 400 });
-  }
-  // 이미 잡힌 예약(취소·거절 제외)이 총 횟수 이상이면 더 예약 불가 → 모든 예약 완료 상태.
-  const { count: reservedCount } = await supabase
-    .from("crm_reservations")
-    .select("id", { count: "exact", head: true })
-    .eq("center_id", ctx.centerId)
-    .eq("pass_id", passId)
-    .not("status", "in", "(cancelled,rejected)");
-  if ((reservedCount ?? 0) >= (pass.total_sessions ?? 0)) {
-    return NextResponse.json({ error: "이미 모든 예약이 완료된 수강권입니다" }, { status: 400 });
+  // 기간제(총 세션 0)는 기간 내 횟수 제한 없이 예약 가능 → 잔여/슬롯 검사 건너뜀.
+  const isPeriodPass = !pass.total_sessions || pass.total_sessions <= 0;
+  if (!isPeriodPass) {
+    if (pass.remaining_sessions <= 0) {
+      return NextResponse.json({ error: "잔여 세션이 없습니다" }, { status: 400 });
+    }
+    // 이미 잡힌 예약(취소·거절 제외)이 총 횟수 이상이면 더 예약 불가 → 모든 예약 완료 상태.
+    const { count: reservedCount } = await supabase
+      .from("crm_reservations")
+      .select("id", { count: "exact", head: true })
+      .eq("center_id", ctx.centerId)
+      .eq("pass_id", passId)
+      .not("status", "in", "(cancelled,rejected)");
+    if ((reservedCount ?? 0) >= (pass.total_sessions ?? 0)) {
+      return NextResponse.json({ error: "이미 모든 예약이 완료된 수강권입니다" }, { status: 400 });
+    }
   }
 
   // 담당 강사 = 주강사 + 추가강사(co_trainer_ids). 이들만 예약 가능

@@ -267,29 +267,26 @@ export async function PATCH(
     ? -1                   // 미차감 → 차감: 잔여 -1
     : 0;
 
-  // 잔여 변동이 있으면 조건부 UPDATE 로 race condition 방지
+  // 잔여 변동이 있으면 조건부 UPDATE 로 race condition 방지.
+  // 단, 기간제(총 세션 0)는 횟수 개념이 없어 잔여 차감/복원을 하지 않는다.
   if (remainingDelta !== 0) {
-    if (remainingDelta < 0) {
-      // -1: remaining > 0 일 때만
-      const { data: passRow } = await supabase
-        .from("crm_passes")
-        .select("remaining_sessions")
-        .eq("id", cur.pass_id)
-        .maybeSingle();
-      if (!passRow || passRow.remaining_sessions <= 0) {
-        return NextResponse.json({ error: "잔여 세션이 부족합니다" }, { status: 409 });
-      }
-      await supabase
-        .from("crm_passes")
-        .update({ remaining_sessions: passRow.remaining_sessions - 1 } as never)
-        .eq("id", cur.pass_id);
-    } else {
-      const { data: passRow } = await supabase
-        .from("crm_passes")
-        .select("remaining_sessions, total_sessions")
-        .eq("id", cur.pass_id)
-        .maybeSingle();
-      if (passRow) {
+    const { data: passRow } = await supabase
+      .from("crm_passes")
+      .select("remaining_sessions, total_sessions")
+      .eq("id", cur.pass_id)
+      .maybeSingle();
+    const isPeriodPass = !passRow?.total_sessions || (passRow?.total_sessions ?? 0) <= 0;
+    if (passRow && !isPeriodPass) {
+      if (remainingDelta < 0) {
+        // -1: remaining > 0 일 때만
+        if (passRow.remaining_sessions <= 0) {
+          return NextResponse.json({ error: "잔여 세션이 부족합니다" }, { status: 409 });
+        }
+        await supabase
+          .from("crm_passes")
+          .update({ remaining_sessions: passRow.remaining_sessions - 1 } as never)
+          .eq("id", cur.pass_id);
+      } else {
         const next = Math.min(passRow.remaining_sessions + 1, passRow.total_sessions);
         await supabase
           .from("crm_passes")
