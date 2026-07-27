@@ -39,7 +39,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_reservations")
     .select(
-      "id, pass_id, member_id, trainer_member_id, starts_at, ends_at, status, consumed, attended_at, cancelled_reason"
+      "id, pass_id, member_id, trainer_member_id, starts_at, ends_at, status, consumed, attended_at, cancelled_reason, created_by_uid, created_at"
     )
     .eq("center_id", ctx.centerId)
     .gte("starts_at", startUtc.toISOString())
@@ -83,6 +83,36 @@ export async function GET(request: Request) {
     : { data: [] };
   const nameMap = new Map((members ?? []).map((m) => [m.id, m.name]));
 
+  // 담당 강사 이름 + 예약 생성자 이름 (센터 소속 강사 기준 lookup).
+  const trainerIds = Array.from(
+    new Set((data ?? []).map((r) => r.trainer_member_id).filter((v): v is number => !!v))
+  );
+  const creatorUids = Array.from(
+    new Set((data ?? []).map((r) => r.created_by_uid).filter((v): v is string => !!v))
+  );
+  const [trainerLookup, creatorLookup] = await Promise.all([
+    trainerIds.length
+      ? supabase
+          .from("crm_center_members")
+          .select("id, display_name")
+          .eq("center_id", ctx.centerId)
+          .in("id", trainerIds)
+      : Promise.resolve({ data: [] as { id: number; display_name: string }[] }),
+    creatorUids.length
+      ? supabase
+          .from("crm_center_members")
+          .select("firebase_uid, display_name")
+          .eq("center_id", ctx.centerId)
+          .in("firebase_uid", creatorUids)
+      : Promise.resolve({ data: [] as { firebase_uid: string; display_name: string }[] }),
+  ]);
+  const trainerNameMap = new Map(
+    (trainerLookup.data ?? []).map((t) => [t.id, t.display_name])
+  );
+  const creatorNameMap = new Map(
+    (creatorLookup.data ?? []).map((c) => [c.firebase_uid, c.display_name])
+  );
+
   // 수강권 회차 표시: 각 예약이 해당 수강권의 몇 회째인지 + 총 횟수
   // 회차 = 취소되지 않은 예약을 시작시각 순으로 매긴 순번 (노쇼도 차감이므로 포함)
   const passIds = Array.from(
@@ -119,6 +149,8 @@ export async function GET(request: Request) {
     reservations: (data ?? []).map((r) => ({
       ...r,
       member_name: nameMap.get(r.member_id) ?? "",
+      trainer_name: trainerNameMap.get(r.trainer_member_id) ?? null,
+      created_by_name: r.created_by_uid ? creatorNameMap.get(r.created_by_uid) ?? null : null,
       session_index: r.pass_id ? sessionIndexMap.get(r.id) ?? null : null,
       session_total: r.pass_id ? passTotalMap.get(r.pass_id) ?? null : null,
     })),

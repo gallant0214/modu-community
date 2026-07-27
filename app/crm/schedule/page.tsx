@@ -15,6 +15,7 @@ interface Reservation {
   member_id: number;
   member_name: string;
   trainer_member_id: number;
+  trainer_name?: string | null;
   starts_at: string;
   ends_at: string;
   status: string;
@@ -23,6 +24,9 @@ interface Reservation {
   cancelled_reason: string | null;
   session_index: number | null;
   session_total: number | null;
+  created_by_uid?: string | null;
+  created_by_name?: string | null;
+  created_at?: string | null;
 }
 
 // "총 10회 중 3회째" → "3/10회" 짧은 배지
@@ -63,6 +67,50 @@ function nowKst() {
   return { ymd, minutes };
 }
 const WORK_END_HOUR = 23;
+
+/**
+ * 시간대가 겹치는 아이템들을 나란히 배치하기 위한 좌표(colIdx, colCount) 계산.
+ * 서로 겹치는 아이템끼리 한 '클러스터'로 묶고, 클러스터 내 최대 동시 개수를 colCount 로 사용.
+ * 렌더 시 width = 100/colCount %, left = (100/colCount)*colIdx %.
+ */
+function layoutOverlaps<
+  T extends { id: number | string; starts_at: string; ends_at: string }
+>(items: T[]): Map<T["id"], { colIdx: number; colCount: number }> {
+  const result = new Map<T["id"], { colIdx: number; colCount: number }>();
+  if (items.length === 0) return result;
+  const sorted = [...items].sort((a, b) =>
+    a.starts_at < b.starts_at ? -1 : a.starts_at > b.starts_at ? 1 : 0
+  );
+
+  let cluster: T[] = [];
+  let clusterEnd = "";
+  const flush = () => {
+    if (!cluster.length) return;
+    // 클러스터 안에서 greedy 로 컬럼 배정: 각 컬럼의 마지막 종료시각 배열.
+    const colEnds: string[] = [];
+    const idxByItem = new Map<T["id"], number>();
+    for (const it of cluster) {
+      let col = 0;
+      while (col < colEnds.length && colEnds[col] > it.starts_at) col++;
+      colEnds[col] = it.ends_at;
+      idxByItem.set(it.id, col);
+    }
+    const colCount = Math.max(1, colEnds.length);
+    for (const it of cluster) {
+      result.set(it.id, { colIdx: idxByItem.get(it.id) ?? 0, colCount });
+    }
+    cluster = [];
+    clusterEnd = "";
+  };
+
+  for (const it of sorted) {
+    if (cluster.length && it.starts_at >= clusterEnd) flush();
+    cluster.push(it);
+    if (it.ends_at > clusterEnd) clusterEnd = it.ends_at;
+  }
+  flush();
+  return result;
+}
 
 export default function CrmSchedulePage() {
   const { getIdToken } = useAuth();
@@ -748,6 +796,35 @@ function DayView({
           );
         })()}
 
+        {/* 하루 종일 노출되는 센터 일정 스트립 — 강사 컬럼과 무관하게 한 번만 표시 */}
+        {(() => {
+          const centerEvents = events.filter((e) => e.type === "center");
+          if (centerEvents.length === 0) return null;
+          return (
+            <div className="border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#5A8BB0]/8 dark:bg-[#5A8BB0]/12 px-3 py-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10.5px] font-semibold text-[#487596] dark:text-[#8FB7D4]">
+                  센터 일정
+                </span>
+                {centerEvents.map((e) => (
+                  <button
+                    key={`center-${e.id}`}
+                    type="button"
+                    onClick={() => onPickEvent(e)}
+                    className="px-2 py-0.5 rounded-md text-[11.5px] font-medium border border-[#5A8BB0]/40 bg-[#5A8BB0]/15 text-[#487596] dark:text-[#8FB7D4] hover:bg-[#5A8BB0]/25"
+                    title={`${fmtKstHm(e.starts_at)} ~ ${fmtKstHm(e.ends_at)}${e.description ? " · " + e.description : ""}`}
+                  >
+                    <span className="font-semibold">{e.title}</span>
+                    <span className="ml-1 text-[10.5px] opacity-80">
+                      {fmtKstHm(e.starts_at)}~{fmtKstHm(e.ends_at)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         <div
           className="relative grid"
           style={{
@@ -798,12 +875,27 @@ function DayView({
                 : reservations.filter(
                     (r) => r.trainer_member_id === t.id && r.status !== "cancelled"
                   );
-            // 서버가 trainer_id 로 이미 필터함 (특정 강사 지정 시 그 강사가 만든 센터 일정만 포함).
-            // 클라이언트는 컬럼당 표시 규칙만: 센터 일정=모든 컬럼, 개인 일정=담당 강사 컬럼.
+            // 센터 일정은 상단 스트립에서 한 번만 표시하고, 강사 컬럼에는 개인 일정만 배치.
             const evList = events.filter(
-              (e) => e.type === "center" || e.trainer_member_id === t.id
+              (e) => e.type === "personal" && e.trainer_member_id === t.id
             );
-            void strictTrainerId;
+            // 예약·개인일정 겹침을 가로 분할로 배치.
+            type Lay = { id: string; starts_at: string; ends_at: string };
+            const layInput: Lay[] = [
+              ...list.map((r) => ({ id: `r-${r.id}`, starts_at: r.starts_at, ends_at: r.ends_at })),
+              ...evList.map((e) => ({ id: `e-${e.id}`, starts_at: e.starts_at, ends_at: e.ends_at })),
+            ];
+            const layout = layoutOverlaps(layInput);
+            const laneStyle = (id: string) => {
+              const l = layout.get(id) ?? { colIdx: 0, colCount: 1 };
+              const widthPct = 100 / l.colCount;
+              const leftPct = widthPct * l.colIdx;
+              // 아이템 사이 미세 간격
+              return {
+                left: `calc(${leftPct}% + 2px)`,
+                width: `calc(${widthPct}% - 4px)`,
+              } as React.CSSProperties;
+            };
             return (
               <div
                 key={t.id}
@@ -828,9 +920,7 @@ function DayView({
                   const bottom = offsetPx(e.ends_at);
                   const height = Math.max(SLOT_HEIGHT_PX * 0.9, bottom - top);
                   const cls =
-                    e.type === "center"
-                      ? "bg-[#5A8BB0]/15 text-[#487596] border-[#5A8BB0]/40 hover:bg-[#5A8BB0]/25"
-                      : "bg-[#8B6BAA]/15 text-[#7A5C99] border-[#8B6BAA]/40 hover:bg-[#8B6BAA]/25";
+                    "bg-[#8B6BAA]/15 text-[#7A5C99] border-[#8B6BAA]/40 hover:bg-[#8B6BAA]/25";
                   return (
                     <button
                       type="button"
@@ -839,12 +929,12 @@ function DayView({
                         ev.stopPropagation();
                         onPickEvent(e);
                       }}
-                      className={`absolute left-1 right-1 px-2 py-1 rounded-md text-left text-[11.5px] font-medium border cursor-pointer ${cls}`}
-                      style={{ top: `${top}px`, height: `${height}px` }}
+                      className={`absolute px-2 py-1 rounded-md text-left text-[11.5px] font-medium border cursor-pointer ${cls}`}
+                      style={{ top: `${top}px`, height: `${height}px`, ...laneStyle(`e-${e.id}`) }}
                       title={e.description ?? e.title}
                     >
                       <div className="truncate font-semibold">
-                        [{e.type === "center" ? "센터" : "개인"}] {e.title}
+                        [개인] {e.title}
                       </div>
                     </button>
                   );
@@ -872,8 +962,8 @@ function DayView({
                           setDrag
                         );
                       }}
-                      className={`absolute left-1 right-1 px-2 py-1 rounded-md text-left text-[11.5px] font-medium border ${color.bg} ${color.text} cursor-grab active:cursor-grabbing ${isDragging ? "opacity-40" : ""}`}
-                      style={{ top: `${top}px`, height: `${height}px` }}
+                      className={`absolute px-2 py-1 rounded-md text-left text-[11.5px] font-medium border ${color.bg} ${color.text} cursor-grab active:cursor-grabbing ${isDragging ? "opacity-40" : ""}`}
+                      style={{ top: `${top}px`, height: `${height}px`, ...laneStyle(`r-${r.id}`) }}
                     >
                       <div className="truncate font-semibold pointer-events-none">{r.member_name || "회원"}</div>
                       <div className="truncate text-[10.5px] opacity-80 pointer-events-none">
@@ -1199,7 +1289,19 @@ function WeekView({
             void strictTrainerId;
             // 서버가 trainer_id 로 이미 필터함. 클라이언트는 날짜 매칭만.
             const evList = events.filter((e) => kstDateKey(e.starts_at) === key);
-            void strictTrainerId;
+            // 겹치는 아이템들을 나란히 배치하기 위한 좌표. 예약(res-N) + 이벤트(ev-N) 통합 계산.
+            type Lay = { id: string; starts_at: string; ends_at: string };
+            const layInput: Lay[] = [
+              ...list.map((r) => ({ id: `r-${r.id}`, starts_at: r.starts_at, ends_at: r.ends_at })),
+              ...evList.map((e) => ({ id: `e-${e.id}`, starts_at: e.starts_at, ends_at: e.ends_at })),
+            ];
+            const layout = layoutOverlaps(layInput);
+            const laneStyle = (id: string) => {
+              const l = layout.get(id) ?? { colIdx: 0, colCount: 1 };
+              const widthPct = 100 / l.colCount;
+              const leftPct = widthPct * l.colIdx;
+              return { left: `${leftPct}%`, width: `${widthPct}%` } as React.CSSProperties;
+            };
             const defaultTrainer = trainers[0] ?? null;
             const now = nowKst();
             const isTodayCol = now.ymd === key;
@@ -1252,8 +1354,8 @@ function WeekView({
                         ev.stopPropagation();
                         onPickEvent(e);
                       }}
-                      className={`absolute left-1 right-1 px-1.5 py-0.5 rounded text-left text-[11px] font-medium border cursor-pointer ${cls}`}
-                      style={{ top: `${top}px`, height: `${height}px` }}
+                      className={`absolute px-1 py-0.5 rounded text-left text-[11px] font-medium border cursor-pointer ${cls}`}
+                      style={{ top: `${top}px`, height: `${height}px`, ...laneStyle(`e-${e.id}`) }}
                       title={e.description ?? e.title}
                     >
                       <div className="truncate font-semibold">
@@ -1284,8 +1386,8 @@ function WeekView({
                           setDrag
                         );
                       }}
-                      className={`absolute left-1 right-1 px-1.5 py-0.5 rounded text-left text-[11px] font-medium border ${color.bg} ${color.text} cursor-grab active:cursor-grabbing ${isDragging ? "opacity-40" : ""}`}
-                      style={{ top: `${top}px`, height: `${height}px` }}
+                      className={`absolute px-1 py-0.5 rounded text-left text-[11px] font-medium border ${color.bg} ${color.text} cursor-grab active:cursor-grabbing ${isDragging ? "opacity-40" : ""}`}
+                      style={{ top: `${top}px`, height: `${height}px`, ...laneStyle(`r-${r.id}`) }}
                     >
                       <div className="truncate font-semibold pointer-events-none">{r.member_name || "회원"}</div>
                       {sessionBadge(r) && (
@@ -1617,8 +1719,29 @@ function ReservationDialog({
             {RESERVATION_STATUS_LABEL[reservation.status]}
             {reservation.consumed && <span className="ml-1 text-[#B47B2A]">· 차감됨</span>}
           </div>
+
+          {/* 담당 강사 / 예약자 / 예약 접수 시각 */}
+          <div className="mt-2 grid grid-cols-[64px_1fr] gap-y-0.5 gap-x-2 text-[12px]">
+            <span className="text-[#A89B80]">담당 강사</span>
+            <span className="text-[#3A342A] dark:text-zinc-200">
+              {reservation.trainer_name || `#${reservation.trainer_member_id}`}
+            </span>
+            <span className="text-[#A89B80]">예약자</span>
+            <span className="text-[#3A342A] dark:text-zinc-200">
+              {reservation.created_by_name || (reservation.created_by_uid ? "센터 외부" : "—")}
+            </span>
+            {reservation.created_at && (
+              <>
+                <span className="text-[#A89B80]">예약한 시간</span>
+                <span className="text-[#3A342A] dark:text-zinc-200">
+                  {formatDateTimeKST(reservation.created_at)}
+                </span>
+              </>
+            )}
+          </div>
+
           {sessionBadge(reservation) && (
-            <div className="mt-1 inline-block px-2 py-0.5 rounded-full text-[11.5px] font-semibold bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]">
+            <div className="mt-2 inline-block px-2 py-0.5 rounded-full text-[11.5px] font-semibold bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]">
               총 {reservation.session_total}회 중 {reservation.session_index}회째 수업
             </div>
           )}
