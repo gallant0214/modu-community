@@ -789,9 +789,15 @@ function DayView({
           </div>
 
           {trainers.map((t) => {
-            const list = reservations.filter(
-              (r) => r.trainer_member_id === t.id && r.status !== "cancelled"
-            );
+            // 특정 강사 필터 시엔 서버가 이미 (담당강사=t) OR (예약 생성자=t) 로 필터함.
+            // 컬럼 배치를 위해 trainer_member_id 로 다시 자르면 '내가 만든 다른 강사 pass 예약'이 사라지므로
+            // 필터 모드에서는 취소만 걸러 모두 표시한다.
+            const list =
+              strictTrainerId != null
+                ? reservations.filter((r) => r.status !== "cancelled")
+                : reservations.filter(
+                    (r) => r.trainer_member_id === t.id && r.status !== "cancelled"
+                  );
             // 서버가 trainer_id 로 이미 필터함 (특정 강사 지정 시 그 강사가 만든 센터 일정만 포함).
             // 클라이언트는 컬럼당 표시 규칙만: 센터 일정=모든 컬럼, 개인 일정=담당 강사 컬럼.
             const evList = events.filter(
@@ -1186,9 +1192,11 @@ function WeekView({
 
           {days.map((d, di) => {
             const key = dayKey(d);
+            // 특정 강사 필터 시엔 서버가 이미 필터함. 클라이언트는 날짜만 매칭.
             const list = reservations.filter(
               (r) => kstDateKey(r.starts_at) === key && r.status !== "cancelled"
             );
+            void strictTrainerId;
             // 서버가 trainer_id 로 이미 필터함. 클라이언트는 날짜 매칭만.
             const evList = events.filter((e) => kstDateKey(e.starts_at) === key);
             void strictTrainerId;

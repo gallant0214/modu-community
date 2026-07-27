@@ -54,7 +54,21 @@ export async function GET(request: Request) {
   if (ctx.role === "trainer") {
     query = query.eq("trainer_member_id", ctx.centerMemberId);
   } else if (trainerParam) {
-    query = query.eq("trainer_member_id", Number(trainerParam));
+    // 특정 강사 필터: 그 강사가 담당 강사인 예약 + 그 강사가 직접 예약을 만든 것
+    // (owner/manager 가 다른 강사 pass 로 예약을 대신 잡아준 경우도 본인 스케줄에서 보이게)
+    const tid = Number(trainerParam);
+    const { data: tm } = await supabase
+      .from("crm_center_members")
+      .select("firebase_uid")
+      .eq("id", tid)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    const trainerUid = tm?.firebase_uid ?? null;
+    if (trainerUid) {
+      query = query.or(`trainer_member_id.eq.${tid},created_by_uid.eq.${trainerUid}`);
+    } else {
+      query = query.eq("trainer_member_id", tid);
+    }
   }
 
   const { data, error } = await query;
