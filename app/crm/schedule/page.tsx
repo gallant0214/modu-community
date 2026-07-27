@@ -124,6 +124,7 @@ export default function CrmSchedulePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [picked, setPicked] = useState<Reservation | null>(null);
+  const [editing, setEditing] = useState<Reservation | null>(null);
   const [pickedEvent, setPickedEvent] = useState<ScheduleEvent | null>(null);
   const [newSlot, setNewSlot] = useState<{
     trainerId: number;
@@ -461,6 +462,10 @@ export default function CrmSchedulePage() {
         <ReservationDialog
           reservation={picked}
           onClose={() => setPicked(null)}
+          onEdit={() => {
+            setEditing(picked);
+            setPicked(null);
+          }}
           onChange={async (next, reason) => {
             const token = await getIdToken();
             const res = await fetch(`/api/crm/reservations/${picked.id}`, {
@@ -474,6 +479,18 @@ export default function CrmSchedulePage() {
               return;
             }
             setPicked(null);
+            load();
+          }}
+        />
+      )}
+
+      {editing && (
+        <EditReservationModal
+          reservation={editing}
+          trainers={trainers}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
             load();
           }}
         />
@@ -518,6 +535,215 @@ export default function CrmSchedulePage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** 예약 수정 다이얼로그 — 시간·강사 변경. 서버 PATCH reschedule 흐름 사용. */
+function EditReservationModal({
+  reservation,
+  trainers,
+  onClose,
+  onSaved,
+}: {
+  reservation: Reservation;
+  trainers: StaffOption[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  // 예약 시간을 로컬(KST) 값으로 변환해 편집 입력에 채움.
+  const startKst = new Date(reservation.starts_at);
+  const endKst = new Date(reservation.ends_at);
+  const initDate = (() => {
+    const kst = new Date(startKst.getTime() + 9 * 3600 * 1000);
+    return kst.toISOString().slice(0, 10);
+  })();
+  const initTime = (() => {
+    const kst = new Date(startKst.getTime() + 9 * 3600 * 1000);
+    return kst.toISOString().slice(11, 16);
+  })();
+  const initDuration = Math.max(
+    5,
+    Math.round((endKst.getTime() - startKst.getTime()) / 60000)
+  );
+
+  const [trainerId, setTrainerId] = useState<number>(reservation.trainer_member_id);
+  const [date, setDate] = useState<string>(initDate);
+  const [time, setTime] = useState<string>(initTime);
+  const [duration, setDuration] = useState<number>(initDuration);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    setError("");
+    if (!date || !time) return setError("날짜와 시간을 입력해 주세요");
+    const [hStr, mStr] = time.split(":");
+    const h = Number(hStr);
+    const m = Number(mStr);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return setError("시간 형식 오류");
+    // KST → UTC ISO
+    const startIso = new Date(`${date}T${time}:00+09:00`).toISOString();
+    const endIso = new Date(
+      new Date(startIso).getTime() + duration * 60 * 1000
+    ).toISOString();
+
+    setSaving(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/reservations/${reservation.id}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          starts_at: startIso,
+          ends_at: endIso,
+          trainer_member_id: trainerId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "수정 실패");
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-md rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-xl">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#E8E0D0]/70 dark:border-zinc-800">
+          <h2 className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            예약 수정
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-1 -m-1 text-[#A89B80] hover:text-[#3A342A]"
+            aria-label="닫기"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-5 space-y-3">
+          <div className="px-3 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 space-y-1">
+            <div>
+              회원: <strong className="text-[#2A251D] dark:text-zinc-100">{reservation.member_name || "회원"}</strong>
+              {sessionBadge(reservation) && (
+                <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10.5px] font-semibold bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]">
+                  {sessionBadge(reservation)}
+                </span>
+              )}
+            </div>
+            <div className="text-[11.5px] text-[#A89B80]">
+              회원·수강권은 여기서 바꿀 수 없어요. 다른 회원으로 옮기려면 예약을 취소하고 새로 만들어 주세요.
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+              담당 강사
+            </div>
+            <select
+              value={trainerId}
+              onChange={(e) => setTrainerId(Number(e.target.value))}
+              className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px]"
+            >
+              {trainers.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.display_name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+                날짜
+              </div>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px]"
+              />
+            </div>
+            <div>
+              <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+                시작 시간
+              </div>
+              <input
+                type="time"
+                step={300}
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px]"
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+              수업 시간(분)
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[30, 45, 50, 60, 75, 90].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setDuration(n)}
+                  className={`px-2.5 py-1 rounded-full text-[12px] font-medium border
+                    ${duration === n
+                      ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                      : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                    }`}
+                >
+                  {n}분
+                </button>
+              ))}
+              <input
+                type="number"
+                min={5}
+                max={480}
+                value={duration}
+                onChange={(e) =>
+                  setDuration(Math.max(5, Math.min(480, Number(e.target.value) || 0)))
+                }
+                className="w-16 px-2 py-1 rounded-full text-[12px] border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 bg-white dark:bg-zinc-900 text-center focus:outline-none ml-1"
+                aria-label="수업 시간 직접 입력 (분)"
+              />
+              <span className="text-[11.5px] text-[#A89B80]">직접</span>
+            </div>
+          </div>
+
+          {error && (
+            <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 px-5 py-3.5 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+          >
+            취소
+          </button>
+          <button
+            onClick={submit}
+            disabled={saving}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+          >
+            {saving ? "저장 중…" : "예약 수정"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1698,10 +1924,12 @@ function ReservationDialog({
   reservation,
   onClose,
   onChange,
+  onEdit,
 }: {
   reservation: Reservation;
   onClose: () => void;
   onChange: (next: string, reason?: string) => void;
+  onEdit: () => void;
 }) {
   const [reason, setReason] = useState<string>("");
   const [cancelMode, setCancelMode] = useState(false);
@@ -1770,12 +1998,20 @@ function ReservationDialog({
                 {/* 노쇼 = 회원이 시간을 지키지 않은 것 → 사유 선택 불필요, 바로 처리 */}
                 <ActionBtn label="노쇼(차감 취소)" onClick={() => onChange("noshow")} color="red" />
               </div>
-              <button
-                onClick={onClose}
-                className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-              >
-                닫기
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={onEdit}
+                  className="px-3 py-2 rounded-lg border border-[#6B7B3A]/40 bg-[#6B7B3A]/10 text-[13px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/20"
+                >
+                  수정
+                </button>
+                <button
+                  onClick={onClose}
+                  className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                >
+                  닫기
+                </button>
+              </div>
             </>
           ) : (
             <>
