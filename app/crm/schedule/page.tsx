@@ -76,6 +76,7 @@ export default function CrmSchedulePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [picked, setPicked] = useState<Reservation | null>(null);
+  const [pickedEvent, setPickedEvent] = useState<ScheduleEvent | null>(null);
   const [newSlot, setNewSlot] = useState<{
     trainerId: number;
     trainerName: string;
@@ -156,6 +157,13 @@ export default function CrmSchedulePage() {
     () => staff.filter((s) => s.role === "trainer" || s.role === "manager" || s.role === "owner" || s.role === "admin"),
     [staff]
   );
+
+  // 강사 필터가 특정인이면 그 강사만 컬럼으로 표시 (다른 컬럼에서 중복 표시되는 오해 방지).
+  // '전체(all)' 이면 모든 강사 컬럼 표시.
+  const visibleTrainers = useMemo(() => {
+    if (selectedTrainerId === "all") return trainers;
+    return trainers.filter((t) => t.id === selectedTrainerId);
+  }, [trainers, selectedTrainerId]);
 
   // 드래그로 예약 시간·강사 이동
   const reschedule = useCallback(
@@ -334,11 +342,12 @@ export default function CrmSchedulePage() {
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : viewMode === "day" ? (
         <DayView
-          trainers={trainers}
+          trainers={visibleTrainers}
           reservations={reservations}
           events={events}
           anchorDate={anchor}
           onPick={setPicked}
+          onPickEvent={setPickedEvent}
           onReschedule={proposeReschedule}
           onSlotClick={(trainer, h, m) => {
             const startISO = kstDateToUTCISO(anchor, h, m, 0);
@@ -356,8 +365,9 @@ export default function CrmSchedulePage() {
           anchor={anchor}
           reservations={reservations}
           events={events}
-          trainers={trainers}
+          trainers={visibleTrainers}
           onPick={setPicked}
+          onPickEvent={setPickedEvent}
           onReschedule={proposeReschedule}
           onSlotClick={(ymd, h, m, defaultTrainer) => {
             if (!defaultTrainer) return;
@@ -383,7 +393,7 @@ export default function CrmSchedulePage() {
       {newSlot && (
         <NewReservationModal
           slot={newSlot}
-          trainers={trainers}
+          trainers={visibleTrainers}
           onChangeTrainer={(t) =>
             setNewSlot((prev) =>
               prev ? { ...prev, trainerId: t.id, trainerName: t.display_name } : prev
@@ -419,6 +429,29 @@ export default function CrmSchedulePage() {
         />
       )}
 
+      {pickedEvent && (
+        <EventDialog
+          event={pickedEvent}
+          trainers={trainers}
+          onClose={() => setPickedEvent(null)}
+          onDelete={async () => {
+            const ev = pickedEvent;
+            const token = await getIdToken();
+            const res = await fetch(`/api/crm/schedule-events/${ev.id}`, {
+              method: "DELETE",
+              headers: { authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+              const d = await res.json().catch(() => ({}));
+              alert(d?.error || "삭제 실패");
+              return;
+            }
+            setPickedEvent(null);
+            load();
+          }}
+        />
+      )}
+
       {pendingReschedule && (
         <RescheduleConfirmDialog
           pending={pendingReschedule}
@@ -435,6 +468,95 @@ export default function CrmSchedulePage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** 센터/개인 일정 상세 다이얼로그 (삭제 지원) */
+function EventDialog({
+  event,
+  trainers,
+  onClose,
+  onDelete,
+}: {
+  event: ScheduleEvent;
+  trainers: StaffOption[];
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  const trainerName = trainers.find((t) => t.id === event.trainer_member_id)?.display_name ?? null;
+  const typeLabel = event.type === "center" ? "센터 일정" : "개인 일정";
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-sm rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-xl p-5">
+        <h2 className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">일정 상세</h2>
+        <div className="mt-2 text-[13px] text-[#6B5D47] dark:text-zinc-400 space-y-1">
+          <div>
+            <span className="text-[11.5px] text-[#A89B80] mr-1.5">유형</span>
+            <span className="font-medium text-[#3A342A] dark:text-zinc-200">{typeLabel}</span>
+            {event.type === "personal" && trainerName && (
+              <span className="ml-1.5 text-[12px] text-[#8C8270]">· {trainerName}</span>
+            )}
+          </div>
+          <div>
+            <span className="text-[11.5px] text-[#A89B80] mr-1.5">제목</span>
+            <span className="font-semibold text-[#2A251D] dark:text-zinc-100">{event.title}</span>
+          </div>
+          <div className="text-[12px] text-[#8C8270]">
+            {formatDateTimeKST(event.starts_at)} ~ {formatTimeKST(event.ends_at)}
+          </div>
+          {event.description && (
+            <div className="mt-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 bg-[#F5F0E5]/60 dark:bg-zinc-900 px-2.5 py-2 whitespace-pre-wrap break-words text-[12.5px] text-[#3A342A] dark:text-zinc-200">
+              {event.description}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {!confirming ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setConfirming(true)}
+                className="w-full px-3 py-2 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-[13px] font-semibold text-red-700 dark:text-red-300 hover:bg-red-100"
+              >
+                일정 삭제
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+              >
+                닫기
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[12.5px] text-red-700 dark:text-red-300">
+                정말 삭제할까요? 되돌릴 수 없어요.
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirming(false)}
+                  className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                >
+                  아니오
+                </button>
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="px-3 py-2 rounded-lg bg-red-600 text-white text-[13px] font-semibold hover:bg-red-700"
+                >
+                  삭제
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -538,6 +660,7 @@ function DayView({
   events,
   anchorDate,
   onPick,
+  onPickEvent,
   onSlotClick,
   onReschedule,
 }: {
@@ -546,6 +669,7 @@ function DayView({
   events: ScheduleEvent[];
   anchorDate: string;
   onPick: (r: Reservation) => void;
+  onPickEvent: (e: ScheduleEvent) => void;
   onSlotClick: (trainer: StaffOption, h: number, m: number) => void;
   onReschedule: (
     r: Reservation,
@@ -691,19 +815,24 @@ function DayView({
                   const height = Math.max(SLOT_HEIGHT_PX * 0.9, bottom - top);
                   const cls =
                     e.type === "center"
-                      ? "bg-[#5A8BB0]/15 text-[#487596] border-[#5A8BB0]/40"
-                      : "bg-[#8B6BAA]/15 text-[#7A5C99] border-[#8B6BAA]/40";
+                      ? "bg-[#5A8BB0]/15 text-[#487596] border-[#5A8BB0]/40 hover:bg-[#5A8BB0]/25"
+                      : "bg-[#8B6BAA]/15 text-[#7A5C99] border-[#8B6BAA]/40 hover:bg-[#8B6BAA]/25";
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={`ev-${e.id}`}
-                      className={`absolute left-1 right-1 px-2 py-1 rounded-md text-left text-[11.5px] font-medium border ${cls}`}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        onPickEvent(e);
+                      }}
+                      className={`absolute left-1 right-1 px-2 py-1 rounded-md text-left text-[11.5px] font-medium border cursor-pointer ${cls}`}
                       style={{ top: `${top}px`, height: `${height}px` }}
-                      title={e.description ?? undefined}
+                      title={e.description ?? e.title}
                     >
                       <div className="truncate font-semibold">
                         [{e.type === "center" ? "센터" : "개인"}] {e.title}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
                 {list.map((r) => {
@@ -938,6 +1067,7 @@ function WeekView({
   events,
   trainers,
   onPick,
+  onPickEvent,
   onSlotClick,
   onReschedule,
 }: {
@@ -946,6 +1076,7 @@ function WeekView({
   events: ScheduleEvent[];
   trainers: StaffOption[];
   onPick: (r: Reservation) => void;
+  onPickEvent: (e: ScheduleEvent) => void;
   onSlotClick: (ymd: string, h: number, m: number, trainer: StaffOption | null) => void;
   onReschedule: (
     r: Reservation,
@@ -1090,20 +1221,25 @@ function WeekView({
                   const height = Math.max(SLOT_HEIGHT_PX * 0.9, bottom - top);
                   const cls =
                     e.type === "center"
-                      ? "bg-[#5A8BB0]/15 text-[#487596] border-[#5A8BB0]/40"
-                      : "bg-[#8B6BAA]/15 text-[#7A5C99] border-[#8B6BAA]/40";
+                      ? "bg-[#5A8BB0]/15 text-[#487596] border-[#5A8BB0]/40 hover:bg-[#5A8BB0]/25"
+                      : "bg-[#8B6BAA]/15 text-[#7A5C99] border-[#8B6BAA]/40 hover:bg-[#8B6BAA]/25";
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={`ev-${e.id}`}
-                      className={`absolute left-1 right-1 px-1.5 py-0.5 rounded text-left text-[11px] font-medium border ${cls}`}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        onPickEvent(e);
+                      }}
+                      className={`absolute left-1 right-1 px-1.5 py-0.5 rounded text-left text-[11px] font-medium border cursor-pointer ${cls}`}
                       style={{ top: `${top}px`, height: `${height}px` }}
-                      title={e.description ?? undefined}
+                      title={e.description ?? e.title}
                     >
                       <div className="truncate font-semibold">
                         {e.type === "center" ? "센터·" : "개인·"}
                         {e.title}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
                 {list.map((r) => {
