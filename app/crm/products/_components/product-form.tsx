@@ -425,7 +425,13 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
             <button
               key={m}
               type="button"
-              onClick={() => setBillingMode(m)}
+              onClick={() => {
+                if (m === billingMode) return;
+                setBillingMode(m);
+                // serviceDays 는 모드별 의미가 달라 기본값 재설정:
+                //  - 횟수제: 유효 기간 40일  /  기간제: 서비스 기간 0일
+                if (mode === "create") setServiceDays(m === "count" ? 40 : 0);
+              }}
               className={`px-4 py-2 text-[13px] font-medium
                 ${billingMode === m
                   ? "bg-[#6B7B3A] text-white"
