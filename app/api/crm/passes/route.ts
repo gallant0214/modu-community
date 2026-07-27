@@ -117,6 +117,10 @@ export async function POST(request: Request) {
     paid_amount_won?: number;
     /** 발급 소스 상품(있으면 정원·유형 스냅샷용). */
     product_id?: number;
+    /** 이용 방식. 'period'(기간제)면 총 세션 수 없이 만료일로만 관리(총 세션 0 허용). 저장 컬럼 없음(검증용). */
+    billing_mode?: "count" | "period";
+    /** 그룹 수업 정원(수기 발급 시). 상품 선택 발급은 상품 정원을 우선 사용. */
+    group_capacity?: number;
   };
   try {
     body = await request.json();
@@ -139,12 +143,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "결제 수단이 잘못됨" }, { status: 400 });
   }
 
+  // 기간제(period)는 총 세션 수 없이 만료일로만 관리하므로 total_sessions 필수 아님.
+  const isPeriod = body.billing_mode === "period";
   if (
     !body.lesson_kind?.trim() ||
-    !body.total_sessions ||
     !body.session_minutes ||
     !body.issued_at ||
-    !body.expires_at
+    !body.expires_at ||
+    (!isPeriod && !body.total_sessions)
   ) {
     return NextResponse.json({ error: "필수 항목이 비어있습니다" }, { status: 400 });
   }
@@ -204,8 +210,13 @@ export async function POST(request: Request) {
       }
     }
   }
+  // 수기 발급(상품 미선택)에서 넘어온 그룹 정원 사용.
+  if (!productId && body.group_capacity) {
+    const cap = Math.floor(Number(body.group_capacity) || 0);
+    groupCapacity = cap > 1 ? Math.min(cap, 999) : 1;
+  }
 
-  const totalSessions = Number(body.total_sessions);
+  const totalSessions = Number(body.total_sessions) || 0;
   const priceWon = Number(body.price_won) || 0;
   const paidAmount =
     body.paid_amount_won === undefined
