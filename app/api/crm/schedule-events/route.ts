@@ -48,7 +48,16 @@ export async function GET(request: Request) {
   if (error) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
-  return NextResponse.json({ events: data ?? [] });
+
+  // 프라이버시: 개인 일정(personal)의 상세(제목·내용)는 본인만 볼 수 있다.
+  // 본인이 아닌 사람(센터장/관리자 등)에게는 "개인 일정" 블록으로만 표시하고 상세는 서버에서 제거.
+  const events = (data ?? []).map((e) => {
+    if (e.type === "personal" && e.trainer_member_id !== ctx.centerMemberId) {
+      return { ...e, title: "개인 일정", description: null, private: true };
+    }
+    return e;
+  });
+  return NextResponse.json({ events });
 }
 
 /**
