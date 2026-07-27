@@ -69,7 +69,6 @@ const UNIT_OPTIONS: { value: DurationUnit; label: string }[] = [
   { value: "year", label: "년" },
 ];
 
-const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 interface Props {
   mode: "create" | "edit";
@@ -196,9 +195,8 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   // 하루 이용 시간 제한 UI 제거됨 — 항상 비활성, 시간값은 기본 보존.
   const openTime = initial?.open_time ?? "00:00";
   const closeTime = initial?.close_time ?? "23:59";
-  const [days, setDays] = useState<number[]>(
-    initial?.operating_days ?? [0, 1, 2, 3, 4, 5, 6]
-  );
+  // 운영 요일 UI 제거됨 — 항상 매일(편집 시 기존 값 보존).
+  const days = initial?.operating_days ?? [0, 1, 2, 3, 4, 5, 6];
   // 기간 설정 기본: 일(day) 단위, 40일
   const [durationValue, setDurationValue] = useState(initial?.duration_value ?? 40);
   const [durationUnit, setDurationUnit] = useState<DurationUnit>(
@@ -237,14 +235,6 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   const [error, setError] = useState("");
 
   const priceWon = useMemo(() => parseWon(priceText), [priceText]);
-
-  const toggleDay = (d: number) => {
-    setDays((prev) =>
-      prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()
-    );
-  };
-  const setAllDays = () => setDays([0, 1, 2, 3, 4, 5, 6]);
-  const setWeekdays = () => setDays([1, 2, 3, 4, 5]);
 
   const save = async () => {
     setError("");
@@ -491,46 +481,6 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
           maxLength={60}
         />
 
-        <div className="mt-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <FieldLabel>운영 요일</FieldLabel>
-            <div className="flex gap-1.5">
-              <button
-                type="button"
-                onClick={setAllDays}
-                className="text-[11.5px] px-2 py-0.5 rounded border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-400 hover:border-[#6B7B3A]/40"
-              >
-                매일
-              </button>
-              <button
-                type="button"
-                onClick={setWeekdays}
-                className="text-[11.5px] px-2 py-0.5 rounded border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-400 hover:border-[#6B7B3A]/40"
-              >
-                평일
-              </button>
-            </div>
-          </div>
-          <div className="flex gap-1.5">
-            {WEEKDAYS.map((label, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => toggleDay(idx)}
-                className={`w-9 h-9 rounded-lg text-[12.5px] font-semibold border
-                  ${days.includes(idx)
-                    ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
-                    : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
-                  }
-                  ${idx === 0 ? "text-red-500" : ""}
-                  ${idx === 6 ? "text-blue-500" : ""}
-                `}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
       </Section>
 
       {/* 기간·횟수 설정 */}
