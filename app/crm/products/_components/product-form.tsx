@@ -204,7 +204,8 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   const [durationUnit, setDurationUnit] = useState<DurationUnit>(
     (initial?.duration_unit as DurationUnit) ?? "day"
   );
-  const [serviceDays, setServiceDays] = useState(initial?.service_days ?? 0);
+  // 유효 기간 기본 40일 (무기한 기본 체크 X)
+  const [serviceDays, setServiceDays] = useState(initial?.service_days ?? 40);
   const [totalSessions, setTotalSessions] = useState(initial?.total_sessions ?? 10);
   const [pauseEnabled, setPauseEnabled] = useState(initial?.pause_enabled ?? false);
   const [pauseDays, setPauseDays] = useState(initial?.pause_days ?? 0);
@@ -591,7 +592,7 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
                 <input
                   type="checkbox"
                   checked={serviceDays === 0}
-                  onChange={(e) => setServiceDays(e.target.checked ? 0 : 30)}
+                  onChange={(e) => setServiceDays(e.target.checked ? 0 : 40)}
                   className="w-4 h-4 accent-[#6B7B3A]"
                 />
                 <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">무기한</span>
