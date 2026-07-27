@@ -210,13 +210,9 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   const [pauseCount, setPauseCount] = useState(initial?.pause_count ?? 0);
   const [mileageEarn, setMileageEarn] = useState(initial?.mileage_earn ?? 0);
   const [mileageUsable, setMileageUsable] = useState(initial?.mileage_usable ?? true);
-  const [attendanceMileageEarn, setAttendanceMileageEarn] = useState(
-    initial?.attendance_mileage_earn ?? 0
-  );
-  // 출석 시 마일리지 적립 on/off (금액 > 0 이면 켜진 상태로 초기화)
-  const [attendanceMileageEnabled, setAttendanceMileageEnabled] = useState(
-    (initial?.attendance_mileage_earn ?? 0) > 0
-  );
+  // 출석 시 마일리지 적립 UI 제거됨 — 편집 시 기존 값 보존, 신규는 0.
+  const attendanceMileageEarn = initial?.attendance_mileage_earn ?? 0;
+  const attendanceMileageEnabled = attendanceMileageEarn > 0;
   const [priceText, setPriceText] = useState(
     initial?.price_won ? String(initial.price_won) : ""
   );
@@ -673,47 +669,6 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B5D47] dark:text-zinc-400">
             P
           </span>
-        </div>
-
-        <div className="mt-4">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={attendanceMileageEnabled}
-              onChange={(e) => {
-                setAttendanceMileageEnabled(e.target.checked);
-                if (!e.target.checked) setAttendanceMileageEarn(0);
-              }}
-              className="w-4 h-4 accent-[#6B7B3A]"
-            />
-            <span className="text-[13.5px] font-medium text-[#3A342A] dark:text-zinc-200">
-              출석 시 마일리지 적립
-            </span>
-          </label>
-          {attendanceMileageEnabled && (
-            <div className="mt-2">
-              <FieldLabel>출석 시 적립 마일리지 (P)</FieldLabel>
-              <div className="relative">
-                <input
-                  type="number"
-                  min={0}
-                  value={attendanceMileageEarn ?? 0}
-                  onChange={(e) =>
-                    setAttendanceMileageEarn(Math.max(0, Number(e.target.value) || 0))
-                  }
-                  placeholder="0"
-                  className={`${crmInputClass} pr-9`}
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-                  P
-                </span>
-              </div>
-              <p className="mt-1.5 text-[11.5px] text-[#A89B80] dark:text-zinc-500">
-                이 이용권 회원이 출석(체크인)할 때마다 적립돼요. <b>하루 1회</b>만 적립되며,
-                하루에 여러 번 방문해도 중복 적립되지 않습니다.
-              </p>
-            </div>
-          )}
         </div>
 
         <label className="mt-3 flex items-center gap-2">
