@@ -349,6 +349,7 @@ export default function CrmSchedulePage() {
           onPick={setPicked}
           onPickEvent={setPickedEvent}
           onReschedule={proposeReschedule}
+          strictTrainerId={selectedTrainerId === "all" ? null : selectedTrainerId}
           onSlotClick={(trainer, h, m) => {
             const startISO = kstDateToUTCISO(anchor, h, m, 0);
             const endISO = kstDateToUTCISO(anchor, h, m + 50, 0); // 기본 50분
@@ -369,6 +370,7 @@ export default function CrmSchedulePage() {
           onPick={setPicked}
           onPickEvent={setPickedEvent}
           onReschedule={proposeReschedule}
+          strictTrainerId={selectedTrainerId === "all" ? null : selectedTrainerId}
           onSlotClick={(ymd, h, m, defaultTrainer) => {
             if (!defaultTrainer) return;
             setNewSlot({
@@ -663,6 +665,7 @@ function DayView({
   onPickEvent,
   onSlotClick,
   onReschedule,
+  strictTrainerId,
 }: {
   trainers: StaffOption[];
   reservations: Reservation[];
@@ -678,6 +681,8 @@ function DayView({
     newTrainerId?: number,
     newTrainerName?: string
   ) => void;
+  /** 특정 강사가 필터된 상태면 그 id. null 이면 전체(all). 필터된 상태에서는 다른 트레이너의 일정·센터 일정 제외. */
+  strictTrainerId: number | null;
 }) {
   void anchorDate;
   const columnRefs = useRef<Map<number, HTMLDivElement | null>>(new Map());
@@ -787,9 +792,14 @@ function DayView({
             const list = reservations.filter(
               (r) => r.trainer_member_id === t.id && r.status !== "cancelled"
             );
-            const evList = events.filter(
-              (e) => e.type === "center" || e.trainer_member_id === t.id
-            );
+            const evList = events.filter((e) => {
+              if (strictTrainerId != null) {
+                // 특정 강사 필터: 그 강사의 개인 일정만. 센터 일정/다른 강사 개인 일정 제외.
+                return e.trainer_member_id === strictTrainerId;
+              }
+              // 전체 모드: 센터 일정은 모든 컬럼에, 개인 일정은 해당 강사 컬럼에.
+              return e.type === "center" || e.trainer_member_id === t.id;
+            });
             return (
               <div
                 key={t.id}
@@ -1070,6 +1080,7 @@ function WeekView({
   onPickEvent,
   onSlotClick,
   onReschedule,
+  strictTrainerId,
 }: {
   anchor: string;
   reservations: Reservation[];
@@ -1085,6 +1096,8 @@ function WeekView({
     newTrainerId?: number,
     newTrainerName?: string
   ) => void;
+  /** 특정 강사가 필터된 상태면 그 id. null 이면 전체(all). 필터된 상태에서는 다른 트레이너의 일정·센터 일정 제외. */
+  strictTrainerId: number | null;
 }) {
   void anchor;
   const columnRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
@@ -1178,7 +1191,14 @@ function WeekView({
             const list = reservations.filter(
               (r) => kstDateKey(r.starts_at) === key && r.status !== "cancelled"
             );
-            const evList = events.filter((e) => kstDateKey(e.starts_at) === key);
+            const evList = events.filter((e) => {
+              if (kstDateKey(e.starts_at) !== key) return false;
+              if (strictTrainerId != null) {
+                // 특정 강사 필터: 그 강사의 개인 일정만.
+                return e.trainer_member_id === strictTrainerId;
+              }
+              return true;
+            });
             const defaultTrainer = trainers[0] ?? null;
             const now = nowKst();
             const isTodayCol = now.ymd === key;
