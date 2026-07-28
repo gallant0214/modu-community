@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../../_components/crm-modal";
-import { formatWon, parseWon } from "../../_components/crm-labels";
+// formatWon/parseWon 은 금액 UI 제거 이후 미사용
+// import { formatWon, parseWon } from "../../_components/crm-labels";
 
 type BillingMode = "period" | "count";
 type DurationUnit = "day" | "month" | "year";
@@ -187,20 +188,21 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
     }
   };
 
-  // 이용 방식 기본 = 횟수제(count)
+  // 헬스장 시설 이용권(회원권/락커/운동복) = 기간제·개월·1 을 기본으로.
+  const FACILITY_TYPES = ["membership", "locker", "apparel"] as const;
+  const isFacility = (t: string) =>
+    (FACILITY_TYPES as readonly string[]).includes(t);
+
   const [billingMode, setBillingMode] = useState<BillingMode>(
-    initial?.billing_mode ?? "count"
+    initial?.billing_mode ?? (isFacility(type) ? "period" : "count")
   );
   const [name, setName] = useState(initial?.name ?? "");
-  // 하루 이용 시간 제한 UI 제거됨 — 항상 비활성, 시간값은 기본 보존.
-  const openTime = initial?.open_time ?? "00:00";
-  const closeTime = initial?.close_time ?? "23:59";
-  // 운영 요일 UI 제거됨 — 항상 매일(편집 시 기존 값 보존).
-  const days = initial?.operating_days ?? [0, 1, 2, 3, 4, 5, 6];
-  // 기간 설정 기본: 일(day) 단위, 40일
-  const [durationValue, setDurationValue] = useState(initial?.duration_value ?? 40);
+  // 기간 설정: 시설 이용권이면 개월/1, 그 외엔 기존(일/40)
+  const [durationValue, setDurationValue] = useState(
+    initial?.duration_value ?? (isFacility(type) ? 1 : 40)
+  );
   const [durationUnit, setDurationUnit] = useState<DurationUnit>(
-    (initial?.duration_unit as DurationUnit) ?? "day"
+    (initial?.duration_unit as DurationUnit) ?? (isFacility(type) ? "month" : "day")
   );
   // 유효 기간 기본 40일 (무기한 기본 체크 X)
   const [serviceDays, setServiceDays] = useState(initial?.service_days ?? 40);
@@ -213,16 +215,57 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   // 출석 시 마일리지 적립 UI 제거됨 — 편집 시 기존 값 보존, 신규는 0.
   const attendanceMileageEarn = initial?.attendance_mileage_earn ?? 0;
   const attendanceMileageEnabled = attendanceMileageEarn > 0;
-  const [priceText, setPriceText] = useState(
-    initial?.price_won ? String(initial.price_won) : ""
-  );
-  const [vatIncluded, setVatIncluded] = useState(initial?.vat_included ?? false);
+  // 금액/부가세 UI 는 제거됨 — 편집 시 기존 값 보존, 신규는 0/false.
+  const priceWonSaved = initial?.price_won ?? 0;
+  const vatIncluded = initial?.vat_included ?? false;
   const [capacity, setCapacity] = useState(initial?.capacity ?? 2);
   const [sessionMinutes, setSessionMinutes] = useState(initial?.session_minutes ?? 50);
-  // 하루 출석 가능 횟수 UI 제거됨 — 항상 기본 1 로 저장.
-  const dailyCheckInLimit = initial?.daily_check_in_limit ?? 1;
+
+  // 회원권 전용: 일일 입장 가능 횟수 (0 = 무제한 sentinel)
+  const [dailyCheckInLimit, setDailyCheckInLimit] = useState<number>(
+    initial?.daily_check_in_limit ?? 1
+  );
+  const [dailyUnlimited, setDailyUnlimited] = useState<boolean>(
+    (initial?.daily_check_in_limit ?? 1) === 0
+  );
+
+  // 회원권 전용: 입장 가능 요일/시간
+  // '무제한' = 매일 00:00~23:59, '설정' = 사용자 지정.
+  const initOperatingDays: number[] = initial?.operating_days ?? [0, 1, 2, 3, 4, 5, 6];
+  const initOpenTime = initial?.open_time ?? "00:00";
+  const initCloseTime = initial?.close_time ?? "23:59";
+  const isAllDayInit =
+    initOperatingDays.length === 7 &&
+    initOpenTime.startsWith("00:00") &&
+    initCloseTime.startsWith("23:59");
+  const [accessMode, setAccessMode] = useState<"unlimited" | "custom">(
+    isAllDayInit ? "unlimited" : "custom"
+  );
+  const [operatingDays, setOperatingDays] = useState<number[]>(initOperatingDays);
+  const [openTime, setOpenTime] = useState<string>(
+    initOpenTime.startsWith("00:00") ? "09:00" : initOpenTime.slice(0, 5)
+  );
+  const [closeTime, setCloseTime] = useState<string>(
+    initCloseTime.startsWith("23:59") ? "18:00" : initCloseTime.slice(0, 5)
+  );
+  const [is24h, setIs24h] = useState<boolean>(
+    initOpenTime.startsWith("00:00") && initCloseTime.startsWith("23:59") && !isAllDayInit
+  );
   // 하루 이용 시간 제한 UI 제거됨 — 항상 false 로 저장.
   const dailyTimeLimitEnabled = false;
+
+  // type 이 바뀔 때 시설 이용권이면 이용 방식·기간을 기본값으로 재설정 (create 모드만)
+  useEffect(() => {
+    if (mode === "edit") return;
+    if (isFacility(type)) {
+      setBillingMode("period");
+      setDurationUnit("month");
+      setDurationValue(1);
+    } else if (type === "group" || type === "personal") {
+      setBillingMode("count");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type]);
   // 상품 설명 UI 제거됨 — 편집 시 기존 값 보존, 신규는 null.
   const description: string | null = initial?.description ?? null;
   // 묶음 구성 상품 UI 는 제거됨. 기존 묶음 상품은 데이터 보존을 위해 편집 시 그대로 유지(신규는 항상 [] ).
@@ -230,7 +273,7 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const priceWon = useMemo(() => parseWon(priceText), [priceText]);
+  const priceWon = priceWonSaved;
 
   const save = async () => {
     setError("");
@@ -239,25 +282,42 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
       return setError("기간을 0 이상으로 입력해 주세요");
     if (billingMode === "count" && totalSessions !== null && totalSessions <= 0)
       return setError("총 횟수를 1 이상으로 입력해 주세요");
-    if (priceWon < 0) return setError("금액을 확인해 주세요");
     if (type === "group" && capacity !== null && capacity <= 0)
       return setError("그룹 수업 정원을 1명 이상으로 입력해 주세요");
     if ((type === "personal" || type === "group") && sessionMinutes !== null && sessionMinutes <= 0)
       return setError("수업 시간을 1분 이상으로 입력해 주세요");
+    if (type === "membership" && accessMode === "custom" && operatingDays.length === 0)
+      return setError("입장 가능 요일을 하나 이상 선택해 주세요");
 
     setSaving(true);
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
 
+      // 회원권 입장 가능 요일/시간: 무제한이면 매일·00:00~23:59, 24시간 토글도 동일
+      const effectiveDays =
+        type === "membership" && accessMode === "custom" && !is24h
+          ? operatingDays
+          : [0, 1, 2, 3, 4, 5, 6];
+      const effectiveOpen =
+        type === "membership" && accessMode === "custom" && !is24h ? openTime : "00:00";
+      const effectiveClose =
+        type === "membership" && accessMode === "custom" && !is24h ? closeTime : "23:59";
+      const effectiveDaily =
+        type === "membership"
+          ? dailyUnlimited
+            ? 0
+            : Math.max(1, dailyCheckInLimit || 1)
+          : Math.max(1, dailyCheckInLimit || 1);
+
       const payload = {
         type,
         billing_mode: billingMode,
         name: name.trim(),
         description: description?.trim() || null,
-        open_time: openTime,
-        close_time: closeTime,
-        operating_days: days,
+        open_time: effectiveOpen,
+        close_time: effectiveClose,
+        operating_days: effectiveDays,
         duration_value: billingMode === "period" ? durationValue ?? 0 : 0,
         duration_unit: durationUnit,
         service_days: serviceDays ?? 0,
@@ -273,7 +333,7 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
         capacity: type === "group" ? capacity ?? 0 : 0,
         session_minutes:
           type === "personal" || type === "group" ? sessionMinutes ?? 0 : 0,
-        daily_check_in_limit: Math.max(1, dailyCheckInLimit ?? 1),
+        daily_check_in_limit: effectiveDaily,
         daily_time_limit_enabled: dailyTimeLimitEnabled,
         components: components.map((c) => ({
           type: c.type,
@@ -588,8 +648,8 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
         )}
       </Section>
 
-      {/* 정지 · 금액 */}
-      <Section title="정지 · 금액 설정">
+      {/* 정지 · 홀딩 설정 */}
+      <Section title="정지 · 홀딩 설정">
         <label className="flex items-center gap-2 mb-3">
           <input
             type="checkbox"
@@ -602,7 +662,7 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
           </span>
         </label>
         {pauseEnabled && (
-          <div className="mb-3 grid grid-cols-2 gap-2">
+          <div className="mb-1 grid grid-cols-2 gap-2">
             <div>
               <FieldLabel>최대 정지 기간 (일)</FieldLabel>
               <input
@@ -626,33 +686,136 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
             </div>
           </div>
         )}
-
-        <FieldLabel>금액</FieldLabel>
-        <div className="relative">
-          <input
-            type="text"
-            inputMode="numeric"
-            value={priceText ? formatWon(priceText) : ""}
-            onChange={(e) => setPriceText(e.target.value)}
-            placeholder="0"
-            className={`${crmInputClass} pr-9`}
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-            원
-          </span>
-        </div>
-        <label className="mt-2 flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={vatIncluded}
-            onChange={(e) => setVatIncluded(e.target.checked)}
-            className="w-4 h-4 accent-[#6B7B3A]"
-          />
-          <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-            부가세 포함 금액
-          </span>
-        </label>
       </Section>
+
+      {/* 회원권 전용: 일일 입장 가능 횟수 */}
+      {type === "membership" && (
+        <Section title="일일 입장 가능 횟수">
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1 max-w-[160px]">
+              <input
+                type="number"
+                min={1}
+                disabled={dailyUnlimited}
+                value={dailyCheckInLimit}
+                onChange={(e) =>
+                  setDailyCheckInLimit(Math.max(1, Number(e.target.value) || 1))
+                }
+                className={`${crmInputClass} pr-9 disabled:opacity-50`}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+                회
+              </span>
+            </div>
+            <label className="inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={dailyUnlimited}
+                onChange={(e) => setDailyUnlimited(e.target.checked)}
+                className="w-4 h-4 accent-[#6B7B3A]"
+              />
+              <span className="text-[13px] text-[#3A342A] dark:text-zinc-300">무제한</span>
+            </label>
+          </div>
+          <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
+            하루에 이 상품으로 입장할 수 있는 최대 횟수. 무제한이면 제한 없음.
+          </p>
+        </Section>
+      )}
+
+      {/* 회원권 전용: 입장 가능 요일/시간 */}
+      {type === "membership" && (
+        <Section title="입장 가능 요일 / 시간 설정">
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {(
+              [
+                { key: "unlimited", label: "무제한 선택하기" },
+                { key: "custom", label: "설정하기" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setAccessMode(opt.key)}
+                className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors
+                  ${accessMode === opt.key
+                    ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                    : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                  }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {accessMode === "unlimited" ? (
+            <p className="text-[12px] text-[#A89B80]">
+              365일 24시간 언제든 입장 가능해요.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <FieldLabel>입장 가능 요일</FieldLabel>
+                <div className="flex flex-wrap gap-1.5">
+                  {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => {
+                    const on = operatingDays.includes(i);
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() =>
+                          setOperatingDays((cur) =>
+                            on ? cur.filter((x) => x !== i) : [...cur, i].sort()
+                          )
+                        }
+                        className={`w-9 h-9 rounded-full text-[13px] font-semibold border
+                          ${on
+                            ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                            : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                          }`}
+                      >
+                        {d}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <FieldLabel>입장 시간</FieldLabel>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="time"
+                    disabled={is24h}
+                    value={openTime}
+                    onChange={(e) => setOpenTime(e.target.value)}
+                    className={`${crmInputClass} max-w-[130px] disabled:opacity-50`}
+                  />
+                  <span className="text-[13px] text-[#A89B80]">~</span>
+                  <input
+                    type="time"
+                    disabled={is24h}
+                    value={closeTime}
+                    onChange={(e) => setCloseTime(e.target.value)}
+                    className={`${crmInputClass} max-w-[130px] disabled:opacity-50`}
+                  />
+                </div>
+                <label className="mt-2 inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={is24h}
+                    onChange={(e) => setIs24h(e.target.checked)}
+                    className="w-4 h-4 accent-[#6B7B3A]"
+                  />
+                  <span className="text-[13px] text-[#3A342A] dark:text-zinc-300">
+                    24시간 입장 가능
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
+        </Section>
+      )}
 
       {/* 마일리지 */}
       <Section title="마일리지 설정">

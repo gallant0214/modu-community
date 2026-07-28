@@ -191,7 +191,11 @@ export async function POST(request: Request) {
         body.type === "personal" || body.type === "group"
           ? Math.max(0, Number(body.session_minutes) || 0)
           : 0,
-      daily_check_in_limit: Math.max(1, Number(body.daily_check_in_limit) || 1),
+      // 0 = 무제한 sentinel (회원권 UI에서 '무제한' 체크 시). 그 외엔 ≥1 강제.
+      daily_check_in_limit:
+        Number(body.daily_check_in_limit) === 0
+          ? 0
+          : Math.max(1, Number(body.daily_check_in_limit) || 1),
       daily_time_limit_enabled: !!body.daily_time_limit_enabled,
       components: sanitizeComponents(body.components),
       status: "active",
