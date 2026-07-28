@@ -177,7 +177,7 @@ export async function POST(request: Request) {
     if (perm?.can_manage_all_schedules) canManageAll = true;
   }
 
-  let body: { pass_id?: number; starts_at?: string; ends_at?: string };
+  let body: { pass_id?: number; starts_at?: string; ends_at?: string; trainer_member_id?: number };
   try {
     body = await request.json();
   } catch {
@@ -232,10 +232,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "이 수강권의 담당이 아닙니다" }, { status: 403 });
   }
 
-  // 예약을 실제로 진행하는 강사에 귀속: 예약자가 지정 강사(주/추가)면 본인, 아니면 주강사
-  const reservationTrainerId = isAssignedTrainer
-    ? (ctx.centerMemberId as number)
-    : pass.trainer_member_id;
+  // 예약을 실제로 진행하는 강사에 귀속:
+  //   1) 클라이언트가 body.trainer_member_id 를 명시 → 유효성 확인 후 그 값 사용
+  //      - 그 강사가 pass 의 주강사/추가강사 이거나
+  //      - 요청자가 canManageAll(대표/관리자·직급권한·can_manage_all_schedules) 이면 허용
+  //   2) 미명시면 기존 fallback: 예약자가 지정 강사면 본인, 아니면 주강사
+  const requestedTrainer =
+    body.trainer_member_id && Number.isFinite(Number(body.trainer_member_id))
+      ? Number(body.trainer_member_id)
+      : null;
+  const requestedInAssigned =
+    requestedTrainer != null &&
+    (requestedTrainer === pass.trainer_member_id || coTrainerIds.includes(requestedTrainer));
+  let reservationTrainerId: number;
+  if (requestedTrainer != null && (requestedInAssigned || canManageAll)) {
+    reservationTrainerId = requestedTrainer;
+  } else {
+    reservationTrainerId = isAssignedTrainer
+      ? (ctx.centerMemberId as number)
+      : pass.trainer_member_id;
+  }
 
   // 종료 시각: 수강권 session_minutes 로 서버측 파생 (웹·앱 공통 규칙).
   // 유효값 없으면 클라이언트 ends_at 폴백 → 그것도 없으면 50분 기본

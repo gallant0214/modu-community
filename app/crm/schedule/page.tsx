@@ -2512,6 +2512,9 @@ function NewReservationModal({
               pass_id: pid,
               starts_at: startsAt,
               ends_at: endsAt,
+              // 사용자가 모달에서 선택한 담당 강사를 서버가 존중하도록 명시 전달.
+              // 서버는 그 강사가 pass 의 담당/추가 강사이거나, 요청자가 canManageAll 이면 허용.
+              trainer_member_id: slot.trainerId,
             }),
           });
           lastRes = r;
