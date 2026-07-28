@@ -203,6 +203,15 @@ export default function CrmStaffDetailPage() {
         onSave={(p) => patchMember(p)}
       />
 
+      {error && (
+        <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      {/* 개인 강사(solo) 본인 프로필에서는 급여·계약·등급·권한·재직 등 센터 관리 섹션 숨김 (개인 CRM 불필요) */}
+      {!member.is_solo_owner && (
+        <>
       <Section title="인사 정보">
         <div>
           <div className="text-[12.5px] text-[#A89B80] mb-1.5">근무형태</div>
@@ -223,12 +232,6 @@ export default function CrmStaffDetailPage() {
       <CommissionSection member={member} saving={saving} onSave={(p) => patchMember(p)} />
 
       <StaffContractsSection staffMemberId={member.id} />
-
-      {error && (
-        <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
 
       <DisplayNameSection
         currentName={member.display_name}
@@ -310,6 +313,8 @@ export default function CrmStaffDetailPage() {
           휴직: CRM 접근은 유지되고 재직 목록에 남아요. 퇴사 처리: CRM 접근이 차단돼요.
         </p>
       </Section>
+        </>
+      )}
     </div>
   );
 }
