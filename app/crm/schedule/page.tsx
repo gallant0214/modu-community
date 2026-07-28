@@ -120,6 +120,7 @@ export default function CrmSchedulePage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [role, setRole] = useState<"owner" | "admin" | "manager" | "trainer" | null>(null);
+  const [myMemberId, setMyMemberId] = useState<number | null>(null);
   const [selectedTrainerId, setSelectedTrainerId] = useState<number | "all">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -198,6 +199,7 @@ export default function CrmSchedulePage() {
       if (resBoot.ok) {
         const data = await resBoot.json();
         if (data?.role) setRole(data.role);
+        if (typeof data?.centerMemberId === "number") setMyMemberId(data.centerMemberId);
       }
     })();
   }, [getIdToken]);
@@ -421,10 +423,14 @@ export default function CrmSchedulePage() {
           onReschedule={proposeReschedule}
           strictTrainerId={selectedTrainerId === "all" ? null : selectedTrainerId}
           onSlotClick={(ymd, h, m, defaultTrainer) => {
-            if (!defaultTrainer) return;
+            // 로그인 사용자가 강사 목록에 있으면 본인을 기본 강사로.
+            const me =
+              myMemberId != null ? trainers.find((t) => t.id === myMemberId) : null;
+            const chosen = me ?? defaultTrainer;
+            if (!chosen) return;
             setNewSlot({
-              trainerId: defaultTrainer.id,
-              trainerName: defaultTrainer.display_name,
+              trainerId: chosen.id,
+              trainerName: chosen.display_name,
               startsAt: kstDateToUTCISO(ymd, h, m),
               endsAt: kstDateToUTCISO(ymd, h, m + 50),
             });
@@ -648,29 +654,20 @@ function EditReservationModal({
             <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
               담당 강사
             </div>
-            {(() => {
-              // 담당 강사 후보는 role='trainer' 인 실제 강사만.
-              // 현재 예약의 담당이 trainer 가 아닌 다른 role(예: owner) 이면 그 사람도 후보에 유지 (자기 자신 유지 위해).
-              const trainerOnly = trainers.filter((t) => t.role === "trainer");
-              const current = trainers.find((t) => t.id === trainerId);
-              const list =
-                current && current.role !== "trainer"
-                  ? [current, ...trainerOnly.filter((t) => t.id !== current.id)]
-                  : trainerOnly;
-              return (
-                <select
-                  value={trainerId}
-                  onChange={(e) => setTrainerId(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px]"
-                >
-                  {list.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.display_name}
-                    </option>
-                  ))}
-                </select>
-              );
-            })()}
+            <select
+              value={trainerId}
+              onChange={(e) => setTrainerId(Number(e.target.value))}
+              className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px]"
+            >
+              {trainers.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.display_name}
+                  {t.role !== "trainer" && (
+                    <> {" "}({t.role === "owner" ? "대표자" : t.role === "admin" ? "관리자" : "팀장"})</>
+                  )}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
