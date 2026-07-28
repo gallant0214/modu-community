@@ -3487,6 +3487,17 @@ function UsageIssueModal({
   const cartTotalMileageUse = cart.reduce((s, c) => s + c.mileageUse, 0);
   const cartTotalMileageEarn = cart.reduce((s, c) => s + c.mileageEarn, 0);
 
+  // 결제 성공 직후: 전자계약서 작성 여부 묻는 다이얼로그
+  const [contractPromptOpen, setContractPromptOpen] = useState(false);
+  const [contractPickerOpen, setContractPickerOpen] = useState(false);
+  interface ContractTpl {
+    id: number;
+    category: string;
+    title: string;
+  }
+  const [contractTemplates, setContractTemplates] = useState<ContractTpl[]>([]);
+  const [contractTplLoading, setContractTplLoading] = useState(false);
+
   const resetFormOnly = () => {
     setName("");
     setPriceWon(0);
@@ -3785,12 +3796,52 @@ function UsageIssueModal({
         if (!r.ok) failed.push(`${line.name}: ${r.error}`);
       }
       if (failed.length > 0) throw new Error(failed.join(" · "));
-      onSuccess();
+      // 결제 성공 → 전자계약서 작성 여부 다이얼로그
+      setContractPromptOpen(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const loadContractTemplates = async () => {
+    setContractTplLoading(true);
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/contracts", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setContractTemplates((data.contracts ?? []) as ContractTpl[]);
+      }
+    } finally {
+      setContractTplLoading(false);
+    }
+  };
+
+  const openContractPicker = async () => {
+    setContractPromptOpen(false);
+    setContractPickerOpen(true);
+    if (contractTemplates.length === 0) await loadContractTemplates();
+  };
+
+  const goToContractSign = (tplId: number) => {
+    setContractPickerOpen(false);
+    // 결제 확정된 상품 정보를 후처리 페이지에서 채우기 어려우므로,
+    // 회원 + 템플릿 만으로 sign/new 로 이동 (계약서 폼에서 나머지 상세 편집)
+    if (typeof window !== "undefined") {
+      window.location.href = `/crm/contracts/sign/new?member_id=${memberId}&template_id=${tplId}`;
+    }
+  };
+
+  const finishWithoutContract = () => {
+    setContractPromptOpen(false);
+    setContractPickerOpen(false);
+    onSuccess();
   };
 
   return (
@@ -4228,6 +4279,101 @@ function UsageIssueModal({
           </p>
         </aside>
       </div>
+
+      {/* 결제 성공 → 전자계약서 여부 다이얼로그 */}
+      {contractPromptOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/50" onClick={finishWithoutContract} />
+          <div className="relative w-full max-w-sm rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-xl p-5">
+            <h3 className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">결제 완료</h3>
+            <p className="mt-1.5 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+              지금 회원과 함께 있는 자리라면 전자 계약서를 바로 작성하시겠어요?
+            </p>
+            <div className="mt-4 space-y-2">
+              <button
+                type="button"
+                onClick={openContractPicker}
+                className="w-full px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+              >
+                전자 계약서 작성하기
+              </button>
+              <button
+                type="button"
+                onClick={finishWithoutContract}
+                className="w-full px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+              >
+                미작성하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 전자계약서 선택 다이얼로그 */}
+      {contractPickerOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setContractPickerOpen(false)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-xl flex flex-col max-h-[80vh]">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#E8E0D0]/70 dark:border-zinc-800">
+              <h3 className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">
+                전자 계약서 선택
+              </h3>
+              <button
+                onClick={() => setContractPickerOpen(false)}
+                className="p-1 -m-1 text-[#A89B80] hover:text-[#3A342A]"
+                aria-label="닫기"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {contractTplLoading ? (
+                <div className="py-10 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
+              ) : contractTemplates.length === 0 ? (
+                <div className="py-10 text-center">
+                  <div className="text-[13px] text-[#8C8270]">등록된 계약서 템플릿이 없어요.</div>
+                  <a
+                    href="/crm/settings?tab=contracts"
+                    className="mt-2 inline-block text-[12.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+                  >
+                    계약서 관리로 이동 →
+                  </a>
+                </div>
+              ) : (
+                <ul className="space-y-1.5">
+                  {contractTemplates.map((t) => (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        onClick={() => goToContractSign(t.id)}
+                        className="w-full text-left px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-[#6B7B3A]/40 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                      >
+                        <div className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                          {t.title}
+                        </div>
+                        <div className="text-[11.5px] text-[#8C8270] mt-0.5">
+                          유형 · {t.category}
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="flex gap-2 px-4 py-3 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={finishWithoutContract}
+                className="flex-1 px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] font-medium text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5]"
+              >
+                작성하지 않고 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </CrmModal>
   );
 }
