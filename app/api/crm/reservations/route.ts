@@ -192,7 +192,7 @@ export async function POST(request: Request) {
   // session_minutes 까지 조회 → 예약 종료 시각 서버측 파생
   const { data: pass } = await supabase
     .from("crm_passes")
-    .select("id, center_id, member_id, trainer_member_id, co_trainer_ids, remaining_sessions, total_sessions, status, session_minutes")
+    .select("id, center_id, member_id, trainer_member_id, co_trainer_ids, remaining_sessions, total_sessions, status, session_minutes, group_capacity")
     .eq("id", passId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -271,6 +271,34 @@ export async function POST(request: Request) {
     endsAtIso = e.toISOString();
   } else {
     endsAtIso = new Date(startsAt.getTime() + 50 * 60 * 1000).toISOString();
+  }
+
+  // 시간 겹침 방지: 같은 강사가 겹치는 시간대에 이미 예약이 있으면 막는다(경고).
+  // 단 2:1 등 그룹 수업(group_capacity>=2)은 정원까지 동시 예약 허용.
+  const groupCap = Math.max(1, Number((pass as { group_capacity?: number }).group_capacity ?? 1) || 1);
+  const startIso = startsAt.toISOString();
+  const { data: overlaps } = await supabase
+    .from("crm_reservations")
+    .select("id")
+    .eq("center_id", ctx.centerId)
+    .eq("trainer_member_id", reservationTrainerId)
+    .not("status", "in", "(cancelled,rejected)")
+    .lt("starts_at", endsAtIso)
+    .gt("ends_at", startIso);
+  const overlapCount = (overlaps ?? []).length;
+  if (overlapCount > 0) {
+    if (groupCap < 2) {
+      return NextResponse.json(
+        { error: "이미 예약된 시간이에요. 다른 시간을 선택해 주세요." },
+        { status: 409 }
+      );
+    }
+    if (overlapCount >= groupCap) {
+      return NextResponse.json(
+        { error: `그룹 수업 정원(${groupCap}명)이 찼어요.` },
+        { status: 409 }
+      );
+    }
   }
 
   const { data: created, error } = await supabase
