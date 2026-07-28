@@ -51,7 +51,15 @@ export async function GET(
   const coIds = ((pass as { co_trainer_ids?: number[] }).co_trainer_ids ?? []).filter(
     (v): v is number => !!v
   );
-  const [{ data: member }, { data: reservations }, { data: coRows }] = await Promise.all([
+  // 담당강사·판매자·추가강사 이름 한 번에 조회
+  const staffIds = Array.from(
+    new Set(
+      [pass.trainer_member_id, pass.seller_member_id, ...coIds].filter(
+        (v): v is number => !!v
+      )
+    )
+  );
+  const [{ data: member }, { data: reservations }, { data: staffRows }] = await Promise.all([
     supabase.from("crm_members").select("id, name, phone, face_image_thumb").eq("id", pass.member_id).maybeSingle(),
     supabase
       .from("crm_reservations")
@@ -59,19 +67,28 @@ export async function GET(
       .eq("pass_id", passId)
       .order("starts_at", { ascending: false })
       .limit(100),
-    coIds.length
-      ? supabase.from("crm_center_members").select("id, display_name").in("id", coIds)
+    staffIds.length
+      ? supabase.from("crm_center_members").select("id, display_name").in("id", staffIds)
       : Promise.resolve({ data: [] as { id: number; display_name: string }[] }),
   ]);
 
+  const nameOf = (mid: number | null | undefined) =>
+    mid ? (staffRows ?? []).find((r) => r.id === mid)?.display_name ?? null : null;
   const co_trainers = coIds
     .map((id) => {
-      const row = (coRows ?? []).find((r) => r.id === id);
-      return row ? { id: row.id, name: row.display_name } : null;
+      const name = nameOf(id);
+      return name ? { id, name } : null;
     })
     .filter((v): v is { id: number; name: string } => !!v);
 
-  return NextResponse.json({ pass, member, reservations: reservations ?? [], co_trainers });
+  return NextResponse.json({
+    pass,
+    member,
+    reservations: reservations ?? [],
+    co_trainers,
+    trainer_name: nameOf(pass.trainer_member_id),
+    seller_name: nameOf(pass.seller_member_id),
+  });
 }
 
 /**
