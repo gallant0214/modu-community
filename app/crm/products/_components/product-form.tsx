@@ -54,10 +54,10 @@ interface TypeOption {
 
 const BUILT_IN_TYPES: TypeOption[] = [
   { value: "membership", label: "회원권" },
-  { value: "group", label: "그룹 수업" },
-  { value: "personal", label: "개인 레슨" },
   { value: "locker", label: "락커" },
   { value: "apparel", label: "운동복" },
+  { value: "personal", label: "개인 레슨" },
+  { value: "group", label: "그룹 수업" },
   { value: "goods", label: "운동 용품" },
 ];
 
