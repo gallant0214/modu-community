@@ -1150,15 +1150,12 @@ function DayView({
           </div>
 
           {trainers.map((t) => {
-            // 특정 강사 필터 시엔 서버가 이미 (담당강사=t) OR (예약 생성자=t) 로 필터함.
-            // 컬럼 배치를 위해 trainer_member_id 로 다시 자르면 '내가 만든 다른 강사 pass 예약'이 사라지므로
-            // 필터 모드에서는 취소만 걸러 모두 표시한다.
-            const list =
-              strictTrainerId != null
-                ? reservations.filter((r) => r.status !== "cancelled")
-                : reservations.filter(
-                    (r) => r.trainer_member_id === t.id && r.status !== "cancelled"
-                  );
+            // 예약은 항상 담당 강사(trainer_member_id) 기준으로 컬럼에 배치.
+            // (owner 가 다른 강사 pass 로 대신 예약해준 경우도 담당 강사 컬럼에 표시)
+            const list = reservations.filter(
+              (r) => r.trainer_member_id === t.id && r.status !== "cancelled"
+            );
+            void strictTrainerId;
             // 센터 일정은 상단 스트립에서 한 번만 표시하고, 강사 컬럼에는 개인 일정만 배치.
             const evList = events.filter(
               (e) => e.type === "personal" && e.trainer_member_id === t.id

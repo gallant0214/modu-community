@@ -52,24 +52,12 @@ export async function GET(request: Request) {
   // 권한:
   //   trainer         → 본인 스케줄만
   //   manager 이상    → 전체, trainer_id 로 특정 강사만 필터 가능
+  // 참고: 예약은 담당 강사(trainer_member_id) 기준으로만 필터.
+  //       creator 기반 필터는 예약이 아니라 이벤트(schedule-events)에서만 의미가 있음.
   if (ctx.role === "trainer") {
     query = query.eq("trainer_member_id", ctx.centerMemberId);
   } else if (trainerParam) {
-    // 특정 강사 필터: 그 강사가 담당 강사인 예약 + 그 강사가 직접 예약을 만든 것
-    // (owner/manager 가 다른 강사 pass 로 예약을 대신 잡아준 경우도 본인 스케줄에서 보이게)
-    const tid = Number(trainerParam);
-    const { data: tm } = await supabase
-      .from("crm_center_members")
-      .select("firebase_uid")
-      .eq("id", tid)
-      .eq("center_id", ctx.centerId)
-      .maybeSingle();
-    const trainerUid = tm?.firebase_uid ?? null;
-    if (trainerUid) {
-      query = query.or(`trainer_member_id.eq.${tid},created_by_uid.eq.${trainerUid}`);
-    } else {
-      query = query.eq("trainer_member_id", tid);
-    }
+    query = query.eq("trainer_member_id", Number(trainerParam));
   }
 
   const { data, error } = await query;
