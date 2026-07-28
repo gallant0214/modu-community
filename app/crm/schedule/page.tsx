@@ -2098,7 +2098,7 @@ function ReservationDialog({
                   color="neutral"
                 />
                 <ActionBtn
-                  label="노쇼(차감 취소)"
+                  label="노쇼(수업 차감)"
                   onClick={() => {
                     setReasonMode("noshow");
                     setReason("");
