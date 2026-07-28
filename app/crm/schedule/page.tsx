@@ -580,6 +580,41 @@ function EditReservationModal({
   const [duration, setDuration] = useState<number>(initDuration);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // 이 수강권에 등록된 담당·추가강사 id 집합 (담당 강사 후보 제한용)
+  const [allowedTrainerIds, setAllowedTrainerIds] = useState<Set<number> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!reservation.pass_id) {
+        setAllowedTrainerIds(new Set([reservation.trainer_member_id]));
+        return;
+      }
+      try {
+        const token = await getIdToken();
+        const res = await fetch(`/api/crm/passes/${reservation.pass_id}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (cancelled || !res.ok) return;
+        const p = data.pass ?? {};
+        const primary = Number(p.trainer_member_id) || 0;
+        const co: number[] = Array.isArray(p.co_trainer_ids) ? p.co_trainer_ids : [];
+        const ids = new Set<number>();
+        if (primary) ids.add(primary);
+        for (const c of co) if (Number(c)) ids.add(Number(c));
+        // 현재 예약 담당도 후보에 유지 (기존 값을 지키기 위해)
+        ids.add(reservation.trainer_member_id);
+        setAllowedTrainerIds(ids);
+      } catch {
+        setAllowedTrainerIds(new Set([reservation.trainer_member_id]));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [reservation.pass_id, reservation.trainer_member_id, getIdToken]);
 
   const submit = async () => {
     setError("");
@@ -654,20 +689,32 @@ function EditReservationModal({
             <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
               담당 강사
             </div>
-            <select
-              value={trainerId}
-              onChange={(e) => setTrainerId(Number(e.target.value))}
-              className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px]"
-            >
-              {trainers.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.display_name}
-                  {t.role !== "trainer" && (
-                    <> {" "}({t.role === "owner" ? "대표자" : t.role === "admin" ? "관리자" : "팀장"})</>
-                  )}
-                </option>
-              ))}
-            </select>
+            {(() => {
+              // 이 수강권에 등록된 담당·추가강사만 후보. 아직 로딩 중이면 현재 담당만 표시.
+              const list = allowedTrainerIds
+                ? trainers.filter((t) => allowedTrainerIds.has(t.id))
+                : trainers.filter((t) => t.id === trainerId);
+              return (
+                <select
+                  value={trainerId}
+                  onChange={(e) => setTrainerId(Number(e.target.value))}
+                  disabled={!allowedTrainerIds}
+                  className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px] disabled:opacity-60"
+                >
+                  {list.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.display_name}
+                      {t.role !== "trainer" && (
+                        <> {" "}({t.role === "owner" ? "대표자" : t.role === "admin" ? "관리자" : "팀장"})</>
+                      )}
+                    </option>
+                  ))}
+                </select>
+              );
+            })()}
+            <p className="mt-1 text-[11px] text-[#A89B80]">
+              이 수강권에 등록된 담당 강사와 추가 강사만 선택할 수 있어요.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
