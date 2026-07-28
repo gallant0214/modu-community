@@ -41,41 +41,51 @@ export async function GET(request: Request) {
   const q = (url.searchParams.get("q") || "").trim();
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 50), 1), 5000);
 
-  let allowedMemberIds: number[] | null = null;
-  // 1인 강사(solo owner)는 본인 센터 전체를 보는 대표자와 동일하게 취급 → 격리 미적용.
-  if ((ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner) {
-    // 주강사(trainer_member_id) · 추가강사(co_trainer_ids) · 판매자(seller_member_id) 로 연결된 회원.
-    // (트레이너 대시보드 스코프와 동일 — 내가 담당/추가/등록한 회원)
+  // ── 회원 스코프 계산 ──
+  // 개인 CRM(solo) 로그인 시엔 "내가 다른 센터에서 담당(주강사·추가강사·판매자)하는 회원"도
+  // 한 목록에 합쳐 보여준다. 단 다른 센터 회원은 조회 전용(foreign=true) —
+  // 수정·삭제·발급은 그 센터 컨텍스트에서만, 개인 계정으로 등록한 회원만 이 CRM에서 관리. [[feedback-crm-data-isolation]]
+  type CenterScope = { centerId: number; centerName: string; foreign: boolean; allowedIds: number[] | null };
+
+  const teachingScopeIds = async (centerId: number, myMemberId: number): Promise<number[]> => {
+    // 주강사(trainer_member_id) · 추가강사(co_trainer_ids) · 판매자(seller_member_id) 로 연결된 회원
     const { data: passes } = await supabase
       .from("crm_passes")
       .select("member_id")
-      .eq("center_id", ctx.centerId)
+      .eq("center_id", centerId)
       .or(
-        `trainer_member_id.eq.${ctx.centerMemberId},co_trainer_ids.cs.{${ctx.centerMemberId}},seller_member_id.eq.${ctx.centerMemberId}`
+        `trainer_member_id.eq.${myMemberId},co_trainer_ids.cs.{${myMemberId}},seller_member_id.eq.${myMemberId}`
       );
-    allowedMemberIds = Array.from(new Set((passes ?? []).map((p) => p.member_id)));
-    if (allowedMemberIds.length === 0) {
-      return NextResponse.json({ members: [] });
+    return Array.from(new Set((passes ?? []).map((p) => p.member_id)));
+  };
+
+  const scopes: CenterScope[] = [];
+  {
+    // 현재 컨텍스트 센터. solo owner/owner/admin = 전체, trainer/manager = 담당만.
+    const restricted = (ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner;
+    const allowedIds = restricted ? await teachingScopeIds(ctx.centerId, ctx.centerMemberId) : null;
+    scopes.push({ centerId: ctx.centerId, centerName: ctx.centerName, foreign: false, allowedIds });
+  }
+  if (ctx.centerKind === "solo") {
+    // 개인 CRM: 내가 소속된 다른 센터에서 담당하는 회원 합산 (조회 전용)
+    const { data: others } = await supabase
+      .from("crm_center_members")
+      .select("id, center_id, role, is_solo_owner, crm_centers!inner(name)")
+      .eq("firebase_uid", ctx.uid)
+      .eq("status", "active")
+      .neq("center_id", ctx.centerId);
+    for (const om of others ?? []) {
+      const centerObj = Array.isArray(om.crm_centers) ? om.crm_centers[0] : om.crm_centers;
+      const centerName = (centerObj as { name?: string } | null)?.name ?? "";
+      const restricted = (om.role === "trainer" || om.role === "manager") && !om.is_solo_owner;
+      const allowedIds = restricted ? await teachingScopeIds(om.center_id, om.id) : null;
+      scopes.push({ centerId: om.center_id, centerName, foreign: true, allowedIds });
     }
   }
 
-  const buildQuery = () => {
-    let query = supabase
-      .from("crm_members")
-      .select(
-        "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, registration_type, first_use_at, total_paid_won, final_expire_at, last_purchase_at, last_attended_at, attendance_no, current_membership, current_pass, current_rental, current_locker, face_image_thumb, created_at"
-      )
-      .eq("center_id", ctx.centerId)
-      .eq("status", "active")
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false }); // 동일 created_at 다수 → range 페이지네이션 안정화
-    if (allowedMemberIds) query = query.in("id", allowedMemberIds);
-    if (q) {
-      // name 또는 phone LIKE 매칭
-      query = query.or(`name.ilike.%${q}%,phone.ilike.%${q}%`);
-    }
-    return query;
-  };
+  const centerIds = Array.from(new Set(scopes.map((s) => s.centerId)));
+  const centerNameById = new Map(scopes.map((s) => [s.centerId, s.centerName] as const));
+  const foreignCenterIds = new Set(scopes.filter((s) => s.foreign).map((s) => s.centerId));
 
   type MemberBase = {
     id: number;
@@ -107,20 +117,53 @@ export async function GET(request: Request) {
     current_rental: string | null;
     current_locker: string | null;
     created_at: string;
+    center_id: number;
   };
 
-  let members: MemberBase[];
-  try {
-    members = await paginateAll<MemberBase>(
-      () => buildQuery() as unknown as { range: (from: number, to: number) => PromiseLike<{ data: MemberBase[] | null }> },
+  const MEMBER_SELECT =
+    "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, registration_type, first_use_at, total_paid_won, final_expire_at, last_purchase_at, last_attended_at, attendance_no, current_membership, current_pass, current_rental, current_locker, face_image_thumb, created_at, center_id";
+
+  const fetchScope = (s: CenterScope) =>
+    paginateAll<MemberBase>(
+      () => {
+        let query = supabase
+          .from("crm_members")
+          .select(MEMBER_SELECT)
+          .eq("center_id", s.centerId)
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false }); // 동일 created_at 다수 → range 페이지네이션 안정화
+        if (s.allowedIds) query = query.in("id", s.allowedIds.length ? s.allowedIds : [-1]);
+        if (q) query = query.or(`name.ilike.%${q}%,phone.ilike.%${q}%`);
+        return query as unknown as {
+          range: (from: number, to: number) => PromiseLike<{ data: MemberBase[] | null }>;
+        };
+      },
       limit
     );
+
+  let baseMembers: MemberBase[];
+  try {
+    if (scopes.length === 1) {
+      baseMembers = await fetchScope(scopes[0]);
+    } else {
+      const perScope = await Promise.all(scopes.map(fetchScope));
+      baseMembers = perScope.flat().slice(0, limit);
+    }
   } catch (e) {
     return NextResponse.json(
       { error: "조회 실패", detail: e instanceof Error ? e.message : String(e) },
       { status: 500 }
     );
   }
+
+  // 각 회원에 center_name / foreign(조회 전용) 태깅
+  const members = baseMembers.map((m) => ({
+    ...m,
+    center_name: centerNameById.get(m.center_id) ?? "",
+    foreign: foreignCenterIds.has(m.center_id),
+  }));
+
   const wantDetail = url.searchParams.get("detail") === "1";
   if (!wantDetail || members.length === 0) {
     return NextResponse.json({ members });
@@ -158,7 +201,7 @@ export async function GET(request: Request) {
         supabase
           .from("crm_passes")
           .select("member_id, lesson_kind, remaining_sessions, total_sessions, expires_at, start_date, is_paused, outstanding_won, payment_status")
-          .eq("center_id", ctx.centerId)
+          .in("center_id", centerIds)
           .in("member_id", c)
           .eq("status", "valid")
     ),
@@ -174,7 +217,7 @@ export async function GET(request: Request) {
       supabase
         .from("crm_memberships")
         .select("member_id, plan_name, expires_at, start_date, is_paused, outstanding_won, payment_status")
-        .eq("center_id", ctx.centerId)
+        .in("center_id", centerIds)
         .in("member_id", c)
         .eq("status", "valid")
     ),
@@ -183,14 +226,14 @@ export async function GET(request: Request) {
         supabase
           .from("crm_lockers")
           .select("assigned_member_id, number, zone_id, crm_locker_zones(name)")
-          .eq("center_id", ctx.centerId)
+          .in("center_id", centerIds)
           .in("assigned_member_id", c)
     ),
     gather<{ member_id: number; checked_in_at: string }>((c) =>
       supabase
         .from("crm_attendances")
         .select("member_id, checked_in_at")
-        .eq("center_id", ctx.centerId)
+        .in("center_id", centerIds)
         .in("member_id", c)
         .order("checked_in_at", { ascending: false })
         .limit(2000)

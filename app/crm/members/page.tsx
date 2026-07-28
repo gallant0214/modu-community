@@ -53,6 +53,10 @@ interface MemberRow {
   on_hold?: boolean;
   scheduled?: boolean;
   outstanding_won?: number;
+  center_id?: number;
+  center_name?: string;
+  /** 다른 센터에서 담당하는 회원(조회 전용). 개인 CRM에서만 표시됨 */
+  foreign?: boolean;
 }
 
 type StatusFilter = "all" | "valid" | "scheduled" | "expired" | "hold" | "expiring";
@@ -1312,7 +1316,7 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
     sortKey: "name",
     render: (m) => (
       <Link
-        href={`/crm/members/${m.id}`}
+        href={m.foreign ? `/crm/members/${m.id}?center=${m.center_id}` : `/crm/members/${m.id}`}
         className="inline-flex items-center gap-2 font-semibold text-[#2A251D] dark:text-zinc-100 hover:text-[#6B7B3A] dark:hover:text-[#A8B87A]"
       >
         {m.face_image_thumb ? (
@@ -1327,7 +1331,14 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
             —
           </span>
         )}
-        <span className="truncate">{m.name}</span>
+        <span className="flex flex-col min-w-0">
+          <span className="truncate">{m.name}</span>
+          {m.foreign && (
+            <span className="mt-0.5 inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#EEF1E3] text-[#6B7B3A] dark:bg-[#3a4127] dark:text-[#A8B87A]">
+              🏢 {m.center_name || "다른 센터"} · 조회
+            </span>
+          )}
+        </span>
       </Link>
     ),
   },

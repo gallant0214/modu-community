@@ -22,13 +22,34 @@ export async function GET(
   const memberId = Number(id);
   if (!memberId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
+  // 개인 CRM(solo)에서 "다른 센터에서 담당하는 회원"을 조회 전용으로 열람하는 경우 ?center=<id>.
+  // 그 센터의 활성 멤버십이 있어야 하고, 응답은 read_only=true 로 표시(편집 UI 차단).
+  const targetCenterParam = Number(new URL(request.url).searchParams.get("center") || 0);
+  let targetCenterId = ctx.centerId;
+  let scopeMemberId = ctx.centerMemberId;
+  let readOnly = false;
+  if (targetCenterParam && targetCenterParam !== ctx.centerId && ctx.centerKind === "solo") {
+    const { data: otherMembership } = await supabase
+      .from("crm_center_members")
+      .select("id")
+      .eq("firebase_uid", ctx.uid)
+      .eq("center_id", targetCenterParam)
+      .eq("status", "active")
+      .maybeSingle();
+    if (otherMembership) {
+      targetCenterId = targetCenterParam;
+      scopeMemberId = otherMembership.id;
+      readOnly = true;
+    }
+  }
+
   const { data: member, error } = await supabase
     .from("crm_members")
     .select(
       "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, registration_type, first_use_at, total_paid_won, final_expire_at, last_purchase_at, last_attended_at, attendance_no, current_membership, current_pass, current_rental, current_locker, face_image_data, face_image_thumb, created_at"
     )
     .eq("id", memberId)
-    .eq("center_id", ctx.centerId)
+    .eq("center_id", targetCenterId)
     .maybeSingle();
 
   if (error) {
@@ -43,18 +64,19 @@ export async function GET(
     .select(
       "id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, vat_included, payment_method, payment_method_custom, issued_at, expires_at, status, memo, trainer_member_id, seller_member_id, created_at"
     )
-    .eq("center_id", ctx.centerId)
+    .eq("center_id", targetCenterId)
     .eq("member_id", memberId)
     .neq("status", "deleted")
     .order("issued_at", { ascending: false });
 
   // 1인 강사(solo owner)는 본인 센터 전체 접근 → 격리 미적용.
+  // 다른 센터 조회(readOnly)일 땐 그 센터에서 내가 담당한 수강권만.
   const restricted =
-    (ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner;
+    readOnly || ((ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner);
   if (restricted) {
     // 주강사 또는 추가강사(co_trainer_ids)로 배정된 수강권만
     passQuery = passQuery.or(
-      `trainer_member_id.eq.${ctx.centerMemberId},co_trainer_ids.cs.{${ctx.centerMemberId}}`
+      `trainer_member_id.eq.${scopeMemberId},co_trainer_ids.cs.{${scopeMemberId}}`
     );
   }
 
@@ -73,7 +95,7 @@ export async function GET(
     const { data: resv } = await supabase
       .from("crm_reservations")
       .select("pass_id")
-      .eq("center_id", ctx.centerId)
+      .eq("center_id", targetCenterId)
       .in("pass_id", passIds)
       .not("status", "in", "(cancelled,rejected)");
     for (const r of resv ?? []) {
@@ -85,7 +107,7 @@ export async function GET(
     reserved_count: reservedMap.get(p.id) ?? 0,
   }));
 
-  return NextResponse.json({ member, passes: passesOut });
+  return NextResponse.json({ member, passes: passesOut, read_only: readOnly });
 }
 
 // 회원 필드 그룹 — 권한 매트릭스와 매핑

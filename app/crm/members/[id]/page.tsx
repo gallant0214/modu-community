@@ -16,6 +16,7 @@ import {
 } from "../../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../../_components/crm-modal";
 import { CrmLineChart } from "../../_components/crm-line-chart";
+import { unitToDays } from "@/app/lib/duration-convert";
 
 interface Member {
   id: number;
@@ -81,6 +82,8 @@ export default function CrmMemberDetailPage() {
 
   const [member, setMember] = useState<Member | null>(null);
   const [passes, setPasses] = useState<Pass[]>([]);
+  // 다른 센터 담당 회원 = 조회 전용(편집·발급·삭제 차단)
+  const [readOnly, setReadOnly] = useState(false);
   const [staffList, setStaffList] = useState<
     { id: number; display_name: string; role: string; status: string }[]
   >([]);
@@ -119,25 +122,32 @@ export default function CrmMemberDetailPage() {
     }
   }, [searchParams, router, memberId]);
 
+  // 개인 CRM에서 다른 센터 담당 회원을 조회 전용으로 열람할 때 ?center=<id>
+  const foreignCenter = searchParams.get("center");
+
   const load = useCallback(async () => {
     setError("");
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch(`/api/crm/members/${memberId}`, {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/crm/members/${memberId}${foreignCenter ? `?center=${foreignCenter}` : ""}`,
+        {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "조회 실패");
       setMember(data.member);
       setPasses(data.passes ?? []);
+      setReadOnly(!!data.read_only);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
       setLoading(false);
     }
-  }, [getIdToken, memberId]);
+  }, [getIdToken, memberId, foreignCenter]);
 
   useEffect(() => {
     if (memberId) load();
@@ -179,9 +189,10 @@ export default function CrmMemberDetailPage() {
     })();
   }, [getIdToken]);
 
-  const canEditBasic = !!perms["members.edit_basic"];
-  const canEditUsage = !!perms["members.edit_usage"];
-  const canDelete = !!perms["members.delete"];
+  // 조회 전용(다른 센터 회원)이면 모든 편집·삭제 차단
+  const canEditBasic = !readOnly && !!perms["members.edit_basic"];
+  const canEditUsage = !readOnly && !!perms["members.edit_usage"];
+  const canDelete = !readOnly && !!perms["members.delete"];
 
   // 직원 목록 1회 로드 (수강권 발급 모달 + 상세 모달 공용)
   useEffect(() => {
@@ -268,6 +279,12 @@ export default function CrmMemberDetailPage() {
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-5xl mx-auto">
       <BackLink />
+
+      {readOnly && (
+        <div className="mt-3 mb-1 px-3.5 py-2.5 rounded-xl bg-[#EEF1E3] dark:bg-[#3a4127]/60 border border-[#D8DEC3] dark:border-[#4a5334] text-[12.5px] text-[#5c6b30] dark:text-[#A8B87A] leading-relaxed">
+          🏢 <strong>다른 센터에서 담당하는 회원</strong>입니다. 조회만 가능하며, 수강권 발급·정보 수정·삭제는 해당 센터로 전환하거나 앱에서 진행하세요.
+        </div>
+      )}
 
       <header className="mt-3 mb-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-white/75 dark:bg-zinc-900 px-4 py-4 md:px-5 md:py-5 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-stretch gap-4">
@@ -497,20 +514,22 @@ export default function CrmMemberDetailPage() {
           <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
             수강권 ({passes.length})
           </h2>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setUsageOpen(true)}
-              className="px-3 py-1.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/5"
-            >
-              + 회원권 발급
-            </button>
-            <button
-              onClick={() => setPassOpen(true)}
-              className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]"
-            >
-              + 수강권 발급
-            </button>
-          </div>
+          {!readOnly && (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setUsageOpen(true)}
+                className="px-3 py-1.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/5"
+              >
+                + 회원권 발급
+              </button>
+              <button
+                onClick={() => setPassOpen(true)}
+                className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]"
+              >
+                + 수강권 발급
+              </button>
+            </div>
+          )}
         </div>
         {passes.length === 0 ? (
           member.current_pass ? (
@@ -3651,8 +3670,8 @@ function UsageIssueModal({
     // 상품 선택 시점에 시작일을 오늘로 자동 세팅 (사용자가 이후 수정 가능)
     setStartDate(new Date().toISOString().slice(0, 10));
     if (p.duration_value && p.duration_unit) {
-      const mult = p.duration_unit === "year" ? 365 : p.duration_unit === "month" ? 30 : 1;
-      setDurationDays(Math.max(1, p.duration_value * mult));
+      // 12개월 = 365일이 되도록 unitToDays 공통 헬퍼 사용
+      setDurationDays(Math.max(1, unitToDays(p.duration_value, p.duration_unit)));
     } else {
       // 기간 미설정 상품은 기본 30일로
       setDurationDays(30);
@@ -4517,8 +4536,8 @@ function PassIssueModal({
       setDurationDays(p.service_days);
       setUnlimited(false);
     } else if (p.duration_value && p.duration_value > 0 && p.duration_unit) {
-      const mult = p.duration_unit === "year" ? 365 : p.duration_unit === "month" ? 30 : 1;
-      setDurationDays(Math.max(1, p.duration_value * mult));
+      // 12개월 = 365일이 되도록 unitToDays 공통 헬퍼 사용
+      setDurationDays(Math.max(1, unitToDays(p.duration_value, p.duration_unit)));
       setUnlimited(false);
     } else {
       // 유효기간 미설정(0) = 무기한
