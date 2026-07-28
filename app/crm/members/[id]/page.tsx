@@ -3510,10 +3510,12 @@ function UsageIssueModal({
           ? "락커 상품을 선택하거나 입력해 주세요"
           : "대여 상품을 선택하거나 입력해 주세요";
     }
-    if (type === "locker" && !lockerId) return "배정할 빈 자리를 선택해 주세요";
+    // 락커는 배정(구역/자리)을 결제 후로 미룰 수 있음 → 필수 아님.
     if (!startDate || !expiresAt) return "기간을 확인해 주세요";
     if (!sellerId) return "판매자를 선택해 주세요";
-    const loc = type === "locker" ? lockers.find((l) => l.id === lockerId) : null;
+    const loc = type === "locker" && lockerId
+      ? lockers.find((l) => l.id === lockerId)
+      : null;
     const line: CartLine = {
       key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       type,
@@ -3527,7 +3529,7 @@ function UsageIssueModal({
       vatIncluded,
       startDate,
       durationDays,
-      lockerId: type === "locker" ? (lockerId as number) : undefined,
+      lockerId: type === "locker" && lockerId ? Number(lockerId) : undefined,
       lockerLabel: loc ? `${loc.zone_name} ${loc.number}번` : undefined,
       lockerPassword: type === "locker" ? lockerPassword : undefined,
       paymentMethod,
@@ -3681,22 +3683,31 @@ function UsageIssueModal({
           }),
         });
       } else {
-        // locker
-        if (!line.lockerId) return { ok: false, error: "락커 자리 누락" };
-        const assignRes = await fetch(`/api/crm/lockers/${line.lockerId}`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({
-            action: "assign",
-            member_id: memberId,
-            start_date: line.startDate,
-            expires_at: lineExpires,
-            password: line.lockerPassword || undefined,
-            memo: line.memo || undefined,
-          }),
-        });
-        const aData = await assignRes.json();
-        if (!assignRes.ok) return { ok: false, error: aData?.error || "락커 배정 실패" };
+        // locker: 자리(lockerId) 가 지정된 경우에만 물리 배정.
+        //   지정 안 됐으면 결제(rental 매출)만 기록 → 배정은 나중에 락커 관리에서 진행.
+        if (line.lockerId) {
+          const assignRes = await fetch(`/api/crm/lockers/${line.lockerId}`, {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({
+              action: "assign",
+              member_id: memberId,
+              start_date: line.startDate,
+              expires_at: lineExpires,
+              password: line.lockerPassword || undefined,
+              memo: line.memo || undefined,
+            }),
+          });
+          const aData = await assignRes.json();
+          if (!assignRes.ok) return { ok: false, error: aData?.error || "락커 배정 실패" };
+        }
+
+        const rentalMemo = [
+          line.lockerLabel ?? "구역 미배정",
+          line.memo,
+        ]
+          .filter(Boolean)
+          .join(" · ");
 
         res = await fetch("/api/crm/rentals", {
           method: "POST",
@@ -3714,7 +3725,7 @@ function UsageIssueModal({
             payment_method_custom: line.paymentCustom,
             start_date: line.startDate,
             expires_at: lineExpires,
-            memo: [line.lockerLabel, line.memo].filter(Boolean).join(" · "),
+            memo: rentalMemo,
           }),
         });
       }
@@ -3874,7 +3885,7 @@ function UsageIssueModal({
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2">
-                <CrmField label="구역" required>
+                <CrmField label="구역">
                   <select
                     className={crmInputClass}
                     value={lockerZone}
@@ -3883,7 +3894,7 @@ function UsageIssueModal({
                       setLockerId("");
                     }}
                   >
-                    <option value="">구역 선택</option>
+                    <option value="">배정 없이 결제</option>
                     {Array.from(
                       new Map(lockers.map((l) => [l.zone_id, l.zone_name])).entries()
                     ).map(([zid, zname]) => (
@@ -3893,7 +3904,7 @@ function UsageIssueModal({
                     ))}
                   </select>
                 </CrmField>
-                <CrmField label="빈 자리" required>
+                <CrmField label="빈 자리">
                   <select
                     className={crmInputClass}
                     value={lockerId}
@@ -3901,7 +3912,7 @@ function UsageIssueModal({
                     onChange={(e) => setLockerId(e.target.value ? Number(e.target.value) : "")}
                   >
                     <option value="">
-                      {lockerZone === "" ? "구역 먼저 선택" : "자리 선택"}
+                      {lockerZone === "" ? "배정 나중에" : "자리 선택"}
                     </option>
                     {lockers
                       .filter((l) => l.zone_id === lockerZone)
@@ -3914,6 +3925,9 @@ function UsageIssueModal({
                 </CrmField>
               </div>
             )}
+            <p className="text-[11.5px] text-[#A89B80] -mt-1">
+              구역·자리를 지금 지정하지 않으면 결제만 먼저 진행하고, 나중에 <strong>락커 관리</strong> 에서 배정할 수 있어요.
+            </p>
             <CrmField label="락커 비밀번호">
               <input
                 className={crmInputClass}
