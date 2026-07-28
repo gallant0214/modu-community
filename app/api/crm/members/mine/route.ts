@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  *
  * 센터별 범위:
  *  - owner/admin/solo → 그 센터 전체 회원
- *  - trainer/manager  → 본인(trainer_member_id) 담당 회원만
+ *  - trainer/manager  → 본인이 주강사(trainer_member_id)·추가강사(co_trainer_ids)·판매자(seller_member_id)로 연결된 회원 (웹 /api/crm/members 스코프와 동일)
  *
  * 각 회원에 center_id/center_name/trainer_member_id 를 태깅해서 반환
  * (앱에서 상세·발급 시 해당 센터 컨텍스트로 호출하도록).
@@ -60,12 +60,15 @@ export async function GET(request: Request) {
 
     let allowedIds: number[] | null = null;
     if (restricted) {
-      // 주강사 또는 추가강사(co_trainer_ids)로 배정된 회원
+      // 주강사(trainer_member_id) · 추가강사(co_trainer_ids) · 판매자(seller_member_id)로 연결된 회원
+      // (웹 /api/crm/members·트레이너 대시보드 스코프와 동일하게 3종 모두 포함)
       const { data: passes } = await supabase
         .from("crm_passes")
         .select("member_id")
         .eq("center_id", m.center_id)
-        .or(`trainer_member_id.eq.${m.id},co_trainer_ids.cs.{${m.id}}`);
+        .or(
+          `trainer_member_id.eq.${m.id},co_trainer_ids.cs.{${m.id}},seller_member_id.eq.${m.id}`
+        );
       allowedIds = Array.from(new Set((passes ?? []).map((p) => p.member_id)));
       if (allowedIds.length === 0) continue;
     }
