@@ -423,9 +423,11 @@ export default function CrmSchedulePage() {
           onReschedule={proposeReschedule}
           strictTrainerId={selectedTrainerId === "all" ? null : selectedTrainerId}
           onSlotClick={(ymd, h, m, defaultTrainer) => {
-            // 로그인 사용자가 강사 목록에 있으면 본인을 기본 강사로.
+            // 강사 필터가 특정인이면 그 강사를 기본으로. 전체 모드일 때만 로그인 사용자 우선.
             const me =
-              myMemberId != null ? trainers.find((t) => t.id === myMemberId) : null;
+              selectedTrainerId === "all" && myMemberId != null
+                ? visibleTrainers.find((t) => t.id === myMemberId)
+                : null;
             const chosen = me ?? defaultTrainer;
             if (!chosen) return;
             setNewSlot({
@@ -2352,6 +2354,7 @@ function NewReservationModal({
     setOtherPasses([]);
     setSearchMode("assigned");
     setFilterText("");
+    setAssigned([]); // 이전 강사의 결과가 남지 않도록 즉시 비움
     (async () => {
       setLoadingAssigned(true);
       setError("");

@@ -118,6 +118,22 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    key: "schedule",
+    label: "스케줄 관리",
+    items: [
+      {
+        key: "schedule.view_others",
+        label: "타 강사 스케줄 열람",
+        defaults: D_ADMIN,
+      },
+      {
+        key: "schedule.manage_others",
+        label: "타 강사 스케줄 예약·수정·삭제",
+        defaults: D_ADMIN,
+      },
+    ],
+  },
+  {
     key: "staff_contracts",
     label: "직원 계약서 (근로·아르바이트)",
     items: [

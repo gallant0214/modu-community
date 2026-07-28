@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -170,7 +171,12 @@ export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  let canManageAll = ctx.role === "owner" || ctx.role === "admin";
+  // 타 강사 스케줄 예약·수정·삭제 권한: 직급권한(schedule.manage_others) + 개별 강사(can_manage_all_schedules) 병합
+  const rolePerms = await loadPermissionsForContext(ctx);
+  let canManageAll =
+    ctx.role === "owner" ||
+    ctx.role === "admin" ||
+    rolePerms["schedule.manage_others"] === true;
   if (ctx.role === "trainer" || ctx.role === "manager") {
     const { data: perm } = await supabase
       .from("crm_trainer_permissions")

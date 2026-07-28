@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { sendPushToMember, formatKstSlot } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
@@ -159,6 +160,10 @@ export async function PATCH(
     return NextResponse.json({ ok: true, status: "rejected" });
   }
 
+  // 직급권한(schedule.manage_others) 도 타 강사 예약 관리 게이트에 반영
+  const rolePerms = await loadPermissionsForContext(ctx);
+  const roleAllowsAll = rolePerms["schedule.manage_others"] === true;
+
   // trainer 권한 게이트
   if (ctx.role === "trainer") {
     const { data: perm } = await supabase
@@ -167,6 +172,7 @@ export async function PATCH(
       .eq("center_member_id", ctx.centerMemberId)
       .maybeSingle();
     if (
+      !roleAllowsAll &&
       !perm?.can_manage_all_schedules &&
       cur.trainer_member_id !== ctx.centerMemberId
     ) {
@@ -185,8 +191,8 @@ export async function PATCH(
       return NextResponse.json({ error: "출석 취소 권한이 없습니다" }, { status: 403 });
     }
   } else if (ctx.role === "manager") {
-    // manager 는 본인 담당 아니면 can_manage_all_schedules 필요
-    if (cur.trainer_member_id !== ctx.centerMemberId) {
+    // manager 는 본인 담당 아니면 schedule.manage_others 또는 can_manage_all_schedules 필요
+    if (cur.trainer_member_id !== ctx.centerMemberId && !roleAllowsAll) {
       const { data: perm } = await supabase
         .from("crm_trainer_permissions")
         .select("can_manage_all_schedules")
