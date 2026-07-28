@@ -803,7 +803,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
             <button
               onClick={save}
               disabled={!dirty || saving}
-              className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
+              className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors ${dirty ? "bg-[#6B7B3A] text-white hover:bg-[#5a6932] disabled:opacity-60" : "bg-[#E9E2D2] text-[#B0A488] dark:bg-zinc-800 dark:text-zinc-500"}`}
             >
               {saving ? "저장 중…" : "저장"}
             </button>

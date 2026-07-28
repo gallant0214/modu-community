@@ -851,7 +851,7 @@ function DisplayNameSection({
         <button
           onClick={() => onSave(name.trim())}
           disabled={saving || !changed}
-          className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-40 text-white text-[13px] font-semibold hover:bg-[#5a6932] whitespace-nowrap"
+          className={`px-4 rounded-lg text-[13px] font-semibold whitespace-nowrap transition-colors ${changed ? "bg-[#6B7B3A] text-white hover:bg-[#5a6932] disabled:opacity-60" : "bg-[#E9E2D2] text-[#B0A488] dark:bg-zinc-800 dark:text-zinc-500"}`}
         >
           {saving ? "저장 중…" : "저장"}
         </button>
@@ -1146,7 +1146,7 @@ function ContactSection({
         <button
           onClick={save}
           disabled={!dirty || saving || !n.trim() || !p.trim()}
-          className="w-full px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-40 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+          className={`w-full px-4 py-2.5 rounded-lg text-[13.5px] font-semibold transition-colors ${dirty ? "bg-[#6B7B3A] text-white hover:bg-[#5a6932] disabled:opacity-60" : "bg-[#E9E2D2] text-[#B0A488] dark:bg-zinc-800 dark:text-zinc-500"}`}
         >
           {saving ? "저장 중…" : "저장"}
         </button>

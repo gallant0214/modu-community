@@ -701,7 +701,7 @@ export default function CrmLockersPage() {
 
       {tab === "unassigned" && <UnassignedTab zone={zone} zoneLabel={zoneLabel} onZoneChange={setZone} onAssigned={loadLockers} />}
 
-      {tab === "returns" && <ReturnsTab zone={zone} zoneLabel={zoneLabel} onZoneChange={setZone} />}
+      {tab === "returns" && <ReturnsTab zone={zone} zoneLabel={zoneLabel} />}
 
       {tab === "settings" && (
         <>
@@ -849,7 +849,7 @@ export default function CrmLockersPage() {
           <button
             onClick={saveSettings}
             disabled={saving || !dirtySettings}
-            className="w-full px-4 py-3 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[14.5px] font-semibold hover:bg-[#5a6932] transition-colors"
+            className={`w-full px-4 py-3 rounded-lg text-[14.5px] font-semibold transition-colors ${dirtySettings ? "bg-[#6B7B3A] text-white hover:bg-[#5a6932] disabled:opacity-60" : "bg-[#E9E2D2] text-[#B0A488] dark:bg-zinc-800 dark:text-zinc-500"}`}
           >
             {saving ? "저장 중…" : "저장"}
           </button>
@@ -1651,7 +1651,7 @@ interface ReturnHistory {
   created_at: string;
 }
 
-function ReturnsTab({ zone, onZoneChange, zoneLabel }: { zone: number; zoneLabel: (n: number) => string; onZoneChange: (n: number) => void }) {
+function ReturnsTab({ zone, zoneLabel }: { zone: number; zoneLabel: (n: number) => string }) {
   const { getIdToken } = useAuth();
   const [scope, setScope] = useState<"current" | "all">("all");
   const [list, setList] = useState<ReturnHistory[]>([]);
@@ -2498,9 +2498,10 @@ function ZoneChips({
   }
 
   return (
-    <div className="flex items-center gap-1.5 mt-5 mb-4 overflow-x-auto -mx-1 px-1">
+    <div className="mt-5 mb-4 overflow-x-auto">
+      <div className="inline-flex min-w-full items-center gap-1.5 rounded-xl border border-[#E4D9C6] bg-[#F7F2E8]/80 p-1.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/70">
       {showOnlyActive && numbers.length === 0 && (
-        <span className="text-[12px] text-[#8C8270] dark:text-zinc-500 mr-1">
+        <span className="px-2 text-[12px] text-[#8C8270] dark:text-zinc-500">
           설정된 락커룸이 없어요.
         </span>
       )}
@@ -2508,7 +2509,10 @@ function ZoneChips({
         const active = zone === n;
         if (editingZone === n && onRename) {
           return (
-            <div key={n} className="inline-flex items-center gap-1">
+            <div
+              key={n}
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-[#6B7B3A]/35 bg-white px-2 shadow-sm dark:border-[#A8B87A]/30 dark:bg-zinc-900"
+            >
               <input
                 autoFocus
                 type="text"
@@ -2525,7 +2529,7 @@ function ZoneChips({
                   }
                   if (e.key === "Escape") setEditingZone(null);
                 }}
-                className="px-2.5 py-1 rounded-full text-[12.5px] border border-[#6B7B3A] bg-white dark:bg-zinc-900 text-[#2A251D] dark:text-zinc-100 focus:outline-none w-24"
+                className="h-7 w-24 rounded-md border border-[#D9CDB8] bg-[#FEFCF7] px-2 text-[12.5px] text-[#2A251D] focus:border-[#6B7B3A] focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
               />
               <button
                 type="button"
@@ -2537,14 +2541,14 @@ function ZoneChips({
                   setEditingZone(null);
                 }}
                 disabled={saving}
-                className="text-[11.5px] text-[#6B7B3A] hover:underline disabled:opacity-50"
+                className="h-7 rounded-md bg-[#2F3A2B] px-2 text-[11.5px] font-bold text-white disabled:opacity-50 dark:bg-[#A8B87A] dark:text-zinc-950"
               >
                 저장
               </button>
               <button
                 type="button"
                 onClick={() => setEditingZone(null)}
-                className="text-[11.5px] text-[#8C8270] hover:underline"
+                className="h-7 rounded-md px-1.5 text-[11.5px] font-semibold text-[#8C8270] hover:bg-[#F5F0E5] dark:text-zinc-400 dark:hover:bg-zinc-800"
               >
                 취소
               </button>
@@ -2554,6 +2558,7 @@ function ZoneChips({
         return (
           <button
             key={n}
+            type="button"
             onClick={() => onChange(n)}
             onDoubleClick={() => {
               if (!onRename) return;
@@ -2561,24 +2566,36 @@ function ZoneChips({
               setEditingZone(n);
             }}
             title={onRename ? "더블 클릭하면 구역명을 수정할 수 있어요" : undefined}
-            className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-medium border whitespace-nowrap transition-colors
+            className={`group inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-[13px] font-semibold whitespace-nowrap transition-all
               ${active
-                ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
-                : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
+                ? "border-[#2F3A2B] bg-[#2F3A2B] text-white shadow-sm dark:border-[#A8B87A] dark:bg-[#A8B87A] dark:text-zinc-950"
+                : "border-transparent bg-transparent text-[#6B5D47] hover:border-[#D9CDB8] hover:bg-white/80 hover:text-[#2A251D] dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
               }`}
           >
-            {zoneLabel(n)}
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                active
+                  ? "bg-[#D6C38D] dark:bg-zinc-950/70"
+                  : "bg-[#C7B99F] opacity-60 group-hover:opacity-100 dark:bg-zinc-600"
+              }`}
+            />
+            <span>{zoneLabel(n)}</span>
           </button>
         );
       })}
       {onAddRoom && (
         <button
+          type="button"
           onClick={onAddRoom}
-          className="px-3 py-1.5 rounded-full text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5 whitespace-nowrap"
+          className="ml-auto inline-flex h-10 items-center gap-2 rounded-lg border border-dashed border-[#A8B87A] bg-white/55 px-3.5 text-[13px] font-bold text-[#4D622C] transition-colors hover:border-[#6B7B3A] hover:bg-[#F3F7EA] dark:border-[#A8B87A]/50 dark:bg-zinc-900/60 dark:text-[#A8B87A] dark:hover:bg-zinc-800"
         >
-          + 새 락커룸
+          <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#6B7B3A] text-[15px] leading-none text-white dark:bg-[#A8B87A] dark:text-zinc-950">
+            +
+          </span>
+          <span className="whitespace-nowrap">새 락커룸</span>
         </button>
       )}
+      </div>
     </div>
   );
 }
