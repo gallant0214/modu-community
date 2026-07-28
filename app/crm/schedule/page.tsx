@@ -2057,8 +2057,13 @@ function ReservationDialog({
           {!reasonMode ? (
             <>
               {reservation.status === "booked" ? (
-                // 이미 예약 완료 상태 → '되돌리기' 숨기고 '출석 완료' 를 가로로 길게
-                <ActionBtn label="출석 완료" onClick={() => onChange("attended")} color="green" />
+                // 이미 예약 완료 상태 → '되돌리기' 숨기고 '출석 완료' 를 가로로 길게 (좌우 꽉)
+                <button
+                  onClick={() => onChange("attended")}
+                  className="w-full px-3 py-2.5 rounded-lg border border-[#6B7B3A] text-[13px] font-semibold text-[#6B7B3A] hover:bg-[#6B7B3A]/5"
+                >
+                  출석 완료
+                </button>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   <ActionBtn label="출석 완료" onClick={() => onChange("attended")} color="green" />
