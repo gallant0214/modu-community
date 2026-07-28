@@ -13,6 +13,7 @@ import {
   formatPhone,
 } from "../_components/crm-labels";
 import { useColumnWidths, ResizableTh } from "../_components/use-column-widths";
+import { unitToDays } from "@/app/lib/duration-convert";
 import { MembershipDetailModal } from "./_components/membership-detail-modal";
 
 const M_COLS = [
@@ -667,13 +668,8 @@ function IssueModal({
     setPlanName(`${p.name} (신규)`);
     setPriceWon(p.price_won);
     if (p.billing_mode === "period") {
-      const v = p.duration_value ?? 0;
-      const base =
-        p.duration_unit === "month"
-          ? v * 30
-          : p.duration_unit === "year"
-            ? v * 365
-            : v;
+      // 12개월 = 365일이 되도록 공통 헬퍼로 환산 (구 로직: month * 30 → 360일 오차)
+      const base = unitToDays(p.duration_value ?? 0, p.duration_unit);
       setDuration(Math.max(1, base + (p.service_days || 0)));
     }
   };
