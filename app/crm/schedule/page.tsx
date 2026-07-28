@@ -2055,6 +2055,23 @@ function ReservationDialog({
 
         <div className="mt-4 space-y-2">
           {!reasonMode ? (
+            reservation.status === "noshow" ? (
+              // 노쇼 처리된 예약은 되돌리기 + 닫기 만 노출
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => onChange("booked")}
+                  className="px-3 py-2.5 rounded-lg border border-[#6B7B3A] bg-[#6B7B3A] text-[13px] font-semibold text-white hover:bg-[#5a6932]"
+                >
+                  예약상태로 변경
+                </button>
+                <button
+                  onClick={onClose}
+                  className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                >
+                  닫기
+                </button>
+              </div>
+            ) : (
             <>
               {reservation.status === "booked" ? (
                 // 이미 예약 완료 상태 → '되돌리기' 숨기고 '출석 완료' 를 가로로 길게 (좌우 꽉)
@@ -2067,7 +2084,7 @@ function ReservationDialog({
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   <ActionBtn label="출석 완료" onClick={() => onChange("attended")} color="green" />
-                  <ActionBtn label="예약 완료로 되돌리기" onClick={() => onChange("booked")} color="neutral" />
+                  <ActionBtn label="예약상태로 변경" onClick={() => onChange("booked")} color="neutral" />
                 </div>
               )}
               <div className="grid grid-cols-2 gap-2">
@@ -2105,6 +2122,7 @@ function ReservationDialog({
                 </button>
               </div>
             </>
+            )
           ) : (
             <>
               <div className="text-[11.5px] font-medium text-[#6B5D47] dark:text-zinc-400">
