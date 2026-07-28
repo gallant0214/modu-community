@@ -3447,8 +3447,9 @@ function UsageIssueModal({
   const [vatIncluded, setVatIncluded] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "etc">("card");
   const [paymentCustom, setPaymentCustom] = useState("");
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [durationDays, setDurationDays] = useState(30);
+  // 상품 선택 전에는 비어 있음. 상품 픽 → applyProduct 에서 자동 채움.
+  const [startDate, setStartDate] = useState("");
+  const [durationDays, setDurationDays] = useState<number>(0);
   const [memo, setMemo] = useState("");
   const [sellerId, setSellerId] = useState<number | "">("");
   const [products, setProducts] = useState<UsageProduct[]>([]);
@@ -3505,7 +3506,8 @@ function UsageIssueModal({
     setMileageEarn(0);
     setMileageUsable(true);
     setMileageUse(0);
-    setDurationDays(30);
+    setStartDate("");
+    setDurationDays(0);
     setMemo("");
     setLockerZone("");
     setLockerId("");
@@ -3522,7 +3524,9 @@ function UsageIssueModal({
           : "대여 상품을 선택하거나 입력해 주세요";
     }
     // 락커는 배정(구역/자리)을 결제 후로 미룰 수 있음 → 필수 아님.
-    if (!startDate || !expiresAt) return "기간을 확인해 주세요";
+    if (!startDate) return "시작일을 선택해 주세요";
+    if (!durationDays || durationDays < 1) return "이용 기간을 입력해 주세요";
+    if (!expiresAt) return "기간을 확인해 주세요";
     if (!sellerId) return "판매자를 선택해 주세요";
     const loc = type === "locker" && lockerId
       ? lockers.find((l) => l.id === lockerId)
@@ -3573,8 +3577,9 @@ function UsageIssueModal({
       setVatIncluded(true);
       setPaymentMethod("card");
       setPaymentCustom("");
-      setStartDate(new Date().toISOString().slice(0, 10));
-      setDurationDays(30);
+      // 상품 선택 전엔 비어 있게 (applyProduct 가 채움)
+      setStartDate("");
+      setDurationDays(0);
       setMemo("");
       setLockerZone("");
       setLockerId("");
@@ -3594,11 +3599,22 @@ function UsageIssueModal({
   }, [open, staffList, myMemberId]);
 
   // 타입별 상품 카탈로그 로드 (프리필용)
+  //   + 유형이 바뀌면 왼쪽 폼을 초기화(이전 유형의 상품/기간/금액 잔재 제거).
+  //     장바구니(cart)/공통 결제 정보(sellerId, paymentMethod)는 그대로 유지.
   useEffect(() => {
     if (!open) return;
+    setName("");
+    setPriceWon(0);
+    setDiscountWon(0);
     setMileageEarn(0);
     setMileageUsable(true);
     setMileageUse(0);
+    setStartDate("");
+    setDurationDays(0);
+    setMemo("");
+    setLockerZone("");
+    setLockerId("");
+    setLockerPassword("");
     (async () => {
       const token = await getIdToken();
       if (!token) return;
@@ -3632,9 +3648,14 @@ function UsageIssueModal({
     setMileageUsable(p.mileage_usable !== false);
     setAttendanceMileageEarn(p.attendance_mileage_earn ?? 0);
     if (p.mileage_usable === false) setMileageUse(0);
+    // 상품 선택 시점에 시작일을 오늘로 자동 세팅 (사용자가 이후 수정 가능)
+    setStartDate(new Date().toISOString().slice(0, 10));
     if (p.duration_value && p.duration_unit) {
       const mult = p.duration_unit === "year" ? 365 : p.duration_unit === "month" ? 30 : 1;
       setDurationDays(Math.max(1, p.duration_value * mult));
+    } else {
+      // 기간 미설정 상품은 기본 30일로
+      setDurationDays(30);
     }
   };
 
@@ -3997,6 +4018,7 @@ function UsageIssueModal({
               className={crmInputClass}
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
+              placeholder="상품 선택 후 자동 입력"
             />
           </CrmField>
           <CrmField label="이용 기간(일)" required>
@@ -4004,8 +4026,11 @@ function UsageIssueModal({
               type="number"
               min={1}
               className={crmInputClass}
-              value={durationDays}
-              onChange={(e) => setDurationDays(Math.max(1, Number(e.target.value) || 0))}
+              value={durationDays > 0 ? durationDays : ""}
+              onChange={(e) =>
+                setDurationDays(Math.max(0, Number(e.target.value) || 0))
+              }
+              placeholder="상품 선택 후 자동 입력"
             />
           </CrmField>
         </div>
