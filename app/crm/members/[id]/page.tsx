@@ -3460,6 +3460,86 @@ function UsageIssueModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // 장바구니 — 여러 상품을 한 번의 결제로 처리하기 위한 스냅샷 배열
+  interface CartLine {
+    key: string;
+    type: UsageType;
+    name: string;
+    priceWon: number;
+    discountWon: number;
+    mileageEarn: number;
+    mileageUse: number;
+    attendanceMileageEarn: number;
+    mileageUsable: boolean;
+    vatIncluded: boolean;
+    startDate: string;
+    durationDays: number;
+    lockerId?: number;
+    lockerLabel?: string;
+    lockerPassword?: string;
+    paymentMethod: "cash" | "card" | "transfer" | "etc";
+    paymentCustom?: string;
+    sellerId: number;
+    memo: string;
+  }
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const cartTotalPrice = cart.reduce((s, c) => s + Math.max(0, c.priceWon - c.discountWon), 0);
+  const cartTotalMileageUse = cart.reduce((s, c) => s + c.mileageUse, 0);
+  const cartTotalMileageEarn = cart.reduce((s, c) => s + c.mileageEarn, 0);
+
+  const resetFormOnly = () => {
+    setName("");
+    setPriceWon(0);
+    setDiscountWon(0);
+    setMileageEarn(0);
+    setMileageUsable(true);
+    setMileageUse(0);
+    setDurationDays(30);
+    setMemo("");
+    setLockerZone("");
+    setLockerId("");
+    setLockerPassword("");
+    setError("");
+  };
+
+  const addToCart = (): string | null => {
+    if (!name.trim()) {
+      return type === "membership"
+        ? "회원권 상품을 선택하거나 입력해 주세요"
+        : type === "locker"
+          ? "락커 상품을 선택하거나 입력해 주세요"
+          : "대여 상품을 선택하거나 입력해 주세요";
+    }
+    if (type === "locker" && !lockerId) return "배정할 빈 자리를 선택해 주세요";
+    if (!startDate || !expiresAt) return "기간을 확인해 주세요";
+    if (!sellerId) return "판매자를 선택해 주세요";
+    const loc = type === "locker" ? lockers.find((l) => l.id === lockerId) : null;
+    const line: CartLine = {
+      key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type,
+      name: name.trim(),
+      priceWon,
+      discountWon,
+      mileageEarn,
+      mileageUse,
+      attendanceMileageEarn,
+      mileageUsable,
+      vatIncluded,
+      startDate,
+      durationDays,
+      lockerId: type === "locker" ? (lockerId as number) : undefined,
+      lockerLabel: loc ? `${loc.zone_name} ${loc.number}번` : undefined,
+      lockerPassword: type === "locker" ? lockerPassword : undefined,
+      paymentMethod,
+      paymentCustom: paymentMethod === "etc" ? paymentCustom : undefined,
+      sellerId: Number(sellerId),
+      memo,
+    };
+    setCart((cur) => [...cur, line]);
+    resetFormOnly();
+    return null;
+  };
+
   const expiresAt = (() => {
     if (!startDate) return "";
     const d = new Date(`${startDate}T00:00:00Z`);
@@ -3486,6 +3566,7 @@ function UsageIssueModal({
       setLockerZone("");
       setLockerId("");
       setLockerPassword("");
+      setCart([]);
       setError("");
     }
   }, [open]);
@@ -3544,20 +3625,142 @@ function UsageIssueModal({
     }
   };
 
+  // 단일 CartLine 을 서버에 발급.
+  const postLine = async (
+    line: CartLine,
+    headers: { authorization: string; "content-type": string }
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const lineExpires = (() => {
+      if (!line.startDate) return "";
+      const d = new Date(`${line.startDate}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + Math.max(1, line.durationDays));
+      return d.toISOString().slice(0, 10);
+    })();
+    try {
+      let res: Response;
+      if (line.type === "membership") {
+        res = await fetch("/api/crm/memberships", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            member_id: memberId,
+            seller_member_id: line.sellerId,
+            plan_name: line.name,
+            duration_days: line.durationDays,
+            price_won: line.priceWon,
+            discount_won: line.discountWon,
+            mileage_earned: line.mileageEarn,
+            mileage_used: line.mileageUse,
+            attendance_mileage_earn: line.attendanceMileageEarn,
+            vat_included: line.vatIncluded,
+            payment_method: line.paymentMethod,
+            payment_method_custom: line.paymentCustom,
+            start_date: line.startDate,
+            expires_at: lineExpires,
+            memo: line.memo || undefined,
+          }),
+        });
+      } else if (line.type === "apparel") {
+        res = await fetch("/api/crm/rentals", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            member_id: memberId,
+            seller_member_id: line.sellerId,
+            item_name: line.name,
+            price_won: line.priceWon,
+            discount_won: line.discountWon,
+            mileage_earned: line.mileageEarn,
+            mileage_used: line.mileageUse,
+            vat_included: line.vatIncluded,
+            payment_method: line.paymentMethod,
+            payment_method_custom: line.paymentCustom,
+            start_date: line.startDate,
+            expires_at: lineExpires,
+            memo: line.memo || undefined,
+          }),
+        });
+      } else {
+        // locker
+        if (!line.lockerId) return { ok: false, error: "락커 자리 누락" };
+        const assignRes = await fetch(`/api/crm/lockers/${line.lockerId}`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({
+            action: "assign",
+            member_id: memberId,
+            start_date: line.startDate,
+            expires_at: lineExpires,
+            password: line.lockerPassword || undefined,
+            memo: line.memo || undefined,
+          }),
+        });
+        const aData = await assignRes.json();
+        if (!assignRes.ok) return { ok: false, error: aData?.error || "락커 배정 실패" };
+
+        res = await fetch("/api/crm/rentals", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            member_id: memberId,
+            seller_member_id: line.sellerId,
+            item_name: line.name,
+            price_won: line.priceWon,
+            discount_won: line.discountWon,
+            mileage_earned: line.mileageEarn,
+            mileage_used: line.mileageUse,
+            vat_included: line.vatIncluded,
+            payment_method: line.paymentMethod,
+            payment_method_custom: line.paymentCustom,
+            start_date: line.startDate,
+            expires_at: lineExpires,
+            memo: [line.lockerLabel, line.memo].filter(Boolean).join(" · "),
+          }),
+        });
+      }
+      const data = await res.json();
+      if (!res.ok) return { ok: false, error: data?.error || "발급 실패" };
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "네트워크 오류" };
+    }
+  };
+
   const submit = async () => {
     setError("");
-    if (!name.trim()) {
-      return setError(
-        type === "membership"
-          ? "회원권 상품을 선택하거나 입력해 주세요"
-          : type === "locker"
-            ? "락커 상품을 선택하거나 입력해 주세요"
-            : "대여 상품을 선택하거나 입력해 주세요"
-      );
+    // 장바구니에 아무것도 없고 현재 폼에 상품이 입력돼 있으면 자동으로 담고 결제.
+    let toProcess: CartLine[] = cart;
+    if (toProcess.length === 0) {
+      const err = addToCart();
+      if (err) return setError(err);
+      // addToCart 는 setCart 를 호출하므로 다음 렌더에서만 반영됨.
+      // 즉시 처리 위해 로컬로 다시 만든다.
+      const loc = type === "locker" ? lockers.find((l) => l.id === lockerId) : null;
+      toProcess = [
+        {
+          key: `now-${Date.now()}`,
+          type,
+          name: name.trim(),
+          priceWon,
+          discountWon,
+          mileageEarn,
+          mileageUse,
+          attendanceMileageEarn,
+          mileageUsable,
+          vatIncluded,
+          startDate,
+          durationDays,
+          lockerId: type === "locker" ? (lockerId as number) : undefined,
+          lockerLabel: loc ? `${loc.zone_name} ${loc.number}번` : undefined,
+          lockerPassword: type === "locker" ? lockerPassword : undefined,
+          paymentMethod,
+          paymentCustom: paymentMethod === "etc" ? paymentCustom : undefined,
+          sellerId: Number(sellerId),
+          memo,
+        },
+      ];
     }
-    if (type === "locker" && !lockerId) return setError("배정할 빈 자리를 선택해 주세요");
-    if (!startDate || !expiresAt) return setError("기간을 확인해 주세요");
-    if (!sellerId) return setError("판매자를 선택해 주세요");
+
     setSubmitting(true);
     try {
       const token = await getIdToken();
@@ -3565,90 +3768,12 @@ function UsageIssueModal({
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
       };
-      let res: Response;
-      if (type === "membership") {
-        res = await fetch("/api/crm/memberships", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            member_id: memberId,
-            seller_member_id: Number(sellerId),
-            plan_name: name.trim(),
-            duration_days: durationDays,
-            price_won: priceWon,
-            discount_won: discountWon,
-            mileage_earned: mileageEarn,
-            mileage_used: mileageUse,
-            attendance_mileage_earn: attendanceMileageEarn,
-            vat_included: vatIncluded,
-            payment_method: paymentMethod,
-            payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
-            start_date: startDate,
-            expires_at: expiresAt,
-            memo: memo || undefined,
-          }),
-        });
-      } else if (type === "apparel") {
-        res = await fetch("/api/crm/rentals", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            member_id: memberId,
-            seller_member_id: Number(sellerId),
-            item_name: name.trim(),
-            price_won: priceWon,
-            discount_won: discountWon,
-            mileage_earned: mileageEarn,
-            mileage_used: mileageUse,
-            vat_included: vatIncluded,
-            payment_method: paymentMethod,
-            payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
-            start_date: startDate,
-            expires_at: expiresAt,
-            memo: memo || undefined,
-          }),
-        });
-      } else {
-        // locker: ① 물리 락커 배정 ② 판매 기록(crm_rentals, 매출·마일리지)
-        const loc = lockers.find((l) => l.id === lockerId);
-        const locLabel = loc ? `락커 ${loc.zone_name} ${loc.number}번` : "락커";
-        const assignRes = await fetch(`/api/crm/lockers/${lockerId}`, {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({
-            action: "assign",
-            member_id: memberId,
-            start_date: startDate,
-            expires_at: expiresAt,
-            password: lockerPassword || undefined,
-            memo: memo || undefined,
-          }),
-        });
-        const assignData = await assignRes.json();
-        if (!assignRes.ok) throw new Error(assignData?.error || "락커 배정 실패");
-
-        res = await fetch("/api/crm/rentals", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            member_id: memberId,
-            seller_member_id: Number(sellerId),
-            item_name: name.trim(),
-            price_won: priceWon,
-            discount_won: discountWon,
-            mileage_earned: mileageEarn,
-            mileage_used: mileageUse,
-            vat_included: vatIncluded,
-            payment_method: paymentMethod,
-            payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
-            start_date: startDate,
-            expires_at: expiresAt,
-            memo: [locLabel, memo].filter(Boolean).join(" · "),
-          }),
-        });
+      const failed: string[] = [];
+      for (const line of toProcess) {
+        const r = await postLine(line, headers);
+        if (!r.ok) failed.push(`${line.name}: ${r.error}`);
       }
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "발급 실패");
+      if (failed.length > 0) throw new Error(failed.join(" · "));
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
@@ -3658,8 +3783,9 @@ function UsageIssueModal({
   };
 
   return (
-    <CrmModal open={open} onClose={onClose} title="회원권 발급" size="lg">
-      <div className="space-y-3">
+    <CrmModal open={open} onClose={onClose} title="회원권 발급" size="xl">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-4">
+        <div className="space-y-3">
         <CrmField label="종류" required>
           <div className="grid grid-cols-3 gap-2">
             {USAGE_TABS.map((t) => (
@@ -3970,12 +4096,123 @@ function UsageIssueModal({
           </div>
         )}
         <button
-          onClick={submit}
+          onClick={() => {
+            const err = addToCart();
+            if (err) setError(err);
+            else setError("");
+          }}
           disabled={submitting}
           className="w-full px-4 py-3 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[14.5px] font-semibold hover:bg-[#5a6932] mt-2"
         >
-          {submitting ? "발급 중…" : "발급"}
+          장바구니에 담기
         </button>
+        </div>
+
+        {/* 우측: 장바구니 + 총액 + 결제하기 */}
+        <aside className="md:sticky md:top-0 md:self-start space-y-3">
+          <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 p-3 space-y-2">
+            <div className="flex items-baseline justify-between">
+              <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                장바구니
+              </span>
+              <span className="text-[11.5px] text-[#A89B80]">{cart.length}건</span>
+            </div>
+            {cart.length === 0 ? (
+              <div className="py-6 text-center text-[12px] text-[#A89B80]">
+                왼쪽에서 상품을 담아주세요
+              </div>
+            ) : (
+              <ul className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                {cart.map((c, i) => {
+                  const typeLbl =
+                    c.type === "membership" ? "회원권" : c.type === "locker" ? "락커" : "운동복";
+                  const net = Math.max(0, c.priceWon - c.discountWon);
+                  return (
+                    <li
+                      key={c.key}
+                      className="rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-2 text-[12.5px]"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded-full text-[10.5px] font-semibold bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]">
+                              {typeLbl}
+                            </span>
+                            {c.lockerLabel && (
+                              <span className="text-[10.5px] text-[#8C8270]">{c.lockerLabel}</span>
+                            )}
+                          </div>
+                          <div className="mt-1 font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
+                            {c.name}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-[#8C8270]">
+                            {c.startDate} · {c.durationDays}일
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCart((cur) => cur.filter((_, idx) => idx !== i))
+                          }
+                          className="text-[11px] text-red-600 hover:underline shrink-0"
+                        >
+                          제거
+                        </button>
+                      </div>
+                      <div className="mt-1 flex items-baseline justify-between">
+                        <span className="text-[10.5px] text-[#A89B80]">
+                          {c.discountWon > 0
+                            ? `${formatWon(c.priceWon + c.discountWon)}원 - ${formatWon(c.discountWon)}원`
+                            : ""}
+                        </span>
+                        <span className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100 tabular-nums">
+                          {formatWon(net)}원
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          <div className="rounded-xl border-2 border-[#6B7B3A]/40 bg-[#6B7B3A]/5 p-3 space-y-1">
+            <div className="flex items-baseline justify-between">
+              <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">총 결제 금액</span>
+              <span className="text-[18px] font-extrabold text-[#3A342A] dark:text-zinc-100 tabular-nums">
+                {formatWon(cartTotalPrice)}원
+              </span>
+            </div>
+            {cartTotalMileageUse > 0 && (
+              <div className="flex items-baseline justify-between text-[11px] text-[#8C8270]">
+                <span>마일리지 사용</span>
+                <span>-{cartTotalMileageUse.toLocaleString()}P</span>
+              </div>
+            )}
+            {cartTotalMileageEarn > 0 && (
+              <div className="flex items-baseline justify-between text-[11px] text-[#6B7B3A]">
+                <span>적립 예정</span>
+                <span>+{cartTotalMileageEarn.toLocaleString()}P</span>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={submit}
+            disabled={submitting || (cart.length === 0 && !name.trim())}
+            className="w-full px-4 py-3 rounded-lg bg-[#B47B2A] disabled:opacity-60 text-white text-[14.5px] font-bold hover:bg-[#9c682a]"
+          >
+            {submitting
+              ? "결제 중…"
+              : cart.length === 0
+                ? "폼 항목 결제하기"
+                : `${cart.length}건 결제하기`}
+          </button>
+          <p className="text-[10.5px] text-[#A89B80] leading-relaxed">
+            &lsquo;장바구니에 담기&rsquo; 로 여러 상품을 추가한 뒤 한 번에 결제하세요. 담긴 상품이 없으면 왼쪽 폼의 항목을 바로 결제합니다.
+          </p>
+        </aside>
       </div>
     </CrmModal>
   );

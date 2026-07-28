@@ -7,8 +7,8 @@ interface Props {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  /** sm | md | lg */
-  size?: "sm" | "md" | "lg";
+  /** sm | md | lg | xl */
+  size?: "sm" | "md" | "lg" | "xl";
   /** 헤더 우측에 기본 X 대신 커스텀 액션(예: [수정][닫기]) 을 넣고 싶을 때 */
   headerActions?: React.ReactNode;
 }
@@ -44,7 +44,13 @@ export function CrmModal({ open, onClose, title, children, size = "md", headerAc
   if (!open) return null;
 
   const widthClass =
-    size === "lg" ? "max-w-2xl" : size === "sm" ? "max-w-sm" : "max-w-md";
+    size === "xl"
+      ? "max-w-5xl"
+      : size === "lg"
+        ? "max-w-2xl"
+        : size === "sm"
+          ? "max-w-sm"
+          : "max-w-md";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
