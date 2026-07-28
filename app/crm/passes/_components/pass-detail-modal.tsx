@@ -84,7 +84,18 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
   const [expiresAt, setExpiresAt] = useState("");
   const [memo, setMemo] = useState("");
   const [coTrainers, setCoTrainers] = useState<{ id: number; name: string }[]>([]);
-  const [reservations, setReservations] = useState<{ status: string }[]>([]);
+  const [reservations, setReservations] = useState<
+    {
+      id: number;
+      starts_at: string;
+      ends_at: string;
+      status: string;
+      consumed: boolean;
+      cancelled_reason: string | null;
+      cancelled_at: string | null;
+    }[]
+  >([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   const loadPass = useCallback(async () => {
     if (!passId) return;
@@ -303,8 +314,19 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
 
             {/* 예약·출석 현황 */}
             <div className="mt-3 pt-3 border-t border-[#EFE7D5] dark:border-zinc-800">
-              <div className="text-[11.5px] font-semibold text-[#8C8270] dark:text-zinc-500 mb-2">
-                예약·출석 현황 (전체 {reservations.length}건)
+              <div className="flex items-baseline justify-between">
+                <div className="text-[11.5px] font-semibold text-[#8C8270] dark:text-zinc-500 mb-2">
+                  예약·출석 현황 (전체 {reservations.length}건)
+                </div>
+                {reservations.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowHistory((v) => !v)}
+                    className="text-[11.5px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+                  >
+                    {showHistory ? "이력 접기" : "이력 자세히 보기"}
+                  </button>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 {([
@@ -327,6 +349,56 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
                   );
                 })}
               </div>
+
+              {showHistory && (
+                <div className="mt-3 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800 max-h-[280px] overflow-y-auto text-[12px]">
+                  {[...reservations]
+                    .sort((a, b) => (a.starts_at < b.starts_at ? 1 : -1))
+                    .map((r) => {
+                      const c = RESERVATION_STATUS_COLOR[r.status];
+                      const labelMap: Record<string, string> = {
+                        requested: "예약대기",
+                        booked: "예약완료",
+                        attended: "출석완료",
+                        cancelled: "취소",
+                        noshow: "노쇼",
+                        rejected: "반려",
+                      };
+                      const kstDate = (iso: string) => {
+                        const d = new Date(iso);
+                        const k = new Date(d.getTime() + 9 * 3600 * 1000);
+                        return `${k.getUTCMonth() + 1}/${k.getUTCDate()} ${String(k.getUTCHours()).padStart(2, "0")}:${String(k.getUTCMinutes()).padStart(2, "0")}`;
+                      };
+                      return (
+                        <div key={r.id} className="px-3 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[#3A342A] dark:text-zinc-200 tabular-nums">
+                              {kstDate(r.starts_at)}~{kstDate(r.ends_at).split(" ")[1]}
+                            </span>
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold ${c?.bg ?? "bg-[#F5F0E5]"} ${c?.text ?? "text-[#6B5D47]"}`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${c?.dot ?? "bg-zinc-400"}`} />
+                              {labelMap[r.status] ?? r.status}
+                              {r.consumed && <span className="ml-0.5">·차감</span>}
+                            </span>
+                          </div>
+                          {(r.status === "cancelled" || r.status === "noshow") && r.cancelled_reason && (
+                            <div className="mt-1 text-[11px] text-[#6B5D47] dark:text-zinc-400 leading-snug">
+                              <span className="text-[#A89B80]">{r.status === "noshow" ? "노쇼 사유" : "취소 사유"}:</span>{" "}
+                              <span className="whitespace-pre-wrap break-words">
+                                {r.cancelled_reason}
+                              </span>
+                              {r.cancelled_at && (
+                                <span className="ml-1 text-[#A89B80]">({kstDate(r.cancelled_at)})</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
             </div>
           </section>
 

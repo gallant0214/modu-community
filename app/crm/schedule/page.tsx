@@ -1987,7 +1987,16 @@ function ReservationDialog({
   onEdit: () => void;
 }) {
   const [reason, setReason] = useState<string>("");
-  const [cancelMode, setCancelMode] = useState(false);
+  const [reasonNote, setReasonNote] = useState<string>("");
+  const [reasonMode, setReasonMode] = useState<null | "cancelled" | "noshow">(null);
+  const cancelMode = reasonMode === "cancelled";
+  const noshowMode = reasonMode === "noshow";
+  const commitReason = () => {
+    // 사전 정의 사유 + 자유 텍스트 병합 (둘 다 있으면 콜론으로 연결)
+    const combined = [reason, reasonNote.trim()].filter(Boolean).join(" · ");
+    if (!combined) return;
+    onChange(reasonMode as "cancelled" | "noshow", combined);
+  };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -2042,16 +2051,31 @@ function ReservationDialog({
         </div>
 
         <div className="mt-4 space-y-2">
-          {!cancelMode ? (
+          {!reasonMode ? (
             <>
               <div className="grid grid-cols-2 gap-2">
                 <ActionBtn label="출석 완료" onClick={() => onChange("attended")} color="green" />
                 <ActionBtn label="예약 완료로 되돌리기" onClick={() => onChange("booked")} color="neutral" />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <ActionBtn label="예약 취소" onClick={() => setCancelMode(true)} color="neutral" />
-                {/* 노쇼 = 회원이 시간을 지키지 않은 것 → 사유 선택 불필요, 바로 처리 */}
-                <ActionBtn label="노쇼(차감 취소)" onClick={() => onChange("noshow")} color="red" />
+                <ActionBtn
+                  label="예약 취소"
+                  onClick={() => {
+                    setReasonMode("cancelled");
+                    setReason("");
+                    setReasonNote("");
+                  }}
+                  color="neutral"
+                />
+                <ActionBtn
+                  label="노쇼(차감 취소)"
+                  onClick={() => {
+                    setReasonMode("noshow");
+                    setReason("");
+                    setReasonNote("");
+                  }}
+                  color="red"
+                />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -2071,10 +2095,10 @@ function ReservationDialog({
           ) : (
             <>
               <div className="text-[11.5px] font-medium text-[#6B5D47] dark:text-zinc-400">
-                취소 사유를 선택해 주세요
+                {cancelMode ? "취소 사유를 선택해 주세요" : "노쇼 사유를 선택해 주세요"}
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {CANCEL_REASONS.map((r) => (
+                {(cancelMode ? CANCEL_REASONS : NOSHOW_REASONS).map((r) => (
                   <button
                     key={r}
                     type="button"
@@ -2089,15 +2113,39 @@ function ReservationDialog({
                   </button>
                 ))}
               </div>
+              <textarea
+                value={reasonNote}
+                onChange={(e) => setReasonNote(e.target.value.slice(0, 200))}
+                placeholder={
+                  cancelMode
+                    ? "추가 사유 (예: 회원이 감기로 못 오심). 선택 사유 없이 이 칸만 채워도 돼요."
+                    : "추가 사유 (예: 연락 없이 미출석). 선택 사유 없이 이 칸만 채워도 돼요."
+                }
+                maxLength={200}
+                rows={2}
+                className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] resize-none"
+              />
               <ActionBtn
-                label={reason ? `'${reason}'으로 예약 취소` : "취소 확정"}
-                onClick={() => reason && onChange("cancelled", reason)}
+                label={
+                  cancelMode
+                    ? reason || reasonNote.trim()
+                      ? "이 사유로 예약 취소"
+                      : "사유를 입력해 주세요"
+                    : reason || reasonNote.trim()
+                      ? "이 사유로 노쇼 처리"
+                      : "사유를 입력해 주세요"
+                }
+                onClick={() => {
+                  if (!reason && !reasonNote.trim()) return;
+                  commitReason();
+                }}
                 color="red"
               />
               <button
                 onClick={() => {
-                  setCancelMode(false);
+                  setReasonMode(null);
                   setReason("");
+                  setReasonNote("");
                 }}
                 className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
               >
@@ -2112,6 +2160,7 @@ function ReservationDialog({
 }
 
 const CANCEL_REASONS = ["강사 요청", "회원 요청"] as const;
+const NOSHOW_REASONS = ["연락 없이 미출석", "지각 후 미출석", "회원 사정"] as const;
 
 function ActionBtn({
   label,
