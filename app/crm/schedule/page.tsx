@@ -1992,8 +1992,11 @@ function ReservationDialog({
   const cancelMode = reasonMode === "cancelled";
   const noshowMode = reasonMode === "noshow";
   const commitReason = () => {
-    // 사전 정의 사유 + 자유 텍스트 병합 (둘 다 있으면 콜론으로 연결)
-    const combined = [reason, reasonNote.trim()].filter(Boolean).join(" · ");
+    // 사전 정의 사유 + 자유 텍스트 병합.
+    //   '사유 입력' 프리셋은 라벨 자체를 저장하지 않고 자유 텍스트만 사용.
+    const isCustomOnly = reason === CUSTOM_REASON_SENTINEL;
+    const parts = isCustomOnly ? [reasonNote.trim()] : [reason, reasonNote.trim()];
+    const combined = parts.filter(Boolean).join(" · ");
     if (!combined) return;
     onChange(reasonMode as "cancelled" | "noshow", combined);
   };
@@ -2125,22 +2128,26 @@ function ReservationDialog({
                 rows={2}
                 className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] resize-none"
               />
-              <ActionBtn
-                label={
-                  cancelMode
-                    ? reason || reasonNote.trim()
-                      ? "이 사유로 예약 취소"
-                      : "사유를 입력해 주세요"
-                    : reason || reasonNote.trim()
-                      ? "이 사유로 노쇼 처리"
-                      : "사유를 입력해 주세요"
-                }
-                onClick={() => {
-                  if (!reason && !reasonNote.trim()) return;
-                  commitReason();
-                }}
-                color="red"
-              />
+              {(() => {
+                const needsCustomText =
+                  reason === CUSTOM_REASON_SENTINEL || (!reason && !reasonNote.trim());
+                const noteMissing = needsCustomText && !reasonNote.trim();
+                const label = noteMissing
+                  ? "사유를 입력해 주세요"
+                  : cancelMode
+                    ? "이 사유로 예약 취소"
+                    : "이 사유로 노쇼 처리";
+                return (
+                  <ActionBtn
+                    label={label}
+                    onClick={() => {
+                      if (noteMissing) return;
+                      commitReason();
+                    }}
+                    color="red"
+                  />
+                );
+              })()}
               <button
                 onClick={() => {
                   setReasonMode(null);
@@ -2160,7 +2167,9 @@ function ReservationDialog({
 }
 
 const CANCEL_REASONS = ["강사 요청", "회원 요청"] as const;
-const NOSHOW_REASONS = ["연락 없이 미출석", "지각 후 미출석", "회원 사정"] as const;
+// '사유 입력' 은 프리셋 텍스트를 저장하지 않고 자유 텍스트만 사용하는 스페셜 버튼.
+const NOSHOW_REASONS = ["연락 없이 미출석", "당일 취소", "사유 입력"] as const;
+const CUSTOM_REASON_SENTINEL = "사유 입력";
 
 function ActionBtn({
   label,
