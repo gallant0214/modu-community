@@ -726,34 +726,36 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
       {/* 회원권 전용: 입장 가능 요일/시간 */}
       {type === "membership" && (
         <Section title="입장 가능 요일 / 시간 설정">
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {(
-              [
-                { key: "unlimited", label: "무제한 선택하기" },
-                { key: "custom", label: "설정하기" },
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => setAccessMode(opt.key)}
-                className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors
-                  ${accessMode === opt.key
-                    ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
-                    : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
-                  }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-
           {accessMode === "unlimited" ? (
-            <p className="text-[12px] text-[#A89B80]">
-              365일 24시간 언제든 입장 가능해요.
-            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setAccessMode("custom")}
+                className="px-3 py-1.5 rounded-full text-[12.5px] font-semibold border border-[#6B7B3A] bg-[#6B7B3A] text-white hover:bg-[#5a6932]"
+              >
+                설정하기
+              </button>
+              <span className="text-[12px] text-[#A89B80]">
+                지금은 365일 24시간 언제든 입장 가능해요. 특정 요일·시간대만 열려면 설정하세요.
+              </span>
+            </div>
           ) : (
             <div className="space-y-3">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccessMode("unlimited");
+                    setOperatingDays([0, 1, 2, 3, 4, 5, 6]);
+                    setIs24h(false);
+                    setOpenTime("09:00");
+                    setCloseTime("18:00");
+                  }}
+                  className="text-[12px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+                >
+                  ← 무제한으로 되돌리기
+                </button>
+              </div>
               <div>
                 <FieldLabel>입장 가능 요일</FieldLabel>
                 <div className="flex flex-wrap gap-1.5">
