@@ -274,13 +274,14 @@ export async function PATCH(
     else patch.left_at = null;
   }
   if (body.display_name !== undefined) {
-    const dn = body.display_name.trim();
+    const dn = (body.display_name ?? "").trim();
     if (!dn) return NextResponse.json({ error: "표시명을 입력해주세요" }, { status: 400 });
     patch.display_name = dn;
   }
-  if (body.phone !== undefined) patch.phone = body.phone.trim() || null;
-  if (body.email !== undefined) patch.email = body.email.trim() || null;
-  if (body.address !== undefined) patch.address = body.address.trim() || null;
+  // null 이 올 수 있어 옵셔널 체이닝으로 안전하게 trim (앱은 빈 값을 null 로 보냄)
+  if (body.phone !== undefined) patch.phone = body.phone?.trim() || null;
+  if (body.email !== undefined) patch.email = body.email?.trim() || null;
+  if (body.address !== undefined) patch.address = body.address?.trim() || null;
   if (body.employment_status !== undefined) {
     if (!["working", "on_leave", "resigned"].includes(body.employment_status)) {
       return NextResponse.json({ error: "재직상태 값이 잘못됨" }, { status: 400 });
