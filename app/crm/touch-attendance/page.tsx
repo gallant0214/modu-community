@@ -15,8 +15,35 @@ interface MemberLite {
   has_face?: boolean;
 }
 
+interface CheckinSummary {
+  mileage: number;
+  coupon_count: number;
+  can_enter: boolean;
+  memberships: { id: number; plan_name: string; expires_at: string; is_paused: boolean }[];
+  passes: {
+    id: number;
+    lesson_kind: string;
+    remaining_sessions: number;
+    total_sessions: number;
+    expires_at: string;
+    is_paused: boolean;
+  }[];
+  rentals: { id: number; item_name: string; expires_at: string }[];
+  lockers: { id: number; number: number; expires_at: string; zone_name: string }[];
+  week_present: boolean[];
+  week_start_ymd: string;
+}
+
 type Result =
-  | { kind: "success"; name: string; duplicate?: boolean; mileageAwarded?: number }
+  | {
+      kind: "success";
+      name: string;
+      birth: string | null;
+      phone: string | null;
+      duplicate?: boolean;
+      mileageAwarded?: number;
+      summary?: CheckinSummary;
+    }
   | { kind: "error"; message: string };
 
 /**
@@ -77,9 +104,9 @@ export default function TouchAttendancePage() {
     setBusy(false);
   }, []);
 
-  // 결과 토스트 자동 사라짐 + 입력 초기화
+  // 에러 토스트만 자동 사라짐(3.5초). 성공은 CheckinResultScreen 이 카운트다운 자체 관리.
   useEffect(() => {
-    if (!result) return;
+    if (!result || result.kind !== "error") return;
     const t = setTimeout(() => {
       setResult(null);
       reset();
@@ -122,8 +149,11 @@ export default function TouchAttendancePage() {
         setResult({
           kind: "success",
           name: data.member?.name ?? member.name,
+          birth: data.member?.birth ?? null,
+          phone: data.member?.phone ?? member.phone ?? null,
           duplicate: data.duplicate,
           mileageAwarded: data.mileage_awarded ?? 0,
+          summary: data.summary as CheckinSummary | undefined,
         });
         // 서버에서 매칭된 음성 안내(예: 회원권 만료 임박) 재생
         speakMessages(Array.isArray(data.voice_messages) ? data.voice_messages : []);
@@ -263,33 +293,24 @@ export default function TouchAttendancePage() {
         <FaceAttendance />
       ) : (
         <>
-      {/* 결과 토스트 */}
-      {result && (
+      {/* 결과 화면 (에러는 상단 토스트, 성공은 전체 화면 카드) */}
+      {result && result.kind === "error" && (
         <div
-          className={`mb-5 w-full px-5 py-4 rounded-2xl border-2 text-center ${landscape ? "max-w-[min(96vw,1120px)]" : "max-w-[min(92vw,560px)]"}
-            ${result.kind === "success"
-              ? result.duplicate
-                ? "border-[#B47B2A] bg-amber-50 text-[#B47B2A]"
-                : "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A]"
-              : "border-red-300 bg-red-50 text-red-700"
-            }`}
+          className={`mb-5 w-full px-5 py-4 rounded-2xl border-2 text-center border-red-300 bg-red-50 text-red-700 ${
+            landscape ? "max-w-[min(96vw,1120px)]" : "max-w-[min(92vw,560px)]"
+          }`}
         >
-          {result.kind === "success" ? (
-            <>
-              <div className="text-[18px] font-medium">
-                {result.duplicate ? "이미 출석했어요" : "출석 완료!"}
-              </div>
-              <div className="text-[26px] font-bold mt-0.5">{result.name}</div>
-              {!result.duplicate && !!result.mileageAwarded && result.mileageAwarded > 0 && (
-                <div className="mt-2 inline-block px-3 py-1 rounded-full bg-[#6B7B3A] text-white text-[13px] font-bold">
-                  출석 마일리지 +{result.mileageAwarded.toLocaleString()}P
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="text-[16px] font-semibold">{result.message}</div>
-          )}
+          <div className="text-[16px] font-semibold">{result.message}</div>
         </div>
+      )}
+      {result && result.kind === "success" && (
+        <CheckinResultScreen
+          data={result}
+          onClose={() => {
+            setResult(null);
+            reset();
+          }}
+        />
       )}
 
       {enrollTarget ? (
@@ -397,4 +418,324 @@ function maskPhone(phone: string): string {
   const parts = f.split("-");
   if (parts.length === 3) return `${parts[0]}-${parts[1]}-****`;
   return f;
+}
+
+function maskName(name: string): string {
+  if (!name) return "";
+  if (name.length <= 1) return name;
+  if (name.length === 2) return `${name[0]}*`;
+  return `${name[0]}*${name.slice(-1)}`;
+}
+
+function maskPhoneMiddle(phone: string | null): string {
+  if (!phone) return "-";
+  const f = formatPhone(phone);
+  const parts = f.split("-");
+  if (parts.length !== 3) return f;
+  const mid = parts[1];
+  const last = parts[2];
+  const midMasked = mid.length >= 4 ? mid.slice(0, 2) + "*".repeat(mid.length - 2) : mid;
+  const lastMasked = last.length >= 4 ? last.slice(0, 2) + "*".repeat(last.length - 2) : last;
+  return `${parts[0]}-${midMasked}-${lastMasked}`;
+}
+
+const DOW_KOR = ["일", "월", "화", "수", "목", "금", "토"];
+
+/**
+ * 체크인 성공 시 회원과 함께 있는 자리에서 보여주는 전체화면 결과 카드.
+ * - 입장 가/불가 시각적 구분
+ * - 회원 이름·연락처 마스킹 표시
+ * - 유효 이용권/락커/대여권 요약
+ * - 이번 주 출석 요일 뱃지
+ * - 3초 카운트다운 후 자동 닫힘 (X / 처음으로 돌아가기 클릭 시 즉시)
+ */
+function CheckinResultScreen({
+  data,
+  onClose,
+}: {
+  data: {
+    kind: "success";
+    name: string;
+    birth: string | null;
+    phone: string | null;
+    duplicate?: boolean;
+    mileageAwarded?: number;
+    summary?: CheckinSummary;
+  };
+  onClose: () => void;
+}) {
+  const [remain, setRemain] = useState(3);
+  useEffect(() => {
+    if (remain <= 0) {
+      onClose();
+      return;
+    }
+    const t = setTimeout(() => setRemain((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [remain, onClose]);
+
+  const s = data.summary;
+  // 입장 가능 판정: summary 없으면 성공 자체를 가능으로 간주 (하위 호환)
+  const canEnter = s ? s.can_enter : true;
+  const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
+  const todayDow = nowKst.getUTCDay();
+
+  return (
+    <div className="fixed inset-0 z-40 bg-[#111214] text-white flex items-center justify-center px-4 py-6 overflow-y-auto">
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="닫기"
+        className="absolute top-5 right-5 w-11 h-11 flex items-center justify-center rounded-full hover:bg-white/10 text-white/80"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+
+      <div className="w-full max-w-[1180px] grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        {/* 좌측: 상태 + 회원 카드 + 이번 주 출석 */}
+        <div className="rounded-2xl bg-[#1E2024] p-5 md:p-7 space-y-5">
+          {/* 상태 표시 */}
+          <div className="flex flex-col items-center">
+            {canEnter ? (
+              <div className="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center">
+                <svg className="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-red-500/15 border border-red-500/40 flex items-center justify-center">
+                <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" transform="rotate(45 12 12)" />
+                </svg>
+              </div>
+            )}
+            <div className="mt-3 text-[26px] md:text-[30px] font-bold">
+              {canEnter ? (
+                data.duplicate ? (
+                  <>
+                    이미 <span className="text-amber-400">출석</span>했어요
+                  </>
+                ) : (
+                  <>
+                    입장이 <span className="text-emerald-400">완료</span>됐어요
+                  </>
+                )
+              ) : (
+                <>
+                  입장이 <span className="text-red-400">불가</span>합니다
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* 회원 카드 */}
+          <div className="rounded-xl bg-white/[0.03] border border-white/10 p-4">
+            <div className="flex items-start gap-4">
+              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-2xl text-white/50">
+                <svg className="w-9 h-9" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="text-[24px] font-bold">{maskName(data.name)}</div>
+                <div className="flex gap-x-4 text-[13px] text-white/60">
+                  <span>생년월일</span>
+                  <span className="text-white/90 tabular-nums">
+                    {data.birth ? data.birth : "-"}
+                  </span>
+                </div>
+                <div className="flex gap-x-4 text-[13px] text-white/60">
+                  <span>연락처</span>
+                  <span className="text-white/90 tabular-nums">{maskPhoneMiddle(data.phone)}</span>
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between text-[13.5px]">
+              <div className="flex items-center gap-2">
+                <span className="text-white/60">마일리지</span>
+                <span className="font-bold text-white tabular-nums">
+                  {(s?.mileage ?? 0).toLocaleString()}
+                </span>
+                <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  M
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-white/60">쿠폰</span>
+                <span className="font-bold text-white tabular-nums">
+                  {s?.coupon_count ?? 0}장
+                </span>
+              </div>
+            </div>
+            {!!data.mileageAwarded && data.mileageAwarded > 0 && (
+              <div className="mt-2 text-center text-[12px] text-emerald-300">
+                오늘 출석 마일리지 +{data.mileageAwarded.toLocaleString()}P 적립
+              </div>
+            )}
+          </div>
+
+          {/* 이번 주 출석 */}
+          <div className="rounded-xl bg-white/[0.03] border border-white/10 p-4">
+            <div className="flex items-center gap-2 text-[13px] text-white/70 mb-3">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M8 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2h-3M8 3v4h8V3M8 3h8" />
+              </svg>
+              <span className="font-semibold">출석 현황</span>
+            </div>
+            <div className="grid grid-cols-7 gap-1.5 md:gap-2">
+              {DOW_KOR.map((d, i) => {
+                const present = s?.week_present[i] ?? false;
+                const isToday = i === todayDow;
+                return (
+                  <div key={d} className="flex flex-col items-center gap-1.5">
+                    <div
+                      className={`w-10 h-10 md:w-11 md:h-11 rounded-full flex items-center justify-center text-[11px] font-bold border-2 ${
+                        present
+                          ? "bg-emerald-500/20 border-emerald-500 text-emerald-300"
+                          : "bg-white/5 border-white/15 text-white/40"
+                      }`}
+                    >
+                      {present ? "✓" : "·"}
+                    </div>
+                    <div
+                      className={`text-[12px] ${
+                        i === 0 ? "text-red-400" : i === 6 ? "text-sky-400" : "text-white/60"
+                      } ${isToday ? "font-bold" : ""}`}
+                    >
+                      {isToday ? "Today" : d}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 text-[11px] text-white/40 text-right">
+              (주간) 매주 월요일 · (월간) 매월 1일 초기화
+            </div>
+          </div>
+        </div>
+
+        {/* 우측: 이용권/락커/대여권 */}
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <SummaryCard
+              icon="👕"
+              title="대여권"
+              value={
+                s && s.rentals.length > 0
+                  ? `${s.rentals.length}건`
+                  : "사용 안 함"
+              }
+              muted={!s || s.rentals.length === 0}
+            />
+            <SummaryCard
+              icon="🔒"
+              title="락커"
+              value={
+                s && s.lockers.length > 0
+                  ? s.lockers.map((l) => `${l.zone_name} ${l.number}번`).join(", ")
+                  : "사용 안 함"
+              }
+              muted={!s || s.lockers.length === 0}
+            />
+          </div>
+
+          <div className="rounded-2xl bg-[#1E2024] p-5 md:p-7 min-h-[220px] flex flex-col">
+            <div className="text-[13px] text-white/60 mb-3 font-semibold">보유 이용권</div>
+            {!s ||
+            (s.memberships.length === 0 && s.passes.length === 0) ? (
+              <div className="flex-1 flex items-center justify-center text-white/50 text-[14.5px]">
+                보유하신 이용권이 없습니다
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {s.memberships.map((m) => (
+                  <li
+                    key={`m${m.id}`}
+                    className="px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-between"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[13.5px] font-semibold truncate">
+                        {m.plan_name}
+                        {m.is_paused && (
+                          <span className="ml-2 text-[10.5px] text-amber-300">홀딩중</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-white/50">회원권 · 만료 {formatExpiry(m.expires_at)}</div>
+                    </div>
+                  </li>
+                ))}
+                {s.passes.map((p) => (
+                  <li
+                    key={`p${p.id}`}
+                    className="px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-between"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[13.5px] font-semibold truncate">
+                        {p.lesson_kind}
+                        {p.is_paused && (
+                          <span className="ml-2 text-[10.5px] text-amber-300">홀딩중</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-white/50">
+                        수강권 · 잔여 {p.remaining_sessions}/{p.total_sessions}회 · 만료{" "}
+                        {formatExpiry(p.expires_at)}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* 카운트다운 처음으로 */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full px-5 py-4 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 text-white text-[16px] font-bold flex items-center justify-center gap-3"
+          >
+            <span className="w-8 h-8 rounded-full bg-white text-[#111214] flex items-center justify-center font-extrabold">
+              {remain}
+            </span>
+            처음으로 돌아가기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({
+  icon,
+  title,
+  value,
+  muted,
+}: {
+  icon: string;
+  title: string;
+  value: string;
+  muted?: boolean;
+}) {
+  return (
+    <div className="rounded-2xl bg-[#1E2024] px-4 py-4 md:px-5 md:py-5 min-h-[104px]">
+      <div className="flex items-center gap-1.5 text-[13px] text-white/70">
+        <span>{icon}</span>
+        <span className="font-semibold">{title}</span>
+      </div>
+      <div
+        className={`mt-2 text-[18px] md:text-[20px] font-bold truncate ${
+          muted ? "text-white/50" : "text-white"
+        }`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function formatExpiry(ymd: string): string {
+  if (!ymd) return "-";
+  if (ymd.startsWith("9999")) return "무기한";
+  return ymd;
 }

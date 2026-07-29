@@ -105,13 +105,144 @@ export async function POST(request: Request) {
     voiceMessages = [];
   }
 
+  // 결과 화면용 요약(이용권/락커/이번 주 출석/마일리지)
+  const summary = await buildCheckinSummary(ctx.centerId, member.id);
+
   return NextResponse.json({
     ok: true,
     member,
     attendance: created,
     mileage_awarded: mileageAwarded,
     voice_messages: voiceMessages,
+    summary,
   });
+}
+
+/**
+ * 체크인 결과 화면에 노출할 회원 요약.
+ * - mileage / coupon_count
+ * - active_memberships[]   : 유효 회원권 (이름·만료일)
+ * - active_passes[]        : 유효 수강권 (수업명·잔여·총·만료)
+ * - active_rentals[]       : 유효 대여권(운동복 등)
+ * - lockers[]              : 배정된 락커
+ * - week_attendance[7]     : KST 이번 주(일~토) 요일별 출석 여부
+ * - can_enter              : 하나라도 유효 이용권/락커 있으면 true
+ */
+async function buildCheckinSummary(centerId: number, memberId: number) {
+  const kstNow = new Date(Date.now() + 9 * 3600 * 1000);
+  const todayYmd = kstNow.toISOString().slice(0, 10);
+  // 이번 주(일요일 시작) 시작 KST → UTC
+  const dow = kstNow.getUTCDay(); // 0=일
+  const weekStartKst = new Date(kstNow);
+  weekStartKst.setUTCDate(weekStartKst.getUTCDate() - dow);
+  const weekStartYmd = weekStartKst.toISOString().slice(0, 10);
+  const weekStartUtc = new Date(`${weekStartYmd}T00:00:00+09:00`);
+  const weekEndUtc = new Date(weekStartUtc.getTime() + 7 * 24 * 3600 * 1000);
+
+  const [
+    memberRow,
+    membershipsRes,
+    passesRes,
+    rentalsRes,
+    lockersRes,
+    weekAttendRes,
+  ] = await Promise.all([
+    supabase
+      .from("crm_members")
+      .select("mileage")
+      .eq("center_id", centerId)
+      .eq("id", memberId)
+      .maybeSingle(),
+    supabase
+      .from("crm_memberships")
+      .select("id, plan_name, expires_at, is_paused")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .eq("status", "valid")
+      .gte("expires_at", todayYmd),
+    supabase
+      .from("crm_passes")
+      .select("id, lesson_kind, remaining_sessions, total_sessions, expires_at, is_paused")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .eq("status", "valid")
+      .gte("expires_at", todayYmd),
+    supabase
+      .from("crm_rentals")
+      .select("id, item_name, expires_at")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .eq("status", "active")
+      .gte("expires_at", todayYmd),
+    supabase
+      .from("crm_lockers")
+      .select("id, number, expires_at, zone_id, crm_locker_zones(name)")
+      .eq("center_id", centerId)
+      .eq("assigned_member_id", memberId),
+    supabase
+      .from("crm_attendances")
+      .select("checked_in_at")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .gte("checked_in_at", weekStartUtc.toISOString())
+      .lt("checked_in_at", weekEndUtc.toISOString()),
+  ]);
+
+  const memberships = (membershipsRes.data ?? []).map((m) => ({
+    id: m.id,
+    plan_name: m.plan_name,
+    expires_at: m.expires_at,
+    is_paused: m.is_paused ?? false,
+  }));
+  const passes = (passesRes.data ?? []).map((p) => ({
+    id: p.id,
+    lesson_kind: p.lesson_kind,
+    remaining_sessions: p.remaining_sessions ?? 0,
+    total_sessions: p.total_sessions ?? 0,
+    expires_at: p.expires_at,
+    is_paused: p.is_paused ?? false,
+  }));
+  const rentals = (rentalsRes.data ?? []).map((r) => ({
+    id: r.id,
+    item_name: r.item_name,
+    expires_at: r.expires_at,
+  }));
+  const lockers = (lockersRes.data ?? []).map((l) => {
+    const zn = Array.isArray(l.crm_locker_zones)
+      ? l.crm_locker_zones[0]
+      : (l.crm_locker_zones as { name?: string } | null);
+    return {
+      id: l.id,
+      number: l.number,
+      expires_at: l.expires_at,
+      zone_name: zn?.name ?? "",
+    };
+  });
+
+  // 이번 주 요일별 출석 여부 (일=0 ~ 토=6)
+  const weekPresent = [false, false, false, false, false, false, false];
+  for (const a of weekAttendRes.data ?? []) {
+    const dt = new Date(new Date(a.checked_in_at).getTime() + 9 * 3600 * 1000);
+    weekPresent[dt.getUTCDay()] = true;
+  }
+
+  const canEnter =
+    memberships.some((m) => !m.is_paused) ||
+    passes.some((p) => !p.is_paused && p.remaining_sessions > 0) ||
+    rentals.length > 0 ||
+    lockers.length > 0;
+
+  return {
+    mileage: memberRow.data?.mileage ?? 0,
+    coupon_count: 0, // 쿠폰 미구현 상태
+    can_enter: canEnter,
+    memberships,
+    passes,
+    rentals,
+    lockers,
+    week_present: weekPresent,
+    week_start_ymd: weekStartYmd,
+  };
 }
 
 /**
