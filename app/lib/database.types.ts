@@ -2940,6 +2940,16 @@ export type Database = {
           msg_expired_locker: string
           msg_holding: string
           msg_scheduled_membership: string
+          msg_active_entry_enabled: boolean
+          msg_birthday_entry_enabled: boolean
+          msg_expiring_membership_enabled: boolean
+          msg_exit_enabled: boolean
+          msg_outstanding_enabled: boolean
+          msg_expired_membership_enabled: boolean
+          msg_expired_rental_enabled: boolean
+          msg_expired_locker_enabled: boolean
+          msg_holding_enabled: boolean
+          msg_scheduled_membership_enabled: boolean
           photo_suggest_enabled: boolean
           identifier_use_number: boolean
           identifier_use_phone: boolean
@@ -2965,6 +2975,16 @@ export type Database = {
           msg_expired_locker?: string
           msg_holding?: string
           msg_scheduled_membership?: string
+          msg_active_entry_enabled?: boolean
+          msg_birthday_entry_enabled?: boolean
+          msg_expiring_membership_enabled?: boolean
+          msg_exit_enabled?: boolean
+          msg_outstanding_enabled?: boolean
+          msg_expired_membership_enabled?: boolean
+          msg_expired_rental_enabled?: boolean
+          msg_expired_locker_enabled?: boolean
+          msg_holding_enabled?: boolean
+          msg_scheduled_membership_enabled?: boolean
           photo_suggest_enabled?: boolean
           identifier_use_number?: boolean
           identifier_use_phone?: boolean
@@ -2990,6 +3010,16 @@ export type Database = {
           msg_expired_locker?: string
           msg_holding?: string
           msg_scheduled_membership?: string
+          msg_active_entry_enabled?: boolean
+          msg_birthday_entry_enabled?: boolean
+          msg_expiring_membership_enabled?: boolean
+          msg_exit_enabled?: boolean
+          msg_outstanding_enabled?: boolean
+          msg_expired_membership_enabled?: boolean
+          msg_expired_rental_enabled?: boolean
+          msg_expired_locker_enabled?: boolean
+          msg_holding_enabled?: boolean
+          msg_scheduled_membership_enabled?: boolean
           photo_suggest_enabled?: boolean
           identifier_use_number?: boolean
           identifier_use_phone?: boolean

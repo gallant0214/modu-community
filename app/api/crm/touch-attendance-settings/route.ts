@@ -7,15 +7,25 @@ export const dynamic = "force-dynamic";
 const COLUMNS = [
   "center_id",
   "msg_active_entry",
+  "msg_active_entry_enabled",
   "msg_birthday_entry",
+  "msg_birthday_entry_enabled",
   "msg_expiring_membership",
+  "msg_expiring_membership_enabled",
   "msg_exit",
+  "msg_exit_enabled",
   "msg_outstanding",
+  "msg_outstanding_enabled",
   "msg_expired_membership",
+  "msg_expired_membership_enabled",
   "msg_expired_rental",
+  "msg_expired_rental_enabled",
   "msg_expired_locker",
+  "msg_expired_locker_enabled",
   "msg_holding",
+  "msg_holding_enabled",
   "msg_scheduled_membership",
+  "msg_scheduled_membership_enabled",
   "photo_suggest_enabled",
   "identifier_use_number",
   "identifier_use_phone",
@@ -30,17 +40,40 @@ const COLUMNS = [
   "updated_at",
 ].join(", ");
 
+const MSG_ENABLED_FIELDS = [
+  "msg_active_entry_enabled",
+  "msg_birthday_entry_enabled",
+  "msg_expiring_membership_enabled",
+  "msg_exit_enabled",
+  "msg_outstanding_enabled",
+  "msg_expired_membership_enabled",
+  "msg_expired_rental_enabled",
+  "msg_expired_locker_enabled",
+  "msg_holding_enabled",
+  "msg_scheduled_membership_enabled",
+] as const;
+
 const DEFAULTS = {
   msg_active_entry: "출석 포인트가 적립되었습니다",
+  msg_active_entry_enabled: true,
   msg_birthday_entry: "생일 축하드립니다",
+  msg_birthday_entry_enabled: true,
   msg_expiring_membership: "회원권이 곧 만료 예정입니다",
+  msg_expiring_membership_enabled: true,
   msg_exit: "퇴실 포인트가 적립되었습니다",
+  msg_exit_enabled: true,
   msg_outstanding: "",
+  msg_outstanding_enabled: true,
   msg_expired_membership: "회원권이 만료되었습니다. 카운터에 문의주세요!",
+  msg_expired_membership_enabled: true,
   msg_expired_rental: "운동복이 만료되었습니다. 카운터에 문의주세요!",
+  msg_expired_rental_enabled: true,
   msg_expired_locker: "락커가 만료되었습니다. 카운터에 문의주세요!",
+  msg_expired_locker_enabled: true,
   msg_holding: "",
+  msg_holding_enabled: true,
   msg_scheduled_membership: "",
+  msg_scheduled_membership_enabled: true,
   photo_suggest_enabled: true,
   identifier_use_number: true,
   identifier_use_phone: false,
@@ -105,7 +138,7 @@ export async function PUT(request: Request) {
   ]) {
     if (body[k] !== undefined) patch[k] = String(body[k] ?? "").slice(0, 300);
   }
-  // 불리언
+  // 불리언 (앱 동작 + 각 멘트 on/off)
   for (const k of [
     "photo_suggest_enabled",
     "identifier_use_number",
@@ -115,6 +148,7 @@ export async function PUT(request: Request) {
     "staff_call_enabled",
     "exit_enabled",
     "lesson_reentry_until_end",
+    ...MSG_ENABLED_FIELDS,
   ]) {
     if (body[k] !== undefined) patch[k] = !!body[k];
   }
