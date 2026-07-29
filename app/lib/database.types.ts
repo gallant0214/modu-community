@@ -2927,6 +2927,84 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_touch_attendance_settings: {
+        Row: {
+          center_id: number
+          msg_active_entry: string
+          msg_birthday_entry: string
+          msg_expiring_membership: string
+          msg_exit: string
+          msg_outstanding: string
+          msg_expired_membership: string
+          msg_expired_rental: string
+          msg_expired_locker: string
+          msg_holding: string
+          msg_scheduled_membership: string
+          photo_suggest_enabled: boolean
+          identifier_use_number: boolean
+          identifier_use_phone: boolean
+          identifier_use_unified: boolean
+          attendance_mode_enabled: boolean
+          staff_call_enabled: boolean
+          exit_enabled: boolean
+          entry_reentry_minutes: number
+          lesson_reentry_until_end: boolean
+          attendance_mileage_earn: number
+          expiring_threshold_days: number
+          updated_at: string
+        }
+        Insert: {
+          center_id: number
+          msg_active_entry?: string
+          msg_birthday_entry?: string
+          msg_expiring_membership?: string
+          msg_exit?: string
+          msg_outstanding?: string
+          msg_expired_membership?: string
+          msg_expired_rental?: string
+          msg_expired_locker?: string
+          msg_holding?: string
+          msg_scheduled_membership?: string
+          photo_suggest_enabled?: boolean
+          identifier_use_number?: boolean
+          identifier_use_phone?: boolean
+          identifier_use_unified?: boolean
+          attendance_mode_enabled?: boolean
+          staff_call_enabled?: boolean
+          exit_enabled?: boolean
+          entry_reentry_minutes?: number
+          lesson_reentry_until_end?: boolean
+          attendance_mileage_earn?: number
+          expiring_threshold_days?: number
+          updated_at?: string
+        }
+        Update: {
+          center_id?: number
+          msg_active_entry?: string
+          msg_birthday_entry?: string
+          msg_expiring_membership?: string
+          msg_exit?: string
+          msg_outstanding?: string
+          msg_expired_membership?: string
+          msg_expired_rental?: string
+          msg_expired_locker?: string
+          msg_holding?: string
+          msg_scheduled_membership?: string
+          photo_suggest_enabled?: boolean
+          identifier_use_number?: boolean
+          identifier_use_phone?: boolean
+          identifier_use_unified?: boolean
+          attendance_mode_enabled?: boolean
+          staff_call_enabled?: boolean
+          exit_enabled?: boolean
+          entry_reentry_minutes?: number
+          lesson_reentry_until_end?: boolean
+          attendance_mileage_earn?: number
+          expiring_threshold_days?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_attendance_voice_rules: {
         Row: {
           id: number

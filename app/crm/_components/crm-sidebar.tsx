@@ -32,6 +32,7 @@ const MENU: MenuItem[] = [
   { href: "/crm/stats",       label: "통계",          group: "admin", icon: IconStats },
   { href: "/crm/settings",    label: "센터설정",       group: "admin", staffOnly: true, icon: IconSettings },
   { href: "/crm/touch-attendance", label: "터치출석", group: "tools", staffOnly: true, newWindow: true, icon: IconTouch },
+  { href: "/crm/touch-attendance-settings", label: "터치출석 설정", group: "tools", staffOnly: true, icon: IconSettings },
 ];
 
 /**
