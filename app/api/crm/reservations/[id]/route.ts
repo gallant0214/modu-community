@@ -231,6 +231,36 @@ export async function PATCH(
     const durationMs = e.getTime() - s.getTime();
     const endsSnapped = new Date(startsSnapped.getTime() + durationMs);
 
+    // 겹침 방지: 이동한 시간대에 같은 강사의 다른 예약이 있으면 막는다(본인 제외).
+    // 2:1 등 그룹 수업(group_capacity>=2)은 정원까지 허용.
+    let groupCap = 1;
+    if (cur.pass_id) {
+      const { data: pp } = await supabase
+        .from("crm_passes")
+        .select("group_capacity")
+        .eq("id", cur.pass_id)
+        .maybeSingle();
+      groupCap = Math.max(1, Number((pp as { group_capacity?: number } | null)?.group_capacity ?? 1) || 1);
+    }
+    const { data: ov } = await supabase
+      .from("crm_reservations")
+      .select("id")
+      .eq("center_id", ctx.centerId)
+      .eq("trainer_member_id", trainerId)
+      .neq("id", reservationId)
+      .not("status", "in", "(cancelled,rejected)")
+      .lt("starts_at", endsSnapped.toISOString())
+      .gt("ends_at", startsSnapped.toISOString());
+    const overlapCount = (ov ?? []).length;
+    if (overlapCount > 0) {
+      if (groupCap < 2) {
+        return NextResponse.json({ error: "이미 예약된 시간이에요. 다른 시간을 선택해 주세요." }, { status: 409 });
+      }
+      if (overlapCount >= groupCap) {
+        return NextResponse.json({ error: `그룹 수업 정원(${groupCap}명)이 찼어요.` }, { status: 409 });
+      }
+    }
+
     const patch: Record<string, unknown> = {
       starts_at: startsSnapped.toISOString(),
       ends_at: endsSnapped.toISOString(),
