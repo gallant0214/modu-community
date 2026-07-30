@@ -3511,11 +3511,17 @@ function UsageIssueModal({
   // 결제 단위 "보유 마일리지 사용": 체크 시 회원 보유 마일리지를 총액 한도 내에서 적용해 결제액 차감.
   // 미체크 시 원래 금액 그대로. 적용 마일리지는 결제 시 회원 잔고에서 차감되고 회원 로그에 남는다.
   const [useOwnedMileage, setUseOwnedMileage] = useState(false);
+  // 사용할 마일리지 직접 입력값 (체크 시 노출). 체크 켤 때 최대치로 프리필, 이후 사용자가 조정.
+  const [mileageUseInput, setMileageUseInput] = useState(0);
   const ownedMileage = Math.max(0, memberMileage);
   // 장바구니가 있으면 장바구니 합계, 없으면 현재 폼 항목(바로 결제) 순금액 기준.
   const formNetPrice = name.trim() ? Math.max(0, priceWon - discountWon) : 0;
   const checkoutTotal = cart.length > 0 ? cartTotalPrice : formNetPrice;
-  const appliedOwnedMileage = useOwnedMileage ? Math.min(ownedMileage, checkoutTotal) : 0;
+  // 적용 가능한 최대 마일리지 = 보유량과 결제 총액 중 작은 값.
+  const maxApplicableMileage = Math.min(ownedMileage, checkoutTotal);
+  const appliedOwnedMileage = useOwnedMileage
+    ? Math.min(Math.max(0, Math.floor(mileageUseInput) || 0), maxApplicableMileage)
+    : 0;
   const finalPayAmount = Math.max(0, checkoutTotal - appliedOwnedMileage);
 
   // 결제 성공 직후: 전자계약서 작성 여부 묻는 다이얼로그
@@ -4346,32 +4352,75 @@ function UsageIssueModal({
             )}
           </div>
 
-          {/* 보유 마일리지 사용 — 체크 시 회원 보유 마일리지를 총액 한도 내에서 차감 적용 */}
-          <label
-            className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border cursor-pointer ${
+          {/* 보유 마일리지 사용 — 체크 시 사용할 마일리지를 직접 입력 */}
+          <div
+            className={`rounded-lg border ${
               useOwnedMileage
                 ? "border-[#B47B2A] bg-[#B47B2A]/5"
                 : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900"
-            } ${ownedMileage <= 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+            } ${ownedMileage <= 0 || checkoutTotal <= 0 ? "opacity-50" : ""}`}
           >
-            <span className="flex flex-col min-w-0">
-              <span className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">
-                보유 마일리지 사용
+            <label
+              className={`flex items-center justify-between gap-3 px-3 py-2.5 ${
+                ownedMileage <= 0 || checkoutTotal <= 0 ? "cursor-not-allowed" : "cursor-pointer"
+              }`}
+            >
+              <span className="flex flex-col min-w-0">
+                <span className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                  보유 마일리지 사용
+                </span>
+                <span className="text-[11px] text-[#A89B80]">
+                  보유 {ownedMileage.toLocaleString()}P
+                  {maxApplicableMileage > 0 && ` · 최대 ${maxApplicableMileage.toLocaleString()}P 사용 가능`}
+                </span>
               </span>
-              <span className="text-[11px] text-[#A89B80]">
-                보유 {ownedMileage.toLocaleString()}P
-                {ownedMileage > 0 && checkoutTotal > 0 &&
-                  ` · 최대 ${Math.min(ownedMileage, checkoutTotal).toLocaleString()}P 적용`}
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={useOwnedMileage}
-              disabled={ownedMileage <= 0 || checkoutTotal <= 0}
-              onChange={(e) => setUseOwnedMileage(e.target.checked)}
-              className="w-5 h-5 accent-[#B47B2A] shrink-0 disabled:opacity-40"
-            />
-          </label>
+              <input
+                type="checkbox"
+                checked={useOwnedMileage}
+                disabled={ownedMileage <= 0 || checkoutTotal <= 0}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setUseOwnedMileage(on);
+                  // 체크 켤 때 최대치로 프리필(이후 사용자가 조정), 끄면 0.
+                  setMileageUseInput(on ? maxApplicableMileage : 0);
+                }}
+                className="w-5 h-5 accent-[#B47B2A] shrink-0 disabled:opacity-40"
+              />
+            </label>
+            {useOwnedMileage && (
+              <div className="px-3 pb-3 -mt-0.5">
+                <div className="flex items-stretch gap-2">
+                  <div className="flex-1 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950">
+                    <input
+                      type="number"
+                      min={0}
+                      max={maxApplicableMileage}
+                      value={mileageUseInput === 0 ? "" : mileageUseInput}
+                      placeholder="0"
+                      onChange={(e) => {
+                        const v = Math.floor(Number(e.target.value) || 0);
+                        setMileageUseInput(Math.max(0, Math.min(v, maxApplicableMileage)));
+                      }}
+                      className="flex-1 min-w-0 bg-transparent text-right text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tabular-nums focus:outline-none"
+                    />
+                    <span className="text-[13px] font-semibold text-[#8C8270] shrink-0">P</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMileageUseInput(maxApplicableMileage)}
+                    className="px-3 rounded-lg border border-[#B47B2A] text-[#B47B2A] text-[12.5px] font-semibold hover:bg-[#B47B2A]/10 shrink-0"
+                  >
+                    전액
+                  </button>
+                </div>
+                {mileageUseInput > maxApplicableMileage && (
+                  <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">
+                    최대 {maxApplicableMileage.toLocaleString()}P 까지 사용할 수 있어요.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
 
           <button
             type="button"
@@ -5187,6 +5236,8 @@ function PassDetailModal({
     setEditPaymentMethod(p.payment_method || "card");
     setEditPaymentCustom(p.payment_method_custom ?? "");
     setEditMemo(p.memo ?? "");
+    setEditAttendanceMileageEarn(p.attendance_mileage_earn ?? 0);
+    setEditAttendanceMileageEnabled((p.attendance_mileage_earn ?? 0) > 0);
     setEditing(true);
     setError("");
   };
@@ -5217,6 +5268,9 @@ function PassDetailModal({
           payment_method: editPaymentMethod,
           payment_method_custom: editPaymentMethod === "etc" ? editPaymentCustom : undefined,
           memo: editMemo,
+          attendance_mileage_earn: editAttendanceMileageEnabled
+            ? Math.max(0, editAttendanceMileageEarn)
+            : 0,
         }),
       });
       const data = await res.json();
@@ -5467,6 +5521,38 @@ function PassDetailModal({
                   className={`${crmInputClass} min-h-[60px]`}
                 />
               </CrmField>
+
+              <div className="rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 px-3 py-2.5">
+                <label className="flex items-center gap-2 text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                  <input
+                    type="checkbox"
+                    checked={editAttendanceMileageEnabled}
+                    onChange={(e) => setEditAttendanceMileageEnabled(e.target.checked)}
+                    className="w-4 h-4 accent-[#6B7B3A]"
+                  />
+                  출석 시 마일리지 적립
+                </label>
+                {editAttendanceMileageEnabled && (
+                  <div className="mt-2 relative max-w-[200px]">
+                    <input
+                      type="number"
+                      min={0}
+                      value={editAttendanceMileageEarn}
+                      onChange={(e) =>
+                        setEditAttendanceMileageEarn(Math.max(0, Number(e.target.value) || 0))
+                      }
+                      className={`${crmInputClass} pr-9`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] text-[#A89B80]">
+                      P
+                    </span>
+                  </div>
+                )}
+                <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
+                  이 수강권으로 체크인할 때마다 자동 적립 (하루 1회)
+                </p>
+              </div>
+
               <div className="flex gap-2 pt-1">
                 <button
                   type="button"
