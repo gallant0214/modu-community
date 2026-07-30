@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
   const { data: memberships } = await supabase
     .from("crm_center_members")
-    .select("id, center_id, role, is_solo_owner, crm_centers!inner(name)")
+    .select("id, center_id, role, is_solo_owner, display_name, crm_centers!inner(name, kind)")
     .eq("firebase_uid", user.uid)
     .eq("status", "active");
 
@@ -52,9 +52,15 @@ export async function GET(request: Request) {
   const out: OutMember[] = [];
 
   for (const m of memberships) {
-    const centerName = Array.isArray(m.crm_centers)
-      ? m.crm_centers[0]?.name
-      : (m.crm_centers as { name?: string } | null)?.name;
+    const c = Array.isArray(m.crm_centers)
+      ? m.crm_centers[0]
+      : (m.crm_centers as { name?: string; kind?: string } | null);
+    const storedName = c?.name ?? "";
+    // 개인(solo) 센터는 커뮤니티 닉네임으로 이름이 자동 생성됨 → 소유자 실명(display_name)이 있으면
+    // "{실명}의 수업" 으로 표시. 실명이 없으면(=닉네임 그대로면) 저장된 이름 사용.
+    const displayName = (m as { display_name?: string }).display_name?.trim();
+    const centerName =
+      c?.kind === "solo" && displayName ? `${displayName}의 수업` : storedName;
     const restricted =
       (m.role === "trainer" || m.role === "manager") && !m.is_solo_owner;
 
