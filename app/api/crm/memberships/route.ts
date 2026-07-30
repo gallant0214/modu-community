@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_memberships")
     .select(
-      "id, member_id, seller_member_id, plan_name, duration_days, price_won, discount_won, mileage_earned, mileage_used, vat_included, payment_method, payment_method_custom, start_date, expires_at, purchased_at, status, memo, outstanding_won, payment_status, is_paused, created_at"
+      "id, member_id, seller_member_id, plan_name, duration_days, price_won, discount_won, mileage_earned, mileage_used, attendance_mileage_earn, vat_included, payment_method, payment_method_custom, start_date, expires_at, purchased_at, status, memo, outstanding_won, payment_status, is_paused, created_at"
     )
     .eq("center_id", ctx.centerId)
     .neq("status", "deleted")
@@ -204,6 +204,7 @@ export async function POST(request: Request) {
       plan_name: plan,
       duration_days: duration,
       price_won: Number(body.price_won) || 0,
+      ...(mileageUsed > 0 ? { mileage_used: mileageUsed } : {}),
     } as never,
   });
 

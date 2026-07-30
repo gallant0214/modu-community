@@ -141,7 +141,11 @@ export async function POST(request: Request) {
     action: "rental.issue",
     entity_type: "crm_rentals",
     entity_id: created.id,
-    payload: { item_name: itemName } as never,
+    payload: {
+      member_id: memberId,
+      item_name: itemName,
+      ...(mileageUsed > 0 ? { mileage_used: mileageUsed } : {}),
+    } as never,
   });
 
   return NextResponse.json({ ok: true, rentalId: created.id });

@@ -71,6 +71,7 @@ interface Pass {
   co_trainer_ids?: number[];
   memo?: string | null;
   is_paused?: boolean;
+  attendance_mileage_earn?: number;
 }
 
 export default function CrmMemberDetailPage() {
@@ -1961,6 +1962,7 @@ const ACTION_LABEL: Record<string, string> = {
   "membership.issue": "회원권 발급",
   "membership.update": "회원권 수정",
   "membership.refund": "회원권 환불",
+  "rental.issue": "대여권/락커 발급",
   "rental.update": "대여권 수정",
   "rental.refund": "대여권 환불",
   "reservation.book": "예약 생성",
@@ -3504,8 +3506,17 @@ function UsageIssueModal({
   }
   const [cart, setCart] = useState<CartLine[]>([]);
   const cartTotalPrice = cart.reduce((s, c) => s + Math.max(0, c.priceWon - c.discountWon), 0);
-  const cartTotalMileageUse = cart.reduce((s, c) => s + c.mileageUse, 0);
   const cartTotalMileageEarn = cart.reduce((s, c) => s + c.mileageEarn, 0);
+
+  // 결제 단위 "보유 마일리지 사용": 체크 시 회원 보유 마일리지를 총액 한도 내에서 적용해 결제액 차감.
+  // 미체크 시 원래 금액 그대로. 적용 마일리지는 결제 시 회원 잔고에서 차감되고 회원 로그에 남는다.
+  const [useOwnedMileage, setUseOwnedMileage] = useState(false);
+  const ownedMileage = Math.max(0, memberMileage);
+  // 장바구니가 있으면 장바구니 합계, 없으면 현재 폼 항목(바로 결제) 순금액 기준.
+  const formNetPrice = name.trim() ? Math.max(0, priceWon - discountWon) : 0;
+  const checkoutTotal = cart.length > 0 ? cartTotalPrice : formNetPrice;
+  const appliedOwnedMileage = useOwnedMileage ? Math.min(ownedMileage, checkoutTotal) : 0;
+  const finalPayAmount = Math.max(0, checkoutTotal - appliedOwnedMileage);
 
   // 결제 성공 직후: 전자계약서 작성 여부 묻는 다이얼로그
   const [contractPromptOpen, setContractPromptOpen] = useState(false);
@@ -3821,6 +3832,19 @@ function UsageIssueModal({
           memo,
         },
       ];
+    }
+
+    // 보유 마일리지 사용: 총액 한도 내 적용액을 각 라인에 순서대로 배분(mileage_used).
+    // 서버가 라인 발급 시 회원 잔고에서 차감하고 발급 이력(회원 로그)에 기록한다.
+    if (useOwnedMileage && appliedOwnedMileage > 0) {
+      let remaining = appliedOwnedMileage;
+      toProcess = toProcess.map((line) => {
+        if (remaining <= 0) return line;
+        const net = Math.max(0, line.priceWon - line.discountWon);
+        const alloc = Math.min(remaining, net);
+        remaining -= alloc;
+        return { ...line, mileageUse: line.mileageUse + alloc };
+      });
     }
 
     setSubmitting(true);
@@ -4287,15 +4311,23 @@ function UsageIssueModal({
 
           <div className="rounded-xl border-2 border-[#6B7B3A]/40 bg-[#6B7B3A]/5 p-3 space-y-1">
             <div className="flex items-baseline justify-between">
-              <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">총 결제 금액</span>
-              <span className="text-[18px] font-extrabold text-[#3A342A] dark:text-zinc-100 tabular-nums">
-                {formatWon(cartTotalPrice)}원
+              <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+                {appliedOwnedMileage > 0 ? "총 상품 금액" : "총 결제 금액"}
+              </span>
+              <span
+                className={`tabular-nums ${
+                  appliedOwnedMileage > 0
+                    ? "text-[14px] font-semibold text-[#6B5D47] dark:text-zinc-300"
+                    : "text-[18px] font-extrabold text-[#3A342A] dark:text-zinc-100"
+                }`}
+              >
+                {formatWon(checkoutTotal)}원
               </span>
             </div>
-            {cartTotalMileageUse > 0 && (
-              <div className="flex items-baseline justify-between text-[11px] text-[#8C8270]">
+            {appliedOwnedMileage > 0 && (
+              <div className="flex items-baseline justify-between text-[12px] text-[#B47B2A] font-medium">
                 <span>마일리지 사용</span>
-                <span>-{cartTotalMileageUse.toLocaleString()}P</span>
+                <span className="tabular-nums">-{appliedOwnedMileage.toLocaleString()}P</span>
               </div>
             )}
             {cartTotalMileageEarn > 0 && (
@@ -4304,7 +4336,42 @@ function UsageIssueModal({
                 <span>+{cartTotalMileageEarn.toLocaleString()}P</span>
               </div>
             )}
+            {appliedOwnedMileage > 0 && (
+              <div className="flex items-baseline justify-between pt-1.5 mt-1 border-t border-[#6B7B3A]/25">
+                <span className="text-[12.5px] font-semibold text-[#6B5D47] dark:text-zinc-300">최종 결제 금액</span>
+                <span className="text-[18px] font-extrabold text-[#3A342A] dark:text-zinc-100 tabular-nums">
+                  {formatWon(finalPayAmount)}원
+                </span>
+              </div>
+            )}
           </div>
+
+          {/* 보유 마일리지 사용 — 체크 시 회원 보유 마일리지를 총액 한도 내에서 차감 적용 */}
+          <label
+            className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border cursor-pointer ${
+              useOwnedMileage
+                ? "border-[#B47B2A] bg-[#B47B2A]/5"
+                : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900"
+            } ${ownedMileage <= 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            <span className="flex flex-col min-w-0">
+              <span className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                보유 마일리지 사용
+              </span>
+              <span className="text-[11px] text-[#A89B80]">
+                보유 {ownedMileage.toLocaleString()}P
+                {ownedMileage > 0 && checkoutTotal > 0 &&
+                  ` · 최대 ${Math.min(ownedMileage, checkoutTotal).toLocaleString()}P 적용`}
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={useOwnedMileage}
+              disabled={ownedMileage <= 0 || checkoutTotal <= 0}
+              onChange={(e) => setUseOwnedMileage(e.target.checked)}
+              className="w-5 h-5 accent-[#B47B2A] shrink-0 disabled:opacity-40"
+            />
+          </label>
 
           <button
             type="button"
@@ -4315,8 +4382,8 @@ function UsageIssueModal({
             {submitting
               ? "결제 중…"
               : cart.length === 0
-                ? "폼 항목 결제하기"
-                : `${cart.length}건 결제하기`}
+                ? `${appliedOwnedMileage > 0 ? `${formatWon(finalPayAmount)}원 ` : "폼 항목 "}결제하기`
+                : `${cart.length}건 ${appliedOwnedMileage > 0 ? `· ${formatWon(finalPayAmount)}원 ` : ""}결제하기`}
           </button>
           <p className="text-[10.5px] text-[#A89B80] leading-relaxed">
             &lsquo;장바구니에 담기&rsquo; 로 여러 상품을 추가한 뒤 한 번에 결제하세요. 담긴 상품이 없으면 왼쪽 폼의 항목을 바로 결제합니다.
@@ -5026,6 +5093,8 @@ function PassDetailModal({
   const [editPaymentMethod, setEditPaymentMethod] = useState<string>("card");
   const [editPaymentCustom, setEditPaymentCustom] = useState("");
   const [editMemo, setEditMemo] = useState("");
+  const [editAttendanceMileageEnabled, setEditAttendanceMileageEnabled] = useState(false);
+  const [editAttendanceMileageEarn, setEditAttendanceMileageEarn] = useState(0);
   const [saving, setSaving] = useState(false);
 
   // 수강권 수정 권한 조회
