@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
 import FaceAttendance from "./face-attendance";
@@ -13,6 +13,7 @@ interface MemberLite {
   phone: string | null;
   birth?: string | null;
   has_face?: boolean;
+  face_thumb?: string | null;
 }
 
 interface CheckinSummary {
@@ -61,7 +62,9 @@ export default function TouchAttendancePage() {
   const [busy, setBusy] = useState(false);
   const [centerName, setCenterName] = useState("");
   const [mode, setMode] = useState<"portrait" | "landscape">("portrait");
-  const [recogMode, setRecogMode] = useState<"number" | "face">("number");
+  const [recogMode, setRecogMode] = useState<"number" | "face" | "both">("number");
+  // '번호+얼굴' 모드에서 번호 매칭 후 얼굴 확인이 필요한 회원
+  const [verifyTarget, setVerifyTarget] = useState<MemberLite | null>(null);
 
   // 가로/세로 레이아웃 기억
   useEffect(() => {
@@ -190,7 +193,16 @@ export default function TouchAttendancePage() {
         setNum("");
       } else if (members.length === 1) {
         const m = members[0];
-        if (m.has_face) {
+        if (recogMode === "both") {
+          // 번호+얼굴 모드: 얼굴 등록됐으면 카메라 확인 단계로, 없으면 촬영 등록 후 체크인
+          if (m.has_face) {
+            setVerifyTarget(m);
+            setBusy(false);
+          } else {
+            setEnrollTarget(m);
+            setBusy(false);
+          }
+        } else if (m.has_face) {
           await checkin(m);
         } else {
           // 얼굴 미등록 → 촬영/동의 플로우
@@ -278,19 +290,25 @@ export default function TouchAttendancePage() {
         </p>
       </header>
 
-      {/* 번호 / 얼굴 인식 방식 전환 */}
+      {/* 번호 / 얼굴 / 번호+얼굴 인식 방식 전환 */}
       <div className="mb-6 inline-flex rounded-xl border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden bg-white dark:bg-zinc-900">
-        {(["number", "face"] as const).map((r) => (
+        {(
+          [
+            { k: "number", label: "번호 출석" },
+            { k: "face", label: "얼굴 출석" },
+            { k: "both", label: "번호+얼굴" },
+          ] as const
+        ).map(({ k, label }) => (
           <button
-            key={r}
-            onClick={() => setRecogMode(r)}
+            key={k}
+            onClick={() => setRecogMode(k)}
             className={`px-5 py-2.5 text-[14px] font-semibold ${
-              recogMode === r
+              recogMode === k
                 ? "bg-[#6B7B3A] text-white"
                 : "text-[#6B5D47] dark:text-zinc-300"
             }`}
           >
-            {r === "number" ? "번호 입력" : "얼굴 인식"}
+            {label}
           </button>
         ))}
       </div>
@@ -319,7 +337,21 @@ export default function TouchAttendancePage() {
         />
       )}
 
-      {enrollTarget ? (
+      {verifyTarget ? (
+        /* 번호+얼굴 모드: 등록된 얼굴과 대조 후 수동 확인 */
+        <VerifyFacePanel
+          member={verifyTarget}
+          onCancel={() => {
+            setVerifyTarget(null);
+            clearAll();
+          }}
+          onConfirm={async () => {
+            const m = verifyTarget;
+            setVerifyTarget(null);
+            await checkin(m);
+          }}
+        />
+      ) : enrollTarget ? (
         /* 얼굴 미등록 단일 회원 → 동의·촬영 */
         <FaceEnroll
           member={enrollTarget}
@@ -419,6 +451,127 @@ function KeyBtn({
 }
 
 /** 뒷자리만 노출: 010-1234-**** */
+/**
+ * '번호+얼굴' 모드 확인 패널.
+ * - 왼쪽: 등록된 얼굴 사진 (crm_members.face_image_thumb)
+ * - 오른쪽: 카메라 라이브 프리뷰 (getUserMedia)
+ * - 실물이 등록 얼굴과 일치하는지 관리자가 육안 확인 후 '얼굴 확인 → 출석' 버튼
+ * - 자동 매칭(face-api) 은 추후 확장 여지.
+ */
+function VerifyFacePanel({
+  member,
+  onCancel,
+  onConfirm,
+}: {
+  member: MemberLite;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [camError, setCamError] = useState("");
+
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" },
+          audio: false,
+        });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
+        }
+      } catch (e) {
+        setCamError(
+          e instanceof Error ? e.message : "카메라를 열 수 없습니다"
+        );
+      }
+    })();
+    return () => {
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  return (
+    <div className="w-full max-w-[min(96vw,900px)] rounded-2xl border-2 border-[#6B7B3A]/40 bg-white dark:bg-zinc-900 p-5 md:p-6">
+      <div className="text-center mb-4">
+        <div className="text-[13px] text-[#8C8270] dark:text-zinc-500">
+          얼굴 확인
+        </div>
+        <div className="mt-1 text-[22px] font-bold text-[#2A251D] dark:text-zinc-100">
+          {member.name}
+          {member.phone && (
+            <span className="ml-2 text-[13px] font-medium text-[#8C8270]">
+              {formatPhone(member.phone)}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5]/40 dark:bg-zinc-950 p-2">
+          <div className="text-[11.5px] text-[#8C8270] mb-1.5 text-center">
+            등록된 얼굴
+          </div>
+          <div className="aspect-square rounded-lg overflow-hidden bg-[#EFE7D5] dark:bg-zinc-800 flex items-center justify-center">
+            {member.face_thumb ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={member.face_thumb}
+                alt="등록된 얼굴"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-[12px] text-[#A89B80]">등록 얼굴 없음</span>
+            )}
+          </div>
+        </div>
+        <div className="rounded-xl border border-[#6B7B3A]/40 bg-black p-2">
+          <div className="text-[11.5px] text-white/70 mb-1.5 text-center">
+            카메라 (실시간)
+          </div>
+          <div className="aspect-square rounded-lg overflow-hidden bg-black flex items-center justify-center">
+            {camError ? (
+              <div className="text-[12px] text-red-300 px-3 text-center">
+                {camError}
+              </div>
+            ) : (
+              <video
+                ref={videoRef}
+                muted
+                playsInline
+                className="w-full h-full object-cover scale-x-[-1]"
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      <p className="text-[12px] text-[#A89B80] text-center mb-3">
+        위 등록 얼굴과 아래 카메라 얼굴이 동일 인물인지 확인 후 출석 처리해 주세요.
+      </p>
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 text-[15px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+        >
+          다시 입력
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          className="px-4 py-3 rounded-xl bg-[#6B7B3A] text-white text-[15px] font-bold hover:bg-[#5a6932]"
+        >
+          얼굴 확인 → 출석
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function maskPhone(phone: string): string {
   const f = formatPhone(phone);
   const parts = f.split("-");
