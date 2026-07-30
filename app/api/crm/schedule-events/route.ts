@@ -112,7 +112,7 @@ export async function POST(request: Request) {
   }
 
   // 권한 확인
-  let canManageAll = ctx.role === "owner" || ctx.role === "admin";
+  let canManageAll = ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner;
   if (!canManageAll) {
     const { data: perm } = await supabase
       .from("crm_trainer_permissions")
