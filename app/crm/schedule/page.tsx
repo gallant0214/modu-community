@@ -2667,7 +2667,7 @@ function NewReservationModal({
                   const t = trainers.find((x) => x.id === Number(e.target.value));
                   if (t) onChangeTrainer(t);
                 }}
-                className="w-full px-3.5 py-3 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[16px] font-semibold text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A]"
+                className="w-full px-3.5 py-3 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A]"
               >
                 {trainers.map((t) => (
                   <option key={t.id} value={t.id}>
