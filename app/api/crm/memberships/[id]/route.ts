@@ -33,6 +33,7 @@ export async function PATCH(
     payment_method?: string;
     payment_method_custom?: string;
     seller_member_id?: number;
+    attendance_mileage_earn?: number;
   };
   try {
     body = await request.json();
@@ -76,6 +77,12 @@ export async function PATCH(
   }
   if (body.seller_member_id !== undefined && Number(body.seller_member_id) > 0) {
     patch.seller_member_id = Number(body.seller_member_id);
+  }
+  if (body.attendance_mileage_earn !== undefined) {
+    patch.attendance_mileage_earn = Math.max(
+      0,
+      Math.floor(Number(body.attendance_mileage_earn) || 0)
+    );
   }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });

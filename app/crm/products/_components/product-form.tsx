@@ -212,9 +212,13 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   const [pauseCount, setPauseCount] = useState(initial?.pause_count ?? 0);
   const [mileageEarn, setMileageEarn] = useState(initial?.mileage_earn ?? 0);
   const [mileageUsable, setMileageUsable] = useState(initial?.mileage_usable ?? true);
-  // 출석 시 마일리지 적립 UI 제거됨 — 편집 시 기존 값 보존, 신규는 0.
-  const attendanceMileageEarn = initial?.attendance_mileage_earn ?? 0;
-  const attendanceMileageEnabled = attendanceMileageEarn > 0;
+  // 출석 시 마일리지 적립: 헬스 이용권(membership) + 수강권(personal/group) 만 노출
+  const [attendanceMileageEnabled, setAttendanceMileageEnabled] = useState<boolean>(
+    (initial?.attendance_mileage_earn ?? 0) > 0
+  );
+  const [attendanceMileageEarn, setAttendanceMileageEarn] = useState<number>(
+    initial?.attendance_mileage_earn ?? 0
+  );
   // 금액/부가세 UI 는 제거됨 — 편집 시 기존 값 보존, 신규는 0/false.
   const priceWonSaved = initial?.price_won ?? 0;
   const vatIncluded = initial?.vat_included ?? false;
@@ -867,6 +871,42 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
             이 상품 구매 시 마일리지 사용 허용
           </span>
         </label>
+
+        {(type === "membership" || type === "personal" || type === "group") && (
+          <div className="mt-4 pt-3 border-t border-[#E8E0D0] dark:border-zinc-800">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={attendanceMileageEnabled}
+                onChange={(e) => setAttendanceMileageEnabled(e.target.checked)}
+                className="w-4 h-4 accent-[#6B7B3A]"
+              />
+              <span className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                출석 시 마일리지 적립
+              </span>
+            </label>
+            {attendanceMileageEnabled && (
+              <div className="mt-2 relative max-w-[220px]">
+                <input
+                  type="number"
+                  min={0}
+                  value={attendanceMileageEarn}
+                  onChange={(e) =>
+                    setAttendanceMileageEarn(Math.max(0, Number(e.target.value) || 0))
+                  }
+                  placeholder="0"
+                  className={`${crmInputClass} pr-9`}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+                  P
+                </span>
+              </div>
+            )}
+            <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
+              이 상품을 이용하는 회원이 체크인할 때마다 자동 적립됩니다. (하루 1회)
+            </p>
+          </div>
+        )}
       </Section>
 
       {error && (

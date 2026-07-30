@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_passes")
     .select(
-      "id, member_id, trainer_member_id, co_trainer_ids, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, payment_method, payment_method_custom, issued_at, start_date, expires_at, status, product_id, group_capacity, created_at"
+      "id, member_id, trainer_member_id, co_trainer_ids, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, payment_method, payment_method_custom, issued_at, start_date, expires_at, status, product_id, group_capacity, attendance_mileage_earn, created_at"
     )
     .eq("center_id", ctx.centerId)
     .order("issued_at", { ascending: false, nullsFirst: false })
@@ -192,13 +192,14 @@ export async function POST(request: Request) {
     coTrainerIds = (validCo ?? []).map((v) => v.id);
   }
 
-  // 상품(선택 시) → 그룹 정원 스냅샷. 개인 레슨/유형 없음 = 1.
+  // 상품(선택 시) → 그룹 정원 · 출석 마일리지 스냅샷. 개인 레슨/유형 없음 = 1.
   let productId: number | null = null;
   let groupCapacity = 1;
+  let productAttendanceMileage = 0;
   if (body.product_id) {
     const { data: prod } = await supabase
       .from("crm_products")
-      .select("id, type, capacity")
+      .select("id, type, capacity, attendance_mileage_earn")
       .eq("id", Number(body.product_id))
       .eq("center_id", ctx.centerId)
       .maybeSingle();
@@ -208,6 +209,10 @@ export async function POST(request: Request) {
         const cap = Number((prod as { capacity: number | null }).capacity ?? 0);
         groupCapacity = cap > 1 ? Math.min(cap, 999) : 1;
       }
+      productAttendanceMileage = Math.max(
+        0,
+        Math.floor(Number((prod as { attendance_mileage_earn?: number }).attendance_mileage_earn) || 0)
+      );
     }
   }
   // 수기 발급(상품 미선택)에서 넘어온 그룹 정원 사용.
@@ -251,6 +256,7 @@ export async function POST(request: Request) {
       payment_status: paymentStatus,
       product_id: productId,
       group_capacity: groupCapacity,
+      attendance_mileage_earn: productAttendanceMileage,
     })
     .select("id")
     .single();

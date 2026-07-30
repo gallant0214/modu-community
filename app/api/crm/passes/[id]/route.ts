@@ -23,7 +23,7 @@ export async function GET(
   const { data: pass, error } = await supabase
     .from("crm_passes")
     .select(
-      "id, member_id, trainer_member_id, co_trainer_ids, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, service_sessions, session_minutes, price_won, vat_included, payment_method, payment_method_custom, issued_at, start_date, expires_at, status, memo, created_at"
+      "id, member_id, trainer_member_id, co_trainer_ids, seller_member_id, issue_type, lesson_kind, total_sessions, remaining_sessions, service_sessions, session_minutes, price_won, vat_included, payment_method, payment_method_custom, issued_at, start_date, expires_at, status, memo, attendance_mileage_earn, created_at"
     )
     .eq("id", passId)
     .eq("center_id", ctx.centerId)
@@ -129,6 +129,7 @@ export async function PATCH(
     total_sessions?: number;
     remaining_sessions?: number;
     service_sessions?: number;
+    attendance_mileage_earn?: number;
   };
   try {
     body = await request.json();
@@ -194,6 +195,12 @@ export async function PATCH(
   // 서비스 섹션(무료 보너스) — 수업료 계산에는 포함되지 않음
   if (body.service_sessions !== undefined && body.service_sessions >= 0) {
     patch.service_sessions = Math.max(0, Math.floor(Number(body.service_sessions) || 0));
+  }
+  if (body.attendance_mileage_earn !== undefined) {
+    patch.attendance_mileage_earn = Math.max(
+      0,
+      Math.floor(Number(body.attendance_mileage_earn) || 0)
+    );
   }
 
   if (Object.keys(patch).length === 0) {

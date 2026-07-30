@@ -273,19 +273,30 @@ async function awardAttendanceMileage(
     .limit(1);
   if (awardedToday && awardedToday.length > 0) return 0;
 
-  // 유효 회원권 중 출석 적립 마일리지 최댓값
-  const { data: memberships } = await supabase
-    .from("crm_memberships")
-    .select("attendance_mileage_earn")
-    .eq("center_id", centerId)
-    .eq("member_id", memberId)
-    .eq("status", "valid")
-    .eq("is_paused", false)
-    .gte("expires_at", ymd);
+  // 유효 회원권 + 유효 수강권 중 출석 적립 마일리지 최댓값
+  const [{ data: memberships }, { data: passes }] = await Promise.all([
+    supabase
+      .from("crm_memberships")
+      .select("attendance_mileage_earn")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .eq("status", "valid")
+      .eq("is_paused", false)
+      .gte("expires_at", ymd),
+    supabase
+      .from("crm_passes")
+      .select("attendance_mileage_earn")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .eq("status", "valid")
+      .eq("is_paused", false)
+      .gte("expires_at", ymd),
+  ]);
 
   const amount = Math.max(
     0,
-    ...(memberships ?? []).map((m) => Number(m.attendance_mileage_earn) || 0)
+    ...(memberships ?? []).map((m) => Number(m.attendance_mileage_earn) || 0),
+    ...(passes ?? []).map((p) => Number(p.attendance_mileage_earn) || 0)
   );
   if (amount <= 0) return 0;
 

@@ -26,6 +26,7 @@ export interface MembershipRow {
   expires_at: string;
   purchased_at: string | null;
   status: string;
+  attendance_mileage_earn?: number;
 }
 
 interface Props {
@@ -50,6 +51,8 @@ export function MembershipDetailModal({ row: initialRow, canEdit, onClose, onSav
   const [expiresAt, setExpiresAt] = useState("");
   const [purchasedAt, setPurchasedAt] = useState("");
   const [memo, setMemo] = useState("");
+  const [attendanceMileageEnabled, setAttendanceMileageEnabled] = useState(false);
+  const [attendanceMileageEarn, setAttendanceMileageEarn] = useState(0);
 
   useEffect(() => {
     setRow(initialRow);
@@ -61,6 +64,8 @@ export function MembershipDetailModal({ row: initialRow, canEdit, onClose, onSav
     setExpiresAt(initialRow.expires_at ?? "");
     setPurchasedAt(initialRow.purchased_at ?? "");
     setMemo("");
+    setAttendanceMileageEarn(initialRow.attendance_mileage_earn ?? 0);
+    setAttendanceMileageEnabled((initialRow.attendance_mileage_earn ?? 0) > 0);
     setEditMode(false);
     setError("");
   }, [initialRow]);
@@ -71,6 +76,7 @@ export function MembershipDetailModal({ row: initialRow, canEdit, onClose, onSav
     setError("");
     try {
       const token = await getIdToken();
+      const nextAttendanceMileage = attendanceMileageEnabled ? Math.max(0, attendanceMileageEarn) : 0;
       const patch: Record<string, unknown> = {
         price_won: priceWon,
         payment_method: paymentMethod,
@@ -78,6 +84,7 @@ export function MembershipDetailModal({ row: initialRow, canEdit, onClose, onSav
         start_date: startDate || undefined,
         expires_at: expiresAt || undefined,
         purchased_at: purchasedAt || undefined,
+        attendance_mileage_earn: nextAttendanceMileage,
       };
       if (memo.trim()) patch.memo = memo.trim();
       const res = await fetch(`/api/crm/memberships/${row.id}`, {
@@ -101,6 +108,7 @@ export function MembershipDetailModal({ row: initialRow, canEdit, onClose, onSav
               start_date: startDate || prev.start_date,
               expires_at: expiresAt || prev.expires_at,
               purchased_at: purchasedAt || prev.purchased_at,
+              attendance_mileage_earn: nextAttendanceMileage,
             }
           : prev
       );
@@ -225,6 +233,47 @@ export function MembershipDetailModal({ row: initialRow, canEdit, onClose, onSav
             </ModalField>
           </InfoPanel>
         </div>
+
+        <InfoPanel title="마일리지">
+          {editMode ? (
+            <>
+              <label className="flex items-center gap-2 text-[13px] text-[#3A342A] dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={attendanceMileageEnabled}
+                  onChange={(e) => setAttendanceMileageEnabled(e.target.checked)}
+                  className="w-4 h-4 accent-[#6B7B3A]"
+                />
+                출석 시 마일리지 적립
+              </label>
+              {attendanceMileageEnabled && (
+                <div className="mt-2 relative max-w-[200px]">
+                  <input
+                    type="number"
+                    min={0}
+                    value={attendanceMileageEarn}
+                    onChange={(e) =>
+                      setAttendanceMileageEarn(Math.max(0, Number(e.target.value) || 0))
+                    }
+                    className={`${crmInputClass} pr-9`}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] text-[#A89B80]">
+                    P
+                  </span>
+                </div>
+              )}
+              <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
+                이 회원권을 이용해 체크인할 때마다 자동 적립 (하루 1회)
+              </p>
+            </>
+          ) : (
+            <div className="text-[13.5px] text-[#3A342A] dark:text-zinc-200">
+              {(row.attendance_mileage_earn ?? 0) > 0
+                ? `출석 시 ${row.attendance_mileage_earn}P 적립`
+                : "출석 시 자동 적립 없음"}
+            </div>
+          )}
+        </InfoPanel>
 
         {editMode && (
           <InfoPanel title="변경 메모">

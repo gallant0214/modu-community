@@ -2715,6 +2715,7 @@ export type Database = {
           is_paused: boolean
           product_id: number | null
           group_capacity: number
+          attendance_mileage_earn: number
           created_at: string
           updated_at: string
         }
@@ -2745,6 +2746,7 @@ export type Database = {
           is_paused?: boolean
           product_id?: number | null
           group_capacity?: number
+          attendance_mileage_earn?: number
           created_at?: string
           updated_at?: string
         }
@@ -2775,6 +2777,7 @@ export type Database = {
           is_paused?: boolean
           product_id?: number | null
           group_capacity?: number
+          attendance_mileage_earn?: number
           created_at?: string
           updated_at?: string
         }
@@ -2961,6 +2964,7 @@ export type Database = {
           lesson_reentry_until_end: boolean
           attendance_mileage_earn: number
           expiring_threshold_days: number
+          face_threshold: number
           updated_at: string
         }
         Insert: {
@@ -2996,6 +3000,7 @@ export type Database = {
           lesson_reentry_until_end?: boolean
           attendance_mileage_earn?: number
           expiring_threshold_days?: number
+          face_threshold?: number
           updated_at?: string
         }
         Update: {
@@ -3031,6 +3036,7 @@ export type Database = {
           lesson_reentry_until_end?: boolean
           attendance_mileage_earn?: number
           expiring_threshold_days?: number
+          face_threshold?: number
           updated_at?: string
         }
         Relationships: []
