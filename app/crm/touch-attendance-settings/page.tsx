@@ -37,6 +37,7 @@ interface Settings {
   lesson_reentry_until_end: boolean;
   attendance_mileage_earn: number;
   expiring_threshold_days: number;
+  face_threshold: number;
 }
 
 const MSG_FIELDS: {
@@ -251,6 +252,35 @@ export default function TouchAttendanceSettingsPage() {
           on={s.exit_enabled}
           onChange={(v) => patch("exit_enabled", v)}
         />
+      </Section>
+
+      <Section title="얼굴 인식 정밀도">
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">
+              인식 정밀도(임계값)
+            </div>
+            <div className="tabular-nums text-[14px] font-bold text-[#6B7B3A] dark:text-[#A8B87A]">
+              {(Number(s.face_threshold) || 0.45).toFixed(2)}
+            </div>
+          </div>
+          <input
+            type="range"
+            min={0.35}
+            max={0.6}
+            step={0.01}
+            value={Number(s.face_threshold) || 0.45}
+            onChange={(e) => patch("face_threshold", Number(e.target.value))}
+            className="w-full accent-[#6B7B3A]"
+          />
+          <div className="mt-1 flex justify-between text-[11.5px] text-[#A89B80]">
+            <span>← 엄격 (오인식 ↓)</span>
+            <span>관대 (본인 인식 ↑) →</span>
+          </div>
+          <p className="mt-2 text-[11.5px] text-[#A89B80] leading-relaxed">
+            다른 사람이 출석되면 값을 <strong>낮추고</strong>, 본인이 인식 안 되면 <strong>올리세요</strong>. (권장 0.42 ~ 0.48)
+          </p>
+        </div>
       </Section>
 
       <Section title="재입장 · 마일리지">

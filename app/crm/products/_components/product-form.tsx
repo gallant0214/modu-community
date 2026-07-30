@@ -726,96 +726,116 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
       {/* 회원권 전용: 입장 가능 요일/시간 */}
       {type === "membership" && (
         <Section title="입장 가능 요일 / 시간 설정">
-          {accessMode === "unlimited" ? (
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-1.5">
+              <AccessModeButton
+                active={accessMode === "unlimited"}
+                title="상시 입장"
+                onClick={() => {
+                  setAccessMode("unlimited");
+                  setOperatingDays([0, 1, 2, 3, 4, 5, 6]);
+                  setIs24h(false);
+                  setOpenTime("09:00");
+                  setCloseTime("18:00");
+                }}
+              />
+              <AccessModeButton
+                active={accessMode === "custom"}
+                title="요일·시간 지정"
                 onClick={() => setAccessMode("custom")}
-                className="px-3 py-1.5 rounded-full text-[12.5px] font-semibold border border-[#6B7B3A] bg-[#6B7B3A] text-white hover:bg-[#5a6932]"
-              >
-                설정하기
-              </button>
-              <span className="text-[12px] text-[#A89B80]">
-                지금은 365일 24시간 언제든 입장 가능해요. 특정 요일·시간대만 열려면 설정하세요.
-              </span>
+              />
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAccessMode("unlimited");
-                    setOperatingDays([0, 1, 2, 3, 4, 5, 6]);
-                    setIs24h(false);
-                    setOpenTime("09:00");
-                    setCloseTime("18:00");
-                  }}
-                  className="text-[12px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
-                >
-                  ← 무제한으로 되돌리기
-                </button>
-              </div>
-              <div>
-                <FieldLabel>입장 가능 요일</FieldLabel>
-                <div className="flex flex-wrap gap-1.5">
-                  {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => {
-                    const on = operatingDays.includes(i);
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() =>
-                          setOperatingDays((cur) =>
-                            on ? cur.filter((x) => x !== i) : [...cur, i].sort()
-                          )
-                        }
-                        className={`w-9 h-9 rounded-full text-[13px] font-semibold border
-                          ${on
-                            ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
-                            : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
-                          }`}
-                      >
-                        {d}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
 
-              <div>
-                <FieldLabel>입장 시간</FieldLabel>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="time"
-                    disabled={is24h}
-                    value={openTime}
-                    onChange={(e) => setOpenTime(e.target.value)}
-                    className={`${crmInputClass} max-w-[130px] disabled:opacity-50`}
-                  />
-                  <span className="text-[13px] text-[#A89B80]">~</span>
-                  <input
-                    type="time"
-                    disabled={is24h}
-                    value={closeTime}
-                    onChange={(e) => setCloseTime(e.target.value)}
-                    className={`${crmInputClass} max-w-[130px] disabled:opacity-50`}
-                  />
-                </div>
-                <label className="mt-2 inline-flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={is24h}
-                    onChange={(e) => setIs24h(e.target.checked)}
-                    className="w-4 h-4 accent-[#6B7B3A]"
-                  />
-                  <span className="text-[13px] text-[#3A342A] dark:text-zinc-300">
-                    24시간 입장 가능
-                  </span>
-                </label>
+            {accessMode === "unlimited" ? (
+              <div className="rounded-lg border border-[#E8E0D0] bg-[#FBF7EB]/55 px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-950/30">
+                <p className="text-[12px] leading-relaxed text-[#8C8270] dark:text-zinc-500">
+                  현재 설정: 매일 24시간 입장 가능
+                </p>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="rounded-lg border border-[#E8E0D0] bg-[#FBF7EB]/45 p-3 dark:border-zinc-800 dark:bg-zinc-950/30">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-[12px] text-[#8C8270] dark:text-zinc-500">
+                    선택한 요일과 시간에만 입장할 수 있어요.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccessMode("unlimited");
+                      setOperatingDays([0, 1, 2, 3, 4, 5, 6]);
+                      setIs24h(false);
+                      setOpenTime("09:00");
+                      setCloseTime("18:00");
+                    }}
+                    className="shrink-0 text-[12px] font-semibold text-[#6B7B3A] hover:underline dark:text-[#A8B87A]"
+                  >
+                    상시 입장
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <FieldLabel>입장 가능 요일</FieldLabel>
+                    <div className="flex flex-wrap gap-1.5">
+                      {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => {
+                        const on = operatingDays.includes(i);
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() =>
+                              setOperatingDays((cur) =>
+                                on ? cur.filter((x) => x !== i) : [...cur, i].sort()
+                              )
+                            }
+                            className={`h-9 min-w-9 rounded-lg border px-3 text-[13px] font-semibold transition-colors
+                              ${on
+                                ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                                : "border-[#E8E0D0] bg-[#FEFCF7] text-[#3A342A] hover:border-[#6B7B3A]/40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                              }`}
+                          >
+                            {d}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <FieldLabel>입장 시간</FieldLabel>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="time"
+                        disabled={is24h}
+                        value={openTime}
+                        onChange={(e) => setOpenTime(e.target.value)}
+                        className={`${crmInputClass} max-w-[130px] disabled:opacity-50`}
+                      />
+                      <span className="text-[13px] text-[#A89B80]">~</span>
+                      <input
+                        type="time"
+                        disabled={is24h}
+                        value={closeTime}
+                        onChange={(e) => setCloseTime(e.target.value)}
+                        className={`${crmInputClass} max-w-[130px] disabled:opacity-50`}
+                      />
+                      <label className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#E8E0D0] bg-[#FEFCF7] px-3 cursor-pointer dark:border-zinc-700 dark:bg-zinc-900">
+                        <input
+                          type="checkbox"
+                          checked={is24h}
+                          onChange={(e) => setIs24h(e.target.checked)}
+                          className="w-4 h-4 accent-[#6B7B3A]"
+                        />
+                        <span className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-300">
+                          24시간 입장
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </Section>
       )}
 
@@ -893,6 +913,37 @@ function Section({
       </h2>
       {children}
     </section>
+  );
+}
+
+function AccessModeButton({
+  active,
+  title,
+  onClick,
+}: {
+  active: boolean;
+  title: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-semibold whitespace-nowrap transition-colors ${
+        active
+          ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+          : "border-[#E8E0D0] bg-[#FEFCF7] text-[#3A342A] hover:border-[#6B7B3A]/40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+      }`}
+    >
+      <span
+        className={`h-2 w-2 rounded-full ${
+          active
+            ? "bg-white"
+            : "bg-[#CFC2AA] dark:bg-zinc-600"
+        }`}
+      />
+      {title}
+    </button>
   );
 }
 

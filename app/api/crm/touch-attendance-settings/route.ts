@@ -37,6 +37,7 @@ const COLUMNS = [
   "lesson_reentry_until_end",
   "attendance_mileage_earn",
   "expiring_threshold_days",
+  "face_threshold",
   "updated_at",
 ].join(", ");
 
@@ -85,6 +86,7 @@ const DEFAULTS = {
   lesson_reentry_until_end: true,
   attendance_mileage_earn: 50,
   expiring_threshold_days: 5,
+  face_threshold: 0.45,
 };
 
 /**
@@ -161,6 +163,12 @@ export async function PUT(request: Request) {
     if (body[k] !== undefined) {
       patch[k] = Math.max(0, Math.min(100000, Math.floor(Number(body[k]) || 0)));
     }
+  }
+  // 실수(얼굴 인식 임계값): 0.35 ~ 0.60 로 clamp, 소수점 2자리
+  if (body.face_threshold !== undefined) {
+    const raw = Number(body.face_threshold);
+    const v = Number.isFinite(raw) ? raw : 0.45;
+    patch.face_threshold = Math.round(Math.max(0.35, Math.min(0.6, v)) * 100) / 100;
   }
 
   const { error } = await supabase

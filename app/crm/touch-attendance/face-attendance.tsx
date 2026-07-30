@@ -67,12 +67,28 @@ export default function FaceAttendance() {
   const [error, setError] = useState("");
   const [camError, setCamError] = useState("");
   const [status, setStatus] = useState("준비 중…");
-  const [threshold, setThreshold] = useState(DEFAULT_THRESHOLD);
   const [lastHit, setLastHit] = useState<{ name: string; at: number } | null>(null);
 
+  // 임계값(정밀도)은 터치출석 설정에서 관리 — 여기서는 조회만.
   useEffect(() => {
-    thresholdRef.current = threshold;
-  }, [threshold]);
+    (async () => {
+      try {
+        const token = await getIdToken();
+        const res = await fetch("/api/crm/touch-attendance-settings", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const raw = Number(data?.settings?.face_threshold);
+        if (Number.isFinite(raw) && raw >= 0.3 && raw <= 0.7) {
+          thresholdRef.current = raw;
+        }
+      } catch {
+        /* 실패해도 기본값 유지 */
+      }
+    })();
+  }, [getIdToken]);
 
   const checkin = useCallback(
     async (memberId: number, name: string) => {
@@ -368,30 +384,6 @@ export default function FaceAttendance() {
           <div className="mt-0.5 text-[12px] text-[#A89B80]">
             등록 얼굴 {progress.total - progress.skipped}명 학습됨
             {progress.skipped > 0 && ` · 사진 인식불가 ${progress.skipped}명`}
-          </div>
-
-          {/* 정밀도(임계값) 조절 — 낮출수록 엄격(오인식 감소), 높일수록 관대 */}
-          <div className="mt-3 mx-auto max-w-[420px] px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900">
-            <div className="flex items-center justify-between text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
-              <span>인식 정밀도(임계값)</span>
-              <span className="tabular-nums text-[#6B7B3A] dark:text-[#A8B87A]">{threshold.toFixed(2)}</span>
-            </div>
-            <input
-              type="range"
-              min={0.35}
-              max={0.6}
-              step={0.01}
-              value={threshold}
-              onChange={(e) => setThreshold(Number(e.target.value))}
-              className="mt-2 w-full accent-[#6B7B3A]"
-            />
-            <div className="mt-1 flex justify-between text-[11px] text-[#A89B80]">
-              <span>← 엄격 (오인식 ↓)</span>
-              <span>관대 (본인 인식 ↑) →</span>
-            </div>
-            <p className="mt-1.5 text-[11px] text-[#A89B80] leading-relaxed">
-              다른 사람이 출석되면 값을 <strong>낮추고</strong>, 본인이 인식 안 되면 <strong>올리세요</strong>. (권장 0.42~0.48)
-            </p>
           </div>
         </div>
       )}

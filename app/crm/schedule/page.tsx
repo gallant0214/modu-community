@@ -2316,22 +2316,42 @@ function fmtKstHm(iso: string): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-/** "2026년07월09일까지 (5일 남음)" 형태로 포맷. 무기한/만료 상태도 처리. */
-function formatExpiry(ymd: string): { text: string; tone: "normal" | "warn" | "expired" | "infinite" } {
-  if (!ymd) return { text: "-", tone: "normal" };
-  if (ymd === "9999-12-31") return { text: "무기한", tone: "infinite" };
+function formatExpiryBadge(ymd: string): { label: string; detail: string; tone: "normal" | "warn" | "expired" | "infinite" } {
+  if (!ymd) return { label: "-", detail: "만료일 없음", tone: "normal" };
+  if (ymd === "9999-12-31") return { label: "무기한", detail: "기간 제한 없음", tone: "infinite" };
   const [, m, d] = ymd.split("-").map(Number);
-  const dateStr = `${String(m).padStart(2, "0")}월${String(d).padStart(2, "0")}일까지`;
+  const detail = `${String(m).padStart(2, "0")}.${String(d).padStart(2, "0")}까지`;
   const target = new Date(`${ymd}T00:00:00+09:00`);
   const now = new Date();
   const nowKstMidnight = new Date(now.getTime() + 9 * 3600_000);
   nowKstMidnight.setUTCHours(0, 0, 0, 0);
   const kstNow = new Date(nowKstMidnight.getTime() - 9 * 3600_000);
   const diffDays = Math.round((target.getTime() - kstNow.getTime()) / (24 * 3600_000));
-  if (diffDays < 0) return { text: `${dateStr} (만료됨)`, tone: "expired" };
-  if (diffDays === 0) return { text: `${dateStr} (오늘 만료)`, tone: "warn" };
-  const tone = diffDays <= 7 ? "warn" : "normal";
-  return { text: `${dateStr} (${diffDays}일 남음)`, tone };
+  if (diffDays < 0) return { label: "만료됨", detail, tone: "expired" };
+  if (diffDays === 0) return { label: "오늘 만료", detail, tone: "warn" };
+  return {
+    label: `D-${diffDays}`,
+    detail,
+    tone: diffDays <= 7 ? "warn" : "normal",
+  };
+}
+
+function passMetricClasses(tone: "normal" | "warn" | "expired" | "infinite") {
+  if (tone === "expired") {
+    return "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300";
+  }
+  if (tone === "warn") {
+    return "border-amber-200 bg-amber-50 text-[#9A5B12] dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-300";
+  }
+  if (tone === "infinite") {
+    return "border-[#6B7B3A]/25 bg-[#6B7B3A]/8 text-[#53612D] dark:border-[#A8B87A]/25 dark:bg-[#A8B87A]/10 dark:text-[#C4D48F]";
+  }
+  return "border-[#D7CCB8] bg-white text-[#4B4438] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200";
+}
+
+function remainingTone(remaining: number) {
+  if (remaining <= 2) return "warn";
+  return "infinite";
 }
 
 /* ─── 새 예약 모달 ────────────────────────────── */
@@ -2826,13 +2846,28 @@ function NewReservationModal({
 
             {searchMode === "assigned" ? (
               <>
-                <input
-                  type="text"
-                  value={filterText}
-                  onChange={(e) => setFilterText(e.target.value)}
-                  placeholder="이름 · 수업 종류로 필터"
-                  className="mb-2 w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px]"
-                />
+                <div className="mb-3 rounded-xl border border-[#E8E0D0]/80 bg-[#F7F1E4] p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-100">
+                        회원 찾기
+                      </div>
+                      <div className="text-[11px] text-[#8C8270] dark:text-zinc-500">
+                        이름이나 수업 종류로 빠르게 좁혀보세요
+                      </div>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-[#6B7B3A] ring-1 ring-[#E8E0D0] dark:bg-zinc-950 dark:ring-zinc-700">
+                      {filteredAssigned.length}명
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={filterText}
+                    onChange={(e) => setFilterText(e.target.value)}
+                    placeholder="회원명 또는 수업명 검색"
+                    className="w-full rounded-lg border border-[#D9CEBA] bg-white px-3 py-2.5 text-[13px] text-[#2A251D] shadow-sm outline-none transition focus:border-[#6B7B3A] focus:ring-2 focus:ring-[#6B7B3A]/15 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  />
+                </div>
                 {loadingAssigned ? (
                   <div className="px-3 py-4 text-center text-[12.5px] text-[#8C8270]">불러오는 중…</div>
                 ) : filteredAssigned.length === 0 ? (
@@ -2842,64 +2877,80 @@ function NewReservationModal({
                       : "일치하는 결과가 없어요."}
                   </div>
                 ) : (
-                  <ul className="space-y-1.5 max-h-[260px] overflow-y-auto">
+                  <>
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-100">
+                      예약 가능한 회원
+                    </div>
+                    <div className="text-[11px] text-[#8C8270] dark:text-zinc-500">
+                      수강권 상태를 확인하고 선택하세요
+                    </div>
+                  </div>
+                  <ul className="space-y-2 max-h-[300px] overflow-y-auto pr-0.5">
                     {filteredAssigned.map((p) => {
                       const selected = passId === p.id;
+                      const expiry = formatExpiryBadge(p.expires_at);
+                      const remainingCls = passMetricClasses(remainingTone(p.remaining_sessions));
+                      const expiryCls = passMetricClasses(expiry.tone);
                       return (
                         <li key={p.id}>
                           <button
                             type="button"
                             onClick={() => pickAssignedPass(p)}
-                            className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors
+                            className={`w-full text-left px-3.5 py-3 rounded-xl border transition-colors
                               ${selected
-                                ? "border-[#6B7B3A] bg-[#6B7B3A]/10"
-                                : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
+                                ? "border-[#6B7B3A] bg-[#6B7B3A]/10 shadow-sm ring-1 ring-[#6B7B3A]/20"
+                                : "border-[#E8E0D0] bg-[#FEFCF7] hover:border-[#6B7B3A]/40 hover:bg-white dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-900/80"
                               }`}
                           >
-                            {(() => {
-                              const exp = formatExpiry(p.expires_at);
-                              const expCls =
-                                exp.tone === "expired"
-                                  ? "text-red-600"
-                                  : exp.tone === "warn"
-                                    ? "text-[#B47B2A] dark:text-amber-300"
-                                    : exp.tone === "infinite"
-                                      ? "text-[#6B7B3A] dark:text-[#A8B87A]"
-                                      : "text-[#8C8270] dark:text-zinc-500";
-                              return (
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0 space-y-0.5">
-                                    <div className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
-                                      {p.member_name || "(이름 없음)"}
-                                    </div>
-                                    <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 truncate">
-                                      {p.lesson_kind} · {p.session_minutes}분
-                                    </div>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <div className="truncate text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                                    {p.member_name || "(이름 없음)"}
                                   </div>
-                                  <div className="shrink-0 text-right space-y-0.5 leading-tight">
-                                    <div className="text-[10.5px] text-[#A89B80] dark:text-zinc-500">
-                                      총 {p.total_sessions}회 중
-                                    </div>
-                                    <div className="text-[11px] font-medium text-[#B47B2A] dark:text-amber-300">
-                                      잔여 {p.remaining_sessions}회
-                                    </div>
-                                    <div className={`text-[10.5px] ${expCls}`}>{exp.text}</div>
-                                  </div>
+                                  {selected && (
+                                    <span className="shrink-0 rounded-full bg-[#6B7B3A] px-2 py-0.5 text-[10.5px] font-semibold text-white">
+                                      선택됨
+                                    </span>
+                                  )}
                                 </div>
-                              );
-                            })()}
+                                <div className="mt-1 truncate text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                                  {p.lesson_kind} · {p.session_minutes}분
+                                </div>
+                              </div>
+                              <div className="shrink-0 rounded-full border border-[#E8E0D0] bg-white px-2.5 py-1 text-[11px] font-medium text-[#8C8270] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-400">
+                                총 {p.total_sessions}회
+                              </div>
+                            </div>
+                            <div className="mt-3 grid grid-cols-2 gap-2">
+                              <div className={`rounded-lg border px-2.5 py-2 ${remainingCls}`}>
+                                <div className="text-[10.5px] font-medium opacity-75">잔여 회수</div>
+                                <div className="mt-0.5 text-[13px] font-bold">
+                                  {p.remaining_sessions}/{p.total_sessions}회
+                                </div>
+                              </div>
+                              <div className={`rounded-lg border px-2.5 py-2 ${expiryCls}`}>
+                                <div className="text-[10.5px] font-medium opacity-75">유효기간</div>
+                                <div className="mt-0.5 flex items-baseline gap-1.5">
+                                  <span className="text-[13px] font-bold">{expiry.label}</span>
+                                  <span className="text-[10.5px] opacity-75">{expiry.detail}</span>
+                                </div>
+                              </div>
+                            </div>
                           </button>
                         </li>
                       );
                     })}
                   </ul>
+                  </>
                 )}
               </>
             ) : (
               <>
                 {picked ? (
                   <>
-                    <div className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-[#6B7B3A]/40 bg-[#6B7B3A]/5 mb-2">
+                    <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-[#6B7B3A]/35 bg-[#6B7B3A]/8 px-3 py-2.5">
                       <span className="text-[13.5px] text-[#3A342A] dark:text-zinc-200">
                         <strong>{picked.name}</strong>
                         {picked.phone && (
@@ -2917,8 +2968,13 @@ function NewReservationModal({
                         다시 선택
                       </button>
                     </div>
-                    <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
-                      사용할 수강권
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-100">
+                        사용할 수강권
+                      </div>
+                      <div className="text-[11px] text-[#8C8270] dark:text-zinc-500">
+                        잔여와 만료일을 확인하세요
+                      </div>
                     </div>
                     {loadingOtherPasses ? (
                       <div className="text-[12.5px] text-[#8C8270]">불러오는 중…</div>
@@ -2927,78 +2983,103 @@ function NewReservationModal({
                         잔여가 있는 유효 수강권이 없어요.
                       </div>
                     ) : (
-                      <ul className="space-y-1.5">
-                        {otherPasses.map((p) => (
-                          <li key={p.id}>
-                            <button
-                              type="button"
-                              onClick={() => pickOtherPass(p)}
-                              className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors
-                                ${passId === p.id
-                                  ? "border-[#6B7B3A] bg-[#6B7B3A]/10"
-                                  : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
-                                }`}
-                            >
-                              <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">
-                                {p.lesson_kind}
-                              </div>
-                              <div className="mt-0.5 flex items-end justify-between gap-2">
-                                <span className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 truncate">
-                                  잔여 {p.remaining_sessions}/{p.total_sessions}회 · {p.session_minutes}분
-                                  {p.trainer_member_id !== slot.trainerId && (
-                                    <span className="ml-2 text-[#B47B2A]">다른 강사 수강권</span>
-                                  )}
-                                </span>
-                                {(() => {
-                                  const exp = formatExpiry(p.expires_at);
-                                  const cls =
-                                    exp.tone === "expired"
-                                      ? "text-red-600"
-                                      : exp.tone === "warn"
-                                        ? "text-[#B47B2A] dark:text-amber-300"
-                                        : exp.tone === "infinite"
-                                          ? "text-[#6B7B3A] dark:text-[#A8B87A]"
-                                          : "text-[#8C8270] dark:text-zinc-500";
-                                  return (
-                                    <span
-                                      className={`shrink-0 text-right text-[10.5px] leading-tight ${cls}`}
-                                    >
-                                      {exp.text}
-                                    </span>
-                                  );
-                                })()}
-                              </div>
-                            </button>
-                          </li>
-                        ))}
+                      <ul className="space-y-2">
+                        {otherPasses.map((p) => {
+                          const selected = passId === p.id;
+                          const expiry = formatExpiryBadge(p.expires_at);
+                          const remainingCls = passMetricClasses(remainingTone(p.remaining_sessions));
+                          const expiryCls = passMetricClasses(expiry.tone);
+                          return (
+                            <li key={p.id}>
+                              <button
+                                type="button"
+                                onClick={() => pickOtherPass(p)}
+                                className={`w-full text-left px-3.5 py-3 rounded-xl border transition-colors
+                                  ${selected
+                                    ? "border-[#6B7B3A] bg-[#6B7B3A]/10 shadow-sm ring-1 ring-[#6B7B3A]/20"
+                                    : "border-[#E8E0D0] bg-[#FEFCF7] hover:border-[#6B7B3A]/40 hover:bg-white dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-900/80"
+                                  }`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <div className="truncate text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                                        {p.lesson_kind}
+                                      </div>
+                                      {selected && (
+                                        <span className="shrink-0 rounded-full bg-[#6B7B3A] px-2 py-0.5 text-[10.5px] font-semibold text-white">
+                                          선택됨
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="mt-1 truncate text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                                      {p.session_minutes}분
+                                      {p.trainer_member_id !== slot.trainerId && (
+                                        <span className="ml-2 text-[#B47B2A]">다른 강사 수강권</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="shrink-0 rounded-full border border-[#E8E0D0] bg-white px-2.5 py-1 text-[11px] font-medium text-[#8C8270] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-400">
+                                    총 {p.total_sessions}회
+                                  </div>
+                                </div>
+                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                  <div className={`rounded-lg border px-2.5 py-2 ${remainingCls}`}>
+                                    <div className="text-[10.5px] font-medium opacity-75">잔여 회수</div>
+                                    <div className="mt-0.5 text-[13px] font-bold">
+                                      {p.remaining_sessions}/{p.total_sessions}회
+                                    </div>
+                                  </div>
+                                  <div className={`rounded-lg border px-2.5 py-2 ${expiryCls}`}>
+                                    <div className="text-[10.5px] font-medium opacity-75">유효기간</div>
+                                    <div className="mt-0.5 flex items-baseline gap-1.5">
+                                      <span className="text-[13px] font-bold">{expiry.label}</span>
+                                      <span className="text-[10.5px] opacity-75">{expiry.detail}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </button>
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
                   </>
                 ) : (
                   <>
-                    <div className="flex gap-2">
-                      <input
-                        className="flex-1 px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px]"
-                        value={filterText}
-                        onChange={(e) => setFilterText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            searchOther();
-                          }
-                        }}
-                        placeholder="이름 또는 연락처"
-                      />
-                      <button
-                        onClick={searchOther}
-                        disabled={searching || !filterText.trim()}
-                        className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932]"
-                      >
-                        {searching ? "…" : "검색"}
-                      </button>
+                    <div className="rounded-xl border border-[#E8E0D0]/80 bg-[#F7F1E4] p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+                      <div className="mb-2">
+                        <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-100">
+                          회원 검색
+                        </div>
+                        <div className="text-[11px] text-[#8C8270] dark:text-zinc-500">
+                          담당 회원이 아니어도 유효 수강권이 있으면 예약할 수 있어요
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          className="flex-1 rounded-lg border border-[#D9CEBA] bg-white px-3 py-2.5 text-[13.5px] text-[#2A251D] shadow-sm outline-none transition focus:border-[#6B7B3A] focus:ring-2 focus:ring-[#6B7B3A]/15 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                          value={filterText}
+                          onChange={(e) => setFilterText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              searchOther();
+                            }
+                          }}
+                          placeholder="이름 또는 연락처"
+                        />
+                        <button
+                          onClick={searchOther}
+                          disabled={searching || !filterText.trim()}
+                          className="px-4 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13px] font-semibold hover:bg-[#5a6932]"
+                        >
+                          {searching ? "…" : "검색"}
+                        </button>
+                      </div>
                     </div>
                     {otherResults.length > 0 && (
-                      <ul className="mt-2 space-y-1.5 max-h-[180px] overflow-y-auto">
+                      <ul className="mt-3 space-y-1.5 max-h-[180px] overflow-y-auto">
                         {otherResults.map((m) => (
                           <li key={m.id}>
                             <button
