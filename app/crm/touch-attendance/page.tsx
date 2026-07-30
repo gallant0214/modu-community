@@ -209,10 +209,16 @@ export default function TouchAttendancePage() {
   };
 
   const display = (
-    <div className="h-[clamp(66px,11vmin,140px)] rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 flex items-center justify-center">
-      <span className="text-[clamp(32px,6.5vmin,80px)] font-bold tracking-[0.2em] text-[#2A251D] dark:text-zinc-100">
-        {num || <span className="text-[#C9BEA6] tracking-normal text-[clamp(18px,3vmin,34px)] font-medium">출석번호</span>}
-      </span>
+    <div className="h-[clamp(66px,11vmin,140px)] rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 flex items-center justify-center leading-none">
+      {num ? (
+        <span className="text-[clamp(32px,6.5vmin,80px)] font-bold tracking-[0.2em] text-[#2A251D] dark:text-zinc-100 leading-none">
+          {num}
+        </span>
+      ) : (
+        <span className="text-[#C9BEA6] tracking-normal text-[clamp(18px,3vmin,34px)] font-medium leading-none">
+          출석번호
+        </span>
+      )}
     </div>
   );
   const keypad = (
