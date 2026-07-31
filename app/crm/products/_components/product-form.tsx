@@ -82,13 +82,26 @@ interface Props {
   onCancel: () => void;
   /** 'personal' 이면 강사 개인 상품 스코프로 저장 (수강권=personal/group 만 허용) */
   scope?: "center" | "personal";
+  /** 내부용 — 초기화 버튼이 폼을 리마운트해 모든 입력을 초기값으로 되돌림 */
+  onReset?: () => void;
 }
 
 /**
- * 상품 생성/수정 공용 폼.
+ * 상품 생성/수정 공용 폼. 초기화 버튼으로 리마운트해 폼을 초기 상태로 되돌린다.
  * new/page.tsx 와 상품 관리 페이지의 수정 모달 둘 다 사용.
  */
-export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center" }: Props) {
+export function ProductForm(props: Props) {
+  const [resetNonce, setResetNonce] = useState(0);
+  return (
+    <ProductFormInner
+      key={resetNonce}
+      {...props}
+      onReset={() => setResetNonce((n) => n + 1)}
+    />
+  );
+}
+
+function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", onReset }: Props) {
   const { getIdToken } = useAuth();
 
   const [customTypes, setCustomTypes] = useState<TypeOption[]>([]);
@@ -1155,6 +1168,15 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
       )}
 
       <div className="flex items-center justify-end gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm("입력한 내용을 모두 초기화할까요?")) onReset?.();
+          }}
+          className="px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-medium text-[#8C7A52] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-900"
+        >
+          초기화
+        </button>
         <button
           type="button"
           onClick={onCancel}
