@@ -177,7 +177,7 @@ export async function POST(request: Request) {
     if (perm?.can_manage_all_schedules) canManageAll = true;
   }
 
-  let body: { pass_id?: number; starts_at?: string; ends_at?: string; trainer_member_id?: number };
+  let body: { pass_id?: number; starts_at?: string; ends_at?: string; trainer_member_id?: number; force?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -286,7 +286,8 @@ export async function POST(request: Request) {
     .lt("starts_at", endsAtIso)
     .gt("ends_at", startIso);
   const overlapCount = (overlaps ?? []).length;
-  if (overlapCount > 0) {
+  // force=true 면 강사가 중복 예약을 명시적으로 허용한 것(앱에서 "중복 예약하시겠습니까?" 확인 후)
+  if (!body.force && overlapCount > 0) {
     if (groupCap < 2) {
       return NextResponse.json(
         { error: "이미 예약된 시간이에요. 다른 시간을 선택해 주세요." },
