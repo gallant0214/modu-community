@@ -224,8 +224,8 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   );
   // 상품 판매 가격 (판매 시 자동으로 채워짐).
   const [priceWon, setPriceWon] = useState<number>(initial?.price_won ?? 0);
-  // 부가세 UI 는 제거됨 — 편집 시 기존 값 보존, 신규는 false.
-  const vatIncluded = initial?.vat_included ?? false;
+  // 부가세 포함 여부 (가격 입력 옆 체크).
+  const [vatIncluded, setVatIncluded] = useState<boolean>(initial?.vat_included ?? false);
   const [capacity, setCapacity] = useState(initial?.capacity ?? 2);
   const [sessionMinutes, setSessionMinutes] = useState(initial?.session_minutes ?? 50);
 
@@ -580,6 +580,17 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
               원
             </span>
           </div>
+          <label className="mt-2 flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={vatIncluded}
+              onChange={(e) => setVatIncluded(e.target.checked)}
+              className="w-4 h-4 accent-[#6B7B3A]"
+            />
+            <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+              부가세(VAT) 포함 금액
+            </span>
+          </label>
           <p className="mt-1 text-[12px] text-[#A89B80]">
             회원에게 이 상품을 판매(결제)할 때 자동으로 채워지는 기본 금액이에요.
           </p>
