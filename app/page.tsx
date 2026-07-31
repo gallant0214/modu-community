@@ -292,7 +292,8 @@ export default async function Home() {
             <div className="lp-faq-item">
               <div className="lp-faq-q">Q. 추가 문의는 어떻게 하나요?</div>
               <div className="lp-faq-a">
-                실기·구술·필기 시험에 관한 문의는 카카오톡 오픈채팅으로 받고 있습니다.
+                시험(실기·구술·필기) · 종목별 커뮤니티 · 스포츠 구인·거래 · 회원관리 CRM(센터/개인) 등
+                모든 서비스에 대한 문의·오류 신고·기능 제안은 카카오톡 오픈채팅으로 받고 있습니다.
                 <div style={{ marginTop: 12 }}>
                   <a
                     href="https://open.kakao.com/o/soLx7Eei"
