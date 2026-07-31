@@ -2806,6 +2806,7 @@ export type Database = {
           approved_at: string | null
           approved_by_uid: string | null
           rejected_reason: string | null
+          booking_reason: string | null
         }
         Insert: {
           id?: number
@@ -2829,6 +2830,7 @@ export type Database = {
           approved_at?: string | null
           approved_by_uid?: string | null
           rejected_reason?: string | null
+          booking_reason?: string | null
         }
         Update: {
           id?: number
@@ -2852,6 +2854,7 @@ export type Database = {
           approved_at?: string | null
           approved_by_uid?: string | null
           rejected_reason?: string | null
+          booking_reason?: string | null
         }
         Relationships: []
       }
