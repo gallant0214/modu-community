@@ -22,6 +22,7 @@ interface Reservation {
   consumed: boolean;
   attended_at: string | null;
   cancelled_reason: string | null;
+  booking_reason?: string | null;
   session_index: number | null;
   session_total: number | null;
   created_by_uid?: string | null;
@@ -2051,6 +2052,14 @@ function ReservationDialog({
                 </div>
               </div>
             )}
+          {reservation.booking_reason && (
+            <div className="mt-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 bg-[#F5F0E5]/60 dark:bg-zinc-900 px-2.5 py-1.5">
+              <span className="text-[11.5px] font-semibold text-[#8C8270] dark:text-zinc-500">지난 예약 사유</span>
+              <div className="mt-0.5 text-[12.5px] text-[#3A342A] dark:text-zinc-200 whitespace-pre-wrap break-words">
+                {reservation.booking_reason}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-4 space-y-2">
@@ -2149,7 +2158,7 @@ function ReservationDialog({
                 onChange={(e) => setReasonNote(e.target.value.slice(0, 200))}
                 placeholder={
                   cancelMode
-                    ? "추가 사유 (예: 회원이 감기로 못 오심). 선택 사유 없이 이 칸만 채워도 돼요."
+                    ? "취소 내용을 입력해 주세요 (점 하나라도 필수)."
                     : "추가 사유 (예: 연락 없이 미출석). 선택 사유 없이 이 칸만 채워도 돼요."
                 }
                 maxLength={200}
@@ -2157,11 +2166,14 @@ function ReservationDialog({
                 className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] resize-none"
               />
               {(() => {
-                const needsCustomText =
-                  reason === CUSTOM_REASON_SENTINEL || (!reason && !reasonNote.trim());
-                const noteMissing = needsCustomText && !reasonNote.trim();
+                // 취소: 사유 선택 + 내용(한 글자라도) 필수 / 노쇼: 기존 규칙
+                const noteMissing = cancelMode
+                  ? !reason || !reasonNote.trim()
+                  : !reasonNote.trim() && (reason === CUSTOM_REASON_SENTINEL || !reason);
                 const label = noteMissing
-                  ? "사유를 입력해 주세요"
+                  ? cancelMode
+                    ? "사유 선택 후 내용을 입력해 주세요"
+                    : "사유를 입력해 주세요"
                   : cancelMode
                     ? "이 사유로 예약 취소"
                     : "이 사유로 노쇼 처리";
