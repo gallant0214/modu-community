@@ -26,7 +26,7 @@ export default async function Home() {
         {/* ===== 1. 히어로 ===== */}
         <section className="lp-hero" id="about">
           <div className="lp-c">
-            <div className="lp-hero-chip">커뮤니티 · 스포츠 구인 · 스포츠 거래 · 시험 준비</div>
+            <div className="lp-hero-chip">커뮤니티 · 스포츠 구인 · 스포츠 거래 · 시험 준비 · 회원관리 CRM</div>
             <h1 className="lp-hero-title">
               체육지도사를 준비하고
               <br />
@@ -39,6 +39,7 @@ export default async function Home() {
             </p>
             <div className="lp-hero-ctas">
               <Link href="/community" className="lp-btn lp-btn-primary">종목별 커뮤니티 보기</Link>
+              <Link href="/crm/members" className="lp-btn lp-btn-outline">회원관리 CRM</Link>
               <Link href="/jobs" className="lp-btn lp-btn-outline">구인 공고 탐색</Link>
               <Link href="/trade" className="lp-btn lp-btn-outline">스포츠 거래 보기</Link>
               <a
@@ -111,6 +112,7 @@ export default async function Home() {
                   <li>&quot;내 종목&quot; 후기만 찾으려면 수십 번 검색</li>
                   <li>일반 알바 사이트에 묻힌 스포츠 채용</li>
                   <li>근무조건·급여 비교가 어려움</li>
+                  <li>회원관리는 엑셀·수기 장부·고가 프로그램</li>
                 </ul>
               </div>
               <div className="lp-compare-col lp-compare-after">
@@ -120,6 +122,7 @@ export default async function Home() {
                   <li>실기·구술 정보와 현장 경험을 함께 확인</li>
                   <li>스포츠 업계 전용 구인 공고를 바로 비교</li>
                   <li>운동 장비·센터 거래도 한곳에서 확인</li>
+                  <li>회원관리 CRM(센터/1인 프리랜서용)으로 회원·수강권·스케줄·급여까지 통합</li>
                   <li>기출문제 풀이 앱까지 브랜드 안에서 자연스럽게 연결</li>
                 </ul>
               </div>
@@ -191,6 +194,83 @@ export default async function Home() {
           </div></div>
         </section>
 
+        {/* ===== 5.5 회원관리 CRM ===== */}
+        <section className="lp-section" id="section-crm">
+          <div className="lp-c"><div className="lp-card">
+            <div className="lp-label">회원관리 CRM · 신규</div>
+            <h2 className="lp-title">체육시설 사장님과 프리랜서 강사를 위한<br />올인원 회원관리 도구</h2>
+            <p className="lp-desc">회원 등록부터 이용권·수강권 발급, 스케줄·예약·출석, 마일리지, 락커, 전자 계약서까지 — 별도 프로그램 없이 웹 브라우저 하나로 관리하세요.</p>
+            <div className="lp-grid-2">
+              <div className="lp-gc">
+                <h3>🏢 센터 CRM</h3>
+                <ul>
+                  <li>다인 사업장(센터장 · 관리자 · 강사 · 프론트) 권한 분리</li>
+                  <li>회원별 이용권·락커·운동복 · 결제 · 미수금 · 예약 · 출석 통합</li>
+                  <li>강사 수업료 · 급여 자동 산정, 성과급 구간 지원</li>
+                  <li>얼굴 인식/번호 입력 터치 출석, 음성 안내</li>
+                </ul>
+                <p className="lp-gc-example">예: &ldquo;3층 필라테스 스튜디오, 강사 5명 · 회원 200명 관리&rdquo;</p>
+              </div>
+              <div className="lp-gc">
+                <h3>🧑‍🏫 개인 CRM</h3>
+                <ul>
+                  <li>1인 프리랜서 강사 전용 축소 UI</li>
+                  <li>내 회원 · 내 수강권 · 내 스케줄 · 내 급여만 한눈에</li>
+                  <li>여러 센터를 오가며 담당하는 회원도 통합 조회</li>
+                  <li>개인 상품 카탈로그(PT · 그룹 수업) 별도 관리</li>
+                </ul>
+                <p className="lp-gc-example">예: &ldquo;여러 센터에 출강하는 PT 강사, 회원별 진행 상황을 한 화면에&rdquo;</p>
+              </div>
+            </div>
+
+            <div className="lp-grid-3" style={{ marginTop: 24 }}>
+              <div className="lp-feature-card">
+                <div className="lp-feature-icon">📅</div>
+                <h3>스케줄 · 예약</h3>
+                <p className="lp-feature-example">&ldquo;내일 10시 회원 3명 노쇼 사유까지 기록&rdquo;</p>
+                <p>강사별 캘린더, 드래그 이동, 겹침 자동 분할, 노쇼/취소 사유 이력</p>
+              </div>
+              <div className="lp-feature-card">
+                <div className="lp-feature-icon">✅</div>
+                <h3>터치 출석</h3>
+                <p className="lp-feature-example">&ldquo;출석번호 or 얼굴만 대면 자동 체크인&rdquo;</p>
+                <p>번호 / 얼굴 / 번호+얼굴 3가지 모드 + 만료·생일·저세션 음성 안내</p>
+              </div>
+              <div className="lp-feature-card">
+                <div className="lp-feature-icon">💳</div>
+                <h3>이용권 · 결제</h3>
+                <p className="lp-feature-example">&ldquo;회원권+락커+운동복 장바구니 한번에 결제&rdquo;</p>
+                <p>회원권/수강권 발급, 정지·홀딩, 미수금, 자동 마일리지 적립</p>
+              </div>
+              <div className="lp-feature-card">
+                <div className="lp-feature-icon">📝</div>
+                <h3>전자 계약서</h3>
+                <p className="lp-feature-example">&ldquo;결제 즉시 서명 링크 발송, 서명 이력 자동 보관&rdquo;</p>
+                <p>템플릿 선택 → 회원 서명 → 이중 서명 저장 (SMS · 앱 푸시 발송 예정)</p>
+              </div>
+              <div className="lp-feature-card">
+                <div className="lp-feature-icon">📈</div>
+                <h3>대시보드 · 통계</h3>
+                <p className="lp-feature-example">&ldquo;이번 달 매출·수업료·미수금·만료 임박 한 눈에&rdquo;</p>
+                <p>센터장/강사 관점 분리, 시간대 · 요일 매출, 리텐션 · 활성 회원 KPI</p>
+              </div>
+              <div className="lp-feature-card">
+                <div className="lp-feature-icon">🔔</div>
+                <h3>자동 알림</h3>
+                <p className="lp-feature-example">&ldquo;만료 D-3, 생일, 저세션 회원에 자동 안내&rdquo;</p>
+                <p>트리거별 on/off · 개별 문구 관리 (실 발송 채널은 순차 오픈)</p>
+              </div>
+            </div>
+
+            <div className="lp-section-cta">
+              <Link href="/crm/members" className="lp-btn lp-btn-primary">회원관리 CRM 시작하기 →</Link>
+            </div>
+            <p className="lp-hero-note" style={{ marginTop: 12 }}>
+              현재 무료 이용 중 · 자동 알림 발송 · POS · 전자 계약서 채널 등 일부 기능은 추후 유료 전환될 수 있습니다.
+            </p>
+          </div></div>
+        </section>
+
         {/* ===== 6. 타겟별 어필 ===== */}
         <section className="lp-section">
           <div className="lp-c"><div className="lp-card">
@@ -203,6 +283,8 @@ export default async function Home() {
               <div className="lp-persona"><span className="lp-persona-emoji">💼</span><h3>스포츠 구직자</h3><p>운동 분야 전용 일자리를 찾는 분</p></div>
               <div className="lp-persona"><span className="lp-persona-emoji">🏢</span><h3>센터 운영자</h3><p>업계 경험자를 채용하고 싶은 분</p></div>
               <div className="lp-persona"><span className="lp-persona-emoji">🎓</span><h3>체육 지도자</h3><p>정리된 시험 정보를 보여주고 싶은 분</p></div>
+              <div className="lp-persona"><span className="lp-persona-emoji">🧾</span><h3>1인 프리랜서 강사</h3><p>개인 CRM으로 회원·수업·급여를 정리하고 싶은 분</p></div>
+              <div className="lp-persona"><span className="lp-persona-emoji">🏋️‍♀️</span><h3>센터·스튜디오 사장님</h3><p>회원·강사·매출을 웹 하나로 관리하고 싶은 분</p></div>
             </div>
           </div></div>
         </section>
@@ -241,7 +323,8 @@ export default async function Home() {
           <div className="lp-c"><div className="lp-card">
             <div className="lp-label">FAQ</div>
             <h2 className="lp-title">자주 묻는 질문</h2>
-            <FAQ q="Q. 무료인가요?" a="네, 완전 무료입니다. 앱 다운로드, 후기 열람, 구인 공고 확인, 거래 게시판 이용까지 모두 무료이며 별도 결제 없이 이용 가능합니다." />
+            <FAQ q="Q. 무료인가요?" a="네, 커뮤니티·구인·거래·회원관리 CRM 모두 현재 무료로 이용 가능합니다. 자동 알림 발송, POS, 전자 계약서 발송 채널 등 CRM 일부 기능은 추후 유료 전환될 수 있으며, 시행 최소 30일 전 사전 공지드립니다." />
+            <FAQ q="Q. 회원관리 CRM은 뭔가요?" a="체육시설 사장님과 프리랜서 강사를 위한 회원관리 도구입니다. 회원 등록, 이용권/수강권 발급, 스케줄·예약, 얼굴/번호 터치 출석, 마일리지, 락커, 전자 계약서, 강사 급여 자동 산정까지 별도 프로그램 없이 웹 브라우저 하나로 이용할 수 있으며, '센터 CRM'(다인)과 '개인 CRM'(1인 강사) 두 가지 형태로 제공됩니다." />
             <FAQ q="Q. 어떤 종목 후기를 볼 수 있나요?" a="생활스포츠지도사, 전문스포츠지도사, 유소년·노인스포츠지도사 등 체육지도자 자격시험 전 종목의 실기·구술 후기를 다루고 있습니다." />
             <FAQ q="Q. 구인 공고에는 어떤 분야가 있나요?" a="헬스장, PT 스튜디오, 필라테스, 요가, GX, 복싱, 수영 등 스포츠·운동 업계 전용 구인 공고만 모여 있습니다." />
             <FAQ q="Q. iOS에서도 이용할 수 있나요?" a="네, App Store와 Google Play 모두에서 다운로드 가능합니다." />
@@ -253,7 +336,7 @@ export default async function Home() {
                 실기·구술·필기 시험에 관한 문의는 카카오톡 오픈채팅으로 받고 있습니다.
                 <div style={{ marginTop: 12 }}>
                   <a
-                    href="https://open.kakao.com/o/gvup8fki"
+                    href="https://open.kakao.com/o/soLx7Eei"
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{
