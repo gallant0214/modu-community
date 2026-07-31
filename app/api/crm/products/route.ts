@@ -11,6 +11,8 @@ const UNITS = ["day", "month", "year"] as const;
 /** 묶음(번들) 구성 상품 정규화. duration_value(일) 또는 total_sessions(회) 가 있어야 유효 */
 export function sanitizeComponents(input: unknown): {
   type: string;
+  name: string;
+  price_won: number;
   billing_mode: string;
   duration_value: number;
   total_sessions: number;
@@ -23,6 +25,8 @@ export function sanitizeComponents(input: unknown): {
       const o = (c ?? {}) as Record<string, unknown>;
       return {
         type: typeof o.type === "string" ? o.type : "membership",
+        name: typeof o.name === "string" ? o.name.slice(0, 60) : "",
+        price_won: Math.max(0, Math.floor(Number(o.price_won) || 0)),
         billing_mode: o.billing_mode === "count" ? "count" : "period",
         duration_value: Math.max(0, Math.floor(Number(o.duration_value) || 0)),
         total_sessions: Math.max(0, Math.floor(Number(o.total_sessions) || 0)),

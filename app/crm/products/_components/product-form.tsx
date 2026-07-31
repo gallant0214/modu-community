@@ -39,6 +39,10 @@ export interface ProductInitial {
 
 export interface BundleComponent {
   type: string;
+  /** 구성 상품명 (묶음 판매 시 이 이름으로 각 항목 발급) */
+  name?: string;
+  /** 구성 상품 개별 가격 (묶음 총액 = 상단 상품 + 각 구성 합산) */
+  price_won?: number;
   billing_mode: BillingMode;
   duration_value?: number;
   total_sessions?: number;
@@ -272,8 +276,28 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   }, [type]);
   // 상품 설명 UI 제거됨 — 편집 시 기존 값 보존, 신규는 null.
   const description: string | null = initial?.description ?? null;
-  // 묶음 구성 상품 UI 는 제거됨. 기존 묶음 상품은 데이터 보존을 위해 편집 시 그대로 유지(신규는 항상 [] ).
-  const components: BundleComponent[] = initial?.components ?? [];
+  // 묶음 구성 상품 — 상단 상품에 함께 발급될 다른 상품들. 판매 시 한 결제로 전개.
+  const [components, setComponents] = useState<BundleComponent[]>(initial?.components ?? []);
+  // 유형별 기본값으로 구성 상품 한 줄 추가
+  const addComponent = (compType: string) => {
+    const isLesson = compType === "personal" || compType === "group";
+    setComponents((prev) => [
+      ...prev,
+      {
+        type: compType,
+        name: "",
+        price_won: 0,
+        billing_mode: isLesson ? "count" : "period",
+        duration_value: isLesson ? 0 : 30,
+        total_sessions: isLesson ? 10 : 0,
+        session_minutes: isLesson ? 50 : 0,
+      },
+    ]);
+  };
+  const updateComponent = (i: number, patch: Partial<BundleComponent>) =>
+    setComponents((prev) => prev.map((c, x) => (x === i ? { ...c, ...patch } : c)));
+  const removeComponent = (i: number) =>
+    setComponents((prev) => prev.filter((_, x) => x !== i));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -339,6 +363,8 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
         daily_time_limit_enabled: dailyTimeLimitEnabled,
         components: components.map((c) => ({
           type: c.type,
+          name: (c.name ?? "").trim(),
+          price_won: Math.max(0, Math.floor(c.price_won ?? 0)),
           billing_mode: c.billing_mode,
           duration_value: c.billing_mode === "period" ? c.duration_value ?? 0 : 0,
           total_sessions: c.billing_mode === "count" ? c.total_sessions ?? 0 : 0,
@@ -925,6 +951,175 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
           </div>
         )}
       </Section>
+
+      {/* 묶음 구성 상품 — 상단 상품에 함께 발급될 다른 상품을 붙여 하나의 묶음으로 판매 */}
+      {(type === "personal" || type === "group" || type === "membership" || components.length > 0) && (
+        <Section title="묶음 상품 구성">
+          <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 mb-3 leading-relaxed">
+            아래에 구성 상품을 추가하면 <b>하나의 묶음 상품</b>으로 판매돼요. 판매(결제) 시 상단 상품과 구성 상품이 <b>함께 발급</b>되고, 결제 금액은 <b>모든 가격의 합산</b>입니다.
+          </p>
+
+          {components.length > 0 && (
+            <div className="space-y-2.5 mb-3">
+              {components.map((c, i) => {
+                const compLabel = BUILT_IN_TYPES.find((t) => t.value === c.type)?.label ?? c.type;
+                const isLesson = c.type === "personal" || c.type === "group";
+                return (
+                  <div
+                    key={i}
+                    className="rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/50 dark:bg-zinc-900/50 p-3 space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded text-[11.5px] font-semibold bg-[#6B7B3A]/12 text-[#6B7B3A] dark:text-[#A8B87A]">
+                        구성 {i + 1} · {compLabel}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeComponent(i)}
+                        className="px-2 py-0.5 rounded-md border border-red-200 dark:border-red-900/60 text-[12px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
+                      >
+                        삭제
+                      </button>
+                    </div>
+
+                    <div>
+                      <FieldLabel>상품명</FieldLabel>
+                      <input
+                        type="text"
+                        value={c.name ?? ""}
+                        onChange={(e) => updateComponent(i, { name: e.target.value })}
+                        placeholder={isLesson ? "예: 개인 PT 10회" : compLabel + " 상품명"}
+                        className={crmInputClass}
+                        maxLength={60}
+                      />
+                    </div>
+
+                    <div>
+                      <FieldLabel>판매 가격 (원)</FieldLabel>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={(c.price_won ?? 0) === 0 ? "" : formatWon(c.price_won ?? 0)}
+                          onChange={(e) => updateComponent(i, { price_won: parseWon(e.target.value) })}
+                          placeholder="0"
+                          className={`${crmInputClass} pr-8 text-right tabular-nums`}
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#A89B80] pointer-events-none">
+                          원
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <FieldLabel>이용 방식</FieldLabel>
+                      <div className="flex gap-1.5">
+                        {(["period", "count"] as const).map((bm) => (
+                          <button
+                            key={bm}
+                            type="button"
+                            onClick={() => updateComponent(i, { billing_mode: bm })}
+                            className={`px-3 py-1.5 rounded-lg text-[12.5px] font-medium border ${
+                              c.billing_mode === bm
+                                ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
+                                : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[#3A342A] dark:text-zinc-300"
+                            }`}
+                          >
+                            {bm === "period" ? "기간제" : "횟수제"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {c.billing_mode === "period" ? (
+                        <div>
+                          <FieldLabel>기간 (일)</FieldLabel>
+                          <input
+                            type="number"
+                            min={0}
+                            value={c.duration_value ?? 0}
+                            onChange={(e) => updateComponent(i, { duration_value: Math.max(0, Number(e.target.value) || 0) })}
+                            className={crmInputClass}
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <FieldLabel>총 횟수</FieldLabel>
+                          <input
+                            type="number"
+                            min={0}
+                            value={c.total_sessions ?? 0}
+                            onChange={(e) => updateComponent(i, { total_sessions: Math.max(0, Number(e.target.value) || 0) })}
+                            className={crmInputClass}
+                          />
+                        </div>
+                      )}
+                      {isLesson && (
+                        <div>
+                          <FieldLabel>수업 시간 (분)</FieldLabel>
+                          <input
+                            type="number"
+                            min={0}
+                            value={c.session_minutes ?? 0}
+                            onChange={(e) => updateComponent(i, { session_minutes: Math.max(0, Number(e.target.value) || 0) })}
+                            className={crmInputClass}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 유형별 추가 버튼 */}
+          {(type === "personal" || type === "group") && (
+            <button
+              type="button"
+              onClick={() => addComponent("membership")}
+              className="w-full px-3.5 py-2.5 rounded-lg text-[13px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
+            >
+              + 회원권 추가하고 묶음 상품 만들기
+            </button>
+          )}
+          {type === "membership" && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => addComponent("locker")}
+                className="px-3 py-2.5 rounded-lg text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
+              >
+                + 락커 상품 추가
+              </button>
+              <button
+                type="button"
+                onClick={() => addComponent("apparel")}
+                className="px-3 py-2.5 rounded-lg text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
+              >
+                + 운동복 상품 추가
+              </button>
+              <button
+                type="button"
+                onClick={() => addComponent("personal")}
+                className="px-3 py-2.5 rounded-lg text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
+              >
+                + 수강권 추가
+              </button>
+            </div>
+          )}
+
+          {components.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-[#E8E0D0] dark:border-zinc-800 flex items-baseline justify-between">
+              <span className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-300">묶음 결제 금액 (합산)</span>
+              <span className="text-[16px] font-extrabold text-[#3A342A] dark:text-zinc-100 tabular-nums">
+                {formatWon(priceWon + components.reduce((s, c) => s + Math.max(0, c.price_won ?? 0), 0))}원
+              </span>
+            </div>
+          )}
+        </Section>
+      )}
 
       {error && (
         <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
