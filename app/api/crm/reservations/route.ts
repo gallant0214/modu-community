@@ -40,7 +40,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_reservations")
     .select(
-      "id, pass_id, member_id, trainer_member_id, starts_at, ends_at, status, consumed, attended_at, cancelled_reason, created_by_uid, created_at"
+      "id, pass_id, member_id, trainer_member_id, starts_at, ends_at, status, consumed, attended_at, cancelled_reason, booking_reason, created_by_uid, created_at"
     )
     .eq("center_id", ctx.centerId)
     .gte("starts_at", startUtc.toISOString())
@@ -177,7 +177,7 @@ export async function POST(request: Request) {
     if (perm?.can_manage_all_schedules) canManageAll = true;
   }
 
-  let body: { pass_id?: number; starts_at?: string; ends_at?: string; trainer_member_id?: number; force?: boolean };
+  let body: { pass_id?: number; starts_at?: string; ends_at?: string; trainer_member_id?: number; force?: boolean; booking_reason?: string };
   try {
     body = await request.json();
   } catch {
@@ -314,6 +314,7 @@ export async function POST(request: Request) {
       status: "booked",
       consumed: false,
       created_by_uid: ctx.uid,
+      booking_reason: body.booking_reason?.trim() || null,
     })
     .select("id")
     .single();
