@@ -71,6 +71,12 @@ interface StaffOption {
   status: string;
 }
 
+// 발급 시 상품명 뒤에 붙는 "(N회)" 세션 수 표기는 목록에선 떼고 상품 이름만 표시.
+// (예: "10회 이벤트(10회)" → "10회 이벤트", "기본 10회(신규)(10회)" → "기본 10회(신규)")
+function passDisplayName(lessonKind: string): string {
+  return (lessonKind || "").replace(/\s*\(\d+회\)\s*$/, "").trim() || lessonKind;
+}
+
 export default function CrmPassesPage() {
   const { getIdToken } = useAuth();
   const [list, setList] = useState<PassRow[]>([]);
@@ -339,7 +345,7 @@ export default function CrmPassesPage() {
                       title="수강권 상세 보기"
                       className="group text-left w-full cursor-pointer"
                     >
-                      <div className="font-semibold text-[#2A251D] dark:text-zinc-100 truncate group-hover:text-[#6B7B3A] group-hover:underline">{p.lesson_kind}</div>
+                      <div className="font-semibold text-[#2A251D] dark:text-zinc-100 truncate group-hover:text-[#6B7B3A] group-hover:underline">{passDisplayName(p.lesson_kind)}</div>
                     </button>
                   </Td>
                   <Td>
