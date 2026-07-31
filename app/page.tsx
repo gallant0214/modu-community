@@ -1,20 +1,8 @@
 export const revalidate = false;
 
 import Link from "next/link";
-import Image from "next/image";
 import { AppStoreButton } from "@/app/components/app-store-button";
 import { GooglePlayButton } from "@/app/components/google-play-button";
-
-const APP_PREVIEWS = [
-  { src: "/app-preview/1.webp", label: "홈 화면", desc: "인기 종목·게시글을 한눈에" },
-  { src: "/app-preview/2.webp", label: "실기·구술 필독", desc: "26년 정책·일정·요건 정리" },
-  { src: "/app-preview/3.webp", label: "종목별 구술", desc: "공통·종목별 구술 자료" },
-  { src: "/app-preview/4.webp", label: "종목별 후기", desc: "보디빌딩·검도·게이트볼 등" },
-  { src: "/app-preview/5.webp", label: "지역별 구인", desc: "서울·부산·대구… 지역으로 탐색" },
-  { src: "/app-preview/6.webp", label: "MY", desc: "내 글·북마크·쪽지·알림" },
-  { src: "/app-preview/7.webp", label: "실기 동작 (사진)", desc: "동작별 체크리스트" },
-  { src: "/app-preview/8.webp", label: "실기 동작 (해부)", desc: "근육 도식 + 체크리스트" },
-];
 
 export default async function Home() {
 
@@ -285,35 +273,6 @@ export default async function Home() {
               <div className="lp-persona"><span className="lp-persona-emoji">🎓</span><h3>체육 지도자</h3><p>정리된 시험 정보를 보여주고 싶은 분</p></div>
               <div className="lp-persona"><span className="lp-persona-emoji">🧾</span><h3>1인 프리랜서 강사</h3><p>개인 CRM으로 회원·수업·급여를 정리하고 싶은 분</p></div>
               <div className="lp-persona"><span className="lp-persona-emoji">🏋️‍♀️</span><h3>센터·스튜디오 사장님</h3><p>회원·강사·매출을 웹 하나로 관리하고 싶은 분</p></div>
-            </div>
-          </div></div>
-        </section>
-
-        {/* ===== 7. 앱 미리보기 ===== */}
-        <section className="lp-section">
-          <div className="lp-c"><div className="lp-card">
-            <div className="lp-label">앱 미리보기</div>
-            <h2 className="lp-title">앱에서는 이렇게 이용할 수 있어요</h2>
-            <p className="lp-desc">실제 앱 화면 — 홈, 실기·구술, 종목후기, 구인, 거래, MY 까지 한눈에 확인하세요.</p>
-            <div className="lp-screenshot-grid">
-              {APP_PREVIEWS.map((p) => (
-                <figure key={p.src} className="lp-screenshot">
-                  <div className="lp-screenshot-frame">
-                    <Image
-                      src={p.src}
-                      alt={`${p.label} 화면`}
-                      width={360}
-                      height={783}
-                      sizes="(min-width: 1024px) 220px, (min-width: 640px) 30vw, 45vw"
-                      className="lp-screenshot-img"
-                    />
-                  </div>
-                  <figcaption>
-                    <span className="lp-screenshot-label">{p.label}</span>
-                    <span className="lp-screenshot-desc">{p.desc}</span>
-                  </figcaption>
-                </figure>
-              ))}
             </div>
           </div></div>
         </section>
