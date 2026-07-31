@@ -372,20 +372,22 @@ export default function TouchAttendancePage() {
       ) : recogMode === "both" ? (
         /* 번호+얼굴 모드: 얼굴 카메라 + 키패드 동시 노출 (어느 쪽이든 먼저 완료되는 방식으로 출석) */
         landscape ? (
-          <div className="w-full max-w-[min(98vw,1400px)] flex flex-row items-stretch gap-[clamp(16px,3vmin,40px)]">
-            <div className="flex-1 min-w-0">
-              <FaceAttendance />
+          <div className="w-full max-w-[98vw] flex flex-row items-stretch gap-[clamp(12px,2.5vmin,32px)]">
+            <div className="flex-1 min-w-0 flex items-center justify-center">
+              <FaceAttendance fill />
             </div>
-            <div className="w-[min(48vw,560px)] shrink-0 flex flex-col justify-center gap-[clamp(12px,2.5vmin,28px)]">
+            <div className="flex-1 min-w-0 flex flex-col justify-center gap-[clamp(12px,2.5vmin,28px)]">
               {display}
               {keypad}
               {submitBtn}
             </div>
           </div>
         ) : (
-          <div className="w-full max-w-[min(96vw,720px)] space-y-6">
-            <FaceAttendance />
-            <div className="pt-2 border-t border-[#E8E0D0] dark:border-zinc-700">
+          <div className="w-full max-w-[96vw] space-y-6 flex flex-col items-center">
+            <div className="w-full flex items-center justify-center">
+              <FaceAttendance fill />
+            </div>
+            <div className="w-full pt-2 border-t border-[#E8E0D0] dark:border-zinc-700">
               <div className="mb-[clamp(12px,2vmin,24px)] mt-4">{display}</div>
               {keypad}
               <div className="mt-[clamp(10px,1.8vmin,22px)]">{submitBtn}</div>

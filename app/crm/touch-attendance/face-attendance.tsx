@@ -47,7 +47,11 @@ type Stage = "init" | "models" | "faces" | "ready" | "error";
  * 얼굴인식 출석 — 카메라 상시 활성 + 등록 얼굴과 실시간 매칭 → 자동 체크인.
  * face_image_data(등록 사진)로 브라우저에서 디스크립터를 계산해 매칭.
  */
-export default function FaceAttendance() {
+/**
+ * @param fill true 이면 부모 flex 컨테이너를 꽉 채우도록 내부 max-width 를 해제.
+ * '번호+얼굴' 모드처럼 카메라를 다른 UI와 나란히 놓을 때 사용.
+ */
+export default function FaceAttendance({ fill = false }: { fill?: boolean } = {}) {
   const { getIdToken } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -329,7 +333,11 @@ export default function FaceAttendance() {
     progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
   return (
-    <div className="w-full max-w-[min(94vw,720px)] flex flex-col items-center">
+    <div
+      className={`w-full flex flex-col items-center ${
+        fill ? "" : "max-w-[min(94vw,720px)]"
+      }`}
+    >
       <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden border-2 border-[#E8E0D0] dark:border-zinc-700 bg-black">
         <video
           ref={videoRef}
