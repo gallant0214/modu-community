@@ -3410,6 +3410,120 @@ const USAGE_TABS: { key: UsageType; label: string }[] = [
   { key: "apparel", label: "운동복" },
 ];
 
+// 묶음 구성 상품 (crm_products.components 항목)
+interface BundleComp {
+  type: string;
+  name?: string;
+  price_won?: number;
+  billing_mode?: string;
+  duration_value?: number;
+  total_sessions?: number;
+  session_minutes?: number;
+}
+
+// 무기한 만료 sentinel (count 기반 구성 수강권은 기간 개념이 없어 무기한으로).
+const UNLIMITED_EXPIRY = "9999-12-31";
+
+function addDaysYmd(startYmd: string, days: number): string {
+  const d = new Date(`${startYmd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + Math.max(1, days));
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * 묶음 구성 상품 1건을 유형에 맞는 API로 발급. (판매 시 부모 상품과 함께 발급)
+ * membership → /api/crm/memberships, locker·apparel → /api/crm/rentals,
+ * personal·group(수강권) → /api/crm/passes (담당강사=판매자 기본).
+ */
+async function postBundleComponent(
+  comp: BundleComp,
+  args: {
+    memberId: number;
+    sellerId: number;
+    trainerId: number;
+    startDate: string;
+    paymentMethod: string;
+    paymentCustom?: string;
+    token: string;
+  }
+): Promise<{ ok: boolean; error?: string }> {
+  const headers = {
+    authorization: `Bearer ${args.token}`,
+    "content-type": "application/json",
+  };
+  const name = (comp.name || "").trim() || "구성 상품";
+  const price = Math.max(0, Math.floor(comp.price_won ?? 0));
+  const isCount = comp.billing_mode === "count";
+  const durationDays = Math.max(0, Math.floor(comp.duration_value ?? 0));
+  const expires = isCount
+    ? UNLIMITED_EXPIRY
+    : addDaysYmd(args.startDate, durationDays || 30);
+  try {
+    let res: Response;
+    if (comp.type === "membership") {
+      res = await fetch("/api/crm/memberships", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          member_id: args.memberId,
+          seller_member_id: args.sellerId,
+          plan_name: name,
+          duration_days: durationDays || 30,
+          price_won: price,
+          payment_method: args.paymentMethod,
+          payment_method_custom: args.paymentCustom,
+          start_date: args.startDate,
+          expires_at: expires,
+        }),
+      });
+    } else if (comp.type === "locker" || comp.type === "apparel") {
+      res = await fetch("/api/crm/rentals", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          member_id: args.memberId,
+          seller_member_id: args.sellerId,
+          item_name: name,
+          price_won: price,
+          payment_method: args.paymentMethod,
+          payment_method_custom: args.paymentCustom,
+          start_date: args.startDate,
+          expires_at: expires,
+        }),
+      });
+    } else {
+      // personal | group (수강권)
+      const totalSessions = Math.max(0, Math.floor(comp.total_sessions ?? 0));
+      res = await fetch("/api/crm/passes", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          member_id: args.memberId,
+          trainer_member_id: args.trainerId,
+          seller_member_id: args.sellerId,
+          issue_type: "new",
+          lesson_kind: isCount ? `${name}(${totalSessions}회)` : name,
+          total_sessions: totalSessions,
+          session_minutes: Math.max(0, Math.floor(comp.session_minutes ?? 0)) || 50,
+          price_won: price,
+          payment_method: args.paymentMethod,
+          payment_method_custom: args.paymentCustom,
+          issued_at: args.startDate,
+          start_date: args.startDate,
+          expires_at: expires,
+          billing_mode: isCount ? "count" : "period",
+          group_capacity: comp.type === "group" ? 2 : 1,
+        }),
+      });
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data?.error || `${name} 발급 실패` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "네트워크 오류" };
+  }
+}
+
 interface UsageProduct {
   id: number;
   name: string;
@@ -3419,6 +3533,7 @@ interface UsageProduct {
   mileage_earn: number;
   mileage_usable: boolean;
   attendance_mileage_earn?: number;
+  components?: BundleComp[];
 }
 interface VacantLocker {
   id: number;
@@ -3437,6 +3552,7 @@ interface PassProduct {
   duration_unit: string | null;
   type?: string;
   capacity?: number | null;
+  components?: BundleComp[];
 }
 
 function UsageIssueModal({
@@ -3503,9 +3619,17 @@ function UsageIssueModal({
     paymentCustom?: string;
     sellerId: number;
     memo: string;
+    // 묶음 구성 상품 — 이 라인 발급 시 함께 발급될 상품들
+    components?: BundleComp[];
   }
   const [cart, setCart] = useState<CartLine[]>([]);
-  const cartTotalPrice = cart.reduce((s, c) => s + Math.max(0, c.priceWon - c.discountWon), 0);
+  // 현재 폼에 선택된 상품의 묶음 구성 (담기/결제 시 라인에 실려 함께 발급)
+  const [pickedComponents, setPickedComponents] = useState<BundleComp[]>([]);
+  // 라인 합계 = (상품 순금액) + (구성 상품 가격 합)
+  const lineTotal = (c: CartLine) =>
+    Math.max(0, c.priceWon - c.discountWon) +
+    (c.components ?? []).reduce((s, k) => s + Math.max(0, Math.floor(k.price_won ?? 0)), 0);
+  const cartTotalPrice = cart.reduce((s, c) => s + lineTotal(c), 0);
   const cartTotalMileageEarn = cart.reduce((s, c) => s + c.mileageEarn, 0);
 
   // 결제 단위 "보유 마일리지 사용": 체크 시 회원 보유 마일리지를 총액 한도 내에서 적용해 결제액 차감.
@@ -3514,8 +3638,11 @@ function UsageIssueModal({
   // 사용할 마일리지 직접 입력값 (체크 시 노출). 체크 켤 때 최대치로 프리필, 이후 사용자가 조정.
   const [mileageUseInput, setMileageUseInput] = useState(0);
   const ownedMileage = Math.max(0, memberMileage);
-  // 장바구니가 있으면 장바구니 합계, 없으면 현재 폼 항목(바로 결제) 순금액 기준.
-  const formNetPrice = name.trim() ? Math.max(0, priceWon - discountWon) : 0;
+  // 장바구니가 있으면 장바구니 합계, 없으면 현재 폼 항목(바로 결제) 순금액 + 묶음 구성 가격 합.
+  const formNetPrice = name.trim()
+    ? Math.max(0, priceWon - discountWon) +
+      pickedComponents.reduce((s, k) => s + Math.max(0, Math.floor(k.price_won ?? 0)), 0)
+    : 0;
   const checkoutTotal = cart.length > 0 ? cartTotalPrice : formNetPrice;
   // 적용 가능한 최대 마일리지 = 보유량과 결제 총액 중 작은 값.
   const maxApplicableMileage = Math.min(ownedMileage, checkoutTotal);
@@ -3548,6 +3675,7 @@ function UsageIssueModal({
     setLockerZone("");
     setLockerId("");
     setLockerPassword("");
+    setPickedComponents([]);
     setError("");
   };
 
@@ -3587,6 +3715,7 @@ function UsageIssueModal({
       paymentCustom: paymentMethod === "etc" ? paymentCustom : undefined,
       sellerId: Number(sellerId),
       memo,
+      components: pickedComponents.length ? pickedComponents : undefined,
     };
     setCart((cur) => [...cur, line]);
     resetFormOnly();
@@ -3651,6 +3780,7 @@ function UsageIssueModal({
     setLockerZone("");
     setLockerId("");
     setLockerPassword("");
+    setPickedComponents([]);
     (async () => {
       const token = await getIdToken();
       if (!token) return;
@@ -3683,6 +3813,7 @@ function UsageIssueModal({
     setMileageEarn(p.mileage_earn ?? 0);
     setMileageUsable(p.mileage_usable !== false);
     setAttendanceMileageEarn(p.attendance_mileage_earn ?? 0);
+    setPickedComponents(p.components ?? []);
     if (p.mileage_usable === false) setMileageUse(0);
     // 상품 선택 시점에 시작일을 오늘로 자동 세팅 (사용자가 이후 수정 가능)
     setStartDate(new Date().toISOString().slice(0, 10));
@@ -3799,6 +3930,23 @@ function UsageIssueModal({
       }
       const data = await res.json();
       if (!res.ok) return { ok: false, error: data?.error || "발급 실패" };
+
+      // 묶음 구성 상품 함께 발급 (판매 시 부모 + 구성 항목 동시 생성)
+      if (line.components && line.components.length > 0) {
+        const token = headers.authorization.replace(/^Bearer\s+/, "");
+        for (const comp of line.components) {
+          const r = await postBundleComponent(comp, {
+            memberId,
+            sellerId: line.sellerId,
+            trainerId: line.sellerId,
+            startDate: line.startDate,
+            paymentMethod: line.paymentMethod,
+            paymentCustom: line.paymentCustom,
+            token,
+          });
+          if (!r.ok) return { ok: false, error: `[구성] ${r.error}` };
+        }
+      }
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : "네트워크 오류" };
@@ -3836,6 +3984,7 @@ function UsageIssueModal({
           paymentCustom: paymentMethod === "etc" ? paymentCustom : undefined,
           sellerId: Number(sellerId),
           memo,
+          components: pickedComponents.length ? pickedComponents : undefined,
         },
       ];
     }
@@ -4234,6 +4383,19 @@ function UsageIssueModal({
             {error}
           </div>
         )}
+        {pickedComponents.length > 0 && (
+          <div className="mt-2 px-3 py-2.5 rounded-lg border border-[#B47B2A]/40 bg-[#B47B2A]/5">
+            <div className="text-[12px] font-semibold text-[#B47B2A] mb-1">🎁 묶음 구성 (함께 발급)</div>
+            <ul className="space-y-0.5">
+              {pickedComponents.map((c, i) => (
+                <li key={i} className="flex items-baseline justify-between text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                  <span className="truncate">+ {c.name || "구성 상품"} {c.billing_mode === "count" ? `${c.total_sessions ?? 0}회` : `${c.duration_value ?? 0}일`}</span>
+                  <span className="tabular-nums shrink-0 ml-2">{formatWon(c.price_won ?? 0)}원</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <button
           onClick={() => {
             const err = addToCart();
@@ -4559,6 +4721,8 @@ function PassIssueModal({
   const [lessonKinds, setLessonKinds] = useState<{ id: number; label: string }[]>([]);
   const [passProducts, setPassProducts] = useState<PassProduct[]>([]);
   const [pickedProductId, setPickedProductId] = useState<number | null>(null);
+  // 선택한 수강권 상품의 묶음 구성 (예: 회원권) — 발급 성공 후 함께 발급
+  const [pickedComponents, setPickedComponents] = useState<BundleComp[]>([]);
   const [showKindList, setShowKindList] = useState(false);
   const [totalSessions, setTotalSessions] = useState(10);
   const [serviceSessions, setServiceSessions] = useState(0);
@@ -4644,6 +4808,7 @@ function PassIssueModal({
   // 수강권 상품 선택 → 금액·세션·기간 자동 적용
   const applyPassProduct = (p: PassProduct) => {
     setPickedProductId(p.id);
+    setPickedComponents(p.components ?? []);
     setLessonKind(p.name);
     if (p.total_sessions && p.total_sessions > 0) setTotalSessions(p.total_sessions);
     if (p.session_minutes && p.session_minutes > 0) setSessionMinutes(p.session_minutes);
@@ -4694,6 +4859,23 @@ function PassIssueModal({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "발급 실패");
+
+      // 묶음 구성 상품(예: 회원권) 함께 발급
+      if (pickedComponents.length > 0) {
+        const seller = Number(sellerId) || Number(trainerId);
+        for (const comp of pickedComponents) {
+          const r = await postBundleComponent(comp, {
+            memberId,
+            sellerId: seller,
+            trainerId: Number(trainerId),
+            startDate,
+            paymentMethod,
+            paymentCustom: paymentMethod === "etc" ? paymentCustom : undefined,
+            token: token || "",
+          });
+          if (!r.ok) throw new Error(`[구성] ${r.error}`);
+        }
+      }
       onSuccess(data.passId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
@@ -5011,6 +5193,25 @@ function PassIssueModal({
             onChange={(e) => setMemo(e.target.value)}
           />
         </CrmField>
+        {pickedComponents.length > 0 && (
+          <div className="px-3 py-2.5 rounded-lg border border-[#B47B2A]/40 bg-[#B47B2A]/5">
+            <div className="text-[12px] font-semibold text-[#B47B2A] mb-1">🎁 묶음 구성 (함께 발급)</div>
+            <ul className="space-y-0.5">
+              {pickedComponents.map((c, i) => (
+                <li key={i} className="flex items-baseline justify-between text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                  <span className="truncate">+ {c.name || "구성 상품"} {c.billing_mode === "count" ? `${c.total_sessions ?? 0}회` : `${c.duration_value ?? 0}일`}</span>
+                  <span className="tabular-nums shrink-0 ml-2">{formatWon(c.price_won ?? 0)}원</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-1.5 pt-1.5 border-t border-[#B47B2A]/20 flex items-baseline justify-between text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+              <span>묶음 합계</span>
+              <span className="tabular-nums">
+                {formatWon(priceWon + pickedComponents.reduce((s, c) => s + Math.max(0, Math.floor(c.price_won ?? 0)), 0))}원
+              </span>
+            </div>
+          </div>
+        )}
         {error && (
           <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
             {error}
@@ -5021,7 +5222,7 @@ function PassIssueModal({
           disabled={submitting}
           className="w-full px-4 py-3 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[14.5px] font-semibold hover:bg-[#5a6932] mt-2"
         >
-          {submitting ? "발급 중…" : "수강권 발급"}
+          {submitting ? "발급 중…" : pickedComponents.length > 0 ? "묶음 상품 발급" : "수강권 발급"}
         </button>
       </div>
     </CrmModal>
