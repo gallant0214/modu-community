@@ -1095,8 +1095,8 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
             </div>
           )}
 
-          {/* 유형별 추가 버튼 */}
-          {(type === "personal" || type === "group") && (
+          {/* 유형별 추가 버튼 — 이미 추가한 유형은 버튼 숨김(각 유형 1개까지) */}
+          {(type === "personal" || type === "group") && !components.some((c) => c.type === "membership") && (
             <button
               type="button"
               onClick={() => addComponent("membership")}
@@ -1107,27 +1107,33 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
           )}
           {type === "membership" && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => addComponent("locker")}
-                className="px-3 py-2.5 rounded-lg text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
-              >
-                + 락커 상품 추가
-              </button>
-              <button
-                type="button"
-                onClick={() => addComponent("apparel")}
-                className="px-3 py-2.5 rounded-lg text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
-              >
-                + 운동복 상품 추가
-              </button>
-              <button
-                type="button"
-                onClick={() => addComponent("personal")}
-                className="px-3 py-2.5 rounded-lg text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
-              >
-                + 수강권 추가
-              </button>
+              {!components.some((c) => c.type === "locker") && (
+                <button
+                  type="button"
+                  onClick={() => addComponent("locker")}
+                  className="px-3 py-2.5 rounded-lg text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
+                >
+                  + 락커 상품 추가
+                </button>
+              )}
+              {!components.some((c) => c.type === "apparel") && (
+                <button
+                  type="button"
+                  onClick={() => addComponent("apparel")}
+                  className="px-3 py-2.5 rounded-lg text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
+                >
+                  + 운동복 상품 추가
+                </button>
+              )}
+              {!components.some((c) => c.type === "personal") && (
+                <button
+                  type="button"
+                  onClick={() => addComponent("personal")}
+                  className="px-3 py-2.5 rounded-lg text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
+                >
+                  + 수강권 추가
+                </button>
+              )}
             </div>
           )}
 
