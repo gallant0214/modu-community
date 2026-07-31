@@ -560,7 +560,17 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder={type === "group" ? "예시: 2:1 PT 10회 이용권" : "예시: 10회 PT 이용권"}
+          placeholder={
+            type === "membership"
+              ? "예시 : 헬스 3개월 이용권"
+              : type === "locker"
+                ? "예시 : 락커 3개월"
+                : type === "apparel"
+                  ? "예시 : 운동복 3개월"
+                  : type === "group"
+                    ? "예시 : 2:1 그룹 PT 10회"
+                    : "예시: 10회 PT 이용권"
+          }
           className={crmInputClass}
           maxLength={60}
         />
