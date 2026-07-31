@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../../_components/crm-modal";
-// formatWon/parseWon 은 금액 UI 제거 이후 미사용
-// import { formatWon, parseWon } from "../../_components/crm-labels";
+import { formatWon, parseWon } from "../../_components/crm-labels";
 
 type BillingMode = "period" | "count";
 type DurationUnit = "day" | "month" | "year";
@@ -219,8 +218,9 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   const [attendanceMileageEarn, setAttendanceMileageEarn] = useState<number>(
     initial?.attendance_mileage_earn ?? 0
   );
-  // 금액/부가세 UI 는 제거됨 — 편집 시 기존 값 보존, 신규는 0/false.
-  const priceWonSaved = initial?.price_won ?? 0;
+  // 상품 판매 가격 (판매 시 자동으로 채워짐).
+  const [priceWon, setPriceWon] = useState<number>(initial?.price_won ?? 0);
+  // 부가세 UI 는 제거됨 — 편집 시 기존 값 보존, 신규는 false.
   const vatIncluded = initial?.vat_included ?? false;
   const [capacity, setCapacity] = useState(initial?.capacity ?? 2);
   const [sessionMinutes, setSessionMinutes] = useState(initial?.session_minutes ?? 50);
@@ -276,8 +276,6 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
   const components: BundleComponent[] = initial?.components ?? [];
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  const priceWon = priceWonSaved;
 
   const save = async () => {
     setError("");
@@ -541,6 +539,25 @@ export function ProductForm({ mode, initial, onSaved, onCancel, scope = "center"
           maxLength={60}
         />
 
+        <div className="mt-3">
+          <FieldLabel>판매 가격 (원)</FieldLabel>
+          <div className="relative">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={priceWon === 0 ? "" : formatWon(priceWon)}
+              onChange={(e) => setPriceWon(parseWon(e.target.value))}
+              placeholder="0"
+              className={`${crmInputClass} pr-8 text-right tabular-nums`}
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#A89B80] pointer-events-none">
+              원
+            </span>
+          </div>
+          <p className="mt-1 text-[12px] text-[#A89B80]">
+            회원에게 이 상품을 판매(결제)할 때 자동으로 채워지는 기본 금액이에요.
+          </p>
+        </div>
       </Section>
 
       {/* 기간·횟수 설정 */}
