@@ -801,7 +801,7 @@ export function ConsultationForm({ mode, initial }: Props) {
       {/* ===== 컨디션 ===== */}
       <Section title="컨디션">
         <div className="space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <Field label="기상 시간">
               <select
                 value={wakeHour}
@@ -830,23 +830,23 @@ export function ConsultationForm({ mode, initial }: Props) {
                 ))}
               </select>
             </Field>
-            <Field label="수면 만족도">
-              <ChipList
-                single
-                options={LEVELS.map((s) => ({ v: s.v, l: s.l }))}
-                value={sleepSatisfaction ? [sleepSatisfaction] : []}
-                onToggle={(v) => setSleepSatisfaction(sleepSatisfaction === v ? "" : v)}
-              />
-            </Field>
-            <Field label="컨디션 지수">
-              <ChipList
-                single
-                options={LEVELS.map((s) => ({ v: s.v, l: s.l }))}
-                value={conditionScore ? [conditionScore] : []}
-                onToggle={(v) => setConditionScore(conditionScore === v ? "" : v)}
-              />
-            </Field>
           </div>
+          <Field label="수면 만족도">
+            <ChipList
+              single
+              options={LEVELS.map((s) => ({ v: s.v, l: s.l }))}
+              value={sleepSatisfaction ? [sleepSatisfaction] : []}
+              onToggle={(v) => setSleepSatisfaction(sleepSatisfaction === v ? "" : v)}
+            />
+          </Field>
+          <Field label="컨디션 지수">
+            <ChipList
+              single
+              options={LEVELS.map((s) => ({ v: s.v, l: s.l }))}
+              value={conditionScore ? [conditionScore] : []}
+              onToggle={(v) => setConditionScore(conditionScore === v ? "" : v)}
+            />
+          </Field>
           <Field label="피로도 시점">
             <ChipList
               options={FATIGUE_WHEN.map((s) => ({ v: s.v, l: s.l }))}
