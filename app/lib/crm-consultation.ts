@@ -34,6 +34,7 @@ export function buildConsultationPayload(
 
   return {
     member_id: asInt(body.member_id) ?? null,
+    template_id: asInt(body.template_id) ?? null,
     gender: asStr(body.gender),
     birth: asStr(body.birth),
     phone: asStr(body.phone),

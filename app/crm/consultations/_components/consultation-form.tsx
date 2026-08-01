@@ -28,6 +28,8 @@ export interface ConsultationInitial {
 interface Props {
   mode: "create" | "edit";
   initial?: ConsultationInitial;
+  /** 신규 생성 시 사용할 상담지 템플릿 ID (탭 상단 셀렉터에서 전달) */
+  templateId?: number | null;
 }
 
 interface StaffLite {
@@ -48,7 +50,7 @@ interface MemberSearchHit {
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-export function ConsultationForm({ mode, initial }: Props) {
+export function ConsultationForm({ mode, initial, templateId }: Props) {
   const router = useRouter();
   const { getIdToken } = useAuth();
 
@@ -247,6 +249,10 @@ export function ConsultationForm({ mode, initial }: Props) {
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
       const payload = {
         member_id: memberId,
+        template_id:
+          mode === "edit"
+            ? (initial?.template_id as number | null | undefined) ?? null
+            : templateId ?? null,
         name: name.trim(),
         gender: gender || null,
         birth: birth || null,

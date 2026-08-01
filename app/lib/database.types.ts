@@ -2783,11 +2783,48 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_consultation_templates: {
+        Row: {
+          id: number
+          center_id: number
+          name: string
+          description: string | null
+          is_default: boolean
+          sort_order: number
+          active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          name: string
+          description?: string | null
+          is_default?: boolean
+          sort_order?: number
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          name?: string
+          description?: string | null
+          is_default?: boolean
+          sort_order?: number
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_pt_consultations: {
         Row: {
           id: number
           center_id: number
           member_id: number | null
+          template_id: number | null
           name: string
           gender: string | null
           birth: string | null
@@ -2860,6 +2897,7 @@ export type Database = {
           id?: number
           center_id: number
           member_id?: number | null
+          template_id?: number | null
           name: string
           gender?: string | null
           birth?: string | null
@@ -2932,6 +2970,7 @@ export type Database = {
           id?: number
           center_id?: number
           member_id?: number | null
+          template_id?: number | null
           name?: string
           gender?: string | null
           birth?: string | null
