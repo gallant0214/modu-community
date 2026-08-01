@@ -22,6 +22,7 @@ import {
   CONDITIONS,
   PLANNED_DAYS,
 } from "../_labels";
+import { normalizeDefinition } from "@/app/lib/crm-consultation-template";
 
 interface Consultation {
   id: number;
@@ -97,6 +98,13 @@ interface Consultation {
   weekly_freq: number | null;
   planned_days: string[] | null;
   planned_time: string | null;
+
+  custom_data: Record<string, unknown> | null;
+  template: {
+    id: number;
+    name: string;
+    definition: unknown;
+  } | null;
 }
 
 export default function ConsultationDetailPage() {
@@ -198,7 +206,11 @@ export default function ConsultationDetailPage() {
             수정 취소
           </button>
         </header>
-        <ConsultationForm mode="edit" initial={c as unknown as Record<string, unknown>} />
+        <ConsultationForm
+          mode="edit"
+          initial={c as unknown as Record<string, unknown>}
+          templateDefinition={c.template?.definition ?? null}
+        />
       </div>
     );
   }
@@ -411,6 +423,34 @@ export default function ConsultationDetailPage() {
           ]}
         />
       </SectionCard>
+
+      {/* 커스텀 섹션 답변 렌더링 */}
+      {c.template && (() => {
+        const def = normalizeDefinition(c.template.definition);
+        const data = c.custom_data ?? {};
+        return (def.custom_sections ?? []).map((s) => {
+          const rows: [string, string | null][] = s.fields.map((f) => {
+            const v = data[f.key];
+            let display: string | null = null;
+            if (v == null || v === "") display = null;
+            else if (Array.isArray(v)) {
+              const labels = v.map((x) => f.options?.find((o) => o.v === x)?.l ?? String(x));
+              display = labels.length ? labels.join(", ") : null;
+            } else if (typeof v === "boolean") display = v ? "예" : "아니오";
+            else if (f.type === "chips_single") {
+              display = f.options?.find((o) => o.v === v)?.l ?? String(v);
+            } else display = String(v);
+            return [f.label, display];
+          });
+          const hasAny = rows.some(([, val]) => val !== null && val !== "");
+          if (!hasAny) return null;
+          return (
+            <SectionCard key={s.key} title={s.title}>
+              <KVList rows={rows} />
+            </SectionCard>
+          );
+        });
+      })()}
 
       {c.request_note && (
         <SectionCard title="강사에게 바라는 점 · 요청 사항">

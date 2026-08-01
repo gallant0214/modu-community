@@ -2792,6 +2792,7 @@ export type Database = {
           is_default: boolean
           sort_order: number
           active: boolean
+          definition: unknown
           created_at: string
           updated_at: string
         }
@@ -2803,6 +2804,7 @@ export type Database = {
           is_default?: boolean
           sort_order?: number
           active?: boolean
+          definition?: unknown
           created_at?: string
           updated_at?: string
         }
@@ -2814,6 +2816,7 @@ export type Database = {
           is_default?: boolean
           sort_order?: number
           active?: boolean
+          definition?: unknown
           created_at?: string
           updated_at?: string
         }
@@ -2888,6 +2891,7 @@ export type Database = {
           converted_pass_id: number | null
           lost_reason: string | null
           memo: string | null
+          custom_data: unknown
           created_at: string
           updated_at: string
           created_by_uid: string
@@ -2961,6 +2965,7 @@ export type Database = {
           converted_pass_id?: number | null
           lost_reason?: string | null
           memo?: string | null
+          custom_data?: unknown
           created_at?: string
           updated_at?: string
           created_by_uid: string
@@ -3034,6 +3039,7 @@ export type Database = {
           converted_pass_id?: number | null
           lost_reason?: string | null
           memo?: string | null
+          custom_data?: unknown
           created_at?: string
           updated_at?: string
           created_by_uid?: string

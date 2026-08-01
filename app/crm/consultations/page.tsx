@@ -7,6 +7,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
 import { CONSULT_STATUS_COLOR, CONSULT_STATUS_LABEL } from "./_labels";
 import { ConsultationForm } from "./_components/consultation-form";
+import type { TemplateDefinition } from "@/app/lib/crm-consultation-template";
 
 interface Template {
   id: number;
@@ -15,6 +16,7 @@ interface Template {
   is_default: boolean;
   sort_order: number;
   active: boolean;
+  definition?: TemplateDefinition | null;
 }
 
 interface Row {
@@ -198,7 +200,11 @@ function NewTab() {
         )}
       </section>
 
-      <ConsultationForm mode="create" templateId={selected} />
+      <ConsultationForm
+        mode="create"
+        templateId={selected}
+        templateDefinition={selectedTpl?.definition ?? null}
+      />
     </div>
   );
 }
@@ -334,6 +340,7 @@ function ManageTab() {
     loadAll();
   }, [loadAll]);
 
+  const router = useRouter();
   const createTemplate = async () => {
     setAddError("");
     if (!newName.trim()) return setAddError("상담지 이름을 입력해 주세요");
@@ -347,9 +354,15 @@ function ManageTab() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "저장 실패");
+      // 만들자마자 편집 화면으로 이동해 섹션·항목을 구성하도록 유도
+      const newId = data.template?.id;
       setNewName("");
       setNewDesc("");
       setShowAdd(false);
+      if (newId) {
+        router.push(`/crm/consultations/templates/${newId}`);
+        return;
+      }
       await loadAll();
     } catch (e) {
       setAddError(e instanceof Error ? e.message : "네트워크 오류");
@@ -488,6 +501,14 @@ function ManageTab() {
                   )}
                 </div>
                 <div className="shrink-0 flex items-center gap-1">
+                  {!t.is_default && (
+                    <Link
+                      href={`/crm/consultations/templates/${t.id}`}
+                      className="px-2 py-1 rounded-md border border-[#6B7B3A] text-[11.5px] text-[#6B7B3A] hover:bg-[#F3F7EA]"
+                    >
+                      편집
+                    </Link>
+                  )}
                   {!t.is_default && (
                     <button
                       type="button"

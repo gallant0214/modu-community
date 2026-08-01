@@ -48,7 +48,18 @@ export async function GET(
     trainer_name = `${data.trainer_name_custom} (직접 입력)`;
   }
 
-  return NextResponse.json({ consultation: { ...data, trainer_name } });
+  // 템플릿 definition join (있으면 상세페이지 커스텀 렌더링에 사용)
+  let template: { id: number; name: string; definition: unknown } | null = null;
+  if (data.template_id) {
+    const { data: t } = await supabase
+      .from("crm_consultation_templates")
+      .select("id, name, definition")
+      .eq("id", data.template_id)
+      .maybeSingle();
+    template = t ?? null;
+  }
+
+  return NextResponse.json({ consultation: { ...data, trainer_name, template } });
 }
 
 /**

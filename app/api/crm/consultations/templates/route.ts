@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("crm_consultation_templates")
-    .select("id, name, description, is_default, sort_order, active, created_at, updated_at")
+    .select("id, name, description, is_default, sort_order, active, definition, created_at, updated_at")
     .eq("center_id", ctx.centerId)
     .eq("active", true)
     .order("is_default", { ascending: false })
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
       .from("crm_consultation_templates")
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .insert({ ...DEFAULT_SEED, center_id: ctx.centerId } as any)
-      .select("id, name, description, is_default, sort_order, active, created_at, updated_at")
+      .select("id, name, description, is_default, sort_order, active, definition, created_at, updated_at")
       .single();
     if (seedErr || !seeded) {
       return NextResponse.json({ templates: [] });
@@ -79,8 +79,10 @@ export async function POST(request: Request) {
       // 마지막 순서로
       sort_order: 999,
       active: true,
+      // 기본: 표준 섹션 포함 + 빈 커스텀 섹션 배열
+      definition: { include_standard: true, custom_sections: [] },
     })
-    .select("id, name, description, is_default, sort_order, active")
+    .select("id, name, description, is_default, sort_order, active, definition")
     .single();
   if (error || !created) {
     return NextResponse.json({ error: "저장 실패", detail: error?.message }, { status: 500 });

@@ -4,9 +4,34 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 
 export const dynamic = "force-dynamic";
 
+/** 단일 상담지 템플릿 조회 (에디터용). */
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const ctx = await requireCrmContext(request);
+  if (isCrmError(ctx)) return ctx;
+
+  const { id } = await params;
+  const tid = Number(id);
+  if (!tid) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+
+  const { data, error } = await supabase
+    .from("crm_consultation_templates")
+    .select("id, center_id, name, description, is_default, sort_order, active, definition, created_at, updated_at")
+    .eq("id", tid)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+  if (error) {
+    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+  }
+  if (!data) return NextResponse.json({ error: "템플릿을 찾을 수 없습니다" }, { status: 404 });
+  return NextResponse.json({ template: data });
+}
+
 /**
- * PATCH — 이름/설명/기본템플릿 변경, 정렬 변경.
- * body: { name?, description?, is_default?, sort_order? }
+ * PATCH — 이름/설명/기본템플릿 변경, 정렬 변경, definition 갱신.
+ * body: { name?, description?, is_default?, sort_order?, definition? }
  */
 export async function PATCH(
   request: Request,
@@ -24,6 +49,7 @@ export async function PATCH(
     description?: string | null;
     is_default?: boolean;
     sort_order?: number;
+    definition?: unknown;
   };
   try {
     body = await request.json();
@@ -41,6 +67,10 @@ export async function PATCH(
     patch.description = typeof body.description === "string" ? body.description.trim() || null : null;
   }
   if (typeof body.sort_order === "number") patch.sort_order = Math.floor(body.sort_order);
+  if (body.definition !== undefined) {
+    patch.definition =
+      body.definition && typeof body.definition === "object" ? body.definition : {};
+  }
 
   // is_default 를 true 로 바꾸면 다른 템플릿의 is_default 해제
   if (body.is_default === true) {

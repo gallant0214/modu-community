@@ -101,5 +101,9 @@ export function buildConsultationPayload(
 
     request_note: asStr(body.request_note),
     memo: asStr(body.memo),
+
+    // 커스텀 필드 답변 (템플릿 definition 의 field key 로 매핑)
+    custom_data:
+      body.custom_data && typeof body.custom_data === "object" ? body.custom_data : {},
   };
 }

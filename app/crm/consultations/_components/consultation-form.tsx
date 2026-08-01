@@ -19,6 +19,12 @@ import {
   CONDITIONS,
   PLANNED_DAYS,
 } from "../_labels";
+import type {
+  CustomField,
+  CustomSection,
+  TemplateDefinition,
+} from "@/app/lib/crm-consultation-template";
+import { normalizeDefinition } from "@/app/lib/crm-consultation-template";
 
 export interface ConsultationInitial {
   id?: number;
@@ -30,6 +36,8 @@ interface Props {
   initial?: ConsultationInitial;
   /** 신규 생성 시 사용할 상담지 템플릿 ID (탭 상단 셀렉터에서 전달) */
   templateId?: number | null;
+  /** 선택된 템플릿의 definition (표준 섹션 포함 여부 + 커스텀 섹션) */
+  templateDefinition?: TemplateDefinition | null;
 }
 
 interface StaffLite {
@@ -50,7 +58,10 @@ interface MemberSearchHit {
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-export function ConsultationForm({ mode, initial, templateId }: Props) {
+export function ConsultationForm({ mode, initial, templateId, templateDefinition }: Props) {
+  const def = useMemo(() => normalizeDefinition(templateDefinition), [templateDefinition]);
+  const includeStandard = def.include_standard !== false;
+  const customSections: CustomSection[] = def.custom_sections ?? [];
   const router = useRouter();
   const { getIdToken } = useAuth();
 
@@ -153,6 +164,14 @@ export function ConsultationForm({ mode, initial, templateId }: Props) {
   const [plannedTime, setPlannedTime] = useState(asStr("planned_time"));
   const [requestNote, setRequestNote] = useState(asStr("request_note"));
   const [memo, setMemo] = useState(asStr("memo"));
+
+  // 커스텀 필드 답변 상태 (custom_data JSONB 저장)
+  const [customData, setCustomData] = useState<Record<string, unknown>>(() => {
+    const raw = initial?.custom_data as Record<string, unknown> | null | undefined;
+    return raw && typeof raw === "object" ? { ...raw } : {};
+  });
+  const setCustomField = (key: string, value: unknown) =>
+    setCustomData((prev) => ({ ...prev, [key]: value }));
 
   // 저장 상태
   const [saving, setSaving] = useState(false);
@@ -313,6 +332,7 @@ export function ConsultationForm({ mode, initial, templateId }: Props) {
         planned_time: plannedTime,
         request_note: requestNote,
         memo,
+        custom_data: customData,
       };
       const url =
         mode === "edit" && initial?.id
@@ -526,6 +546,9 @@ export function ConsultationForm({ mode, initial, templateId }: Props) {
         </div>
       </Section>
 
+      {/* ===== 표준 섹션 (템플릿에서 include_standard=false 이면 숨김) ===== */}
+      {includeStandard && (
+      <>
       {/* ===== 운동 경험 ===== */}
       <Section title="운동 경험">
         <div className="space-y-3">
@@ -976,6 +999,29 @@ export function ConsultationForm({ mode, initial, templateId }: Props) {
           className={`${crmInputClass} min-h-[100px]`}
         />
       </Section>
+      </>
+      )}
+
+      {/* ===== 커스텀 섹션 (템플릿에서 정의) ===== */}
+      {customSections.map((s) => (
+        <Section key={s.key} title={s.title || "섹션"}>
+          <div className="space-y-3">
+            {s.fields.length === 0 ? (
+              <p className="text-[12px] text-[#A89B80]">이 섹션에 항목이 없습니다.</p>
+            ) : (
+              s.fields.map((f) => (
+                <Field key={f.key} label={f.label}>
+                  <CustomFieldInput
+                    field={f}
+                    value={customData[f.key]}
+                    onChange={(v) => setCustomField(f.key, v)}
+                  />
+                </Field>
+              ))
+            )}
+          </div>
+        </Section>
+      ))}
 
       {/* ===== 상담 메모 ===== */}
       <Section title="상담 메모 (내부용)">
@@ -1097,5 +1143,142 @@ function ChipToggle({
     >
       {children}
     </button>
+  );
+}
+
+/** 커스텀 필드 타입별 입력 렌더러. */
+function CustomFieldInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: CustomField;
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  const strVal = typeof value === "string" ? value : "";
+  const numVal =
+    typeof value === "number" ? value : typeof value === "string" && value !== "" ? Number(value) : "";
+  const arrVal: string[] = Array.isArray(value) ? (value as string[]) : [];
+  const boolVal = value === true;
+
+  if (field.type === "textarea") {
+    return (
+      <textarea
+        value={strVal}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={field.placeholder}
+        className={`${crmInputClass} min-h-[70px]`}
+      />
+    );
+  }
+  if (field.type === "number") {
+    return (
+      <input
+        type="number"
+        value={numVal}
+        onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
+        placeholder={field.placeholder}
+        className={crmInputClass}
+      />
+    );
+  }
+  if (field.type === "date") {
+    return (
+      <input
+        type="date"
+        value={strVal}
+        onChange={(e) => onChange(e.target.value)}
+        className={crmInputClass}
+      />
+    );
+  }
+  if (field.type === "time") {
+    return (
+      <input
+        type="time"
+        value={strVal}
+        onChange={(e) => onChange(e.target.value)}
+        className={crmInputClass}
+      />
+    );
+  }
+  if (field.type === "toggle") {
+    return (
+      <label className="inline-flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={boolVal}
+          onChange={(e) => onChange(e.target.checked)}
+          className="w-4 h-4 accent-[#6B7B3A]"
+        />
+        <span className="text-[13px] text-[#3A342A]">예</span>
+      </label>
+    );
+  }
+  if (field.type === "chips_multi") {
+    const opts = field.options ?? [];
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        {opts.length === 0 && (
+          <span className="text-[11.5px] text-[#A89B80]">선택지가 없습니다 (편집에서 추가)</span>
+        )}
+        {opts.map((o) => {
+          const on = arrVal.includes(o.v);
+          return (
+            <button
+              key={o.v}
+              type="button"
+              onClick={() =>
+                onChange(on ? arrVal.filter((x) => x !== o.v) : [...arrVal, o.v])
+              }
+              className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
+                on
+                  ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                  : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+              }`}
+            >
+              {o.l}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+  if (field.type === "chips_single") {
+    const opts = field.options ?? [];
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        {opts.length === 0 && (
+          <span className="text-[11.5px] text-[#A89B80]">선택지가 없습니다 (편집에서 추가)</span>
+        )}
+        {opts.map((o) => {
+          const on = strVal === o.v;
+          return (
+            <button
+              key={o.v}
+              type="button"
+              onClick={() => onChange(on ? "" : o.v)}
+              className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
+                on
+                  ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                  : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+              }`}
+            >
+              {o.l}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+  // default: text
+  return (
+    <input
+      value={strVal}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={field.placeholder}
+      className={crmInputClass}
+    />
   );
 }
