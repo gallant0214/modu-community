@@ -28,6 +28,7 @@ const MENU: MenuItem[] = [
   { href: "/crm/products",    label: "상품 관리",     group: "sales", icon: IconProduct },
   { href: "/crm/memberships", label: "회원권 관리",   group: "sales", icon: IconMembership },
   { href: "/crm/passes",      label: "수강권 관리",   group: "sales", icon: IconPass },
+  { href: "/crm/consultations", label: "PT 상담",       group: "sales", icon: IconConsult },
   { href: "/crm/messages",    label: "메세지 전송",   group: "engage", icon: IconMessage },
   { href: "/crm/stats",       label: "통계",          group: "admin", icon: IconStats },
   { href: "/crm/settings",    label: "센터설정",       group: "admin", staffOnly: true, icon: IconSettings },
@@ -45,6 +46,7 @@ const SOLO_MENU_HREFS = [
   "/crm/members",
   "/crm/schedule",
   "/crm/passes",
+  "/crm/consultations",
 ];
 
 function buildSoloMenu(
@@ -561,6 +563,13 @@ function IconTouch({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 11V6a2 2 0 114 0v5m0 0V4a2 2 0 114 0v7m0 0V9a2 2 0 114 0v6a6 6 0 01-6 6h-2.5a5 5 0 01-4-2l-3.5-4.5a2 2 0 013-2.5L9 15V11z" />
+    </svg>
+  );
+}
+function IconConsult({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
     </svg>
   );
 }

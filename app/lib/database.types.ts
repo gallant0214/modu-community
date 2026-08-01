@@ -2783,6 +2783,222 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_pt_consultations: {
+        Row: {
+          id: number
+          center_id: number
+          member_id: number | null
+          name: string
+          gender: string | null
+          birth: string | null
+          phone: string | null
+          address_dong: string | null
+          trainer_member_id: number | null
+          recent_year_history: string | null
+          past_sports: unknown
+          past_sports_etc: string | null
+          experience_length: string | null
+          motivation: string | null
+          goals: unknown
+          goals_etc: string | null
+          workout_method: string | null
+          preferred_trainer: string | null
+          referral_source: string | null
+          meal_morning_time: string | null
+          meal_morning_menu: string | null
+          meal_lunch_time: string | null
+          meal_lunch_menu: string | null
+          meal_dinner_time: string | null
+          meal_dinner_menu: string | null
+          meal_habits: unknown
+          preferred_foods: unknown
+          preferred_foods_etc: string | null
+          water_liters_per_day: number | null
+          caffeine_cups_per_day: number | null
+          alcohol_period: string | null
+          alcohol_count: number | null
+          smoking: boolean
+          cigarettes_per_day: number | null
+          supplements: string | null
+          diet_experience: boolean
+          diet_experience_detail: string | null
+          job: string | null
+          work_hours_start: string | null
+          work_hours_end: string | null
+          commute: string | null
+          job_traits: unknown
+          work_notes: string | null
+          wake_hour: number | null
+          sleep_hour: number | null
+          sleep_satisfaction: string | null
+          condition_score: string | null
+          fatigue_when: unknown
+          fatigue_reason: string | null
+          condition_notes: string | null
+          injury_history: string | null
+          pain_parts: unknown
+          pain_parts_etc: string | null
+          conditions: unknown
+          medications: string | null
+          current_state: string | null
+          weekly_freq: number | null
+          planned_days: unknown
+          planned_time: string | null
+          request_note: string | null
+          status: string
+          converted_at: string | null
+          converted_pass_id: number | null
+          lost_reason: string | null
+          memo: string | null
+          created_at: string
+          updated_at: string
+          created_by_uid: string
+          consulted_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          member_id?: number | null
+          name: string
+          gender?: string | null
+          birth?: string | null
+          phone?: string | null
+          address_dong?: string | null
+          trainer_member_id?: number | null
+          recent_year_history?: string | null
+          past_sports?: unknown
+          past_sports_etc?: string | null
+          experience_length?: string | null
+          motivation?: string | null
+          goals?: unknown
+          goals_etc?: string | null
+          workout_method?: string | null
+          preferred_trainer?: string | null
+          referral_source?: string | null
+          meal_morning_time?: string | null
+          meal_morning_menu?: string | null
+          meal_lunch_time?: string | null
+          meal_lunch_menu?: string | null
+          meal_dinner_time?: string | null
+          meal_dinner_menu?: string | null
+          meal_habits?: unknown
+          preferred_foods?: unknown
+          preferred_foods_etc?: string | null
+          water_liters_per_day?: number | null
+          caffeine_cups_per_day?: number | null
+          alcohol_period?: string | null
+          alcohol_count?: number | null
+          smoking?: boolean
+          cigarettes_per_day?: number | null
+          supplements?: string | null
+          diet_experience?: boolean
+          diet_experience_detail?: string | null
+          job?: string | null
+          work_hours_start?: string | null
+          work_hours_end?: string | null
+          commute?: string | null
+          job_traits?: unknown
+          work_notes?: string | null
+          wake_hour?: number | null
+          sleep_hour?: number | null
+          sleep_satisfaction?: string | null
+          condition_score?: string | null
+          fatigue_when?: unknown
+          fatigue_reason?: string | null
+          condition_notes?: string | null
+          injury_history?: string | null
+          pain_parts?: unknown
+          pain_parts_etc?: string | null
+          conditions?: unknown
+          medications?: string | null
+          current_state?: string | null
+          weekly_freq?: number | null
+          planned_days?: unknown
+          planned_time?: string | null
+          request_note?: string | null
+          status?: string
+          converted_at?: string | null
+          converted_pass_id?: number | null
+          lost_reason?: string | null
+          memo?: string | null
+          created_at?: string
+          updated_at?: string
+          created_by_uid: string
+          consulted_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          member_id?: number | null
+          name?: string
+          gender?: string | null
+          birth?: string | null
+          phone?: string | null
+          address_dong?: string | null
+          trainer_member_id?: number | null
+          recent_year_history?: string | null
+          past_sports?: unknown
+          past_sports_etc?: string | null
+          experience_length?: string | null
+          motivation?: string | null
+          goals?: unknown
+          goals_etc?: string | null
+          workout_method?: string | null
+          preferred_trainer?: string | null
+          referral_source?: string | null
+          meal_morning_time?: string | null
+          meal_morning_menu?: string | null
+          meal_lunch_time?: string | null
+          meal_lunch_menu?: string | null
+          meal_dinner_time?: string | null
+          meal_dinner_menu?: string | null
+          meal_habits?: unknown
+          preferred_foods?: unknown
+          preferred_foods_etc?: string | null
+          water_liters_per_day?: number | null
+          caffeine_cups_per_day?: number | null
+          alcohol_period?: string | null
+          alcohol_count?: number | null
+          smoking?: boolean
+          cigarettes_per_day?: number | null
+          supplements?: string | null
+          diet_experience?: boolean
+          diet_experience_detail?: string | null
+          job?: string | null
+          work_hours_start?: string | null
+          work_hours_end?: string | null
+          commute?: string | null
+          job_traits?: unknown
+          work_notes?: string | null
+          wake_hour?: number | null
+          sleep_hour?: number | null
+          sleep_satisfaction?: string | null
+          condition_score?: string | null
+          fatigue_when?: unknown
+          fatigue_reason?: string | null
+          condition_notes?: string | null
+          injury_history?: string | null
+          pain_parts?: unknown
+          pain_parts_etc?: string | null
+          conditions?: unknown
+          medications?: string | null
+          current_state?: string | null
+          weekly_freq?: number | null
+          planned_days?: unknown
+          planned_time?: string | null
+          request_note?: string | null
+          status?: string
+          converted_at?: string | null
+          converted_pass_id?: number | null
+          lost_reason?: string | null
+          memo?: string | null
+          created_at?: string
+          updated_at?: string
+          created_by_uid?: string
+          consulted_at?: string
+        }
+        Relationships: []
+      }
       crm_reservations: {
         Row: {
           id: number
