@@ -407,16 +407,18 @@ function ManageTab() {
           <h2 className="text-[13.5px] font-bold text-[#2A251D] dark:text-zinc-100">
             PT 상담지 관리
           </h2>
-          <button
-            type="button"
-            onClick={() => {
-              setShowAdd((s) => !s);
-              setAddError("");
-            }}
-            className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]"
-          >
-            {showAdd ? "취소" : "+ PT 상담지 만들기"}
-          </button>
+          {!showAdd && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowAdd(true);
+                setAddError("");
+              }}
+              className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]"
+            >
+              + PT 상담지 만들기
+            </button>
+          )}
         </div>
 
         {showAdd && (
@@ -439,7 +441,10 @@ function ManageTab() {
             <div className="flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setShowAdd(false)}
+                onClick={() => {
+                  setShowAdd(false);
+                  setAddError("");
+                }}
                 className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] text-[12.5px] text-[#3A342A] hover:bg-white"
               >
                 취소
@@ -450,7 +455,7 @@ function ManageTab() {
                 disabled={saving}
                 className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
               >
-                {saving ? "저장 중…" : "저장"}
+                {saving ? "만드는 중…" : "상담지 만들기"}
               </button>
             </div>
           </div>
