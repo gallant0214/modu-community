@@ -2794,6 +2794,7 @@ export type Database = {
           phone: string | null
           address_dong: string | null
           trainer_member_id: number | null
+          trainer_name_custom: string | null
           recent_year_history: string | null
           past_sports: unknown
           past_sports_etc: string | null
@@ -2865,6 +2866,7 @@ export type Database = {
           phone?: string | null
           address_dong?: string | null
           trainer_member_id?: number | null
+          trainer_name_custom?: string | null
           recent_year_history?: string | null
           past_sports?: unknown
           past_sports_etc?: string | null
@@ -2936,6 +2938,7 @@ export type Database = {
           phone?: string | null
           address_dong?: string | null
           trainer_member_id?: number | null
+          trainer_name_custom?: string | null
           recent_year_history?: string | null
           past_sports?: unknown
           past_sports_etc?: string | null

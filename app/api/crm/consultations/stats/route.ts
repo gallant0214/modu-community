@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("crm_pt_consultations")
-    .select("trainer_member_id, status")
+    .select("trainer_member_id, trainer_name_custom, status")
     .eq("center_id", ctx.centerId);
   if (from) query = query.gte("consulted_at", from);
   if (to) query = query.lte("consulted_at", to);
@@ -32,12 +32,37 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
 
-  type Bucket = { trainer_member_id: number | null; total: number; converted: number; lost: number; open: number };
-  const bucket = new Map<number, Bucket>();
+  // 버킷 키 규칙:
+  //  - 등록 강사: `id:<n>`
+  //  - 직접 입력: `custom:<name>` (같은 이름끼리 합산)
+  //  - 미지정   : `none`
+  type Bucket = {
+    key: string;
+    trainer_member_id: number | null;
+    trainer_name_custom: string | null;
+    total: number;
+    converted: number;
+    lost: number;
+    open: number;
+  };
+  const bucket = new Map<string, Bucket>();
   for (const r of data ?? []) {
-    const key = r.trainer_member_id ?? 0;
+    const custom = (r.trainer_name_custom ?? "").trim();
+    const key = r.trainer_member_id
+      ? `id:${r.trainer_member_id}`
+      : custom
+        ? `custom:${custom}`
+        : "none";
     if (!bucket.has(key)) {
-      bucket.set(key, { trainer_member_id: r.trainer_member_id, total: 0, converted: 0, lost: 0, open: 0 });
+      bucket.set(key, {
+        key,
+        trainer_member_id: r.trainer_member_id,
+        trainer_name_custom: r.trainer_member_id ? null : custom || null,
+        total: 0,
+        converted: 0,
+        lost: 0,
+        open: 0,
+      });
     }
     const b = bucket.get(key)!;
     b.total += 1;
@@ -46,7 +71,9 @@ export async function GET(request: Request) {
     else b.open += 1;
   }
 
-  const trainerIds = Array.from(bucket.keys()).filter((id) => id > 0);
+  const trainerIds = Array.from(bucket.values())
+    .map((b) => b.trainer_member_id)
+    .filter((v): v is number => !!v);
   const nameMap = new Map<number, string>();
   if (trainerIds.length) {
     const { data: staff } = await supabase
@@ -67,7 +94,11 @@ export async function GET(request: Request) {
   const trainerStats = Array.from(bucket.values())
     .map((b) => ({
       trainer_member_id: b.trainer_member_id,
-      trainer_name: b.trainer_member_id ? nameMap.get(b.trainer_member_id) ?? "미지정" : "미지정",
+      trainer_name: b.trainer_member_id
+        ? nameMap.get(b.trainer_member_id) ?? "미지정"
+        : b.trainer_name_custom
+          ? `${b.trainer_name_custom} (직접 입력)`
+          : "미지정",
       total: b.total,
       converted: b.converted,
       lost: b.lost,

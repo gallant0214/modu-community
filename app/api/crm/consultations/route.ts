@@ -6,7 +6,7 @@ import { buildConsultationPayload } from "@/app/lib/crm-consultation";
 export const dynamic = "force-dynamic";
 
 const LIST_COLUMNS =
-  "id, member_id, name, gender, birth, phone, address_dong, trainer_member_id, goals, status, converted_at, converted_pass_id, lost_reason, consulted_at, created_at";
+  "id, member_id, name, gender, birth, phone, address_dong, trainer_member_id, trainer_name_custom, goals, status, converted_at, converted_pass_id, lost_reason, consulted_at, created_at";
 
 /**
  * GET /api/crm/consultations?status=&trainer_id=&q=&from=&to=&limit=
@@ -67,7 +67,11 @@ export async function GET(request: Request) {
 
   const consultations = (data ?? []).map((r) => ({
     ...r,
-    trainer_name: r.trainer_member_id ? staffMap.get(r.trainer_member_id) ?? null : null,
+    trainer_name: r.trainer_member_id
+      ? staffMap.get(r.trainer_member_id) ?? null
+      : r.trainer_name_custom
+        ? `${r.trainer_name_custom} (직접 입력)`
+        : null,
   }));
 
   return NextResponse.json({ consultations });

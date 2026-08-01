@@ -73,6 +73,13 @@ export function ConsultationForm({ mode, initial }: Props) {
   const [trainerId, setTrainerId] = useState<number | "">(
     (initial?.trainer_member_id as number | null | undefined) ?? ""
   );
+  const [trainerNameCustom, setTrainerNameCustom] = useState<string>(
+    (initial?.trainer_name_custom as string | null | undefined) ?? ""
+  );
+  // 초기값에 커스텀 이름이 있으면 직접입력 모드로 시작
+  const [trainerMode, setTrainerMode] = useState<"select" | "custom">(
+    initial?.trainer_name_custom ? "custom" : "select"
+  );
   const [consultedAt, setConsultedAt] = useState(
     asStr("consulted_at") || new Date().toISOString().slice(0, 10)
   );
@@ -245,7 +252,8 @@ export function ConsultationForm({ mode, initial }: Props) {
         birth: birth || null,
         phone: phone.trim() || null,
         address_dong: addressDong.trim() || null,
-        trainer_member_id: trainerId || null,
+        trainer_member_id: trainerMode === "select" ? trainerId || null : null,
+        trainer_name_custom: trainerMode === "custom" ? trainerNameCustom.trim() || null : null,
         consulted_at: consultedAt,
         recent_year_history: recentYearHistory,
         past_sports: pastSports,
@@ -446,18 +454,59 @@ export function ConsultationForm({ mode, initial }: Props) {
               />
             </Field>
             <Field label="상담 담당 강사">
-              <select
-                value={trainerId}
-                onChange={(e) => setTrainerId(e.target.value ? Number(e.target.value) : "")}
-                className={crmInputClass}
-              >
-                <option value="">선택</option>
-                {activeTrainers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.display_name} ({s.role})
-                  </option>
-                ))}
-              </select>
+              <div className="space-y-1.5">
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setTrainerMode("select")}
+                    className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold border transition-colors ${
+                      trainerMode === "select"
+                        ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                        : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                    }`}
+                  >
+                    명단 선택
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTrainerMode("custom")}
+                    className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold border transition-colors ${
+                      trainerMode === "custom"
+                        ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                        : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                    }`}
+                  >
+                    직접 입력
+                  </button>
+                </div>
+                {trainerMode === "select" ? (
+                  <select
+                    value={trainerId}
+                    onChange={(e) => {
+                      setTrainerId(e.target.value ? Number(e.target.value) : "");
+                      setTrainerNameCustom("");
+                    }}
+                    className={crmInputClass}
+                  >
+                    <option value="">선택</option>
+                    {activeTrainers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.display_name} ({s.role})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={trainerNameCustom}
+                    onChange={(e) => {
+                      setTrainerNameCustom(e.target.value);
+                      setTrainerId("");
+                    }}
+                    className={crmInputClass}
+                    placeholder="예: 외부 강사 · 미등록 담당자 이름"
+                  />
+                )}
+              </div>
             </Field>
             <Field label="상담일">
               <input
@@ -913,8 +962,8 @@ export function ConsultationForm({ mode, initial }: Props) {
         </div>
       </Section>
 
-      {/* ===== 트레이너에게 바라는 점 ===== */}
-      <Section title="트레이너에게 바라는 점 또는 요청 사항">
+      {/* ===== 강사에게 바라는 점 ===== */}
+      <Section title="강사에게 바라는 점 또는 요청 사항">
         <textarea
           value={requestNote}
           onChange={(e) => setRequestNote(e.target.value)}

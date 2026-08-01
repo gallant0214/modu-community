@@ -62,7 +62,9 @@ export const JOB_TRAITS = [
 
 export const LEVELS = [
   { v: "high", l: "상" },
+  { v: "midhigh", l: "중상" },
   { v: "mid", l: "중" },
+  { v: "midlow", l: "중하" },
   { v: "low", l: "하" },
 ] as const;
 

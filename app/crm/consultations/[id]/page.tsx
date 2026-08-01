@@ -413,7 +413,7 @@ export default function ConsultationDetailPage() {
       </SectionCard>
 
       {c.request_note && (
-        <SectionCard title="트레이너에게 바라는 점 · 요청 사항">
+        <SectionCard title="강사에게 바라는 점 · 요청 사항">
           <p className="text-[13.5px] leading-relaxed text-[#2A251D] dark:text-zinc-200 whitespace-pre-wrap">
             {c.request_note}
           </p>

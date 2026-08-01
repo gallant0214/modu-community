@@ -18,13 +18,28 @@ export function buildConsultationPayload(
     return Number.isFinite(n) ? n : null;
   };
   const asArr = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []);
+
+  // 담당 강사: 명단 선택(trainer_member_id) 또는 직접 입력(trainer_name_custom).
+  // 직접 입력이 있으면 fallback 안 함 (기본값이 강사를 오염시키지 않도록).
+  const trainerNameCustom = asStr(body.trainer_name_custom);
+  const explicitTrainerId = asInt(body.trainer_member_id);
+  const hasExplicitTrainerField =
+    Object.prototype.hasOwnProperty.call(body, "trainer_member_id") ||
+    Object.prototype.hasOwnProperty.call(body, "trainer_name_custom");
+  const trainerMemberId = explicitTrainerId
+    ? explicitTrainerId
+    : hasExplicitTrainerField
+      ? null
+      : fallbackTrainerId;
+
   return {
     member_id: asInt(body.member_id) ?? null,
     gender: asStr(body.gender),
     birth: asStr(body.birth),
     phone: asStr(body.phone),
     address_dong: asStr(body.address_dong),
-    trainer_member_id: asInt(body.trainer_member_id) ?? fallbackTrainerId,
+    trainer_member_id: trainerMemberId,
+    trainer_name_custom: trainerNameCustom,
 
     recent_year_history: asStr(body.recent_year_history),
     past_sports: asArr(body.past_sports),

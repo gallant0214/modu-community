@@ -35,7 +35,7 @@ export async function GET(
     return NextResponse.json({ error: "접근 권한이 없습니다" }, { status: 403 });
   }
 
-  // trainer_name join
+  // trainer_name join (등록 강사 우선, 없으면 직접 입력값)
   let trainer_name: string | null = null;
   if (data.trainer_member_id) {
     const { data: t } = await supabase
@@ -44,6 +44,8 @@ export async function GET(
       .eq("id", data.trainer_member_id)
       .maybeSingle();
     trainer_name = t?.display_name ?? null;
+  } else if (data.trainer_name_custom) {
+    trainer_name = `${data.trainer_name_custom} (직접 입력)`;
   }
 
   return NextResponse.json({ consultation: { ...data, trainer_name } });
