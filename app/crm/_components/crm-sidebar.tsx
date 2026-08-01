@@ -49,6 +49,14 @@ const SOLO_MENU_HREFS = [
   "/crm/consultations",
 ];
 
+// 특정 센터에서만 노출되는 메뉴 (본격 서비스 전 파일럿 단계).
+// PT 상담 = 스페셜바디 센터 요청 기능 → 다른 센터에는 숨김.
+const SPECIAL_BODY_ONLY_HREFS = new Set(["/crm/consultations"]);
+function isSpecialBodyCenter(centerName: string): boolean {
+  const n = (centerName || "").trim().toLowerCase().replace(/\s+/g, "");
+  return n.includes("스페셜바디") || n.includes("specialbody");
+}
+
 function buildSoloMenu(
   myMemberId: number | null,
   opts: { includeCenterInfo: boolean }
@@ -137,9 +145,12 @@ export function CrmSidebar({ role, centerName, centerKind, centerMemberId }: Pro
   //  - centerKind='solo' (개인 강사 본인 센터)
   //  - role='trainer' (센터 소속 강사) — 락커/메세지/통계 등 관리 도구 대신 본인 스코프 위주로 표시
   const isSoloMode = centerKind === "solo" || role === "trainer";
-  const visible = isSoloMode
-    ? buildSoloMenu(centerMemberId ?? null, { includeCenterInfo: centerKind === "solo" })
-    : MENU.filter((m) => !m.staffOnly || isStaffLevel);
+  const specialBody = isSpecialBodyCenter(centerName);
+  const visible = (
+    isSoloMode
+      ? buildSoloMenu(centerMemberId ?? null, { includeCenterInfo: centerKind === "solo" })
+      : MENU.filter((m) => !m.staffOnly || isStaffLevel)
+  ).filter((m) => (SPECIAL_BODY_ONLY_HREFS.has(m.href) ? specialBody : true));
   const isActive = (href: string) => {
     const clean = href.split("?")[0];
     if (!clean) return false;
