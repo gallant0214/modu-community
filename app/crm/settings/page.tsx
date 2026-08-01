@@ -182,16 +182,18 @@ type SettingsTab =
   | "contracts"
   | "logs"
   | "expenses"
-  | "vendors";
+  | "vendors"
+  | "display";
 
 const SETTINGS_TABS: {
   key: SettingsTab;
   label: string;
   desc: string;
-  icon: "calendar" | "bell" | "notice" | "point" | "badge" | "shield" | "card" | "vendor" | "danger" | "log";
+  icon: "calendar" | "bell" | "notice" | "point" | "badge" | "shield" | "card" | "vendor" | "danger" | "log" | "display";
   danger?: boolean;
 }[] = [
   { key: "center", label: "센터 정보", desc: "주소·연락처·SNS", icon: "notice" },
+  { key: "display", label: "화면 모드", desc: "다크·화이트 테마", icon: "display" },
   { key: "reservation", label: "예약 정책", desc: "예약·취소 기준", icon: "calendar" },
   { key: "alerts", label: "알림", desc: "채팅 알림", icon: "bell" },
   { key: "voice", label: "출석 알림", desc: "체크인 음성 안내", icon: "bell" },
@@ -368,7 +370,7 @@ export default function CrmSettingsPage() {
       </header>
 
       <div className="mb-5 overflow-x-auto">
-        <div className="grid min-w-[860px] grid-cols-5 gap-2 rounded-xl border border-[#E4D9C6] bg-white/80 p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="grid min-w-[860px] grid-cols-6 gap-2 rounded-xl border border-[#E4D9C6] bg-white/80 p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           {SETTINGS_TABS.map((item) => (
             <TabBtn
               key={item.key}
@@ -589,6 +591,53 @@ export default function CrmSettingsPage() {
       )}
 
       {tab === "center" && <CenterProfilePanel role={info?.role ?? "trainer"} />}
+
+      {tab === "display" && (
+        <Card title="화면 모드">
+          <p className="text-[12.5px] text-[#8C8270] dark:text-zinc-500 -mt-2 mb-3">
+            CRM 화면 색상 테마를 선택하세요. 사용 기기(브라우저)별로 저장됩니다.
+          </p>
+          <div className="grid grid-cols-2 gap-2 max-w-[420px]">
+            <button
+              type="button"
+              onClick={() => setTheme("light")}
+              className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition-colors ${
+                theme === "light"
+                  ? "border-[#6B7B3A] bg-[#F3F7EA] dark:bg-emerald-950/20"
+                  : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-[#6B7B3A]/50"
+              }`}
+            >
+              <span className="text-[22px]">☀</span>
+              <span className="min-w-0">
+                <span className="block text-[13.5px] font-bold text-[#2A251D] dark:text-zinc-100">
+                  화이트 모드
+                </span>
+                <span className="mt-0.5 block text-[11px] text-[#8C8270]">밝은 배경 · 낮 시간 권장</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTheme("dark")}
+              className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition-colors ${
+                theme === "dark"
+                  ? "border-[#6B7B3A] bg-[#F3F7EA] dark:bg-emerald-950/20"
+                  : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-[#6B7B3A]/50"
+              }`}
+            >
+              <span className="text-[22px]">☾</span>
+              <span className="min-w-0">
+                <span className="block text-[13.5px] font-bold text-[#2A251D] dark:text-zinc-100">
+                  다크 모드
+                </span>
+                <span className="mt-0.5 block text-[11px] text-[#8C8270]">어두운 배경 · 야간 권장</span>
+              </span>
+            </button>
+          </div>
+          <p className="mt-3 text-[11.5px] text-[#A89B80]">
+            우측 상단의 ☀/☾ 버튼으로도 빠르게 전환할 수 있어요.
+          </p>
+        </Card>
+      )}
 
       {tab === "voice" && <AttendanceVoicePanel role={info?.role ?? "trainer"} />}
 
@@ -2936,6 +2985,13 @@ function SettingsTabIcon({
     return (
       <svg {...common}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 4.3L2.8 18a2 2 0 001.7 3h15a2 2 0 001.7-3L13.7 4.3a2 2 0 00-3.4 0z" />
+      </svg>
+    );
+  }
+  if (kind === "display") {
+    return (
+      <svg {...common}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
       </svg>
     );
   }
