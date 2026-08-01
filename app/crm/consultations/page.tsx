@@ -85,20 +85,37 @@ export default function ConsultationsPage() {
 
   return (
     <div className="px-5 md:px-8 pt-3 pb-8 max-w-6xl mx-auto space-y-5">
-      <header className="flex items-baseline justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
-            PT 상담
-          </h1>
-          <p className="mt-1 text-[12.5px] text-[#8C8270] dark:text-zinc-500">
-            종이 상담지를 대체 · 상담 → PT 등록 전환률을 자동 집계합니다.
-          </p>
+      <header>
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
+              PT 상담
+            </h1>
+            <p className="mt-1 text-[12.5px] text-[#8C8270] dark:text-zinc-500">
+              종이 상담지를 대체 · 상담 → PT 등록 전환률을 자동 집계합니다.
+            </p>
+          </div>
         </div>
+
+        {/* 상단 CTA: 새 상담지 만들기 */}
         <Link
           href="/crm/consultations/new"
-          className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932]"
+          className="mt-3 flex items-center justify-between gap-3 px-4 md:px-5 py-3.5 rounded-2xl border-2 border-dashed border-[#6B7B3A]/60 bg-gradient-to-r from-[#F3F7EA] to-white dark:from-emerald-950/20 dark:to-zinc-900 hover:border-[#6B7B3A] hover:bg-[#EFE7D5]/50 transition-colors"
         >
-          + 새 상담 작성
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full bg-[#6B7B3A] text-white text-[18px] font-bold">
+              +
+            </span>
+            <div className="min-w-0">
+              <div className="text-[14.5px] font-bold text-[#2A251D] dark:text-zinc-100">
+                피티 상담지 만들기
+              </div>
+              <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 truncate">
+                센터 회원 검색 또는 방문객 정보 입력 → 스페셜바디 상담지 항목 그대로 기록
+              </div>
+            </div>
+          </div>
+          <span className="shrink-0 text-[13px] font-semibold text-[#6B7B3A]">시작 →</span>
         </Link>
       </header>
 
