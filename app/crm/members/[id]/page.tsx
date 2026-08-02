@@ -3625,6 +3625,8 @@ function UsageIssueModal({
   const [cart, setCart] = useState<CartLine[]>([]);
   // 현재 폼에 선택된 상품의 묶음 구성 (담기/결제 시 라인에 실려 함께 발급)
   const [pickedComponents, setPickedComponents] = useState<BundleComp[]>([]);
+  // 목록에서 선택한 상품 id (선택 여부 시각 표시용)
+  const [pickedProductId, setPickedProductId] = useState<number | null>(null);
   // 라인 합계 = (상품 순금액) + (구성 상품 가격 합)
   const lineTotal = (c: CartLine) =>
     Math.max(0, c.priceWon - c.discountWon) +
@@ -3676,6 +3678,7 @@ function UsageIssueModal({
     setLockerId("");
     setLockerPassword("");
     setPickedComponents([]);
+    setPickedProductId(null);
     setError("");
   };
 
@@ -3781,6 +3784,7 @@ function UsageIssueModal({
     setLockerId("");
     setLockerPassword("");
     setPickedComponents([]);
+    setPickedProductId(null);
     (async () => {
       const token = await getIdToken();
       if (!token) return;
@@ -3814,6 +3818,7 @@ function UsageIssueModal({
     setMileageUsable(p.mileage_usable !== false);
     setAttendanceMileageEarn(p.attendance_mileage_earn ?? 0);
     setPickedComponents(p.components ?? []);
+    setPickedProductId(p.id);
     if (p.mileage_usable === false) setMileageUse(0);
     // 상품 선택 시점에 시작일을 오늘로 자동 세팅 (사용자가 이후 수정 가능)
     setStartDate(new Date().toISOString().slice(0, 10));
@@ -4092,16 +4097,17 @@ function UsageIssueModal({
         >
           <div className="relative">
             <input
-              className={crmInputClass}
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
                 setShowProducts(true);
+                setPickedProductId(null);
               }}
               onFocus={() => setShowProducts(true)}
               onBlur={() => setTimeout(() => setShowProducts(false), 150)}
               placeholder="상품 관리에 등록된 상품명 검색 (직접 입력 가능)"
               autoComplete="off"
+              className={`${crmInputClass} ${pickedProductId ? "border-[#6B7B3A] bg-[#6B7B3A]/5 dark:bg-[#6B7B3A]/15 font-semibold" : ""}`}
             />
             {showProducts &&
               (() => {
@@ -4122,9 +4128,14 @@ function UsageIssueModal({
                             applyProduct(p);
                             setShowProducts(false);
                           }}
-                          className="w-full text-left px-3 py-2 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800 last:border-0"
+                          className={`w-full text-left px-3 py-2 border-b border-[#E8E0D0]/50 dark:border-zinc-800 last:border-0 ${
+                            pickedProductId === p.id
+                              ? "bg-[#6B7B3A]/12 dark:bg-[#6B7B3A]/25"
+                              : "hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                          }`}
                         >
-                          <div className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">
+                          <div className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100 flex items-center gap-1.5">
+                            {pickedProductId === p.id && <span className="text-[#6B7B3A]">✓</span>}
                             {p.name}
                           </div>
                           <div className="text-[11px] text-[#8C8270]">
@@ -4890,16 +4901,18 @@ function PassIssueModal({
         <CrmField label="수강권 상품" required>
           <div className="relative">
             <input
-              className={crmInputClass}
               value={lessonKind}
               onChange={(e) => {
                 setLessonKind(e.target.value);
                 setShowKindList(true);
+                setPickedProductId(null);
+                setPickedComponents([]);
               }}
               onFocus={() => setShowKindList(true)}
               onBlur={() => setTimeout(() => setShowKindList(false), 150)}
               placeholder="상품 관리에 등록된 수강권 검색 (직접 입력 가능)"
               autoComplete="off"
+              className={`${crmInputClass} ${pickedProductId ? "border-[#6B7B3A] bg-[#6B7B3A]/5 dark:bg-[#6B7B3A]/15 font-semibold" : ""}`}
             />
             {showKindList &&
               (() => {
@@ -4922,9 +4935,14 @@ function PassIssueModal({
                             applyPassProduct(p);
                             setShowKindList(false);
                           }}
-                          className="w-full text-left px-3 py-2 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800"
+                          className={`w-full text-left px-3 py-2 border-b border-[#E8E0D0]/50 dark:border-zinc-800 ${
+                            pickedProductId === p.id
+                              ? "bg-[#6B7B3A]/12 dark:bg-[#6B7B3A]/25"
+                              : "hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                          }`}
                         >
-                          <div className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">
+                          <div className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100 flex items-center gap-1.5">
+                            {pickedProductId === p.id && <span className="text-[#6B7B3A]">✓</span>}
                             {p.name}
                           </div>
                           <div className="text-[11px] text-[#8C8270]">
@@ -4943,6 +4961,8 @@ function PassIssueModal({
                             e.preventDefault();
                             setLessonKind(k.label);
                             setShowKindList(false);
+                            setPickedProductId(null);
+                            setPickedComponents([]);
                           }}
                           className="w-full text-left px-3 py-2 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 border-b border-[#E8E0D0]/50 dark:border-zinc-800 last:border-0"
                         >
