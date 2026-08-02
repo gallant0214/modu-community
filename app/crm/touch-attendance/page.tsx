@@ -354,9 +354,9 @@ export default function TouchAttendancePage() {
                   className="w-full px-5 py-4 rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-left hover:border-[#6B7B3A] disabled:opacity-50"
                 >
                   <div className="text-[19px] font-bold text-[#2A251D] dark:text-zinc-100">{m.name}</div>
-                  <div className="mt-0.5 text-[13px] text-[#A89B80] flex flex-wrap gap-x-2">
-                    {m.phone && <span>{maskPhone(m.phone)}</span>}
-                    {m.birth && <span>· 생년월일 {m.birth}</span>}
+                  <div className="mt-0.5 text-[13px] text-[#6B5D47] dark:text-zinc-400 flex flex-wrap gap-x-2">
+                    {m.phone && <span className="tabular-nums font-semibold">{formatPhone(m.phone)}</span>}
+                    {m.birth && <span className="text-[#A89B80]">· 생년월일 {m.birth}</span>}
                   </div>
                 </button>
               </li>

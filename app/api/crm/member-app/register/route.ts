@@ -79,7 +79,7 @@ export async function POST(request: Request) {
   const last4 = phoneDigits.slice(-4);
   const { data: candidates } = await supabase
     .from("crm_members")
-    .select("id, name, phone, linked_firebase_uid, birth, address")
+    .select("id, name, phone, linked_firebase_uid, birth, address, attendance_no")
     .eq("center_id", centerId)
     .eq("status", "active")
     .ilike("phone", `%${last4}%`);
@@ -90,22 +90,27 @@ export async function POST(request: Request) {
       m.name.trim().toLowerCase() === name.toLowerCase()
   );
   if (match) {
+    const linkPatch: Record<string, unknown> = {
+      linked_firebase_uid: user.uid,
+      member_type: "matched",
+      birth: match.birth ?? birth,
+      address: match.address ?? address,
+      privacy_agreed_at: nowIso,
+    };
+    // 기존 미연동 회원의 attendance_no 가 비어 있으면 폰 뒷자리 4자리로 채워둔다.
+    if (!match.attendance_no || !match.attendance_no.trim()) {
+      linkPatch.attendance_no = last4;
+    }
     const { error: linkErr } = await supabase
       .from("crm_members")
-      .update({
-        linked_firebase_uid: user.uid,
-        member_type: "matched",
-        birth: match.birth ?? birth,
-        address: match.address ?? address,
-        privacy_agreed_at: nowIso,
-      } as never)
+      .update(linkPatch as never)
       .eq("id", match.id)
       .is("linked_firebase_uid", null);
     if (linkErr) return NextResponse.json({ error: "가입 실패", detail: linkErr.message }, { status: 500 });
     return NextResponse.json({ ok: true, memberId: match.id, linkedExisting: true });
   }
 
-  // 3) 신규 생성
+  // 3) 신규 생성 (attendance_no = 폰 뒷 4자리; 중복은 터치출석 시 이름/전화로 선택)
   const { data: created, error } = await supabase
     .from("crm_members")
     .insert({
@@ -118,6 +123,7 @@ export async function POST(request: Request) {
       linked_firebase_uid: user.uid,
       privacy_agreed_at: nowIso,
       status: "active",
+      attendance_no: last4,
     } as never)
     .select("id")
     .single();
