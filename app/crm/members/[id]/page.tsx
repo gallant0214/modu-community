@@ -5346,6 +5346,7 @@ function PassDetailModal({
   const [editing, setEditing] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
   const [canRefund, setCanRefund] = useState(false);
+  const [reqSending, setReqSending] = useState(false);
   // 수정 폼 값 (편집 시작 시 detail 로부터 초기화)
   const [editTrainerId, setEditTrainerId] = useState<number | "">("");
   const [editCoTrainerIds, setEditCoTrainerIds] = useState<number[]>([]);
@@ -5520,6 +5521,46 @@ function PassDetailModal({
       : PAYMENT_METHOD_LABEL[pass.payment_method] ?? pass.payment_method
     : "";
 
+  // 회원용 앱으로 전자 계약서 작성 요청 (약관 동의 + 서명은 회원이 직접 완료)
+  const requestContractToApp = async () => {
+    if (!detail?.member || !pass || reqSending) return;
+    if (!window.confirm("회원용 앱에서 전자 계약서 작성을 하도록 메세지를 전송하시겠습니까?")) return;
+    setReqSending(true);
+    try {
+      const token = await getIdToken();
+      const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+      // 활성 계약서 양식 조회 → 첫 양식 사용 (양식이 없으면 안내)
+      const tRes = await fetch("/api/crm/contracts", { headers, cache: "no-store" });
+      const tData = await tRes.json();
+      const templates: { id: number }[] = tData.contracts ?? [];
+      if (templates.length === 0) {
+        alert("등록된 계약서 양식이 없어요. 설정 → 계약서 관리에서 먼저 양식을 등록해 주세요.");
+        return;
+      }
+      const res = await fetch("/api/crm/contracts/sign/request", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          member_id: detail.member.id,
+          pass_id: pass.id,
+          template_id: templates[0].id,
+          notify_app: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "요청 실패");
+      alert(
+        data.notified
+          ? "회원 앱으로 전자 계약서 작성 요청을 보냈어요. 회원이 앱에서 약관 동의와 서명을 완료하면 계약이 등록돼요."
+          : "요청을 만들었어요. 다만 회원이 아직 회원용 앱을 연결하지 않아 알림이 전송되지 않았어요. (앱 연결 후 다시 시도해 주세요)"
+      );
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setReqSending(false);
+    }
+  };
+
   return (
     <CrmModal open={open} onClose={onClose} title="수강권 상세" size="lg">
       {loading ? (
@@ -5560,13 +5601,21 @@ function PassDetailModal({
           />
 
           {!editing && pass.status === "valid" && detail.member && (
-            <div>
+            <div className="flex flex-wrap items-center gap-2">
               <Link
                 href={`/crm/contracts/sign/new?member_id=${detail.member.id}&pass_id=${pass.id}`}
                 className="inline-flex px-3 py-1.5 rounded-lg border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 text-[12.5px] font-semibold hover:bg-amber-50/60"
               >
                 전자 계약서
               </Link>
+              <button
+                type="button"
+                onClick={requestContractToApp}
+                disabled={reqSending}
+                className="inline-flex px-3 py-1.5 rounded-lg bg-[#B47B2A] text-white text-[12.5px] font-semibold hover:bg-[#9c682a] disabled:opacity-60"
+              >
+                {reqSending ? "요청 중…" : "전자 계약서 작성 요청"}
+              </button>
             </div>
           )}
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { sendPushToMember } from "@/app/lib/member-notify";
 import crypto from "node:crypto";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,8 @@ export async function POST(request: Request) {
     template_id?: number;
     pass_id?: number;
     membership_id?: number;
+    /** true 면 회원 앱으로 계약서 작성 요청 푸시 발송 */
+    notify_app?: boolean;
   };
   try {
     body = await request.json();
@@ -236,5 +239,24 @@ export async function POST(request: Request) {
   const origin = url.origin;
   const signUrl = `${origin}/contract/sign/${token}`;
 
-  return NextResponse.json({ ok: true, id: created.id, token, url: signUrl });
+  // 회원 앱으로 계약서 작성 요청 푸시 (연결된 기기 있을 때만 전송됨)
+  let notified = false;
+  if (body.notify_app) {
+    const { count } = await supabase
+      .from("crm_member_device_tokens")
+      .select("token", { count: "exact", head: true })
+      .eq("member_id", memberId);
+    notified = (count ?? 0) > 0;
+    if (notified) {
+      await sendPushToMember(
+        memberId,
+        "contract_request",
+        "전자 계약서 작성 요청",
+        "작성할 전자 계약서가 도착했어요. 눌러서 약관 동의와 서명을 완료해 주세요.",
+        { url: signUrl, contract_id: String(created.id), token }
+      );
+    }
+  }
+
+  return NextResponse.json({ ok: true, id: created.id, token, url: signUrl, notified });
 }
