@@ -1253,6 +1253,11 @@ export type Database = {
           phone: string | null
           business_no: string | null
           status: string
+          address: string | null
+          naver_url: string | null
+          google_url: string | null
+          instagram_id: string | null
+          youtube_url: string | null
           created_at: string
           updated_at: string
         }
@@ -1266,6 +1271,11 @@ export type Database = {
           phone?: string | null
           business_no?: string | null
           status?: string
+          address?: string | null
+          naver_url?: string | null
+          google_url?: string | null
+          instagram_id?: string | null
+          youtube_url?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1279,6 +1289,11 @@ export type Database = {
           phone?: string | null
           business_no?: string | null
           status?: string
+          address?: string | null
+          naver_url?: string | null
+          google_url?: string | null
+          instagram_id?: string | null
+          youtube_url?: string | null
           created_at?: string
           updated_at?: string
         }
