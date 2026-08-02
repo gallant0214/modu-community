@@ -6,7 +6,7 @@ import { verifyCenterIdentity } from "@/app/lib/crm-center-verify";
 export const dynamic = "force-dynamic";
 
 const PROFILE_COLUMNS =
-  "id, name, kind, region_sido, region_sigungu, phone, business_no, address, naver_url, google_url, instagram_id, youtube_url, status" as unknown as "*";
+  "id, name, kind, region_sido, region_sigungu, phone, business_no, address, naver_url, google_url, instagram_id, youtube_url, operating_hours, status" as unknown as "*";
 
 /**
  * GET /api/crm/centers/me — 센터 프로필 조회 (센터 정보 탭용)
@@ -48,6 +48,7 @@ export async function PATCH(request: Request) {
     google_url?: string | null;
     instagram_id?: string | null;
     youtube_url?: string | null;
+    operating_hours?: string | null;
   };
   try {
     body = await request.json();
@@ -73,6 +74,7 @@ export async function PATCH(request: Request) {
   setNullable("instagram_id", (body.instagram_id ?? undefined) ?
     body.instagram_id!.replace(/^@/, "") : body.instagram_id);
   setNullable("youtube_url", body.youtube_url ?? undefined);
+  setNullable("operating_hours", body.operating_hours ?? undefined);
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });

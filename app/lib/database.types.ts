@@ -1258,6 +1258,7 @@ export type Database = {
           google_url: string | null
           instagram_id: string | null
           youtube_url: string | null
+          operating_hours: string | null
           created_at: string
           updated_at: string
         }
@@ -1276,6 +1277,7 @@ export type Database = {
           google_url?: string | null
           instagram_id?: string | null
           youtube_url?: string | null
+          operating_hours?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1294,6 +1296,7 @@ export type Database = {
           google_url?: string | null
           instagram_id?: string | null
           youtube_url?: string | null
+          operating_hours?: string | null
           created_at?: string
           updated_at?: string
         }

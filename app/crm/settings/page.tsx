@@ -721,6 +721,7 @@ interface CenterProfile {
   google_url: string | null;
   instagram_id: string | null;
   youtube_url: string | null;
+  operating_hours: string | null;
 }
 
 function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "trainer" }) {
@@ -739,6 +740,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
   const [googleUrl, setGoogleUrl] = useState("");
   const [instagramId, setInstagramId] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [operatingHours, setOperatingHours] = useState("");
 
   const load = useCallback(async () => {
     setError("");
@@ -760,6 +762,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       setGoogleUrl(c.google_url ?? "");
       setInstagramId(c.instagram_id ?? "");
       setYoutubeUrl(c.youtube_url ?? "");
+      setOperatingHours(c.operating_hours ?? "");
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -779,7 +782,8 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       naverUrl !== (profile.naver_url ?? "") ||
       googleUrl !== (profile.google_url ?? "") ||
       instagramId !== (profile.instagram_id ?? "") ||
-      youtubeUrl !== (profile.youtube_url ?? ""));
+      youtubeUrl !== (profile.youtube_url ?? "") ||
+      operatingHours !== (profile.operating_hours ?? ""));
 
   const save = async () => {
     if (!canEdit || !dirty || saving) return;
@@ -799,6 +803,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
           google_url: googleUrl.trim(),
           instagram_id: instagramId.trim().replace(/^@/, ""),
           youtube_url: youtubeUrl.trim(),
+          operating_hours: operatingHours.trim(),
         }),
       });
       const data = await res.json();
@@ -837,6 +842,17 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
           />
           <div className="md:col-span-2">
             <ProfileField label="센터 주소" value={address} onChange={setAddress} disabled={!canEdit} placeholder="서울시 강남구 테헤란로 1길 1, 3층" />
+          </div>
+          <div className="md:col-span-2">
+            <ProfileField
+              label="운영 시간"
+              value={operatingHours}
+              onChange={setOperatingHours}
+              disabled={!canEdit}
+              multiline
+              rows={3}
+              placeholder={"예: 평일 06:00~23:00\n토요일 08:00~20:00\n일·공휴일 휴무"}
+            />
           </div>
           <ProfileField label="네이버 링크" value={naverUrl} onChange={setNaverUrl} disabled={!canEdit} placeholder="https://map.naver.com/..." type="url" />
           <ProfileField label="구글 링크" value={googleUrl} onChange={setGoogleUrl} disabled={!canEdit} placeholder="https://g.co/kgs/..." type="url" />
@@ -1201,6 +1217,8 @@ function ProfileField({
   disabled,
   type = "text",
   inputMode,
+  multiline,
+  rows = 3,
 }: {
   label: string;
   value: string;
@@ -1209,19 +1227,34 @@ function ProfileField({
   disabled?: boolean;
   type?: string;
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  multiline?: boolean;
+  rows?: number;
 }) {
+  const cls =
+    "w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A] disabled:opacity-60";
   return (
     <div>
       <div className="text-[12.5px] text-[#A89B80] mb-1.5">{label}</div>
-      <input
-        type={type}
-        inputMode={inputMode}
-        className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A] disabled:opacity-60"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        disabled={disabled}
-      />
+      {multiline ? (
+        <textarea
+          className={`${cls} resize-y leading-relaxed`}
+          rows={rows}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          disabled={disabled}
+        />
+      ) : (
+        <input
+          type={type}
+          inputMode={inputMode}
+          className={cls}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          disabled={disabled}
+        />
+      )}
     </div>
   );
 }
