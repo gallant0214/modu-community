@@ -724,6 +724,34 @@ interface CenterProfile {
   operating_hours: string | null;
 }
 
+// 운영 시간: 요일 선택 + 시간대 항목 배열을 JSON 으로 operating_hours(text)에 저장.
+const HOURS_DAYS = ["월", "화", "수", "목", "금", "토", "일"];
+interface HoursEntry {
+  days: number[]; // 0=월 ... 6=일
+  open: string; // "HH:MM"
+  close: string;
+}
+function parseHours(raw: string | null | undefined): HoursEntry[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map((e) => ({
+        days: Array.isArray(e?.days) ? e.days.filter((d: unknown) => Number.isInteger(d) && (d as number) >= 0 && (d as number) <= 6) : [],
+        open: typeof e?.open === "string" ? e.open : "",
+        close: typeof e?.close === "string" ? e.close : "",
+      }))
+      .filter((e) => e.days.length > 0 && e.open && e.close);
+  } catch {
+    return [];
+  }
+}
+function formatHoursEntry(e: HoursEntry): string {
+  const days = [...e.days].sort((a, b) => a - b).map((d) => HOURS_DAYS[d]).join("·");
+  return `${days} ${e.open}~${e.close}`;
+}
+
 function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "trainer" }) {
   const { getIdToken } = useAuth();
   const [profile, setProfile] = useState<CenterProfile | null>(null);
@@ -740,7 +768,12 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
   const [googleUrl, setGoogleUrl] = useState("");
   const [instagramId, setInstagramId] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
-  const [operatingHours, setOperatingHours] = useState("");
+  // 운영 시간: 확정 항목 목록 + 현재 입력 중인 요일/시간
+  const [hoursEntries, setHoursEntries] = useState<HoursEntry[]>([]);
+  const [hoursSelDays, setHoursSelDays] = useState<number[]>([]);
+  const [hoursOpen, setHoursOpen] = useState("09:00");
+  const [hoursClose, setHoursClose] = useState("18:00");
+  const hoursSerialized = hoursEntries.length > 0 ? JSON.stringify(hoursEntries) : "";
 
   const load = useCallback(async () => {
     setError("");
@@ -762,7 +795,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       setGoogleUrl(c.google_url ?? "");
       setInstagramId(c.instagram_id ?? "");
       setYoutubeUrl(c.youtube_url ?? "");
-      setOperatingHours(c.operating_hours ?? "");
+      setHoursEntries(parseHours(c.operating_hours));
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -783,7 +816,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       googleUrl !== (profile.google_url ?? "") ||
       instagramId !== (profile.instagram_id ?? "") ||
       youtubeUrl !== (profile.youtube_url ?? "") ||
-      operatingHours !== (profile.operating_hours ?? ""));
+      hoursSerialized !== (profile.operating_hours ?? ""));
 
   const save = async () => {
     if (!canEdit || !dirty || saving) return;
@@ -803,7 +836,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
           google_url: googleUrl.trim(),
           instagram_id: instagramId.trim().replace(/^@/, ""),
           youtube_url: youtubeUrl.trim(),
-          operating_hours: operatingHours.trim(),
+          operating_hours: hoursSerialized,
         }),
       });
       const data = await res.json();
@@ -844,15 +877,121 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
             <ProfileField label="센터 주소" value={address} onChange={setAddress} disabled={!canEdit} placeholder="서울시 강남구 테헤란로 1길 1, 3층" />
           </div>
           <div className="md:col-span-2">
-            <ProfileField
-              label="운영 시간"
-              value={operatingHours}
-              onChange={setOperatingHours}
-              disabled={!canEdit}
-              multiline
-              rows={3}
-              placeholder={"예: 평일 06:00~23:00\n토요일 08:00~20:00\n일·공휴일 휴무"}
-            />
+            <div className="text-[12.5px] text-[#A89B80] mb-1.5">운영 시간</div>
+
+            {/* 등록된 운영 시간 목록 */}
+            {hoursEntries.length > 0 && (
+              <ul className="space-y-1.5 mb-2.5">
+                {hoursEntries.map((e, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/50 dark:bg-zinc-900/50"
+                  >
+                    <span className="text-[13.5px] text-[#3A342A] dark:text-zinc-200 tabular-nums">
+                      {formatHoursEntry(e)}
+                    </span>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => setHoursEntries((prev) => prev.filter((_, x) => x !== i))}
+                        className="shrink-0 px-2 py-0.5 rounded-md border border-red-200 dark:border-red-900/60 text-[12px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {canEdit && (
+              <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 p-3 space-y-2.5">
+                {/* 요일 선택 */}
+                <div>
+                  <div className="text-[11.5px] text-[#A89B80] mb-1.5">운영 요일 선택</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {HOURS_DAYS.map((d, idx) => {
+                      const on = hoursSelDays.includes(idx);
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() =>
+                            setHoursSelDays((prev) =>
+                              prev.includes(idx) ? prev.filter((x) => x !== idx) : [...prev, idx]
+                            )
+                          }
+                          className={`w-9 h-9 rounded-lg text-[13px] font-semibold border transition-colors ${
+                            on
+                              ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                              : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[#3A342A] dark:text-zinc-300"
+                          }`}
+                        >
+                          {d}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setHoursSelDays([0, 1, 2, 3, 4])}
+                      className="px-2.5 h-9 rounded-lg text-[12px] font-medium border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
+                    >
+                      평일
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHoursSelDays([5, 6])}
+                      className="px-2.5 h-9 rounded-lg text-[12px] font-medium border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
+                    >
+                      주말
+                    </button>
+                  </div>
+                </div>
+
+                {/* 시간 입력 */}
+                <div>
+                  <div className="text-[11.5px] text-[#A89B80] mb-1.5">운영 시간</div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="time"
+                      value={hoursOpen}
+                      onChange={(e) => setHoursOpen(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[14px] text-[#2A251D] dark:text-zinc-100 tabular-nums"
+                    />
+                    <span className="text-[#A89B80]">~</span>
+                    <input
+                      type="time"
+                      value={hoursClose}
+                      onChange={(e) => setHoursClose(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[14px] text-[#2A251D] dark:text-zinc-100 tabular-nums"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={hoursSelDays.length === 0 || !hoursOpen || !hoursClose}
+                  onClick={() => {
+                    setHoursEntries((prev) => [
+                      ...prev,
+                      { days: [...hoursSelDays].sort((a, b) => a - b), open: hoursOpen, close: hoursClose },
+                    ]);
+                    setHoursSelDays([]);
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-lg text-[13px] font-semibold bg-[#6B7B3A] text-white hover:bg-[#5a6932] disabled:opacity-50"
+                >
+                  + 운영 시간 추가하기
+                </button>
+                <p className="text-[11px] text-[#A89B80]">
+                  요일을 고르고 시간을 입력한 뒤 추가하세요. (예: 평일 06:00~23:00 / 토 08:00~20:00)
+                </p>
+              </div>
+            )}
+            {!canEdit && hoursEntries.length === 0 && (
+              <div className="px-3 py-2 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#A89B80]">
+                등록된 운영 시간이 없어요.
+              </div>
+            )}
           </div>
           <ProfileField label="네이버 링크" value={naverUrl} onChange={setNaverUrl} disabled={!canEdit} placeholder="https://map.naver.com/..." type="url" />
           <ProfileField label="구글 링크" value={googleUrl} onChange={setGoogleUrl} disabled={!canEdit} placeholder="https://g.co/kgs/..." type="url" />
