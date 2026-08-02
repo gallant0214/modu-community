@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const { data: passes, error } = await supabase
     .from("crm_passes")
     .select(
-      "id, lesson_kind, issue_type, total_sessions, remaining_sessions, session_minutes, group_capacity, trainer_member_id, co_trainer_ids, start_date, expires_at, status"
+      "id, lesson_kind, issue_type, total_sessions, remaining_sessions, session_minutes, group_capacity, trainer_member_id, co_trainer_ids, issued_at, price_won, start_date, expires_at, status"
     )
     .eq("center_id", ctx.centerId)
     .eq("member_id", ctx.memberId)
@@ -88,6 +88,8 @@ export async function GET(request: Request) {
         isPeriod,
         trainerId: p.trainer_member_id,
         trainerName: nameMap.get(p.trainer_member_id) ?? "트레이너",
+        issuedAt: p.issued_at,
+        priceWon: p.price_won ?? null,
         startDate: p.start_date,
         expiresAt: p.expires_at,
         dday,

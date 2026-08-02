@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const [{ data: memberships, error }, { data: lockers }, { data: rentals }] = await Promise.all([
     supabase
       .from("crm_memberships")
-      .select("id, plan_name, duration_days, start_date, expires_at, status, attendance_mileage_earn, mileage_earned, mileage_used")
+      .select("id, plan_name, duration_days, start_date, expires_at, purchased_at, price_won, status, attendance_mileage_earn, mileage_earned, mileage_used")
       .eq("center_id", ctx.centerId)
       .eq("member_id", ctx.memberId)
       .in("status", ["valid", "expired"])
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
       .eq("state", "assigned"),
     supabase
       .from("crm_rentals")
-      .select("id, item_name, start_date, expires_at, status")
+      .select("id, item_name, start_date, expires_at, price_won, created_at, status")
       .eq("center_id", ctx.centerId)
       .eq("member_id", ctx.memberId)
       .eq("status", "valid"),
@@ -57,6 +57,8 @@ export async function GET(request: Request) {
       durationDays: m.duration_days,
       startDate: m.start_date,
       expiresAt: m.expires_at,
+      purchasedAt: m.purchased_at ?? m.start_date,
+      priceWon: m.price_won ?? null,
       dday: dday(m.expires_at),
       status: m.status,
       attendanceMileageEarn: m.attendance_mileage_earn ?? 0,
@@ -66,6 +68,8 @@ export async function GET(request: Request) {
       label: `${l.number}번 락커`,
       startDate: l.start_date,
       expiresAt: l.expires_at,
+      purchasedAt: l.start_date,
+      priceWon: null,
       dday: dday(l.expires_at),
     })),
     rentals: (rentals ?? []).map((r) => ({
@@ -73,6 +77,8 @@ export async function GET(request: Request) {
       itemName: r.item_name,
       startDate: r.start_date,
       expiresAt: r.expires_at,
+      purchasedAt: (r.created_at ?? "").slice(0, 10) || r.start_date,
+      priceWon: r.price_won ?? null,
       dday: dday(r.expires_at),
     })),
   });
