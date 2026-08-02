@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { sendPushToMember, formatKstSlot } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -322,6 +323,18 @@ export async function POST(request: Request) {
   if (error || !created) {
     return NextResponse.json({ error: "예약 생성 실패", detail: error?.message }, { status: 500 });
   }
+
+  // 회원 알림: 강사가 수업을 예약함
+  after(async () => {
+    await sendPushToMember(
+      pass.member_id,
+      "reservation_booked",
+      "수업이 예약됐어요 ✅",
+      `${formatKstSlot(startsAt.toISOString())} 수업이 예약됐어요`,
+      { reservationId: String(created.id) }
+    ).catch(() => {});
+  });
+
   return NextResponse.json({
     ok: true,
     reservationId: created.id,

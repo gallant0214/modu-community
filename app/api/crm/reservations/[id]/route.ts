@@ -291,6 +291,17 @@ export async function PATCH(
       } as never,
     });
 
+    // 회원 알림: 예약 시간 변경
+    after(async () => {
+      await sendPushToMember(
+        cur.member_id,
+        "reservation_rescheduled",
+        "예약 시간이 변경됐어요",
+        `${formatKstSlot(String(patch.starts_at))} 로 수업 시간이 변경됐어요`,
+        { reservationId: String(reservationId) }
+      ).catch(() => {});
+    });
+
     return NextResponse.json({ ok: true, starts_at: patch.starts_at, ends_at: patch.ends_at });
   }
 
@@ -362,6 +373,26 @@ export async function PATCH(
       entity_id: reservationId,
       payload: body.reason ? ({ reason: body.reason } as never) : null,
     });
+  }
+
+  // 회원 알림: 상태 변경(취소/출석완료/노쇼/예약복구). 실제 변경이 있을 때만.
+  if (newStatus !== cur.status) {
+    const slot = formatKstSlot(cur.starts_at);
+    const reason = body.reason?.trim();
+    const noticeMap: Record<string, { title: string; body: string }> = {
+      booked: { title: "예약이 확정됐어요 ✅", body: `${slot} 수업 예약이 확정됐어요` },
+      attended: { title: "수업 완료 처리됐어요 ✅", body: `${slot} 수업이 출석(완료) 처리됐어요` },
+      cancelled: { title: "예약이 취소됐어요", body: `${slot} 수업 예약이 취소됐어요${reason ? ` · 사유: ${reason}` : ""}` },
+      noshow: { title: "노쇼 처리됐어요", body: `${slot} 수업이 노쇼(미출석)로 처리됐어요` },
+    };
+    const n = noticeMap[newStatus];
+    if (n) {
+      after(async () => {
+        await sendPushToMember(cur.member_id, `reservation_${newStatus}`, n.title, n.body, {
+          reservationId: String(reservationId),
+        }).catch(() => {});
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });
