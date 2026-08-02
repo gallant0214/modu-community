@@ -3152,6 +3152,96 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_member_daily_records: {
+        Row: {
+          id: number
+          center_id: number
+          member_id: number
+          record_date: string
+          water_ml: number | null
+          weight_kg: number | null
+          mood: string | null
+          exercise_minutes: number | null
+          exercise_memo: string | null
+          meal_summary: string | null
+          memo: string | null
+          share_with_trainer: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          member_id: number
+          record_date: string
+          water_ml?: number | null
+          weight_kg?: number | null
+          mood?: string | null
+          exercise_minutes?: number | null
+          exercise_memo?: string | null
+          meal_summary?: string | null
+          memo?: string | null
+          share_with_trainer?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          member_id?: number
+          record_date?: string
+          water_ml?: number | null
+          weight_kg?: number | null
+          mood?: string | null
+          exercise_minutes?: number | null
+          exercise_memo?: string | null
+          meal_summary?: string | null
+          memo?: string | null
+          share_with_trainer?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_member_record_items: {
+        Row: {
+          id: number
+          record_id: number
+          member_id: number
+          center_id: number
+          type: string
+          label: string | null
+          value_json: Json | null
+          photo_url: string | null
+          thumb_url: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          record_id: number
+          member_id: number
+          center_id: number
+          type: string
+          label?: string | null
+          value_json?: Json | null
+          photo_url?: string | null
+          thumb_url?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          record_id?: number
+          member_id?: number
+          center_id?: number
+          type?: string
+          label?: string | null
+          value_json?: Json | null
+          photo_url?: string | null
+          thumb_url?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       crm_payout_rules: {
         Row: {
           id: number

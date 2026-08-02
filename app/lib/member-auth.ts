@@ -74,3 +74,98 @@ export function isMemberError(
 ): ctx is NextResponse {
   return ctx instanceof NextResponse;
 }
+
+export interface LinkedMemberCenter {
+  memberId: number;
+  centerId: number;
+  centerName: string;
+  name: string;
+  phone: string;
+}
+
+/**
+ * 로그인 사용자가 연동된 모든 (센터 x 회원) 목록. 회원 앱 bootstrap 용.
+ * 한 사람이 여러 센터에 회원으로 등록돼 있을 수 있어 배열로 반환한다.
+ */
+export async function listLinkedMembers(
+  request: Request
+): Promise<NextResponse | LinkedMemberCenter[]> {
+  const user = await verifyAuth(request);
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+  }
+
+  const { data: rows, error } = await supabase
+    .from("crm_members")
+    .select("id, center_id, name, phone, created_at")
+    .eq("linked_firebase_uid", user.uid)
+    .eq("status", "active")
+    .order("created_at", { ascending: false });
+  if (error) {
+    return NextResponse.json({ error: "DB 오류", detail: error.message }, { status: 500 });
+  }
+
+  const members = rows ?? [];
+  if (members.length === 0) return [];
+
+  const centerIds = Array.from(new Set(members.map((m) => m.center_id)));
+  const { data: centers } = await supabase
+    .from("crm_centers")
+    .select("id, name")
+    .in("id", centerIds);
+  const nameMap = new Map((centers ?? []).map((c) => [c.id, c.name]));
+
+  return members.map((m) => ({
+    memberId: m.id,
+    centerId: m.center_id,
+    centerName: nameMap.get(m.center_id) ?? "",
+    name: m.name,
+    phone: m.phone ?? "",
+  }));
+}
+
+/**
+ * 특정 센터에 대한 회원 컨텍스트. 회원 앱의 대부분 엔드포인트가 ?centerId= 로 호출.
+ * 해당 센터에 이 사용자와 연동된 회원이 없으면 403.
+ */
+export async function requireMemberForCenter(
+  request: Request,
+  centerId: number
+): Promise<NextResponse | MemberContext> {
+  const user = await verifyAuth(request);
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+  }
+  if (!centerId || Number.isNaN(centerId)) {
+    return NextResponse.json({ error: "센터를 선택해주세요" }, { status: 400 });
+  }
+
+  const { data: member, error } = await supabase
+    .from("crm_members")
+    .select("id, center_id, name, phone")
+    .eq("linked_firebase_uid", user.uid)
+    .eq("center_id", centerId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (error) {
+    return NextResponse.json({ error: "DB 오류", detail: error.message }, { status: 500 });
+  }
+  if (!member) {
+    return NextResponse.json({ error: "이 센터에 연결된 회원 정보가 없어요" }, { status: 403 });
+  }
+
+  const { data: center } = await supabase
+    .from("crm_centers")
+    .select("name")
+    .eq("id", centerId)
+    .maybeSingle();
+
+  return {
+    uid: user.uid,
+    memberId: member.id,
+    centerId: member.center_id,
+    centerName: center?.name ?? "",
+    name: member.name,
+    phone: member.phone ?? "",
+  };
+}
