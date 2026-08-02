@@ -3260,6 +3260,42 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_member_notifications: {
+        Row: {
+          id: number
+          center_id: number | null
+          member_id: number
+          type: string
+          title: string
+          body: string | null
+          data_json: Json | null
+          read_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          center_id?: number | null
+          member_id: number
+          type: string
+          title: string
+          body?: string | null
+          data_json?: Json | null
+          read_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number | null
+          member_id?: number
+          type?: string
+          title?: string
+          body?: string | null
+          data_json?: Json | null
+          read_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       crm_payout_rules: {
         Row: {
           id: number

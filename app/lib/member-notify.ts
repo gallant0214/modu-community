@@ -40,6 +40,26 @@ export async function sendPushToMember(
   body: string,
   data?: Record<string, string>
 ) {
+  // 1) 알림 내역 저장 (앱 알림함/뱃지용 — 푸시 토큰 유무와 무관하게 항상 기록)
+  try {
+    const { data: mem } = await supabase
+      .from("crm_members")
+      .select("center_id")
+      .eq("id", memberId)
+      .maybeSingle();
+    await supabase.from("crm_member_notifications").insert({
+      center_id: mem?.center_id ?? null,
+      member_id: memberId,
+      type,
+      title,
+      body: body ?? null,
+      data_json: (data ?? null) as never,
+    } as never);
+  } catch (e) {
+    console.error("[member-notify] log error", e);
+  }
+
+  // 2) 실제 푸시 발송
   try {
     const { data: tokens } = await supabase
       .from("crm_member_device_tokens")
