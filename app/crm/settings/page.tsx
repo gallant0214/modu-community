@@ -727,9 +727,10 @@ interface CenterProfile {
 // 운영 시간: 요일 선택 + 시간대 항목 배열을 JSON 으로 operating_hours(text)에 저장.
 const HOURS_DAYS = ["월", "화", "수", "목", "금", "토", "일"];
 interface HoursEntry {
-  days: number[]; // 0=월 ... 6=일
+  days: number[]; // 0=월 ... 6=일 (note 항목이면 [])
   open: string; // "HH:MM"
   close: string;
+  note: string; // 자유 입력(기타) — 있으면 요일/시간 대신 이 문구 표시
 }
 function parseHours(raw: string | null | undefined): HoursEntry[] {
   if (!raw) return [];
@@ -741,15 +742,21 @@ function parseHours(raw: string | null | undefined): HoursEntry[] {
         days: Array.isArray(e?.days) ? e.days.filter((d: unknown) => Number.isInteger(d) && (d as number) >= 0 && (d as number) <= 6) : [],
         open: typeof e?.open === "string" ? e.open : "",
         close: typeof e?.close === "string" ? e.close : "",
+        note: typeof e?.note === "string" ? e.note : "",
       }))
-      .filter((e) => e.days.length > 0 && e.open && e.close);
+      .filter((e) => (e.note ? true : e.days.length > 0 && e.open && e.close));
   } catch {
     return [];
   }
 }
 function formatHoursEntry(e: HoursEntry): string {
+  if (e.note) return e.note;
   const days = [...e.days].sort((a, b) => a - b).map((d) => HOURS_DAYS[d]).join("·");
-  return `${days} ${e.open}~${e.close}`;
+  const hm = (t: string) => {
+    const [h, m] = t.split(":");
+    return m === "00" ? `${Number(h)}시` : t;
+  };
+  return `${days} ${hm(e.open)}~${hm(e.close)}`;
 }
 
 function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "trainer" }) {
@@ -773,6 +780,8 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
   const [hoursSelDays, setHoursSelDays] = useState<number[]>([]);
   const [hoursOpen, setHoursOpen] = useState("09:00");
   const [hoursClose, setHoursClose] = useState("18:00");
+  const [hoursNoteMode, setHoursNoteMode] = useState(false);
+  const [hoursNote, setHoursNote] = useState("");
   const hoursSerialized = hoursEntries.length > 0 ? JSON.stringify(hoursEntries) : "";
 
   const load = useCallback(async () => {
@@ -945,26 +954,82 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
                     >
                       주말
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setHoursNoteMode((v) => !v)}
+                      className={`px-2.5 h-9 rounded-lg text-[12px] font-medium border transition-colors ${
+                        hoursNoteMode
+                          ? "border-[#B47B2A] bg-[#B47B2A]/10 text-[#B47B2A]"
+                          : "border-dashed border-[#B47B2A] text-[#B47B2A] hover:bg-[#B47B2A]/5"
+                      }`}
+                    >
+                      기타 입력하기
+                    </button>
                   </div>
                 </div>
 
-                {/* 시간 입력 */}
+                {/* 기타(자유 입력) */}
+                {hoursNoteMode && (
+                  <div className="rounded-lg border border-[#B47B2A]/40 bg-[#B47B2A]/5 p-2.5 space-y-2">
+                    <input
+                      type="text"
+                      value={hoursNote}
+                      onChange={(e) => setHoursNote(e.target.value)}
+                      placeholder="예시 : 매월 마지막 주 일요일은 휴무 입니다"
+                      className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[14px] text-[#2A251D] dark:text-zinc-100"
+                      maxLength={100}
+                    />
+                    <button
+                      type="button"
+                      disabled={!hoursNote.trim()}
+                      onClick={() => {
+                        setHoursEntries((prev) => [
+                          ...prev,
+                          { days: [], open: "", close: "", note: hoursNote.trim() },
+                        ]);
+                        setHoursNote("");
+                        setHoursNoteMode(false);
+                      }}
+                      className="w-full px-3.5 py-2 rounded-lg text-[13px] font-semibold bg-[#B47B2A] text-white hover:bg-[#9c682a] disabled:opacity-50"
+                    >
+                      + 기타 안내 추가하기
+                    </button>
+                  </div>
+                )}
+
+                {/* 시간 입력 — 0~23시 단위 선택 */}
                 <div>
                   <div className="text-[11.5px] text-[#A89B80] mb-1.5">운영 시간</div>
                   <div className="flex items-center gap-2">
-                    <input
-                      type="time"
+                    <select
                       value={hoursOpen}
                       onChange={(e) => setHoursOpen(e.target.value)}
                       className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[14px] text-[#2A251D] dark:text-zinc-100 tabular-nums"
-                    />
+                    >
+                      {Array.from({ length: 24 }, (_, h) => {
+                        const v = `${String(h).padStart(2, "0")}:00`;
+                        return (
+                          <option key={h} value={v}>
+                            {h}시
+                          </option>
+                        );
+                      })}
+                    </select>
                     <span className="text-[#A89B80]">~</span>
-                    <input
-                      type="time"
+                    <select
                       value={hoursClose}
                       onChange={(e) => setHoursClose(e.target.value)}
                       className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[14px] text-[#2A251D] dark:text-zinc-100 tabular-nums"
-                    />
+                    >
+                      {Array.from({ length: 24 }, (_, h) => {
+                        const v = `${String(h).padStart(2, "0")}:00`;
+                        return (
+                          <option key={h} value={v}>
+                            {h}시
+                          </option>
+                        );
+                      })}
+                    </select>
                   </div>
                 </div>
 
@@ -974,7 +1039,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
                   onClick={() => {
                     setHoursEntries((prev) => [
                       ...prev,
-                      { days: [...hoursSelDays].sort((a, b) => a - b), open: hoursOpen, close: hoursClose },
+                      { days: [...hoursSelDays].sort((a, b) => a - b), open: hoursOpen, close: hoursClose, note: "" },
                     ]);
                     setHoursSelDays([]);
                   }}
