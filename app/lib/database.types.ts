@@ -3296,6 +3296,36 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_member_mileage_logs: {
+        Row: {
+          id: number
+          center_id: number | null
+          member_id: number
+          delta: number
+          reason: string
+          balance_after: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          center_id?: number | null
+          member_id: number
+          delta: number
+          reason: string
+          balance_after?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number | null
+          member_id?: number
+          delta?: number
+          reason?: string
+          balance_after?: number | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       crm_payout_rules: {
         Row: {
           id: number
@@ -3505,6 +3535,8 @@ export type Database = {
           working_hours_start: string
           working_hours_end: string
           default_columns: number
+          checkout_mileage_enabled: boolean
+          checkout_mileage_earn: number
           updated_at: string
         }
         Insert: {
