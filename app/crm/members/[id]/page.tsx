@@ -345,6 +345,7 @@ export default function CrmMemberDetailPage() {
                     className="tabular-nums"
                   />
                 </div>
+                {!readOnly && <CheckInButton memberId={member.id} onDone={load} />}
               </div>
             </div>
           </div>
@@ -827,6 +828,62 @@ function MemoSection({
         <div className="px-3.5 py-2 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#A89B80]">
           메모가 없습니다.
         </div>
+      )}
+    </div>
+  );
+}
+
+/* 회원 상세 헤더 — 수동 출석 처리 버튼 */
+function CheckInButton({ memberId, onDone }: { memberId: number; onDone: () => void }) {
+  const { getIdToken } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; tone: "ok" | "warn" } | null>(null);
+
+  const run = async () => {
+    if (busy) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/attendances/check-in", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ member_id: memberId, source: "manual" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "출석 처리 실패");
+      if (data.duplicate) {
+        setMsg({ text: data.message || "이미 최근에 출석 처리됐어요.", tone: "warn" });
+      } else {
+        setMsg({ text: "출석 처리했어요.", tone: "ok" });
+        onDone();
+      }
+    } catch (e) {
+      setMsg({ text: e instanceof Error ? e.message : "네트워크 오류", tone: "warn" });
+    } finally {
+      setBusy(false);
+      setTimeout(() => setMsg(null), 4000);
+    }
+  };
+
+  return (
+    <div className="mt-2 flex items-center gap-2 flex-wrap">
+      <button
+        type="button"
+        onClick={run}
+        disabled={busy}
+        className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+      >
+        {busy ? "처리 중…" : "출석 처리"}
+      </button>
+      {msg && (
+        <span
+          className={`text-[12px] font-medium ${
+            msg.tone === "ok" ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#B47B2A]"
+          }`}
+        >
+          {msg.text}
+        </span>
       )}
     </div>
   );
