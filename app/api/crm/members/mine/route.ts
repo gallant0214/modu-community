@@ -43,7 +43,7 @@ export async function GET(request: Request) {
     gender: string | null;
     mileage: number;
     face_image_thumb: string | null;
-    items: { kind: string; type: "lesson"; remaining: number | null; total: number; expires: string }[];
+    items: { kind: string; type: "lesson"; remaining: number | null; total: number; reserved: number; expires: string }[];
     center_id: number;
     center_name: string;
     trainer_member_id: number;
@@ -95,10 +95,26 @@ export async function GET(request: Request) {
     const ids = members.map((x) => x.id);
     const { data: passesData } = await supabase
       .from("crm_passes")
-      .select("member_id, lesson_kind, remaining_sessions, total_sessions, expires_at")
+      .select("id, member_id, lesson_kind, remaining_sessions, total_sessions, expires_at")
       .eq("center_id", m.center_id)
       .in("member_id", ids)
       .eq("status", "valid");
+
+    // 수강권별 예약 건수(취소·반려 제외) → 예약가능 = 총 횟수 - 예약 건수
+    const passIds = (passesData ?? []).map((p) => p.id);
+    const reservedMap = new Map<number, number>();
+    if (passIds.length > 0) {
+      const { data: resv } = await supabase
+        .from("crm_reservations")
+        .select("pass_id")
+        .eq("center_id", m.center_id)
+        .in("pass_id", passIds)
+        .not("status", "in", "(cancelled,rejected)");
+      for (const r of resv ?? []) {
+        if (r.pass_id == null) continue;
+        reservedMap.set(r.pass_id, (reservedMap.get(r.pass_id) ?? 0) + 1);
+      }
+    }
 
     const passMap = new Map<number, OutMember["items"]>();
     for (const p of passesData ?? []) {
@@ -108,6 +124,7 @@ export async function GET(request: Request) {
         type: "lesson",
         remaining: p.remaining_sessions,
         total: p.total_sessions,
+        reserved: reservedMap.get(p.id) ?? 0,
         expires: p.expires_at,
       });
       passMap.set(p.member_id, arr);
