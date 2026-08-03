@@ -345,7 +345,11 @@ export default function CrmMemberDetailPage() {
                     className="tabular-nums"
                   />
                 </div>
-                {!readOnly && <CheckInButton memberId={member.id} onDone={load} />}
+                <CheckInButton
+                  memberId={member.id}
+                  centerId={foreignCenter ? Number(foreignCenter) : undefined}
+                  onDone={load}
+                />
               </div>
             </div>
           </div>
@@ -834,7 +838,15 @@ function MemoSection({
 }
 
 /* 회원 상세 헤더 — 수동 출석 처리 버튼 */
-function CheckInButton({ memberId, onDone }: { memberId: number; onDone: () => void }) {
+function CheckInButton({
+  memberId,
+  centerId,
+  onDone,
+}: {
+  memberId: number;
+  centerId?: number;
+  onDone: () => void;
+}) {
   const { getIdToken } = useAuth();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; tone: "ok" | "warn" } | null>(null);
@@ -848,7 +860,7 @@ function CheckInButton({ memberId, onDone }: { memberId: number; onDone: () => v
       const res = await fetch("/api/crm/attendances/check-in", {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ member_id: memberId, source: "manual" }),
+        body: JSON.stringify({ member_id: memberId, source: "manual", ...(centerId ? { center_id: centerId } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "출석 처리 실패");

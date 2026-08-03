@@ -20,11 +20,26 @@ export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  let body: { token?: string; member_id?: number; source?: string };
+  let body: { token?: string; member_id?: number; source?: string; center_id?: number };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  }
+
+  // 다른 센터 회원(개인 CRM 통합 목록 등)을 출석 처리할 때 center_id 로 대상 센터 지정.
+  // 요청자가 그 센터의 활성 멤버여야 허용. 미지정/무권한이면 현재 컨텍스트 센터.
+  let targetCenterId = ctx.centerId;
+  const centerParam = Number(body.center_id) || 0;
+  if (centerParam && centerParam !== ctx.centerId) {
+    const { data: om } = await supabase
+      .from("crm_center_members")
+      .select("id")
+      .eq("firebase_uid", ctx.uid)
+      .eq("center_id", centerParam)
+      .eq("status", "active")
+      .maybeSingle();
+    if (om) targetCenterId = centerParam;
   }
 
   let member: { id: number; name: string; phone: string | null; birth: string | null } | null = null;
@@ -33,7 +48,7 @@ export async function POST(request: Request) {
     const { data } = await supabase
       .from("crm_members")
       .select("id, name, phone, birth")
-      .eq("center_id", ctx.centerId)
+      .eq("center_id", targetCenterId)
       .eq("checkin_token", body.token.trim())
       .eq("status", "active")
       .maybeSingle();
@@ -42,7 +57,7 @@ export async function POST(request: Request) {
     const { data } = await supabase
       .from("crm_members")
       .select("id, name, phone, birth")
-      .eq("center_id", ctx.centerId)
+      .eq("center_id", targetCenterId)
       .eq("id", body.member_id)
       .eq("status", "active")
       .maybeSingle();
@@ -58,7 +73,7 @@ export async function POST(request: Request) {
   const { data: recent } = await supabase
     .from("crm_attendances")
     .select("id, checked_in_at")
-    .eq("center_id", ctx.centerId)
+    .eq("center_id", targetCenterId)
     .eq("member_id", member.id)
     .gte("checked_in_at", cutoff)
     .order("checked_in_at", { ascending: false })
@@ -82,7 +97,7 @@ export async function POST(request: Request) {
   const { data: created, error } = await supabase
     .from("crm_attendances")
     .insert({
-      center_id: ctx.centerId,
+      center_id: targetCenterId,
       member_id: member.id,
       source,
     })
@@ -94,19 +109,19 @@ export async function POST(request: Request) {
   }
 
   // 출석 마일리지 적립 (하루 1회). 하루에 여러 번 방문해도 한 번만 적립.
-  const mileageAwarded = await awardAttendanceMileage(ctx.centerId, member.id, created.id);
+  const mileageAwarded = await awardAttendanceMileage(targetCenterId, member.id, created.id);
 
   // 음성 안내 메세지 계산 (센터가 규칙을 등록해뒀을 때만 반환).
   // 실패해도 체크인 자체는 성공으로 응답해야 하므로 try/catch.
   let voiceMessages: string[] = [];
   try {
-    voiceMessages = await buildAttendanceVoiceMessages(ctx.centerId, member);
+    voiceMessages = await buildAttendanceVoiceMessages(targetCenterId, member);
   } catch {
     voiceMessages = [];
   }
 
   // 결과 화면용 요약(이용권/락커/이번 주 출석/마일리지)
-  const summary = await buildCheckinSummary(ctx.centerId, member.id);
+  const summary = await buildCheckinSummary(targetCenterId, member.id);
 
   return NextResponse.json({
     ok: true,
