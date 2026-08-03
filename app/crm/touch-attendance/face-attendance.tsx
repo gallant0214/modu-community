@@ -38,7 +38,8 @@ function loadFaceApi(): Promise<any> {
 interface FaceRow {
   id: number;
   name: string;
-  face_image_data: string | null;
+  face_image_data?: string | null;
+  face_descriptor?: number[] | null;
 }
 
 type Stage = "init" | "models" | "faces" | "ready" | "error";
@@ -260,7 +261,9 @@ export default function FaceAttendance({ fill = false }: { fill?: boolean } = {}
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || "등록 얼굴 조회 실패");
-        const faces: FaceRow[] = (data.faces ?? []).filter((f: FaceRow) => f.face_image_data);
+        const faces: FaceRow[] = (data.faces ?? []).filter(
+          (f: FaceRow) => (Array.isArray(f.face_descriptor) && f.face_descriptor.length > 0) || f.face_image_data
+        );
         if (cancelled) return;
 
         // 등록 사진은 inputSize 크게(정확도 우선), 실시간 루프는 별도 opt(속도 우선)
@@ -274,16 +277,31 @@ export default function FaceAttendance({ fill = false }: { fill?: boolean } = {}
           if (cancelled) return;
           const f = faces[i];
           try {
-            const img = new Image();
-            img.src = f.face_image_data as string;
-            await img.decode();
-            const det = await faceapi
-              .detectSingleFace(img, enrollOpt)
-              .withFaceLandmarks()
-              .withFaceDescriptor();
-            if (det?.descriptor) {
-              built.push({ id: f.id, descriptor: det.descriptor });
+            // 저장된 디스크립터가 있으면 이미지 처리 없이 바로 사용 (빠름·일관)
+            if (Array.isArray(f.face_descriptor) && f.face_descriptor.length > 0) {
+              built.push({ id: f.id, descriptor: new Float32Array(f.face_descriptor) });
               nameMapRef.current.set(f.id, f.name);
+            } else if (f.face_image_data) {
+              // 레거시(사진만) → 계산 후 서버에 백필 저장 → 다음부터는 벡터만 내려받음
+              const img = new Image();
+              img.src = f.face_image_data;
+              await img.decode();
+              const det = await faceapi
+                .detectSingleFace(img, enrollOpt)
+                .withFaceLandmarks()
+                .withFaceDescriptor();
+              if (det?.descriptor) {
+                built.push({ id: f.id, descriptor: det.descriptor });
+                nameMapRef.current.set(f.id, f.name);
+                // 백필(실패해도 무시 — 매칭에는 영향 없음)
+                fetch("/api/crm/members/faces", {
+                  method: "POST",
+                  headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+                  body: JSON.stringify({ member_id: f.id, descriptor: Array.from(det.descriptor as Float32Array) }),
+                }).catch(() => {});
+              } else {
+                skipped++;
+              }
             } else {
               skipped++;
             }

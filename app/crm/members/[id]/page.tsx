@@ -17,6 +17,7 @@ import {
 import { CrmModal, CrmField, crmInputClass } from "../../_components/crm-modal";
 import { CrmLineChart } from "../../_components/crm-line-chart";
 import { unitToDays } from "@/app/lib/duration-convert";
+import { computeFaceDescriptor } from "../../_lib/faceapi";
 
 interface Member {
   id: number;
@@ -984,20 +985,39 @@ function FacePhotoUpload({
     }
     setBusy(true);
     try {
-      // 얼굴 인식 정확도 우선: 등록 원본 512x512, q=0.90 (≈80~100KB) — face-api 디스크립터 크롭 선명도↑
-      // + 목록 썸네일(144x144, q=0.9) — 48px 디스플레이 retina 3x 까지 선명
+      // 표시용 사진은 예전과 동일한 정도(420x420, q=0.85 ≈ 40KB) + 목록 썸네일(144x144).
       const [compressed, thumb] = await Promise.all([
-        compressToDataUrl(file, 512, 0.9),
+        compressToDataUrl(file, 420, 0.85),
         compressToDataUrl(file, 144, 0.9),
       ]);
+      // 얼굴 인식용 디스크립터는 "원본 고해상도"에서 계산 → 정확도↑ (표시 화질과 분리).
+      // 실패(모델 로드/얼굴 미검출)해도 사진은 저장하고, 매칭은 얼굴출석에서 사진으로 폴백 처리됨.
+      let descriptor: number[] | null = null;
+      try {
+        const objUrl = URL.createObjectURL(file);
+        try {
+          descriptor = await computeFaceDescriptor(objUrl);
+        } finally {
+          URL.revokeObjectURL(objUrl);
+        }
+      } catch {
+        descriptor = null;
+      }
       const token = await getIdToken();
       const res = await fetch(`/api/crm/members/${memberId}`, {
         method: "PATCH",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ face_image_data: compressed, face_image_thumb: thumb }),
+        body: JSON.stringify({
+          face_image_data: compressed,
+          face_image_thumb: thumb,
+          face_descriptor: descriptor,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "업로드 실패");
+      if (!descriptor) {
+        setError("사진은 저장했지만 얼굴을 자동 인식하지 못했어요. 정면·밝은 곳에서 다시 촬영하면 인식률이 올라가요.");
+      }
       onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
@@ -1015,7 +1035,7 @@ function FacePhotoUpload({
       const res = await fetch(`/api/crm/members/${memberId}`, {
         method: "PATCH",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ face_image_data: null, face_image_thumb: null }),
+        body: JSON.stringify({ face_image_data: null, face_image_thumb: null, face_descriptor: null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "삭제 실패");

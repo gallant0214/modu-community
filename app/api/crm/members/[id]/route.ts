@@ -141,6 +141,7 @@ const USAGE_FIELDS = new Set([
   "current_locker",
   "face_image_data",
   "face_image_thumb",
+  "face_descriptor",
 ]);
 
 // 얼굴 사진 base64 최대 크기 (안전장치 · 300KB)
@@ -193,6 +194,7 @@ export async function PATCH(
     current_locker?: string;
     face_image_data?: string | null;
     face_image_thumb?: string | null;
+    face_descriptor?: number[] | null;
   };
   try {
     body = await request.json();
@@ -280,6 +282,17 @@ export async function PATCH(
         { error: "썸네일 이미지가 너무 크거나 형식이 잘못됐어요" },
         { status: 400 }
       );
+    }
+  }
+  // 얼굴 인식용 디스크립터 (128차원 float 배열). 얼굴 미검출 시 null.
+  if (body.face_descriptor !== undefined) {
+    const v = body.face_descriptor;
+    if (v === null) {
+      patch.face_descriptor = null;
+    } else if (Array.isArray(v) && v.length >= 64 && v.length <= 512 && v.every((n) => typeof n === "number" && Number.isFinite(n))) {
+      patch.face_descriptor = v;
+    } else {
+      return NextResponse.json({ error: "얼굴 인식 데이터 형식이 잘못됐어요" }, { status: 400 });
     }
   }
 
