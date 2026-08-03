@@ -357,6 +357,17 @@ function TrainerTab({ data }: { data: MonthlyResp | null }) {
 
 /* ─── 센터 매출 탭 ────────────────────────────── */
 
+interface PaymentBucket {
+  cash: number;
+  card: number;
+  culture: number;
+  other: number;
+}
+interface RegBucket {
+  new: number;
+  renewal: number;
+  unknown: number;
+}
 interface CenterRevenueResp {
   ym: string;
   total: number;
@@ -385,6 +396,16 @@ interface CenterRevenueResp {
     pass: number;
     notStarted: number;
     inProgress: number;
+  };
+  payment_totals: {
+    total: PaymentBucket;
+    membership: PaymentBucket;
+    pass: PaymentBucket;
+  };
+  registration_totals: {
+    total: RegBucket;
+    membership: RegBucket;
+    pass: RegBucket;
   };
 }
 
@@ -433,6 +454,28 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
     rows.push(["  수강권", data.liability_breakdown.pass]);
     rows.push(["  미시작", data.liability_breakdown.notStarted]);
     rows.push(["  진행중", data.liability_breakdown.inProgress]);
+    rows.push([]);
+    rows.push(["결제수단별", "현금(원)", "카드(원)", "문화상품권(원)", "기타(원)"]);
+    (
+      [
+        ["전체", data.payment_totals.total],
+        ["회원권", data.payment_totals.membership],
+        ["수강권", data.payment_totals.pass],
+      ] as const
+    ).forEach(([label, b]) => {
+      rows.push([label, b.cash, b.card, b.culture, b.other]);
+    });
+    rows.push([]);
+    rows.push(["신규·재등록", "신규(원)", "재등록(원)", "미분류(원)"]);
+    (
+      [
+        ["전체", data.registration_totals.total],
+        ["회원권", data.registration_totals.membership],
+        ["수강권", data.registration_totals.pass],
+      ] as const
+    ).forEach(([label, b]) => {
+      rows.push([label, b.new, b.renewal, b.unknown]);
+    });
     rows.push([]);
     rows.push(["이번달 활동 건수"]);
     rows.push(["회원권 발급 수", data.counts.memberships]);
@@ -543,8 +586,20 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
         })}
       </section>
 
-      {/* 부가세 (선택 기간 결제 기준) */}
+      {/* 결제수단별 매출 */}
       <div className="mb-2 text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+        결제수단별 매출
+      </div>
+      <PaymentBreakdown data={data} />
+
+      {/* 신규 / 재등록 매출 */}
+      <div className="mt-4 mb-2 text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+        신규 · 재등록 매출
+      </div>
+      <RegistrationBreakdown data={data} />
+
+      {/* 부가세 (선택 기간 결제 기준) */}
+      <div className="mt-4 mb-2 text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
         부가세 (선택 기간 결제 기준)
       </div>
       <section className="mb-5 px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/50 dark:bg-zinc-900/60">
@@ -588,6 +643,132 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
         💡 <strong>부가세</strong>는 결제 시 상품에 &quot;부가세 포함&quot; 옵션을 체크한 건만 10% 를 제외한 실매출로 환산해요.
       </div>
     </>
+  );
+}
+
+/* ─── 결제수단·등록타입 브레이크다운 컴포넌트 ────────────── */
+
+function PaymentBreakdown({ data }: { data: CenterRevenueResp | null }) {
+  const rows: {
+    label: string;
+    bucket: PaymentBucket | undefined;
+    tone?: "membership" | "pass";
+  }[] = [
+    { label: "전체 매출", bucket: data?.payment_totals.total },
+    { label: "회원권 매출", bucket: data?.payment_totals.membership, tone: "membership" },
+    { label: "수강권 매출", bucket: data?.payment_totals.pass, tone: "pass" },
+  ];
+  return (
+    <section className="overflow-x-auto -mx-2 px-2 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+      <table className="w-full text-[13px] min-w-[520px]">
+        <thead className="text-[#8C8270] dark:text-zinc-500 border-b border-[#E8E0D0] dark:border-zinc-800">
+          <tr>
+            <th className="text-left py-2 pl-4 pr-2 font-semibold">구분</th>
+            <th className="text-right py-2 px-2 font-semibold">현금</th>
+            <th className="text-right py-2 px-2 font-semibold">카드</th>
+            <th className="text-right py-2 px-2 font-semibold">문화상품권</th>
+            <th className="text-right py-2 pr-4 pl-2 font-semibold">기타</th>
+          </tr>
+        </thead>
+        <tbody className="text-[#2A251D] dark:text-zinc-200">
+          {rows.map((r) => (
+            <tr
+              key={r.label}
+              className="border-b border-[#E8E0D0]/50 dark:border-zinc-800/70 last:border-b-0"
+            >
+              <td className="py-2 pl-4 pr-2 font-semibold">{r.label}</td>
+              <td className="py-2 px-2 text-right tabular-nums">
+                {formatWon(r.bucket?.cash ?? 0)}원
+              </td>
+              <td className="py-2 px-2 text-right tabular-nums">
+                {formatWon(r.bucket?.card ?? 0)}원
+              </td>
+              <td className="py-2 px-2 text-right tabular-nums text-[#8C8270]">
+                {formatWon(r.bucket?.culture ?? 0)}원
+              </td>
+              <td className="py-2 pr-4 pl-2 text-right tabular-nums text-[#8C8270]">
+                {formatWon(r.bucket?.other ?? 0)}원
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="px-4 py-2 text-[11px] text-[#A89B80]">
+        기타 = 총 결제금액 − (현금+카드+문화상품권). 계좌이체·상품권·포인트 등 기타 결제 수단 포함.
+      </div>
+    </section>
+  );
+}
+
+function RegistrationBreakdown({ data }: { data: CenterRevenueResp | null }) {
+  const total = data?.registration_totals.total;
+  const totalSum = (total?.new ?? 0) + (total?.renewal ?? 0) + (total?.unknown ?? 0);
+  const pctNew = totalSum > 0 ? Math.round(((total?.new ?? 0) / totalSum) * 100) : 0;
+  const pctRe = totalSum > 0 ? Math.round(((total?.renewal ?? 0) / totalSum) * 100) : 0;
+  const rows: { label: string; bucket: RegBucket | undefined; accent: boolean }[] = [
+    { label: "전체 매출", bucket: total, accent: true },
+    { label: "회원권 매출", bucket: data?.registration_totals.membership, accent: false },
+    { label: "수강권 매출 (PT·레슨)", bucket: data?.registration_totals.pass, accent: false },
+  ];
+  return (
+    <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden">
+      {/* 전체 요약 바 */}
+      <div className="px-4 pt-3 pb-2">
+        <div className="text-[11.5px] text-[#A89B80]">
+          전체 <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">신규 {pctNew}%</strong> ·
+          <strong className="ml-1 text-[#B47B2A] dark:text-amber-300">재등록 {pctRe}%</strong>
+        </div>
+        {totalSum > 0 && (
+          <div className="mt-1.5 h-2 rounded-full bg-[#EFE7D5] dark:bg-zinc-800 overflow-hidden flex">
+            <div
+              className="h-full bg-[#6B7B3A]"
+              style={{ width: `${pctNew}%` }}
+              title={`신규 ${pctNew}%`}
+            />
+            <div
+              className="h-full bg-[#B47B2A]"
+              style={{ width: `${pctRe}%` }}
+              title={`재등록 ${pctRe}%`}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="overflow-x-auto -mx-2 px-2">
+        <table className="w-full text-[13px] min-w-[520px]">
+          <thead className="text-[#8C8270] dark:text-zinc-500 border-b border-[#E8E0D0] dark:border-zinc-800">
+            <tr>
+              <th className="text-left py-2 pl-4 pr-2 font-semibold">구분</th>
+              <th className="text-right py-2 px-2 font-semibold">신규</th>
+              <th className="text-right py-2 px-2 font-semibold">재등록</th>
+              <th className="text-right py-2 pr-4 pl-2 font-semibold">미분류</th>
+            </tr>
+          </thead>
+          <tbody className="text-[#2A251D] dark:text-zinc-200">
+            {rows.map((r) => (
+              <tr
+                key={r.label}
+                className={`border-b border-[#E8E0D0]/50 dark:border-zinc-800/70 last:border-b-0 ${r.accent ? "bg-[#FBF7EB]/40 dark:bg-zinc-900/60" : ""}`}
+              >
+                <td className="py-2 pl-4 pr-2 font-semibold">{r.label}</td>
+                <td className="py-2 px-2 text-right tabular-nums text-[#6B7B3A] dark:text-[#A8B87A]">
+                  {formatWon(r.bucket?.new ?? 0)}원
+                </td>
+                <td className="py-2 px-2 text-right tabular-nums text-[#B47B2A] dark:text-amber-300">
+                  {formatWon(r.bucket?.renewal ?? 0)}원
+                </td>
+                <td className="py-2 pr-4 pl-2 text-right tabular-nums text-[#8C8270]">
+                  {formatWon(r.bucket?.unknown ?? 0)}원
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="px-4 py-2 text-[11px] text-[#A89B80]">
+        &lsquo;미분류&rsquo; = 결제 원장에 등록타입이 남아있지 않은 legacy/자동유입 건. 신규+재등록 합계와 총 매출의 차이만큼 표시돼요.
+      </div>
+    </section>
   );
 }
 

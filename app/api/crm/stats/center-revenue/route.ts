@@ -61,17 +61,55 @@ export async function GET(request: Request) {
   let goodsRevenue = 0;
   let membershipCount = 0;
   let passCount = 0;
+
+  // 결제수단 집계 (전체 · 회원권그룹 · 수강권그룹)
+  const emptyPay = () => ({ cash: 0, card: 0, culture: 0, other: 0 });
+  const payTotal = emptyPay();
+  const payMembership = emptyPay();
+  const payPass = emptyPay();
+
+  // 등록 타입(신규/재등록) 집계
+  const emptyReg = () => ({ new: 0, renewal: 0, unknown: 0 });
+  const regTotal = emptyReg();
+  const regMembership = emptyReg();
+  const regPass = emptyReg();
+
+  const addPay = (bucket: ReturnType<typeof emptyPay>, s: (typeof periodSales)[number]) => {
+    const cash = s.cash_won ?? 0;
+    const card = s.card_won ?? 0;
+    const culture = s.culture_won ?? 0;
+    bucket.cash += cash;
+    bucket.card += card;
+    bucket.culture += culture;
+    // 총액 - (현금 + 카드 + 문화) 나머지 = 계좌이체·상품권 등 기타
+    const other = (s.amount_won ?? 0) - cash - card - culture;
+    if (other) bucket.other += other;
+  };
+  const addReg = (bucket: ReturnType<typeof emptyReg>, s: (typeof periodSales)[number]) => {
+    const amt = s.amount_won ?? 0;
+    const t = (s.registration_type ?? "").trim();
+    if (t === "신규") bucket.new += amt;
+    else if (t === "재등록") bucket.renewal += amt;
+    else bucket.unknown += amt;
+  };
+
   for (const s of periodSales) {
     const cat = saleCategory(s.product_type);
     if (cat === "lesson") {
       passRevenue += s.amount_won;
       passCount += 1;
+      addPay(payPass, s);
+      addReg(regPass, s);
     } else if (cat === "goods") {
       goodsRevenue += s.amount_won;
     } else {
       membershipRevenue += s.amount_won; // membership / rental / locker
       membershipCount += 1;
+      addPay(payMembership, s);
+      addReg(regMembership, s);
     }
+    addPay(payTotal, s);
+    addReg(regTotal, s);
   }
   const lockerRevenue = 0;
   const etcRevenue = 0;
@@ -235,6 +273,18 @@ export async function GET(request: Request) {
       pass: liabilityPass,
       notStarted: liabilityNotStarted,
       inProgress: liabilityInProgress,
+    },
+    // 결제수단별 매출 (현금·카드·문화상품권·기타) — 전체 / 회원권 / 수강권
+    payment_totals: {
+      total: payTotal,
+      membership: payMembership,
+      pass: payPass,
+    },
+    // 신규 vs 재등록 매출 — 전체 / 회원권 / 수강권
+    registration_totals: {
+      total: regTotal,
+      membership: regMembership,
+      pass: regPass,
     },
   });
 }

@@ -11,6 +11,10 @@ export type SaleRow = {
   amount_won: number;
   product_type: string | null;
   member_id: number | null;
+  cash_won: number;
+  card_won: number;
+  culture_won: number;
+  registration_type: string | null;   // '신규' | '재등록' | null
 };
 
 export type SalesCategory = "membership" | "lesson" | "rental" | "locker" | "goods";
@@ -51,7 +55,7 @@ export async function fetchSales(
   for (let from = 0; ; from += chunk) {
     const { data, error } = await supabase
       .from("crm_sales")
-      .select("tx_at, amount_won, product_type, member_id")
+      .select("tx_at, amount_won, product_type, member_id, cash_won, card_won, culture_won, registration_type")
       .eq("center_id", centerId)
       .gte("tx_at", `${startYmd}T00:00:00+09:00`)
       .lt("tx_at", `${endExclYmd}T00:00:00+09:00`)
