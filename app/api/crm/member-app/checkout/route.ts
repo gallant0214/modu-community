@@ -31,9 +31,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "적립 포인트가 설정되지 않았어요" }, { status: 400 });
   }
 
-  // 하루 1회 제한
   const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const dayStartUtc = new Date(`${todayKst}T00:00:00+09:00`).toISOString();
+  const dayEndUtc = new Date(new Date(dayStartUtc).getTime() + 24 * 3600 * 1000).toISOString();
+
+  // 오늘 출석(체크인) 해야만 퇴실 적립 가능
+  const { count: attendedToday } = await supabase
+    .from("crm_attendances")
+    .select("id", { count: "exact", head: true })
+    .eq("member_id", ctx.memberId)
+    .gte("checked_in_at", dayStartUtc)
+    .lt("checked_in_at", dayEndUtc);
+  if ((attendedToday ?? 0) === 0) {
+    return NextResponse.json({ error: "출석하셔야 적립이 가능합니다." }, { status: 400 });
+  }
+
+  // 하루 1회 제한
   const { count: doneToday } = await supabase
     .from("crm_member_mileage_logs")
     .select("id", { count: "exact", head: true })

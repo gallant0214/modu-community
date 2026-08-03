@@ -16,7 +16,16 @@ export async function GET(request: Request) {
   const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const dayStartUtc = new Date(`${todayKst}T00:00:00+09:00`).toISOString();
 
-  const [{ data: notice }, { data: mem }, { data: settings }, { count: checkoutToday }] = await Promise.all([
+  // 이번 주(일~토, KST) 범위
+  const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
+  const dow = nowKst.getUTCDay(); // 0=일
+  const weekStartKst = new Date(nowKst);
+  weekStartKst.setUTCHours(0, 0, 0, 0);
+  weekStartKst.setUTCDate(weekStartKst.getUTCDate() - dow);
+  const weekStartUtc = new Date(weekStartKst.getTime() - 9 * 3600 * 1000).toISOString();
+  const weekEndUtc = new Date(weekStartKst.getTime() + 7 * 24 * 3600 * 1000 - 9 * 3600 * 1000).toISOString();
+
+  const [{ data: notice }, { data: mem }, { data: settings }, { count: checkoutToday }, { data: atts }] = await Promise.all([
     supabase
       .from("crm_center_notices")
       .select("id, title, body, created_at")
@@ -38,7 +47,22 @@ export async function GET(request: Request) {
       .eq("member_id", ctx.memberId)
       .eq("reason", "checkout")
       .gte("created_at", dayStartUtc),
+    supabase
+      .from("crm_attendances")
+      .select("checked_in_at")
+      .eq("member_id", ctx.memberId)
+      .gte("checked_in_at", weekStartUtc)
+      .lt("checked_in_at", weekEndUtc),
   ]);
+
+  // 이번 주 출석한 요일(KST ymd) 집합
+  const weekAttendance = Array.from(
+    new Set(
+      (atts ?? []).map((a) =>
+        new Date(new Date(a.checked_in_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+      )
+    )
+  );
 
   return NextResponse.json({
     notice: notice
@@ -50,5 +74,6 @@ export async function GET(request: Request) {
       earn: settings?.checkout_mileage_earn ?? 0,
       doneToday: (checkoutToday ?? 0) > 0,
     },
+    weekAttendance,
   });
 }
