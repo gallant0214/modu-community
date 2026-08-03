@@ -25,10 +25,10 @@ export async function GET(request: Request) {
       .order("expires_at", { ascending: true }),
     supabase
       .from("crm_lockers")
-      .select("id, number, state, start_date, expires_at")
+      .select("id, zone_id, number, state, start_date, expires_at")
       .eq("center_id", ctx.centerId)
       .eq("assigned_member_id", ctx.memberId)
-      .eq("state", "assigned"),
+      .neq("state", "broken"),
     supabase
       .from("crm_rentals")
       .select("id, item_name, start_date, expires_at, price_won, created_at, status")
@@ -50,6 +50,17 @@ export async function GET(request: Request) {
         )
       : null;
 
+  // 락커 구역(존) 이름 조회 → "남자탈의실 - 39번" 라벨용
+  const zoneIds = Array.from(new Set((lockers ?? []).map((l) => l.zone_id).filter(Boolean)));
+  const zoneMap = new Map<number, string>();
+  if (zoneIds.length) {
+    const { data: zones } = await supabase
+      .from("crm_locker_zones")
+      .select("id, name")
+      .in("id", zoneIds as number[]);
+    for (const z of zones ?? []) zoneMap.set(z.id, z.name);
+  }
+
   return NextResponse.json({
     memberships: (memberships ?? []).map((m) => ({
       id: m.id,
@@ -63,15 +74,22 @@ export async function GET(request: Request) {
       status: m.status,
       attendanceMileageEarn: m.attendance_mileage_earn ?? 0,
     })),
-    lockers: (lockers ?? []).map((l) => ({
-      id: l.id,
-      label: `${l.number}번 락커`,
-      startDate: l.start_date,
-      expiresAt: l.expires_at,
-      purchasedAt: l.start_date,
-      priceWon: null,
-      dday: dday(l.expires_at),
-    })),
+    lockers: (lockers ?? []).map((l) => {
+      const assigned = l.state === "assigned" && l.number != null;
+      const zoneName = l.zone_id ? zoneMap.get(l.zone_id) : null;
+      const assignmentLabel = assigned && zoneName ? `${zoneName} - ${l.number}번` : "미배정";
+      return {
+        id: l.id,
+        label: "락커",
+        assignmentLabel,
+        assigned,
+        startDate: l.start_date,
+        expiresAt: l.expires_at,
+        purchasedAt: l.start_date,
+        priceWon: null,
+        dday: dday(l.expires_at),
+      };
+    }),
     rentals: (rentals ?? []).map((r) => ({
       id: r.id,
       itemName: r.item_name,
