@@ -1973,6 +1973,7 @@ export type Database = {
           terms_accepted: unknown
           terms_snapshot: unknown
           signature_data_url: string | null
+          trainer_signature_data_url: string | null
           signed_at: string
           signed_by_uid: string | null
           status: string
@@ -1995,6 +1996,7 @@ export type Database = {
           terms_accepted?: unknown
           terms_snapshot?: unknown
           signature_data_url?: string | null
+          trainer_signature_data_url?: string | null
           signed_at?: string
           signed_by_uid?: string | null
           status?: string
@@ -2017,6 +2019,7 @@ export type Database = {
           terms_accepted?: unknown
           terms_snapshot?: unknown
           signature_data_url?: string | null
+          trainer_signature_data_url?: string | null
           signed_at?: string
           signed_by_uid?: string | null
           status?: string
