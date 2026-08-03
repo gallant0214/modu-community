@@ -984,9 +984,10 @@ function FacePhotoUpload({
     }
     setBusy(true);
     try {
-      // 상세용(420x420, q=0.85) + 목록 썸네일(144x144, q=0.9) — 48px 디스플레이 retina 3x 까지 선명
+      // 얼굴 인식 정확도 우선: 등록 원본 512x512, q=0.90 (≈80~100KB) — face-api 디스크립터 크롭 선명도↑
+      // + 목록 썸네일(144x144, q=0.9) — 48px 디스플레이 retina 3x 까지 선명
       const [compressed, thumb] = await Promise.all([
-        compressToDataUrl(file, 420, 0.85),
+        compressToDataUrl(file, 512, 0.9),
         compressToDataUrl(file, 144, 0.9),
       ]);
       const token = await getIdToken();
