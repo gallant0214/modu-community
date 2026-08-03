@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { notifyCenterMembers } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,19 @@ export async function POST(request: Request) {
     entity_id: data.id,
     payload: { title } as never,
   });
+
+  // 게시된 공지는 회원 앱 알림함/푸시로 브로드캐스트
+  if (data.is_published) {
+    after(async () => {
+      await notifyCenterMembers(
+        ctx.centerId,
+        "notice",
+        "새 공지사항",
+        title,
+        { noticeId: String(data.id) }
+      ).catch(() => {});
+    });
+  }
 
   return NextResponse.json({ notice: data });
 }

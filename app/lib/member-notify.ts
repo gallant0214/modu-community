@@ -17,6 +17,63 @@ function getAdmin() {
   return getApps()[0];
 }
 
+/**
+ * 센터의 전체 연동 회원에게 알림 발송(알림함 저장 + 푸시). 공지 등록 등 브로드캐스트용.
+ */
+export async function notifyCenterMembers(
+  centerId: number,
+  type: string,
+  title: string,
+  body: string,
+  data?: Record<string, string>
+) {
+  try {
+    const { data: members } = await supabase
+      .from("crm_members")
+      .select("id")
+      .eq("center_id", centerId)
+      .eq("status", "active")
+      .not("linked_firebase_uid", "is", null);
+    const ids = (members ?? []).map((m) => m.id);
+    if (ids.length === 0) return;
+
+    // 알림함 일괄 저장
+    await supabase.from("crm_member_notifications").insert(
+      ids.map((memberId) => ({
+        center_id: centerId,
+        member_id: memberId,
+        type,
+        title,
+        body: body ?? null,
+        data_json: (data ?? null) as never,
+      })) as never
+    );
+
+    // 푸시 (해당 회원들의 토큰 멀티캐스트)
+    const { data: tokens } = await supabase
+      .from("crm_member_device_tokens")
+      .select("token")
+      .in("member_id", ids);
+    const tokenList = (tokens ?? []).map((t) => t.token);
+    if (tokenList.length === 0) return;
+    const messaging = getMessaging(getAdmin());
+    // FCM 멀티캐스트는 최대 500개/콜
+    for (let i = 0; i < tokenList.length; i += 500) {
+      const batch = tokenList.slice(i, i + 500);
+      await messaging
+        .sendEachForMulticast({
+          notification: { title, body },
+          data: { type, ...data },
+          apns: { payload: { aps: { sound: "default", badge: 1 } } },
+          tokens: batch,
+        })
+        .catch(() => {});
+    }
+  } catch (e) {
+    console.error("[member-notify] broadcast error", e);
+  }
+}
+
 /** ISO 시각 → "5월 2일 (월) 08:30" (KST) */
 export function formatKstSlot(iso: string): string {
   const d = new Date(iso);

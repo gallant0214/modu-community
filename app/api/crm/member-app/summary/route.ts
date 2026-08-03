@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   const weekStartUtc = new Date(weekStartKst.getTime() - 9 * 3600 * 1000).toISOString();
   const weekEndUtc = new Date(weekStartKst.getTime() + 7 * 24 * 3600 * 1000 - 9 * 3600 * 1000).toISOString();
 
-  const [{ data: notice }, { data: mem }, { data: settings }, { count: checkoutToday }, { data: atts }] = await Promise.all([
+  const [{ data: notice }, { data: mem }, { data: settings }, { count: checkoutToday }, { data: atts }, { count: noticeUnread }] = await Promise.all([
     supabase
       .from("crm_center_notices")
       .select("id, title, body, created_at")
@@ -53,6 +53,12 @@ export async function GET(request: Request) {
       .eq("member_id", ctx.memberId)
       .gte("checked_in_at", weekStartUtc)
       .lt("checked_in_at", weekEndUtc),
+    supabase
+      .from("crm_member_notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("member_id", ctx.memberId)
+      .eq("type", "notice")
+      .is("read_at", null),
   ]);
 
   // 이번 주 출석한 요일(KST ymd) 집합
@@ -68,6 +74,7 @@ export async function GET(request: Request) {
     notice: notice
       ? { id: notice.id, title: notice.title, body: notice.body, createdAt: notice.created_at }
       : null,
+    noticeUnread: noticeUnread ?? 0,
     mileage: mem?.mileage ?? 0,
     checkout: {
       enabled: settings?.checkout_mileage_enabled ?? false,
