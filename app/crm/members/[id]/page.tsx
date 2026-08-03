@@ -855,7 +855,11 @@ function CheckInButton({ memberId, onDone }: { memberId: number; onDone: () => v
       if (data.duplicate) {
         setMsg({ text: data.message || "이미 최근에 출석 처리됐어요.", tone: "warn" });
       } else {
-        setMsg({ text: "출석 처리했어요.", tone: "ok" });
+        const awarded = Number(data.mileage_awarded) || 0;
+        setMsg({
+          text: awarded > 0 ? `출석 처리했어요. (+${awarded.toLocaleString()}P 적립)` : "출석 처리했어요.",
+          tone: "ok",
+        });
         onDone();
       }
     } catch (e) {
