@@ -19,7 +19,7 @@ function formatDateTime(dateStr: string) {
   return `${y}. ${m}. ${day}. ${h}:${min}`;
 }
 
-export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; isNotice?: boolean; hideCategoryTag?: string }) {
+export function PostCardItem({ post, isNotice, pinned, hideCategoryTag }: { post: Post; isNotice?: boolean; pinned?: boolean; hideCategoryTag?: string }) {
   const likes = Number(post.likes);
   const [authorMenu, setAuthorMenu] = useState(false);
   const [showSendMessage, setShowSendMessage] = useState(false);
@@ -58,7 +58,7 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
     <Link
       href={`/category/${post.category_id}/post/${post.id}?from=${encodeURIComponent(currentUrl)}`}
       className={`group flex items-center gap-2 px-4 py-3.5 md:px-6 md:py-3.5 transition-colors ${
-        isNotice
+        isNotice || pinned
           ? "bg-[#FBF7EB]/60 dark:bg-zinc-800/30 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
           : "hover:bg-[#F5F0E5]/60 dark:hover:bg-zinc-800/40"
       }`}
@@ -66,6 +66,12 @@ export function PostCardItem({ post, isNotice, hideCategoryTag }: { post: Post; 
       {/* Title area (flex-1) */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 flex-wrap">
+          {/* 고정(핀) 배지 */}
+          {pinned && (
+            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md bg-[#C0392B]/10 px-1.5 py-0.5 text-[11px] font-bold text-[#C0392B]">
+              📌 고정
+            </span>
+          )}
           {/* Tags inline */}
           {tags.map((tag) => (
             <span

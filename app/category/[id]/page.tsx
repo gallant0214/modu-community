@@ -39,6 +39,21 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
+  // 특정 작성자(닉네임) 글은 종목 게시판 최상단 고정 — 별도 지시 전까지 유지.
+  const PINNED_AUTHOR = "KSPO_1";
+  const showPinned = !isSearching && currentPage === 1;
+  const pinnedPromise = showPinned
+    ? supabase
+        .from("posts")
+        .select("*")
+        .eq("category_id", categoryId)
+        .eq("author", PINNED_AUTHOR)
+        .or("is_notice.eq.false,is_notice.is.null")
+        .order("created_at", { ascending: false })
+        .limit(20)
+        .then((r) => (r.data || []) as Post[])
+    : Promise.resolve([] as Post[]);
+
   // 공통 쿼리: 공지 + 인기글
   const noticePromise = supabase
     .from("posts")
@@ -64,6 +79,8 @@ export default async function CategoryPage({ params, searchParams }: Props) {
     .select("*", { count: "exact", head: true })
     .eq("category_id", categoryId)
     .or("is_notice.eq.false,is_notice.is.null");
+  // 일반 목록에선 고정 작성자 글을 제외(상단에 따로 고정 표시). 검색 시엔 정상 포함.
+  if (!isSearching) countQ = countQ.neq("author", PINNED_AUTHOR);
   if (isSearching) {
     if (searchFilter === "title") countQ = countQ.ilike("title", wild);
     else if (searchFilter === "content") countQ = countQ.ilike("content", wild);
@@ -81,6 +98,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
     .select("*")
     .eq("category_id", categoryId)
     .or("is_notice.eq.false,is_notice.is.null");
+  if (!isSearching) postsQ = postsQ.neq("author", PINNED_AUTHOR);
   if (isSearching) {
     if (searchFilter === "title") postsQ = postsQ.ilike("title", wild);
     else if (searchFilter === "content") postsQ = postsQ.ilike("content", wild);
@@ -104,11 +122,12 @@ export default async function CategoryPage({ params, searchParams }: Props) {
     .range(offset, offset + perPage - 1)
     .then((r) => (r.data || []) as Post[]);
 
-  const [noticePosts, topPosts, totalCount, posts] = await Promise.all([
+  const [noticePosts, topPosts, totalCount, posts, pinnedPosts] = await Promise.all([
     noticePromise,
     topPromise,
     countPromise,
     postsPromise,
+    pinnedPromise,
   ]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
@@ -249,7 +268,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
             <span className="w-[84px] shrink-0"></span>
           </div>
 
-          {posts.length === 0 ? (
+          {posts.length === 0 && pinnedPosts.length === 0 ? (
             <div className="py-20 text-center px-4">
               <div className="inline-flex w-14 h-14 mb-3 rounded-2xl bg-[#F5F0E5] dark:bg-zinc-800 items-center justify-center">
                 <svg className="w-7 h-7 text-[#A89B80]" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -276,6 +295,9 @@ export default async function CategoryPage({ params, searchParams }: Props) {
             </div>
           ) : (
             <div className="divide-y divide-[#E8E0D0]/50 dark:divide-zinc-800">
+              {pinnedPosts.map((post) => (
+                <PostCardItem key={`pin-${post.id}`} post={post} pinned hideCategoryTag={category.name} />
+              ))}
               {posts.map((post) => (
                 <PostCardItem key={post.id} post={post} hideCategoryTag={category.name} />
               ))}
