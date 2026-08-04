@@ -758,9 +758,41 @@ function formatHoursEntry(e: HoursEntry): string {
   const days = [...e.days].sort((a, b) => a - b).map((d) => HOURS_DAYS[d]).join("·");
   const hm = (t: string) => {
     const [h, m] = t.split(":");
-    return m === "00" ? `${Number(h)}시` : t;
+    return m === "00" ? `${Number(h)}시` : `${Number(h)}시 ${Number(m)}분`;
   };
   return `${days} ${hm(e.open)}~${hm(e.close)}`;
+}
+
+// 운영 시간 시:분(10분 단위) 선택기
+function HourMinuteSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const hh = (value || "00:00").slice(0, 2);
+  const mm = (value || "00:00").slice(3, 5) || "00";
+  const selCls =
+    "px-2.5 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[14px] text-[#2A251D] dark:text-zinc-100 tabular-nums";
+  return (
+    <span className="inline-flex items-center gap-1">
+      <select value={hh} onChange={(e) => onChange(`${e.target.value}:${mm}`)} className={selCls}>
+        {Array.from({ length: 24 }, (_, h) => {
+          const v = String(h).padStart(2, "0");
+          return (
+            <option key={h} value={v}>
+              {h}시
+            </option>
+          );
+        })}
+      </select>
+      <select value={mm} onChange={(e) => onChange(`${hh}:${e.target.value}`)} className={selCls}>
+        {[0, 10, 20, 30, 40, 50].map((m) => {
+          const v = String(m).padStart(2, "0");
+          return (
+            <option key={m} value={v}>
+              {v}분
+            </option>
+          );
+        })}
+      </select>
+    </span>
+  );
 }
 
 function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "trainer" }) {
@@ -1001,39 +1033,13 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
                   </div>
                 )}
 
-                {/* 시간 입력 — 0~23시 단위 선택 */}
+                {/* 시간 입력 — 시(0~23) + 분(10분 단위) 선택 */}
                 <div>
                   <div className="text-[11.5px] text-[#A89B80] mb-1.5">운영 시간</div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={hoursOpen}
-                      onChange={(e) => setHoursOpen(e.target.value)}
-                      className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[14px] text-[#2A251D] dark:text-zinc-100 tabular-nums"
-                    >
-                      {Array.from({ length: 24 }, (_, h) => {
-                        const v = `${String(h).padStart(2, "0")}:00`;
-                        return (
-                          <option key={h} value={v}>
-                            {h}시
-                          </option>
-                        );
-                      })}
-                    </select>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <HourMinuteSelect value={hoursOpen} onChange={setHoursOpen} />
                     <span className="text-[#A89B80]">~</span>
-                    <select
-                      value={hoursClose}
-                      onChange={(e) => setHoursClose(e.target.value)}
-                      className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[14px] text-[#2A251D] dark:text-zinc-100 tabular-nums"
-                    >
-                      {Array.from({ length: 24 }, (_, h) => {
-                        const v = `${String(h).padStart(2, "0")}:00`;
-                        return (
-                          <option key={h} value={v}>
-                            {h}시
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <HourMinuteSelect value={hoursClose} onChange={setHoursClose} />
                   </div>
                 </div>
 
