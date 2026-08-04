@@ -20,8 +20,10 @@ const COLUMNS = [
   "msg_expired_membership_enabled",
   "msg_expired_rental",
   "msg_expired_rental_enabled",
+  "msg_expired_rental_days",
   "msg_expired_locker",
   "msg_expired_locker_enabled",
+  "msg_expired_locker_days",
   "msg_holding",
   "msg_holding_enabled",
   "msg_scheduled_membership",
@@ -69,8 +71,10 @@ const DEFAULTS = {
   msg_expired_membership_enabled: true,
   msg_expired_rental: "운동복이 만료되었습니다. 카운터에 문의주세요!",
   msg_expired_rental_enabled: true,
+  msg_expired_rental_days: 7,
   msg_expired_locker: "락커가 만료되었습니다. 카운터에 문의주세요!",
   msg_expired_locker_enabled: true,
+  msg_expired_locker_days: 7,
   msg_holding: "",
   msg_holding_enabled: true,
   msg_scheduled_membership: "",
@@ -159,6 +163,8 @@ export async function PUT(request: Request) {
     "entry_reentry_minutes",
     "attendance_mileage_earn",
     "expiring_threshold_days",
+    "msg_expired_rental_days",
+    "msg_expired_locker_days",
   ]) {
     if (body[k] !== undefined) {
       patch[k] = Math.max(0, Math.min(100000, Math.floor(Number(body[k]) || 0)));

@@ -31,14 +31,12 @@ export async function buildAttendanceVoiceMessages(
     .eq("enabled", true)
     .order("sort_order", { ascending: true });
 
-  if (!rules || rules.length === 0) return [];
-
   const kstNow = new Date(Date.now() + 9 * 3600 * 1000);
   const todayYmd = kstNow.toISOString().slice(0, 10);
   const todayMonthDay = todayYmd.slice(5); // MM-DD
 
-  // 필요한 규칙 종류에 따라 데이터 로드
-  const typedRules = rules as Rule[];
+  // 필요한 규칙 종류에 따라 데이터 로드 (규칙이 없어도 아래 만료 대여권/락커 안내는 평가)
+  const typedRules = (rules ?? []) as Rule[];
   const hasType = (t: string) => typedRules.some((r) => r.trigger_type === t);
 
   const [membershipsRes, passesRes] = await Promise.all([
@@ -121,6 +119,74 @@ export async function buildAttendanceVoiceMessages(
         break;
       }
     }
+  }
+
+  // 만료 운동복(대여권)·락커 안내 — 터치출석 설정(crm_touch_attendance_settings) 기반.
+  // "만료 후 N일까지" 안내(N=0 이면 만료 후 계속). 실패해도 다른 메세지에 영향 없도록 try/catch.
+  try {
+    const { data: st } = await supabase
+      .from("crm_touch_attendance_settings")
+      .select(
+        "msg_expired_rental, msg_expired_rental_enabled, msg_expired_rental_days, msg_expired_locker, msg_expired_locker_enabled, msg_expired_locker_days"
+      )
+      .eq("center_id", centerId)
+      .maybeSingle();
+
+    if (st) {
+      const s = st as {
+        msg_expired_rental?: string;
+        msg_expired_rental_enabled?: boolean;
+        msg_expired_rental_days?: number;
+        msg_expired_locker?: string;
+        msg_expired_locker_enabled?: boolean;
+        msg_expired_locker_days?: number;
+      };
+      // 만료 후 N일 이내인지: expires_at < 오늘 && (N=0 || 만료 경과일 <= N)
+      const isExpiredWithin = (ymd: string, days: number): boolean => {
+        if (!ymd || ymd.startsWith("9999")) return false;
+        const d = daysUntil(ymd); // 과거면 음수
+        if (d >= 0) return false; // 아직 유효
+        return days <= 0 || d >= -days;
+      };
+
+      const needRental = s.msg_expired_rental_enabled && (s.msg_expired_rental || "").trim();
+      const needLocker = s.msg_expired_locker_enabled && (s.msg_expired_locker || "").trim();
+
+      const [rentalsRes, lockersRes] = await Promise.all([
+        needRental
+          ? supabase
+              .from("crm_rentals")
+              .select("expires_at")
+              .eq("center_id", centerId)
+              .eq("member_id", member.id)
+              .eq("status", "active")
+          : Promise.resolve({ data: [] as { expires_at: string }[] }),
+        needLocker
+          ? supabase
+              .from("crm_lockers")
+              .select("expires_at")
+              .eq("center_id", centerId)
+              .eq("assigned_member_id", member.id)
+          : Promise.resolve({ data: [] as { expires_at: string }[] }),
+      ]);
+
+      if (needRental) {
+        const days = Number(s.msg_expired_rental_days ?? 0);
+        const hit = ((rentalsRes.data ?? []) as { expires_at: string }[]).some((r) =>
+          isExpiredWithin(r.expires_at, days)
+        );
+        if (hit) messages.push(substitute(s.msg_expired_rental!));
+      }
+      if (needLocker) {
+        const days = Number(s.msg_expired_locker_days ?? 0);
+        const hit = ((lockersRes.data ?? []) as { expires_at: string }[]).some((l) =>
+          isExpiredWithin(l.expires_at, days)
+        );
+        if (hit) messages.push(substitute(s.msg_expired_locker!));
+      }
+    }
+  } catch {
+    /* 설정 없거나 조회 실패 — 만료 안내 스킵 */
   }
 
   return messages;

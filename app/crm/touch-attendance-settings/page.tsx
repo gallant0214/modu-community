@@ -20,8 +20,10 @@ interface Settings {
   msg_expired_membership_enabled: boolean;
   msg_expired_rental: string;
   msg_expired_rental_enabled: boolean;
+  msg_expired_rental_days: number;
   msg_expired_locker: string;
   msg_expired_locker_enabled: boolean;
+  msg_expired_locker_days: number;
   msg_holding: string;
   msg_holding_enabled: boolean;
   msg_scheduled_membership: string;
@@ -46,6 +48,7 @@ const MSG_FIELDS: {
   label: string;
   placeholder: string;
   hint?: string;
+  daysKey?: keyof Settings;
 }[] = [
   { key: "msg_active_entry", enabledKey: "msg_active_entry_enabled", label: "활성 회원 입장 시 안내 멘트", placeholder: "예: 출석 포인트가 적립되었습니다" },
   { key: "msg_birthday_entry", enabledKey: "msg_birthday_entry_enabled", label: "생일자 회원 입장 시 안내 멘트", placeholder: "예: 생일 축하드립니다" },
@@ -53,8 +56,8 @@ const MSG_FIELDS: {
   { key: "msg_exit", enabledKey: "msg_exit_enabled", label: "퇴장 멘트", placeholder: "예: 퇴실 포인트가 적립되었습니다" },
   { key: "msg_outstanding", enabledKey: "msg_outstanding_enabled", label: "미수금 멘트", placeholder: "멘트를 입력해주세요." },
   { key: "msg_expired_membership", enabledKey: "msg_expired_membership_enabled", label: "만료 회원 입장 시 안내 멘트", placeholder: "예: 회원권이 만료되었습니다. 카운터에 문의주세요!", hint: "회원권이 유효기간을 지난 회원이 체크인할 때마다 재생" },
-  { key: "msg_expired_rental", enabledKey: "msg_expired_rental_enabled", label: "대여권 만료 멘트", placeholder: "예: 운동복이 만료되었습니다. 카운터에 문의주세요!", hint: "대여권이 만료된 회원이 체크인할 때마다 재생 (새로 결제·갱신 전까지 반복)" },
-  { key: "msg_expired_locker", enabledKey: "msg_expired_locker_enabled", label: "락커 만료 멘트", placeholder: "예: 락커가 만료되었습니다. 카운터에 문의주세요!", hint: "락커가 만료된 회원이 체크인할 때마다 재생 (새로 결제·갱신 전까지 반복)" },
+  { key: "msg_expired_rental", enabledKey: "msg_expired_rental_enabled", daysKey: "msg_expired_rental_days", label: "운동복 만료 멘트", placeholder: "예: 운동복이 만료되었습니다. 카운터에 문의주세요!", hint: "운동복(대여권)이 만료된 회원이 체크인할 때 재생. 아래에서 만료 후 며칠까지 안내할지 설정하세요." },
+  { key: "msg_expired_locker", enabledKey: "msg_expired_locker_enabled", daysKey: "msg_expired_locker_days", label: "락커 만료 멘트", placeholder: "예: 락커가 만료되었습니다. 카운터에 문의주세요!", hint: "락커가 만료된 회원이 체크인할 때 재생. 아래에서 만료 후 며칠까지 안내할지 설정하세요." },
   { key: "msg_holding", enabledKey: "msg_holding_enabled", label: "홀딩 회원 입장 시 안내 멘트", placeholder: "멘트를 입력해주세요." },
   { key: "msg_scheduled_membership", enabledKey: "msg_scheduled_membership_enabled", label: "예정 [멤버십] 회원 입장 시 안내 멘트", placeholder: "멘트를 입력해주세요." },
 ];
@@ -200,6 +203,22 @@ export default function TouchAttendanceSettingsPage() {
                   maxLength={200}
                   className={`${crmInputClass} disabled:opacity-60`}
                 />
+                {f.daysKey && (
+                  <div className={`mt-2 flex items-center gap-2 ${on ? "" : "opacity-60"}`}>
+                    <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">만료 후</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={365}
+                      disabled={!on}
+                      value={Number(s[f.daysKey] ?? 0)}
+                      onChange={(e) => patch(f.daysKey!, Math.max(0, Math.min(365, Number(e.target.value) || 0)) as never)}
+                      className="w-20 px-2.5 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-right tabular-nums disabled:opacity-60"
+                    />
+                    <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">일까지 안내</span>
+                    <span className="text-[11px] text-[#A89B80]">(0 = 만료 후 계속)</span>
+                  </div>
+                )}
                 {f.hint && (
                   <p className="mt-1.5 text-[11px] text-[#A89B80]">{f.hint}</p>
                 )}

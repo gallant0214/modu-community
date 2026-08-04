@@ -3388,6 +3388,8 @@ export type Database = {
           msg_expired_membership: string
           msg_expired_rental: string
           msg_expired_locker: string
+          msg_expired_rental_days: number
+          msg_expired_locker_days: number
           msg_holding: string
           msg_scheduled_membership: string
           msg_active_entry_enabled: boolean
@@ -3424,6 +3426,8 @@ export type Database = {
           msg_expired_membership?: string
           msg_expired_rental?: string
           msg_expired_locker?: string
+          msg_expired_rental_days?: number
+          msg_expired_locker_days?: number
           msg_holding?: string
           msg_scheduled_membership?: string
           msg_active_entry_enabled?: boolean
@@ -3460,6 +3464,8 @@ export type Database = {
           msg_expired_membership?: string
           msg_expired_rental?: string
           msg_expired_locker?: string
+          msg_expired_rental_days?: number
+          msg_expired_locker_days?: number
           msg_holding?: string
           msg_scheduled_membership?: string
           msg_active_entry_enabled?: boolean
