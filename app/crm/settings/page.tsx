@@ -183,13 +183,14 @@ type SettingsTab =
   | "logs"
   | "expenses"
   | "vendors"
-  | "display";
+  | "display"
+  | "inquiries";
 
 const SETTINGS_TABS: {
   key: SettingsTab;
   label: string;
   desc: string;
-  icon: "calendar" | "bell" | "notice" | "point" | "badge" | "shield" | "card" | "vendor" | "danger" | "log" | "display";
+  icon: "calendar" | "bell" | "notice" | "point" | "badge" | "shield" | "card" | "vendor" | "danger" | "log" | "display" | "inquiry";
   danger?: boolean;
 }[] = [
   { key: "center", label: "센터 정보", desc: "주소·연락처·SNS", icon: "notice" },
@@ -205,6 +206,7 @@ const SETTINGS_TABS: {
   { key: "expenses", label: "고정 지출", desc: "월 지출", icon: "card" },
   { key: "vendors", label: "거래처", desc: "업체 관리", icon: "vendor" },
   { key: "logs", label: "활동 로그", desc: "변경 기록", icon: "log" },
+  { key: "inquiries", label: "문의하기", desc: "관리자에게 문의", icon: "inquiry" },
 ];
 
 export default function CrmSettingsPage() {
@@ -370,7 +372,7 @@ export default function CrmSettingsPage() {
       </header>
 
       <div className="mb-5 overflow-x-auto">
-        <div className="grid min-w-[860px] grid-cols-6 gap-2 rounded-xl border border-[#E4D9C6] bg-white/80 p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="grid min-w-[980px] grid-cols-7 gap-2 rounded-xl border border-[#E4D9C6] bg-white/80 p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           {SETTINGS_TABS.map((item) => (
             <TabBtn
               key={item.key}
@@ -696,6 +698,8 @@ export default function CrmSettingsPage() {
       {tab === "expenses" && <FixedExpensesPanel />}
 
       {tab === "vendors" && <VendorsPanel />}
+
+      {tab === "inquiries" && <InquiriesPanel />}
 
       {/* 센터 탈퇴 / 양도 는 위험 작업이라 UI 에서 숨김.
           수정이 필요하면 관리자에게 문의. WithdrawModal/TransferModal 컴포넌트 정의는 유지. */}
@@ -3232,6 +3236,13 @@ function SettingsTabIcon({
       </svg>
     );
   }
+  if (kind === "inquiry") {
+    return (
+      <svg {...common}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-4.5-7.79L21 3l-1.29 4.79A9 9 0 0121 12z" />
+      </svg>
+    );
+  }
   return (
     <svg {...common}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 5h12M6 12h12M6 19h12" />
@@ -3319,3 +3330,195 @@ function formatDateTime(iso: string) {
 }
 
 /** 구버전 단일 body 안의 "[제목]" 헤더를 기준으로 섹션 배열로 분리 */
+
+/* ─── 문의하기 패널 ───────────────────────────────
+   CRM 관리자가 서비스 관리자에게 직접 문의.
+   POST /api/inquiries — /developer 문의하기 탭과 동일 저장소 사용.
+*/
+function InquiriesPanel() {
+  const { user, getIdToken } = useAuth();
+  const toast = useCrmToast();
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [mine, setMine] = useState<
+    { id: number; title: string; content: string; reply: string | null; replied_at: string | null; created_at: string }[]
+  >([]);
+  const [loadingList, setLoadingList] = useState(true);
+
+  const authorName =
+    (user?.displayName && user.displayName.trim()) || (user?.email && user.email.split("@")[0]) || "관리자";
+
+  const load = useCallback(async () => {
+    try {
+      setLoadingList(true);
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/inquiries/mine", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (res.ok) setMine(data.inquiries ?? []);
+    } finally {
+      setLoadingList(false);
+    }
+  }, [getIdToken]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const submit = async () => {
+    setError("");
+    if (!title.trim() || !content.trim()) {
+      setError("제목과 내용을 모두 입력해주세요");
+      return;
+    }
+    if (title.trim().length > 200) return setError("제목이 너무 길어요 (200자 이내)");
+    if (content.trim().length > 10000) return setError("내용이 너무 길어요 (1만자 이내)");
+    setSaving(true);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch("/api/inquiries", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          author: authorName,
+          email: user?.email ?? "",
+          title: title.trim(),
+          content: content.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "저장 실패");
+      setTitle("");
+      setContent("");
+      toast.show("문의가 접수되었어요. 답변은 이 화면에서 확인할 수 있어요.");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* 안내 카드 */}
+      <div className="rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/60 dark:bg-indigo-950/20 px-4 py-3 text-[12.5px] text-indigo-900 dark:text-indigo-200 leading-relaxed">
+        <strong>모두의 지도사 관리자에게 문의하기</strong> — 기능 오류, 기능 제안, 결제·계정 문의 등 어떤 내용이든 편하게 남겨주세요. 답변은 이 화면과 이메일로 받아보실 수 있어요.
+      </div>
+
+      {/* 작성 폼 */}
+      <Card title="문의 작성">
+        <Field label="작성자">
+          <div className="text-[13.5px] text-[#2A251D] dark:text-zinc-200 font-semibold">
+            {authorName}
+            {user?.email && (
+              <span className="ml-2 text-[12px] text-[#8C8270] font-normal">({user.email})</span>
+            )}
+          </div>
+        </Field>
+        <Field label="제목">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={200}
+            placeholder="예: 스케줄 예약 등록이 안 돼요"
+            className={crmInputClass}
+          />
+        </Field>
+        <Field label="내용">
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            maxLength={10000}
+            placeholder="상황·재현 방법·에러 메시지 등을 자세히 적어주시면 답변이 빨라져요."
+            className={`${crmInputClass} min-h-[140px]`}
+          />
+          <div className="mt-1 text-right text-[11px] text-[#A89B80]">
+            {content.length.toLocaleString()} / 10,000자
+          </div>
+        </Field>
+
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+            {error}
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={submit}
+            disabled={saving}
+            className="px-5 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+          >
+            {saving ? "전송 중…" : "문의 보내기"}
+          </button>
+        </div>
+      </Card>
+
+      {/* 내 문의 목록 */}
+      <Card title="내 문의 · 답변">
+        {loadingList ? (
+          <p className="text-[12.5px] text-[#8C8270] py-4 text-center">불러오는 중…</p>
+        ) : mine.length === 0 ? (
+          <p className="text-[12.5px] text-[#A89B80] py-6 text-center">
+            아직 남긴 문의가 없어요.
+          </p>
+        ) : (
+          <ul className="space-y-2.5">
+            {mine.map((q) => (
+              <li
+                key={q.id}
+                className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[13.5px] font-bold text-[#2A251D] dark:text-zinc-100 truncate">
+                      {q.title}
+                    </div>
+                    <div className="mt-0.5 text-[11.5px] text-[#8C8270]">
+                      {q.created_at?.slice(0, 16).replace("T", " ")}
+                    </div>
+                  </div>
+                  <span
+                    className={`shrink-0 px-2 py-0.5 rounded text-[10.5px] font-bold ${
+                      q.reply
+                        ? "bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300"
+                        : "bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300"
+                    }`}
+                  >
+                    {q.reply ? "답변 완료" : "답변 대기"}
+                  </span>
+                </div>
+                <p className="mt-2 text-[12.5px] text-[#3A342A] dark:text-zinc-300 whitespace-pre-wrap leading-relaxed">
+                  {q.content}
+                </p>
+                {q.reply && (
+                  <div className="mt-2.5 pt-2.5 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+                    <div className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 mb-1">
+                      관리자 답변
+                      {q.replied_at && (
+                        <span className="ml-1 font-normal text-[#8C8270]">
+                          · {q.replied_at?.slice(0, 16).replace("T", " ")}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[12.5px] text-[#3A342A] dark:text-zinc-200 whitespace-pre-wrap leading-relaxed">
+                      {q.reply}
+                    </p>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </div>
+  );
+}
