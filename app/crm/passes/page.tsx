@@ -12,6 +12,7 @@ import {
 import { crmInputClass } from "../_components/crm-modal";
 import { useColumnWidths, ResizableTh } from "../_components/use-column-widths";
 import { PassDetailModal } from "./_components/pass-detail-modal";
+import { PeriodSelect, inPeriod } from "../_components/period-filter";
 
 const P_COLS = [
   { key: "member", label: "회원" },
@@ -91,6 +92,7 @@ export default function CrmPassesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [trainerFilter, setTrainerFilter] = useState<string>("");
   const [paymentFilter, setPaymentFilter] = useState<string>("");
+  const [periodFilter, setPeriodFilter] = useState<string>("all"); // 발급 기간 (기본 전체)
   const [query, setQuery] = useState("");
   const { widths, startResize, reset, changed, totalWidth } = useColumnWidths<PColKey>(
     "crm_passes_col_widths_v1",
@@ -159,31 +161,37 @@ export default function CrmPassesPage() {
   }, [getIdToken]);
 
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s.display_name])), [staff]);
+  // 발급 기간 필터 적용 (issued_at 기준)
+  const periodList = useMemo(
+    () => list.filter((p) => inPeriod(p.issued_at, periodFilter)),
+    [list, periodFilter]
+  );
   const visibleList = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((p) =>
+    if (!q) return periodList;
+    return periodList.filter((p) =>
       [p.member_name, p.member_phone, p.lesson_kind, staffMap.get(p.trainer_member_id)]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q))
     );
-  }, [list, query, staffMap]);
+  }, [periodList, query, staffMap]);
   const stats = useMemo(() => {
-    const valid = list.filter((p) => p.status === "valid");
+    const valid = periodList.filter((p) => p.status === "valid");
     const expiring = valid.filter((p) => daysUntil(p.expires_at) <= 7).length;
     return {
-      total: list.length,
+      total: periodList.length,
       valid: valid.length,
       remaining: valid.reduce((sum, p) => sum + (Number(p.remaining_sessions) || 0), 0),
       expiring,
-      revenue: list.reduce((sum, p) => sum + (Number(p.price_won) || 0), 0),
+      revenue: periodList.reduce((sum, p) => sum + (Number(p.price_won) || 0), 0),
     };
-  }, [list]);
-  const filtersActive = !!statusFilter || !!trainerFilter || !!paymentFilter || !!query.trim();
+  }, [periodList]);
+  const filtersActive = !!statusFilter || !!trainerFilter || !!paymentFilter || !!query.trim() || periodFilter !== "all";
   const resetFilters = () => {
     setStatusFilter("");
     setTrainerFilter("");
     setPaymentFilter("");
+    setPeriodFilter("all");
     setQuery("");
   };
 
@@ -202,10 +210,13 @@ export default function CrmPassesPage() {
               발급된 레슨권의 잔여 세션, 만료일, 결제 상태를 한 화면에서 확인합니다.
             </p>
           </div>
-          <div className="rounded-lg border border-[#D9CDB8] bg-white/70 px-3 py-2 text-right dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">현재 결과</div>
-            <div className="mt-0.5 text-[18px] font-bold text-[#2F3A2B] dark:text-[#A8B87A]">
-              {visibleList.length.toLocaleString()}건
+          <div className="flex flex-col items-end gap-1.5">
+            <PeriodSelect value={periodFilter} onChange={setPeriodFilter} />
+            <div className="rounded-lg border border-[#D9CDB8] bg-white/70 px-3 py-2 text-right dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">현재 결과</div>
+              <div className="mt-0.5 text-[18px] font-bold text-[#2F3A2B] dark:text-[#A8B87A]">
+                {visibleList.length.toLocaleString()}건
+              </div>
             </div>
           </div>
         </div>

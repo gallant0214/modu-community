@@ -13,6 +13,7 @@ import {
   formatPhone,
 } from "../_components/crm-labels";
 import { useColumnWidths, ResizableTh } from "../_components/use-column-widths";
+import { PeriodSelect, inPeriod } from "../_components/period-filter";
 import { unitToDays } from "@/app/lib/duration-convert";
 import { MembershipDetailModal } from "./_components/membership-detail-modal";
 
@@ -66,6 +67,7 @@ export default function CrmMembershipsPage() {
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("");
+  const [periodFilter, setPeriodFilter] = useState("all"); // 결제 기간 (기본 전체)
   const [query, setQuery] = useState("");
   const [issueOpen, setIssueOpen] = useState(false);
   const [perms, setPerms] = useState<Record<string, boolean>>({});
@@ -128,9 +130,15 @@ export default function CrmMembershipsPage() {
     })();
   }, [getIdToken]);
 
+  // 결제 기간 필터 적용 (purchased_at 기준)
+  const periodList = useMemo(
+    () => list.filter((p) => inPeriod(p.purchased_at, periodFilter)),
+    [list, periodFilter]
+  );
+
   const visibleList = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return list.filter((p) => {
+    return periodList.filter((p) => {
       const paymentMatches = paymentFilter ? p.payment_method === paymentFilter : true;
       const queryMatches = q
         ? [p.member_name, p.member_phone, p.plan_name]
@@ -139,28 +147,29 @@ export default function CrmMembershipsPage() {
         : true;
       return paymentMatches && queryMatches;
     });
-  }, [list, paymentFilter, query]);
+  }, [periodList, paymentFilter, query]);
 
   const stats = useMemo(() => {
-    const valid = list.filter((p) => p.status === "valid");
+    const valid = periodList.filter((p) => p.status === "valid");
     const expiring = valid.filter((p) => daysUntil(p.expires_at) <= 7).length;
     const avgDuration =
-      list.length > 0
-        ? Math.round(list.reduce((sum, p) => sum + (Number(p.duration_days) || 0), 0) / list.length)
+      periodList.length > 0
+        ? Math.round(periodList.reduce((sum, p) => sum + (Number(p.duration_days) || 0), 0) / periodList.length)
         : 0;
     return {
-      total: list.length,
+      total: periodList.length,
       valid: valid.length,
       expiring,
-      revenue: list.reduce((sum, p) => sum + (Number(p.price_won) || 0), 0),
+      revenue: periodList.reduce((sum, p) => sum + (Number(p.price_won) || 0), 0),
       avgDuration,
     };
-  }, [list]);
+  }, [periodList]);
 
-  const filtersActive = !!statusFilter || !!paymentFilter || !!query.trim();
+  const filtersActive = !!statusFilter || !!paymentFilter || !!query.trim() || periodFilter !== "all";
   const resetFilters = () => {
     setStatusFilter("");
     setPaymentFilter("");
+    setPeriodFilter("all");
     setQuery("");
   };
 
@@ -179,11 +188,14 @@ export default function CrmMembershipsPage() {
               기간형 이용권의 결제, 시작일, 만료일을 한 화면에서 확인합니다.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="rounded-lg border border-[#D9CDB8] bg-white/70 px-3 py-2 text-right dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">현재 결과</div>
-              <div className="mt-0.5 text-[18px] font-bold text-[#2F3A2B] dark:text-[#A8B87A]">
-                {visibleList.length.toLocaleString()}건
+          <div className="flex items-end gap-2">
+            <div className="flex flex-col items-end gap-1.5">
+              <PeriodSelect value={periodFilter} onChange={setPeriodFilter} />
+              <div className="rounded-lg border border-[#D9CDB8] bg-white/70 px-3 py-2 text-right dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">현재 결과</div>
+                <div className="mt-0.5 text-[18px] font-bold text-[#2F3A2B] dark:text-[#A8B87A]">
+                  {visibleList.length.toLocaleString()}건
+                </div>
               </div>
             </div>
             <button
