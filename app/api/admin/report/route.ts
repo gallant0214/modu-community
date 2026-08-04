@@ -250,7 +250,10 @@ export async function POST(request: Request) {
 
   const { cur, prev } = resolveRanges(p, off, customFrom, customTo);
 
-  const [visits, signups, posts, comments, jobs, storeApp, storeGoogle, inflow, topCats] = await Promise.all([
+  const [
+    visits, signups, posts, comments, jobs, storeApp, storeGoogle, inflow, topCats,
+    crmCenters, crmMembers, crmPasses, crmMemberships, crmConsultations, crmAttendances,
+  ] = await Promise.all([
     buildMetric("site_visits", "visited_at", cur, prev),
     buildMetric("nicknames", "created_at", cur, prev),
     buildMetric("posts", "created_at", cur, prev),
@@ -260,6 +263,13 @@ export async function POST(request: Request) {
     buildMetric("store_clicks", "clicked_at", cur, prev, (q: any) => q.eq("store", "google_play")),
     inflowAnalysis(cur),
     topCategoriesInRange(cur),
+    // CRM 지표: 리포트 기간에 맞춰 함께 표시
+    buildMetric("crm_centers", "created_at", cur, prev),
+    buildMetric("crm_members", "created_at", cur, prev),
+    buildMetric("crm_passes", "created_at", cur, prev),
+    buildMetric("crm_memberships", "created_at", cur, prev),
+    buildMetric("crm_pt_consultations", "created_at", cur, prev),
+    buildMetric("crm_attendances", "checked_in_at", cur, prev),
   ]);
 
   // 스토어 클릭은 두 스토어 합산
@@ -280,6 +290,14 @@ export async function POST(request: Request) {
     range: { from: cur.from.toISOString(), to: cur.to.toISOString(), days: cur.days },
     prevRange: { from: prev.from.toISOString(), to: prev.to.toISOString(), days: prev.days },
     metrics: { visits, signups, posts, comments, jobs, storeClicks },
+    crm: {
+      centers: crmCenters,
+      members: crmMembers,
+      passes: crmPasses,
+      memberships: crmMemberships,
+      consultations: crmConsultations,
+      attendances: crmAttendances,
+    },
     inflow,
     topCategories: topCats,
   });

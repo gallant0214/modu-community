@@ -19,7 +19,15 @@ export default function AdminPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"report" | "pending" | "resolved" | "inquiries" | "notice" | "push" | "settings" | "kpi" | "user">("report");
+  const [tab, setTab] = useState<"report" | "pending" | "resolved" | "inquiries" | "notice" | "push" | "settings" | "kpi" | "crm" | "user">("report");
+
+  // CRM 종합 KPI (별도 API 호출)
+  const [crmStats, setCrmStats] = useState<any>(null);
+  const [crmLoading, setCrmLoading] = useState(false);
+  const [crmError, setCrmError] = useState("");
+  const [crmRange, setCrmRange] = useState<"day" | "week" | "month" | "custom" | "all">("month");
+  const [crmFrom, setCrmFrom] = useState("");
+  const [crmTo, setCrmTo] = useState("");
 
   // USER 탭 — 닉네임 조회 상태
   const [userQuery, setUserQuery] = useState("");
@@ -384,12 +392,48 @@ export default function AdminPage() {
     } catch {}
   }
 
+  const loadCrmStats = useCallback(
+    async (mode: typeof crmRange, customFrom?: string, customTo?: string) => {
+      if (!storedPassword) return;
+      try {
+        setCrmLoading(true);
+        setCrmError("");
+        const r = mode === "all" ? null : computeRange(mode === "custom" ? "custom" : mode, customFrom ?? crmFrom, customTo ?? crmTo);
+        const res = await fetch("/api/admin/kpi/crm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            password: storedPassword,
+            from: r?.from ?? undefined,
+            to: r?.to ?? undefined,
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error || "조회 실패");
+        setCrmStats(json);
+      } catch (e) {
+        setCrmError(e instanceof Error ? e.message : "네트워크 오류");
+      } finally {
+        setCrmLoading(false);
+      }
+    },
+    [storedPassword, crmFrom, crmTo]
+  );
+
+  useEffect(() => {
+    if (authStep === "authenticated" && tab === "crm" && !crmStats && !crmLoading) {
+      loadCrmStats(crmRange);
+    }
+  }, [authStep, tab, crmStats, crmLoading, crmRange, loadCrmStats]);
+
   async function handleRefresh() {
     setRefreshing(true);
     if (tab === "kpi") {
       await loadKpi(kpiRange, kpiVisitRange, kpiReportRange);
     } else if (tab === "report") {
       await loadReport(reportPeriod, reportOffset, reportCustomFrom, reportCustomTo);
+    } else if (tab === "crm") {
+      await loadCrmStats(crmRange);
     } else {
       await fetchData(storedPassword);
     }
@@ -804,6 +848,9 @@ export default function AdminPage() {
             }
           }} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "kpi" ? "border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
             KPI
+          </button>
+          <button onClick={() => setTab("crm")} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "crm" ? "border-b-2 border-lime-500 text-lime-600 dark:text-lime-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
+            CRM
           </button>
           <button onClick={() => setTab("user")} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "user" ? "border-b-2 border-cyan-500 text-cyan-600 dark:text-cyan-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
             USER
@@ -1619,6 +1666,156 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* ===== CRM 종합 탭 ===== */}
+        {tab === "crm" && (
+          <div className="p-4 space-y-4">
+            {/* 기간 필터 */}
+            <div className="rounded-xl border border-lime-200 bg-lime-50/40 dark:border-lime-900/60 dark:bg-lime-950/20 p-3 flex flex-wrap items-center gap-2">
+              <div className="text-[11.5px] font-semibold text-lime-800 dark:text-lime-300">
+                기간 델타 기준
+              </div>
+              <div className="flex gap-1.5">
+                {(
+                  [
+                    { v: "day", l: "오늘" },
+                    { v: "week", l: "7일" },
+                    { v: "month", l: "30일" },
+                    { v: "custom", l: "직접" },
+                    { v: "all", l: "전체(누적만)" },
+                  ] as const
+                ).map((r) => (
+                  <button
+                    key={r.v}
+                    type="button"
+                    onClick={() => {
+                      setCrmRange(r.v);
+                      if (r.v !== "custom") loadCrmStats(r.v);
+                    }}
+                    className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold border transition-colors ${
+                      crmRange === r.v
+                        ? "border-lime-500 bg-lime-500 text-white"
+                        : "border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300"
+                    }`}
+                  >
+                    {r.l}
+                  </button>
+                ))}
+              </div>
+              {crmRange === "custom" && (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={crmFrom}
+                    onChange={(e) => setCrmFrom(e.target.value)}
+                    className="h-7 px-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[12px]"
+                  />
+                  <span className="text-[11px] text-zinc-500">~</span>
+                  <input
+                    type="date"
+                    value={crmTo}
+                    onChange={(e) => setCrmTo(e.target.value)}
+                    className="h-7 px-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[12px]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => loadCrmStats("custom")}
+                    className="px-2 py-1 rounded-md bg-lime-500 text-white text-[11.5px] font-semibold hover:bg-lime-600"
+                  >
+                    적용
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {crmError && (
+              <div className="px-3 py-2 rounded-lg bg-red-50 text-[13px] text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                {crmError}
+              </div>
+            )}
+            {crmLoading && !crmStats ? (
+              <div className="flex justify-center py-16">
+                <div className="w-6 h-6 border-2 border-lime-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : !crmStats ? null : (
+              <div className="space-y-4">
+                {/* 종합 스냅샷 */}
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+                  <div className="text-[12.5px] font-bold text-zinc-800 dark:text-zinc-100 mb-3">
+                    📊 종합 스냅샷 (누적)
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                    <CrmTile label="가입 센터" value={crmStats.overview.centers_total} sub={`solo ${crmStats.overview.centers_solo} · center ${crmStats.overview.centers_multi}`} />
+                    <CrmTile label="활성 센터 (최근 30일)" value={crmStats.overview.centers_recently_active} sub="출석 이벤트 발생 기준" tone="green" />
+                    <CrmTile label="센터 직원·강사" value={crmStats.overview.staff_total} />
+                    <CrmTile label="회원 총계" value={crmStats.overview.members_total} sub={`앱 연동 ${crmStats.overview.members_linked}명`} />
+                    <CrmTile label="활성 회원" value={crmStats.overview.members_active} sub={`정회원 ${crmStats.overview.members_matched} · 가회원 ${crmStats.overview.members_provisional}`} />
+                    <CrmTile label="유효 회원권" value={crmStats.overview.memberships_active} sub={`총 ${crmStats.overview.memberships_total}건`} tone="green" />
+                    <CrmTile label="유효 수강권" value={crmStats.overview.passes_active} sub={`총 ${crmStats.overview.passes_total}건`} tone="green" />
+                    <CrmTile label="누적 대여권" value={crmStats.overview.rentals_total} />
+                    <CrmTile label="누적 예약" value={crmStats.overview.reservations_total} />
+                    <CrmTile label="누적 출석" value={crmStats.overview.attendances_total} />
+                    <CrmTile label="PT 상담" value={crmStats.overview.consultations_total} sub={`전환 ${crmStats.overview.consultations_converted}건 · 템플릿 ${crmStats.overview.consultation_templates_total}종`} />
+                    <CrmTile label="누적 매출 원장" value={crmStats.overview.sales_rows_total} sub={`계약서 ${crmStats.overview.contracts_total}건`} />
+                  </div>
+                </div>
+
+                {/* 기간 델타 */}
+                {crmStats.period ? (
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+                    <div className="text-[12.5px] font-bold text-zinc-800 dark:text-zinc-100 mb-3">
+                      🆕 선택 기간 신규 유입
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                      <CrmTile label="신규 센터" value={crmStats.period.new_centers} tone="green" />
+                      <CrmTile label="신규 직원·강사" value={crmStats.period.new_staff} />
+                      <CrmTile label="신규 회원" value={crmStats.period.new_members} sub={`앱 셀프가입 ${crmStats.period.new_members_linked}명`} tone="green" />
+                      <CrmTile label="신규 회원권" value={crmStats.period.new_memberships} />
+                      <CrmTile label="신규 수강권" value={crmStats.period.new_passes} />
+                      <CrmTile label="신규 대여권" value={crmStats.period.new_rentals} />
+                      <CrmTile label="신규 예약" value={crmStats.period.new_reservations} />
+                      <CrmTile label="신규 출석" value={crmStats.period.new_attendances} />
+                      <CrmTile label="신규 상담" value={crmStats.period.new_consultations} />
+                      <CrmTile label="신규 계약서" value={crmStats.period.new_contracts} />
+                      <CrmTile label="기간 매출액" value={`${crmStats.period.sales_amount.toLocaleString()}원`} tone="amber" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 p-3 text-center text-[12px] text-zinc-500">
+                    &lsquo;전체(누적만)&rsquo; 모드는 기간 델타를 계산하지 않아요. 기간을 지정하면 신규 유입이 표시됩니다.
+                  </div>
+                )}
+
+                {/* 기능 채택 */}
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+                  <div className="text-[12.5px] font-bold text-zinc-800 dark:text-zinc-100 mb-3">
+                    🧩 기능 채택 현황
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                    <CrmTile label="얼굴 등록 회원" value={crmStats.feature_adoption.face_registered_members} sub="얼굴 인식 출석 사용 가능" />
+                    <CrmTile label="터치 출석 이벤트" value={crmStats.feature_adoption.touch_attendance_events} sub="source=touch 기준" />
+                    <CrmTile label="앱 예약 건수" value={crmStats.feature_adoption.app_reservations} sub="회원앱에서 요청/승인" />
+                    <CrmTile label="자동 메세지 활성 센터" value={crmStats.feature_adoption.auto_message_enabled_centers} sub="트리거 하나 이상 on" />
+                  </div>
+                </div>
+
+                {/* 상위 센터 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <TopCentersCard title="👥 회원 수 TOP 5" rows={crmStats.top_centers.by_members} unit="명" />
+                  <TopCentersCard title="⚡ 최근 30일 출석 활동 TOP 5" rows={crmStats.top_centers.by_recent_activity} unit="건" />
+                </div>
+
+                {/* 30일 성장 그래프 */}
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+                  <div className="text-[12.5px] font-bold text-zinc-800 dark:text-zinc-100 mb-3">
+                    📈 최근 30일 일별 신규 유입
+                  </div>
+                  <GrowthTable rows={crmStats.growth_daily_30d} />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ===== USER 조회 탭 ===== */}
         {tab === "user" && (
           <div className="p-4 space-y-4">
@@ -2369,6 +2566,26 @@ function ReportTabContent({
           <ReportSummaryCard label="구인글 등록" m={data.metrics.jobs} />
         </div>
       </div>
+
+      {/* ── CRM 지표 (기간 델타) ── */}
+      {data.crm && (
+        <div className="rounded-xl border border-lime-200 bg-lime-50/40 dark:border-lime-900/60 dark:bg-lime-950/20 p-4">
+          <h3 className="text-sm font-bold text-lime-800 dark:text-lime-300 mb-3">
+            CRM 지표 <span className="text-lime-500 ml-1">6</span>
+            <span className="ml-2 text-[11px] font-normal text-lime-700/70 dark:text-lime-400/70">
+              전 기간 대비 변화율 표시 · CRM 탭에서 상세 확인
+            </span>
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <ReportSummaryCard label="신규 센터 가입" m={data.crm.centers} />
+            <ReportSummaryCard label="신규 회원" m={data.crm.members} />
+            <ReportSummaryCard label="신규 수강권" m={data.crm.passes} />
+            <ReportSummaryCard label="신규 회원권" m={data.crm.memberships} />
+            <ReportSummaryCard label="PT 상담" m={data.crm.consultations} />
+            <ReportSummaryCard label="출석 체크인" m={data.crm.attendances} />
+          </div>
+        </div>
+      )}
 
       {/* ── 상세 카드 (2열) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -3419,5 +3636,180 @@ function VisitKeywords({ keywords }: { keywords: { keyword: string; count: numbe
         </div>
       )}
     </div>
+  );
+}
+
+/* ─── CRM 탭 보조 컴포넌트 ────────────────────────── */
+
+function CrmTile({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: number | string;
+  sub?: string;
+  tone?: "green" | "amber";
+}) {
+  const cls =
+    tone === "green"
+      ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/60 dark:bg-emerald-950/20"
+      : tone === "amber"
+      ? "border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20"
+      : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950";
+  return (
+    <div className={`rounded-lg border p-2.5 ${cls}`}>
+      <div className="text-[10.5px] font-semibold text-zinc-600 dark:text-zinc-400 whitespace-nowrap overflow-hidden text-ellipsis">
+        {label}
+      </div>
+      <div className="mt-0.5 text-[18px] font-bold text-zinc-800 dark:text-zinc-100 tabular-nums">
+        {typeof value === "number" ? value.toLocaleString() : value}
+      </div>
+      {sub && (
+        <div className="mt-0.5 text-[10.5px] text-zinc-500 dark:text-zinc-500 truncate">{sub}</div>
+      )}
+    </div>
+  );
+}
+
+function TopCentersCard({
+  title,
+  rows,
+  unit,
+}: {
+  title: string;
+  rows: { center_id: number; count: number; name: string; kind: string }[];
+  unit: string;
+}) {
+  return (
+    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+      <div className="text-[12.5px] font-bold text-zinc-800 dark:text-zinc-100 mb-2">{title}</div>
+      {rows.length === 0 ? (
+        <p className="text-[11.5px] text-zinc-500 py-3 text-center">데이터가 없어요.</p>
+      ) : (
+        <ol className="space-y-1">
+          {rows.map((r, i) => (
+            <li
+              key={r.center_id}
+              className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`text-[11px] font-bold ${i === 0 ? "text-lime-600" : "text-zinc-400"}`}>
+                  #{i + 1}
+                </span>
+                <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100 truncate">
+                  {r.name}
+                </span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600">
+                  {r.kind === "solo" ? "1인" : "센터"}
+                </span>
+              </div>
+              <span className="text-[13px] font-bold tabular-nums text-lime-700 dark:text-lime-300">
+                {r.count.toLocaleString()}
+                {unit}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function GrowthTable({
+  rows,
+}: {
+  rows: { date: string; centers: number; members: number; consultations: number; passes: number }[];
+}) {
+  const max = {
+    centers: Math.max(1, ...rows.map((r) => r.centers)),
+    members: Math.max(1, ...rows.map((r) => r.members)),
+    consultations: Math.max(1, ...rows.map((r) => r.consultations)),
+    passes: Math.max(1, ...rows.map((r) => r.passes)),
+  };
+  const total = rows.reduce(
+    (acc, r) => ({
+      centers: acc.centers + r.centers,
+      members: acc.members + r.members,
+      consultations: acc.consultations + r.consultations,
+      passes: acc.passes + r.passes,
+    }),
+    { centers: 0, members: 0, consultations: 0, passes: 0 }
+  );
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2 text-[11.5px] text-zinc-600 dark:text-zinc-400 mb-2">
+        <span>30일 합계 —</span>
+        <span>센터 <strong className="text-lime-700 dark:text-lime-300">{total.centers.toLocaleString()}</strong></span>
+        <span>· 회원 <strong className="text-lime-700 dark:text-lime-300">{total.members.toLocaleString()}</strong></span>
+        <span>· 상담 <strong className="text-lime-700 dark:text-lime-300">{total.consultations.toLocaleString()}</strong></span>
+        <span>· 수강권 <strong className="text-lime-700 dark:text-lime-300">{total.passes.toLocaleString()}</strong></span>
+      </div>
+      <div className="overflow-x-auto -mx-2 px-2">
+        <table className="w-full text-[11.5px] min-w-[520px]">
+          <thead className="text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
+            <tr>
+              <th className="text-left py-1.5 pr-2 font-semibold">날짜</th>
+              <MiniBarHead label="센터" />
+              <MiniBarHead label="회원" />
+              <MiniBarHead label="상담" />
+              <MiniBarHead label="수강권" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.date} className="border-b border-zinc-100 dark:border-zinc-800/60 last:border-b-0">
+                <td className="py-1 pr-2 tabular-nums text-zinc-600 dark:text-zinc-400">
+                  {r.date.slice(5)}
+                </td>
+                <MiniBarCell v={r.centers} max={max.centers} tone="lime" />
+                <MiniBarCell v={r.members} max={max.members} tone="emerald" />
+                <MiniBarCell v={r.consultations} max={max.consultations} tone="amber" />
+                <MiniBarCell v={r.passes} max={max.passes} tone="violet" />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function MiniBarHead({ label }: { label: string }) {
+  return (
+    <th className="text-right py-1.5 px-2 font-semibold">
+      <span className="inline-block min-w-[80px]">{label}</span>
+    </th>
+  );
+}
+
+function MiniBarCell({
+  v,
+  max,
+  tone,
+}: {
+  v: number;
+  max: number;
+  tone: "lime" | "emerald" | "amber" | "violet";
+}) {
+  const pct = max > 0 ? Math.round((v / max) * 100) : 0;
+  const bar =
+    tone === "lime"
+      ? "bg-lime-400"
+      : tone === "emerald"
+      ? "bg-emerald-400"
+      : tone === "amber"
+      ? "bg-amber-400"
+      : "bg-violet-400";
+  return (
+    <td className="py-1 px-2">
+      <div className="relative h-4 min-w-[80px] bg-zinc-100 dark:bg-zinc-800 rounded overflow-hidden">
+        <div className={`absolute left-0 top-0 bottom-0 ${bar}`} style={{ width: `${pct}%` }} />
+        <div className="relative flex items-center justify-end pr-1.5 h-full text-[10px] font-bold text-zinc-700 dark:text-zinc-100 tabular-nums">
+          {v}
+        </div>
+      </div>
+    </td>
   );
 }
