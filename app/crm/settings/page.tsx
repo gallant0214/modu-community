@@ -797,6 +797,7 @@ function HourMinuteSelect({ value, onChange }: { value: string; onChange: (v: st
 
 function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "trainer" }) {
   const { getIdToken } = useAuth();
+  const toast = useCrmToast();
   const [profile, setProfile] = useState<CenterProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -886,7 +887,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "저장 실패");
-      setMsg("저장했어요.");
+      toast.show("저장 완료");
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
