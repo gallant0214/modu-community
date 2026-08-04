@@ -3412,6 +3412,36 @@ function InquiriesPanel() {
         <strong>모두의 지도사 관리자에게 문의하기</strong> — 기능 오류, 기능 제안, 결제·계정 문의 등 어떤 내용이든 편하게 남겨주세요. 답변은 이 화면과 이메일로 받아보실 수 있어요.
       </div>
 
+      {/* 카카오톡 문의 (빠른 실시간 채널) */}
+      <a
+        href="https://open.kakao.com/o/soLx7Eei"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-between gap-3 px-4 py-3.5 rounded-2xl border-2 border-[#FEE500] bg-[#FEE500]/40 dark:bg-yellow-500/10 hover:bg-[#FEE500]/60 dark:hover:bg-yellow-500/20 transition-colors"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full bg-[#FEE500] text-[#191919]">
+            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M12 3.5C6.755 3.5 2.5 6.948 2.5 11.2c0 2.71 1.736 5.099 4.378 6.475l-1.13 4.115c-.058.21.183.385.357.262l4.93-3.218c.327.025.66.038.965.038 5.245 0 9.5-3.448 9.5-7.7C21.5 6.948 17.245 3.5 12 3.5z"
+                fill="#191919"
+              />
+            </svg>
+          </span>
+          <div className="min-w-0">
+            <div className="text-[13.5px] font-bold text-[#191919] dark:text-yellow-100">
+              카카오톡으로 실시간 문의하기
+            </div>
+            <div className="mt-0.5 text-[11.5px] text-[#5A4E1A] dark:text-yellow-200/80 truncate">
+              1:1 오픈채팅 · 급한 이슈나 빠른 답변이 필요할 때
+            </div>
+          </div>
+        </div>
+        <span className="shrink-0 text-[13px] font-semibold text-[#5A4E1A] dark:text-yellow-100">
+          채팅 열기 ↗
+        </span>
+      </a>
+
       {/* 작성 폼 */}
       <Card title="문의 작성">
         <Field label="작성자">
