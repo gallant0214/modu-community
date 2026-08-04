@@ -331,7 +331,7 @@ export default function CrmSettingsPage() {
   };
 
   return (
-    <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-5xl mx-auto">
+    <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-7xl mx-auto">
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[18px] md:text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
@@ -371,8 +371,8 @@ export default function CrmSettingsPage() {
         </div>
       </header>
 
-      <div className="mb-5 overflow-x-auto">
-        <div className="grid min-w-[1220px] grid-cols-7 gap-2.5 rounded-xl border border-[#E4D9C6] bg-white/80 p-2.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mb-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-2.5 rounded-xl border border-[#E4D9C6] bg-white/80 p-2.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           {SETTINGS_TABS.map((item) => (
             <TabBtn
               key={item.key}
