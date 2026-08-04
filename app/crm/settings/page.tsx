@@ -372,7 +372,7 @@ export default function CrmSettingsPage() {
       </header>
 
       <div className="mb-5 overflow-x-auto">
-        <div className="grid min-w-[980px] grid-cols-7 gap-2 rounded-xl border border-[#E4D9C6] bg-white/80 p-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="grid min-w-[1220px] grid-cols-7 gap-2.5 rounded-xl border border-[#E4D9C6] bg-white/80 p-2.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           {SETTINGS_TABS.map((item) => (
             <TabBtn
               key={item.key}
