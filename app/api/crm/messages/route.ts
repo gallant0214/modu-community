@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { notifyMembersByIds } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -184,6 +185,13 @@ export async function POST(request: Request) {
       audience_kind: kind,
       recipient_count: memberIds.length,
     } as never,
+  });
+
+  // 회원 앱 알림(푸시 + 알림함) — 백그라운드 발송
+  after(async () => {
+    await notifyMembersByIds(ctx.centerId, memberIds, "message", title, bodyText, {
+      broadcastId: String(broadcast.id),
+    });
   });
 
   return NextResponse.json({

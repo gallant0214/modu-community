@@ -74,6 +74,66 @@ export async function notifyCenterMembers(
   }
 }
 
+/**
+ * 지정한 회원 ID 목록에게 알림 발송(알림함 저장 + 푸시). CRM 메세지(세그먼트) 발송용.
+ * notifyCenterMembers 와 달리 대상 회원을 명시적으로 받는다.
+ */
+export async function notifyMembersByIds(
+  centerId: number,
+  memberIds: number[],
+  type: string,
+  title: string,
+  body: string,
+  data?: Record<string, string>
+) {
+  try {
+    const ids = Array.from(
+      new Set((memberIds ?? []).filter((n) => Number.isInteger(n) && n > 0))
+    );
+    if (ids.length === 0) return;
+
+    // 알림함 일괄 저장 (500씩)
+    const rows = ids.map((memberId) => ({
+      center_id: centerId,
+      member_id: memberId,
+      type,
+      title,
+      body: body ?? null,
+      data_json: (data ?? null) as never,
+    }));
+    for (let i = 0; i < rows.length; i += 500) {
+      await supabase.from("crm_member_notifications").insert(rows.slice(i, i + 500) as never);
+    }
+
+    // 대상 회원의 기기 토큰 수집 (in 절도 500씩)
+    const tokenList: string[] = [];
+    for (let i = 0; i < ids.length; i += 500) {
+      const { data: tokens } = await supabase
+        .from("crm_member_device_tokens")
+        .select("token")
+        .in("member_id", ids.slice(i, i + 500));
+      for (const t of tokens ?? []) tokenList.push(t.token);
+    }
+    if (tokenList.length === 0) return;
+
+    // 푸시 멀티캐스트 (FCM 500개/콜)
+    const messaging = getMessaging(getAdmin());
+    for (let i = 0; i < tokenList.length; i += 500) {
+      const batch = tokenList.slice(i, i + 500);
+      await messaging
+        .sendEachForMulticast({
+          notification: { title, body },
+          data: { type, ...data },
+          apns: { payload: { aps: { sound: "default", badge: 1 } } },
+          tokens: batch,
+        })
+        .catch(() => {});
+    }
+  } catch (e) {
+    console.error("[member-notify] notifyMembersByIds error", e);
+  }
+}
+
 /** ISO 시각 → "5월 2일 (월) 08:30" (KST) */
 export function formatKstSlot(iso: string): string {
   const d = new Date(iso);
