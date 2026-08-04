@@ -284,13 +284,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { signInWithPopup, signInWithRedirect, auth, googleProvider } = await loadFirebase();
 
-    // 모바일은 redirect, 데스크톱은 popup 방식 (third-party cookie 차단 우회)
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) {
+    const ua = navigator.userAgent;
+    const isIOS =
+      /iPhone|iPad|iPod/i.test(ua) ||
+      (navigator.platform === "MacIntel" && (navigator as unknown as { maxTouchPoints?: number }).maxTouchPoints! > 1);
+    const isAndroid = /Android/i.test(ua);
+
+    // iOS Safari: signInWithRedirect 는 ITP/스토리지 파티셔닝으로 복귀 시 상태가 유실돼
+    // ("missing initial state") 로그인이 안 되고 로그인 화면으로 되돌아옴 → popup 우선, 차단 시 redirect 폴백.
+    // (firebase 는 마운트 때 프리로드되어 있어 클릭 제스처 안에서 popup 이 열림)
+    if (isIOS) {
+      try {
+        await signInWithPopup(auth, googleProvider);
+      } catch (e: unknown) {
+        console.warn("iOS popup 실패, redirect 폴백:", (e as { code?: string })?.code);
+        try {
+          await signInWithRedirect(auth, googleProvider);
+        } catch (e2) {
+          console.error("Google 로그인 실패(iOS)", e2);
+        }
+      }
+      return;
+    }
+
+    // 안드로이드: redirect (기존 동작 유지)
+    if (isAndroid) {
       try {
         await signInWithRedirect(auth, googleProvider);
       } catch (e) {
-        console.error("Google 로그인 실패 (mobile)", e);
+        console.error("Google 로그인 실패 (android)", e);
       }
       return;
     }
@@ -298,8 +320,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 데스크톱: popup 우선, 실패 시 redirect 폴백
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (e: any) {
-      console.warn("popup 실패, redirect로 폴백:", e?.code);
+    } catch (e: unknown) {
+      console.warn("popup 실패, redirect로 폴백:", (e as { code?: string })?.code);
       try {
         await signInWithRedirect(auth, googleProvider);
       } catch (e2) {
@@ -321,20 +343,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     provider.addScope("email");
     provider.addScope("name");
 
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) {
+    const ua = navigator.userAgent;
+    const isIOS =
+      /iPhone|iPad|iPod/i.test(ua) ||
+      (navigator.platform === "MacIntel" && (navigator as unknown as { maxTouchPoints?: number }).maxTouchPoints! > 1);
+    const isAndroid = /Android/i.test(ua);
+
+    // iOS Safari: redirect 는 상태 유실로 로그인 실패 → popup 우선, 차단 시 redirect 폴백
+    if (isIOS) {
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (e: unknown) {
+        console.warn("iOS Apple popup 실패, redirect 폴백:", (e as { code?: string })?.code);
+        try {
+          await signInWithRedirect(auth, provider);
+        } catch (e2) {
+          console.error("Apple 로그인 실패(iOS)", e2);
+        }
+      }
+      return;
+    }
+
+    if (isAndroid) {
       try {
         await signInWithRedirect(auth, provider);
       } catch (e) {
-        console.error("Apple 로그인 실패 (mobile)", e);
+        console.error("Apple 로그인 실패 (android)", e);
       }
       return;
     }
 
     try {
       await signInWithPopup(auth, provider);
-    } catch (e: any) {
-      console.warn("Apple popup 실패, redirect로 폴백:", e?.code);
+    } catch (e: unknown) {
+      console.warn("Apple popup 실패, redirect로 폴백:", (e as { code?: string })?.code);
       try {
         await signInWithRedirect(auth, provider);
       } catch (e2) {
