@@ -7,27 +7,52 @@ export const dynamic = "force-dynamic";
 
 /**
  * POST /api/admin/kpi/crm
- * body: { password, from?: ISO, to?: ISO }
+ * body: { password, from?: ISO, to?: ISO, center_id?: number }
  *
- * 관리자용 CRM 종합 현황.
- *  - overview: 센터 수(kind 별), 직원/강사 수, 회원 수(연동/미연동), 이용권 수 등
- *  - period_deltas: 선택 기간 내 신규 센터/신규 회원/신규 발급/출석/예약/상담 수
- *  - feature_adoption: 얼굴 등록, 상담지 사용, 자동 알림 활성 센터 수 등
- *  - top_centers: 회원 수 · 최근 30일 활동 상위 5센터
- *  - growth_daily_30d: 최근 30일 일별 센터/회원 신규 유입 (전체 기준)
+ * center_id 를 지정하면 해당 센터 스코프의 지표만 반환.
+ * 지정 안 하면 전체 플랫폼 통합.
+ *
+ * 응답:
+ *  - scope: 'all' | 'center'
+ *  - centers_list: [{id,name,kind}] — 셀렉터용 (전체 센터 목록, 항상 반환)
+ *  - selected_center: 선택된 센터 정보 (center_id 지정 시)
+ *  - platform: 플랫폼 전체 (센터 수 등 — 언제나 통합)
+ *  - overview: 스코프에 따라 필터된 수치
+ *  - period_deltas / feature_adoption / growth_daily_30d: 스코프 적용
+ *  - top_centers: 전체 스코프일 때만 (center_id 지정 시 null)
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  const { password, from, to } = body as { password?: string; from?: string; to?: string };
+  const {
+    password,
+    from,
+    to,
+    center_id,
+  } = body as { password?: string; from?: string; to?: string; center_id?: number };
   if (!(await verifyAdminPassword(password ?? ""))) {
     return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
   }
 
   const rangeFrom = typeof from === "string" ? from : null;
   const rangeTo = typeof to === "string" ? to : null;
+  const centerId = Number.isFinite(Number(center_id)) && Number(center_id) > 0 ? Number(center_id) : null;
+  const scoped = (q: any) => (centerId ? q.eq("center_id", centerId) : q);
 
+  // 플랫폼 전체 통계 (센터 수 등 — 언제나 통합)
   const [
-    centers,
+    centersTotal,
+    soloCenters,
+    activeCentersRow,
+    activeCentersRecent,
+  ] = await Promise.all([
+    countAll("crm_centers"),
+    countWhere("crm_centers", (q) => q.eq("kind", "solo")),
+    countWhere("crm_centers", (q) => q.eq("status", "active")),
+    countDistinctRecentCenters(),
+  ]);
+
+  // 스코프별 통계
+  const [
     centerMembers,
     members,
     memberships,
@@ -39,25 +64,6 @@ export async function POST(request: Request) {
     consultationTemplates,
     sales,
     contracts,
-  ] = await Promise.all([
-    countAll("crm_centers"),
-    countAll("crm_center_members"),
-    countAll("crm_members"),
-    countAll("crm_memberships"),
-    countAll("crm_passes"),
-    countAll("crm_rentals"),
-    countAll("crm_reservations"),
-    countAll("crm_attendances"),
-    countAll("crm_pt_consultations"),
-    countAll("crm_consultation_templates"),
-    countAll("crm_sales"),
-    countAll("crm_signed_contracts").catch(() => 0),
-  ]);
-
-  // 세분화 카운트
-  const [
-    soloCenters,
-    activeCentersRow,
     linkedMembers,
     matchedMembers,
     provisionalMembers,
@@ -68,56 +74,90 @@ export async function POST(request: Request) {
     faceRegistered,
     reservationsWithSourceApp,
     attendancesTouch,
-    // 최근 30일 활동(출석 or 예약 or 상담)이 있는 센터 수
-    activeCentersRecent,
   ] = await Promise.all([
-    countWhere("crm_centers", (q) => q.eq("kind", "solo")),
-    countWhere("crm_centers", (q) => q.eq("status", "active")),
-    countWhere("crm_members", (q) => q.not("linked_firebase_uid", "is", null)),
-    countWhere("crm_members", (q) => q.eq("member_type", "matched")),
-    countWhere("crm_members", (q) => q.eq("member_type", "provisional")),
-    countWhere("crm_members", (q) => q.eq("status", "active")),
+    countWhere("crm_center_members", (q) => scoped(q)),
+    countWhere("crm_members", (q) => scoped(q)),
+    countWhere("crm_memberships", (q) => scoped(q)),
+    countWhere("crm_passes", (q) => scoped(q)),
+    countWhere("crm_rentals", (q) => scoped(q)),
+    countWhere("crm_reservations", (q) => scoped(q)),
+    countWhere("crm_attendances", (q) => scoped(q)),
+    countWhere("crm_pt_consultations", (q) => scoped(q)),
+    countWhere("crm_consultation_templates", (q) => scoped(q)),
+    countWhere("crm_sales", (q) => scoped(q)),
+    countWhere("crm_signed_contracts", (q) => scoped(q)).catch(() => 0),
+    countWhere("crm_members", (q) => scoped(q).not("linked_firebase_uid", "is", null)),
+    countWhere("crm_members", (q) => scoped(q).eq("member_type", "matched")),
+    countWhere("crm_members", (q) => scoped(q).eq("member_type", "provisional")),
+    countWhere("crm_members", (q) => scoped(q).eq("status", "active")),
     countWhere("crm_memberships", (q) =>
-      q.eq("status", "valid").gte("expires_at", todayYmd())
+      scoped(q).eq("status", "valid").gte("expires_at", todayYmd())
     ),
-    countWhere("crm_passes", (q) => q.eq("status", "valid").gte("expires_at", todayYmd())),
-    countWhere("crm_pt_consultations", (q) => q.eq("status", "converted")),
-    countWhere("crm_members", (q) => q.not("face_image_data", "is", null)),
-    countWhere("crm_reservations", (q) => q.eq("source", "app")).catch(() => 0),
-    countWhere("crm_attendances", (q) => q.eq("source", "touch")).catch(() => 0),
-    countDistinctRecentCenters(),
+    countWhere("crm_passes", (q) =>
+      scoped(q).eq("status", "valid").gte("expires_at", todayYmd())
+    ),
+    countWhere("crm_pt_consultations", (q) => scoped(q).eq("status", "converted")),
+    countWhere("crm_members", (q) => scoped(q).not("face_image_data", "is", null)),
+    countWhere("crm_reservations", (q) => scoped(q).eq("source", "app")).catch(() => 0),
+    countWhere("crm_attendances", (q) => scoped(q).eq("source", "touch")).catch(() => 0),
   ]);
 
-  // 자동 메세지: 활성화된 트리거를 하나라도 가진 센터 수
-  const autoMessageCenters = await distinctCentersWith(
-    "crm_auto_message_settings",
-    (q) => q.eq("enabled", true)
-  ).catch(() => 0);
+  // 자동 메세지: 활성화된 트리거를 하나라도 가진 센터 수 (전체) / 선택 센터가 활성화 했는지 (개별)
+  const autoMessageValue = centerId
+    ? await (async () => {
+        const has = await countWhere("crm_auto_message_settings", (q) =>
+          scoped(q).eq("enabled", true)
+        ).catch(() => 0);
+        return has > 0 ? 1 : 0;
+      })()
+    : await distinctCentersWith("crm_auto_message_settings", (q) =>
+        q.eq("enabled", true)
+      ).catch(() => 0);
 
-  // 기간 델타 (선택된 기간에 해당하는 새 레코드 수)
+  // 기간 델타
   const period = rangeFrom && rangeTo
-    ? await buildPeriodDeltas(rangeFrom, rangeTo)
+    ? await buildPeriodDeltas(rangeFrom, rangeTo, centerId)
     : null;
 
-  // 상위 센터 (회원 수 기준 · 최근 30일 출석 기준)
-  const [topByMembers, topByRecentAttend] = await Promise.all([
-    topCenters("crm_members", "member_id", 5),
-    topActiveCenters(30, 5),
-  ]);
-
-  // 최근 30일 일별 성장 (신규 센터 · 신규 회원 · 신규 발급 · 신규 상담)
-  const growth = await growthDaily(30);
-
-  // 컨텍스트 (센터 이름 join용)
+  // 상위 센터는 전체 스코프일 때만
+  let topCentersOut: any = null;
   const centerNames = await allCenterNames();
+  if (!centerId) {
+    const [topByMembers, topByRecentAttend, topByRevenue] = await Promise.all([
+      topCenters("crm_members", 5),
+      topActiveCenters(30, 5),
+      topRevenueCenters(30, 5),
+    ]);
+    topCentersOut = {
+      by_members: joinCenterNames(topByMembers, centerNames),
+      by_recent_activity: joinCenterNames(topByRecentAttend, centerNames),
+      by_recent_revenue: joinCenterNames(topByRevenue, centerNames),
+    };
+  }
+
+  // 최근 30일 일별 성장 (센터 필터 시 센터 신규 유입 열은 제외)
+  const growth = await growthDaily(30, centerId);
+
+  const centersList = [...centerNames.entries()].map(([id, v]) => ({
+    id,
+    name: v.name,
+    kind: v.kind,
+  }));
 
   return NextResponse.json({
-    overview: {
-      centers_total: centers,
+    scope: centerId ? "center" : "all",
+    selected_center: centerId
+      ? { id: centerId, ...(centerNames.get(centerId) ?? { name: `#${centerId}`, kind: "center" }) }
+      : null,
+    centers_list: centersList,
+    platform: {
+      centers_total: centersTotal,
       centers_solo: soloCenters,
-      centers_multi: centers - soloCenters,
+      centers_multi: centersTotal - soloCenters,
       centers_active: activeCentersRow,
       centers_recently_active: activeCentersRecent,
+    },
+    overview: {
       staff_total: centerMembers,
       members_total: members,
       members_linked: linkedMembers,
@@ -141,14 +181,13 @@ export async function POST(request: Request) {
       face_registered_members: faceRegistered,
       touch_attendance_events: attendancesTouch,
       app_reservations: reservationsWithSourceApp,
-      auto_message_enabled_centers: autoMessageCenters,
+      // 전체 스코프에선 '활성 센터 수', 개별 스코프에선 0/1
+      auto_message_enabled_centers: autoMessageValue,
+      auto_message_label: centerId ? "자동 메세지 사용 여부" : "자동 메세지 활성 센터 수",
     },
     period_deltas: period,
     period,
-    top_centers: {
-      by_members: joinCenterNames(topByMembers, centerNames),
-      by_recent_activity: joinCenterNames(topByRecentAttend, centerNames),
-    },
+    top_centers: topCentersOut,
     growth_daily_30d: growth,
   });
 }
@@ -194,11 +233,12 @@ function todayYmd(): string {
   return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-async function buildPeriodDeltas(fromIso: string, toIso: string) {
+async function buildPeriodDeltas(fromIso: string, toIso: string, centerId: number | null) {
   const from = new Date(fromIso).toISOString();
   const to = new Date(toIso).toISOString();
+  const scoped = (q: any) => (centerId ? q.eq("center_id", centerId) : q);
   const inRange = (table: string, dateCol: string) => async () =>
-    countWhere(table, (q) => q.gte(dateCol, from).lte(dateCol, to));
+    countWhere(table, (q) => scoped(q).gte(dateCol, from).lte(dateCol, to));
 
   const [
     newCenters,
@@ -213,11 +253,14 @@ async function buildPeriodDeltas(fromIso: string, toIso: string) {
     newConsultations,
     newContracts,
   ] = await Promise.all([
-    inRange("crm_centers", "created_at")(),
+    // 플랫폼 전체 지표: 센터 필터 무관하게 항상 전체
+    centerId
+      ? Promise.resolve(0)
+      : countWhere("crm_centers", (q) => q.gte("created_at", from).lte("created_at", to)),
     inRange("crm_center_members", "created_at")(),
     inRange("crm_members", "created_at")(),
     countWhere("crm_members", (q) =>
-      q.gte("created_at", from).lte("created_at", to).not("linked_firebase_uid", "is", null)
+      scoped(q).gte("created_at", from).lte("created_at", to).not("linked_firebase_uid", "is", null)
     ),
     inRange("crm_memberships", "created_at")(),
     inRange("crm_passes", "created_at")(),
@@ -226,12 +269,12 @@ async function buildPeriodDeltas(fromIso: string, toIso: string) {
     inRange("crm_attendances", "checked_in_at")(),
     inRange("crm_pt_consultations", "created_at")(),
     countWhere("crm_signed_contracts", (q) =>
-      q.gte("created_at", from).lte("created_at", to)
+      scoped(q).gte("created_at", from).lte("created_at", to)
     ).catch(() => 0),
   ]);
 
-  // 기간 내 매출액 (crm_sales 원장)
-  const salesSum = await sumSales(from, to);
+  // 기간 내 매출액 (crm_sales 원장) — 센터 필터 반영
+  const salesSum = await sumSales(from, to, centerId);
 
   return {
     from,
@@ -239,7 +282,7 @@ async function buildPeriodDeltas(fromIso: string, toIso: string) {
     new_centers: newCenters,
     new_staff: newStaff,
     new_members: newMembers,
-    new_members_linked: newLinkedMembers, // 회원앱 셀프 가입
+    new_members_linked: newLinkedMembers,
     new_memberships: newMemberships,
     new_passes: newPasses,
     new_rentals: newRentals,
@@ -251,16 +294,17 @@ async function buildPeriodDeltas(fromIso: string, toIso: string) {
   };
 }
 
-async function sumSales(fromIso: string, toIso: string): Promise<number> {
+async function sumSales(fromIso: string, toIso: string, centerId: number | null): Promise<number> {
   let total = 0;
   const PAGE = 1000;
   for (let p = 0; p < 200; p++) {
-    const { data } = await (supabase as any)
+    let q = (supabase as any)
       .from("crm_sales")
       .select("amount_won")
       .gte("tx_at", fromIso)
-      .lte("tx_at", toIso)
-      .range(p * PAGE, p * PAGE + PAGE - 1);
+      .lte("tx_at", toIso);
+    if (centerId) q = q.eq("center_id", centerId);
+    const { data } = await q.range(p * PAGE, p * PAGE + PAGE - 1);
     if (!data || data.length === 0) break;
     for (const r of data) total += Number((r as any).amount_won) || 0;
     if (data.length < PAGE) break;
@@ -270,7 +314,6 @@ async function sumSales(fromIso: string, toIso: string): Promise<number> {
 
 async function topCenters(
   table: string,
-  _keyCol: string,
   limit: number
 ): Promise<{ center_id: number; count: number }[]> {
   const PAGE = 1000;
@@ -321,6 +364,34 @@ async function topActiveCenters(
     .map(([center_id, count]) => ({ center_id, count }));
 }
 
+async function topRevenueCenters(
+  daysBack: number,
+  limit: number
+): Promise<{ center_id: number; count: number }[]> {
+  const since = new Date(Date.now() - daysBack * 86400000).toISOString();
+  const PAGE = 1000;
+  const map = new Map<number, number>();
+  for (let p = 0; p < 200; p++) {
+    const { data } = await (supabase as any)
+      .from("crm_sales")
+      .select("center_id, amount_won")
+      .gte("tx_at", since)
+      .range(p * PAGE, p * PAGE + PAGE - 1);
+    if (!data || data.length === 0) break;
+    for (const r of data) {
+      const cid = (r as any).center_id as number;
+      const amt = Number((r as any).amount_won) || 0;
+      if (!cid) continue;
+      map.set(cid, (map.get(cid) ?? 0) + amt);
+    }
+    if (data.length < PAGE) break;
+  }
+  return [...map.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([center_id, count]) => ({ center_id, count }));
+}
+
 async function countDistinctRecentCenters(): Promise<number> {
   const since = new Date(Date.now() - 30 * 86400000).toISOString();
   const set = new Set<number>();
@@ -346,6 +417,7 @@ async function allCenterNames(): Promise<Map<number, { name: string; kind: strin
   const { data } = await (supabase as any)
     .from("crm_centers")
     .select("id, name, kind")
+    .order("name", { ascending: true })
     .range(0, 999);
   for (const r of data ?? []) {
     map.set((r as any).id, { name: (r as any).name, kind: (r as any).kind });
@@ -366,8 +438,9 @@ function joinCenterNames(
 }
 
 async function growthDaily(
-  days: number
-): Promise<{ date: string; centers: number; members: number; consultations: number; passes: number }[]> {
+  days: number,
+  centerId: number | null
+): Promise<{ date: string; centers: number; members: number; consultations: number; passes: number; attendances: number; sales_amount: number }[]> {
   const now = new Date();
   const startUtc = new Date(
     new Date(now.getTime() + 9 * 3600 * 1000).setUTCHours(0, 0, 0, 0) - (days - 1) * 86400000 - 9 * 3600 * 1000
@@ -378,33 +451,43 @@ async function growthDaily(
     return new Date(new Date(iso).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   };
 
-  const collect = async (table: string, dateCol: string): Promise<Map<string, number>> => {
+  const collect = async (
+    table: string,
+    dateCol: string,
+    applyScope = true,
+    valueCol?: string
+  ): Promise<Map<string, number>> => {
     const acc = new Map<string, number>();
     const PAGE = 1000;
     for (let p = 0; p < 100; p++) {
-      const { data } = await (supabase as any)
+      let q = (supabase as any)
         .from(table)
-        .select(dateCol)
-        .gte(dateCol, startIso)
-        .range(p * PAGE, p * PAGE + PAGE - 1);
+        .select(valueCol ? `${dateCol}, ${valueCol}` : dateCol)
+        .gte(dateCol, startIso);
+      if (applyScope && centerId) q = q.eq("center_id", centerId);
+      const { data } = await q.range(p * PAGE, p * PAGE + PAGE - 1);
       if (!data || data.length === 0) break;
       for (const r of data) {
         const k = dateKey((r as any)[dateCol]);
-        acc.set(k, (acc.get(k) ?? 0) + 1);
+        const inc = valueCol ? Number((r as any)[valueCol]) || 0 : 1;
+        acc.set(k, (acc.get(k) ?? 0) + inc);
       }
       if (data.length < PAGE) break;
     }
     return acc;
   };
 
-  const [centersMap, membersMap, consMap, passesMap] = await Promise.all([
-    collect("crm_centers", "created_at"),
+  // 신규 센터는 항상 플랫폼 전체 (센터별 필터에선 0 으로 표시)
+  const [centersMap, membersMap, consMap, passesMap, attendMap, salesMap] = await Promise.all([
+    centerId ? Promise.resolve(new Map<string, number>()) : collect("crm_centers", "created_at", false),
     collect("crm_members", "created_at"),
     collect("crm_pt_consultations", "created_at"),
     collect("crm_passes", "created_at"),
+    collect("crm_attendances", "checked_in_at"),
+    collect("crm_sales", "tx_at", true, "amount_won"),
   ]);
 
-  const out: { date: string; centers: number; members: number; consultations: number; passes: number }[] = [];
+  const out: { date: string; centers: number; members: number; consultations: number; passes: number; attendances: number; sales_amount: number }[] = [];
   for (let i = 0; i < days; i++) {
     const d = new Date(
       new Date(now.getTime() + 9 * 3600 * 1000).setUTCHours(0, 0, 0, 0) - (days - 1 - i) * 86400000 - 9 * 3600 * 1000
@@ -416,6 +499,8 @@ async function growthDaily(
       members: membersMap.get(key) ?? 0,
       consultations: consMap.get(key) ?? 0,
       passes: passesMap.get(key) ?? 0,
+      attendances: attendMap.get(key) ?? 0,
+      sales_amount: salesMap.get(key) ?? 0,
     });
   }
   return out;

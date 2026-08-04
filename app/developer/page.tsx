@@ -28,6 +28,10 @@ export default function AdminPage() {
   const [crmRange, setCrmRange] = useState<"day" | "week" | "month" | "custom" | "all">("month");
   const [crmFrom, setCrmFrom] = useState("");
   const [crmTo, setCrmTo] = useState("");
+  // 센터 필터: null = 전체, 숫자 = 그 센터 스코프만
+  const [crmCenterId, setCrmCenterId] = useState<number | null>(null);
+  const [crmCenterQuery, setCrmCenterQuery] = useState("");
+  const [crmCenterPickerOpen, setCrmCenterPickerOpen] = useState(false);
 
   // USER 탭 — 닉네임 조회 상태
   const [userQuery, setUserQuery] = useState("");
@@ -393,12 +397,18 @@ export default function AdminPage() {
   }
 
   const loadCrmStats = useCallback(
-    async (mode: typeof crmRange, customFrom?: string, customTo?: string) => {
+    async (
+      mode: typeof crmRange,
+      customFrom?: string,
+      customTo?: string,
+      centerIdOverride?: number | null
+    ) => {
       if (!storedPassword) return;
       try {
         setCrmLoading(true);
         setCrmError("");
         const r = mode === "all" ? null : computeRange(mode === "custom" ? "custom" : mode, customFrom ?? crmFrom, customTo ?? crmTo);
+        const cid = centerIdOverride === undefined ? crmCenterId : centerIdOverride;
         const res = await fetch("/api/admin/kpi/crm", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -406,6 +416,7 @@ export default function AdminPage() {
             password: storedPassword,
             from: r?.from ?? undefined,
             to: r?.to ?? undefined,
+            center_id: cid ?? undefined,
           }),
         });
         const json = await res.json();
@@ -417,7 +428,7 @@ export default function AdminPage() {
         setCrmLoading(false);
       }
     },
-    [storedPassword, crmFrom, crmTo]
+    [storedPassword, crmFrom, crmTo, crmCenterId]
   );
 
   useEffect(() => {
@@ -1669,62 +1680,85 @@ export default function AdminPage() {
         {/* ===== CRM 종합 탭 ===== */}
         {tab === "crm" && (
           <div className="p-4 space-y-4">
-            {/* 기간 필터 */}
-            <div className="rounded-xl border border-lime-200 bg-lime-50/40 dark:border-lime-900/60 dark:bg-lime-950/20 p-3 flex flex-wrap items-center gap-2">
-              <div className="text-[11.5px] font-semibold text-lime-800 dark:text-lime-300">
-                기간 델타 기준
-              </div>
-              <div className="flex gap-1.5">
-                {(
-                  [
-                    { v: "day", l: "오늘" },
-                    { v: "week", l: "7일" },
-                    { v: "month", l: "30일" },
-                    { v: "custom", l: "직접" },
-                    { v: "all", l: "전체(누적만)" },
-                  ] as const
-                ).map((r) => (
-                  <button
-                    key={r.v}
-                    type="button"
-                    onClick={() => {
-                      setCrmRange(r.v);
-                      if (r.v !== "custom") loadCrmStats(r.v);
-                    }}
-                    className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold border transition-colors ${
-                      crmRange === r.v
-                        ? "border-lime-500 bg-lime-500 text-white"
-                        : "border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300"
-                    }`}
-                  >
-                    {r.l}
-                  </button>
-                ))}
-              </div>
-              {crmRange === "custom" && (
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="date"
-                    value={crmFrom}
-                    onChange={(e) => setCrmFrom(e.target.value)}
-                    className="h-7 px-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[12px]"
-                  />
-                  <span className="text-[11px] text-zinc-500">~</span>
-                  <input
-                    type="date"
-                    value={crmTo}
-                    onChange={(e) => setCrmTo(e.target.value)}
-                    className="h-7 px-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[12px]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => loadCrmStats("custom")}
-                    className="px-2 py-1 rounded-md bg-lime-500 text-white text-[11.5px] font-semibold hover:bg-lime-600"
-                  >
-                    적용
-                  </button>
+            {/* 필터 바 : 센터 선택 + 기간 */}
+            <div className="rounded-xl border border-lime-200 bg-lime-50/40 dark:border-lime-900/60 dark:bg-lime-950/20 p-3 space-y-2.5">
+              {/* 센터 선택 */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-[11.5px] font-semibold text-lime-800 dark:text-lime-300 shrink-0">
+                  분석 스코프
                 </div>
-              )}
+                <CenterPicker
+                  crmStats={crmStats}
+                  selectedId={crmCenterId}
+                  query={crmCenterQuery}
+                  onQueryChange={setCrmCenterQuery}
+                  open={crmCenterPickerOpen}
+                  setOpen={setCrmCenterPickerOpen}
+                  onSelect={(id) => {
+                    setCrmCenterId(id);
+                    setCrmCenterPickerOpen(false);
+                    setCrmCenterQuery("");
+                    loadCrmStats(crmRange, undefined, undefined, id);
+                  }}
+                />
+              </div>
+              {/* 기간 */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-[11.5px] font-semibold text-lime-800 dark:text-lime-300 shrink-0">
+                  기간 델타 기준
+                </div>
+                <div className="flex gap-1.5 flex-wrap">
+                  {(
+                    [
+                      { v: "day", l: "오늘" },
+                      { v: "week", l: "7일" },
+                      { v: "month", l: "30일" },
+                      { v: "custom", l: "직접" },
+                      { v: "all", l: "전체(누적만)" },
+                    ] as const
+                  ).map((r) => (
+                    <button
+                      key={r.v}
+                      type="button"
+                      onClick={() => {
+                        setCrmRange(r.v);
+                        if (r.v !== "custom") loadCrmStats(r.v);
+                      }}
+                      className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold border transition-colors ${
+                        crmRange === r.v
+                          ? "border-lime-500 bg-lime-500 text-white"
+                          : "border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      {r.l}
+                    </button>
+                  ))}
+                </div>
+                {crmRange === "custom" && (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="date"
+                      value={crmFrom}
+                      onChange={(e) => setCrmFrom(e.target.value)}
+                      className="h-7 px-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[12px]"
+                    />
+                    <span className="text-[11px] text-zinc-500">~</span>
+                    <input
+                      type="date"
+                      value={crmTo}
+                      onChange={(e) => setCrmTo(e.target.value)}
+                      className="h-7 px-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[12px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => loadCrmStats("custom")}
+                      className="px-2 py-1 rounded-md bg-lime-500 text-white text-[11.5px] font-semibold hover:bg-lime-600"
+                    >
+                      적용
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {crmError && (
@@ -1738,15 +1772,27 @@ export default function AdminPage() {
               </div>
             ) : !crmStats ? null : (
               <div className="space-y-4">
-                {/* 종합 스냅샷 */}
+                {/* 플랫폼 전체 (항상 통합) */}
                 <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
                   <div className="text-[12.5px] font-bold text-zinc-800 dark:text-zinc-100 mb-3">
-                    📊 종합 스냅샷 (누적)
+                    🌐 플랫폼 전체 (통합)
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                    <CrmTile label="가입 센터" value={crmStats.overview.centers_total} sub={`solo ${crmStats.overview.centers_solo} · center ${crmStats.overview.centers_multi}`} />
-                    <CrmTile label="활성 센터 (최근 30일)" value={crmStats.overview.centers_recently_active} sub="출석 이벤트 발생 기준" tone="green" />
-                    <CrmTile label="센터 직원·강사" value={crmStats.overview.staff_total} />
+                    <CrmTile label="가입 센터" value={crmStats.platform.centers_total} sub={`solo ${crmStats.platform.centers_solo} · center ${crmStats.platform.centers_multi}`} />
+                    <CrmTile label="활성 센터 (최근 30일)" value={crmStats.platform.centers_recently_active} sub="출석 이벤트 발생 기준" tone="green" />
+                    <CrmTile label="active 상태 센터" value={crmStats.platform.centers_active} />
+                  </div>
+                </div>
+
+                {/* 스코프별 스냅샷 */}
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+                  <div className="text-[12.5px] font-bold text-zinc-800 dark:text-zinc-100 mb-3 flex items-center gap-2">
+                    📊 {crmStats.scope === "center"
+                      ? <>🎯 <span className="text-lime-700 dark:text-lime-300">{crmStats.selected_center?.name}</span> 스냅샷 (누적)</>
+                      : "전체 스냅샷 (전 센터 합산 · 누적)"}
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                    <CrmTile label="직원·강사" value={crmStats.overview.staff_total} />
                     <CrmTile label="회원 총계" value={crmStats.overview.members_total} sub={`앱 연동 ${crmStats.overview.members_linked}명`} />
                     <CrmTile label="활성 회원" value={crmStats.overview.members_active} sub={`정회원 ${crmStats.overview.members_matched} · 가회원 ${crmStats.overview.members_provisional}`} />
                     <CrmTile label="유효 회원권" value={crmStats.overview.memberships_active} sub={`총 ${crmStats.overview.memberships_total}건`} tone="green" />
@@ -1763,10 +1809,12 @@ export default function AdminPage() {
                 {crmStats.period ? (
                   <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
                     <div className="text-[12.5px] font-bold text-zinc-800 dark:text-zinc-100 mb-3">
-                      🆕 선택 기간 신규 유입
+                      🆕 선택 기간 신규 유입 {crmStats.scope === "center" && <span className="text-lime-700 dark:text-lime-300">({crmStats.selected_center?.name})</span>}
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                      <CrmTile label="신규 센터" value={crmStats.period.new_centers} tone="green" />
+                      {crmStats.scope !== "center" && (
+                        <CrmTile label="신규 센터 (플랫폼)" value={crmStats.period.new_centers} tone="green" />
+                      )}
                       <CrmTile label="신규 직원·강사" value={crmStats.period.new_staff} />
                       <CrmTile label="신규 회원" value={crmStats.period.new_members} sub={`앱 셀프가입 ${crmStats.period.new_members_linked}명`} tone="green" />
                       <CrmTile label="신규 회원권" value={crmStats.period.new_memberships} />
@@ -1788,28 +1836,35 @@ export default function AdminPage() {
                 {/* 기능 채택 */}
                 <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
                   <div className="text-[12.5px] font-bold text-zinc-800 dark:text-zinc-100 mb-3">
-                    🧩 기능 채택 현황
+                    🧩 기능 채택 현황 {crmStats.scope === "center" && <span className="text-lime-700 dark:text-lime-300">({crmStats.selected_center?.name})</span>}
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
                     <CrmTile label="얼굴 등록 회원" value={crmStats.feature_adoption.face_registered_members} sub="얼굴 인식 출석 사용 가능" />
                     <CrmTile label="터치 출석 이벤트" value={crmStats.feature_adoption.touch_attendance_events} sub="source=touch 기준" />
                     <CrmTile label="앱 예약 건수" value={crmStats.feature_adoption.app_reservations} sub="회원앱에서 요청/승인" />
-                    <CrmTile label="자동 메세지 활성 센터" value={crmStats.feature_adoption.auto_message_enabled_centers} sub="트리거 하나 이상 on" />
+                    <CrmTile
+                      label={crmStats.feature_adoption.auto_message_label || "자동 메세지"}
+                      value={crmStats.feature_adoption.auto_message_enabled_centers}
+                      sub={crmStats.scope === "center" ? "1=사용중 / 0=미사용" : "트리거 하나 이상 on"}
+                    />
                   </div>
                 </div>
 
-                {/* 상위 센터 */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <TopCentersCard title="👥 회원 수 TOP 5" rows={crmStats.top_centers.by_members} unit="명" />
-                  <TopCentersCard title="⚡ 최근 30일 출석 활동 TOP 5" rows={crmStats.top_centers.by_recent_activity} unit="건" />
-                </div>
+                {/* 상위 센터 — 전체 스코프에서만 노출 */}
+                {crmStats.top_centers && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <TopCentersCard title="👥 회원 수 TOP 5" rows={crmStats.top_centers.by_members} unit="명" onSelect={(id) => { setCrmCenterId(id); loadCrmStats(crmRange, undefined, undefined, id); }} />
+                    <TopCentersCard title="⚡ 최근 30일 출석 TOP 5" rows={crmStats.top_centers.by_recent_activity} unit="건" onSelect={(id) => { setCrmCenterId(id); loadCrmStats(crmRange, undefined, undefined, id); }} />
+                    <TopCentersCard title="💰 최근 30일 매출 TOP 5" rows={crmStats.top_centers.by_recent_revenue} unit="원" onSelect={(id) => { setCrmCenterId(id); loadCrmStats(crmRange, undefined, undefined, id); }} />
+                  </div>
+                )}
 
                 {/* 30일 성장 그래프 */}
                 <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
                   <div className="text-[12.5px] font-bold text-zinc-800 dark:text-zinc-100 mb-3">
-                    📈 최근 30일 일별 신규 유입
+                    📈 최근 30일 일별 신규 유입 {crmStats.scope === "center" && <span className="text-lime-700 dark:text-lime-300">({crmStats.selected_center?.name})</span>}
                   </div>
-                  <GrowthTable rows={crmStats.growth_daily_30d} />
+                  <GrowthTable rows={crmStats.growth_daily_30d} hideCenters={crmStats.scope === "center"} />
                 </div>
               </div>
             )}
@@ -3677,10 +3732,12 @@ function TopCentersCard({
   title,
   rows,
   unit,
+  onSelect,
 }: {
   title: string;
   rows: { center_id: number; count: number; name: string; kind: string }[];
   unit: string;
+  onSelect?: (id: number) => void;
 }) {
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
@@ -3690,25 +3747,32 @@ function TopCentersCard({
       ) : (
         <ol className="space-y-1">
           {rows.map((r, i) => (
-            <li
-              key={r.center_id}
-              className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className={`text-[11px] font-bold ${i === 0 ? "text-lime-600" : "text-zinc-400"}`}>
-                  #{i + 1}
+            <li key={r.center_id}>
+              <button
+                type="button"
+                onClick={() => onSelect?.(r.center_id)}
+                disabled={!onSelect}
+                className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left ${
+                  onSelect ? "hover:bg-lime-50 dark:hover:bg-lime-950/30 cursor-pointer" : ""
+                }`}
+                title={onSelect ? "이 센터로 필터링" : undefined}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={`text-[11px] font-bold ${i === 0 ? "text-lime-600" : "text-zinc-400"}`}>
+                    #{i + 1}
+                  </span>
+                  <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100 truncate">
+                    {r.name}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600">
+                    {r.kind === "solo" ? "1인" : "센터"}
+                  </span>
+                </div>
+                <span className="text-[13px] font-bold tabular-nums text-lime-700 dark:text-lime-300">
+                  {r.count.toLocaleString()}
+                  {unit}
                 </span>
-                <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100 truncate">
-                  {r.name}
-                </span>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600">
-                  {r.kind === "solo" ? "1인" : "센터"}
-                </span>
-              </div>
-              <span className="text-[13px] font-bold tabular-nums text-lime-700 dark:text-lime-300">
-                {r.count.toLocaleString()}
-                {unit}
-              </span>
+              </button>
             </li>
           ))}
         </ol>
@@ -3717,16 +3781,126 @@ function TopCentersCard({
   );
 }
 
+function CenterPicker({
+  crmStats,
+  selectedId,
+  query,
+  onQueryChange,
+  open,
+  setOpen,
+  onSelect,
+}: {
+  crmStats: any;
+  selectedId: number | null;
+  query: string;
+  onQueryChange: (q: string) => void;
+  open: boolean;
+  setOpen: (o: boolean) => void;
+  onSelect: (id: number | null) => void;
+}) {
+  const list = (crmStats?.centers_list ?? []) as { id: number; name: string; kind: string }[];
+  const selected = selectedId ? list.find((c) => c.id === selectedId) : null;
+  const q = query.trim().toLowerCase();
+  const filtered = q ? list.filter((c) => c.name.toLowerCase().includes(q)) : list;
+  return (
+    <div className="relative flex-1 min-w-[220px]">
+      <div className="flex items-center gap-1.5">
+        {selected ? (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-lime-500 bg-lime-500/10 text-[12px]">
+            <span className="font-bold text-lime-800 dark:text-lime-200">🎯 {selected.name}</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white/60 text-lime-800">
+              {selected.kind === "solo" ? "1인" : "센터"}
+            </span>
+            <button
+              type="button"
+              onClick={() => onSelect(null)}
+              className="ml-1 text-[11px] text-zinc-500 hover:text-red-600"
+              title="필터 해제"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            className="px-3 py-1 rounded-md border border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900 text-[12px] font-semibold text-zinc-700 dark:text-zinc-300 hover:border-lime-400"
+          >
+            🌐 전체 센터 통합 — 센터 선택하기 ▾
+          </button>
+        )}
+      </div>
+
+      {open && !selected && (
+        <div className="absolute z-30 left-0 mt-1 w-80 max-w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 shadow-lg">
+          <div className="p-2 border-b border-zinc-100 dark:border-zinc-800">
+            <input
+              autoFocus
+              type="text"
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+              placeholder="센터 이름 검색"
+              className="w-full h-8 px-2.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[12.5px]"
+            />
+          </div>
+          <div className="max-h-72 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <p className="text-center py-3 text-[11.5px] text-zinc-500">검색 결과 없음</p>
+            ) : (
+              filtered.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => onSelect(c.id)}
+                  className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-lime-50 dark:hover:bg-lime-950/30 text-left"
+                >
+                  <span className="text-[12.5px] font-semibold text-zinc-800 dark:text-zinc-100 truncate">
+                    {c.name}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 shrink-0">
+                    {c.kind === "solo" ? "1인" : "센터"}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+          <div className="p-1.5 border-t border-zinc-100 dark:border-zinc-800 text-right">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="text-[11px] text-zinc-500 hover:underline px-2"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GrowthTable({
   rows,
+  hideCenters = false,
 }: {
-  rows: { date: string; centers: number; members: number; consultations: number; passes: number }[];
+  rows: {
+    date: string;
+    centers: number;
+    members: number;
+    consultations: number;
+    passes: number;
+    attendances: number;
+    sales_amount: number;
+  }[];
+  hideCenters?: boolean;
 }) {
   const max = {
     centers: Math.max(1, ...rows.map((r) => r.centers)),
     members: Math.max(1, ...rows.map((r) => r.members)),
     consultations: Math.max(1, ...rows.map((r) => r.consultations)),
     passes: Math.max(1, ...rows.map((r) => r.passes)),
+    attendances: Math.max(1, ...rows.map((r) => r.attendances)),
+    sales: Math.max(1, ...rows.map((r) => r.sales_amount)),
   };
   const total = rows.reduce(
     (acc, r) => ({
@@ -3734,27 +3908,35 @@ function GrowthTable({
       members: acc.members + r.members,
       consultations: acc.consultations + r.consultations,
       passes: acc.passes + r.passes,
+      attendances: acc.attendances + r.attendances,
+      sales: acc.sales + r.sales_amount,
     }),
-    { centers: 0, members: 0, consultations: 0, passes: 0 }
+    { centers: 0, members: 0, consultations: 0, passes: 0, attendances: 0, sales: 0 }
   );
   return (
     <div>
       <div className="flex flex-wrap gap-2 text-[11.5px] text-zinc-600 dark:text-zinc-400 mb-2">
         <span>30일 합계 —</span>
-        <span>센터 <strong className="text-lime-700 dark:text-lime-300">{total.centers.toLocaleString()}</strong></span>
-        <span>· 회원 <strong className="text-lime-700 dark:text-lime-300">{total.members.toLocaleString()}</strong></span>
+        {!hideCenters && (
+          <span>센터 <strong className="text-lime-700 dark:text-lime-300">{total.centers.toLocaleString()}</strong></span>
+        )}
+        <span>회원 <strong className="text-lime-700 dark:text-lime-300">{total.members.toLocaleString()}</strong></span>
         <span>· 상담 <strong className="text-lime-700 dark:text-lime-300">{total.consultations.toLocaleString()}</strong></span>
         <span>· 수강권 <strong className="text-lime-700 dark:text-lime-300">{total.passes.toLocaleString()}</strong></span>
+        <span>· 출석 <strong className="text-lime-700 dark:text-lime-300">{total.attendances.toLocaleString()}</strong></span>
+        <span>· 매출 <strong className="text-lime-700 dark:text-lime-300">{total.sales.toLocaleString()}원</strong></span>
       </div>
       <div className="overflow-x-auto -mx-2 px-2">
-        <table className="w-full text-[11.5px] min-w-[520px]">
+        <table className="w-full text-[11.5px] min-w-[640px]">
           <thead className="text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
             <tr>
               <th className="text-left py-1.5 pr-2 font-semibold">날짜</th>
-              <MiniBarHead label="센터" />
+              {!hideCenters && <MiniBarHead label="센터" />}
               <MiniBarHead label="회원" />
               <MiniBarHead label="상담" />
               <MiniBarHead label="수강권" />
+              <MiniBarHead label="출석" />
+              <MiniBarHead label="매출(원)" />
             </tr>
           </thead>
           <tbody>
@@ -3763,10 +3945,12 @@ function GrowthTable({
                 <td className="py-1 pr-2 tabular-nums text-zinc-600 dark:text-zinc-400">
                   {r.date.slice(5)}
                 </td>
-                <MiniBarCell v={r.centers} max={max.centers} tone="lime" />
+                {!hideCenters && <MiniBarCell v={r.centers} max={max.centers} tone="lime" />}
                 <MiniBarCell v={r.members} max={max.members} tone="emerald" />
                 <MiniBarCell v={r.consultations} max={max.consultations} tone="amber" />
                 <MiniBarCell v={r.passes} max={max.passes} tone="violet" />
+                <MiniBarCell v={r.attendances} max={max.attendances} tone="sky" />
+                <MiniBarCell v={r.sales_amount} max={max.sales} tone="rose" formatMoney />
               </tr>
             ))}
           </tbody>
@@ -3788,10 +3972,12 @@ function MiniBarCell({
   v,
   max,
   tone,
+  formatMoney,
 }: {
   v: number;
   max: number;
-  tone: "lime" | "emerald" | "amber" | "violet";
+  tone: "lime" | "emerald" | "amber" | "violet" | "sky" | "rose";
+  formatMoney?: boolean;
 }) {
   const pct = max > 0 ? Math.round((v / max) * 100) : 0;
   const bar =
@@ -3801,13 +3987,17 @@ function MiniBarCell({
       ? "bg-emerald-400"
       : tone === "amber"
       ? "bg-amber-400"
-      : "bg-violet-400";
+      : tone === "violet"
+      ? "bg-violet-400"
+      : tone === "sky"
+      ? "bg-sky-400"
+      : "bg-rose-400";
   return (
     <td className="py-1 px-2">
       <div className="relative h-4 min-w-[80px] bg-zinc-100 dark:bg-zinc-800 rounded overflow-hidden">
         <div className={`absolute left-0 top-0 bottom-0 ${bar}`} style={{ width: `${pct}%` }} />
         <div className="relative flex items-center justify-end pr-1.5 h-full text-[10px] font-bold text-zinc-700 dark:text-zinc-100 tabular-nums">
-          {v}
+          {formatMoney ? v.toLocaleString() : v}
         </div>
       </div>
     </td>
