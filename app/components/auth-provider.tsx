@@ -140,12 +140,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [activeRegionName, setActiveRegionName] = useState("");
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [termsLoaded, setTermsLoaded] = useState(false);
+  // 로그인 실패 시 조용히 로그인화면으로 되돌아가지 않도록 전역 안내 배너용 에러
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const NICKNAME_CACHE_KEY = "cached_nickname";
   const NICKNAME_UID_KEY = "cached_nickname_uid";
   const REGION_CODE_KEY = "cached_active_region_code";
   const REGION_NAME_KEY = "cached_active_region_name";
   const TERMS_AGREED_KEY = "cached_terms_agreed";
+  // 로그인 시도 흔적(리다이렉트 복귀 후에도 유지). 완료 안 되면 안내 띄우는 데 사용.
+  const SIGNIN_PENDING_KEY = "moducm_signin_pending";
+  const markSigninPending = (provider: string) => {
+    setAuthError(null);
+    try { sessionStorage.setItem(SIGNIN_PENDING_KEY, provider); } catch {}
+  };
+  const clearSigninPending = () => {
+    try { sessionStorage.removeItem(SIGNIN_PENDING_KEY); } catch {}
+  };
 
   const setTermsAgreedLocal = () => {
     setTermsAgreed(true);
@@ -216,12 +227,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { onAuthStateChanged, getRedirectResult, auth } = await loadFirebase();
       if (cancelled) return;
 
-      // redirect 로그인 결과 처리 (비동기, 블로킹 안 함)
-      getRedirectResult(auth).catch(() => {});
+      // redirect 로그인 결과 처리 — 실패를 삼키지 말고 안내(조용한 로그인화면 복귀 방지)
+      getRedirectResult(auth)
+        .then((res: { user: User | null } | null) => {
+          if (res?.user) {
+            clearSigninPending();
+            setAuthError(null);
+            return;
+          }
+          // 리다이렉트로 돌아왔는데 로그인 안 됨 + 로그인 시도 흔적 있으면 → 안내
+          let pending: string | null = null;
+          try { pending = sessionStorage.getItem(SIGNIN_PENDING_KEY); } catch {}
+          if (pending && !auth.currentUser) {
+            setAuthError("로그인이 완료되지 않았어요. 다시 시도해 주세요.");
+            clearSigninPending();
+          }
+        })
+        .catch((err: unknown) => {
+          console.error("[auth] getRedirectResult 실패", err);
+          setAuthError("로그인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.");
+          clearSigninPending();
+        });
 
       unsubscribe = onAuthStateChanged(auth, (u: User | null) => {
         setUser(u);
         if (u) {
+          clearSigninPending();
+          setAuthError(null);
           // 1단계: 캐시된 닉네임/지역으로 즉시 로그인 완료 표시 (빠름)
           const cachedUid = localStorage.getItem(NICKNAME_UID_KEY);
           const cachedNickname = localStorage.getItem(NICKNAME_CACHE_KEY);
@@ -281,6 +313,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       openInExternalBrowser();
       return;
     }
+    markSigninPending("google");
 
     const { signInWithPopup, signInWithRedirect, auth, googleProvider } = await loadFirebase();
 
@@ -302,6 +335,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await signInWithRedirect(auth, googleProvider);
         } catch (e2) {
           console.error("Google 로그인 실패(iOS)", e2);
+          setAuthError("로그인에 실패했어요. 팝업 차단을 해제하거나 잠시 후 다시 시도해 주세요.");
+          clearSigninPending();
         }
       }
       return;
@@ -313,6 +348,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await signInWithRedirect(auth, googleProvider);
       } catch (e) {
         console.error("Google 로그인 실패 (android)", e);
+        setAuthError("로그인에 실패했어요. 잠시 후 다시 시도해 주세요.");
+        clearSigninPending();
       }
       return;
     }
@@ -326,6 +363,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await signInWithRedirect(auth, googleProvider);
       } catch (e2) {
         console.error("Google 로그인 실패", e2);
+        setAuthError("로그인에 실패했어요. 잠시 후 다시 시도해 주세요.");
+        clearSigninPending();
       }
     }
   };
@@ -336,6 +375,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       openInExternalBrowser();
       return;
     }
+    markSigninPending("apple");
 
     const { OAuthProvider, signInWithPopup, signInWithRedirect, auth } = await loadFirebase();
 
@@ -359,6 +399,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await signInWithRedirect(auth, provider);
         } catch (e2) {
           console.error("Apple 로그인 실패(iOS)", e2);
+          setAuthError("로그인에 실패했어요. 팝업 차단을 해제하거나 잠시 후 다시 시도해 주세요.");
+          clearSigninPending();
         }
       }
       return;
@@ -369,6 +411,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await signInWithRedirect(auth, provider);
       } catch (e) {
         console.error("Apple 로그인 실패 (android)", e);
+        setAuthError("로그인에 실패했어요. 잠시 후 다시 시도해 주세요.");
+        clearSigninPending();
       }
       return;
     }
@@ -381,6 +425,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await signInWithRedirect(auth, provider);
       } catch (e2) {
         console.error("Apple 로그인 실패", e2);
+        setAuthError("로그인에 실패했어요. 잠시 후 다시 시도해 주세요.");
+        clearSigninPending();
       }
     }
   };
@@ -418,6 +464,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{ user, loading, nickname, nicknameLoaded, setNicknameLocal: (name: string) => { setNickname(name); setNicknameLoaded(true); }, activeRegionCode, activeRegionName, termsAgreed, termsLoaded, setTermsAgreedLocal, signInWithGoogle, signInWithApple, signOutUser, getIdToken, refreshNickname, setActiveRegionLocal }}>
       {children}
+      {authError && (
+        <div className="fixed inset-x-0 bottom-4 z-[9999] flex justify-center px-4 pointer-events-none">
+          <div className="pointer-events-auto max-w-[92vw] flex items-center gap-3 px-4 py-3 rounded-2xl bg-[#2A251D] text-white shadow-xl">
+            <span className="text-[13px] leading-snug">{authError}</span>
+            <button
+              onClick={() => setAuthError(null)}
+              className="shrink-0 px-2.5 py-1 rounded-lg bg-white/15 text-[12px] font-semibold hover:bg-white/25"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 }
