@@ -21,10 +21,10 @@ export async function GET(request: Request) {
   const endUtc = new Date(`${to}T00:00:00+09:00`);
   endUtc.setUTCHours(endUtc.getUTCHours() + 24);
 
-  // 개인 일정 필터 (권한별). 강사용 앱은 mine=1 로 owner여도 본인 것만.
-  const mineOnly = url.searchParams.get("mine") === "1";
+  // 🔒 기본은 '본인 것'만 (강사용 앱 보호 — 권한 무관). 웹 CRM 전체조회만 all=1 로 옵트인.
+  const allView = url.searchParams.get("all") === "1";
   let personalTrainerId: number | null = null;
-  if (ctx.role === "trainer" || mineOnly) {
+  if (ctx.role === "trainer" || !allView) {
     personalTrainerId = ctx.centerMemberId;
   } else if (trainerParam) {
     personalTrainerId = Number(trainerParam);

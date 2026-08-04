@@ -55,9 +55,9 @@ export async function GET(request: Request) {
   //   manager 이상    → 전체, trainer_id 로 특정 강사만 필터 가능
   // 참고: 예약은 담당 강사(trainer_member_id) 기준으로만 필터.
   //       creator 기반 필터는 예약이 아니라 이벤트(schedule-events)에서만 의미가 있음.
-  // 강사용 앱은 수업 예약 도구라 owner여도 '본인 담당 예약'만 봐야 한다 → mine=1 로 강제 스코프
-  const mineOnly = url.searchParams.get("mine") === "1";
-  if (ctx.role === "trainer" || mineOnly) {
+  // 🔒 기본은 '본인 담당 예약'만 (강사용 앱 보호 — 권한 무관). 웹 CRM 전체조회만 all=1 로 옵트인.
+  const allView = url.searchParams.get("all") === "1";
+  if (ctx.role === "trainer" || !allView) {
     query = query.eq("trainer_member_id", ctx.centerMemberId);
   } else if (trainerParam) {
     query = query.eq("trainer_member_id", Number(trainerParam));

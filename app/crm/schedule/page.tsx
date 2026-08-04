@@ -158,11 +158,12 @@ export default function CrmSchedulePage() {
           ? `&trainer_id=${selectedTrainerId}`
           : "";
       const [resR, resE] = await Promise.all([
-        fetch(`/api/crm/reservations?from=${range.from}&to=${range.to}${trainerQs}`, {
+        // all=1: 웹 CRM은 센터 전체 조회 (앱은 이 파라미터 없이 본인 것만)
+        fetch(`/api/crm/reservations?from=${range.from}&to=${range.to}&all=1${trainerQs}`, {
           headers: { authorization: `Bearer ${token}` },
           cache: "no-store",
         }),
-        fetch(`/api/crm/schedule-events?from=${range.from}&to=${range.to}${trainerQs}`, {
+        fetch(`/api/crm/schedule-events?from=${range.from}&to=${range.to}&all=1${trainerQs}`, {
           headers: { authorization: `Bearer ${token}` },
           cache: "no-store",
         }),
