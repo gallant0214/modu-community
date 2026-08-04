@@ -61,8 +61,9 @@ export async function GET(request: Request) {
     const displayName = (m as { display_name?: string }).display_name?.trim();
     const centerName =
       c?.kind === "solo" && displayName ? `${displayName}의 수업` : storedName;
-    const restricted =
-      (m.role === "trainer" || m.role === "manager") && !m.is_solo_owner;
+    // 강사용 앱은 '본인이 담당/추가강사/판매자'로 연결된 회원만 보여준다.
+    // owner/admin 이라도 앱에서는 본인 담당만(전체 조회는 웹 CRM 전용). solo owner 는 자기 센터 전체.
+    const restricted = !m.is_solo_owner;
 
     let allowedIds: number[] | null = null;
     if (restricted) {
