@@ -2159,7 +2159,7 @@ function ReservationDialog({
                 onChange={(e) => setReasonNote(e.target.value.slice(0, 200))}
                 placeholder={
                   cancelMode
-                    ? "취소 내용을 입력해 주세요 (점 하나라도 필수)."
+                    ? "취소 내용을 입력해 주세요."
                     : "추가 사유 (예: 연락 없이 미출석). 선택 사유 없이 이 칸만 채워도 돼요."
                 }
                 maxLength={200}
