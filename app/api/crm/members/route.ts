@@ -435,7 +435,11 @@ export async function POST(request: Request) {
     final_expire_at: body.final_expire_at || null,
     last_purchase_at: body.last_purchase_at || null,
     last_attended_at: body.last_attended_at || null,
-    attendance_no: body.attendance_no?.trim() || null,
+    // 출석번호는 등록 완료 시 휴대폰 뒷 4자리로 자동 설정.
+    // (명시값이 오면 존중 — 예: 가져오기. 없으면 폰 뒷자리, 폰도 없으면 null)
+    attendance_no:
+      body.attendance_no?.trim() ||
+      (phone ? phone.replace(/\D/g, "").slice(-4) || null : null),
     current_membership: body.current_membership?.trim() || null,
     current_pass: body.current_pass?.trim() || null,
     current_rental: body.current_rental?.trim() || null,
