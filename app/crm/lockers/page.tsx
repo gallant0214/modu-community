@@ -1090,7 +1090,7 @@ interface UnassignedMember {
 const MEMBER_TYPE_KO: Record<string, string> = {
   provisional: "가회원",
   full: "정회원",
-  matched: "매칭회원",
+  matched: "연동 회원",
 };
 
 function UnassignedTab({ onAssigned }: { zone: number; zoneLabel: (n: number) => string; onZoneChange: (n: number) => void; onAssigned?: () => void }) {

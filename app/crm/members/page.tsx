@@ -877,7 +877,7 @@ export default function CrmMembersPage() {
             회원 관리
           </h1>
           <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-            가회원·정회원·매칭회원과 이용 상품을 한눈에 관리해요.
+            가회원·정회원·연동 회원과 이용 상품을 한눈에 관리해요.
           </p>
         </div>
       </header>
@@ -1379,11 +1379,13 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
     sortKey: "app",
     render: (m) =>
       m.linked_firebase_uid ? (
-        <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]">
-          연동
+        <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60">
+          연동 회원
         </span>
       ) : (
-        <span className="text-[#A89B80]">—</span>
+        <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-medium text-zinc-500 border border-zinc-200 dark:border-zinc-700 dark:text-zinc-400">
+          미연동
+        </span>
       ),
   },
   phone: {

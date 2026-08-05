@@ -303,9 +303,21 @@ export default function CrmMemberDetailPage() {
                 <h1 className="text-[22px] md:text-[26px] leading-tight font-bold text-[#2A251D] dark:text-zinc-100">
                   {member.name}
                 </h1>
-                <span className="px-2 py-1 rounded-full bg-[#6B7B3A]/10 text-[11.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">
-                  {MEMBER_TYPE_LABEL[member.member_type] ?? member.member_type}
-                </span>
+                {member.linked_firebase_uid ? (
+                  <span
+                    className="px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11.5px] font-semibold dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60"
+                    title="회원앱에 로그인해 CRM 레코드와 계정이 연결된 상태예요."
+                  >
+                    연동 회원
+                  </span>
+                ) : (
+                  <span
+                    className="px-2 py-1 rounded-full bg-zinc-100 text-zinc-500 border border-zinc-200 text-[11.5px] font-semibold dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
+                    title="회원앱 계정과 아직 연결되지 않았어요. 회원이 앱에서 셀프 가입하면 자동 연동됩니다."
+                  >
+                    미연동 회원
+                  </span>
+                )}
                 <span className={`px-2 py-1 rounded-full text-[11.5px] font-semibold ${
                   isMemberActive(member)
                     ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"

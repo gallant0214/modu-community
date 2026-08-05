@@ -66,7 +66,7 @@ export const EMPLOYMENT_TYPE_LABEL: Record<string, string> = {
 export const MEMBER_TYPE_LABEL: Record<string, string> = {
   provisional: "가회원",
   full: "정회원",
-  matched: "매칭회원",
+  matched: "연동 회원",
 };
 
 export const ISSUE_TYPE_LABEL: Record<string, string> = {
