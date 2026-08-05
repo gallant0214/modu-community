@@ -5448,7 +5448,7 @@ function ContractRequestPickerModal({
         const data = await res.json();
         const list = (data.contracts ?? []) as { id: number; title: string; category: string }[];
         setTemplates(list);
-        if (list.length === 1) setSelectedId(list[0].id);
+        // 양식이 1개여도 자동 선택하지 않고, 직원이 직접 계약서를 고르도록 함
       } catch {
         setError("계약서 양식을 불러오지 못했어요.");
       } finally {
@@ -5560,6 +5560,11 @@ function ContractRequestPickerModal({
         <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
           어떤 계약서로 작성을 요청할지 선택하고, 계약자(직원) 서명을 완료하면 회원용 앱으로 서명 요청이 전송됩니다.
         </p>
+        {!loading && templates.length > 0 && (
+          <div className="text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            ① 계약서 선택
+          </div>
+        )}
         {loading ? (
           <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
         ) : templates.length === 0 ? (
@@ -5607,7 +5612,7 @@ function ContractRequestPickerModal({
         {selectedId !== null && (
           <div>
             <div className="mb-1.5 text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
-              계약자(직원) 서명
+              ② 계약자(직원) 서명
             </div>
             <div className="rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white overflow-hidden">
               <canvas

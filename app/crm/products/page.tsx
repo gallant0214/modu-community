@@ -307,9 +307,11 @@ export default function CrmProductsPage() {
                         <div className="truncate text-[15px] font-bold text-[#241F18] dark:text-zinc-100">
                           {p.name}
                         </div>
-                        <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500 truncate">
-                          {p.category || "종목 미지정"}
-                        </div>
+                        {p.category && (
+                          <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500 truncate">
+                            {p.category}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
