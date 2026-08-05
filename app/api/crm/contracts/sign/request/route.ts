@@ -25,6 +25,8 @@ export async function POST(request: Request) {
     membership_id?: number;
     /** true 면 회원 앱으로 계약서 작성 요청 푸시 발송 */
     notify_app?: boolean;
+    /** 계약자(직원) 서명 data URL — 요청 전 CRM에서 먼저 서명 */
+    trainer_signature_data_url?: string;
   };
   try {
     body = await request.json();
@@ -211,6 +213,12 @@ export async function POST(request: Request) {
       terms_accepted: {} as never,
       terms_snapshot: termsSnapshot as never,
       signature_data_url: null,
+      // 계약자(직원)가 요청 전 먼저 서명한 값 저장. 회원은 앱에서 본인 서명만 추가.
+      trainer_signature_data_url:
+        body.trainer_signature_data_url &&
+        body.trainer_signature_data_url.startsWith("data:image/")
+          ? body.trainer_signature_data_url
+          : null,
       signed_by_uid: null,
       status: "pending_signature",
       signing_token: token,

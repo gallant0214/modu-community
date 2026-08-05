@@ -5427,10 +5427,16 @@ function ContractRequestPickerModal({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
+  // 계약자(직원) 서명 패드
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingRef = useRef(false);
+  const [signatureEmpty, setSignatureEmpty] = useState(true);
+
   useEffect(() => {
     if (!open) return;
     setError("");
     setSelectedId(null);
+    setSignatureEmpty(true);
     (async () => {
       setLoading(true);
       try {
@@ -5451,8 +5457,72 @@ function ContractRequestPickerModal({
     })();
   }, [open, getIdToken]);
 
+  // 템플릿 선택 시 서명 캔버스 초기화 (선택 바뀌면 서명도 리셋)
+  useEffect(() => {
+    if (!open || selectedId === null) return;
+    setSignatureEmpty(true);
+    const c = canvasRef.current;
+    if (!c) return;
+    const dpr = window.devicePixelRatio || 1;
+    c.width = c.clientWidth * dpr;
+    c.height = c.clientHeight * dpr;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.scale(dpr, dpr);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#2A251D";
+  }, [open, selectedId]);
+
+  const sigPos = (e: React.MouseEvent | React.TouchEvent) => {
+    const c = canvasRef.current;
+    if (!c) return { x: 0, y: 0 };
+    const r = c.getBoundingClientRect();
+    if ("touches" in e) {
+      const t = e.touches[0];
+      return { x: t.clientX - r.left, y: t.clientY - r.top };
+    }
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+  const sigStart = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    drawingRef.current = true;
+    const { x, y } = sigPos(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+  const sigDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!drawingRef.current) return;
+    e.preventDefault();
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const { x, y } = sigPos(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    setSignatureEmpty(false);
+  };
+  const sigEnd = () => {
+    drawingRef.current = false;
+  };
+  const clearSig = () => {
+    const c = canvasRef.current;
+    const ctx = c?.getContext("2d");
+    if (!c || !ctx) return;
+    ctx.clearRect(0, 0, c.width, c.height);
+    setSignatureEmpty(true);
+  };
+
   const send = async () => {
     if (!selectedId || sending) return;
+    if (signatureEmpty) {
+      setError("계약자(직원) 서명을 먼저 완료해 주세요.");
+      return;
+    }
+    const trainerSig = canvasRef.current?.toDataURL("image/png") ?? "";
     setSending(true);
     setError("");
     try {
@@ -5466,6 +5536,7 @@ function ContractRequestPickerModal({
           ...(membershipId ? { membership_id: membershipId } : {}),
           template_id: selectedId,
           notify_app: true,
+          trainer_signature_data_url: trainerSig,
         }),
       });
       const data = await res.json();
@@ -5487,7 +5558,7 @@ function ContractRequestPickerModal({
     <CrmModal open={open} onClose={onClose} title="전자 계약서 작성 요청">
       <div className="space-y-3">
         <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-          어떤 계약서로 작성을 요청할지 선택하세요. 회원용 앱으로 서명 요청이 전송됩니다.
+          어떤 계약서로 작성을 요청할지 선택하고, 계약자(직원) 서명을 완료하면 회원용 앱으로 서명 요청이 전송됩니다.
         </p>
         {loading ? (
           <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
@@ -5496,7 +5567,7 @@ function ContractRequestPickerModal({
             등록된 계약서 양식이 없어요. 설정 → 계약서 관리에서 먼저 양식을 등록해 주세요.
           </div>
         ) : (
-          <ul className="space-y-2 max-h-[46vh] overflow-y-auto">
+          <ul className={`space-y-2 overflow-y-auto ${selectedId !== null ? "max-h-[24vh]" : "max-h-[46vh]"}`}>
             {templates.map((t) => {
               const sel = selectedId === t.id;
               return (
@@ -5533,6 +5604,38 @@ function ContractRequestPickerModal({
             })}
           </ul>
         )}
+        {selectedId !== null && (
+          <div>
+            <div className="mb-1.5 text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+              계약자(직원) 서명
+            </div>
+            <div className="rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white overflow-hidden">
+              <canvas
+                ref={canvasRef}
+                className="block w-full h-36 touch-none cursor-crosshair"
+                onMouseDown={sigStart}
+                onMouseMove={sigDraw}
+                onMouseUp={sigEnd}
+                onMouseLeave={sigEnd}
+                onTouchStart={sigStart}
+                onTouchMove={sigDraw}
+                onTouchEnd={sigEnd}
+              />
+            </div>
+            <div className="mt-1.5 flex items-center justify-between">
+              <span className="text-[12px] text-[#A89B80]">
+                {signatureEmpty ? "여기에 직원 서명을 해주세요" : "서명 완료"}
+              </span>
+              <button
+                type="button"
+                onClick={clearSig}
+                className="text-[12px] text-[#6B5D47] dark:text-zinc-400 hover:underline"
+              >
+                서명 지우기
+              </button>
+            </div>
+          </div>
+        )}
         {error && (
           <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[12.5px] text-red-700 dark:text-red-300">{error}</div>
         )}
@@ -5540,10 +5643,16 @@ function ContractRequestPickerModal({
           <button
             type="button"
             onClick={send}
-            disabled={!selectedId || sending}
+            disabled={!selectedId || signatureEmpty || sending}
             className="w-full px-4 py-2.5 rounded-lg bg-[#B47B2A] text-white text-[13.5px] font-semibold hover:bg-[#9c682a] disabled:opacity-50"
           >
-            {sending ? "요청 보내는 중…" : "작성 요청 보내기"}
+            {sending
+              ? "요청 보내는 중…"
+              : !selectedId
+                ? "계약서를 선택하세요"
+                : signatureEmpty
+                  ? "직원 서명 후 요청 보내기"
+                  : "서명 완료 · 작성 요청 보내기"}
           </button>
         )}
       </div>
