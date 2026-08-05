@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../../../_components/crm-modal";
 import { formatPhone, formatWon } from "../../../_components/crm-labels";
-import { DEFAULT_PT_CONTRACT_TERMS } from "../../../_components/pt-contract-terms";
 import { contractBodyHtml } from "@/app/lib/contract-body";
 
 interface TemplateSection {
@@ -81,6 +80,10 @@ export default function CrmContractSignNewPage() {
     expires_at: string;
   } | null>(null);
   const [template, setTemplate] = useState<Template | null>(null);
+  // template_id 없이 진입한 경우: 센터가 등록한 양식 중에서 선택하게 함
+  const [templateList, setTemplateList] = useState<{ id: number; title: string; category: string }[]>([]);
+  const [templatesFetched, setTemplatesFetched] = useState(false);
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
 
   // 고객 기본 정보
   const [name, setName] = useState("");
@@ -194,6 +197,51 @@ export default function CrmContractSignNewPage() {
     })();
   }, [memberId, staffMemberId, passId, membershipId, templateId, getIdToken, name, phone, birth, gender]);
 
+  // 선택한 양식의 전체 내용(본문/섹션) 로드
+  const loadTemplate = async (id: number) => {
+    setLoadingTemplate(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/contracts/${id}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (res.ok && data?.contract) {
+        setTemplate(data.contract);
+        setAgreed({});
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingTemplate(false);
+    }
+  };
+
+  // template_id 없이 진입한 경우: 센터가 등록한 계약서 양식 목록을 불러와 선택하게 함.
+  // (하드코딩 기본 PT 계약서 폴백 제거 — 반드시 센터 자신의 양식을 사용)
+  useEffect(() => {
+    if (templateId) return; // URL 로 양식이 지정된 경우 목록 불필요
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/contracts", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        const list = (data.contracts ?? []) as { id: number; title: string; category: string }[];
+        setTemplateList(list);
+        setTemplatesFetched(true);
+        if (list.length === 1) loadTemplate(list[0].id);
+      } catch {
+        setTemplatesFetched(true);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templateId, getIdToken]);
+
   // 강사 목록 로드 (활성 trainer/manager)
   useEffect(() => {
     (async () => {
@@ -293,19 +341,18 @@ export default function CrmContractSignNewPage() {
     setAgreed((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const requiredOk = (() => {
-    if (template && Array.isArray(template.sections) && template.sections.length > 0) {
+    if (!template) return false; // 양식 미선택 시 진행 불가
+    if (Array.isArray(template.sections) && template.sections.length > 0) {
       return template.sections
         .filter((s) => s.required)
         .every((s, i) => agreed[`sec_${s.key || i}`]);
     }
-    if (template) {
-      return !!agreed[`template_${template.id}`];
-    }
-    return DEFAULT_PT_CONTRACT_TERMS.filter((t) => t.required).every((t) => agreed[t.key]);
+    return !!agreed[`template_${template.id}`];
   })();
 
   const submit = async () => {
     setError("");
+    if (!template) return setError("계약서 양식을 먼저 선택해 주세요");
     if (!name.trim()) return setError("고객 이름을 입력해 주세요");
     if (!requiredOk) return setError("필수 약관에 모두 동의해 주세요");
     const canvas = canvasRef.current;
@@ -325,7 +372,7 @@ export default function CrmContractSignNewPage() {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify({
-          title: template?.title || (isStaff ? "근로 계약서" : "피티 회원가입 계약서"),
+          title: template.title,
           member_id: isStaff ? null : memberId,
           staff_member_id: staffMemberId,
           pass_id: passId,
@@ -376,23 +423,21 @@ export default function CrmContractSignNewPage() {
           },
           terms_accepted: agreed,
           terms_snapshot:
-            template && Array.isArray(template.sections) && template.sections.length > 0
+            Array.isArray(template.sections) && template.sections.length > 0
               ? template.sections.map((s, i) => ({
                   key: `sec_${s.key || i}`,
                   title: s.title,
                   body: s.body,
                   required: !!s.required,
                 }))
-              : template
-                ? [
-                    {
-                      key: `template_${template.id}`,
-                      title: template.title,
-                      body: template.body,
-                      required: true,
-                    },
-                  ]
-                : DEFAULT_PT_CONTRACT_TERMS,
+              : [
+                  {
+                    key: `template_${template.id}`,
+                    title: template.title,
+                    body: template.body,
+                    required: true,
+                  },
+                ],
           signature_data_url: signatureDataUrl,
         }),
       });
@@ -602,31 +647,49 @@ export default function CrmContractSignNewPage() {
             </span>
           </label>
         </Section>
+      ) : loadingTemplate ? (
+        <Section title="[계약서 양식]">
+          <div className="py-6 text-center text-[13px] text-[#8C8270]">양식을 불러오는 중…</div>
+        </Section>
+      ) : !templatesFetched ? (
+        <Section title="[계약서 양식]">
+          <div className="py-6 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
+        </Section>
+      ) : templateList.length === 0 ? (
+        <Section title="[계약서 양식]" headerNote="필요" noteColor="warn">
+          <div className="px-4 py-6 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-lg">
+            등록된 계약서 양식이 없어요.
+            <br />
+            <a
+              href="/crm/settings?tab=contracts"
+              className="mt-2 inline-block text-[#6B7B3A] dark:text-[#A8B87A] font-semibold hover:underline"
+            >
+              설정 → 계약서 관리에서 먼저 양식을 등록해 주세요.
+            </a>
+          </div>
+        </Section>
       ) : (
-        DEFAULT_PT_CONTRACT_TERMS.map((t) => (
-          <Section
-            key={t.key}
-            title={`[${t.title}]`}
-            headerNote={t.required ? "필수" : "선택"}
-            noteColor={t.required ? "warn" : "info"}
-          >
-            <div
-              className="prose prose-sm max-w-none text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-300 max-h-[260px] overflow-y-auto px-3 py-3 border border-[#E8E0D0]/70 dark:border-zinc-800 rounded-lg bg-[#FBF7EB]/40 dark:bg-zinc-900/40"
-              dangerouslySetInnerHTML={{ __html: contractBodyHtml(t.body) }}
-            />
-            <label className="mt-3 flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={!!agreed[t.key]}
-                onChange={() => toggleAgree(t.key)}
-                className="w-4 h-4 accent-[#6B7B3A]"
-              />
-              <span className="text-[13px] text-[#3A342A] dark:text-zinc-300">
-                ({t.required ? "필수" : "선택"}) 위의 약관을 확인하였으며 동의합니다.
-              </span>
-            </label>
-          </Section>
-        ))
+        <Section title="[계약서 양식 선택]" headerNote="필수" noteColor="warn">
+          <p className="mb-2 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+            이 센터에 등록된 계약서 양식 중에서 선택하세요.
+          </p>
+          <ul className="space-y-2">
+            {templateList.map((t) => (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  onClick={() => loadTemplate(t.id)}
+                  className="w-full text-left px-3.5 py-2.5 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60 transition-colors"
+                >
+                  <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">{t.title}</span>
+                  {t.category && (
+                    <span className="ml-2 text-[11px] text-[#A89B80]">{t.category}</span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Section>
       )}
 
       {/* 날짜 + 서명 (강사 · 계약자) */}
