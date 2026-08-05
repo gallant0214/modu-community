@@ -53,9 +53,16 @@ export async function GET(request: Request) {
     nextMonth = new Date(y, m, 1).toISOString().slice(0, 10);
   }
 
-  // 이번 기간 실제 거래(매출) — 실매출 원장 crm_sales 기준 (환불은 음수)
+  // 이번 기간 실제 거래(매출).
+  // 원장 우선순위:
+  //   1) crm_sales (BROJ 임포트 완료 센터) — 원장이 존재하면 이 값을 신뢰
+  //   2) 폴백: crm_memberships / crm_passes / crm_rentals 발급 기준
+  //      (CRM UI 로만 발급한 신규 센터는 crm_sales 가 비어 있으므로)
   //   회원권 그룹 = 멤버십 + 대여권 + 락커 / 수강권 그룹 = 이용권 + 예약권(PT) / 일반 = goods
-  const periodSales = await fetchSales(ctx.centerId, startDate, nextMonth);
+  const centerHasSales = await centerHasSalesLedger(ctx.centerId);
+  const periodSales = centerHasSales
+    ? await fetchSales(ctx.centerId, startDate, nextMonth)
+    : [];
   let membershipRevenue = 0;
   let passRevenue = 0;
   let goodsRevenue = 0;
@@ -110,6 +117,102 @@ export async function GET(request: Request) {
     }
     addPay(payTotal, s);
     addReg(regTotal, s);
+  }
+
+  // ── 폴백: crm_sales 원장이 없는 센터 → 발급 테이블에서 직접 집계 ──
+  if (!centerHasSales) {
+    // 기간: [startDate, nextMonth) 을 issued_at 기준으로 조회
+    const [issMemberships, issPasses, issRentals] = await Promise.all([
+      paginateAll<{
+        price_won: number;
+        payment_method: string | null;
+        issue_type?: string | null;
+        registration_type?: string | null;
+        purchased_at?: string | null;
+        start_date?: string | null;
+      }>((f, t) =>
+        supabase
+          .from("crm_memberships")
+          .select("price_won, payment_method, registration_type, purchased_at, start_date")
+          .eq("center_id", ctx.centerId)
+          .gte("start_date", startDate)
+          .lt("start_date", nextMonth)
+          .range(f, t)
+      ),
+      paginateAll<{
+        price_won: number;
+        payment_method: string | null;
+        issue_type: string | null;
+        issued_at: string | null;
+      }>((f, t) =>
+        supabase
+          .from("crm_passes")
+          .select("price_won, payment_method, issue_type, issued_at")
+          .eq("center_id", ctx.centerId)
+          .gte("issued_at", startDate)
+          .lt("issued_at", nextMonth)
+          .range(f, t)
+      ),
+      paginateAll<{
+        price_won: number;
+        payment_method: string | null;
+        registration_type?: string | null;
+        start_date?: string | null;
+      }>((f, t) =>
+        supabase
+          .from("crm_rentals")
+          .select("price_won, payment_method, start_date")
+          .eq("center_id", ctx.centerId)
+          .gte("start_date", startDate)
+          .lt("start_date", nextMonth)
+          .range(f, t)
+      ),
+    ]);
+
+    const applyIssuance = (
+      priceWon: number,
+      paymentMethod: string | null,
+      regKey: "new" | "renewal" | "unknown",
+      cat: "membership" | "pass"
+    ) => {
+      if (cat === "pass") {
+        passRevenue += priceWon;
+        passCount += 1;
+      } else {
+        membershipRevenue += priceWon;
+        membershipCount += 1;
+      }
+      // 결제수단 매핑
+      const key: "cash" | "card" | "culture" | "other" =
+        paymentMethod === "cash"
+          ? "cash"
+          : paymentMethod === "card"
+            ? "card"
+            : "other"; // transfer / etc / custom / null 모두 '기타'
+      const payBucket = cat === "pass" ? payPass : payMembership;
+      payBucket[key] += priceWon;
+      payTotal[key] += priceWon;
+      // 등록 타입 매핑
+      const regBucket = cat === "pass" ? regPass : regMembership;
+      regBucket[regKey] += priceWon;
+      regTotal[regKey] += priceWon;
+    };
+
+    for (const m of issMemberships) {
+      const rt = (m.registration_type ?? "").trim();
+      const key = rt === "신규" ? "new" : rt === "재등록" ? "renewal" : "unknown";
+      applyIssuance(m.price_won ?? 0, m.payment_method, key, "membership");
+    }
+    for (const p of issPasses) {
+      const key: "new" | "renewal" | "unknown" =
+        p.issue_type === "new" ? "new" : p.issue_type === "renewal" ? "renewal" : "unknown";
+      applyIssuance(p.price_won ?? 0, p.payment_method, key, "pass");
+    }
+    for (const r of issRentals) {
+      const rt = (r.registration_type ?? "").trim();
+      const key = rt === "신규" ? "new" : rt === "재등록" ? "renewal" : "unknown";
+      applyIssuance(r.price_won ?? 0, r.payment_method, key, "membership");
+    }
   }
   const lockerRevenue = 0;
   const etcRevenue = 0;
@@ -293,6 +396,18 @@ function kstYmd(): string {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 3600 * 1000);
   return kst.toISOString().slice(0, 10);
+}
+
+/** 이 센터가 crm_sales 원장(BROJ 임포트)을 갖고 있는지 확인.
+ *  없으면 CRM UI 발급 테이블로 폴백 집계해야 함. */
+async function centerHasSalesLedger(centerId: number): Promise<boolean> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { count } = await (supabase as any)
+    .from("crm_sales")
+    .select("id", { head: true, count: "exact" })
+    .eq("center_id", centerId)
+    .limit(1);
+  return (count ?? 0) > 0;
 }
 
 function daysBetween(from: string, to: string): number {
