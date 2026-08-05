@@ -239,23 +239,18 @@ export async function POST(request: Request) {
   const origin = url.origin;
   const signUrl = `${origin}/contract/sign/${token}`;
 
-  // 회원 앱으로 계약서 작성 요청 푸시 (연결된 기기 있을 때만 전송됨)
+  // 회원 앱으로 계약서 작성 요청 푸시. 연동 계정(uid) 기준으로 토큰을 찾아 발송하고,
+  // 실제 발송된 토큰 수(sent)로 알림 전송 여부를 판단(다중센터 등 member_id 어긋남 방지).
   let notified = false;
   if (body.notify_app) {
-    const { count } = await supabase
-      .from("crm_member_device_tokens")
-      .select("token", { count: "exact", head: true })
-      .eq("member_id", memberId);
-    notified = (count ?? 0) > 0;
-    if (notified) {
-      await sendPushToMember(
-        memberId,
-        "contract_request",
-        "전자 계약서 작성 요청",
-        "작성할 전자 계약서가 도착했어요. 눌러서 약관 동의와 서명을 완료해 주세요.",
-        { url: signUrl, contract_id: String(created.id), token }
-      );
-    }
+    const sent = await sendPushToMember(
+      memberId,
+      "contract_request",
+      "전자 계약서 작성 요청",
+      "작성할 전자 계약서가 도착했어요. 눌러서 약관 동의와 서명을 완료해 주세요.",
+      { url: signUrl, contract_id: String(created.id), token }
+    );
+    notified = sent > 0;
   }
 
   return NextResponse.json({ ok: true, id: created.id, token, url: signUrl, notified });

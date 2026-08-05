@@ -3142,46 +3142,7 @@ function HoldingDetailModal({
 }) {
   const { getIdToken } = useAuth();
   const open = detail !== null;
-  const [reqSending, setReqSending] = useState(false);
-
-  // 회원용 앱으로 전자 계약서 작성 요청 (회원권 상세용 — 수강권 상세와 동일 동작)
-  const requestContractToApp = async () => {
-    if (!detail?.id || detail.kind !== "membership" || reqSending) return;
-    if (!window.confirm("회원용 앱에서 전자 계약서 작성을 하도록 메세지를 전송하시겠습니까?")) return;
-    setReqSending(true);
-    try {
-      const token = await getIdToken();
-      const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
-      const tRes = await fetch("/api/crm/contracts", { headers, cache: "no-store" });
-      const tData = await tRes.json();
-      const templates: { id: number }[] = tData.contracts ?? [];
-      if (templates.length === 0) {
-        alert("등록된 계약서 양식이 없어요. 설정 → 계약서 관리에서 먼저 양식을 등록해 주세요.");
-        return;
-      }
-      const res = await fetch("/api/crm/contracts/sign/request", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          member_id: memberId,
-          membership_id: detail.id,
-          template_id: templates[0].id,
-          notify_app: true,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "요청 실패");
-      alert(
-        data.notified
-          ? "회원 앱으로 전자 계약서 작성 요청을 보냈어요. 회원이 앱에서 약관 동의와 서명을 완료하면 계약이 등록돼요."
-          : "요청을 만들었어요. 다만 회원이 아직 회원용 앱을 연결하지 않아 알림이 전송되지 않았어요. (앱 연결 후 다시 시도해 주세요)"
-      );
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "네트워크 오류");
-    } finally {
-      setReqSending(false);
-    }
-  };
+  const [contractPickerOpen, setContractPickerOpen] = useState(false);
   const editable = !!detail && detail.source === "record" && !!detail.id && !!detail.kind;
 
   const [canEdit, setCanEdit] = useState(false);
@@ -3311,6 +3272,7 @@ function HoldingDetailModal({
       : null;
 
   return (
+    <>
     <CrmModal open={open} onClose={onClose} title="결제 상세">
       {!detail ? null : detail.source === "snapshot" ? (
         <div className="space-y-4">
@@ -3392,11 +3354,10 @@ function HoldingDetailModal({
               </Link>
               <button
                 type="button"
-                onClick={requestContractToApp}
-                disabled={reqSending}
-                className="inline-flex px-3 py-1.5 rounded-lg bg-[#B47B2A] text-white text-[12.5px] font-semibold hover:bg-[#9c682a] disabled:opacity-60"
+                onClick={() => setContractPickerOpen(true)}
+                className="inline-flex px-3 py-1.5 rounded-lg bg-[#B47B2A] text-white text-[12.5px] font-semibold hover:bg-[#9c682a]"
               >
-                {reqSending ? "요청 중…" : "전자 계약서 작성 요청"}
+                전자 계약서 작성 요청
               </button>
             </div>
           )}
@@ -3556,6 +3517,13 @@ function HoldingDetailModal({
         </div>
       )}
     </CrmModal>
+    <ContractRequestPickerModal
+      open={contractPickerOpen}
+      memberId={memberId}
+      membershipId={detail?.kind === "membership" ? detail.id : undefined}
+      onClose={() => setContractPickerOpen(false)}
+    />
+    </>
   );
 }
 
@@ -5406,6 +5374,151 @@ function PassIssueModal({
   );
 }
 
+/** 전자 계약서 작성 요청 — 어떤 계약서 양식으로 보낼지 고른 뒤 회원 앱으로 전송. 수강권/회원권 공용. */
+function ContractRequestPickerModal({
+  open,
+  memberId,
+  passId,
+  membershipId,
+  onClose,
+}: {
+  open: boolean;
+  memberId: number;
+  passId?: number;
+  membershipId?: number;
+  onClose: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [templates, setTemplates] = useState<{ id: number; title: string; category: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setError("");
+    setSelectedId(null);
+    (async () => {
+      setLoading(true);
+      try {
+        const token = await getIdToken();
+        const res = await fetch("/api/crm/contracts", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        const list = (data.contracts ?? []) as { id: number; title: string; category: string }[];
+        setTemplates(list);
+        if (list.length === 1) setSelectedId(list[0].id);
+      } catch {
+        setError("계약서 양식을 불러오지 못했어요.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [open, getIdToken]);
+
+  const send = async () => {
+    if (!selectedId || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/contracts/sign/request", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          member_id: memberId,
+          ...(passId ? { pass_id: passId } : {}),
+          ...(membershipId ? { membership_id: membershipId } : {}),
+          template_id: selectedId,
+          notify_app: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "요청 실패");
+      alert(
+        data.notified
+          ? "회원 앱으로 전자 계약서 작성 요청을 보냈어요. 회원이 앱에서 약관 동의와 서명을 완료하면 계약이 등록돼요."
+          : "요청을 만들었어요. 회원 앱 알림함에도 저장됐어요. (푸시 토큰이 없어 알림음은 안 갈 수 있어요)"
+      );
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <CrmModal open={open} onClose={onClose} title="전자 계약서 작성 요청">
+      <div className="space-y-3">
+        <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+          어떤 계약서로 작성을 요청할지 선택하세요. 회원용 앱으로 서명 요청이 전송됩니다.
+        </p>
+        {loading ? (
+          <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
+        ) : templates.length === 0 ? (
+          <div className="px-4 py-6 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+            등록된 계약서 양식이 없어요. 설정 → 계약서 관리에서 먼저 양식을 등록해 주세요.
+          </div>
+        ) : (
+          <ul className="space-y-2 max-h-[46vh] overflow-y-auto">
+            {templates.map((t) => {
+              const sel = selectedId === t.id;
+              return (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(t.id)}
+                    className={`w-full text-left px-3.5 py-2.5 rounded-xl border transition-colors ${
+                      sel
+                        ? "border-[#6B7B3A] bg-[#6B7B3A]/8 dark:bg-[#6B7B3A]/20"
+                        : "border-[#E8E0D0] dark:border-zinc-700 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                          sel ? "border-[#6B7B3A] bg-[#6B7B3A] text-white" : "border-[#C7B89B]"
+                        }`}
+                      >
+                        {sel && (
+                          <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={4}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </span>
+                      <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">{t.title}</span>
+                      {t.category && (
+                        <span className="ml-auto text-[11px] text-[#A89B80]">{t.category}</span>
+                      )}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[12.5px] text-red-700 dark:text-red-300">{error}</div>
+        )}
+        {templates.length > 0 && (
+          <button
+            type="button"
+            onClick={send}
+            disabled={!selectedId || sending}
+            className="w-full px-4 py-2.5 rounded-lg bg-[#B47B2A] text-white text-[13.5px] font-semibold hover:bg-[#9c682a] disabled:opacity-50"
+          >
+            {sending ? "요청 보내는 중…" : "작성 요청 보내기"}
+          </button>
+        )}
+      </div>
+    </CrmModal>
+  );
+}
+
 /** 추가 강사(공동 진행) 다중 선택 — 칩 + 드롭다운으로 추가/삭제 */
 function CoTrainerPicker({
   staffList,
@@ -5503,7 +5616,7 @@ function PassDetailModal({
   const [editing, setEditing] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
   const [canRefund, setCanRefund] = useState(false);
-  const [reqSending, setReqSending] = useState(false);
+  const [contractPickerOpen, setContractPickerOpen] = useState(false);
   // 수정 폼 값 (편집 시작 시 detail 로부터 초기화)
   const [editTrainerId, setEditTrainerId] = useState<number | "">("");
   const [editCoTrainerIds, setEditCoTrainerIds] = useState<number[]>([]);
@@ -5678,47 +5791,9 @@ function PassDetailModal({
       : PAYMENT_METHOD_LABEL[pass.payment_method] ?? pass.payment_method
     : "";
 
-  // 회원용 앱으로 전자 계약서 작성 요청 (약관 동의 + 서명은 회원이 직접 완료)
-  const requestContractToApp = async () => {
-    if (!detail?.member || !pass || reqSending) return;
-    if (!window.confirm("회원용 앱에서 전자 계약서 작성을 하도록 메세지를 전송하시겠습니까?")) return;
-    setReqSending(true);
-    try {
-      const token = await getIdToken();
-      const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
-      // 활성 계약서 양식 조회 → 첫 양식 사용 (양식이 없으면 안내)
-      const tRes = await fetch("/api/crm/contracts", { headers, cache: "no-store" });
-      const tData = await tRes.json();
-      const templates: { id: number }[] = tData.contracts ?? [];
-      if (templates.length === 0) {
-        alert("등록된 계약서 양식이 없어요. 설정 → 계약서 관리에서 먼저 양식을 등록해 주세요.");
-        return;
-      }
-      const res = await fetch("/api/crm/contracts/sign/request", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          member_id: detail.member.id,
-          pass_id: pass.id,
-          template_id: templates[0].id,
-          notify_app: true,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "요청 실패");
-      alert(
-        data.notified
-          ? "회원 앱으로 전자 계약서 작성 요청을 보냈어요. 회원이 앱에서 약관 동의와 서명을 완료하면 계약이 등록돼요."
-          : "요청을 만들었어요. 다만 회원이 아직 회원용 앱을 연결하지 않아 알림이 전송되지 않았어요. (앱 연결 후 다시 시도해 주세요)"
-      );
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "네트워크 오류");
-    } finally {
-      setReqSending(false);
-    }
-  };
 
   return (
+    <>
     <CrmModal open={open} onClose={onClose} title="수강권 상세" size="lg">
       {loading ? (
         <div className="text-[13px] text-[#8C8270] py-6 text-center">불러오는 중…</div>
@@ -5767,11 +5842,10 @@ function PassDetailModal({
               </Link>
               <button
                 type="button"
-                onClick={requestContractToApp}
-                disabled={reqSending}
-                className="inline-flex px-3 py-1.5 rounded-lg bg-[#B47B2A] text-white text-[12.5px] font-semibold hover:bg-[#9c682a] disabled:opacity-60"
+                onClick={() => setContractPickerOpen(true)}
+                className="inline-flex px-3 py-1.5 rounded-lg bg-[#B47B2A] text-white text-[12.5px] font-semibold hover:bg-[#9c682a]"
               >
-                {reqSending ? "요청 중…" : "전자 계약서 작성 요청"}
+                전자 계약서 작성 요청
               </button>
             </div>
           )}
@@ -6098,6 +6172,13 @@ function PassDetailModal({
         }}
       />
     </CrmModal>
+    <ContractRequestPickerModal
+      open={contractPickerOpen}
+      memberId={detail?.member?.id ?? 0}
+      passId={pass?.id}
+      onClose={() => setContractPickerOpen(false)}
+    />
+    </>
   );
 }
 

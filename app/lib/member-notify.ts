@@ -156,14 +156,18 @@ export async function sendPushToMember(
   title: string,
   body: string,
   data?: Record<string, string>
-) {
+): Promise<number> {
+  // 회원의 연동 앱 계정(uid). member_id 가 다중센터 등으로 어긋나도 uid 로 토큰을 잡기 위함.
+  let linkedUid: string | null = null;
+
   // 1) 알림 내역 저장 (앱 알림함/뱃지용 — 푸시 토큰 유무와 무관하게 항상 기록)
   try {
     const { data: mem } = await supabase
       .from("crm_members")
-      .select("center_id")
+      .select("center_id, linked_firebase_uid")
       .eq("id", memberId)
       .maybeSingle();
+    linkedUid = (mem as { linked_firebase_uid?: string | null } | null)?.linked_firebase_uid ?? null;
     await supabase.from("crm_member_notifications").insert({
       center_id: mem?.center_id ?? null,
       member_id: memberId,
@@ -176,16 +180,17 @@ export async function sendPushToMember(
     console.error("[member-notify] log error", e);
   }
 
-  // 2) 실제 푸시 발송
+  // 2) 실제 푸시 발송 — member_id 또는 연동 uid 로 등록된 토큰 모두
   try {
-    const { data: tokens } = await supabase
-      .from("crm_member_device_tokens")
-      .select("token")
-      .eq("member_id", memberId);
-    if (!tokens || tokens.length === 0) return;
+    let tq = supabase.from("crm_member_device_tokens").select("token");
+    tq = linkedUid
+      ? tq.or(`member_id.eq.${memberId},firebase_uid.eq.${linkedUid}`)
+      : tq.eq("member_id", memberId);
+    const { data: tokens } = await tq;
+    const tokenList = Array.from(new Set((tokens ?? []).map((t) => t.token))).filter(Boolean);
+    if (tokenList.length === 0) return 0;
 
     const messaging = getMessaging(getAdmin());
-    const tokenList = tokens.map((t) => t.token);
     const result = await messaging.sendEachForMulticast({
       notification: { title, body },
       data: { type, ...data },
@@ -208,8 +213,10 @@ export async function sendPushToMember(
     if (toDelete.length > 0) {
       await supabase.from("crm_member_device_tokens").delete().in("token", toDelete);
     }
+    return tokenList.length;
   } catch (error) {
     console.error("[member-notify] push error", error);
+    return 0;
   }
 }
 
