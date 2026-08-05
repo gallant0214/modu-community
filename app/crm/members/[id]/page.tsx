@@ -615,6 +615,7 @@ export default function CrmMemberDetailPage() {
 
       <HoldingDetailModal
         detail={paymentDetail}
+        memberId={member.id}
         onClose={() => setPaymentDetail(null)}
         staffList={staffList}
         onSaved={() => setUsageReload((n) => n + 1)}
@@ -3126,12 +3127,14 @@ function UsageCard({
 
 function HoldingDetailModal({
   detail,
+  memberId,
   onClose,
   staffList,
   onSaved,
   onHold,
 }: {
   detail: PaymentDetail | null;
+  memberId: number;
   onClose: () => void;
   staffList: { id: number; display_name: string; role: string; status: string }[];
   onSaved: () => void;
@@ -3139,6 +3142,46 @@ function HoldingDetailModal({
 }) {
   const { getIdToken } = useAuth();
   const open = detail !== null;
+  const [reqSending, setReqSending] = useState(false);
+
+  // 회원용 앱으로 전자 계약서 작성 요청 (회원권 상세용 — 수강권 상세와 동일 동작)
+  const requestContractToApp = async () => {
+    if (!detail?.id || detail.kind !== "membership" || reqSending) return;
+    if (!window.confirm("회원용 앱에서 전자 계약서 작성을 하도록 메세지를 전송하시겠습니까?")) return;
+    setReqSending(true);
+    try {
+      const token = await getIdToken();
+      const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+      const tRes = await fetch("/api/crm/contracts", { headers, cache: "no-store" });
+      const tData = await tRes.json();
+      const templates: { id: number }[] = tData.contracts ?? [];
+      if (templates.length === 0) {
+        alert("등록된 계약서 양식이 없어요. 설정 → 계약서 관리에서 먼저 양식을 등록해 주세요.");
+        return;
+      }
+      const res = await fetch("/api/crm/contracts/sign/request", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          member_id: memberId,
+          membership_id: detail.id,
+          template_id: templates[0].id,
+          notify_app: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "요청 실패");
+      alert(
+        data.notified
+          ? "회원 앱으로 전자 계약서 작성 요청을 보냈어요. 회원이 앱에서 약관 동의와 서명을 완료하면 계약이 등록돼요."
+          : "요청을 만들었어요. 다만 회원이 아직 회원용 앱을 연결하지 않아 알림이 전송되지 않았어요. (앱 연결 후 다시 시도해 주세요)"
+      );
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setReqSending(false);
+    }
+  };
   const editable = !!detail && detail.source === "record" && !!detail.id && !!detail.kind;
 
   const [canEdit, setCanEdit] = useState(false);
@@ -3335,6 +3378,26 @@ function HoldingDetailModal({
           {detail.memo && !editing && (
             <div className="px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
               <strong className="text-[#3A342A] dark:text-zinc-300">메모 ·</strong> {detail.memo}
+            </div>
+          )}
+
+          {/* 회원권 상세: 전자 계약서 (수강권 상세와 동일 동작) */}
+          {!editing && detail.kind === "membership" && detail.status === "valid" && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href={`/crm/contracts/sign/new?member_id=${memberId}&membership_id=${detail.id}`}
+                className="inline-flex px-3 py-1.5 rounded-lg border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 text-[12.5px] font-semibold hover:bg-amber-50/60"
+              >
+                전자 계약서
+              </Link>
+              <button
+                type="button"
+                onClick={requestContractToApp}
+                disabled={reqSending}
+                className="inline-flex px-3 py-1.5 rounded-lg bg-[#B47B2A] text-white text-[12.5px] font-semibold hover:bg-[#9c682a] disabled:opacity-60"
+              >
+                {reqSending ? "요청 중…" : "전자 계약서 작성 요청"}
+              </button>
             </div>
           )}
 
