@@ -39,6 +39,7 @@ export default function CrmStatsPage() {
       ? (t as Tab)
       : "center";
   });
+  // 입력값(pending) — 사용자가 드롭다운/날짜를 바꾸면 여기만 갱신됨
   const [dateMode, setDateMode] = useState<DateMode>("month");
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [ym, setYm] = useState(() => new Date().toISOString().slice(0, 7));
@@ -48,20 +49,43 @@ export default function CrmStatsPage() {
     return d.toISOString().slice(0, 10);
   });
   const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
+
+  // 적용값(applied) — [검색하기] 버튼을 눌러야만 여기가 갱신되고 API 재호출됨
+  const [appliedDateMode, setAppliedDateMode] = useState<DateMode>(dateMode);
+  const [appliedYear, setAppliedYear] = useState(year);
+  const [appliedYm, setAppliedYm] = useState(ym);
+  const [appliedFrom, setAppliedFrom] = useState(from);
+  const [appliedTo, setAppliedTo] = useState(to);
+
   const [data, setData] = useState<MonthlyResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // API 쿼리 문자열 (탭 공용)
+  // 입력값과 적용값이 달라진 상태 여부 (버튼 강조용)
+  const filtersDirty =
+    dateMode !== appliedDateMode ||
+    (dateMode === "year" && year !== appliedYear) ||
+    (dateMode === "month" && ym !== appliedYm) ||
+    (dateMode === "range" && (from !== appliedFrom || to !== appliedTo));
+
+  // API 쿼리 문자열 (탭 공용) — 적용값 기준
   const rangeQs = (() => {
-    if (dateMode === "year") {
-      return `from=${year}-01-01&to=${year}-12-31`;
+    if (appliedDateMode === "year") {
+      return `from=${appliedYear}-01-01&to=${appliedYear}-12-31`;
     }
-    if (dateMode === "range" && from && to && to >= from) {
-      return `from=${from}&to=${to}`;
+    if (appliedDateMode === "range" && appliedFrom && appliedTo && appliedTo >= appliedFrom) {
+      return `from=${appliedFrom}&to=${appliedTo}`;
     }
-    return `ym=${ym}`;
+    return `ym=${appliedYm}`;
   })();
+
+  const applyFilters = () => {
+    setAppliedDateMode(dateMode);
+    setAppliedYear(year);
+    setAppliedYm(ym);
+    setAppliedFrom(from);
+    setAppliedTo(to);
+  };
 
   // 연도 선택지 (현재 연도 기준 -5 ~ +1)
   const currentYear = new Date().getFullYear();
