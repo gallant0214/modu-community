@@ -5516,7 +5516,7 @@ function ContractRequestPickerModal({
     setSignatureEmpty(true);
   };
 
-  const send = async () => {
+  const send = async (force = false) => {
     if (!selectedId || sending) return;
     if (signatureEmpty) {
       setError("계약자(직원) 서명을 먼저 완료해 주세요.");
@@ -5537,10 +5537,24 @@ function ContractRequestPickerModal({
           template_id: selectedId,
           notify_app: true,
           trainer_signature_data_url: trainerSig,
+          force,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "요청 실패");
+      // 같은 계약서로 이미 요청한 pending 이 있으면 중복 전송 대신 물어본다.
+      if (data.duplicate && data.existing) {
+        setSending(false);
+        const again = window.confirm(
+          "이미 이 계약서로 작성을 요청한 내역이 있어요.\n\n[확인] 기존 요청을 유지(중복 전송 안 함)\n[취소] 새 계약서로 다시 요청(기존 요청은 대체)"
+        );
+        if (again) {
+          onClose();
+        } else {
+          await send(true);
+        }
+        return;
+      }
       alert(
         data.notified
           ? "회원 앱으로 전자 계약서 작성 요청을 보냈어요. 회원이 앱에서 약관 동의와 서명을 완료하면 계약이 등록돼요."
@@ -5647,7 +5661,7 @@ function ContractRequestPickerModal({
         {templates.length > 0 && (
           <button
             type="button"
-            onClick={send}
+            onClick={() => send()}
             disabled={!selectedId || signatureEmpty || sending}
             className="w-full px-4 py-2.5 rounded-lg bg-[#B47B2A] text-white text-[13.5px] font-semibold hover:bg-[#9c682a] disabled:opacity-50"
           >
@@ -7153,7 +7167,7 @@ function RequestLinkModal({
     setSignatureEmpty(true);
   };
 
-  const generate = async () => {
+  const generate = async (force = false) => {
     setError("");
     if (!templateId) {
       return setError("계약서 양식을 선택해 주세요");
@@ -7172,10 +7186,25 @@ function RequestLinkModal({
           member_id: memberId,
           template_id: templateId,
           trainer_signature_data_url: trainerSig,
+          force,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "요청 생성 실패");
+      // 같은 계약서로 이미 요청한 pending 이 있으면 중복 생성 대신 물어본다.
+      if (data.duplicate && data.existing) {
+        setCreating(false);
+        const reuse = window.confirm(
+          "이미 이 계약서로 작성을 요청한 내역이 있어요.\n\n[확인] 기존 요청 링크를 다시 사용\n[취소] 새 계약서로 다시 요청(기존 요청은 대체)"
+        );
+        if (reuse) {
+          if (data.existing.url) setLink(data.existing.url);
+          onCreated(data.existing.id as number);
+        } else {
+          await generate(true);
+        }
+        return;
+      }
       setLink(data.url);
       // 생성 성공 시 부모가 요청 관리 모달을 바로 열도록 id 전달
       onCreated(data.id as number);
@@ -7308,7 +7337,7 @@ function RequestLinkModal({
               </button>
               <button
                 type="button"
-                onClick={generate}
+                onClick={() => generate()}
                 disabled={creating || !templateId || signatureEmpty}
                 className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
               >

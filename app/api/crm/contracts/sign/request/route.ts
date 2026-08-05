@@ -27,6 +27,8 @@ export async function POST(request: Request) {
     notify_app?: boolean;
     /** 계약자(직원) 서명 data URL — 요청 전 CRM에서 먼저 서명 */
     trainer_signature_data_url?: string;
+    /** true 면 동일 계약 중복 pending 이 있어도 기존을 대체하고 새로 생성 */
+    force?: boolean;
   };
   try {
     body = await request.json();
@@ -80,6 +82,52 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "계약서 양식을 찾을 수 없어요" }, { status: 404 });
   }
   const title = tpl.title;
+
+  // 동일 계약(같은 대상·같은 양식 제목·같은 상품)으로 아직 서명 안 된 pending 요청이
+  // 이미 있으면, force 가 아닌 한 새로 만들지 않고 기존 요청을 돌려줘 중복 생성을 막는다.
+  const findPending = () => {
+    let q = supabase
+      .from("crm_signed_contracts")
+      .select("id, title, signing_token, requested_at")
+      .eq("center_id", ctx.centerId)
+      .eq("status", "pending_signature")
+      .eq("title", title);
+    q = staffMemberId ? q.eq("staff_member_id", staffMemberId) : q.eq("member_id", memberId);
+    q = body.pass_id ? q.eq("pass_id", body.pass_id) : q.is("pass_id", null);
+    q = body.membership_id ? q.eq("membership_id", body.membership_id) : q.is("membership_id", null);
+    return q.order("requested_at", { ascending: false }).limit(1);
+  };
+
+  const origin0 = new URL(request.url).origin;
+
+  if (!body.force) {
+    const { data: dups } = await findPending();
+    const existing = dups?.[0];
+    if (existing) {
+      return NextResponse.json({
+        duplicate: true,
+        existing: {
+          id: existing.id,
+          token: existing.signing_token,
+          url: existing.signing_token ? `${origin0}/contract/sign/${existing.signing_token}` : null,
+          title: existing.title,
+          requested_at: existing.requested_at,
+        },
+      });
+    }
+  } else {
+    // 새로 작성 선택 시: 같은 계약의 기존 pending(과거에 쌓인 중복 포함) 을 모두 정리
+    let del = supabase
+      .from("crm_signed_contracts")
+      .delete()
+      .eq("center_id", ctx.centerId)
+      .eq("status", "pending_signature")
+      .eq("title", title);
+    del = staffMemberId ? del.eq("staff_member_id", staffMemberId) : del.eq("member_id", memberId);
+    del = body.pass_id ? del.eq("pass_id", body.pass_id) : del.is("pass_id", null);
+    del = body.membership_id ? del.eq("membership_id", body.membership_id) : del.is("membership_id", null);
+    await del;
+  }
 
   // 1) sections 컬럼이 있으면 그대로 사용
   // 2) 없으면 body 안의 [제목] 헤더로 자동 분리 (구버전 단일 body 템플릿 호환)
