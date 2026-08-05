@@ -628,6 +628,7 @@ export default function CrmMemberDetailPage() {
       <HoldingDetailModal
         detail={paymentDetail}
         memberId={member.id}
+        memberName={member.name}
         onClose={() => setPaymentDetail(null)}
         staffList={staffList}
         onSaved={() => setUsageReload((n) => n + 1)}
@@ -3140,6 +3141,7 @@ function UsageCard({
 function HoldingDetailModal({
   detail,
   memberId,
+  memberName,
   onClose,
   staffList,
   onSaved,
@@ -3147,6 +3149,7 @@ function HoldingDetailModal({
 }: {
   detail: PaymentDetail | null;
   memberId: number;
+  memberName: string;
   onClose: () => void;
   staffList: { id: number; display_name: string; role: string; status: string }[];
   onSaved: () => void;
@@ -3316,15 +3319,32 @@ function HoldingDetailModal({
         <div className="space-y-4">
           <div className="px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
             <div className="text-[10.5px] font-bold text-[#6B7B3A] dark:text-[#A8B87A]">{detail.tag}</div>
-            <div className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">{detail.name}</div>
+            <div className="mt-0.5 flex items-baseline justify-between gap-2">
+              <span className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">{detail.name}</span>
+              <span className="flex items-center gap-1 shrink-0">
+                {detail.isPaused && (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                    일시정지
+                  </span>
+                )}
+                {detail.status && <PassStatusChip status={detail.status} />}
+              </span>
+            </div>
             {detail.period && (
               <div className="mt-0.5 text-[12px] text-[#A89B80]">{detail.period}</div>
             )}
           </div>
           <DetailGrid
             rows={[
-              ["결제일", detail.paidAt ? new Date(detail.paidAt).toISOString().slice(0, 10) : "—"],
-              ["담당자", detail.sellerName ?? "—"],
+              ["회원", memberName],
+              ["판매 직원", detail.sellerName ?? "—"],
+              ["발급일", detail.paidAt ? new Date(detail.paidAt).toISOString().slice(0, 10) : "—"],
+              ...(detail.startDate
+                ? ([["시작일", detail.startDate]] as [string, React.ReactNode][])
+                : []),
+              ...(detail.expiresAt
+                ? ([["만료일", detail.expiresAt === "9999-12-31" ? "무기한" : detail.expiresAt]] as [string, React.ReactNode][])
+                : []),
               ...(detail.discountWon && detail.discountWon > 0
                 ? ([
                     ["정가", listPrice !== null ? `${formatWon(listPrice)}원` : "—"],
