@@ -6668,11 +6668,100 @@ interface SignedContractRow {
   requested_at: string | null;
 }
 
+/** '+ 전자 계약서 작성' — 센터가 등록한 양식 중에서 고른 뒤 sign/new(현장 작성)로 이동. */
+function WriteContractPickerModal({
+  open,
+  memberId,
+  onClose,
+}: {
+  open: boolean;
+  memberId: number;
+  onClose: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [templates, setTemplates] = useState<{ id: number; title: string; category: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setError("");
+    (async () => {
+      setLoading(true);
+      try {
+        const token = await getIdToken();
+        const res = await fetch("/api/crm/contracts?sort=name_asc", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        // 회원 계약 흐름에는 직원(근로) 계약서 양식 제외
+        const list = ((data.contracts ?? []) as { id: number; title: string; category: string }[]).filter(
+          (t) => t.category !== "employment"
+        );
+        setTemplates(list);
+      } catch {
+        setError("계약서 양식을 불러오지 못했어요.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [open, getIdToken]);
+
+  const pick = (tplId: number) => {
+    if (typeof window !== "undefined") {
+      window.location.href = `/crm/contracts/sign/new?member_id=${memberId}&template_id=${tplId}`;
+    }
+  };
+
+  return (
+    <CrmModal open={open} onClose={onClose} title="전자 계약서 작성">
+      <div className="space-y-3">
+        <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+          어떤 계약서로 작성할지 선택하세요. 이 센터에 등록된 양식만 사용할 수 있어요.
+        </p>
+        {loading ? (
+          <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
+        ) : templates.length === 0 ? (
+          <div className="px-4 py-6 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+            등록된 계약서 양식이 없어요.{" "}
+            <a
+              href="/crm/settings?tab=contracts"
+              className="text-[#6B7B3A] dark:text-[#A8B87A] font-semibold hover:underline"
+            >
+              설정 → 계약서 관리에서 먼저 양식을 등록해 주세요.
+            </a>
+          </div>
+        ) : (
+          <ul className="space-y-2 max-h-[52vh] overflow-y-auto">
+            {templates.map((t) => (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  onClick={() => pick(t.id)}
+                  className="w-full text-left px-3.5 py-2.5 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60 transition-colors"
+                >
+                  <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">{t.title}</span>
+                  {t.category && <span className="ml-2 text-[11px] text-[#A89B80]">{t.category}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[12.5px] text-red-700 dark:text-red-300">{error}</div>
+        )}
+      </div>
+    </CrmModal>
+  );
+}
+
 function SignedContractsSection({ memberId }: { memberId: number }) {
   const { getIdToken } = useAuth();
   const [list, setList] = useState<SignedContractRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [requestOpen, setRequestOpen] = useState(false);
+  const [writeOpen, setWriteOpen] = useState(false);
   const [managePending, setManagePending] = useState<SignedContractRow | null>(null);
 
   const reload = async () => {
@@ -6709,14 +6798,21 @@ function SignedContractsSection({ memberId }: { memberId: number }) {
           >
             요청 링크 생성
           </button>
-          <Link
-            href={`/crm/contracts/sign/new?member_id=${memberId}`}
+          <button
+            type="button"
+            onClick={() => setWriteOpen(true)}
             className="px-3 py-1.5 rounded-lg border border-[#B47B2A] text-[12.5px] font-semibold text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 hover:bg-amber-50/60"
           >
             + 전자 계약서 작성
-          </Link>
+          </button>
         </div>
       </div>
+
+      <WriteContractPickerModal
+        open={writeOpen}
+        memberId={memberId}
+        onClose={() => setWriteOpen(false)}
+      />
 
       <RequestLinkModal
         open={requestOpen}
