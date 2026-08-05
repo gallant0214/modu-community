@@ -311,8 +311,8 @@ export default function CrmContractSignNewPage() {
     const canvas = canvasRef.current;
     if (!canvas || signatureEmpty) return setError("가입 회원 서명을 입력해 주세요");
     const trainerCanvas = trainerCanvasRef.current;
-    if (!trainerCanvas || trainerSignatureEmpty) return setError("계약 담당자 서명을 입력해 주세요");
-    if (!selectedTrainerId) return setError("계약 담당자를 선택해 주세요");
+    if (!trainerCanvas || trainerSignatureEmpty) return setError("계약 직원 서명을 입력해 주세요");
+    if (!selectedTrainerId) return setError("계약 직원을 선택해 주세요");
 
     setSubmitting(true);
     try {
@@ -636,11 +636,11 @@ export default function CrmContractSignNewPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {/* 계약 담당자 서명 */}
+          {/* 계약 직원 서명 */}
           <div>
             <div className="mb-1.5 flex items-center justify-between gap-2">
               <label className="text-[12.5px] font-semibold text-[#6B5D47] dark:text-zinc-400">
-                계약 담당자
+                계약 직원
               </label>
               <select
                 value={selectedTrainerId ?? ""}
@@ -660,7 +660,7 @@ export default function CrmContractSignNewPage() {
             <div className="relative rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 overflow-hidden">
               {/* 이름 라벨: "이종식 : " */}
               <div className="absolute top-2 left-3 pointer-events-none text-[13px] font-semibold text-[#8C8270] dark:text-zinc-500">
-                {(trainers.find((t) => t.id === selectedTrainerId)?.display_name ?? "계약 담당자") + " :"}
+                {(trainers.find((t) => t.id === selectedTrainerId)?.display_name ?? "계약 직원") + " :"}
               </div>
               <canvas
                 ref={trainerCanvasRef}

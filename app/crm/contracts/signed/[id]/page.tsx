@@ -225,7 +225,7 @@ export default function SignedContractDetailPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <div className="text-[12.5px] text-[#6B5D47] mb-1">
-                계약 담당자{" "}
+                계약 직원{" "}
                 <span className="text-[#3A342A] font-semibold">
                   {contract.trainer_info?.name || "—"}
                 </span>
@@ -234,7 +234,7 @@ export default function SignedContractDetailPage() {
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={contract.trainer_signature_data_url}
-                  alt="계약 담당자 서명"
+                  alt="계약 직원 서명"
                   className="max-h-32 border border-[#E8E0D0] rounded-lg bg-white"
                 />
               ) : (
