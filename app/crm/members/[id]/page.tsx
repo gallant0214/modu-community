@@ -4001,6 +4001,10 @@ function UsageIssueModal({
     })();
     try {
       let res: Response;
+      // 서버 스키마상 price_won = 실결제(할인 후) 로 저장돼야 함.
+      // detail 팝업이 '정가 = price_won + discount_won' 로 역산하므로,
+      // 클라이언트에서 net(=정가-할인) 을 계산해 price_won 으로 보낸다.
+      const linePriceNet = Math.max(0, (line.priceWon ?? 0) - (line.discountWon ?? 0));
       if (line.type === "membership") {
         res = await fetch("/api/crm/memberships", {
           method: "POST",
@@ -4010,7 +4014,7 @@ function UsageIssueModal({
             seller_member_id: line.sellerId,
             plan_name: line.name,
             duration_days: line.durationDays,
-            price_won: line.priceWon,
+            price_won: linePriceNet,
             discount_won: line.discountWon,
             mileage_earned: line.mileageEarn,
             mileage_used: line.mileageUse,
@@ -4031,7 +4035,7 @@ function UsageIssueModal({
             member_id: memberId,
             seller_member_id: line.sellerId,
             item_name: line.name,
-            price_won: line.priceWon,
+            price_won: linePriceNet,
             discount_won: line.discountWon,
             mileage_earned: line.mileageEarn,
             mileage_used: line.mileageUse,
@@ -4077,7 +4081,7 @@ function UsageIssueModal({
             member_id: memberId,
             seller_member_id: line.sellerId,
             item_name: line.name,
-            price_won: line.priceWon,
+            price_won: linePriceNet,
             discount_won: line.discountWon,
             mileage_earned: line.mileageEarn,
             mileage_used: line.mileageUse,
@@ -4423,7 +4427,7 @@ function UsageIssueModal({
         </CrmField>
 
         <div className="grid grid-cols-2 gap-2">
-          <CrmField label={type === "locker" ? "대여료 (원)" : "결제 금액 (원)"}>
+          <CrmField label={type === "locker" ? "대여료 (원)" : "정가 (원)"}>
             <input
               type="text"
               inputMode="numeric"
@@ -4455,8 +4459,10 @@ function UsageIssueModal({
         </label>
         {discountWon > 0 && (
           <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 -mt-1">
-            정가 {formatWon(priceWon + discountWon)}원 · 할인 {formatWon(discountWon)}원 → 실결제{" "}
-            <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{formatWon(priceWon)}원</strong>
+            정가 {formatWon(priceWon)}원 · 할인 {formatWon(discountWon)}원 → 실결제{" "}
+            <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">
+              {formatWon(Math.max(0, priceWon - discountWon))}원
+            </strong>
           </div>
         )}
 
