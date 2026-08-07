@@ -87,10 +87,25 @@ export async function notifyMembersByIds(
   data?: Record<string, string>
 ) {
   try {
-    const ids = Array.from(
+    let ids = Array.from(
       new Set((memberIds ?? []).filter((n) => Number.isInteger(n) && n > 0))
     );
     if (ids.length === 0) return;
+
+    // 센터 메세지 알림을 끈 회원 제외 (notify_center_messages=false) — 'message' 타입에만 적용
+    if (type === "message") {
+      const optedOut = new Set<number>();
+      for (let i = 0; i < ids.length; i += 500) {
+        const { data: offs } = await supabase
+          .from("crm_members")
+          .select("id")
+          .in("id", ids.slice(i, i + 500))
+          .eq("notify_center_messages", false);
+        for (const m of offs ?? []) optedOut.add(m.id);
+      }
+      ids = ids.filter((id) => !optedOut.has(id));
+      if (ids.length === 0) return;
+    }
 
     // 알림함 일괄 저장 (500씩)
     const rows = ids.map((memberId) => ({
