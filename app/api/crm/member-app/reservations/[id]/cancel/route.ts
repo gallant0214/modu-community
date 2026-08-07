@@ -1,6 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
+import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
+import { formatKstSlot } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +28,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const { data: res } = await supabase
     .from("crm_reservations")
-    .select("id, status, starts_at")
+    .select("id, status, starts_at, trainer_member_id")
     .eq("id", Number(id))
     .eq("center_id", ctx.centerId)
     .eq("member_id", ctx.memberId)
@@ -67,5 +69,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (error) {
     return NextResponse.json({ error: "취소 실패", detail: error.message }, { status: 500 });
   }
+
+  // 담당 강사에게 취소 알림(알림함 저장 + 강사앱 푸시)
+  if (res.trainer_member_id) {
+    after(async () => {
+      await notifyStaffMember({
+        centerId: ctx.centerId,
+        centerMemberId: res.trainer_member_id as number,
+        type: "reservation_cancelled",
+        title: "예약 취소",
+        body: `${ctx.name}님이 ${formatKstSlot(res.starts_at)} 수업 예약을 취소했어요`,
+        data: { kind: "reservation_cancelled" },
+      }).catch(() => {});
+    });
+  }
+
   return NextResponse.json({ ok: true });
 }

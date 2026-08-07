@@ -3179,6 +3179,39 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_member_workout_logs: {
+        Row: {
+          id: number
+          center_id: number
+          member_id: number
+          log_date: string
+          memo: string
+          created_by_uid: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          member_id: number
+          log_date?: string
+          memo: string
+          created_by_uid?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          member_id?: number
+          log_date?: string
+          memo?: string
+          created_by_uid?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_member_daily_records: {
         Row: {
           id: number
@@ -3302,6 +3335,66 @@ export type Database = {
           data_json?: Json | null
           read_at?: string | null
           created_at?: string
+        }
+        Relationships: []
+      }
+      crm_staff_notifications: {
+        Row: {
+          id: number
+          center_id: number
+          center_member_id: number
+          type: string
+          title: string
+          body: string | null
+          data_json: Json | null
+          read_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          center_member_id: number
+          type: string
+          title: string
+          body?: string | null
+          data_json?: Json | null
+          read_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          center_member_id?: number
+          type?: string
+          title?: string
+          body?: string | null
+          data_json?: Json | null
+          read_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      crm_staff_device_tokens: {
+        Row: {
+          token: string
+          firebase_uid: string
+          center_member_id: number | null
+          platform: string | null
+          updated_at: string
+        }
+        Insert: {
+          token: string
+          firebase_uid: string
+          center_member_id?: number | null
+          platform?: string | null
+          updated_at?: string
+        }
+        Update: {
+          token?: string
+          firebase_uid?: string
+          center_member_id?: number | null
+          platform?: string | null
+          updated_at?: string
         }
         Relationships: []
       }

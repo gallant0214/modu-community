@@ -2,6 +2,7 @@ import { getApps } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import { supabase } from "./supabase";
 import { sendPushToUser } from "./notifications";
+import { notifyStaffMember } from "./crm-staff-notify";
 
 function getAdmin() {
   const apps = getApps();
@@ -245,19 +246,29 @@ export async function notifyCenterStaffNewRequest(params: {
   memberName: string;
   startsAt: string;
 }) {
+  const title = "새 예약 요청";
+  const body = `${params.memberName}님이 ${formatKstSlot(params.startsAt)} 수업을 요청했어요`;
+
+  // 강사앱 알림함 저장 + 강사앱 푸시
+  await notifyStaffMember({
+    centerId: params.centerId,
+    centerMemberId: params.trainerMemberId,
+    type: "reservation_request",
+    title,
+    body,
+    data: { kind: "reservation_request" },
+  });
+
+  // 커뮤니티 앱(동일 계정) 사용 시를 위한 기존 푸시 유지
   const { data: trainer } = await supabase
     .from("crm_center_members")
     .select("firebase_uid")
     .eq("id", params.trainerMemberId)
     .eq("center_id", params.centerId)
     .maybeSingle();
-  if (!trainer?.firebase_uid) return;
-
-  await sendPushToUser(
-    trainer.firebase_uid,
-    "crm_reservation_request",
-    "새 예약 요청",
-    `${params.memberName}님이 ${formatKstSlot(params.startsAt)} 수업을 요청했어요`,
-    { kind: "reservation_request" }
-  );
+  if (trainer?.firebase_uid) {
+    await sendPushToUser(trainer.firebase_uid, "crm_reservation_request", title, body, {
+      kind: "reservation_request",
+    });
+  }
 }

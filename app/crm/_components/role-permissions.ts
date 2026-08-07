@@ -150,6 +150,13 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "segments.delete", label: "세그먼트 삭제", defaults: D_ADMIN },
     ],
   },
+  {
+    key: "messages",
+    label: "메세지 전송",
+    items: [
+      { key: "messages.send", label: "메세지 전송 (회원에게 수동 발송)", defaults: D_MGR },
+    ],
+  },
 ];
 
 /** 저장된 값을 defaults 와 병합해 (role,perm) → enabled 매트릭스 반환 */
