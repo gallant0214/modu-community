@@ -121,15 +121,37 @@ export async function notifyMembersByIds(
       await supabase.from("crm_member_notifications").insert(rows.slice(i, i + 500) as never);
     }
 
-    // 대상 회원의 기기 토큰 수집 (in 절도 500씩)
-    const tokenList: string[] = [];
+    // 대상 회원의 연동 uid 수집 (토큰이 uid 로만 등록됐거나 다중센터로 member_id 가 어긋나도 잡기 위함)
+    const uids: string[] = [];
+    for (let i = 0; i < ids.length; i += 500) {
+      const { data: mrows } = await supabase
+        .from("crm_members")
+        .select("linked_firebase_uid")
+        .in("id", ids.slice(i, i + 500))
+        .not("linked_firebase_uid", "is", null);
+      for (const m of mrows ?? []) {
+        const u = (m as { linked_firebase_uid?: string | null }).linked_firebase_uid;
+        if (u) uids.push(u);
+      }
+    }
+
+    // 기기 토큰 수집: member_id 또는 연동 uid 로 등록된 토큰 모두 (in 절도 500씩)
+    const tokenSet = new Set<string>();
     for (let i = 0; i < ids.length; i += 500) {
       const { data: tokens } = await supabase
         .from("crm_member_device_tokens")
         .select("token")
         .in("member_id", ids.slice(i, i + 500));
-      for (const t of tokens ?? []) tokenList.push(t.token);
+      for (const t of tokens ?? []) tokenSet.add(t.token);
     }
+    for (let i = 0; i < uids.length; i += 500) {
+      const { data: tokens } = await supabase
+        .from("crm_member_device_tokens")
+        .select("token")
+        .in("firebase_uid", uids.slice(i, i + 500));
+      for (const t of tokens ?? []) tokenSet.add(t.token);
+    }
+    const tokenList = Array.from(tokenSet).filter(Boolean);
     if (tokenList.length === 0) return;
 
     // 푸시 멀티캐스트 (FCM 500개/콜)
