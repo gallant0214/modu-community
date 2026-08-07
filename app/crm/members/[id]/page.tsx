@@ -409,7 +409,7 @@ export default function CrmMemberDetailPage() {
       {tab === "logs" ? (
         <MemberLogsSection memberId={member.id} staffList={staffList} />
       ) : tab === "payments" ? (
-        <MemberPaymentsSection memberId={member.id} memberName={member.name} />
+        <MemberPaymentsSection memberId={member.id} />
       ) : tab === "reservations" ? (
         <MemberReservationsSection memberId={member.id} />
       ) : (
@@ -1969,6 +1969,7 @@ interface PaymentRow {
   status: string;
   created_at: string;
   product_name?: string | null;
+  handler_name?: string | null;
 }
 
 const PAYMENT_METHOD_KO: Record<string, string> = {
@@ -1978,7 +1979,7 @@ const PAYMENT_METHOD_KO: Record<string, string> = {
   etc: "기타",
 };
 
-function MemberPaymentsSection({ memberId, memberName }: { memberId: number; memberName: string }) {
+function MemberPaymentsSection({ memberId }: { memberId: number }) {
   const { getIdToken } = useAuth();
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2055,9 +2056,11 @@ function MemberPaymentsSection({ memberId, memberName }: { memberId: number; mem
                 <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#B47B2A]/10 text-[#B47B2A] dark:bg-amber-900/40 dark:text-amber-300">
                   {methodLabel}
                 </span>
-                <span className="text-[12px] text-[#6B5D47] dark:text-zinc-400">
-                  결제자 {memberName}
-                </span>
+                {p.handler_name && (
+                  <span className="text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                    결제자 {p.handler_name}
+                  </span>
+                )}
                 {statusLabel && (
                   <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300">
                     {statusLabel}

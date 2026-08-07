@@ -78,7 +78,7 @@ export async function GET(request: Request) {
   let q = supabase
     .from("crm_payments")
     .select(
-      "id, member_id, pass_id, membership_id, amount_won, method, method_custom, paid_at, note, status, created_at"
+      "id, member_id, pass_id, membership_id, amount_won, method, method_custom, paid_at, note, status, created_at, recorded_by_uid"
     )
     .eq("center_id", ctx.centerId)
     .order("paid_at", { ascending: false })
@@ -103,31 +103,85 @@ export async function GET(request: Request) {
   );
   const passNameMap = new Map<number, string>();
   const membershipNameMap = new Map<number, string>();
+  // 상품을 결제 받은 판매 직원(seller_member_id) 매핑
+  const passSellerMap = new Map<number, number | null>();
+  const membershipSellerMap = new Map<number, number | null>();
   if (passIds.length > 0) {
     const { data: passes } = await supabase
       .from("crm_passes")
-      .select("id, lesson_kind")
+      .select("id, lesson_kind, seller_member_id")
       .eq("center_id", ctx.centerId)
       .in("id", passIds);
-    for (const p of passes ?? []) passNameMap.set(p.id, p.lesson_kind);
+    for (const p of passes ?? []) {
+      passNameMap.set(p.id, p.lesson_kind);
+      passSellerMap.set(p.id, p.seller_member_id);
+    }
   }
   if (membershipIds.length > 0) {
     const { data: memberships } = await supabase
       .from("crm_memberships")
-      .select("id, plan_name")
+      .select("id, plan_name, seller_member_id")
       .eq("center_id", ctx.centerId)
       .in("id", membershipIds);
-    for (const m of memberships ?? []) membershipNameMap.set(m.id, m.plan_name);
+    for (const m of memberships ?? []) {
+      membershipNameMap.set(m.id, m.plan_name);
+      membershipSellerMap.set(m.id, m.seller_member_id);
+    }
   }
 
-  const payments = rows.map((r) => ({
-    ...r,
-    product_name: r.pass_id
-      ? passNameMap.get(r.pass_id) ?? "수강권"
+  // 판매 직원 id → 이름, 그리고 결제를 기록한 직원(recorded_by_uid) → 이름 매핑.
+  // 담당 직원(결제 받은 직원) = 상품 판매 직원 우선, 없으면 결제 기록 직원.
+  const sellerIds = Array.from(
+    new Set(
+      [...passSellerMap.values(), ...membershipSellerMap.values()].filter(
+        (v): v is number => !!v
+      )
+    )
+  );
+  const recorderUids = Array.from(
+    new Set(rows.map((r) => r.recorded_by_uid).filter((v): v is string => !!v))
+  );
+  const staffByIdMap = new Map<number, string>();
+  const staffByUidMap = new Map<string, string>();
+  if (sellerIds.length > 0) {
+    const { data: staff } = await supabase
+      .from("crm_center_members")
+      .select("id, display_name")
+      .eq("center_id", ctx.centerId)
+      .in("id", sellerIds);
+    for (const s of staff ?? []) staffByIdMap.set(s.id, s.display_name);
+  }
+  if (recorderUids.length > 0) {
+    const { data: staff } = await supabase
+      .from("crm_center_members")
+      .select("firebase_uid, display_name")
+      .eq("center_id", ctx.centerId)
+      .in("firebase_uid", recorderUids);
+    for (const s of staff ?? []) {
+      if (s.firebase_uid) staffByUidMap.set(s.firebase_uid, s.display_name);
+    }
+  }
+
+  const payments = rows.map((r) => {
+    const sellerId = r.pass_id
+      ? passSellerMap.get(r.pass_id) ?? null
       : r.membership_id
-        ? membershipNameMap.get(r.membership_id) ?? "회원권"
-        : null,
-  }));
+        ? membershipSellerMap.get(r.membership_id) ?? null
+        : null;
+    const handlerName =
+      (sellerId ? staffByIdMap.get(sellerId) : null) ??
+      (r.recorded_by_uid ? staffByUidMap.get(r.recorded_by_uid) : null) ??
+      null;
+    return {
+      ...r,
+      product_name: r.pass_id
+        ? passNameMap.get(r.pass_id) ?? "수강권"
+        : r.membership_id
+          ? membershipNameMap.get(r.membership_id) ?? "회원권"
+          : null,
+      handler_name: handlerName,
+    };
+  });
 
   return NextResponse.json({ payments });
 }
