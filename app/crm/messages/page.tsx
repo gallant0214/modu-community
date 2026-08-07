@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
-import { crmInputClass } from "../_components/crm-modal";
+import { crmInputClass, CrmModal } from "../_components/crm-modal";
 import { formatPhone } from "../_components/crm-labels";
 import { AutoMessagesTab } from "./_auto-messages";
 
@@ -61,6 +61,36 @@ export default function CrmMessagesPage() {
 
   const [history, setHistory] = useState<Broadcast[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
+
+  // 수신자 확인 모달
+  const [recipientModal, setRecipientModal] = useState<{
+    title: string;
+    loading: boolean;
+    list: { member_id: number; name: string; phone: string | null; read: boolean }[];
+  } | null>(null);
+
+  const openRecipients = useCallback(
+    async (b: Broadcast) => {
+      setRecipientModal({ title: b.title, loading: true, list: [] });
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`/api/crm/messages/${b.id}/recipients`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        setRecipientModal({
+          title: b.title,
+          loading: false,
+          list: res.ok ? data.recipients ?? [] : [],
+        });
+      } catch {
+        setRecipientModal({ title: b.title, loading: false, list: [] });
+      }
+    },
+    [getIdToken]
+  );
 
   const loadHistory = useCallback(async () => {
     setLoadingHistory(true);
@@ -463,14 +493,77 @@ export default function CrmMessagesPage() {
                     {b.body}
                   </div>
                 )}
-                {b.sent_by_name && (
-                  <div className="mt-1 text-[11px] text-[#A89B80]">발송자: {b.sent_by_name}</div>
-                )}
+                <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap">
+                  {b.sent_by_name ? (
+                    <span className="text-[11px] text-[#A89B80]">발송자: {b.sent_by_name}</span>
+                  ) : (
+                    <span />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => openRecipients(b)}
+                    className="px-2.5 py-1 rounded-lg border border-[#6B7B3A] text-[11.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/5"
+                  >
+                    수신자 확인
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
         )}
       </div>
+
+      {/* 수신자 목록 모달 */}
+      <CrmModal
+        open={recipientModal !== null}
+        onClose={() => setRecipientModal(null)}
+        title="수신자 목록"
+      >
+        {recipientModal && (
+          <div className="space-y-3">
+            <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
+              {recipientModal.title}
+            </div>
+            {recipientModal.loading ? (
+              <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
+            ) : recipientModal.list.length === 0 ? (
+              <div className="px-4 py-8 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+                수신자 정보가 없어요.
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                  <span>총 {recipientModal.list.length}명</span>
+                  <span>읽음 {recipientModal.list.filter((r) => r.read).length}명</span>
+                </div>
+                <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800 max-h-[52vh] overflow-y-auto">
+                  {recipientModal.list.map((r) => (
+                    <li key={r.member_id} className="px-3.5 py-2.5 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
+                          {r.name}
+                        </div>
+                        {r.phone && (
+                          <div className="text-[12px] text-[#A89B80]">{formatPhone(r.phone)}</div>
+                        )}
+                      </div>
+                      <span
+                        className={`shrink-0 px-2 py-0.5 rounded text-[11px] font-semibold ${
+                          r.read
+                            ? "bg-[#6B7B3A]/12 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]"
+                            : "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500"
+                        }`}
+                      >
+                        {r.read ? "읽음" : "안읽음"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
+      </CrmModal>
       </>
       )}
     </div>
