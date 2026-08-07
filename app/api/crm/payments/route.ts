@@ -92,7 +92,44 @@ export async function GET(request: Request) {
   if (error) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
-  return NextResponse.json({ payments: data ?? [] });
+
+  // 결제에 연결된 상품 이름(수강권 종류 / 회원권명) 을 붙여준다. (#id 대신 사람이 읽을 이름)
+  const rows = data ?? [];
+  const passIds = Array.from(
+    new Set(rows.map((r) => r.pass_id).filter((v): v is number => !!v))
+  );
+  const membershipIds = Array.from(
+    new Set(rows.map((r) => r.membership_id).filter((v): v is number => !!v))
+  );
+  const passNameMap = new Map<number, string>();
+  const membershipNameMap = new Map<number, string>();
+  if (passIds.length > 0) {
+    const { data: passes } = await supabase
+      .from("crm_passes")
+      .select("id, lesson_kind")
+      .eq("center_id", ctx.centerId)
+      .in("id", passIds);
+    for (const p of passes ?? []) passNameMap.set(p.id, p.lesson_kind);
+  }
+  if (membershipIds.length > 0) {
+    const { data: memberships } = await supabase
+      .from("crm_memberships")
+      .select("id, plan_name")
+      .eq("center_id", ctx.centerId)
+      .in("id", membershipIds);
+    for (const m of memberships ?? []) membershipNameMap.set(m.id, m.plan_name);
+  }
+
+  const payments = rows.map((r) => ({
+    ...r,
+    product_name: r.pass_id
+      ? passNameMap.get(r.pass_id) ?? "수강권"
+      : r.membership_id
+        ? membershipNameMap.get(r.membership_id) ?? "회원권"
+        : null,
+  }));
+
+  return NextResponse.json({ payments });
 }
 
 /**

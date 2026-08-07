@@ -409,7 +409,7 @@ export default function CrmMemberDetailPage() {
       {tab === "logs" ? (
         <MemberLogsSection memberId={member.id} staffList={staffList} />
       ) : tab === "payments" ? (
-        <MemberPaymentsSection memberId={member.id} />
+        <MemberPaymentsSection memberId={member.id} memberName={member.name} />
       ) : tab === "reservations" ? (
         <MemberReservationsSection memberId={member.id} />
       ) : (
@@ -988,6 +988,30 @@ function fmtExp(date: string | null | undefined): string {
   if (!date) return "—";
   return date.slice(0, 10) === "9999-12-31" ? "무기한" : date;
 }
+
+// ISO 시각 → "2026.08.07 16:36" (KST). 서버는 UTC 이므로 +9h.
+function fmtPaidAt(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  const kst = new Date(d.getTime() + 9 * 3600 * 1000);
+  const y = kst.getUTCFullYear();
+  const mo = String(kst.getUTCMonth() + 1).padStart(2, "0");
+  const da = String(kst.getUTCDate()).padStart(2, "0");
+  const hh = String(kst.getUTCHours()).padStart(2, "0");
+  const mi = String(kst.getUTCMinutes()).padStart(2, "0");
+  return `${y}.${mo}.${da} ${hh}:${mi}`;
+}
+
+// 결제 상태 한글 라벨. paid/completed 는 정상 완료라 별도 표시하지 않음.
+const PAYMENT_STATUS_KO: Record<string, string> = {
+  partial: "부분 결제",
+  unpaid: "미결제",
+  pending: "대기",
+  cancelled: "취소",
+  canceled: "취소",
+  refunded: "환불",
+};
 
 // "시작일 ~ 만료일" 표기. 만료일이 무기한이면 "시작일 ~ 무기한"
 function fmtPeriod(start: string | null | undefined, end: string | null | undefined): string {
@@ -1944,6 +1968,7 @@ interface PaymentRow {
   note: string | null;
   status: string;
   created_at: string;
+  product_name?: string | null;
 }
 
 const PAYMENT_METHOD_KO: Record<string, string> = {
@@ -1953,7 +1978,7 @@ const PAYMENT_METHOD_KO: Record<string, string> = {
   etc: "기타",
 };
 
-function MemberPaymentsSection({ memberId }: { memberId: number }) {
+function MemberPaymentsSection({ memberId, memberName }: { memberId: number; memberName: string }) {
   const { getIdToken } = useAuth();
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2008,31 +2033,40 @@ function MemberPaymentsSection({ memberId }: { memberId: number }) {
       </div>
       <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
         {payments.map((p) => {
-          const linked = p.pass_id
-            ? `수강권 #${p.pass_id}`
-            : p.membership_id
-            ? `회원권 #${p.membership_id}`
-            : "—";
+          const productLabel = p.product_name || "기타 결제";
           const methodLabel =
             p.method === "etc" && p.method_custom
-              ? `${p.method_custom}(기타)`
+              ? p.method_custom
               : PAYMENT_METHOD_KO[p.method] ?? p.method;
+          const statusLabel = PAYMENT_STATUS_KO[p.status];
           return (
             <li key={p.id} className="px-4 py-3">
-              <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2 flex-wrap min-w-0">
-                  <span className="text-[14px] font-bold text-[#6B7B3A] dark:text-[#A8B87A]">
-                    {p.amount_won.toLocaleString()}원
+              {/* 1줄: 결제 상품 + 금액 */}
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 truncate">
+                  {productLabel}
+                </span>
+                <span className="text-[14px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] shrink-0">
+                  {p.amount_won.toLocaleString()}원
+                </span>
+              </div>
+              {/* 2줄: 결제수단 · 결제자 · 상태 */}
+              <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#B47B2A]/10 text-[#B47B2A] dark:bg-amber-900/40 dark:text-amber-300">
+                  {methodLabel}
+                </span>
+                <span className="text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                  결제자 {memberName}
+                </span>
+                {statusLabel && (
+                  <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                    {statusLabel}
                   </span>
-                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#B47B2A]/10 text-[#B47B2A] dark:bg-amber-900/40 dark:text-amber-300">
-                    {methodLabel}
-                  </span>
-                  <span className="text-[12px] text-[#8C8270]">{linked}</span>
-                  {p.status !== "paid" && (
-                    <span className="text-[11px] text-red-600">({p.status})</span>
-                  )}
-                </div>
-                <span className="text-[11.5px] text-[#A89B80] shrink-0">{p.paid_at}</span>
+                )}
+              </div>
+              {/* 3줄: 결제 일시 (KST) */}
+              <div className="mt-1 text-[12px] text-[#A89B80]">
+                {fmtPaidAt(p.paid_at)}
               </div>
               {p.note && (
                 <div className="mt-1 text-[12px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap">
