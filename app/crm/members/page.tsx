@@ -251,6 +251,21 @@ const matchStatus = (m: MemberRow, filter: StatusFilter, todayStr: string): bool
 export default function CrmMembersPage() {
   const { getIdToken } = useAuth();
   const searchParamsHook = useSearchParams();
+
+  // 사이드바에서 '회원 관리'를 다시 눌러 들어온 경우: 저장된 필터/검색(memoUi)을 무시하고
+  // 기본값으로 시작. (상세 → 뒤로가기 복원과 구분: 그 경로는 이 신호가 없다)
+  if (typeof window !== "undefined") {
+    try {
+      if (sessionStorage.getItem("crm_nav_reset") === "/crm/members") {
+        sessionStorage.removeItem("crm_nav_reset");
+        memoUi = null;
+        memoPage = 1;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
   const [list, setList] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -301,6 +316,39 @@ export default function CrmMembersPage() {
       query, fStatus, fSignup, fSignupFrom, fSignupTo, fRegType, fAbsence, fExpire, fPayment, fLocker, fGoods,
     };
   }, [query, fStatus, fSignup, fSignupFrom, fSignupTo, fRegType, fAbsence, fExpire, fPayment, fLocker, fGoods]);
+
+  // 이미 회원 목록에 있는 상태에서 사이드바 '회원 관리'를 다시 누르면(같은 라우트라 리마운트
+  // 안 됨) 검색·필터를 즉시 초기화한다.
+  useEffect(() => {
+    const onNav = (e: Event) => {
+      if ((e as CustomEvent).detail !== "/crm/members") return;
+      setQuery("");
+      setFStatus("all");
+      setFSignup("all");
+      setFSignupFrom("");
+      setFSignupTo("");
+      setFRegType("all");
+      setFAbsence("all");
+      setFExpire("all");
+      setFPayment("all");
+      setFLocker("all");
+      setFGoods("all");
+      setPage(1);
+      memoUi = null;
+      memoPage = 1;
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.removeItem("crm_nav_reset");
+        } catch {
+          /* ignore */
+        }
+        window.history.replaceState(window.history.state, "", "/crm/members");
+      }
+    };
+    window.addEventListener("crm:navclick", onNav);
+    return () => window.removeEventListener("crm:navclick", onNav);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 페이지 유지: URL ?page= 우선(브라우저 뒤로가기/새로고침 복원) → 없으면 모듈 스코프 memoPage
   const [page, setPageState] = useState(() => {

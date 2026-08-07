@@ -220,7 +220,21 @@ export function CrmSidebar({ role, centerName, centerKind, centerMemberId }: Pro
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={() => setMobileOpen(false)}
+                  onClick={() => {
+                    setMobileOpen(false);
+                    // 같은 메뉴를 다시 눌러 들어오면 해당 목록 페이지가 검색·필터를
+                    // 초기화할 수 있도록 신호(같은 라우트면 리마운트가 안 되므로 이벤트로도 통지).
+                    if (typeof window !== "undefined") {
+                      try {
+                        sessionStorage.setItem("crm_nav_reset", item.href);
+                      } catch {
+                        /* ignore */
+                      }
+                      window.dispatchEvent(
+                        new CustomEvent("crm:navclick", { detail: item.href })
+                      );
+                    }
+                  }}
                   className={cls}
                 >
                   {body}
