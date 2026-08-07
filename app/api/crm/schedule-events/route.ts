@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +22,16 @@ export async function GET(request: Request) {
   const endUtc = new Date(`${to}T00:00:00+09:00`);
   endUtc.setUTCHours(endUtc.getUTCHours() + 24);
 
-  // 🔒 기본은 '본인 것'만 (강사용 앱 보호 — 권한 무관). 웹 CRM 전체조회만 all=1 로 옵트인.
+  // 🔒 기본은 '본인 것'만. all=1(전체/타강사)은 schedule.view_others 권한자만.
   const allView = url.searchParams.get("all") === "1";
+  let canViewAll = false;
+  if (allView) {
+    canViewAll =
+      ctx.role === "owner" ||
+      (await loadPermissionsForContext(ctx))["schedule.view_others"] === true;
+  }
   let personalTrainerId: number | null = null;
-  if (ctx.role === "trainer" || !allView) {
+  if (!canViewAll) {
     personalTrainerId = ctx.centerMemberId;
   } else if (trainerParam) {
     personalTrainerId = Number(trainerParam);
