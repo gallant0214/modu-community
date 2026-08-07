@@ -245,9 +245,12 @@ export async function notifyCenterStaffNewRequest(params: {
   trainerMemberId: number;
   memberName: string;
   startsAt: string;
+  reservationId?: number;
 }) {
   const title = "새 예약 요청";
   const body = `${params.memberName}님이 ${formatKstSlot(params.startsAt)} 수업을 요청했어요`;
+  const data: Record<string, string> = { kind: "reservation_request" };
+  if (params.reservationId) data.reservation_id = String(params.reservationId);
 
   // 강사앱 알림함 저장 + 강사앱 푸시
   await notifyStaffMember({
@@ -256,7 +259,7 @@ export async function notifyCenterStaffNewRequest(params: {
     type: "reservation_request",
     title,
     body,
-    data: { kind: "reservation_request" },
+    data,
   });
 
   // 커뮤니티 앱(동일 계정) 사용 시를 위한 기존 푸시 유지
@@ -267,8 +270,6 @@ export async function notifyCenterStaffNewRequest(params: {
     .eq("center_id", params.centerId)
     .maybeSingle();
   if (trainer?.firebase_uid) {
-    await sendPushToUser(trainer.firebase_uid, "crm_reservation_request", title, body, {
-      kind: "reservation_request",
-    });
+    await sendPushToUser(trainer.firebase_uid, "crm_reservation_request", title, body, data);
   }
 }

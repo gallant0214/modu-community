@@ -103,7 +103,7 @@ export default function CrmMemberDetailPage() {
   const [holdRs, setHoldRs] = useState<RentalRow[]>([]);
   const [bodyOpen, setBodyOpen] = useState(false);
   // 탭: 정보 / 예약내역 / 결제내역 / 로그
-  const [tab, setTab] = useState<"info" | "reservations" | "payments" | "logs">("info");
+  const [tab, setTab] = useState<"info" | "reservations" | "payments" | "workout" | "logs">("info");
   // 현재 유저 권한 (members.edit_basic / members.edit_usage / members.delete)
   const [perms, setPerms] = useState<Record<string, boolean>>({});
   // 로그인 직원 본인 center_member_id — 발급 시 판매자 기본값
@@ -388,9 +388,9 @@ export default function CrmMemberDetailPage() {
         </div>
       </header>
 
-      {/* 탭: 정보 / 결제내역 / 로그 */}
+      {/* 탭: 정보 / 예약내역 / 결제내역 / 운동기록 / 로그 */}
       <div className="mb-4 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800">
-        {(["info", "reservations", "payments", "logs"] as const).map((t) => (
+        {(["info", "reservations", "payments", "workout", "logs"] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -401,7 +401,15 @@ export default function CrmMemberDetailPage() {
                 : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
               }`}
           >
-            {t === "info" ? "정보" : t === "reservations" ? "예약내역" : t === "payments" ? "결제내역" : "로그"}
+            {t === "info"
+              ? "정보"
+              : t === "reservations"
+                ? "예약내역"
+                : t === "payments"
+                  ? "결제내역"
+                  : t === "workout"
+                    ? "운동기록"
+                    : "로그"}
           </button>
         ))}
       </div>
@@ -412,6 +420,8 @@ export default function CrmMemberDetailPage() {
         <MemberPaymentsSection memberId={member.id} />
       ) : tab === "reservations" ? (
         <MemberReservationsSection memberId={member.id} />
+      ) : tab === "workout" ? (
+        <MemberWorkoutLogsSection memberId={member.id} canEdit={canEditUsage} />
       ) : (
       <>
       {hasHoldings && (
@@ -1978,6 +1988,302 @@ const PAYMENT_METHOD_KO: Record<string, string> = {
   transfer: "계좌이체",
   etc: "기타",
 };
+
+/* ─── 운동 기록 섹션 ─────────────────────────────
+   회원 상세 · 운동기록 탭.
+   - 날짜 선택 + 메모 입력으로 코칭 노트를 남김
+   - 여러 건/날짜 허용 (트레이너/스태프 시점 코멘트)
+   - PATCH/DELETE 지원
+*/
+interface WorkoutLog {
+  id: number;
+  log_date: string;
+  memo: string;
+  created_by_uid: string | null;
+  created_at: string;
+  updated_at: string;
+}
+function MemberWorkoutLogsSection({ memberId, canEdit }: { memberId: number; canEdit: boolean }) {
+  const { getIdToken } = useAuth();
+  const [logs, setLogs] = useState<WorkoutLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [openForm, setOpenForm] = useState(false);
+  const [logDate, setLogDate] = useState<string>(() =>
+    new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+  );
+  const [memo, setMemo] = useState("");
+  const [saving, setSaving] = useState(false);
+  // 인라인 편집
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editMemo, setEditMemo] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch(`/api/crm/members/${memberId}/workout-logs`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setLogs(data.logs ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken, memberId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const submit = async () => {
+    if (!memo.trim()) {
+      setError("운동 내용을 입력해 주세요");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members/${memberId}/workout-logs`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ log_date: logDate, memo: memo.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "저장 실패");
+      setMemo("");
+      setOpenForm(false);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startEdit = (log: WorkoutLog) => {
+    setEditingId(log.id);
+    setEditDate(log.log_date);
+    setEditMemo(log.memo);
+  };
+  const saveEdit = async () => {
+    if (!editingId) return;
+    if (!editMemo.trim()) return;
+    setEditSaving(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(
+        `/api/crm/members/${memberId}/workout-logs/${editingId}`,
+        {
+          method: "PATCH",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ log_date: editDate, memo: editMemo.trim() }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "저장 실패");
+      setEditingId(null);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+  const remove = async (id: number) => {
+    if (!window.confirm("이 운동 기록을 삭제할까요?")) return;
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members/${memberId}/workout-logs/${id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "삭제 실패");
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "네트워크 오류");
+    }
+  };
+
+  return (
+    <section className="space-y-3">
+      {/* 상단 CTA */}
+      {canEdit && !openForm && (
+        <button
+          type="button"
+          onClick={() => {
+            setOpenForm(true);
+            setError("");
+            setLogDate(new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10));
+            setMemo("");
+          }}
+          className="w-full flex items-center justify-between gap-3 px-4 py-3.5 rounded-2xl border-2 border-dashed border-[#6B7B3A]/60 bg-gradient-to-r from-[#F3F7EA] to-white dark:from-emerald-950/20 dark:to-zinc-900 hover:border-[#6B7B3A] hover:bg-[#EFE7D5]/50 transition-colors"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#6B7B3A] text-white text-[16px] font-bold">
+              +
+            </span>
+            <div className="min-w-0 text-left">
+              <div className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100">
+                운동 기록 입력하기
+              </div>
+              <div className="mt-0.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400 truncate">
+                날짜 선택 + 자유 메모로 회원의 운동 세션을 기록해요.
+              </div>
+            </div>
+          </div>
+          <span className="shrink-0 text-[13px] font-semibold text-[#6B7B3A]">시작 →</span>
+        </button>
+      )}
+
+      {/* 입력 폼 */}
+      {openForm && (
+        <div className="rounded-2xl border-2 border-[#6B7B3A]/40 bg-[#FBF7EB]/40 dark:bg-emerald-950/20 p-3 md:p-4 space-y-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400 shrink-0">
+              날짜
+            </span>
+            <input
+              type="date"
+              value={logDate}
+              onChange={(e) => setLogDate(e.target.value)}
+              className="h-9 px-3 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
+            />
+          </div>
+          <textarea
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+            placeholder="예: 상체 데이 - 벤치 60kg 3x8, 랫풀다운 50kg 3x10, 컨디션 좋음"
+            className="w-full min-h-[120px] px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] leading-relaxed"
+            maxLength={5000}
+          />
+          <div className="text-right text-[11px] text-[#A89B80]">
+            {memo.length.toLocaleString()} / 5,000자
+          </div>
+          {error && (
+            <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[12.5px] text-red-700 dark:text-red-300">
+              {error}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOpenForm(false);
+                setError("");
+              }}
+              className="px-3.5 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#3A342A] dark:text-zinc-300 hover:bg-white"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={saving}
+              className="px-3.5 py-2 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+            >
+              {saving ? "저장 중…" : "운동 기록 저장"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 목록 */}
+      {loading ? (
+        <div className="text-center py-8 text-[12.5px] text-[#8C8270]">불러오는 중…</div>
+      ) : logs.length === 0 ? (
+        <div className="text-center py-8 text-[12.5px] text-[#A89B80]">
+          아직 저장된 운동 기록이 없어요.
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {logs.map((log) => (
+            <li
+              key={log.id}
+              className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-3"
+            >
+              {editingId === log.id ? (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11.5px] font-semibold text-[#6B5D47] shrink-0">날짜</span>
+                    <input
+                      type="date"
+                      value={editDate}
+                      onChange={(e) => setEditDate(e.target.value)}
+                      className="h-8 px-2.5 rounded-md border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[12.5px]"
+                    />
+                  </div>
+                  <textarea
+                    value={editMemo}
+                    onChange={(e) => setEditMemo(e.target.value)}
+                    className="w-full min-h-[100px] px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] leading-relaxed"
+                    maxLength={5000}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(null)}
+                      className="px-3 py-1.5 rounded-md border border-[#E8E0D0] text-[12px] text-[#3A342A] hover:bg-white"
+                    >
+                      취소
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveEdit}
+                      disabled={editSaving}
+                      className="px-3 py-1.5 rounded-md bg-[#6B7B3A] text-white text-[12px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+                    >
+                      {editSaving ? "저장 중…" : "저장"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="text-[12.5px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] tabular-nums">
+                      {log.log_date}
+                    </span>
+                    {canEdit && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(log)}
+                          className="px-2 py-0.5 rounded text-[11px] text-[#6B5D47] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                        >
+                          수정
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => remove(log.id)}
+                          className="px-2 py-0.5 rounded text-[11px] text-red-700 hover:bg-red-50"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[13.5px] text-[#2A251D] dark:text-zinc-200 whitespace-pre-wrap leading-relaxed">
+                    {log.memo}
+                  </p>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 function MemberPaymentsSection({ memberId }: { memberId: number }) {
   const { getIdToken } = useAuth();

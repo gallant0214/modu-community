@@ -79,7 +79,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         type: "reservation_cancelled",
         title: "예약 취소",
         body: `${ctx.name}님이 ${formatKstSlot(res.starts_at)} 수업 예약을 취소했어요`,
-        data: { kind: "reservation_cancelled" },
+        data: { kind: "reservation_cancelled", reservation_id: String(res.id) },
       }).catch(() => {});
     });
   }

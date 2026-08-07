@@ -20,6 +20,7 @@ interface BootstrapResp {
   role?: Role;
   accessLevel?: "admin" | "schedule" | "none";
   isSoloOwner?: boolean;
+  permissions?: Record<string, boolean>;
 }
 
 export default function CrmLayout({ children }: { children: React.ReactNode }) {
@@ -148,6 +149,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           isSoloOwner={ctx.isSoloOwner ?? false}
           centerKind={ctx.centerKind}
           centerMemberId={ctx.centerMemberId ?? null}
+          permissions={ctx.permissions}
         />
         <main className="flex-1 min-w-0 md:ml-60">{children}</main>
       </div>

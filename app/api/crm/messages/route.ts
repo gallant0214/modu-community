@@ -1,6 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { notifyMembersByIds } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
@@ -65,8 +66,17 @@ export async function GET(request: Request) {
  * trainer 는 발송 금지 (owner/admin/manager).
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "manager" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+
+  // 직급권한: 메세지 전송 권한이 꺼진 등급은 발송 불가
+  const perms = await loadPermissionsForContext(ctx);
+  if (perms["messages.send"] === false) {
+    return NextResponse.json(
+      { error: "메세지 전송 권한이 없습니다" },
+      { status: 403 }
+    );
+  }
 
   let body: {
     title?: string;

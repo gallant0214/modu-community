@@ -16,6 +16,8 @@ interface MenuItem {
   staffOnly?: boolean;
   /** true 면 새 창(팝업)으로 열기 (터치출석 등 독립 화면). */
   newWindow?: boolean;
+  /** 직급권한 키. 지정 시 해당 권한이 false 면 메뉴 숨김. */
+  perm?: string;
   icon: (props: { className?: string }) => React.ReactElement;
 }
 
@@ -29,7 +31,7 @@ const MENU: MenuItem[] = [
   { href: "/crm/memberships", label: "회원권 관리",   group: "sales", icon: IconMembership },
   { href: "/crm/passes",      label: "수강권 관리",   group: "sales", icon: IconPass },
   { href: "/crm/consultations", label: "PT 상담",       group: "sales", icon: IconConsult },
-  { href: "/crm/messages",    label: "메세지 전송",   group: "engage", icon: IconMessage },
+  { href: "/crm/messages",    label: "메세지 전송",   group: "engage", perm: "messages.send", icon: IconMessage },
   { href: "/crm/stats",       label: "통계",          group: "admin", icon: IconStats },
   { href: "/crm/settings",    label: "센터설정",       group: "admin", staffOnly: true, icon: IconSettings },
   { href: "/crm/touch-attendance", label: "터치출석", group: "tools", staffOnly: true, newWindow: true, icon: IconTouch },
@@ -109,9 +111,11 @@ interface Props {
   isSoloOwner: boolean;
   centerKind?: "solo" | "center";
   centerMemberId?: number | null;
+  /** 직급권한 맵 (key→enabled). perm 지정 메뉴 노출 여부 판정에 사용. */
+  permissions?: Record<string, boolean>;
 }
 
-export function CrmSidebar({ role, centerName, centerKind, centerMemberId }: Props) {
+export function CrmSidebar({ role, centerName, centerKind, centerMemberId, permissions }: Props) {
   const pathname = usePathname();
   const { getIdToken } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -150,7 +154,11 @@ export function CrmSidebar({ role, centerName, centerKind, centerMemberId }: Pro
     isSoloMode
       ? buildSoloMenu(centerMemberId ?? null, { includeCenterInfo: centerKind === "solo" })
       : MENU.filter((m) => !m.staffOnly || isStaffLevel)
-  ).filter((m) => (SPECIAL_BODY_ONLY_HREFS.has(m.href) ? specialBody : true));
+  )
+    .filter((m) => (SPECIAL_BODY_ONLY_HREFS.has(m.href) ? specialBody : true))
+    // 직급권한: perm 이 지정된 메뉴는 해당 권한이 명시적으로 false 면 숨김
+    // (permissions 미로딩 시엔 그대로 노출 → 깜빡임 방지, 서버가 최종 차단)
+    .filter((m) => !m.perm || !permissions || permissions[m.perm] !== false);
   const isActive = (href: string) => {
     const clean = href.split("?")[0];
     if (!clean) return false;

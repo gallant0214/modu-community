@@ -62,6 +62,25 @@ export default function CrmMessagesPage() {
   const [history, setHistory] = useState<Broadcast[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
 
+  // 직급권한: 메세지 전송 가능 여부 (null=확인 중)
+  const [canSend, setCanSend] = useState<boolean | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/bootstrap", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        setCanSend(data?.permissions?.["messages.send"] !== false);
+      } catch {
+        setCanSend(true);
+      }
+    })();
+  }, [getIdToken]);
+
   // 수신자 확인 모달
   const [recipientModal, setRecipientModal] = useState<{
     title: string;
@@ -268,7 +287,16 @@ export default function CrmMessagesPage() {
 
       {activeTab === "auto" && <AutoMessagesTab />}
 
-      {activeTab === "send" && (
+      {activeTab === "send" && canSend === false && (
+        <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          메세지 전송 권한이 없습니다. 센터 관리자에게 문의해 주세요.
+          <div className="mt-1 text-[12px] text-[#A89B80]">
+            (센터설정 → 직급 권한 → 메세지 전송에서 부여할 수 있어요)
+          </div>
+        </div>
+      )}
+
+      {activeTab === "send" && canSend !== false && (
        <>
       {/* 대상 선택 */}
       <Section title="1. 발송 대상">

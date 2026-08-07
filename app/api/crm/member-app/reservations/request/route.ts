@@ -142,6 +142,7 @@ export async function POST(request: Request) {
       trainerMemberId: trainerId,
       memberName: ctx.name,
       startsAt: startsAt.toISOString(),
+      reservationId: created.id,
     }).catch(() => {});
   });
 
