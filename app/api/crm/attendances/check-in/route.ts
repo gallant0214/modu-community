@@ -121,7 +121,17 @@ export async function POST(request: Request) {
   }
 
   // 출석 마일리지 적립 (하루 1회). 하루에 여러 번 방문해도 한 번만 적립.
-  const mileageAwarded = await awardAttendanceMileage(targetCenterId, member.id, created.id);
+  // 정책: 출석포인트는 '터치출석/얼굴출석'으로 회원이 직접 체크인했을 때만 적립.
+  // 직원이 CRM(또는 키오스크 목록)에서 수동 처리한 'manual' 은 적립 대상 아님.
+  const MILEAGE_AWARD_SOURCES = new Set([
+    "touch_face", // 얼굴 인식
+    "touch_number", // 출석번호 입력
+    "touch", // legacy 터치출석
+    "kiosk", // 키오스크 토큰/QR 터치
+  ]);
+  const mileageAwarded = MILEAGE_AWARD_SOURCES.has(source)
+    ? await awardAttendanceMileage(targetCenterId, member.id, created.id)
+    : 0;
 
   // 음성 안내 메세지 계산 (센터가 규칙을 등록해뒀을 때만 반환).
   // 실패해도 체크인 자체는 성공으로 응답해야 하므로 try/catch.
