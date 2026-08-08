@@ -67,7 +67,7 @@ export default function JoinLandingPage() {
     setTimeout(() => {
       if (Date.now() - start < 1600) window.location.href = storeUrl;
     }, 1200);
-    window.location.href = `${APP_SCHEME}://join?token=${encodeURIComponent(token)}`;
+    window.location.href = `${APP_SCHEME}://register?token=${encodeURIComponent(token)}`;
   };
 
   return (
