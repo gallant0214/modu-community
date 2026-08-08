@@ -9,15 +9,25 @@ type Item = { name: string; url: string; desc?: string };
 
 // 큐레이션 리스트. 수정/추가는 이 배열만 손보면 됩니다.
 const SPORTSWEAR: Item[] = [
+  { name: "키네틱피플 (Kinetic People)", url: "https://kineticpeople.co.kr/", desc: "국내 헬스인 인기 머슬핏 브랜드" },
   { name: "Gymshark", url: "https://www.gymshark.com/", desc: "글로벌 헬스웨어 대표 브랜드" },
+  { name: "건담포스 (Gundam Force)", url: "https://gundamforce.imweb.me/", desc: "국내 하드코어 리프팅 웨어" },
   { name: "Alphalete Athletics", url: "https://alphaleteathletics.com/", desc: "LA 프리미엄 머슬핏" },
+  { name: "젝시믹스 (Xexymix)", url: "https://xexymix.com/", desc: "국내 대표 액티브웨어 (남성 라인 포함)" },
   { name: "Ryderwear", url: "https://www.ryderwear.com/", desc: "호주 파워리프팅·보디빌딩" },
+  { name: "뮬라웨어 (Mulawear)", url: "https://mulawear.com/", desc: "국내 액티브웨어 (남성 라인 포함)" },
   { name: "YoungLA", url: "https://www.youngla.com/", desc: "LA 보디빌더 즐겨찾는 브랜드" },
+  { name: "안다르 (Andar)", url: "https://www.andar.co.kr/", desc: "국내 대표 활동복 (남성 라인 포함)" },
   { name: "Better Bodies", url: "https://www.betterbodies.com/", desc: "스웨덴 보디빌딩 대회 웨어" },
+  { name: "퍼스트로우 (First Row)", url: "https://firstrow.co.kr/", desc: "국내 짐 웨어·머슬핏" },
   { name: "GASP", url: "https://www.gaspofficial.com/", desc: "Better Bodies 남성 특화" },
+  { name: "바핏 (Bafit)", url: "https://bafit.com/", desc: "국내 피트니스 웨어" },
   { name: "Legal Power", url: "https://www.legal-power.eu/", desc: "독일 파워리프팅 클래식" },
+  { name: "프로스펙스 (Prospecs)", url: "https://www.prospecs.com/", desc: "국내 대표 스포츠 브랜드 (트레이닝 라인)" },
   { name: "Iron Tanks", url: "https://irontanks.com/", desc: "스트롱리프터·헤비 리프팅" },
+  { name: "바디랩 (BodyLab)", url: "https://bodylab.kr/", desc: "국내 짐 웨어" },
   { name: "Otomix", url: "https://www.otomix.com/", desc: "보디빌딩 전용 슈즈·아파렐" },
+  { name: "몰라코 (MOLAKO)", url: "https://smartstore.naver.com/molakoathletic/", desc: "국내 보디빌딩 웨어 (네이버 스마트스토어)" },
   { name: "Vanquish Fitness", url: "https://vanquishfitness.com/", desc: "UK 프리미엄 머슬핏" },
   { name: "Do You Even", url: "https://www.doyoueven.com/", desc: "호주 헬스 라이프스타일" },
   { name: "Bodyengineers", url: "https://bodyengineers.com/", desc: "네덜란드 보디빌더 브랜드" },
@@ -163,7 +173,7 @@ export default function MarketPage() {
       <Section
         title="스포츠웨어 브랜드"
         emoji="👟"
-        description="보디빌딩·머슬핏·웨이트 트레이닝에 특화된 국내·해외 브랜드 20선"
+        description="보디빌딩·머슬핏·웨이트 트레이닝 특화 국내 10 + 해외 20, 총 30선"
         items={SPORTSWEAR}
       />
 
