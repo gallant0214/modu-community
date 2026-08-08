@@ -159,7 +159,6 @@ export function NavBar() {
           <NavLink href="/community" active={isActive("/community") || isActive("/category")}>종목별 커뮤니티</NavLink>
           <NavLink href="/jobs" active={isActive("/jobs")}>스포츠 구인</NavLink>
           <NavLink href="/trade" active={isActive("/trade")}>거래</NavLink>
-          <NavLink href="/#faq" active={false}>FAQ</NavLink>
           <NavLink href="/my" active={isActive("/my")}>MY</NavLink>
         </div>
 
@@ -351,7 +350,6 @@ export function NavBar() {
               <MobileNavLink href="/community" active={isActive("/community") || isActive("/category")} onClick={() => setMenuOpen(false)} icon="chat">종목별 커뮤니티</MobileNavLink>
               <MobileNavLink href="/jobs" active={isActive("/jobs")} onClick={() => setMenuOpen(false)} icon="briefcase">스포츠 구인</MobileNavLink>
               <MobileNavLink href="/trade" active={isActive("/trade")} onClick={() => setMenuOpen(false)} icon="trade">거래</MobileNavLink>
-              <MobileNavLink href="/#faq" active={false} onClick={() => setMenuOpen(false)} icon="help">FAQ</MobileNavLink>
               <MobileNavLink href="/my" active={isActive("/my")} onClick={() => setMenuOpen(false)} icon="user">MY</MobileNavLink>
             </div>
 
