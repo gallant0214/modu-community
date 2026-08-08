@@ -389,8 +389,20 @@ export async function PATCH(
       cancelled: { title: "예약이 취소됐어요", body: `${slot} 수업 예약이 취소됐어요${reason ? ` · 사유: ${reason}` : ""}` },
       noshow: { title: "노쇼 처리됐어요", body: `${slot} 수업이 노쇼(미출석)로 처리됐어요` },
     };
+    // 수업 완료·노쇼 알림 on/off (notify_class_result) — attended/noshow 만 적용
+    let skipClassNotice = false;
+    if (newStatus === "attended" || newStatus === "noshow") {
+      const { data: mrow } = await supabase
+        .from("crm_members")
+        .select("notify_class_result")
+        .eq("id", cur.member_id)
+        .maybeSingle();
+      skipClassNotice =
+        (mrow as { notify_class_result?: boolean } | null)?.notify_class_result === false;
+    }
+
     const n = noticeMap[newStatus];
-    if (n) {
+    if (n && !skipClassNotice) {
       after(async () => {
         await sendPushToMember(cur.member_id, `reservation_${newStatus}`, n.title, n.body, {
           reservationId: String(reservationId),

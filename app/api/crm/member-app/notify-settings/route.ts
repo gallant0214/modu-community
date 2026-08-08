@@ -6,7 +6,9 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/crm/member-app/notify-settings?centerId=
- * 서버측 알림 수신 설정 조회. (현재: 센터 메세지 알림 on/off)
+ * 서버측 알림 수신 설정 조회.
+ *  - centerMessages: 센터 메세지 알림 (notify_center_messages)
+ *  - classResult: 수업 완료·노쇼 알림 (notify_class_result)
  */
 export async function GET(request: Request) {
   const centerId = Number(new URL(request.url).searchParams.get("centerId"));
@@ -15,22 +17,25 @@ export async function GET(request: Request) {
 
   const { data } = await supabase
     .from("crm_members")
-    .select("notify_center_messages")
+    .select("notify_center_messages, notify_class_result")
     .eq("id", ctx.memberId)
     .maybeSingle();
 
+  const row = data as { notify_center_messages?: boolean; notify_class_result?: boolean } | null;
+
   return NextResponse.json({
     // 미설정(null)이면 기본 on
-    centerMessages: (data as { notify_center_messages?: boolean } | null)?.notify_center_messages !== false,
+    centerMessages: row?.notify_center_messages !== false,
+    classResult: row?.notify_class_result !== false,
   });
 }
 
 /**
- * PATCH /api/crm/member-app/notify-settings  { centerId, centerMessages: boolean }
- * 센터 메세지 푸시 수신 여부 저장.
+ * PATCH /api/crm/member-app/notify-settings  { centerId, centerMessages?, classResult? }
+ * 넘어온 항목만 갱신.
  */
 export async function PATCH(request: Request) {
-  let body: { centerId?: number; centerMessages?: boolean };
+  let body: { centerId?: number; centerMessages?: boolean; classResult?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -39,18 +44,22 @@ export async function PATCH(request: Request) {
   const ctx = await requireMemberForCenter(request, Number(body.centerId));
   if (isMemberError(ctx)) return ctx;
 
-  if (typeof body.centerMessages !== "boolean") {
+  const patch: Record<string, boolean> = {};
+  if (typeof body.centerMessages === "boolean") patch.notify_center_messages = body.centerMessages;
+  if (typeof body.classResult === "boolean") patch.notify_class_result = body.classResult;
+
+  if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
   const { error } = await supabase
     .from("crm_members")
-    .update({ notify_center_messages: body.centerMessages } as never)
+    .update(patch as never)
     .eq("id", ctx.memberId)
     .eq("center_id", ctx.centerId)
     .eq("linked_firebase_uid", ctx.uid);
   if (error) {
     return NextResponse.json({ error: "저장 실패", detail: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, centerMessages: body.centerMessages });
+  return NextResponse.json({ ok: true, ...patch });
 }

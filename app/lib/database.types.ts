@@ -2624,6 +2624,7 @@ export type Database = {
           last_purchase_at: string | null
           last_attended_at: string | null
           notify_center_messages: boolean
+          notify_class_result: boolean
           attendance_no: string | null
           current_membership: string | null
           current_pass: string | null
@@ -2662,6 +2663,7 @@ export type Database = {
           last_purchase_at?: string | null
           last_attended_at?: string | null
           notify_center_messages?: boolean
+          notify_class_result?: boolean
           attendance_no?: string | null
           current_membership?: string | null
           current_pass?: string | null
@@ -2700,6 +2702,7 @@ export type Database = {
           last_purchase_at?: string | null
           last_attended_at?: string | null
           notify_center_messages?: boolean
+          notify_class_result?: boolean
           attendance_no?: string | null
           current_membership?: string | null
           current_pass?: string | null
