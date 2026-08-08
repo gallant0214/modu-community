@@ -155,13 +155,16 @@ export async function POST(request: Request) {
     }
   }
 
-  // 닉네임을 표시명 기본값으로 사용
+  // 표시명(display_name):
+  //  - solo(1인 강사): 온보딩에서 입력한 실명(body.name). 강사 등록/표시에 실명 사용.
+  //  - center(사장님 등록): body.name 은 '센터명'이므로 표시명은 닉네임 폴백.
   const { data: nick } = await supabase
     .from("nicknames")
     .select("name")
     .eq("firebase_uid", user.uid)
     .maybeSingle();
-  const displayName = nick?.name || user.email?.split("@")[0] || "사용자";
+  const nickName = nick?.name || user.email?.split("@")[0] || "사용자";
+  const displayName = mode === "solo" ? (body.name?.trim() || nickName) : nickName;
 
   const centerName =
     mode === "solo"

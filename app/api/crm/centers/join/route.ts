@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     });
   }
 
-  let body: { centerId?: number };
+  let body: { centerId?: number; name?: string };
   try {
     body = await request.json();
   } catch {
@@ -66,13 +66,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "가입할 수 없는 센터입니다" }, { status: 404 });
   }
 
-  // 표시명 — 본인 닉네임
+  // 표시명 — 온보딩에서 입력한 실명(body.name). 센터장이 실명으로 강사 등록을 수락하도록.
   const { data: nick } = await supabase
     .from("nicknames")
     .select("name")
     .eq("firebase_uid", user.uid)
     .maybeSingle();
-  const displayName = nick?.name || user.email?.split("@")[0] || "사용자";
+  const displayName = body.name?.trim() || nick?.name || user.email?.split("@")[0] || "사용자";
 
   // status='pending' 으로 가입 요청 생성 → 센터장이 직원관리에서 수락해야 active.
   // 이미 이 센터에 row 가 있으면(거절/퇴사 포함) 재사용해서 다시 pending 으로.
