@@ -91,8 +91,20 @@ export async function POST(request: Request) {
     });
   }
 
-  const source =
-    body.source === "manual" ? "manual" : body.source === "touch" ? "touch" : "kiosk";
+  const source = (() => {
+    switch (body.source) {
+      case "manual":
+        return "manual";
+      case "touch_face":
+        return "touch_face"; // 터치출석 · 얼굴 인식
+      case "touch_number":
+        return "touch_number"; // 터치출석 · 출석번호 입력
+      case "touch":
+        return "touch"; // legacy
+      default:
+        return "kiosk";
+    }
+  })();
 
   const { data: created, error } = await supabase
     .from("crm_attendances")

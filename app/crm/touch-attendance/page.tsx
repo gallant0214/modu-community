@@ -141,7 +141,7 @@ export default function TouchAttendancePage() {
       const res = await fetch("/api/crm/attendances/check-in", {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ member_id: member.id, source: "touch" }),
+        body: JSON.stringify({ member_id: member.id, source: "touch_number" }),
       });
       const data = await res.json();
       if (!res.ok) {

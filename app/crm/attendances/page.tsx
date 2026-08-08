@@ -24,7 +24,9 @@ interface Attendance {
 const SOURCE_LABEL: Record<string, string> = {
   kiosk: "QR",
   manual: "검색",
-  touch: "터치",
+  touch: "터치",              // legacy (구분 없는 옛 기록)
+  touch_number: "터치·번호",  // 출석번호 입력으로 체크인
+  touch_face: "터치·얼굴",    // 얼굴 인식으로 체크인
   app: "앱",
 };
 
@@ -32,6 +34,8 @@ const SOURCE_STYLE: Record<string, string> = {
   kiosk: "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/30 dark:text-[#A8B87A]",
   manual: "bg-[#B47B2A]/10 text-[#B47B2A] dark:bg-amber-900/40 dark:text-amber-300",
   touch: "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/30 dark:text-[#A8B87A]",
+  touch_number: "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/30 dark:text-[#A8B87A]",
+  touch_face: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
   app: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
 };
 
@@ -46,7 +50,9 @@ export default function CrmAttendancesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<"all" | "kiosk" | "manual" | "touch" | "app">("all");
+  const [sourceFilter, setSourceFilter] = useState<
+    "all" | "kiosk" | "manual" | "touch" | "touch_number" | "touch_face" | "app"
+  >("all");
   const [refreshedAt, setRefreshedAt] = useState<string>("");
   const [month, setMonth] = useState(() => todayKst().slice(0, 7));
   const [monthDays, setMonthDays] = useState<Record<string, { total: number; unique: number }>>({});
@@ -144,7 +150,15 @@ export default function CrmAttendancesPage() {
 
   const filtered = useMemo(() => {
     let arr = rows;
-    if (sourceFilter !== "all") arr = arr.filter((a) => a.source === sourceFilter);
+    if (sourceFilter !== "all") {
+      arr = arr.filter((a) => {
+        if (sourceFilter === "touch") {
+          // '터치' 필터는 legacy 'touch' + 세분화된 touch_number/touch_face 모두 포함
+          return a.source === "touch" || a.source === "touch_number" || a.source === "touch_face";
+        }
+        return a.source === sourceFilter;
+      });
+    }
     const q = query.trim();
     if (q) {
       arr = arr.filter(
@@ -158,10 +172,16 @@ export default function CrmAttendancesPage() {
 
   const stats = useMemo(() => {
     const uniqueMembers = new Set(rows.map((a) => a.member_id));
-    const sources = { kiosk: 0, manual: 0, touch: 0, app: 0 };
+    // 세분화된 소스는 상위 카테고리(touch) 로도 합산 유지 (KPI 카드 호환)
+    const sources = { kiosk: 0, manual: 0, touch: 0, app: 0, touch_number: 0, touch_face: 0 };
     for (const a of rows) {
-      const k = (a.source as keyof typeof sources) ?? "kiosk";
-      if (k in sources) sources[k] = (sources[k] ?? 0) + 1;
+      const s = a.source ?? "kiosk";
+      if (s === "touch_number" || s === "touch_face") {
+        sources[s] += 1;
+        sources.touch += 1;
+      } else if (s in sources) {
+        sources[s as "kiosk" | "manual" | "touch" | "app"] += 1;
+      }
     }
     return {
       total: rows.length,
@@ -290,7 +310,7 @@ export default function CrmAttendancesPage() {
 
       <section className="mb-4 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-4 py-3 shadow-sm">
         <div className="flex items-center gap-2 flex-wrap">
-        {(["all", "kiosk", "manual", "touch", "app"] as const).map((s) => (
+        {(["all", "kiosk", "manual", "touch_number", "touch_face", "touch", "app"] as const).map((s) => (
           <button
             key={s}
             onClick={() => setSourceFilter(s)}
@@ -302,7 +322,7 @@ export default function CrmAttendancesPage() {
           >
             {s === "all"
               ? `전체 ${stats.total}`
-              : `${SOURCE_LABEL[s]} ${stats.sources[s as "kiosk" | "manual" | "touch" | "app"] ?? 0}`}
+              : `${SOURCE_LABEL[s]} ${stats.sources[s as keyof typeof stats.sources] ?? 0}`}
           </button>
         ))}
         <input
