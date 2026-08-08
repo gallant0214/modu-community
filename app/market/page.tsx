@@ -9,26 +9,26 @@ type Item = { name: string; url: string; desc?: string };
 
 // 큐레이션 리스트. 수정/추가는 이 배열만 손보면 됩니다.
 const SPORTSWEAR: Item[] = [
-  { name: "Nike Korea", url: "https://www.nike.com/kr/", desc: "글로벌 대표 스포츠 브랜드" },
-  { name: "Adidas Korea", url: "https://www.adidas.co.kr/", desc: "러닝·트레이닝 라인업" },
-  { name: "Under Armour", url: "https://www.underarmour.co.kr/", desc: "기능성 웨어 전문" },
-  { name: "Puma Korea", url: "https://kr.puma.com/", desc: "라이프+퍼포먼스" },
-  { name: "New Balance Korea", url: "https://www.nbkorea.com/", desc: "러닝화·트레이닝복" },
-  { name: "Reebok Korea", url: "https://www.reebok.co.kr/", desc: "크로스핏·러닝 강세" },
-  { name: "Fila Korea", url: "https://www.fila.co.kr/", desc: "레트로 스포츠" },
-  { name: "Descente Korea", url: "https://www.descente.co.kr/", desc: "골프·러닝·트레이닝" },
-  { name: "Prospecs", url: "https://www.prospecs.com/", desc: "국내 러닝화·워킹화" },
-  { name: "Le Coq Sportif Korea", url: "https://www.lecoqsportif.co.kr/", desc: "프렌치 스포츠 캐주얼" },
-  { name: "Andar (안다르)", url: "https://www.andar.co.kr/", desc: "요가·필라테스 웨어" },
-  { name: "Xexymix (젝시믹스)", url: "https://www.xexymix.com/", desc: "레깅스·요가복" },
-  { name: "Mulawear (뮬라웨어)", url: "https://www.mulawear.com/", desc: "액티브웨어" },
-  { name: "STL Korea", url: "https://www.stl-korea.co.kr/", desc: "요가·필라테스 라인" },
-  { name: "Champion", url: "https://www.champion-usa.co.kr/", desc: "빈티지 스포츠웨어" },
-  { name: "Gymshark", url: "https://www.gymshark.com/", desc: "글로벌 피트니스 웨어" },
-  { name: "Alphalete", url: "https://alphaleteathletics.com/", desc: "북미 피트니스 프리미엄" },
-  { name: "Lululemon", url: "https://www.lululemon.com/", desc: "요가·러닝 웨어" },
-  { name: "Kolon Sport", url: "https://www.kolonsport.com/", desc: "아웃도어·러닝" },
-  { name: "K2 Korea", url: "https://www.k2.co.kr/", desc: "아웃도어 스포츠" },
+  { name: "Gymshark", url: "https://www.gymshark.com/", desc: "글로벌 헬스웨어 대표 브랜드" },
+  { name: "Alphalete Athletics", url: "https://alphaleteathletics.com/", desc: "LA 프리미엄 머슬핏" },
+  { name: "Ryderwear", url: "https://www.ryderwear.com/", desc: "호주 파워리프팅·보디빌딩" },
+  { name: "YoungLA", url: "https://www.youngla.com/", desc: "LA 보디빌더 즐겨찾는 브랜드" },
+  { name: "Better Bodies", url: "https://www.betterbodies.com/", desc: "스웨덴 보디빌딩 대회 웨어" },
+  { name: "GASP", url: "https://www.gaspofficial.com/", desc: "Better Bodies 남성 특화" },
+  { name: "Legal Power", url: "https://www.legal-power.eu/", desc: "독일 파워리프팅 클래식" },
+  { name: "Iron Tanks", url: "https://irontanks.com/", desc: "스트롱리프터·헤비 리프팅" },
+  { name: "Otomix", url: "https://www.otomix.com/", desc: "보디빌딩 전용 슈즈·아파렐" },
+  { name: "Vanquish Fitness", url: "https://vanquishfitness.com/", desc: "UK 프리미엄 머슬핏" },
+  { name: "Do You Even", url: "https://www.doyoueven.com/", desc: "호주 헬스 라이프스타일" },
+  { name: "Bodyengineers", url: "https://bodyengineers.com/", desc: "네덜란드 보디빌더 브랜드" },
+  { name: "Nvgtn", url: "https://nvgtn.com/", desc: "여성 피트니스 웨어" },
+  { name: "Nike Korea (Pro·Metcon)", url: "https://www.nike.com/kr/", desc: "컴프레션·리프팅 슈즈" },
+  { name: "Adidas Korea (Powerlift·Techfit)", url: "https://www.adidas.co.kr/", desc: "리프팅 슈즈·컴프레션" },
+  { name: "Under Armour Korea", url: "https://www.underarmour.co.kr/", desc: "히트기어·러시(Rush) 라인" },
+  { name: "Puma Korea", url: "https://kr.puma.com/", desc: "트레이닝 라인" },
+  { name: "Reebok Korea (Nano)", url: "https://www.reebok.co.kr/", desc: "크로스핏·리프팅 슈즈" },
+  { name: "New Balance Korea", url: "https://www.nbkorea.com/", desc: "트레이닝복·러닝화" },
+  { name: "Champion", url: "https://www.champion-usa.co.kr/", desc: "올드스쿨 짐 웨어" },
 ];
 
 const CHICKEN: Item[] = [
@@ -42,6 +42,16 @@ const CHICKEN: Item[] = [
   { name: "굽네몰", url: "https://www.goobnemall.com/", desc: "굽네 공식몰" },
   { name: "순수한닭", url: "https://www.soonchicken.co.kr/", desc: "무첨가 닭가슴살" },
   { name: "프레시메이트", url: "https://www.freshmate.co.kr/", desc: "프리미엄 도시락·닭가슴살" },
+  { name: "마니커F&G", url: "https://www.manikker.co.kr/", desc: "국내 대형 닭가슴살 브랜드" },
+  { name: "다이어트픽", url: "https://www.dietpick.co.kr/", desc: "닭가슴살·다이어트 도시락" },
+  { name: "짐밀 (Gymmeal)", url: "https://www.gymmeal.co.kr/", desc: "헬스인 도시락 전문" },
+  { name: "하림몰", url: "https://www.harimmall.com/", desc: "하림 공식 온라인몰" },
+  { name: "자연맛남", url: "https://www.naturaltasting.co.kr/", desc: "저염·수제 닭가슴살" },
+  { name: "홀썸박스", url: "https://www.wholesomebox.co.kr/", desc: "프리미엄 도시락 정기배송" },
+  { name: "프릿 (PRIT)", url: "https://www.prit.co.kr/", desc: "닭가슴살 도시락·볼" },
+  { name: "다이어트투데이", url: "https://www.diettoday.co.kr/", desc: "닭가슴살 도시락 정기배송" },
+  { name: "마이핏밀", url: "https://www.myfitmeal.co.kr/", desc: "맞춤 다이어트 도시락" },
+  { name: "노시덤", url: "https://www.noshdum.co.kr/", desc: "저지방 닭가슴살 도시락" },
 ];
 
 const SUPPLEMENT: Item[] = [
@@ -53,8 +63,18 @@ const SUPPLEMENT: Item[] = [
   { name: "셀렉스", url: "https://www.selex.co.kr/", desc: "매일유업 프로틴" },
   { name: "웨이볼릭", url: "https://www.maeilhealthnutrition.com/", desc: "매일헬스뉴트리션" },
   { name: "Optimum Nutrition", url: "https://www.optimumnutrition.com/", desc: "글로벌 프로틴 파우더" },
-  { name: "닥터린", url: "https://www.drlin.co.kr/", desc: "종합 건강기능식품" },
+  { name: "닥터린", url: "https://www.drlin.co.kr/", desc: "국내 종합 건강기능식품" },
   { name: "종근당건강", url: "https://www.ckdhc.com/", desc: "국내 건강기능식품" },
+  { name: "Universal Nutrition (Animal)", url: "https://universalnutrition.com/", desc: "보디빌더 필수 Animal 시리즈" },
+  { name: "BSN", url: "https://bsnonline.net/", desc: "Syntha-6 / True-Mass" },
+  { name: "Dymatize (ISO100)", url: "https://www.dymatize.com/", desc: "가수분해 아이솔레이트 강자" },
+  { name: "Rule 1 Proteins", url: "https://www.rule1proteins.com/", desc: "고순도 프로틴 브랜드" },
+  { name: "Ghost Lifestyle", url: "https://www.ghostlifestyle.com/", desc: "프리워크아웃·프로틴" },
+  { name: "Cellucor (C4)", url: "https://cellucor.com/", desc: "C4 프리워크아웃 클래식" },
+  { name: "Kaged Muscle", url: "https://kaged.com/", desc: "리프터·보디빌더 프리미엄" },
+  { name: "Redcon1", url: "https://redcon1.com/", desc: "하드코어 라인업" },
+  { name: "정관장", url: "https://www.kgc.co.kr/", desc: "홍삼 브랜드 (컨디셔닝)" },
+  { name: "뉴트리코스트 (NutraCost)", url: "https://www.nutricost.com/", desc: "가성비 벌크 보충제" },
 ];
 
 function StoreCard({ item }: { item: Item }) {
@@ -143,21 +163,21 @@ export default function MarketPage() {
       <Section
         title="스포츠웨어 브랜드"
         emoji="👟"
-        description="운동인이 자주 선택하는 국내·해외 스포츠웨어 브랜드 20선"
+        description="보디빌딩·머슬핏·웨이트 트레이닝에 특화된 국내·해외 브랜드 20선"
         items={SPORTSWEAR}
       />
 
       <Section
         title="닭가슴살"
         emoji="🍗"
-        description="식단 관리에 자주 쓰이는 닭가슴살 브랜드 10선"
+        description="식단 관리에 자주 쓰이는 닭가슴살·다이어트 도시락 브랜드 20선"
         items={CHICKEN}
       />
 
       <Section
         title="보충제"
         emoji="💊"
-        description="프로틴·비타민 등 인기 보충제 쇼핑몰 10선"
+        description="프로틴·프리워크아웃·비타민 등 헬스인 인기 보충제 브랜드 20선"
         items={SUPPLEMENT}
       />
     </main>
