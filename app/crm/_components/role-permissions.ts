@@ -142,15 +142,6 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
-    key: "segments",
-    label: "세그먼트 관리",
-    items: [
-      { key: "segments.create", label: "세그먼트 추가", defaults: D_MGR_FC },
-      { key: "segments.edit",   label: "세그먼트 수정", defaults: D_MGR_FC },
-      { key: "segments.delete", label: "세그먼트 삭제", defaults: D_ADMIN },
-    ],
-  },
-  {
     key: "messages",
     label: "메세지 전송",
     items: [
