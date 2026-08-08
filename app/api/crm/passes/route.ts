@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -294,6 +295,34 @@ export async function POST(request: Request) {
       price_won: Number(body.price_won) || 0,
     } as never,
   });
+
+  // 배정 알림 — 주강사/추가강사(본인 제외)에게 "회원이 배정되었습니다" (알림함 + 푸시)
+  const assignTargets = Array.from(
+    new Set([trainerMemberId, ...coTrainerIds].filter((id) => id && id !== ctx.centerMemberId))
+  );
+  if (assignTargets.length > 0) {
+    after(async () => {
+      const { data: mem } = await supabase
+        .from("crm_members")
+        .select("name")
+        .eq("id", memberId)
+        .maybeSingle();
+      const memberName = mem?.name ?? "회원";
+      for (const tid of assignTargets) {
+        const isCo = tid !== trainerMemberId;
+        await notifyStaffMember({
+          centerId: ctx.centerId,
+          centerMemberId: tid,
+          type: "member_assigned",
+          title: "회원 배정",
+          body: isCo
+            ? `${memberName}님의 추가 강사로 배정되었습니다`
+            : `${memberName}님이 배정되었습니다`,
+          data: { kind: "member_assigned", member_id: String(memberId) },
+        }).catch(() => {});
+      }
+    });
+  }
 
   return NextResponse.json({ ok: true, passId: created.id });
 }

@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -207,6 +208,26 @@ export async function PATCH(
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
   }
 
+  // 강사 배정 변경 시: 새로 배정된 강사에게만 알림 주기 위해 기존 배정 조회
+  const trainerFieldsTouched =
+    body.trainer_member_id !== undefined || body.co_trainer_ids !== undefined;
+  let prevAssign: { member_id: number; trainer_member_id: number | null; co_trainer_ids: number[] } | null = null;
+  if (trainerFieldsTouched) {
+    const { data: prev } = await supabase
+      .from("crm_passes")
+      .select("member_id, trainer_member_id, co_trainer_ids")
+      .eq("id", passId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    if (prev) {
+      prevAssign = {
+        member_id: prev.member_id,
+        trainer_member_id: prev.trainer_member_id ?? null,
+        co_trainer_ids: (prev.co_trainer_ids ?? []) as number[],
+      };
+    }
+  }
+
   const { error } = await supabase
     .from("crm_passes")
     .update(patch as never)
@@ -225,6 +246,36 @@ export async function PATCH(
     entity_id: passId,
     payload: patch as never,
   });
+
+  // 새로 배정된 강사(주강사/추가강사, 본인 제외)에게 배정 알림
+  if (trainerFieldsTouched && prevAssign) {
+    const newMain = (patch.trainer_member_id as number | undefined) ?? prevAssign.trainer_member_id ?? 0;
+    const newCo = (patch.co_trainer_ids as number[] | undefined) ?? prevAssign.co_trainer_ids;
+    const oldSet = new Set([prevAssign.trainer_member_id, ...prevAssign.co_trainer_ids].filter(Boolean) as number[]);
+    const added = Array.from(
+      new Set([newMain, ...newCo].filter((x) => x && !oldSet.has(x) && x !== ctx.centerMemberId))
+    );
+    if (added.length > 0) {
+      const memberId = prevAssign.member_id;
+      after(async () => {
+        const { data: mem } = await supabase.from("crm_members").select("name").eq("id", memberId).maybeSingle();
+        const memberName = mem?.name ?? "회원";
+        for (const tid of added) {
+          const isCo = tid !== newMain;
+          await notifyStaffMember({
+            centerId: ctx.centerId,
+            centerMemberId: tid as number,
+            type: "member_assigned",
+            title: "회원 배정",
+            body: isCo
+              ? `${memberName}님의 추가 강사로 배정되었습니다`
+              : `${memberName}님이 배정되었습니다`,
+            data: { kind: "member_assigned", member_id: String(memberId) },
+          }).catch(() => {});
+        }
+      });
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }
