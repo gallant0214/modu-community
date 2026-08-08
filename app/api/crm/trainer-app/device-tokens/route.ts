@@ -43,6 +43,9 @@ export async function POST(request: Request) {
  * DELETE /api/crm/trainer-app/device-tokens  { token }
  */
 export async function DELETE(request: Request) {
+  const ctx = await requireCrmContext(request);
+  if (isCrmError(ctx)) return ctx;
+
   let body: { token?: string };
   try {
     body = await request.json();
@@ -51,6 +54,7 @@ export async function DELETE(request: Request) {
   }
   const token = (body.token ?? "").trim();
   if (!token) return NextResponse.json({ error: "토큰이 없습니다" }, { status: 400 });
-  await supabase.from("crm_staff_device_tokens").delete().eq("token", token);
+  // 본인 소유 토큰만 삭제 (타인 토큰 임의 삭제로 인한 알림 차단 방지)
+  await supabase.from("crm_staff_device_tokens").delete().eq("token", token).eq("firebase_uid", ctx.uid);
   return NextResponse.json({ ok: true });
 }
