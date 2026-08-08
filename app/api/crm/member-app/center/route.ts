@@ -7,10 +7,16 @@ export const dynamic = "force-dynamic";
 // 센터설정 운영시간(crm_centers.operating_hours) JSON → 표시 문자열.
 // 규칙: days 0=월 … 6=일, note 항목은 days=[] 로 자유 문구.
 function formatOperatingHours(oh: unknown): string | null {
-  if (!Array.isArray(oh) || oh.length === 0) return null;
+  // operating_hours 는 text 컬럼(JSON 문자열)이라 파싱 필요.
+  let arr: unknown = oh;
+  if (typeof oh === "string") {
+    if (!oh.trim()) return null;
+    try { arr = JSON.parse(oh); } catch { return null; }
+  }
+  if (!Array.isArray(arr) || arr.length === 0) return null;
   const DAYS = ["월", "화", "수", "목", "금", "토", "일"];
   const lines: string[] = [];
-  for (const g of oh as Array<{ days?: number[]; open?: string; close?: string; note?: string }>) {
+  for (const g of arr as Array<{ days?: number[]; open?: string; close?: string; note?: string }>) {
     const days = Array.isArray(g?.days)
       ? g.days.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
       : [];
