@@ -9,6 +9,7 @@ import { TrainerDashboard } from "./_trainer-dashboard";
 import { CustomerStatusView } from "./_components/customer-status-view";
 import { MemberConversionCard } from "./_components/member-conversion-card";
 import { WeeklyAttendanceChart } from "./_components/weekly-attendance-chart";
+import { JoinLinkModal } from "./_components/join-link-modal";
 import { DualLineChart } from "./_components/dual-line-chart";
 
 interface TrendPoint {
@@ -126,6 +127,7 @@ export default function CrmDashboardPage() {
   const [summary, setSummary] = useState<SummaryResp | null>(null);
   const [me, setMe] = useState<BootstrapResp | null>(null);
   const [period, setPeriod] = useState<Period>("month");
+  const [joinModal, setJoinModal] = useState<"qr" | "link" | null>(null);
   const [view, setView] = useState<"overview" | "customers">("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -223,22 +225,48 @@ export default function CrmDashboardPage() {
             </p>
           </div>
 
-          <div className="inline-flex self-start rounded-lg border border-[#D9CDB8] dark:border-zinc-700 bg-[#F8F4EC] dark:bg-zinc-950 p-1">
-            {(["day", "week", "month"] as const).map((p) => (
+          <div className="flex flex-col items-start md:items-end gap-2">
+            <div className="inline-flex self-start rounded-lg border border-[#D9CDB8] dark:border-zinc-700 bg-[#F8F4EC] dark:bg-zinc-950 p-1">
+              {(["day", "week", "month"] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  className={`px-3.5 py-1.5 rounded-md text-[12.5px] font-semibold transition-colors
+                    ${period === p
+                      ? "bg-[#2F3A2B] text-white dark:bg-[#A8B87A] dark:text-zinc-950"
+                      : "text-[#6B5D47] dark:text-zinc-400 hover:bg-white/80 dark:hover:bg-zinc-800"
+                    }`}
+                >
+                  {p === "day" ? "일간" : p === "week" ? "주간" : "월간"}
+                </button>
+              ))}
+            </div>
+            {/* 센터 연결 QR / 링크 생성 */}
+            <div className="flex flex-wrap gap-1.5">
               <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-3.5 py-1.5 rounded-md text-[12.5px] font-semibold transition-colors
-                  ${period === p
-                    ? "bg-[#2F3A2B] text-white dark:bg-[#A8B87A] dark:text-zinc-950"
-                    : "text-[#6B5D47] dark:text-zinc-400 hover:bg-white/80 dark:hover:bg-zinc-800"
-                  }`}
+                type="button"
+                onClick={() => setJoinModal("qr")}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#6B7B3A] bg-[#6B7B3A] text-white text-[12px] font-semibold hover:bg-[#5a6932]"
               >
-                {p === "day" ? "일간" : p === "week" ? "주간" : "월간"}
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h3m-3 3h6m0-6v.01M17 14h3" />
+                </svg>
+                센터 연결 QR 생성
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => setJoinModal("link")}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-200 text-[12px] font-semibold hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m6.656-3.172a4 4 0 00-5.656 0l-3 3" />
+                </svg>
+                센터 연결 링크 생성
+              </button>
+            </div>
           </div>
         </div>
+        {joinModal && <JoinLinkModal mode={joinModal} onClose={() => setJoinModal(null)} />}
 
         {summary && (
           <section className="mt-5 grid grid-cols-2 lg:grid-cols-3 gap-2">

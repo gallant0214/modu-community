@@ -1242,6 +1242,33 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_center_join_links: {
+        Row: {
+          id: number
+          center_id: number
+          token: string
+          code: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          token: string
+          code: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          token?: string
+          code?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_centers: {
         Row: {
           id: number
