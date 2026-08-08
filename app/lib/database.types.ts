@@ -3374,6 +3374,30 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_staff_notification_prefs: {
+        Row: {
+          center_member_id: number
+          center_id: number | null
+          notify_reservation_request: boolean
+          notify_reservation_cancelled: boolean
+          updated_at: string
+        }
+        Insert: {
+          center_member_id: number
+          center_id?: number | null
+          notify_reservation_request?: boolean
+          notify_reservation_cancelled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          center_member_id?: number
+          center_id?: number | null
+          notify_reservation_request?: boolean
+          notify_reservation_cancelled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_staff_device_tokens: {
         Row: {
           token: string

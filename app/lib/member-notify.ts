@@ -274,8 +274,8 @@ export async function notifyCenterStaffNewRequest(params: {
   const data: Record<string, string> = { kind: "reservation_request" };
   if (params.reservationId) data.reservation_id = String(params.reservationId);
 
-  // 강사앱 알림함 저장 + 강사앱 푸시
-  await notifyStaffMember({
+  // 강사앱 알림함 저장 + 강사앱 푸시. 강사가 이 알림을 껐으면(false) 커뮤니티 푸시도 스킵.
+  const allowed = await notifyStaffMember({
     centerId: params.centerId,
     centerMemberId: params.trainerMemberId,
     type: "reservation_request",
@@ -283,6 +283,7 @@ export async function notifyCenterStaffNewRequest(params: {
     body,
     data,
   });
+  if (allowed === false) return;
 
   // 커뮤니티 앱(동일 계정) 사용 시를 위한 기존 푸시 유지
   const { data: trainer } = await supabase

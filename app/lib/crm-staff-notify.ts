@@ -33,6 +33,21 @@ export async function notifyStaffMember(params: {
 }) {
   const { centerId, centerMemberId, type, title, body, data } = params;
   try {
+    // 0) 강사 알림 설정 확인 — 해당 유형 알림을 껐으면 저장·발송 모두 스킵
+    const PREF_COLUMN: Record<string, string> = {
+      reservation_request: "notify_reservation_request",
+      reservation_cancelled: "notify_reservation_cancelled",
+    };
+    const prefCol = PREF_COLUMN[type];
+    if (prefCol) {
+      const { data: pref } = await supabase
+        .from("crm_staff_notification_prefs")
+        .select(prefCol)
+        .eq("center_member_id", centerMemberId)
+        .maybeSingle();
+      if (pref && (pref as unknown as Record<string, unknown>)[prefCol] === false) return false;
+    }
+
     // 1) 알림함 저장 (앱의 알림 탭에서 조회)
     await supabase.from("crm_staff_notifications").insert({
       center_id: centerId,
@@ -50,7 +65,7 @@ export async function notifyStaffMember(params: {
       .eq("id", centerMemberId)
       .eq("center_id", centerId)
       .maybeSingle();
-    if (!staff?.firebase_uid) return;
+    if (!staff?.firebase_uid) return true;
 
     // 3) 강사앱 디바이스 토큰으로 푸시 (토큰 미등록이면 알림함만 저장하고 종료)
     const { data: tokens } = await supabase
@@ -58,7 +73,7 @@ export async function notifyStaffMember(params: {
       .select("token")
       .eq("firebase_uid", staff.firebase_uid);
     const tokenList = (tokens ?? []).map((t) => t.token);
-    if (tokenList.length === 0) return;
+    if (tokenList.length === 0) return true;
 
     const messaging = getMessaging(getAdmin());
     for (let i = 0; i < tokenList.length; i += 500) {
@@ -72,7 +87,9 @@ export async function notifyStaffMember(params: {
         })
         .catch(() => {});
     }
+    return true;
   } catch (e) {
     console.error("[crm-staff-notify] error", e);
+    return true;
   }
 }
