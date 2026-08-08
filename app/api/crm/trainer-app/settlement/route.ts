@@ -36,7 +36,10 @@ export async function GET(request: Request) {
   const centerId = ctx.centerId;
 
   const today = kstYmd();
-  const monthStart = firstOfMonth(today);
+  // ?ym=YYYY-MM 으로 특정 월 조회 (기본: 이번달)
+  const ymParam = new URL(request.url).searchParams.get("ym");
+  const ym = ymParam && /^\d{4}-\d{2}$/.test(ymParam) ? ymParam : today.slice(0, 7);
+  const monthStart = `${ym}-01`;
   const nextMonthStart = firstOfMonth(shiftYmd(monthStart, 32));
 
   const [{ data: meRow }, { data: monthRes }] = await Promise.all([
@@ -89,7 +92,8 @@ export async function GET(request: Request) {
     Number(cfg.commission_rate ?? 0) > 0;
 
   return NextResponse.json({
-    ym: today.slice(0, 7),
+    ym,
+    isCurrentMonth: ym === today.slice(0, 7),
     totalReservations: attendedCount + bookedCount,
     attendedCount,
     bookedCount,
