@@ -14,7 +14,12 @@ function formatOperatingHours(oh: unknown): string | null {
     const days = Array.isArray(g?.days)
       ? g.days.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
       : [];
-    const time = g?.open && g?.close ? `${g.open}~${g.close}` : "";
+    const time =
+      g?.open && g?.close
+        ? g.open === g.close
+          ? "24시간 운영"
+          : `${g.open}~${g.close}`
+        : "";
     let dayStr = "";
     if (days.length === 7) dayStr = "매일";
     else if (days.length) dayStr = [...days].sort((a, b) => a - b).map((d) => DAYS[d]).join("·");
