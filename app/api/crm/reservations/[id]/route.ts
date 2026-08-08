@@ -314,6 +314,9 @@ export async function PATCH(
     ? -1                   // 미차감 → 차감: 잔여 -1
     : 0;
 
+  // 출석 차감 후 잔여 회차(세션제만). 1/0 이면 잔여 안내 알림용.
+  let remainingAfter: number | null = null;
+
   // 잔여 변동이 있으면 조건부 UPDATE 로 race condition 방지.
   // 단, 기간제(총 세션 0)는 횟수 개념이 없어 잔여 차감/복원을 하지 않는다.
   if (remainingDelta !== 0) {
@@ -329,6 +332,7 @@ export async function PATCH(
         if (passRow.remaining_sessions <= 0) {
           return NextResponse.json({ error: "잔여 세션이 부족합니다" }, { status: 409 });
         }
+        remainingAfter = passRow.remaining_sessions - 1;
         await supabase
           .from("crm_passes")
           .update({ remaining_sessions: passRow.remaining_sessions - 1 } as never)
@@ -391,6 +395,31 @@ export async function PATCH(
         await sendPushToMember(cur.member_id, `reservation_${newStatus}`, n.title, n.body, {
           reservationId: String(reservationId),
         }).catch(() => {});
+      });
+    }
+  }
+
+  // 출석으로 잔여 회차가 1/0 이 되면 잔여 안내 알림 (세션제 수강권만)
+  if (newStatus === "attended" && remainingAfter !== null) {
+    if (remainingAfter === 1) {
+      after(async () => {
+        await sendPushToMember(
+          cur.member_id,
+          "pass_last_session",
+          "수업 1회 남았어요",
+          "다음 수업이 1회 남았습니다.",
+          {}
+        ).catch(() => {});
+      });
+    } else if (remainingAfter === 0) {
+      after(async () => {
+        await sendPushToMember(
+          cur.member_id,
+          "pass_completed",
+          "수업을 모두 완료했어요 🎉",
+          "수업을 모두 진행하였습니다.",
+          {}
+        ).catch(() => {});
       });
     }
   }
