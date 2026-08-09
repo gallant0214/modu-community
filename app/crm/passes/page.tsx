@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import {
@@ -99,7 +99,9 @@ export default function CrmPassesPage() {
     P_DEFAULT_WIDTHS
   );
 
+  const reqIdRef = useRef(0);
   const load = useCallback(async () => {
+    const myReq = ++reqIdRef.current; // 최신 요청만 반영 (필터 빠르게 오갈 때 경쟁 방지)
     setError("");
     try {
       const token = await getIdToken();
@@ -113,12 +115,14 @@ export default function CrmPassesPage() {
         cache: "no-store",
       });
       const data = await res.json();
+      if (myReq !== reqIdRef.current) return; // 더 최신 요청이 있으면 이 결과는 버림
       if (!res.ok) throw new Error(data?.error || "조회 실패");
       setList(data.passes ?? []);
     } catch (e) {
+      if (myReq !== reqIdRef.current) return;
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
-      setLoading(false);
+      if (myReq === reqIdRef.current) setLoading(false);
     }
   }, [getIdToken, statusFilter, trainerFilter, paymentFilter]);
 
