@@ -59,6 +59,21 @@ interface MemberSearchHit {
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES_10 = [0, 10, 20, 30, 40, 50];
 
+// 생년월일 입력 자동 포맷: 숫자만 남겨 최대 8자리 → "YYYY.MM.DD" (입력 중 부분값도 허용).
+// "1986-09-24"(DB date) / "19860924"(수기) 모두 → "1986.09.24" 로 표시.
+function formatBirthInput(raw: string): string {
+  const d = (raw || "").replace(/\D/g, "").slice(0, 8);
+  if (d.length <= 4) return d;
+  if (d.length <= 6) return `${d.slice(0, 4)}.${d.slice(4)}`;
+  return `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6)}`;
+}
+// 표시용 "YYYY.MM.DD" → 저장용 "YYYY-MM-DD" (8자리 완성일 때만, 아니면 null).
+function birthToIso(display: string): string | null {
+  const d = (display || "").replace(/\D/g, "");
+  if (d.length !== 8) return null;
+  return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}`;
+}
+
 export function ConsultationForm({ mode, initial, templateId, templateDefinition }: Props) {
   const def = useMemo(() => normalizeDefinition(templateDefinition), [templateDefinition]);
   const includeStandard = def.include_standard !== false;
@@ -81,7 +96,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
   );
   const [name, setName] = useState(asStr("name"));
   const [gender, setGender] = useState(asStr("gender"));
-  const [birth, setBirth] = useState(asStr("birth"));
+  const [birth, setBirth] = useState(formatBirthInput(asStr("birth")));
   const [phone, setPhone] = useState(asStr("phone"));
   const [addressDong, setAddressDong] = useState(asStr("address_dong"));
   const [trainerId, setTrainerId] = useState<number | "">(
@@ -144,6 +159,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
   const [wakeHour, setWakeHour] = useState<number | "">(asNum("wake_hour"));
   const [wakeMinute, setWakeMinute] = useState<number | "">(asNum("wake_minute"));
   const [sleepHour, setSleepHour] = useState<number | "">(asNum("sleep_hour"));
+  const [sleepMinute, setSleepMinute] = useState<number | "">(asNum("sleep_minute"));
   const [sleepSatisfaction, setSleepSatisfaction] = useState(asStr("sleep_satisfaction"));
   const [conditionScore, setConditionScore] = useState(asStr("condition_score"));
   const [fatigueWhen, setFatigueWhen] = useState<string[]>(asArr("fatigue_when"));
@@ -178,6 +194,17 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
   // 저장 상태
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [dirty]);
 
   // 강사 리스트 로드
   const [staffList, setStaffList] = useState<StaffLite[]>([]);
@@ -262,7 +289,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
     setMemberId(m.id);
     setName(m.name);
     if (m.phone) setPhone(m.phone);
-    if (m.birth) setBirth(m.birth);
+    if (m.birth) setBirth(formatBirthInput(m.birth));
     if (m.gender) setGender(m.gender);
     setMemberQuery("");
     setMemberHits([]);
@@ -296,7 +323,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
             : templateId ?? null,
         name: name.trim(),
         gender: gender || null,
-        birth: birth || null,
+        birth: birthToIso(birth),
         phone: phone.trim() || null,
         address_dong: addressDong.trim() || null,
         trainer_member_id: trainerMode === "select" ? trainerId || null : null,
@@ -339,6 +366,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
         wake_hour: wakeHour === "" ? null : wakeHour,
         wake_minute: wakeMinute === "" ? null : wakeMinute,
         sleep_hour: sleepHour === "" ? null : sleepHour,
+        sleep_minute: sleepMinute === "" ? null : sleepMinute,
         sleep_satisfaction: sleepSatisfaction || null,
         condition_score: conditionScore || null,
         fatigue_when: fatigueWhen,
@@ -370,6 +398,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "저장 실패");
       const newId = mode === "edit" ? initial?.id : data.id;
+      setDirty(false);
       router.push(`/crm/consultations/${newId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
@@ -384,7 +413,14 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
   );
 
   return (
-    <div className="max-w-4xl mx-auto px-4 md:px-6 pb-16">
+    <div
+      className="max-w-4xl mx-auto px-4 md:px-6 pb-28"
+      onInputCapture={() => setDirty(true)}
+      onChangeCapture={() => setDirty(true)}
+      onClickCapture={(event) => {
+        if ((event.target as HTMLElement).closest("button[data-form-choice]")) setDirty(true);
+      }}
+    >
       {error && (
         <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
           {error}
@@ -509,9 +545,12 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
             </Field>
             <Field label="생년월일">
               <input
-                type="date"
+                type="text"
+                inputMode="numeric"
                 value={birth}
-                onChange={(e) => setBirth(e.target.value)}
+                onChange={(e) => setBirth(formatBirthInput(e.target.value))}
+                placeholder="예: 19860924 → 1986.09.24"
+                maxLength={10}
                 className={crmInputClass}
               />
             </Field>
@@ -691,7 +730,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
               { label: "저녁", timeKey: mealDinnerTime, setTime: setMealDinnerTime, menu: mealDinnerMenu, setMenu: setMealDinnerMenu },
             ] as const
           ).map((r) => (
-            <div key={r.label} className="grid grid-cols-[64px_120px_1fr] gap-2 items-center">
+            <div key={r.label} className="grid grid-cols-1 sm:grid-cols-[64px_120px_1fr] gap-2 sm:items-center">
               <div className="text-[12.5px] font-semibold text-[#6B5D47]">{r.label}</div>
               <input
                 type="time"
@@ -728,7 +767,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
               placeholder="기타 선호 음식"
             />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="수분 섭취 (리터/일)">
               <input
                 type="number"
@@ -882,7 +921,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
       {/* ===== 컨디션 ===== */}
       <Section title="컨디션">
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="기상 시간">
               <div className="flex items-center gap-1.5">
                 <select
@@ -912,18 +951,32 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
               </div>
             </Field>
             <Field label="취침 시간">
-              <select
-                value={sleepHour}
-                onChange={(e) => setSleepHour(e.target.value === "" ? "" : Number(e.target.value))}
-                className={crmInputClass}
-              >
-                <option value="">-</option>
-                {HOURS.map((h) => (
-                  <option key={h} value={h}>
-                    {h}시
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={sleepHour}
+                  onChange={(e) => setSleepHour(e.target.value === "" ? "" : Number(e.target.value))}
+                  className={crmInputClass}
+                >
+                  <option value="">-</option>
+                  {HOURS.map((h) => (
+                    <option key={h} value={h}>
+                      {h}시
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={sleepMinute}
+                  onChange={(e) => setSleepMinute(e.target.value === "" ? "" : Number(e.target.value))}
+                  className={crmInputClass}
+                >
+                  <option value="">-</option>
+                  {MINUTES_10.map((m) => (
+                    <option key={m} value={m}>
+                      {String(m).padStart(2, "0")}분
+                    </option>
+                  ))}
+                </select>
+              </div>
             </Field>
           </div>
           <Field label="수면 만족도">
@@ -1027,7 +1080,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
       {/* ===== 운동 계획 ===== */}
       <Section title="운동 계획">
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="주 몇 회">
               <input
                 type="number"
@@ -1099,11 +1152,22 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
         />
       </Section>
 
-      <div className="flex items-center justify-end gap-2 pt-2">
+      <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-2xl border border-[#DDD3C0] bg-white/95 dark:border-zinc-700 dark:bg-zinc-900/95 px-3 py-3 shadow-[0_10px_30px_rgba(70,56,35,0.16)] backdrop-blur">
+        <div className="hidden sm:block min-w-0">
+          <p className="text-[12px] font-semibold text-[#3A342A] dark:text-zinc-200">
+            {dirty ? "저장하지 않은 변경사항이 있어요" : "입력 내용을 확인해 주세요"}
+          </p>
+          <p className="text-[11px] text-[#8C8270] dark:text-zinc-500">
+            저장 후 상담 상세 화면에서 결과를 관리할 수 있습니다.
+          </p>
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
         <button
           type="button"
-          onClick={() => router.back()}
-          className="px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-medium text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-900"
+          onClick={() => {
+            if (!dirty || window.confirm("작성 중인 내용이 저장되지 않았습니다. 나갈까요?")) router.back();
+          }}
+          className="px-4 py-2.5 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 text-[14px] font-medium text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
         >
           취소
         </button>
@@ -1111,10 +1175,11 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
           type="button"
           onClick={save}
           disabled={saving}
-          className="px-5 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+          className="min-w-[112px] px-5 py-2.5 rounded-xl bg-[#6B7B3A] text-white text-[14px] font-bold shadow-sm hover:bg-[#5a6932] disabled:opacity-60"
         >
           {saving ? "저장 중…" : mode === "edit" ? "수정 저장" : "상담 저장"}
         </button>
+        </div>
       </div>
     </div>
   );
@@ -1132,9 +1197,9 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mb-5 px-4 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+    <section className="mb-5 px-4 py-4 md:px-5 md:py-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <h2 className="text-[16px] font-bold text-[#2A251D] dark:text-zinc-100">
           {title}
           {required && <span className="text-[#B47B2A] ml-1">*</span>}
         </h2>
@@ -1156,7 +1221,7 @@ function Field({
 }) {
   return (
     <div className="min-w-0">
-      <div className="text-[11.5px] font-semibold text-[#6B5D47] dark:text-zinc-400 mb-1">
+      <div className="text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-400 mb-1.5">
         {label}
         {required && <span className="text-[#B47B2A] ml-0.5">*</span>}
       </div>
@@ -1205,8 +1270,9 @@ function ChipToggle({
   return (
     <button
       type="button"
+      data-form-choice
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
+      className={`min-h-9 px-3 py-1.5 rounded-full text-[13px] font-semibold border transition-colors ${
         on
           ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
           : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/50"
@@ -1300,6 +1366,7 @@ function CustomFieldInput({
             <button
               key={o.v}
               type="button"
+              data-form-choice
               onClick={() =>
                 onChange(on ? arrVal.filter((x) => x !== o.v) : [...arrVal, o.v])
               }
@@ -1329,6 +1396,7 @@ function CustomFieldInput({
             <button
               key={o.v}
               type="button"
+              data-form-choice
               onClick={() => onChange(on ? "" : o.v)}
               className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
                 on
