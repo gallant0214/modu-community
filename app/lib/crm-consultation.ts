@@ -18,6 +18,8 @@ export function buildConsultationPayload(
     return Number.isFinite(n) ? n : null;
   };
   const asArr = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []);
+  const asObj = (v: unknown) =>
+    v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
 
   // 담당 강사: 명단 선택(trainer_member_id) 또는 직접 입력(trainer_name_custom).
   // 직접 입력이 있으면 fallback 안 함 (기본값이 강사를 오염시키지 않도록).
@@ -96,11 +98,18 @@ export function buildConsultationPayload(
     conditions: asArr(body.conditions),
     medications: asStr(body.medications),
     current_state: asStr(body.current_state),
+    safety_screening: asObj(body.safety_screening),
+    pain_details: asObj(body.pain_details),
 
     weekly_freq: asInt(body.weekly_freq),
     planned_days: asArr(body.planned_days),
     planned_days_etc: asStr(body.planned_days_etc),
     planned_time: asStr(body.planned_time),
+    goal_details: asObj(body.goal_details),
+    adherence_details: asObj(body.adherence_details),
+    coaching_preferences: asObj(body.coaching_preferences),
+    follow_up_details: asObj(body.follow_up_details),
+    selection_other_details: asObj(body.selection_other_details),
 
     request_note: asStr(body.request_note),
     memo: asStr(body.memo),

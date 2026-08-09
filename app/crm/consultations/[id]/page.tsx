@@ -21,6 +21,10 @@ import {
   PAIN_PARTS,
   CONDITIONS,
   PLANNED_DAYS,
+  SAFETY_FLAGS,
+  EXERCISE_BARRIERS,
+  COACHING_STYLES,
+  CONTACT_METHODS,
 } from "../_labels";
 import { normalizeDefinition } from "@/app/lib/crm-consultation-template";
 
@@ -101,6 +105,14 @@ interface Consultation {
   planned_days: string[] | null;
   planned_days_etc: string | null;
   planned_time: string | null;
+
+  safety_screening: Record<string, unknown> | null;
+  goal_details: Record<string, unknown> | null;
+  pain_details: Record<string, unknown> | null;
+  adherence_details: Record<string, unknown> | null;
+  coaching_preferences: Record<string, unknown> | null;
+  follow_up_details: Record<string, unknown> | null;
+  selection_other_details: Record<string, unknown> | null;
 
   custom_data: Record<string, unknown> | null;
   template: {
@@ -218,6 +230,16 @@ export default function ConsultationDetailPage() {
     );
   }
 
+  const safety = c.safety_screening ?? {};
+  const goalDetails = c.goal_details ?? {};
+  const painDetails = c.pain_details ?? {};
+  const adherence = c.adherence_details ?? {};
+  const coaching = c.coaching_preferences ?? {};
+  const followUp = c.follow_up_details ?? {};
+  const selectionOther = c.selection_other_details ?? {};
+  const safetyFlagValues = objectStrings(safety.flags);
+  const followUpDate = objectText(followUp.follow_up_date);
+
   return (
     <div className="max-w-4xl mx-auto px-4 md:px-6 pt-3 pb-16 space-y-4">
       {/* 헤더 */}
@@ -245,7 +267,7 @@ export default function ConsultationDetailPage() {
             <div className="mt-0.5 text-[13px] text-[#6B5D47] dark:text-zinc-400 flex flex-wrap gap-x-3 gap-y-0.5">
               {c.phone && <span>{formatPhone(c.phone)}</span>}
               {c.birth && <span>· {c.birth}</span>}
-              {c.gender && <span>· {c.gender === "M" ? "남" : "여"}</span>}
+              {c.gender && <span>· {c.gender === "M" ? "남" : c.gender === "F" ? "여" : objectText(selectionOther.gender) || "기타"}</span>}
               {c.address_dong && <span>· {c.address_dong}</span>}
               {c.trainer_name && <span>· 담당 {c.trainer_name}</span>}
             </div>
@@ -326,21 +348,31 @@ export default function ConsultationDetailPage() {
             label="가능 일정"
             value={[
               c.weekly_freq ? `주 ${c.weekly_freq}회` : null,
-              labelJoin(PLANNED_DAYS, c.planned_days),
+              labelJoin(PLANNED_DAYS, c.planned_days, c.planned_days_etc),
               c.planned_time,
             ].filter(Boolean).join(" · ") || "일정 미입력"}
           />
           <SummaryItem
             label="통증 · 건강 주의"
-            warning={Boolean(c.injury_history || c.pain_parts?.length || c.conditions?.length || c.medications)}
+            warning={Boolean(safetyFlagValues.length || c.injury_history || c.pain_parts?.length || c.conditions?.length || c.medications)}
             value={[
+              labelJoin(SAFETY_FLAGS, safetyFlagValues, objectText(safety.other)),
               c.injury_history,
               labelJoin(PAIN_PARTS, c.pain_parts, c.pain_parts_etc),
-              labelJoin(CONDITIONS, c.conditions),
+              labelJoin(CONDITIONS, c.conditions, objectText(selectionOther.conditions)),
               c.medications ? `복용약: ${c.medications}` : null,
             ].filter(Boolean).join(" · ") || "기록된 주의사항 없음"}
           />
         </div>
+        {followUpDate && (
+          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#E2C49B] bg-[#FFF8EC] px-3.5 py-3 dark:border-amber-800 dark:bg-amber-950/20">
+            <div>
+              <div className="text-[11.5px] font-bold text-[#9A5A1E] dark:text-amber-300">다음 연락 예정</div>
+              <div className="mt-0.5 text-[14px] font-bold text-[#2A251D] dark:text-zinc-100">{followUpDate}</div>
+            </div>
+            <div className="text-[12.5px] text-[#6B5D47] dark:text-zinc-300">{objectText(followUp.follow_up_note) || "후속 상담 내용을 확인해 주세요"}</div>
+          </div>
+        )}
         {(c.request_note || c.memo) && (
           <div className="mt-2.5 rounded-xl border border-[#E4EAD3] bg-white/80 px-3.5 py-3 dark:border-zinc-700 dark:bg-zinc-900/70">
             <div className="text-[11.5px] font-bold text-[#6B7B3A] dark:text-[#A8B87A]">요청 · 다음 액션</div>
@@ -357,7 +389,7 @@ export default function ConsultationDetailPage() {
           rows={[
             ["최근 1년간 경력", c.recent_year_history],
             ["과거 종목", labelJoin(PAST_SPORTS, c.past_sports, c.past_sports_etc)],
-            ["운동 경력", labelOne(EXPERIENCE_LENGTHS, c.experience_length)],
+            ["운동 경력", labelOne(EXPERIENCE_LENGTHS, c.experience_length, objectText(selectionOther.experience_length))],
             ["운동 동기 · 계기", c.motivation],
             ["목표", labelJoin(GOALS, c.goals, c.goals_etc)],
             ["운동 방법", c.workout_method],
@@ -365,6 +397,18 @@ export default function ConsultationDetailPage() {
             ["유입 경로", c.referral_source],
           ]}
         />
+      </SectionCard>
+
+      <SectionCard title="목표 구체화">
+        <KVList rows={[
+          ["1순위 목표", objectText(goalDetails.primary_goal)],
+          ["목표 기한", objectText(goalDetails.deadline)],
+          ["현재 상태·수치", objectText(goalDetails.current_metric)],
+          ["목표 상태·수치", objectText(goalDetails.target_metric)],
+          ["성공 기준", objectText(goalDetails.success_criteria)],
+          ["목표 중요도", scoreText(goalDetails.importance)],
+          ["달성 자신감", scoreText(goalDetails.confidence)],
+        ]} />
       </SectionCard>
 
       <SectionCard title="영양">
@@ -382,7 +426,7 @@ export default function ConsultationDetailPage() {
               "저녁",
               [c.meal_dinner_time, c.meal_dinner_menu].filter(Boolean).join(" · ") || null,
             ],
-            ["식사 습관", labelJoin(MEAL_HABITS, c.meal_habits)],
+            ["식사 습관", labelJoin(MEAL_HABITS, c.meal_habits, objectText(selectionOther.meal_habits))],
             ["선호 음식", labelJoin(PREFERRED_FOODS, c.preferred_foods, c.preferred_foods_etc)],
             ["수분 섭취", c.water_liters_per_day ? `${c.water_liters_per_day} 리터/일` : null],
             ["카페인", c.caffeine_cups_per_day ? `${c.caffeine_cups_per_day} 잔/일` : null],
@@ -417,8 +461,8 @@ export default function ConsultationDetailPage() {
                 ? `${c.work_hours_start ?? "?"} ~ ${c.work_hours_end ?? "?"}`
                 : null,
             ],
-            ["출퇴근", labelOne(COMMUTES, c.commute)],
-            ["직업 형태", labelJoin(JOB_TRAITS, c.job_traits)],
+            ["출퇴근", labelOne(COMMUTES, c.commute, objectText(selectionOther.commute))],
+            ["직업 형태", labelJoin(JOB_TRAITS, c.job_traits, objectText(selectionOther.job_traits))],
             ["기타 사항", c.work_notes],
           ]}
         />
@@ -441,7 +485,7 @@ export default function ConsultationDetailPage() {
             ],
             ["수면 만족도", labelOne(LEVELS, c.sleep_satisfaction)],
             ["컨디션 지수", labelOne(LEVELS, c.condition_score)],
-            ["피로도 시점", labelJoin(FATIGUE_WHEN, c.fatigue_when)],
+            ["피로도 시점", labelJoin(FATIGUE_WHEN, c.fatigue_when, objectText(selectionOther.fatigue_when))],
             ["피로도 원인", c.fatigue_reason],
             ["기타", c.condition_notes],
           ]}
@@ -457,25 +501,69 @@ export default function ConsultationDetailPage() {
         />
       </SectionCard>
 
+      <SectionCard title="통증 상세">
+        <KVList rows={[
+          ["통증 강도", scoreText(painDetails.intensity)],
+          ["방향", optionText([{ v: "left", l: "왼쪽" }, { v: "right", l: "오른쪽" }, { v: "both", l: "양쪽" }], painDetails.side)],
+          ["시작 시점", objectText(painDetails.onset)],
+          ["발생 동작", objectText(painDetails.trigger)],
+          ["피해야 하는 동작", objectText(painDetails.avoid)],
+          ["진단명", objectText(painDetails.diagnosis)],
+          ["치료·재활 상태", objectText(painDetails.treatment)],
+        ]} />
+      </SectionCard>
+
       <SectionCard title="과거 / 현재 병력">
         <KVList
           rows={[
-            ["병력", labelJoin(CONDITIONS, c.conditions)],
+            ["병력", labelJoin(CONDITIONS, c.conditions, objectText(selectionOther.conditions))],
             ["약물 복용", c.medications],
             ["현재 상태", c.current_state],
           ]}
         />
       </SectionCard>
 
+      <SectionCard title="운동 전 안전 확인">
+        <KVList rows={[
+          ["확인 항목", labelJoin(SAFETY_FLAGS, safetyFlagValues, objectText(safety.other))],
+          ["의료진 확인 상태", optionText([{ v: "pending", l: "확인 예정·대기" }, { v: "cleared", l: "운동 가능 확인 완료" }, { v: "restricted", l: "조건부 가능·제한 있음" }], safety.clearance_status)],
+          ["확인일", objectText(safety.clearance_date)],
+          ["주의사항·운동 제한", objectText(safety.precautions)],
+        ]} />
+      </SectionCard>
+
       <SectionCard title="운동 계획">
         <KVList
           rows={[
             ["주 몇 회", c.weekly_freq ? `주 ${c.weekly_freq}회` : null],
-            ["요일", labelJoin(PLANNED_DAYS, c.planned_days)],
-            ["기타", c.planned_days_etc],
+            ["요일", labelJoin(PLANNED_DAYS, c.planned_days, c.planned_days_etc)],
             ["시간대", c.planned_time],
           ]}
         />
+      </SectionCard>
+
+      <SectionCard title="운동 지속 및 지도 선호">
+        <KVList rows={[
+          ["지속 방해 요인", labelJoin(EXERCISE_BARRIERS, objectStrings(adherence.barriers), objectText(adherence.barriers_other))],
+          ["이전 중단 이유", objectText(adherence.dropout_reason)],
+          ["필요한 도움", objectText(adherence.support_needed)],
+          ["선호 지도 방식", labelJoin(COACHING_STYLES, objectStrings(coaching.styles), objectText(coaching.styles_other))],
+          ["신체 접촉 교정", consentText(coaching.touch_consent)],
+          ["사진·영상 촬영", consentText(coaching.media_consent)],
+        ]} />
+      </SectionCard>
+
+      <SectionCard title="상담 후속 관리">
+        <KVList rows={[
+          ["운동 시작 희망일", objectText(followUp.desired_start_date)],
+          ["관심 수업 횟수", objectText(followUp.interested_sessions)],
+          ["선호 연락 방식", labelOne(CONTACT_METHODS, objectText(followUp.preferred_contact), objectText(followUp.preferred_contact_other))],
+          ["연락 가능 시간", objectText(followUp.contact_time)],
+          ["다음 연락 예정일", followUpDate],
+          ["등록 가능성", optionText([{ v: "hot", l: "높음" }, { v: "warm", l: "보통" }, { v: "cold", l: "낮음" }], followUp.lead_temperature)],
+          ["망설이는 이유", objectText(followUp.hesitation_reason)],
+          ["다음 연락·상담 내용", objectText(followUp.follow_up_note)],
+        ]} />
       </SectionCard>
 
       {/* 커스텀 섹션 답변 렌더링 */}
@@ -488,11 +576,17 @@ export default function ConsultationDetailPage() {
             let display: string | null = null;
             if (v == null || v === "") display = null;
             else if (Array.isArray(v)) {
-              const labels = v.map((x) => f.options?.find((o) => o.v === x)?.l ?? String(x));
+              const labels = v
+                .filter((x) => x !== "__other")
+                .map((x) => f.options?.find((o) => o.v === x)?.l ?? String(x));
+              const other = objectText(data[`${f.key}__other`]);
+              if (other) labels.push(`기타: ${other}`);
               display = labels.length ? labels.join(", ") : null;
             } else if (typeof v === "boolean") display = v ? "예" : "아니오";
             else if (f.type === "chips_single") {
-              display = f.options?.find((o) => o.v === v)?.l ?? String(v);
+              display = v === "__other"
+                ? objectText(data[`${f.key}__other`]) ? `기타: ${objectText(data[`${f.key}__other`])}` : "기타"
+                : f.options?.find((o) => o.v === v)?.l ?? String(v);
             } else display = String(v);
             return [f.label, display];
           });
@@ -600,17 +694,45 @@ function labelJoin(
   etc?: string | null
 ): string | null {
   const labels = (arr ?? [])
+    .filter((v) => v !== "__other")
     .map((v) => opts.find((o) => o.v === v)?.l ?? v)
     .filter(Boolean);
-  if (etc && etc.trim()) labels.push(etc.trim());
+  if (etc && etc.trim()) labels.push(`기타: ${etc.trim()}`);
   return labels.length ? labels.join(", ") : null;
+}
+
+function objectText(value: unknown): string | null {
+  if (typeof value === "string") return value.trim() || null;
+  return null;
+}
+
+function objectStrings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function scoreText(value: unknown): string | null {
+  return typeof value === "number" && Number.isFinite(value) ? `${value}/10` : null;
+}
+
+function optionText(
+  options: readonly { v: string; l: string }[],
+  value: unknown
+): string | null {
+  if (typeof value !== "string" || !value) return null;
+  return options.find((option) => option.v === value)?.l ?? value;
+}
+
+function consentText(value: unknown): string | null {
+  return value === "yes" ? "동의" : value === "no" ? "동의하지 않음" : null;
 }
 
 function labelOne(
   opts: readonly { v: string; l: string }[],
-  v: string | null | undefined
+  v: string | null | undefined,
+  other?: string | null
 ): string | null {
   if (!v) return null;
+  if ((v === "__other" || v === "etc") && other?.trim()) return `기타: ${other.trim()}`;
   return opts.find((o) => o.v === v)?.l ?? v;
 }
 

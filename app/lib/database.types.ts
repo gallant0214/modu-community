@@ -2939,6 +2939,13 @@ export type Database = {
           pain_parts: unknown
           pain_parts_etc: string | null
           conditions: unknown
+          safety_screening: unknown
+          goal_details: unknown
+          pain_details: unknown
+          adherence_details: unknown
+          coaching_preferences: unknown
+          follow_up_details: unknown
+          selection_other_details: unknown
           medications: string | null
           current_state: string | null
           weekly_freq: number | null
@@ -3016,6 +3023,13 @@ export type Database = {
           pain_parts?: unknown
           pain_parts_etc?: string | null
           conditions?: unknown
+          safety_screening?: unknown
+          goal_details?: unknown
+          pain_details?: unknown
+          adherence_details?: unknown
+          coaching_preferences?: unknown
+          follow_up_details?: unknown
+          selection_other_details?: unknown
           medications?: string | null
           current_state?: string | null
           weekly_freq?: number | null
@@ -3093,6 +3107,13 @@ export type Database = {
           pain_parts?: unknown
           pain_parts_etc?: string | null
           conditions?: unknown
+          safety_screening?: unknown
+          goal_details?: unknown
+          pain_details?: unknown
+          adherence_details?: unknown
+          coaching_preferences?: unknown
+          follow_up_details?: unknown
+          selection_other_details?: unknown
           medications?: string | null
           current_state?: string | null
           weekly_freq?: number | null

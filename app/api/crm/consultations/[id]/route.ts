@@ -97,8 +97,15 @@ export async function PATCH(
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
+  const statusOnlyKeys = new Set([
+    "status",
+    "converted_pass_id",
+    "converted_at",
+    "lost_reason",
+  ]);
+  const hasConsultationContent = Object.keys(body).some((key) => !statusOnlyKeys.has(key));
   const patch: Record<string, unknown> = {
-    ...buildConsultationPayload(body, ctx.centerMemberId),
+    ...(hasConsultationContent ? buildConsultationPayload(body, ctx.centerMemberId) : {}),
     updated_at: new Date().toISOString(),
   };
 

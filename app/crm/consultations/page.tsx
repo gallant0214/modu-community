@@ -31,6 +31,8 @@ interface Row {
   trainer_member_id: number | null;
   trainer_name: string | null;
   goals: string[] | null;
+  safety_screening: Record<string, unknown> | null;
+  follow_up_details: Record<string, unknown> | null;
   status: string;
   converted_at: string | null;
   converted_pass_id: number | null;
@@ -594,6 +596,9 @@ function ConsultationList({ rows }: { rows: Row[] }) {
       <div className="space-y-2 md:hidden">
         {rows.map((r) => {
           const goalText = consultationGoalText(r.goals);
+          const followUpDate = objectString(r.follow_up_details, "follow_up_date");
+          const leadTemperature = objectString(r.follow_up_details, "lead_temperature");
+          const needsSafetyReview = objectArray(r.safety_screening, "flags").length > 0;
           return (
             <Link
               key={r.id}
@@ -613,6 +618,12 @@ function ConsultationList({ rows }: { rows: Row[] }) {
                   <p className="mt-1 line-clamp-1 text-[13px] font-medium text-[#65733C] dark:text-[#A8B87A]">
                     {goalText || "상담 목표 미입력"}
                   </p>
+                  {followUpDate && (
+                    <p className="mt-1 text-[12px] font-semibold text-[#A25D20]">다음 연락 {followUpDate}</p>
+                  )}
+                  {needsSafetyReview && (
+                    <p className="mt-1 text-[11.5px] font-bold text-red-700 dark:text-red-300">운동 전 안전 확인 필요</p>
+                  )}
                 </div>
                 <StatusChip status={r.status} />
               </div>
@@ -620,6 +631,7 @@ function ConsultationList({ rows }: { rows: Row[] }) {
                 <span className="tabular-nums">{r.consulted_at}</span>
                 <span>담당 {r.trainer_name ?? "미지정"}</span>
                 {r.phone && <span>{formatPhone(r.phone)}</span>}
+                {leadTemperature && <span>등록 가능성 {leadLabel(leadTemperature)}</span>}
               </div>
             </Link>
           );
@@ -651,6 +663,14 @@ function ConsultationList({ rows }: { rows: Row[] }) {
                   <span className="mt-0.5 block max-w-[180px] truncate text-[11.5px] font-normal text-[#7B8752]">
                     {consultationGoalText(r.goals) || "목표 미입력"}
                   </span>
+                  {objectString(r.follow_up_details, "follow_up_date") && (
+                    <span className="mt-0.5 block text-[11px] font-semibold text-[#A25D20]">
+                      다음 연락 {objectString(r.follow_up_details, "follow_up_date")}
+                    </span>
+                  )}
+                  {objectArray(r.safety_screening, "flags").length > 0 && (
+                    <span className="mt-0.5 block text-[11px] font-bold text-red-700 dark:text-red-300">안전 확인 필요</span>
+                  )}
                 </Link>
               </td>
               <td className="py-2 pr-2 text-[#6B5D47]">
@@ -682,6 +702,20 @@ function consultationGoalText(goals: string[] | null) {
   return (goals ?? [])
     .map((goal) => GOALS.find((option) => option.v === goal)?.l ?? goal)
     .join(" · ");
+}
+
+function objectString(value: Record<string, unknown> | null, key: string) {
+  const item = value?.[key];
+  return typeof item === "string" ? item : "";
+}
+
+function objectArray(value: Record<string, unknown> | null, key: string) {
+  const item = value?.[key];
+  return Array.isArray(item) ? item : [];
+}
+
+function leadLabel(value: string) {
+  return value === "hot" ? "높음" : value === "warm" ? "보통" : value === "cold" ? "낮음" : value;
 }
 
 function StatusChip({ status }: { status: string }) {

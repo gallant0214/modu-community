@@ -119,6 +119,39 @@ export const PLANNED_DAYS = [
   { v: "sun", l: "일" },
 ] as const;
 
+export const SAFETY_FLAGS = [
+  { v: "chest_pain", l: "가슴 통증·압박감" },
+  { v: "dizziness", l: "어지럼증·실신 경험" },
+  { v: "breathlessness", l: "가벼운 활동에도 심한 호흡곤란" },
+  { v: "palpitations", l: "불규칙하거나 빠른 심장 박동" },
+  { v: "medical_restriction", l: "의료진의 운동 제한·주의 안내" },
+  { v: "recent_treatment", l: "최근 수술·입원·치료" },
+] as const;
+
+export const EXERCISE_BARRIERS = [
+  { v: "time", l: "시간 부족" },
+  { v: "irregular_work", l: "불규칙한 업무" },
+  { v: "caregiving", l: "육아·가사" },
+  { v: "pain", l: "통증·체력 부족" },
+  { v: "cost", l: "비용 부담" },
+  { v: "distance", l: "이동 거리" },
+  { v: "motivation", l: "동기 유지가 어려움" },
+  { v: "no_results", l: "이전 운동에서 효과를 못 느낌" },
+] as const;
+
+export const COACHING_STYLES = [
+  { v: "encouraging", l: "격려 중심" },
+  { v: "direct", l: "명확하고 적극적인 피드백" },
+  { v: "detailed", l: "원리와 이유를 자세히 설명" },
+  { v: "autonomous", l: "스스로 해볼 시간을 충분히 제공" },
+] as const;
+
+export const CONTACT_METHODS = [
+  { v: "phone", l: "전화" },
+  { v: "text", l: "문자" },
+  { v: "kakao", l: "카카오톡" },
+] as const;
+
 export const CONSULT_STATUS_LABEL: Record<string, string> = {
   open: "진행중",
   converted: "PT 등록",

@@ -6,7 +6,7 @@ import { buildConsultationPayload } from "@/app/lib/crm-consultation";
 export const dynamic = "force-dynamic";
 
 const LIST_COLUMNS =
-  "id, member_id, name, gender, birth, phone, address_dong, trainer_member_id, trainer_name_custom, goals, status, converted_at, converted_pass_id, lost_reason, consulted_at, created_at";
+  "id, member_id, name, gender, birth, phone, address_dong, trainer_member_id, trainer_name_custom, goals, safety_screening, follow_up_details, status, converted_at, converted_pass_id, lost_reason, consulted_at, created_at";
 
 /**
  * GET /api/crm/consultations?status=&trainer_id=&q=&from=&to=&limit=

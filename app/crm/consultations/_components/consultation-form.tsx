@@ -236,8 +236,6 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
   const [coachingStylesOther, setCoachingStylesOther] = useState(nestedStr("coaching_preferences", "styles_other"));
   const [touchConsent, setTouchConsent] = useState(nestedStr("coaching_preferences", "touch_consent"));
   const [mediaConsent, setMediaConsent] = useState(nestedStr("coaching_preferences", "media_consent"));
-  const [emergencyName, setEmergencyName] = useState(nestedStr("coaching_preferences", "emergency_name"));
-  const [emergencyPhone, setEmergencyPhone] = useState(nestedStr("coaching_preferences", "emergency_phone"));
   const [desiredStartDate, setDesiredStartDate] = useState(nestedStr("follow_up_details", "desired_start_date"));
   const [interestedSessions, setInterestedSessions] = useState(nestedStr("follow_up_details", "interested_sessions"));
   const [preferredContact, setPreferredContact] = useState(nestedStr("follow_up_details", "preferred_contact"));
@@ -485,8 +483,6 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
           styles_other: coachingStylesOther,
           touch_consent: touchConsent,
           media_consent: mediaConsent,
-          emergency_name: emergencyName,
-          emergency_phone: emergencyPhone,
         },
         follow_up_details: {
           desired_start_date: desiredStartDate,
@@ -1370,8 +1366,6 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
             <Field label="자세 확인용 사진·영상 촬영 동의">
               <YesNoChoice value={mediaConsent} onChange={setMediaConsent} />
             </Field>
-            <Field label="비상 연락처 이름"><input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} className={crmInputClass} /></Field>
-            <Field label="비상 연락처 전화번호"><input value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} className={crmInputClass} placeholder="010-0000-0000" /></Field>
           </div>
         </div>
       </Section>
