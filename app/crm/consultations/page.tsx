@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
+import { crmInputClass } from "../_components/crm-modal";
 import { CONSULT_STATUS_COLOR, CONSULT_STATUS_LABEL } from "./_labels";
 import { ConsultationForm } from "./_components/consultation-form";
 import type { TemplateDefinition } from "@/app/lib/crm-consultation-template";
@@ -170,31 +171,19 @@ function NewTab() {
             + 상담지 관리 →
           </Link>
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <select
+          className={crmInputClass}
+          value={selected ?? ""}
+          onChange={(e) => setSelected(e.target.value ? Number(e.target.value) : null)}
+        >
+          {templates.length === 0 && <option value="">등록된 상담지가 없어요</option>}
           {templates.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setSelected(t.id)}
-              className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
-                selected === t.id
-                  ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
-                  : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/50"
-              }`}
-            >
+            <option key={t.id} value={t.id}>
               {t.name}
-              {t.is_default && (
-                <span
-                  className={`ml-1.5 text-[10px] font-bold ${
-                    selected === t.id ? "text-white/80" : "text-[#B47B2A]"
-                  }`}
-                >
-                  기본
-                </span>
-              )}
-            </button>
+              {t.is_default ? " (기본)" : ""}
+            </option>
           ))}
-        </div>
+        </select>
         {selectedTpl?.description && (
           <p className="mt-2 text-[11.5px] text-[#A89B80]">{selectedTpl.description}</p>
         )}
