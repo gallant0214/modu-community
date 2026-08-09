@@ -127,13 +127,15 @@ export async function buildAttendanceVoiceMessages(
     const { data: st } = await supabase
       .from("crm_touch_attendance_settings")
       .select(
-        "msg_expired_rental, msg_expired_rental_enabled, msg_expired_rental_days, msg_expired_locker, msg_expired_locker_enabled, msg_expired_locker_days"
+        "msg_expired_membership, msg_expired_membership_enabled, msg_expired_rental, msg_expired_rental_enabled, msg_expired_rental_days, msg_expired_locker, msg_expired_locker_enabled, msg_expired_locker_days"
       )
       .eq("center_id", centerId)
       .maybeSingle();
 
     if (st) {
       const s = st as {
+        msg_expired_membership?: string;
+        msg_expired_membership_enabled?: boolean;
         msg_expired_rental?: string;
         msg_expired_rental_enabled?: boolean;
         msg_expired_rental_days?: number;
@@ -149,10 +151,20 @@ export async function buildAttendanceVoiceMessages(
         return days <= 0 || d >= -days;
       };
 
+      const needExpiredMs =
+        s.msg_expired_membership_enabled && (s.msg_expired_membership || "").trim();
       const needRental = s.msg_expired_rental_enabled && (s.msg_expired_rental || "").trim();
       const needLocker = s.msg_expired_locker_enabled && (s.msg_expired_locker || "").trim();
 
-      const [rentalsRes, lockersRes] = await Promise.all([
+      const [expiredMsRes, rentalsRes, lockersRes] = await Promise.all([
+        needExpiredMs
+          ? supabase
+              .from("crm_memberships")
+              .select("expires_at, status, is_paused")
+              .eq("center_id", centerId)
+              .eq("member_id", member.id)
+              .in("status", ["valid", "expired"])
+          : Promise.resolve({ data: [] as { expires_at: string; status: string; is_paused: boolean }[] }),
         needRental
           ? supabase
               .from("crm_rentals")
@@ -169,6 +181,24 @@ export async function buildAttendanceVoiceMessages(
               .eq("assigned_member_id", member.id)
           : Promise.resolve({ data: [] as { expires_at: string }[] }),
       ]);
+
+      // 만료 회원권: 현재 유효한 회원권이 없고(만료 지남/무기한 아님), 만료된 회원권이 있으면 안내.
+      if (needExpiredMs) {
+        const ms = (expiredMsRes.data ?? []) as {
+          expires_at: string;
+          status: string;
+          is_paused: boolean;
+        }[];
+        const hasActive = ms.some(
+          (m) =>
+            !m.is_paused &&
+            (!!m.expires_at && (m.expires_at.startsWith("9999") || daysUntil(m.expires_at) >= 0))
+        );
+        const hasExpired = ms.some(
+          (m) => m.expires_at && !m.expires_at.startsWith("9999") && daysUntil(m.expires_at) < 0
+        );
+        if (!hasActive && hasExpired) messages.push(substitute(s.msg_expired_membership!));
+      }
 
       if (needRental) {
         const days = Number(s.msg_expired_rental_days ?? 0);
