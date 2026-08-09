@@ -136,7 +136,7 @@ export default function CrmMembershipsPage() {
     [list, periodFilter]
   );
 
-  const visibleList = useMemo(() => {
+  const filteredList = useMemo(() => {
     const q = query.trim().toLowerCase();
     return periodList.filter((p) => {
       const paymentMatches = paymentFilter ? p.payment_method === paymentFilter : true;
@@ -148,6 +148,78 @@ export default function CrmMembershipsPage() {
       return paymentMatches && queryMatches;
     });
   }, [periodList, paymentFilter, query]);
+
+  // 컬럼 헤더 클릭 정렬 (회원 관리와 동일 UX). null = 서버 기본 순서.
+  const [sortKey, setSortKey] = useState<MColKey | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("crm_memberships_sort_v1");
+      if (saved) {
+        const o = JSON.parse(saved) as { key: MColKey | null; dir: "asc" | "desc" };
+        if (o && (o.dir === "asc" || o.dir === "desc")) {
+          setSortKey(o.key ?? null);
+          setSortDir(o.dir);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const toggleSort = (key: MColKey) => {
+    setSortKey((prevKey) => {
+      let nextKey: MColKey | null = key;
+      let nextDir: "asc" | "desc";
+      if (prevKey === key) {
+        // 오름차 → 내림차 → 해제
+        if (sortDir === "asc") nextDir = "desc";
+        else {
+          nextKey = null;
+          nextDir = "asc";
+        }
+      } else {
+        // 텍스트는 오름, 날짜·숫자는 내림(최신·큰 값 먼저)이 기본
+        const desc = ["purchased", "start", "expires", "duration", "price"].includes(key);
+        nextDir = desc ? "desc" : "asc";
+      }
+      setSortDir(nextDir);
+      try {
+        localStorage.setItem("crm_memberships_sort_v1", JSON.stringify({ key: nextKey, dir: nextDir }));
+      } catch {
+        /* ignore */
+      }
+      return nextKey;
+    });
+  };
+
+  const sortVal = (p: Row, key: MColKey): string | number => {
+    switch (key) {
+      case "member": return (p.member_name || "").toLowerCase();
+      case "phone": return p.member_phone || "";
+      case "plan": return (p.plan_name || "").toLowerCase();
+      case "purchased": return p.purchased_at || "";
+      case "duration": return p.duration_days ?? 0;
+      case "start": return p.start_date || "";
+      case "expires": return p.expires_at || "";
+      case "price": return p.price_won ?? 0;
+      case "payment": return p.payment_method || "";
+      case "status": return p.status || "";
+      default: return "";
+    }
+  };
+
+  const visibleList = useMemo(() => {
+    if (!sortKey) return filteredList;
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filteredList].sort((a, b) => {
+      const va = sortVal(a, sortKey);
+      const vb = sortVal(b, sortKey);
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredList, sortKey, sortDir]);
 
   const stats = useMemo(() => {
     const valid = periodList.filter((p) => p.status === "valid");
@@ -290,7 +362,15 @@ export default function CrmMembershipsPage() {
             <thead className="bg-[#F6F0E5] dark:bg-zinc-950/80 text-[#6B5D47] dark:text-zinc-400">
               <tr>
                 {M_COLS.map((c) => (
-                  <ResizableTh key={c.key} colKey={c.key} label={c.label} onStart={startResize} />
+                  <ResizableTh
+                    key={c.key}
+                    colKey={c.key}
+                    label={c.label}
+                    onStart={startResize}
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
                 ))}
               </tr>
             </thead>

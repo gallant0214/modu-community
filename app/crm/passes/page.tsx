@@ -166,7 +166,7 @@ export default function CrmPassesPage() {
     () => list.filter((p) => inPeriod(p.issued_at, periodFilter)),
     [list, periodFilter]
   );
-  const visibleList = useMemo(() => {
+  const filteredList = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return periodList;
     return periodList.filter((p) =>
@@ -175,6 +175,75 @@ export default function CrmPassesPage() {
         .some((v) => String(v).toLowerCase().includes(q))
     );
   }, [periodList, query, staffMap]);
+
+  // 컬럼 헤더 클릭 정렬 (회원 관리와 동일 UX). null = 서버 기본 순서.
+  const [sortKey, setSortKey] = useState<PColKey | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("crm_passes_sort_v1");
+      if (saved) {
+        const o = JSON.parse(saved) as { key: PColKey | null; dir: "asc" | "desc" };
+        if (o && (o.dir === "asc" || o.dir === "desc")) {
+          setSortKey(o.key ?? null);
+          setSortDir(o.dir);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const toggleSort = (key: PColKey) => {
+    setSortKey((prevKey) => {
+      let nextKey: PColKey | null = key;
+      let nextDir: "asc" | "desc";
+      if (prevKey === key) {
+        if (sortDir === "asc") nextDir = "desc";
+        else {
+          nextKey = null;
+          nextDir = "asc";
+        }
+      } else {
+        const desc = ["remaining", "price", "purchased", "start", "expires"].includes(key);
+        nextDir = desc ? "desc" : "asc";
+      }
+      setSortDir(nextDir);
+      try {
+        localStorage.setItem("crm_passes_sort_v1", JSON.stringify({ key: nextKey, dir: nextDir }));
+      } catch {
+        /* ignore */
+      }
+      return nextKey;
+    });
+  };
+  const sortVal = (p: PassRow, key: PColKey): string | number => {
+    switch (key) {
+      case "member": return (p.member_name || "").toLowerCase();
+      case "phone": return p.member_phone || "";
+      case "lesson": return (p.lesson_kind || "").toLowerCase();
+      case "remaining": return p.remaining_sessions ?? 0;
+      case "price": return p.price_won ?? 0;
+      case "payment": return p.payment_method || "";
+      case "trainer": return (staffMap.get(p.trainer_member_id) || "").toLowerCase();
+      case "purchased": return p.issued_at || "";
+      case "start": return p.start_date || "";
+      case "expires": return p.expires_at || "";
+      case "status": return p.status || "";
+      default: return "";
+    }
+  };
+  const visibleList = useMemo(() => {
+    if (!sortKey) return filteredList;
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filteredList].sort((a, b) => {
+      const va = sortVal(a, sortKey);
+      const vb = sortVal(b, sortKey);
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredList, sortKey, sortDir, staffMap]);
   const stats = useMemo(() => {
     const valid = periodList.filter((p) => p.status === "valid");
     const expiring = valid.filter((p) => daysUntil(p.expires_at) <= 7).length;
@@ -316,7 +385,15 @@ export default function CrmPassesPage() {
             <thead className="bg-[#F6F0E5] dark:bg-zinc-950/80 text-[#6B5D47] dark:text-zinc-400">
               <tr>
                 {P_COLS.map((c) => (
-                  <ResizableTh key={c.key} colKey={c.key} label={c.label} onStart={startResize} />
+                  <ResizableTh
+                    key={c.key}
+                    colKey={c.key}
+                    label={c.label}
+                    onStart={startResize}
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
                 ))}
               </tr>
             </thead>

@@ -118,21 +118,47 @@ export function useColumnWidths<K extends string>(
   return { widths, startResize, reset, changed, totalWidth };
 }
 
-/** 너비 조절 핸들이 달린 헤더 셀 */
+/**
+ * 너비 조절 핸들이 달린 헤더 셀.
+ * onSort 를 넘기면 라벨이 정렬 버튼이 되고 활성 컬럼에 ▲/▼ 표시(회원 관리와 동일 UX).
+ */
 export function ResizableTh<K extends string>({
   colKey,
   label,
   onStart,
   className,
+  sortKey,
+  sortDir,
+  onSort,
 }: {
   colKey: K;
   label: React.ReactNode;
   onStart: (key: K, e: React.MouseEvent) => void;
   className?: string;
+  /** 현재 정렬 중인 컬럼 키 */
+  sortKey?: K | null;
+  sortDir?: "asc" | "desc";
+  /** 넘기면 라벨 클릭 시 이 컬럼으로 정렬 토글 */
+  onSort?: (key: K) => void;
 }) {
+  const active = !!onSort && sortKey === colKey;
   return (
     <th className={`relative text-left font-medium px-3 py-2.5 ${className ?? ""}`}>
-      <span className="block truncate pr-2">{label}</span>
+      {onSort ? (
+        <button
+          type="button"
+          onClick={() => onSort(colKey)}
+          className="flex items-center gap-1 w-full pr-2 text-left hover:text-[#6B7B3A] dark:hover:text-[#A8B87A]"
+          title="정렬"
+        >
+          <span className="truncate">{label}</span>
+          <span className={`text-[10px] shrink-0 ${active ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#C7B89B] dark:text-zinc-600"}`}>
+            {active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
+          </span>
+        </button>
+      ) : (
+        <span className="block truncate pr-2">{label}</span>
+      )}
       <span
         onMouseDown={(e) => onStart(colKey, e)}
         className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-[#6B7B3A]/30"
