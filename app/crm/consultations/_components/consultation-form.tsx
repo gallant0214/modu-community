@@ -214,6 +214,26 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
   const [showMemberPanel, setShowMemberPanel] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 입력 방식: 신규(수기 입력) vs 기존회원(검색·자동채움)
+  const [memberMode, setMemberMode] = useState<"new" | "existing">(
+    initial?.member_id ? "existing" : "new"
+  );
+  const switchToNew = () => {
+    setMemberMode("new");
+    // 기존 회원 매칭/자동채움 해제 → 수기 입력 시작
+    if (memberId) {
+      setMemberId(null);
+      setName("");
+      setPhone("");
+      setBirth("");
+      setGender("");
+    }
+    setMemberQuery("");
+    setMemberHits([]);
+    setShowMemberPanel(false);
+  };
+  const switchToExisting = () => setMemberMode("existing");
+
   useEffect(() => {
     if (memberId) return; // 이미 선택된 경우 검색 안 함
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -372,9 +392,38 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
       )}
 
       {/* ===== 상단 : 회원 검색 + 기본 정보 ===== */}
-      <Section title="회원 · 기본 정보" required>
+      <Section
+        title="회원 · 기본 정보"
+        required
+        headerRight={
+          <div className="flex items-center rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden shrink-0">
+            <button
+              type="button"
+              onClick={switchToNew}
+              className={`px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                memberMode === "new"
+                  ? "bg-[#6B7B3A] text-white"
+                  : "bg-white dark:bg-zinc-950 text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+              }`}
+            >
+              신규
+            </button>
+            <button
+              type="button"
+              onClick={switchToExisting}
+              className={`px-3 py-1.5 text-[12px] font-semibold border-l border-[#E8E0D0] dark:border-zinc-700 transition-colors ${
+                memberMode === "existing"
+                  ? "bg-[#6B7B3A] text-white"
+                  : "bg-white dark:bg-zinc-950 text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+              }`}
+            >
+              기존회원
+            </button>
+          </div>
+        }
+      >
         <div className="space-y-3">
-          {memberId ? (
+          {memberMode === "existing" && (memberId ? (
             <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border-2 border-[#6B7B3A]/40 bg-[#F3F7EA]/60 dark:bg-emerald-950/20">
               <div className="min-w-0">
                 <div className="text-[11px] font-semibold text-[#6B7B3A]">센터 회원 매칭됨</div>
@@ -432,7 +481,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
                 </div>
               )}
             </div>
-          )}
+          ))}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="성함" required>
@@ -1074,18 +1123,23 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
 function Section({
   title,
   required,
+  headerRight,
   children,
 }: {
   title: string;
   required?: boolean;
+  headerRight?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className="mb-5 px-4 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-      <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-        {title}
-        {required && <span className="text-[#B47B2A] ml-1">*</span>}
-      </h2>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+          {title}
+          {required && <span className="text-[#B47B2A] ml-1">*</span>}
+        </h2>
+        {headerRight}
+      </div>
       {children}
     </section>
   );
