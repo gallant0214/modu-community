@@ -48,6 +48,7 @@ export async function POST(request: Request) {
 
   if (!centerId) return NextResponse.json({ error: "센터를 선택해주세요" }, { status: 400 });
   if (!name) return NextResponse.json({ error: "이름을 입력해주세요" }, { status: 400 });
+  if (!birth) return NextResponse.json({ error: "생년월일을 정확히 입력해주세요" }, { status: 400 });
   if (phoneDigits.length < 10) return NextResponse.json({ error: "연락처를 정확히 입력해주세요" }, { status: 400 });
   if (body.privacyConsent !== true) {
     return NextResponse.json({ error: "개인정보 수집·이용 동의가 필요해요" }, { status: 400 });
