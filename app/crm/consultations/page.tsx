@@ -162,16 +162,10 @@ function NewTab() {
       {/* 폼(ConsultationForm)과 좌우 폭을 맞추기 위해 동일한 max-w-4xl mx-auto px 컨테이너로 감쌈 */}
       <div className="max-w-4xl mx-auto px-4 md:px-6">
         <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4">
-          <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="mb-2">
             <h2 className="text-[13.5px] font-bold text-[#2A251D] dark:text-zinc-100">
               상담지 선택
             </h2>
-            <Link
-              href="/crm/consultations?tab=manage"
-              className="text-[11.5px] font-semibold text-[#6B7B3A] hover:underline"
-            >
-              + 상담지 관리 →
-            </Link>
           </div>
           <select
             className={crmInputClass}
