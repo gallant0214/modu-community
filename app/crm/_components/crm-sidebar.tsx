@@ -241,6 +241,8 @@ export function CrmSidebar({ role, centerName, centerKind, centerMemberId, permi
                       window.dispatchEvent(
                         new CustomEvent("crm:navclick", { detail: item.href })
                       );
+                      // 사이드바 항목 이동 시 항상 페이지 최상단부터 보이도록.
+                      window.scrollTo({ top: 0, left: 0 });
                     }
                   }}
                   className={cls}

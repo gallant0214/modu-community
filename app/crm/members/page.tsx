@@ -260,6 +260,8 @@ export default function CrmMembersPage() {
         sessionStorage.removeItem("crm_nav_reset");
         memoUi = null;
         memoPage = 1;
+        // 사이드바로 새로 진입 시엔 이전 스크롤 위치를 복원하지 않고 최상단에서 시작.
+        memoScroll = 0;
       }
     } catch {
       /* ignore */
@@ -343,6 +345,10 @@ export default function CrmMembersPage() {
           /* ignore */
         }
         window.history.replaceState(window.history.state, "", "/crm/members");
+        // 최상단부터 보이도록 + 스크롤 복원 억제
+        memoScroll = 0;
+        scrollRestoredRef.current = true;
+        window.scrollTo({ top: 0, left: 0 });
       }
     };
     window.addEventListener("crm:navclick", onNav);
