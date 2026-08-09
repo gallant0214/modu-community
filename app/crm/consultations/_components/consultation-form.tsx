@@ -569,7 +569,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
                 value={addressDong}
                 onChange={(e) => setAddressDong(e.target.value)}
                 className={crmInputClass}
-                placeholder="예: 삼성동"
+                placeholder="삼성동 또는 아파트 or 오피스텔"
               />
             </Field>
             <Field label="상담 담당 강사">
