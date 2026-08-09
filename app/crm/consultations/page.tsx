@@ -65,11 +65,12 @@ export default function ConsultationsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const tab: Tab = tabParam === "new" || tabParam === "manage" ? tabParam : "list";
+  // 기본(파라미터 없음)은 첫 탭 'PT 상담지'(new). 사이드바로 진입하면 항상 첫 탭부터.
+  const tab: Tab = tabParam === "list" || tabParam === "manage" ? tabParam : "new";
 
   const setTab = (t: Tab) => {
     const q = new URLSearchParams(searchParams.toString());
-    if (t === "list") q.delete("tab");
+    if (t === "new") q.delete("tab");
     else q.set("tab", t);
     const qs = q.toString();
     router.replace(`/crm/consultations${qs ? `?${qs}` : ""}`);

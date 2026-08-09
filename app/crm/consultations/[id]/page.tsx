@@ -185,7 +185,7 @@ export default function ConsultationDetailPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "삭제 실패");
-      router.push("/crm/consultations");
+      router.push("/crm/consultations?tab=list");
     } catch (e) {
       alert(e instanceof Error ? e.message : "네트워크 오류");
     }
@@ -274,7 +274,7 @@ export default function ConsultationDetailPage() {
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <Link
-              href="/crm/consultations"
+              href="/crm/consultations?tab=list"
               className="px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
             >
               목록
