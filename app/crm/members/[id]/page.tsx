@@ -308,14 +308,14 @@ export default function CrmMemberDetailPage() {
                     className="px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11.5px] font-semibold dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60"
                     title="회원앱에 로그인해 CRM 레코드와 계정이 연결된 상태예요."
                   >
-                    연동 회원
+                    앱 연동
                   </span>
                 ) : (
                   <span
                     className="px-2 py-1 rounded-full bg-zinc-100 text-zinc-500 border border-zinc-200 text-[11.5px] font-semibold dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
                     title="회원앱 계정과 아직 연결되지 않았어요. 회원이 앱에서 셀프 가입하면 자동 연동됩니다."
                   >
-                    미연동 회원
+                    앱 미연동
                   </span>
                 )}
                 <span className={`px-2 py-1 rounded-full text-[11.5px] font-semibold ${
@@ -362,6 +362,9 @@ export default function CrmMemberDetailPage() {
                   centerId={foreignCenter ? Number(foreignCenter) : undefined}
                   onDone={load}
                 />
+                {member.linked_firebase_uid && (
+                  <UnlinkAppButton memberId={member.id} canEdit={canEditBasic} onDone={load} />
+                )}
               </div>
             </div>
           </div>
@@ -915,6 +918,73 @@ function CheckInButton({
         className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
       >
         {busy ? "처리 중…" : "출석 처리"}
+      </button>
+      {msg && (
+        <span
+          className={`text-[12px] font-medium ${
+            msg.tone === "ok" ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#B47B2A]"
+          }`}
+        >
+          {msg.text}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* 회원 상세 헤더 — 앱 연동 해지 버튼 (연동된 회원에게만 노출) */
+function UnlinkAppButton({
+  memberId,
+  canEdit,
+  onDone,
+}: {
+  memberId: number;
+  canEdit: boolean;
+  onDone: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; tone: "ok" | "warn" } | null>(null);
+
+  const run = async () => {
+    if (busy) return;
+    if (
+      !window.confirm(
+        "이 회원의 앱 연동을 해제할까요?\n회원 데이터·이력은 그대로 유지되고, 앱 계정 연결과 앱 푸시만 끊깁니다."
+      )
+    )
+      return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members/${memberId}/unlink`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "연동 해제 실패");
+      setMsg({ text: "앱 연동을 해제했어요.", tone: "ok" });
+      onDone();
+    } catch (e) {
+      setMsg({ text: e instanceof Error ? e.message : "네트워크 오류", tone: "warn" });
+    } finally {
+      setBusy(false);
+      setTimeout(() => setMsg(null), 4000);
+    }
+  };
+
+  if (!canEdit) return null;
+
+  return (
+    <div className="mt-2 flex items-center gap-2 flex-wrap">
+      <button
+        type="button"
+        onClick={run}
+        disabled={busy}
+        className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-[12.5px] font-semibold hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-60"
+      >
+        {busy ? "해제 중…" : "앱 연동 해지"}
       </button>
       {msg && (
         <span
