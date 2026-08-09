@@ -18,6 +18,10 @@ import {
   PAIN_PARTS,
   CONDITIONS,
   PLANNED_DAYS,
+  SAFETY_FLAGS,
+  EXERCISE_BARRIERS,
+  COACHING_STYLES,
+  CONTACT_METHODS,
 } from "../_labels";
 import type {
   CustomField,
@@ -89,6 +93,24 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
   const asArr = (k: string): string[] =>
     Array.isArray(initial?.[k]) ? (initial![k] as string[]) : [];
   const asBool = (k: string) => Boolean(initial?.[k]);
+  const nestedObj = (group: string) => {
+    const value = initial?.[group];
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : {};
+  };
+  const nestedStr = (group: string, key: string) => {
+    const value = nestedObj(group)[key];
+    return typeof value === "string" ? value : "";
+  };
+  const nestedNum = (group: string, key: string): number | "" => {
+    const value = nestedObj(group)[key];
+    return typeof value === "number" ? value : "";
+  };
+  const nestedArr = (group: string, key: string): string[] => {
+    const value = nestedObj(group)[key];
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  };
 
   // 상단 기본 정보
   const [memberId, setMemberId] = useState<number | null>(
@@ -96,6 +118,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
   );
   const [name, setName] = useState(asStr("name"));
   const [gender, setGender] = useState(asStr("gender"));
+  const [genderOther, setGenderOther] = useState(nestedStr("selection_other_details", "gender"));
   const [birth, setBirth] = useState(formatBirthInput(asStr("birth")));
   const [phone, setPhone] = useState(asStr("phone"));
   const [addressDong, setAddressDong] = useState(asStr("address_dong"));
@@ -124,6 +147,19 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
   const [workoutMethod, setWorkoutMethod] = useState(asStr("workout_method"));
   const [preferredTrainer, setPreferredTrainer] = useState(asStr("preferred_trainer"));
   const [referralSource, setReferralSource] = useState(asStr("referral_source"));
+  const [experienceLengthOther, setExperienceLengthOther] = useState(nestedStr("selection_other_details", "experience_length"));
+  const [mealHabitsOther, setMealHabitsOther] = useState(nestedStr("selection_other_details", "meal_habits"));
+  const [commuteOther, setCommuteOther] = useState(nestedStr("selection_other_details", "commute"));
+  const [jobTraitsOther, setJobTraitsOther] = useState(nestedStr("selection_other_details", "job_traits"));
+  const [fatigueWhenOther, setFatigueWhenOther] = useState(nestedStr("selection_other_details", "fatigue_when"));
+  const [conditionsOther, setConditionsOther] = useState(nestedStr("selection_other_details", "conditions"));
+  const [primaryGoal, setPrimaryGoal] = useState(nestedStr("goal_details", "primary_goal"));
+  const [goalDeadline, setGoalDeadline] = useState(nestedStr("goal_details", "deadline"));
+  const [currentMetric, setCurrentMetric] = useState(nestedStr("goal_details", "current_metric"));
+  const [targetMetric, setTargetMetric] = useState(nestedStr("goal_details", "target_metric"));
+  const [successCriteria, setSuccessCriteria] = useState(nestedStr("goal_details", "success_criteria"));
+  const [goalImportance, setGoalImportance] = useState<number | "">(nestedNum("goal_details", "importance"));
+  const [goalConfidence, setGoalConfidence] = useState<number | "">(nestedNum("goal_details", "confidence"));
 
   // 영양
   const [mealMorningTime, setMealMorningTime] = useState(asStr("meal_morning_time"));
@@ -170,17 +206,48 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
   const [injuryHistory, setInjuryHistory] = useState(asStr("injury_history"));
   const [painParts, setPainParts] = useState<string[]>(asArr("pain_parts"));
   const [painPartsEtc, setPainPartsEtc] = useState(asStr("pain_parts_etc"));
+  const [painIntensity, setPainIntensity] = useState<number | "">(nestedNum("pain_details", "intensity"));
+  const [painSide, setPainSide] = useState(nestedStr("pain_details", "side"));
+  const [painOnset, setPainOnset] = useState(nestedStr("pain_details", "onset"));
+  const [painTrigger, setPainTrigger] = useState(nestedStr("pain_details", "trigger"));
+  const [painAvoid, setPainAvoid] = useState(nestedStr("pain_details", "avoid"));
+  const [painDiagnosis, setPainDiagnosis] = useState(nestedStr("pain_details", "diagnosis"));
+  const [painTreatment, setPainTreatment] = useState(nestedStr("pain_details", "treatment"));
 
   // 병력
   const [conditions, setConditions] = useState<string[]>(asArr("conditions"));
   const [medications, setMedications] = useState(asStr("medications"));
   const [currentState, setCurrentState] = useState(asStr("current_state"));
+  const [safetyFlags, setSafetyFlags] = useState<string[]>(nestedArr("safety_screening", "flags"));
+  const [safetyOther, setSafetyOther] = useState(nestedStr("safety_screening", "other"));
+  const [clearanceStatus, setClearanceStatus] = useState(nestedStr("safety_screening", "clearance_status"));
+  const [clearanceDate, setClearanceDate] = useState(nestedStr("safety_screening", "clearance_date"));
+  const [medicalPrecautions, setMedicalPrecautions] = useState(nestedStr("safety_screening", "precautions"));
 
   // 운동 계획
   const [weeklyFreq, setWeeklyFreq] = useState<number | "">(asNum("weekly_freq"));
   const [plannedDays, setPlannedDays] = useState<string[]>(asArr("planned_days"));
   const [plannedDaysEtc, setPlannedDaysEtc] = useState(asStr("planned_days_etc"));
   const [plannedTime, setPlannedTime] = useState(asStr("planned_time"));
+  const [barriers, setBarriers] = useState<string[]>(nestedArr("adherence_details", "barriers"));
+  const [barriersOther, setBarriersOther] = useState(nestedStr("adherence_details", "barriers_other"));
+  const [dropoutReason, setDropoutReason] = useState(nestedStr("adherence_details", "dropout_reason"));
+  const [adherenceSupport, setAdherenceSupport] = useState(nestedStr("adherence_details", "support_needed"));
+  const [coachingStyles, setCoachingStyles] = useState<string[]>(nestedArr("coaching_preferences", "styles"));
+  const [coachingStylesOther, setCoachingStylesOther] = useState(nestedStr("coaching_preferences", "styles_other"));
+  const [touchConsent, setTouchConsent] = useState(nestedStr("coaching_preferences", "touch_consent"));
+  const [mediaConsent, setMediaConsent] = useState(nestedStr("coaching_preferences", "media_consent"));
+  const [emergencyName, setEmergencyName] = useState(nestedStr("coaching_preferences", "emergency_name"));
+  const [emergencyPhone, setEmergencyPhone] = useState(nestedStr("coaching_preferences", "emergency_phone"));
+  const [desiredStartDate, setDesiredStartDate] = useState(nestedStr("follow_up_details", "desired_start_date"));
+  const [interestedSessions, setInterestedSessions] = useState(nestedStr("follow_up_details", "interested_sessions"));
+  const [preferredContact, setPreferredContact] = useState(nestedStr("follow_up_details", "preferred_contact"));
+  const [preferredContactOther, setPreferredContactOther] = useState(nestedStr("follow_up_details", "preferred_contact_other"));
+  const [contactTime, setContactTime] = useState(nestedStr("follow_up_details", "contact_time"));
+  const [followUpDate, setFollowUpDate] = useState(nestedStr("follow_up_details", "follow_up_date"));
+  const [followUpNote, setFollowUpNote] = useState(nestedStr("follow_up_details", "follow_up_note"));
+  const [hesitationReason, setHesitationReason] = useState(nestedStr("follow_up_details", "hesitation_reason"));
+  const [leadTemperature, setLeadTemperature] = useState(nestedStr("follow_up_details", "lead_temperature"));
   const [requestNote, setRequestNote] = useState(asStr("request_note"));
   const [memo, setMemo] = useState(asStr("memo"));
 
@@ -337,6 +404,15 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
         motivation,
         goals,
         goals_etc: goalsEtc,
+        goal_details: {
+          primary_goal: primaryGoal,
+          deadline: goalDeadline,
+          current_metric: currentMetric,
+          target_metric: targetMetric,
+          success_criteria: successCriteria,
+          importance: goalImportance === "" ? null : goalImportance,
+          confidence: goalConfidence === "" ? null : goalConfidence,
+        },
         workout_method: workoutMethod,
         preferred_trainer: preferredTrainer,
         referral_source: referralSource,
@@ -376,13 +452,63 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
         injury_history: injuryHistory,
         pain_parts: painParts,
         pain_parts_etc: painPartsEtc,
+        pain_details: {
+          intensity: painIntensity === "" ? null : painIntensity,
+          side: painSide,
+          onset: painOnset,
+          trigger: painTrigger,
+          avoid: painAvoid,
+          diagnosis: painDiagnosis,
+          treatment: painTreatment,
+        },
         conditions,
         medications,
         current_state: currentState,
+        safety_screening: {
+          flags: safetyFlags,
+          other: safetyOther,
+          clearance_status: clearanceStatus,
+          clearance_date: clearanceDate,
+          precautions: medicalPrecautions,
+        },
         weekly_freq: weeklyFreq === "" ? null : weeklyFreq,
         planned_days: plannedDays,
         planned_days_etc: plannedDaysEtc,
         planned_time: plannedTime,
+        adherence_details: {
+          barriers,
+          barriers_other: barriersOther,
+          dropout_reason: dropoutReason,
+          support_needed: adherenceSupport,
+        },
+        coaching_preferences: {
+          styles: coachingStyles,
+          styles_other: coachingStylesOther,
+          touch_consent: touchConsent,
+          media_consent: mediaConsent,
+          emergency_name: emergencyName,
+          emergency_phone: emergencyPhone,
+        },
+        follow_up_details: {
+          desired_start_date: desiredStartDate,
+          interested_sessions: interestedSessions,
+          preferred_contact: preferredContact,
+          preferred_contact_other: preferredContactOther,
+          contact_time: contactTime,
+          follow_up_date: followUpDate,
+          follow_up_note: followUpNote,
+          hesitation_reason: hesitationReason,
+          lead_temperature: leadTemperature,
+        },
+        selection_other_details: {
+          experience_length: experienceLengthOther,
+          meal_habits: mealHabitsOther,
+          commute: commuteOther,
+          job_traits: jobTraitsOther,
+          fatigue_when: fatigueWhenOther,
+          conditions: conditionsOther,
+          gender: genderOther,
+        },
         request_note: requestNote,
         memo,
         custom_data: customData,
@@ -534,16 +660,24 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
                 {[
                   { v: "M", l: "남" },
                   { v: "F", l: "여" },
+                  { v: "O", l: "기타" },
                 ].map((o) => (
                   <ChipToggle
                     key={o.v}
                     on={gender === o.v}
-                    onClick={() => setGender(gender === o.v ? "" : o.v)}
+                    onClick={() => {
+                      const next = gender === o.v ? "" : o.v;
+                      setGender(next);
+                      if (next !== "O") setGenderOther("");
+                    }}
                   >
                     {o.l}
                   </ChipToggle>
                 ))}
               </div>
+              {gender === "O" && (
+                <input value={genderOther} onChange={(e) => setGenderOther(e.target.value)} className={`${crmInputClass} mt-2`} placeholder="직접 입력해 주세요" autoFocus />
+              )}
             </Field>
             <Field label="생년월일">
               <input
@@ -551,7 +685,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
                 inputMode="numeric"
                 value={birth}
                 onChange={(e) => setBirth(formatBirthInput(e.target.value))}
-                placeholder="예: 19860924 → 1986.09.24"
+                placeholder="예: 20000101 → 2000.01.01"
                 maxLength={10}
                 className={crmInputClass}
               />
@@ -658,12 +792,10 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
               options={PAST_SPORTS.map((s) => ({ v: s.v, l: s.l }))}
               value={pastSports}
               onToggle={(v) => toggle(pastSports, v, setPastSports)}
-            />
-            <input
-              value={pastSportsEtc}
-              onChange={(e) => setPastSportsEtc(e.target.value)}
-              className={`${crmInputClass} mt-2`}
-              placeholder="기타 (선택)"
+              allowOther
+              otherText={pastSportsEtc}
+              onOtherTextChange={setPastSportsEtc}
+              otherPlaceholder="기타 운동 종목을 입력해 주세요"
             />
           </Field>
           <Field label="운동 경력">
@@ -672,6 +804,10 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
               options={EXPERIENCE_LENGTHS.map((s) => ({ v: s.v, l: s.l }))}
               value={experienceLength ? [experienceLength] : []}
               onToggle={(v) => setExperienceLength(experienceLength === v ? "" : v)}
+              allowOther
+              otherText={experienceLengthOther}
+              onOtherTextChange={setExperienceLengthOther}
+              otherPlaceholder="기타 운동 경력을 입력해 주세요"
             />
           </Field>
           <Field label="운동 동기 / 계기">
@@ -686,14 +822,40 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
               options={GOALS.map((s) => ({ v: s.v, l: s.l }))}
               value={goals}
               onToggle={(v) => toggle(goals, v, setGoals)}
-            />
-            <input
-              value={goalsEtc}
-              onChange={(e) => setGoalsEtc(e.target.value)}
-              className={`${crmInputClass} mt-2`}
-              placeholder="기타 목표"
+              allowOther
+              otherText={goalsEtc}
+              onOtherTextChange={setGoalsEtc}
+              otherPlaceholder="기타 목표를 입력해 주세요"
             />
           </Field>
+          <div className="rounded-xl border border-[#DDE8C5] bg-[#F7FAF0] p-3.5 dark:border-[#65733C] dark:bg-emerald-950/20">
+            <h3 className="mb-3 text-[13.5px] font-bold text-[#4D622C] dark:text-emerald-200">목표 구체화</h3>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="가장 중요한 1순위 목표">
+                <input value={primaryGoal} onChange={(e) => setPrimaryGoal(e.target.value)} className={crmInputClass} placeholder="예: 체지방 감량" />
+              </Field>
+              <Field label="목표 기한">
+                <input type="date" value={goalDeadline} onChange={(e) => setGoalDeadline(e.target.value)} className={crmInputClass} />
+              </Field>
+              <Field label="현재 상태·수치 (선택)">
+                <input value={currentMetric} onChange={(e) => setCurrentMetric(e.target.value)} className={crmInputClass} placeholder="예: 체중 78kg, 스쿼트 40kg" />
+              </Field>
+              <Field label="목표 상태·수치 (선택)">
+                <input value={targetMetric} onChange={(e) => setTargetMetric(e.target.value)} className={crmInputClass} placeholder="예: 체중 72kg, 스쿼트 60kg" />
+              </Field>
+              <Field label="목표 중요도">
+                <ScoreSelect value={goalImportance} onChange={setGoalImportance} />
+              </Field>
+              <Field label="달성 자신감">
+                <ScoreSelect value={goalConfidence} onChange={setGoalConfidence} />
+              </Field>
+            </div>
+            <div className="mt-3">
+              <Field label="성공했다고 판단할 기준">
+                <textarea value={successCriteria} onChange={(e) => setSuccessCriteria(e.target.value)} className={`${crmInputClass} min-h-[60px]`} placeholder="예: 주 3회 운동을 3개월 유지하고 허리둘레 5cm 감소" />
+              </Field>
+            </div>
+          </div>
           <Field label="운동 방법">
             <textarea
               value={workoutMethod}
@@ -754,6 +916,9 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
               options={MEAL_HABITS.map((s) => ({ v: s.v, l: s.l }))}
               value={mealHabits}
               onToggle={(v) => toggle(mealHabits, v, setMealHabits)}
+              allowOther
+              otherText={mealHabitsOther}
+              onOtherTextChange={setMealHabitsOther}
             />
           </Field>
           <Field label="선호 음식">
@@ -761,12 +926,10 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
               options={PREFERRED_FOODS.map((s) => ({ v: s.v, l: s.l }))}
               value={preferredFoods}
               onToggle={(v) => toggle(preferredFoods, v, setPreferredFoods)}
-            />
-            <input
-              value={preferredFoodsEtc}
-              onChange={(e) => setPreferredFoodsEtc(e.target.value)}
-              className={`${crmInputClass} mt-2`}
-              placeholder="기타 선호 음식"
+              allowOther
+              otherText={preferredFoodsEtc}
+              onOtherTextChange={setPreferredFoodsEtc}
+              otherPlaceholder="기타 선호 음식을 입력해 주세요"
             />
           </Field>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -912,12 +1075,18 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
               value={commute ? [commute] : []}
               onToggle={(v) => setCommute(commute === v ? "" : v)}
             />
+            {commute === "etc" && (
+              <input value={commuteOther} onChange={(e) => setCommuteOther(e.target.value)} className={`${crmInputClass} mt-2`} placeholder="기타 출퇴근 수단을 입력해 주세요" autoFocus />
+            )}
           </Field>
           <Field label="직업 형태">
             <ChipList
               options={JOB_TRAITS.map((s) => ({ v: s.v, l: s.l }))}
               value={jobTraits}
               onToggle={(v) => toggle(jobTraits, v, setJobTraits)}
+              allowOther
+              otherText={jobTraitsOther}
+              onOtherTextChange={setJobTraitsOther}
             />
           </Field>
           <Field label="기타 사항">
@@ -1012,6 +1181,9 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
               options={FATIGUE_WHEN.map((s) => ({ v: s.v, l: s.l }))}
               value={fatigueWhen}
               onToggle={(v) => toggle(fatigueWhen, v, setFatigueWhen)}
+              allowOther
+              otherText={fatigueWhenOther}
+              onOtherTextChange={setFatigueWhenOther}
             />
           </Field>
           <Field label="피로도 원인">
@@ -1031,6 +1203,40 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
         </div>
       </Section>
 
+      {/* ===== 운동 전 안전 확인 ===== */}
+      <Section title="운동 전 안전 확인">
+        <div className="space-y-3">
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+            아래 항목은 진단이 아니라 안전한 운동 시작을 위한 사전 확인입니다. 해당 시 의료진 확인이 필요할 수 있습니다.
+          </p>
+          <Field label="현재 또는 최근 경험한 항목">
+            <ChipList options={SAFETY_FLAGS.map((s) => ({ v: s.v, l: s.l }))} value={safetyFlags} onToggle={(v) => toggle(safetyFlags, v, setSafetyFlags)} allowOther otherText={safetyOther} onOtherTextChange={setSafetyOther} otherPlaceholder="기타 안전 확인 내용을 입력해 주세요" />
+          </Field>
+          {safetyFlags.length > 0 && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50/70 p-3.5 dark:border-amber-800 dark:bg-amber-950/20">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="의료진 운동 확인 상태">
+                  <select value={clearanceStatus} onChange={(e) => setClearanceStatus(e.target.value)} className={crmInputClass}>
+                    <option value="">선택</option>
+                    <option value="pending">확인 예정·대기</option>
+                    <option value="cleared">운동 가능 확인 완료</option>
+                    <option value="restricted">조건부 가능·제한 있음</option>
+                  </select>
+                </Field>
+                <Field label="확인일">
+                  <input type="date" value={clearanceDate} onChange={(e) => setClearanceDate(e.target.value)} className={crmInputClass} />
+                </Field>
+              </div>
+              <div className="mt-3">
+                <Field label="의료진 주의사항·운동 제한">
+                  <textarea value={medicalPrecautions} onChange={(e) => setMedicalPrecautions(e.target.value)} className={`${crmInputClass} min-h-[64px]`} />
+                </Field>
+              </div>
+            </div>
+          )}
+        </div>
+      </Section>
+
       {/* ===== 통증 체크 ===== */}
       <Section title="통증 체크">
         <div className="space-y-3">
@@ -1047,14 +1253,35 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
               options={PAIN_PARTS.map((s) => ({ v: s.v, l: s.l }))}
               value={painParts}
               onToggle={(v) => toggle(painParts, v, setPainParts)}
-            />
-            <input
-              value={painPartsEtc}
-              onChange={(e) => setPainPartsEtc(e.target.value)}
-              className={`${crmInputClass} mt-2`}
-              placeholder="기타 부위 (선택)"
+              allowOther
+              otherText={painPartsEtc}
+              onOtherTextChange={setPainPartsEtc}
+              otherPlaceholder="기타 통증 부위를 입력해 주세요"
             />
           </Field>
+          {(painParts.length > 0 || painPartsEtc || injuryHistory) && (
+            <div className="rounded-xl border border-[#E8E0D0] bg-white p-3.5 dark:border-zinc-700 dark:bg-zinc-950">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Field label="통증 강도 (0~10)">
+                  <input type="number" min={0} max={10} value={painIntensity} onChange={(e) => setPainIntensity(e.target.value === "" ? "" : Number(e.target.value))} className={crmInputClass} />
+                </Field>
+                <Field label="방향">
+                  <select value={painSide} onChange={(e) => setPainSide(e.target.value)} className={crmInputClass}>
+                    <option value="">선택</option><option value="left">왼쪽</option><option value="right">오른쪽</option><option value="both">양쪽</option>
+                  </select>
+                </Field>
+                <Field label="시작 시점">
+                  <input value={painOnset} onChange={(e) => setPainOnset(e.target.value)} className={crmInputClass} placeholder="예: 약 3개월 전" />
+                </Field>
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="통증이 발생하는 동작"><input value={painTrigger} onChange={(e) => setPainTrigger(e.target.value)} className={crmInputClass} placeholder="예: 계단 내려가기" /></Field>
+                <Field label="피해야 하는 동작"><input value={painAvoid} onChange={(e) => setPainAvoid(e.target.value)} className={crmInputClass} placeholder="예: 깊은 스쿼트" /></Field>
+                <Field label="병원 진단명"><input value={painDiagnosis} onChange={(e) => setPainDiagnosis(e.target.value)} className={crmInputClass} /></Field>
+                <Field label="치료·재활 상태"><input value={painTreatment} onChange={(e) => setPainTreatment(e.target.value)} className={crmInputClass} placeholder="예: 물리치료 주 1회" /></Field>
+              </div>
+            </div>
+          )}
         </div>
       </Section>
 
@@ -1066,6 +1293,10 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
               options={CONDITIONS.map((s) => ({ v: s.v, l: s.l }))}
               value={conditions}
               onToggle={(v) => toggle(conditions, v, setConditions)}
+              allowOther
+              otherText={conditionsOther}
+              onOtherTextChange={setConditionsOther}
+              otherPlaceholder="기타 병력·건강 상태를 입력해 주세요"
             />
           </Field>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1117,16 +1348,41 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
               options={PLANNED_DAYS.map((s) => ({ v: s.v, l: s.l }))}
               value={plannedDays}
               onToggle={(v) => toggle(plannedDays, v, setPlannedDays)}
+              allowOther
+              otherText={plannedDaysEtc}
+              onOtherTextChange={setPlannedDaysEtc}
+              otherPlaceholder="기타 일정 조건을 입력해 주세요"
             />
           </Field>
-          <Field label="기타 입력 내용">
-            <textarea
-              value={plannedDaysEtc}
-              onChange={(e) => setPlannedDaysEtc(e.target.value)}
-              className={`${crmInputClass} min-h-[64px]`}
-              placeholder="예: 격주 진행, 시험 기간 제외, 특정 요일 선호 등"
-            />
+        </div>
+      </Section>
+
+      <Section title="운동 지속 및 지도 선호">
+        <div className="space-y-4">
+          <Field label="운동 지속을 방해할 수 있는 요인">
+            <ChipList options={EXERCISE_BARRIERS.map((s) => ({ v: s.v, l: s.l }))} value={barriers} onToggle={(v) => toggle(barriers, v, setBarriers)} allowOther otherText={barriersOther} onOtherTextChange={setBarriersOther} otherPlaceholder="기타 방해 요인을 입력해 주세요" />
           </Field>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="이전 운동을 중단한 가장 큰 이유">
+              <textarea value={dropoutReason} onChange={(e) => setDropoutReason(e.target.value)} className={`${crmInputClass} min-h-[64px]`} />
+            </Field>
+            <Field label="운동을 지속하기 위해 필요한 도움">
+              <textarea value={adherenceSupport} onChange={(e) => setAdherenceSupport(e.target.value)} className={`${crmInputClass} min-h-[64px]`} />
+            </Field>
+          </div>
+          <Field label="선호하는 지도 방식">
+            <ChipList options={COACHING_STYLES.map((s) => ({ v: s.v, l: s.l }))} value={coachingStyles} onToggle={(v) => toggle(coachingStyles, v, setCoachingStyles)} allowOther otherText={coachingStylesOther} onOtherTextChange={setCoachingStylesOther} otherPlaceholder="기타 선호 지도 방식을 입력해 주세요" />
+          </Field>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="자세 교정을 위한 신체 접촉 동의">
+              <YesNoChoice value={touchConsent} onChange={setTouchConsent} />
+            </Field>
+            <Field label="자세 확인용 사진·영상 촬영 동의">
+              <YesNoChoice value={mediaConsent} onChange={setMediaConsent} />
+            </Field>
+            <Field label="비상 연락처 이름"><input value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} className={crmInputClass} /></Field>
+            <Field label="비상 연락처 전화번호"><input value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} className={crmInputClass} placeholder="010-0000-0000" /></Field>
+          </div>
         </div>
       </Section>
 
@@ -1137,6 +1393,27 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
           onChange={(e) => setRequestNote(e.target.value)}
           className={`${crmInputClass} min-h-[100px]`}
         />
+      </Section>
+
+      <Section title="상담 후속 관리">
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="운동 시작 희망일"><input type="date" value={desiredStartDate} onChange={(e) => setDesiredStartDate(e.target.value)} className={crmInputClass} /></Field>
+            <Field label="관심 수업 횟수"><input value={interestedSessions} onChange={(e) => setInterestedSessions(e.target.value)} className={crmInputClass} placeholder="예: 주 2회, 20회권" /></Field>
+            <Field label="선호 연락 방식">
+              <ChipList single options={CONTACT_METHODS.map((s) => ({ v: s.v, l: s.l }))} value={preferredContact ? [preferredContact] : []} onToggle={(v) => setPreferredContact(preferredContact === v ? "" : v)} allowOther otherText={preferredContactOther} onOtherTextChange={setPreferredContactOther} otherPlaceholder="기타 연락 방식을 입력해 주세요" />
+            </Field>
+            <Field label="연락 가능한 시간"><input value={contactTime} onChange={(e) => setContactTime(e.target.value)} className={crmInputClass} placeholder="예: 평일 오후 6시 이후" /></Field>
+            <Field label="다음 연락 예정일"><input type="date" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} className={crmInputClass} /></Field>
+            <Field label="등록 가능성">
+              <select value={leadTemperature} onChange={(e) => setLeadTemperature(e.target.value)} className={crmInputClass}>
+                <option value="">선택</option><option value="hot">높음</option><option value="warm">보통</option><option value="cold">낮음</option>
+              </select>
+            </Field>
+          </div>
+          <Field label="등록을 망설이는 이유"><input value={hesitationReason} onChange={(e) => setHesitationReason(e.target.value)} className={crmInputClass} placeholder="예: 근무 일정 확인, 비용 상담 필요" /></Field>
+          <Field label="다음 연락·상담 내용"><textarea value={followUpNote} onChange={(e) => setFollowUpNote(e.target.value)} className={`${crmInputClass} min-h-[72px]`} placeholder="예: 8월 15일 저녁에 일정 확인 후 재연락" /></Field>
+        </div>
       </Section>
       </>
       )}
@@ -1154,6 +1431,8 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
                     field={f}
                     value={customData[f.key]}
                     onChange={(v) => setCustomField(f.key, v)}
+                    otherValue={customData[`${f.key}__other`]}
+                    onOtherChange={(v) => setCustomField(`${f.key}__other`, v)}
                   />
                 </Field>
               ))
@@ -1230,6 +1509,39 @@ function Section({
   );
 }
 
+function ScoreSelect({
+  value,
+  onChange,
+}: {
+  value: number | "";
+  onChange: (value: number | "") => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
+      className={crmInputClass}
+    >
+      <option value="">선택</option>
+      {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
+        <option key={score} value={score}>{score}점</option>
+      ))}
+    </select>
+  );
+}
+
+function YesNoChoice({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <div className="flex gap-1.5">
+      {[{ v: "yes", l: "동의" }, { v: "no", l: "동의하지 않음" }].map((option) => (
+        <ChipToggle key={option.v} on={value === option.v} onClick={() => onChange(value === option.v ? "" : option.v)}>
+          {option.l}
+        </ChipToggle>
+      ))}
+    </div>
+  );
+}
+
 function Field({
   label,
   required,
@@ -1255,24 +1567,48 @@ function ChipList({
   value,
   onToggle,
   single,
+  allowOther,
+  otherText,
+  onOtherTextChange,
+  otherPlaceholder = "기타 내용을 입력해 주세요",
 }: {
   options: { v: string; l: string }[];
   value: string[];
   onToggle: (v: string) => void;
   single?: boolean;
+  allowOther?: boolean;
+  otherText?: string;
+  onOtherTextChange?: (value: string) => void;
+  otherPlaceholder?: string;
 }) {
+  const displayOptions = allowOther ? [...options, { v: "__other", l: "기타" }] : options;
+  const otherSelected = value.includes("__other");
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map((o) => (
-        <ChipToggle
-          key={o.v}
-          on={value.includes(o.v)}
-          onClick={() => onToggle(o.v)}
-          singleMark={single}
-        >
-          {o.l}
-        </ChipToggle>
-      ))}
+    <div>
+      <div className="flex flex-wrap gap-1.5">
+        {displayOptions.map((o) => (
+          <ChipToggle
+            key={o.v}
+            on={value.includes(o.v)}
+            onClick={() => {
+              onToggle(o.v);
+              if (o.v === "__other" && otherSelected) onOtherTextChange?.("");
+            }}
+            singleMark={single}
+          >
+            {o.l}
+          </ChipToggle>
+        ))}
+      </div>
+      {allowOther && otherSelected && (
+        <input
+          value={otherText ?? ""}
+          onChange={(e) => onOtherTextChange?.(e.target.value)}
+          className={`${crmInputClass} mt-2`}
+          placeholder={otherPlaceholder}
+          autoFocus
+        />
+      )}
     </div>
   );
 }
@@ -1308,16 +1644,21 @@ function CustomFieldInput({
   field,
   value,
   onChange,
+  otherValue,
+  onOtherChange,
 }: {
   field: CustomField;
   value: unknown;
   onChange: (v: unknown) => void;
+  otherValue?: unknown;
+  onOtherChange?: (v: string) => void;
 }) {
   const strVal = typeof value === "string" ? value : "";
   const numVal =
     typeof value === "number" ? value : typeof value === "string" && value !== "" ? Number(value) : "";
   const arrVal: string[] = Array.isArray(value) ? (value as string[]) : [];
   const boolVal = value === true;
+  const otherText = typeof otherValue === "string" ? otherValue : "";
 
   if (field.type === "textarea") {
     return (
@@ -1374,12 +1715,9 @@ function CustomFieldInput({
     );
   }
   if (field.type === "chips_multi") {
-    const opts = field.options ?? [];
+    const opts = [...(field.options ?? []), { v: "__other", l: "기타" }];
     return (
       <div className="flex flex-wrap gap-1.5">
-        {opts.length === 0 && (
-          <span className="text-[11.5px] text-[#A89B80]">선택지가 없습니다 (편집에서 추가)</span>
-        )}
         {opts.map((o) => {
           const on = arrVal.includes(o.v);
           return (
@@ -1387,9 +1725,10 @@ function CustomFieldInput({
               key={o.v}
               type="button"
               data-form-choice
-              onClick={() =>
-                onChange(on ? arrVal.filter((x) => x !== o.v) : [...arrVal, o.v])
-              }
+              onClick={() => {
+                onChange(on ? arrVal.filter((x) => x !== o.v) : [...arrVal, o.v]);
+                if (o.v === "__other" && on) onOtherChange?.("");
+              }}
               className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
                 on
                   ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
@@ -1400,16 +1739,16 @@ function CustomFieldInput({
             </button>
           );
         })}
+        {arrVal.includes("__other") && (
+          <input value={otherText} onChange={(e) => onOtherChange?.(e.target.value)} className={`${crmInputClass} mt-2`} placeholder="기타 내용을 입력해 주세요" autoFocus />
+        )}
       </div>
     );
   }
   if (field.type === "chips_single") {
-    const opts = field.options ?? [];
+    const opts = [...(field.options ?? []), { v: "__other", l: "기타" }];
     return (
       <div className="flex flex-wrap gap-1.5">
-        {opts.length === 0 && (
-          <span className="text-[11.5px] text-[#A89B80]">선택지가 없습니다 (편집에서 추가)</span>
-        )}
         {opts.map((o) => {
           const on = strVal === o.v;
           return (
@@ -1417,7 +1756,10 @@ function CustomFieldInput({
               key={o.v}
               type="button"
               data-form-choice
-              onClick={() => onChange(on ? "" : o.v)}
+              onClick={() => {
+                onChange(on ? "" : o.v);
+                if (o.v === "__other" && on) onOtherChange?.("");
+              }}
               className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
                 on
                   ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
@@ -1428,6 +1770,9 @@ function CustomFieldInput({
             </button>
           );
         })}
+        {strVal === "__other" && (
+          <input value={otherText} onChange={(e) => onOtherChange?.(e.target.value)} className={`${crmInputClass} mt-2`} placeholder="기타 내용을 입력해 주세요" autoFocus />
+        )}
       </div>
     );
   }
