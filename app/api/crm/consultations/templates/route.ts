@@ -33,17 +33,27 @@ export async function GET(request: Request) {
   }
 
   if ((data ?? []).length === 0) {
-    // 자동 시드
-    const { data: seeded, error: seedErr } = await supabase
+    // 자동 시드. 동시 첫 접근(레이스)으로 두 요청이 함께 시드하면 uniq 인덱스
+    // (center_id where is_default) 로 한쪽 insert 가 실패한다 → 실패 시 기존 것을 재조회.
+    const { data: seeded } = await supabase
       .from("crm_consultation_templates")
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .insert({ ...DEFAULT_SEED, center_id: ctx.centerId } as any)
       .select("id, name, description, is_default, sort_order, active, definition, created_at, updated_at")
       .single();
-    if (seedErr || !seeded) {
-      return NextResponse.json({ templates: [] });
+    if (seeded) {
+      return NextResponse.json({ templates: [seeded] });
     }
-    return NextResponse.json({ templates: [seeded] });
+    // 시드 실패(레이스 등) → 다시 조회해서 반환
+    const { data: retry } = await supabase
+      .from("crm_consultation_templates")
+      .select("id, name, description, is_default, sort_order, active, definition, created_at, updated_at")
+      .eq("center_id", ctx.centerId)
+      .eq("active", true)
+      .order("is_default", { ascending: false })
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true });
+    return NextResponse.json({ templates: retry ?? [] });
   }
 
   return NextResponse.json({ templates: data });
