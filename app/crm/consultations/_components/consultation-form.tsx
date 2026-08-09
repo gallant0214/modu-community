@@ -179,6 +179,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
   // 운동 계획
   const [weeklyFreq, setWeeklyFreq] = useState<number | "">(asNum("weekly_freq"));
   const [plannedDays, setPlannedDays] = useState<string[]>(asArr("planned_days"));
+  const [plannedDaysEtc, setPlannedDaysEtc] = useState(asStr("planned_days_etc"));
   const [plannedTime, setPlannedTime] = useState(asStr("planned_time"));
   const [requestNote, setRequestNote] = useState(asStr("request_note"));
   const [memo, setMemo] = useState(asStr("memo"));
@@ -380,6 +381,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
         current_state: currentState,
         weekly_freq: weeklyFreq === "" ? null : weeklyFreq,
         planned_days: plannedDays,
+        planned_days_etc: plannedDaysEtc,
         planned_time: plannedTime,
         request_note: requestNote,
         memo,
@@ -842,23 +844,33 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
             />
           </Field>
           <Field label="식단 경험">
-            <div className="flex items-center gap-3">
-              <label className="inline-flex items-center gap-1.5">
+            <div className="space-y-2">
+              <label
+                className={`flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border px-3.5 py-2.5 transition-colors ${
+                  dietExperience
+                    ? "border-[#6B7B3A] bg-[#F3F7EA] text-[#35431F] dark:bg-emerald-950/30 dark:text-emerald-200"
+                    : "border-[#E8E0D0] bg-white text-[#3A342A] hover:border-[#6B7B3A]/50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                }`}
+              >
                 <input
                   type="checkbox"
                   checked={dietExperience}
-                  onChange={(e) => setDietExperience(e.target.checked)}
-                  className="w-4 h-4 accent-[#6B7B3A]"
+                  onChange={(e) => {
+                    setDietExperience(e.target.checked);
+                    if (!e.target.checked) setDietExperienceDetail("");
+                  }}
+                  className="h-5 w-5 shrink-0 accent-[#6B7B3A]"
                 />
-                <span className="text-[13px]">예 (경험 있음)</span>
+                <span className="text-[14px] font-semibold leading-5">예 (경험 있음)</span>
               </label>
-              <input
-                value={dietExperienceDetail}
-                onChange={(e) => setDietExperienceDetail(e.target.value)}
-                disabled={!dietExperience}
-                className={`${crmInputClass} disabled:opacity-50`}
-                placeholder="구체적으로"
-              />
+              {dietExperience && (
+                <input
+                  value={dietExperienceDetail}
+                  onChange={(e) => setDietExperienceDetail(e.target.value)}
+                  className={crmInputClass}
+                  placeholder="어떤 식단을 얼마나 진행했는지 입력해 주세요"
+                />
+              )}
             </div>
           </Field>
         </div>
@@ -1105,6 +1117,14 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
               options={PLANNED_DAYS.map((s) => ({ v: s.v, l: s.l }))}
               value={plannedDays}
               onToggle={(v) => toggle(plannedDays, v, setPlannedDays)}
+            />
+          </Field>
+          <Field label="기타 입력 내용">
+            <textarea
+              value={plannedDaysEtc}
+              onChange={(e) => setPlannedDaysEtc(e.target.value)}
+              className={`${crmInputClass} min-h-[64px]`}
+              placeholder="예: 격주 진행, 시험 기간 제외, 특정 요일 선호 등"
             />
           </Field>
         </div>

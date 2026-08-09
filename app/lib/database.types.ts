@@ -2929,6 +2929,7 @@ export type Database = {
           wake_hour: number | null
           wake_minute: number | null
           sleep_hour: number | null
+          sleep_minute: number | null
           sleep_satisfaction: string | null
           condition_score: string | null
           fatigue_when: unknown
@@ -2942,6 +2943,7 @@ export type Database = {
           current_state: string | null
           weekly_freq: number | null
           planned_days: unknown
+          planned_days_etc: string | null
           planned_time: string | null
           request_note: string | null
           status: string
@@ -3004,6 +3006,7 @@ export type Database = {
           wake_hour?: number | null
           wake_minute?: number | null
           sleep_hour?: number | null
+          sleep_minute?: number | null
           sleep_satisfaction?: string | null
           condition_score?: string | null
           fatigue_when?: unknown
@@ -3017,6 +3020,7 @@ export type Database = {
           current_state?: string | null
           weekly_freq?: number | null
           planned_days?: unknown
+          planned_days_etc?: string | null
           planned_time?: string | null
           request_note?: string | null
           status?: string
@@ -3079,6 +3083,7 @@ export type Database = {
           wake_hour?: number | null
           wake_minute?: number | null
           sleep_hour?: number | null
+          sleep_minute?: number | null
           sleep_satisfaction?: string | null
           condition_score?: string | null
           fatigue_when?: unknown
@@ -3092,6 +3097,7 @@ export type Database = {
           current_state?: string | null
           weekly_freq?: number | null
           planned_days?: unknown
+          planned_days_etc?: string | null
           planned_time?: string | null
           request_note?: string | null
           status?: string

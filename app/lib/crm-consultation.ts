@@ -82,6 +82,7 @@ export function buildConsultationPayload(
     wake_hour: asInt(body.wake_hour),
     wake_minute: asInt(body.wake_minute),
     sleep_hour: asInt(body.sleep_hour),
+    sleep_minute: asInt(body.sleep_minute),
     sleep_satisfaction: asStr(body.sleep_satisfaction),
     condition_score: asStr(body.condition_score),
     fatigue_when: asArr(body.fatigue_when),
@@ -98,6 +99,7 @@ export function buildConsultationPayload(
 
     weekly_freq: asInt(body.weekly_freq),
     planned_days: asArr(body.planned_days),
+    planned_days_etc: asStr(body.planned_days_etc),
     planned_time: asStr(body.planned_time),
 
     request_note: asStr(body.request_note),

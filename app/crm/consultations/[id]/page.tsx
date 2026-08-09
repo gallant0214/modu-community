@@ -82,6 +82,7 @@ interface Consultation {
   wake_hour: number | null;
   wake_minute: number | null;
   sleep_hour: number | null;
+  sleep_minute: number | null;
   sleep_satisfaction: string | null;
   condition_score: string | null;
   fatigue_when: string[] | null;
@@ -98,6 +99,7 @@ interface Consultation {
 
   weekly_freq: number | null;
   planned_days: string[] | null;
+  planned_days_etc: string | null;
   planned_time: string | null;
 
   custom_data: Record<string, unknown> | null;
@@ -309,6 +311,46 @@ export default function ConsultationDetailPage() {
         </div>
       </header>
 
+      {/* 강사가 상담 직후 빠르게 확인하는 핵심 요약 */}
+      <section className="rounded-2xl border border-[#CCD7AD] bg-[#F7FAF0] p-4 md:p-5 dark:border-[#65733C] dark:bg-[#202719]">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-[16px] font-bold text-[#2A251D] dark:text-zinc-100">상담 핵심 요약</h2>
+          <span className="text-[11px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">강사용 요약</span>
+        </div>
+        <div className="grid grid-cols-1 gap-2.5 md:grid-cols-3">
+          <SummaryItem
+            label="운동 목표"
+            value={labelJoin(GOALS, c.goals, c.goals_etc) ?? "목표 미입력"}
+          />
+          <SummaryItem
+            label="가능 일정"
+            value={[
+              c.weekly_freq ? `주 ${c.weekly_freq}회` : null,
+              labelJoin(PLANNED_DAYS, c.planned_days),
+              c.planned_time,
+            ].filter(Boolean).join(" · ") || "일정 미입력"}
+          />
+          <SummaryItem
+            label="통증 · 건강 주의"
+            warning={Boolean(c.injury_history || c.pain_parts?.length || c.conditions?.length || c.medications)}
+            value={[
+              c.injury_history,
+              labelJoin(PAIN_PARTS, c.pain_parts, c.pain_parts_etc),
+              labelJoin(CONDITIONS, c.conditions),
+              c.medications ? `복용약: ${c.medications}` : null,
+            ].filter(Boolean).join(" · ") || "기록된 주의사항 없음"}
+          />
+        </div>
+        {(c.request_note || c.memo) && (
+          <div className="mt-2.5 rounded-xl border border-[#E4EAD3] bg-white/80 px-3.5 py-3 dark:border-zinc-700 dark:bg-zinc-900/70">
+            <div className="text-[11.5px] font-bold text-[#6B7B3A] dark:text-[#A8B87A]">요청 · 다음 액션</div>
+            <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-[13.5px] leading-relaxed text-[#2A251D] dark:text-zinc-200">
+              {c.memo || c.request_note}
+            </p>
+          </div>
+        )}
+      </section>
+
       {/* 상세 내용 */}
       <SectionCard title="운동 경험">
         <KVList
@@ -388,10 +430,15 @@ export default function ConsultationDetailPage() {
             [
               "기상 시간",
               c.wake_hour !== null
-                ? `${c.wake_hour}시${c.wake_minute ? ` ${String(c.wake_minute).padStart(2, "0")}분` : ""}`
+                ? `${c.wake_hour}시${c.wake_minute !== null ? ` ${String(c.wake_minute).padStart(2, "0")}분` : ""}`
                 : null,
             ],
-            ["취침 시간", c.sleep_hour !== null ? `${c.sleep_hour}시` : null],
+            [
+              "취침 시간",
+              c.sleep_hour !== null
+                ? `${c.sleep_hour}시${c.sleep_minute !== null ? ` ${String(c.sleep_minute).padStart(2, "0")}분` : ""}`
+                : null,
+            ],
             ["수면 만족도", labelOne(LEVELS, c.sleep_satisfaction)],
             ["컨디션 지수", labelOne(LEVELS, c.condition_score)],
             ["피로도 시점", labelJoin(FATIGUE_WHEN, c.fatigue_when)],
@@ -425,6 +472,7 @@ export default function ConsultationDetailPage() {
           rows={[
             ["주 몇 회", c.weekly_freq ? `주 ${c.weekly_freq}회` : null],
             ["요일", labelJoin(PLANNED_DAYS, c.planned_days)],
+            ["기타", c.planned_days_etc],
             ["시간대", c.planned_time],
           ]}
         />
@@ -497,6 +545,33 @@ function SectionCard({ title, children }: { title: string; children: React.React
       </h2>
       {children}
     </section>
+  );
+}
+
+function SummaryItem({
+  label,
+  value,
+  warning = false,
+}: {
+  label: string;
+  value: string;
+  warning?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-xl border px-3.5 py-3 ${
+        warning
+          ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30"
+          : "border-[#E4EAD3] bg-white/80 dark:border-zinc-700 dark:bg-zinc-900/70"
+      }`}
+    >
+      <div className={`text-[11.5px] font-bold ${warning ? "text-amber-800 dark:text-amber-300" : "text-[#6B7B3A] dark:text-[#A8B87A]"}`}>
+        {warning ? "주의 · " : ""}{label}
+      </div>
+      <p className="mt-1 text-[13.5px] font-medium leading-relaxed text-[#2A251D] dark:text-zinc-200">
+        {value}
+      </p>
+    </div>
   );
 }
 

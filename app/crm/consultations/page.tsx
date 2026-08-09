@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
 import { crmInputClass } from "../_components/crm-modal";
-import { CONSULT_STATUS_COLOR, CONSULT_STATUS_LABEL } from "./_labels";
+import { CONSULT_STATUS_COLOR, CONSULT_STATUS_LABEL, GOALS } from "./_labels";
 import { ConsultationForm } from "./_components/consultation-form";
 import type { TemplateDefinition } from "@/app/lib/crm-consultation-template";
 
@@ -84,13 +84,13 @@ export default function ConsultationsPage() {
         </p>
 
         {/* 최상단 3-탭 */}
-        <div className="mt-3 flex gap-1 border-b border-[#E8E0D0] dark:border-zinc-800">
+        <div className="mt-3 flex gap-1 overflow-x-auto border-b border-[#E8E0D0] dark:border-zinc-800">
           {TABS.map((t) => (
             <button
               key={t.v}
               type="button"
               onClick={() => setTab(t.v)}
-              className={`relative px-4 py-2 text-[13.5px] font-semibold transition-colors ${
+              className={`relative shrink-0 whitespace-nowrap px-4 py-2 text-[13.5px] font-semibold transition-colors ${
                 tab === t.v
                   ? "text-[#6B7B3A] dark:text-[#A8B87A]"
                   : "text-[#8C8270] dark:text-zinc-500 hover:text-[#3A342A]"
@@ -590,7 +590,43 @@ function ManageTab() {
 
 function ConsultationList({ rows }: { rows: Row[] }) {
   return (
-    <div className="overflow-x-auto -mx-2 px-2">
+    <>
+      <div className="space-y-2 md:hidden">
+        {rows.map((r) => {
+          const goalText = consultationGoalText(r.goals);
+          return (
+            <Link
+              key={r.id}
+              href={`/crm/consultations/${r.id}`}
+              className="block rounded-xl border border-[#E8E0D0] bg-white p-3.5 transition-colors hover:border-[#C8D3AA] hover:bg-[#FBFDF6] dark:border-zinc-800 dark:bg-zinc-950"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">
+                      {r.name}
+                    </span>
+                    <span className="text-[11.5px] text-[#A89B80]">
+                      {r.member_id ? "센터 회원" : "방문객"}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-1 text-[13px] font-medium text-[#65733C] dark:text-[#A8B87A]">
+                    {goalText || "상담 목표 미입력"}
+                  </p>
+                </div>
+                <StatusChip status={r.status} />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-[#EEE7D9] pt-2.5 text-[12px] text-[#6B5D47] dark:border-zinc-800 dark:text-zinc-400">
+                <span className="tabular-nums">{r.consulted_at}</span>
+                <span>담당 {r.trainer_name ?? "미지정"}</span>
+                {r.phone && <span>{formatPhone(r.phone)}</span>}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto -mx-2 px-2 md:block">
       <table className="w-full text-[13px]">
         <thead className="text-[#8C8270] dark:text-zinc-500 border-b border-[#E8E0D0] dark:border-zinc-800">
           <tr>
@@ -609,9 +645,12 @@ function ConsultationList({ rows }: { rows: Row[] }) {
               className="border-b border-[#E8E0D0]/60 dark:border-zinc-800/70 last:border-b-0"
             >
               <td className="py-2 pr-2 tabular-nums text-[#6B5D47]">{r.consulted_at}</td>
-              <td className="py-2 pr-2 font-semibold text-[#2A251D] dark:text-zinc-100">
+              <td className="py-2.5 pr-2 text-[#2A251D] dark:text-zinc-100">
                 <Link href={`/crm/consultations/${r.id}`} className="hover:underline">
-                  {r.name}
+                  <span className="font-semibold">{r.name}</span>
+                  <span className="mt-0.5 block max-w-[180px] truncate text-[11.5px] font-normal text-[#7B8752]">
+                    {consultationGoalText(r.goals) || "목표 미입력"}
+                  </span>
                 </Link>
               </td>
               <td className="py-2 pr-2 text-[#6B5D47]">
@@ -634,8 +673,15 @@ function ConsultationList({ rows }: { rows: Row[] }) {
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
+}
+
+function consultationGoalText(goals: string[] | null) {
+  return (goals ?? [])
+    .map((goal) => GOALS.find((option) => option.v === goal)?.l ?? goal)
+    .join(" · ");
 }
 
 function StatusChip({ status }: { status: string }) {
