@@ -241,7 +241,7 @@ export default function CrmDashboardPage() {
                 </button>
               ))}
             </div>
-            {/* 센터 연결 QR / 링크 생성 */}
+            {/* 센터 연결 QR 생성 */}
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
@@ -252,16 +252,6 @@ export default function CrmDashboardPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h3m-3 3h6m0-6v.01M17 14h3" />
                 </svg>
                 센터 연결 QR 생성
-              </button>
-              <button
-                type="button"
-                onClick={() => setJoinModal("link")}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-200 text-[12px] font-semibold hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m6.656-3.172a4 4 0 00-5.656 0l-3 3" />
-                </svg>
-                센터 연결 링크 생성
               </button>
             </div>
           </div>
