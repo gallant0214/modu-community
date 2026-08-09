@@ -118,7 +118,6 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
   );
   const [name, setName] = useState(asStr("name"));
   const [gender, setGender] = useState(asStr("gender"));
-  const [genderOther, setGenderOther] = useState(nestedStr("selection_other_details", "gender"));
   const [birth, setBirth] = useState(formatBirthInput(asStr("birth")));
   const [phone, setPhone] = useState(asStr("phone"));
   const [addressDong, setAddressDong] = useState(asStr("address_dong"));
@@ -507,7 +506,6 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
           job_traits: jobTraitsOther,
           fatigue_when: fatigueWhenOther,
           conditions: conditionsOther,
-          gender: genderOther,
         },
         request_note: requestNote,
         memo,
@@ -660,24 +658,16 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
                 {[
                   { v: "M", l: "남" },
                   { v: "F", l: "여" },
-                  { v: "O", l: "기타" },
                 ].map((o) => (
                   <ChipToggle
                     key={o.v}
                     on={gender === o.v}
-                    onClick={() => {
-                      const next = gender === o.v ? "" : o.v;
-                      setGender(next);
-                      if (next !== "O") setGenderOther("");
-                    }}
+                    onClick={() => setGender(gender === o.v ? "" : o.v)}
                   >
                     {o.l}
                   </ChipToggle>
                 ))}
               </div>
-              {gender === "O" && (
-                <input value={genderOther} onChange={(e) => setGenderOther(e.target.value)} className={`${crmInputClass} mt-2`} placeholder="직접 입력해 주세요" autoFocus />
-              )}
             </Field>
             <Field label="생년월일">
               <input
@@ -1553,7 +1543,7 @@ function Field({
 }) {
   return (
     <div className="min-w-0">
-      <div className="text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+      <div className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100 mb-1.5">
         {label}
         {required && <span className="text-[#B47B2A] ml-0.5">*</span>}
       </div>
