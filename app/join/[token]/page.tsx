@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
-// 회원용 앱 스토어 (com.moduji.member)
+// 회원용 앱 스토어 (com.moduji.member / App Store id 6797501332)
 const ANDROID_URL = "https://play.google.com/store/apps/details?id=com.moduji.member";
-// TODO: 회원용 앱(com.moduji.member) 실제 App Store ID 로 교체 필요
-const IOS_URL = "https://apps.apple.com/kr/app/id0000000000";
+const IOS_URL = "https://apps.apple.com/kr/app/id6797501332";
 const APP_SCHEME = "moducmmember"; // app.json scheme
 
 type Platform = "ios" | "android" | "other";
