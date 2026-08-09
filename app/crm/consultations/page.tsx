@@ -159,35 +159,38 @@ function NewTab() {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4">
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <h2 className="text-[13.5px] font-bold text-[#2A251D] dark:text-zinc-100">
-            상담지 선택
-          </h2>
-          <Link
-            href="/crm/consultations?tab=manage"
-            className="text-[11.5px] font-semibold text-[#6B7B3A] hover:underline"
+      {/* 폼(ConsultationForm)과 좌우 폭을 맞추기 위해 동일한 max-w-4xl mx-auto px 컨테이너로 감쌈 */}
+      <div className="max-w-4xl mx-auto px-4 md:px-6">
+        <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <h2 className="text-[13.5px] font-bold text-[#2A251D] dark:text-zinc-100">
+              상담지 선택
+            </h2>
+            <Link
+              href="/crm/consultations?tab=manage"
+              className="text-[11.5px] font-semibold text-[#6B7B3A] hover:underline"
+            >
+              + 상담지 관리 →
+            </Link>
+          </div>
+          <select
+            className={crmInputClass}
+            value={selected ?? ""}
+            onChange={(e) => setSelected(e.target.value ? Number(e.target.value) : null)}
           >
-            + 상담지 관리 →
-          </Link>
-        </div>
-        <select
-          className={crmInputClass}
-          value={selected ?? ""}
-          onChange={(e) => setSelected(e.target.value ? Number(e.target.value) : null)}
-        >
-          {templates.length === 0 && <option value="">등록된 상담지가 없어요</option>}
-          {templates.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-              {t.is_default ? " (기본)" : ""}
-            </option>
-          ))}
-        </select>
-        {selectedTpl?.description && (
-          <p className="mt-2 text-[11.5px] text-[#A89B80]">{selectedTpl.description}</p>
-        )}
-      </section>
+            {templates.length === 0 && <option value="">등록된 상담지가 없어요</option>}
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+                {t.is_default ? " (기본)" : ""}
+              </option>
+            ))}
+          </select>
+          {selectedTpl?.description && (
+            <p className="mt-2 text-[11.5px] text-[#A89B80]">{selectedTpl.description}</p>
+          )}
+        </section>
+      </div>
 
       <ConsultationForm
         mode="create"
@@ -490,14 +493,12 @@ function ManageTab() {
                   )}
                 </div>
                 <div className="shrink-0 flex items-center gap-1">
-                  {!t.is_default && (
-                    <Link
-                      href={`/crm/consultations/templates/${t.id}`}
-                      className="px-2 py-1 rounded-md border border-[#6B7B3A] text-[11.5px] text-[#6B7B3A] hover:bg-[#F3F7EA]"
-                    >
-                      편집
-                    </Link>
-                  )}
+                  <Link
+                    href={`/crm/consultations/templates/${t.id}`}
+                    className="px-2 py-1 rounded-md border border-[#6B7B3A] text-[11.5px] text-[#6B7B3A] hover:bg-[#F3F7EA]"
+                  >
+                    수정
+                  </Link>
                   {!t.is_default && (
                     <button
                       type="button"
@@ -507,15 +508,13 @@ function ManageTab() {
                       기본 지정
                     </button>
                   )}
-                  {!t.is_default && (
-                    <button
-                      type="button"
-                      onClick={() => removeTemplate(t.id)}
-                      className="px-2 py-1 rounded-md border border-red-200 text-[11.5px] text-red-700 hover:bg-red-50"
-                    >
-                      삭제
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeTemplate(t.id)}
+                    className="px-2 py-1 rounded-md border border-red-200 text-[11.5px] text-red-700 hover:bg-red-50"
+                  >
+                    삭제
+                  </button>
                 </div>
               </li>
             ))}
