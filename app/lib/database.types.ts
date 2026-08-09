@@ -2927,6 +2927,7 @@ export type Database = {
           job_traits: unknown
           work_notes: string | null
           wake_hour: number | null
+          wake_minute: number | null
           sleep_hour: number | null
           sleep_satisfaction: string | null
           condition_score: string | null
@@ -3001,6 +3002,7 @@ export type Database = {
           job_traits?: unknown
           work_notes?: string | null
           wake_hour?: number | null
+          wake_minute?: number | null
           sleep_hour?: number | null
           sleep_satisfaction?: string | null
           condition_score?: string | null
@@ -3075,6 +3077,7 @@ export type Database = {
           job_traits?: unknown
           work_notes?: string | null
           wake_hour?: number | null
+          wake_minute?: number | null
           sleep_hour?: number | null
           sleep_satisfaction?: string | null
           condition_score?: string | null

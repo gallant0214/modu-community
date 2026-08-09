@@ -80,6 +80,7 @@ interface Consultation {
   work_notes: string | null;
 
   wake_hour: number | null;
+  wake_minute: number | null;
   sleep_hour: number | null;
   sleep_satisfaction: string | null;
   condition_score: string | null;
@@ -384,7 +385,12 @@ export default function ConsultationDetailPage() {
       <SectionCard title="컨디션">
         <KVList
           rows={[
-            ["기상 시간", c.wake_hour !== null ? `${c.wake_hour}시` : null],
+            [
+              "기상 시간",
+              c.wake_hour !== null
+                ? `${c.wake_hour}시${c.wake_minute ? ` ${String(c.wake_minute).padStart(2, "0")}분` : ""}`
+                : null,
+            ],
             ["취침 시간", c.sleep_hour !== null ? `${c.sleep_hour}시` : null],
             ["수면 만족도", labelOne(LEVELS, c.sleep_satisfaction)],
             ["컨디션 지수", labelOne(LEVELS, c.condition_score)],

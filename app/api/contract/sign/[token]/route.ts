@@ -178,15 +178,14 @@ export async function POST(
     }
   }
 
-  const mergedCustomer = {
-    ...(existing.customer_info ?? {}),
-    ...(body.customer_info ?? {}),
-  };
+  // 신원 정보(이름/전화/생년/성별 등)는 센터가 등록한 값을 그대로 유지한다.
+  // 서명자가 body.customer_info 로 계약서 신원 필드를 덮어쓰지 못하게 병합하지 않는다.
+  const finalCustomer = existing.customer_info ?? {};
 
   const { error } = await supabase
     .from("crm_signed_contracts")
     .update({
-      customer_info: mergedCustomer as never,
+      customer_info: finalCustomer as never,
       terms_accepted: (body.terms_accepted ?? {}) as never,
       // 자동 분리된 최종 스냅샷을 저장해 상세 페이지에서도 동일하게 보이도록
       terms_snapshot: snapshot as never,

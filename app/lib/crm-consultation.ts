@@ -80,6 +80,7 @@ export function buildConsultationPayload(
     work_notes: asStr(body.work_notes),
 
     wake_hour: asInt(body.wake_hour),
+    wake_minute: asInt(body.wake_minute),
     sleep_hour: asInt(body.sleep_hour),
     sleep_satisfaction: asStr(body.sleep_satisfaction),
     condition_score: asStr(body.condition_score),

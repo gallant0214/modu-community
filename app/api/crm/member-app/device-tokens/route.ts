@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
+import { verifyAuth } from "@/app/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,15 @@ export async function DELETE(request: Request) {
   const token = (body.token ?? "").trim();
   if (!token) return NextResponse.json({ error: "토큰이 없습니다" }, { status: 400 });
 
-  // 로그인만 확인되면 본인 토큰 삭제 (token unique)
-  await supabase.from("crm_member_device_tokens").delete().eq("token", token);
+  // 인증 필수 — 본인(uid) 소유 토큰만 삭제 (남의 토큰 임의 삭제 방지)
+  const user = await verifyAuth(request);
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
+  }
+  await supabase
+    .from("crm_member_device_tokens")
+    .delete()
+    .eq("token", token)
+    .eq("firebase_uid", user.uid);
   return NextResponse.json({ ok: true });
 }

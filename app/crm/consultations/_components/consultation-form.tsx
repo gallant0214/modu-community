@@ -57,6 +57,7 @@ interface MemberSearchHit {
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTES_10 = [0, 10, 20, 30, 40, 50];
 
 export function ConsultationForm({ mode, initial, templateId, templateDefinition }: Props) {
   const def = useMemo(() => normalizeDefinition(templateDefinition), [templateDefinition]);
@@ -141,6 +142,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
 
   // 컨디션
   const [wakeHour, setWakeHour] = useState<number | "">(asNum("wake_hour"));
+  const [wakeMinute, setWakeMinute] = useState<number | "">(asNum("wake_minute"));
   const [sleepHour, setSleepHour] = useState<number | "">(asNum("sleep_hour"));
   const [sleepSatisfaction, setSleepSatisfaction] = useState(asStr("sleep_satisfaction"));
   const [conditionScore, setConditionScore] = useState(asStr("condition_score"));
@@ -315,6 +317,7 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
         job_traits: jobTraits,
         work_notes: workNotes,
         wake_hour: wakeHour === "" ? null : wakeHour,
+        wake_minute: wakeMinute === "" ? null : wakeMinute,
         sleep_hour: sleepHour === "" ? null : sleepHour,
         sleep_satisfaction: sleepSatisfaction || null,
         condition_score: conditionScore || null,
@@ -832,18 +835,32 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label="기상 시간">
-              <select
-                value={wakeHour}
-                onChange={(e) => setWakeHour(e.target.value === "" ? "" : Number(e.target.value))}
-                className={crmInputClass}
-              >
-                <option value="">-</option>
-                {HOURS.map((h) => (
-                  <option key={h} value={h}>
-                    {h}시
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={wakeHour}
+                  onChange={(e) => setWakeHour(e.target.value === "" ? "" : Number(e.target.value))}
+                  className={crmInputClass}
+                >
+                  <option value="">-</option>
+                  {HOURS.map((h) => (
+                    <option key={h} value={h}>
+                      {h}시
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={wakeMinute}
+                  onChange={(e) => setWakeMinute(e.target.value === "" ? "" : Number(e.target.value))}
+                  className={crmInputClass}
+                >
+                  <option value="">-</option>
+                  {MINUTES_10.map((m) => (
+                    <option key={m} value={m}>
+                      {String(m).padStart(2, "0")}분
+                    </option>
+                  ))}
+                </select>
+              </div>
             </Field>
             <Field label="취침 시간">
               <select
