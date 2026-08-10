@@ -54,6 +54,15 @@ type Result =
  * 태블릿용 가로형/세로형 레이아웃 전환 지원.
  */
 export default function TouchAttendancePage() {
+  return <TouchAttendanceKiosk />;
+}
+
+/**
+ * 터치출석 코어. kioskToken 이 있으면 로그인 없이 공개 링크(/touch/[token]) 모드로
+ * 동작 — 번호 출석만, 공개 엔드포인트(/api/touch/[token]/*) 사용, 얼굴/등록 없음.
+ */
+export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
+  const kiosk = !!kioskToken;
   const { getIdToken } = useAuth();
   const [num, setNum] = useState("");
   const [candidates, setCandidates] = useState<MemberLite[] | null>(null);
@@ -82,6 +91,16 @@ export default function TouchAttendancePage() {
   useEffect(() => {
     (async () => {
       try {
+        if (kiosk) {
+          const res = await fetch(`/api/touch/${kioskToken}/bootstrap`, { cache: "no-store" });
+          if (res.ok) {
+            const data = await res.json();
+            setCenterName(data.centerName ?? "");
+          } else {
+            setCenterName("__invalid__");
+          }
+          return;
+        }
         const token = await getIdToken();
         if (!token) return;
         const res = await fetch("/api/crm/bootstrap", {
@@ -96,7 +115,7 @@ export default function TouchAttendancePage() {
         /* ignore */
       }
     })();
-  }, [getIdToken]);
+  }, [getIdToken, kiosk, kioskToken]);
 
   const reset = useCallback(() => {
     setNum("");
@@ -137,12 +156,20 @@ export default function TouchAttendancePage() {
     setBusy(true);
     setResult(null);
     try {
-      const token = await getIdToken();
-      const res = await fetch("/api/crm/attendances/check-in", {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ member_id: member.id, source: "touch_number" }),
-      });
+      const res = kiosk
+        ? await fetch(`/api/touch/${kioskToken}/check-in`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ member_id: member.id }),
+          })
+        : await fetch("/api/crm/attendances/check-in", {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${await getIdToken()}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({ member_id: member.id, source: "touch_number" }),
+          });
       const data = await res.json();
       if (!res.ok) {
         setResult({ kind: "error", message: data?.error || "출석 실패" });
@@ -173,11 +200,14 @@ export default function TouchAttendancePage() {
     setBusy(true);
     setResult(null);
     try {
-      const token = await getIdToken();
-      const res = await fetch(`/api/crm/attendances/by-number?no=${encodeURIComponent(num.trim())}`, {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
+      const res = kiosk
+        ? await fetch(`/api/touch/${kioskToken}/by-number?no=${encodeURIComponent(num.trim())}`, {
+            cache: "no-store",
+          })
+        : await fetch(`/api/crm/attendances/by-number?no=${encodeURIComponent(num.trim())}`, {
+            headers: { authorization: `Bearer ${await getIdToken()}` },
+            cache: "no-store",
+          });
       const data = await res.json();
       if (!res.ok) {
         setResult({ kind: "error", message: data?.error || "조회 실패" });
@@ -191,7 +221,8 @@ export default function TouchAttendancePage() {
         setNum("");
       } else if (members.length === 1) {
         const m = members[0];
-        if (m.has_face) {
+        if (kiosk || m.has_face) {
+          // 공개 키오스크(번호 전용)는 얼굴 등록 없이 바로 체크인
           await checkin(m);
         } else {
           // 얼굴 미등록 → 촬영/동의 플로우
@@ -244,6 +275,24 @@ export default function TouchAttendancePage() {
     </button>
   );
 
+  if (kiosk && centerName === "__invalid__") {
+    return (
+      <div
+        className="min-h-dvh flex items-center justify-center px-6 text-center bg-[#FEFCF7] dark:bg-zinc-950"
+        style={{ marginTop: "calc(-1 * (env(safe-area-inset-top, 0px) + 56px))" }}
+      >
+        <div>
+          <div className="text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
+            유효하지 않은 링크예요
+          </div>
+          <p className="mt-2 text-[13px] text-[#8C8270] dark:text-zinc-400">
+            링크가 만료됐거나 잘못됐어요. 센터 관리자에게 새 링크를 요청해 주세요.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="min-h-dvh flex flex-col items-center px-5 pb-8 bg-[#FEFCF7] dark:bg-zinc-950"
@@ -281,28 +330,30 @@ export default function TouchAttendancePage() {
         </p>
       </header>
 
-      {/* 번호 / 얼굴 / 번호+얼굴 인식 방식 전환 */}
-      <div className="mb-6 inline-flex rounded-xl border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden bg-white dark:bg-zinc-900">
-        {(
-          [
-            { k: "number", label: "번호 출석" },
-            { k: "face", label: "얼굴 출석" },
-            { k: "both", label: "번호+얼굴" },
-          ] as const
-        ).map(({ k, label }) => (
-          <button
-            key={k}
-            onClick={() => setRecogMode(k)}
-            className={`px-5 py-2.5 text-[14px] font-semibold ${
-              recogMode === k
-                ? "bg-[#6B7B3A] text-white"
-                : "text-[#6B5D47] dark:text-zinc-300"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* 번호 / 얼굴 / 번호+얼굴 인식 방식 전환 (공개 링크는 번호 전용이라 숨김) */}
+      {!kiosk && (
+        <div className="mb-6 inline-flex rounded-xl border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden bg-white dark:bg-zinc-900">
+          {(
+            [
+              { k: "number", label: "번호 출석" },
+              { k: "face", label: "얼굴 출석" },
+              { k: "both", label: "번호+얼굴" },
+            ] as const
+          ).map(({ k, label }) => (
+            <button
+              key={k}
+              onClick={() => setRecogMode(k)}
+              className={`px-5 py-2.5 text-[14px] font-semibold ${
+                recogMode === k
+                  ? "bg-[#6B7B3A] text-white"
+                  : "text-[#6B5D47] dark:text-zinc-300"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {recogMode === "face" ? (
         <FaceAttendance />

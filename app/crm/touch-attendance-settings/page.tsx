@@ -158,6 +158,8 @@ export default function TouchAttendanceSettingsPage() {
         </div>
       )}
 
+      <KioskLinkSection />
+
       <Section title="안내 멘트">
         <p className="mb-3 text-[11.5px] text-[#A89B80]">
           각 상황에 맞춰 재생될 안내 문구예요. 빈 값이면 그 상황에는 재생하지 않습니다.
@@ -381,6 +383,126 @@ export default function TouchAttendanceSettingsPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+/** 공개 터치출석 링크(로그인 없이 접근) 발급·복사·재발급 */
+function KioskLinkSection() {
+  const { getIdToken } = useAuth();
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const t = await getIdToken();
+        if (!t) return;
+        const res = await fetch("/api/crm/kiosk-link", {
+          headers: { authorization: `Bearer ${t}` },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const d = await res.json();
+          setToken(d.token ?? null);
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [getIdToken]);
+
+  const link =
+    token && typeof window !== "undefined" ? `${window.location.origin}/touch/${token}` : "";
+
+  const generate = async (regenerate: boolean) => {
+    if (regenerate && !window.confirm("기존 링크가 즉시 무효화되고 새 링크가 만들어져요. 계속할까요?")) return;
+    setBusy(true);
+    setErr("");
+    try {
+      const t = await getIdToken();
+      const res = await fetch("/api/crm/kiosk-link", {
+        method: "POST",
+        headers: { authorization: `Bearer ${t}` },
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d?.error || "발급 실패");
+      setToken(d.token);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <Section title="공개 터치출석 링크 (로그인 없이 접속)">
+      <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+        이 링크로 열면 로그인 없이 이 센터의 터치출석(출석번호 방식) 화면이 열려요.
+        태블릿·키오스크를 그 링크로 열어두면 회원이 바로 출석할 수 있어요.
+        <br />
+        <span className="text-[#B47B2A]">
+          링크에 접근 권한이 담겨 있으니 외부에 노출되지 않게 관리하세요. 유출되면 아래에서 재발급하면 됩니다.
+        </span>
+      </p>
+      {loading ? (
+        <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : token ? (
+        <>
+          <div className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-950 break-all text-[12.5px] font-mono text-[#3A342A] dark:text-zinc-200">
+            {link}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={copy}
+              className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932]"
+            >
+              {copied ? "복사됨!" : "링크 복사"}
+            </button>
+            <a
+              href={link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+            >
+              새 창에서 열기
+            </a>
+            <button
+              type="button"
+              onClick={() => generate(true)}
+              disabled={busy}
+              className="px-4 py-2 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-[13px] font-semibold hover:bg-red-50 disabled:opacity-50"
+            >
+              {busy ? "처리 중…" : "링크 재발급"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => generate(false)}
+          disabled={busy}
+          className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
+        >
+          {busy ? "생성 중…" : "공개 링크 생성"}
+        </button>
+      )}
+      {err && <div className="text-[12.5px] text-red-700 dark:text-red-300">{err}</div>}
+    </Section>
   );
 }
 
