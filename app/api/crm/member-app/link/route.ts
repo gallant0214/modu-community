@@ -82,14 +82,18 @@ export async function POST(request: Request) {
     const centerIds = Array.from(new Set(linkable.map((m) => m.center_id)));
     const { data: centers } = await supabase
       .from("crm_centers")
-      .select("id, name, region")
+      .select("id, name, region_sido, region_sigungu")
       .in("id", centerIds);
     const infoMap = new Map((centers ?? []).map((c) => [c.id, c]));
-    const list = linkable.map((m) => ({
-      centerId: m.center_id,
-      centerName: infoMap.get(m.center_id)?.name ?? "센터",
-      region: infoMap.get(m.center_id)?.region ?? null,
-    }));
+    const list = linkable.map((m) => {
+      const info = infoMap.get(m.center_id);
+      const region = [info?.region_sido, info?.region_sigungu].filter(Boolean).join(" ") || null;
+      return {
+        centerId: m.center_id,
+        centerName: info?.name ?? "센터",
+        region,
+      };
+    });
     return NextResponse.json({ needsSelection: true, centers: list });
   }
 
