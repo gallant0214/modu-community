@@ -1389,7 +1389,7 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
           <span className="truncate">{m.name}</span>
           {m.foreign && (
             <span className="mt-0.5 inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#EEF1E3] text-[#6B7B3A] dark:bg-[#3a4127] dark:text-[#A8B87A]">
-              🏢 {m.center_name || "다른 센터"} · 조회
+              🏢 {m.center_name || "다른 센터"}
             </span>
           )}
         </span>
