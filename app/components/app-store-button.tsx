@@ -1,16 +1,25 @@
 "use client";
 
-export function AppStoreButton() {
+const COMMUNITY_APP_STORE =
+  "https://apps.apple.com/kr/app/%EB%AA%A8%EB%91%90%EC%9D%98-%EC%A7%80%EB%8F%84%EC%82%AC-%EC%BB%A4%EB%AE%A4%EB%8B%88%ED%8B%B0/id6761803675";
+
+export function AppStoreButton({
+  href = COMMUNITY_APP_STORE,
+  track = "app_store",
+}: {
+  href?: string;
+  track?: string;
+}) {
   return (
     <a
-      href="https://apps.apple.com/kr/app/%EB%AA%A8%EB%91%90%EC%9D%98-%EC%A7%80%EB%8F%84%EC%82%AC-%EC%BB%A4%EB%AE%A4%EB%8B%88%ED%8B%B0/id6761803675"
+      href={href}
       target="_blank"
       rel="noopener"
       onClick={() => {
         fetch("/api/track-store-click", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ store: "app_store" }),
+          body: JSON.stringify({ store: track }),
         }).catch(() => {});
       }}
       className="lp-badge-btn"

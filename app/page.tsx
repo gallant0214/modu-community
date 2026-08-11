@@ -338,6 +338,17 @@ export default async function Home() {
                 <GooglePlayButton />
               </div>
             </div>
+
+            {/* 강사용(회원관리) 앱 카드 */}
+            <div className="lp-final-cta" style={{ marginTop: 20 }}>
+              <div className="lp-label" style={{background:"rgba(255,255,255,.15)",color:"#fff"}}>강사·센터용 앱</div>
+              <h2 className="lp-final-title">{`'모두의지도사 강사용' 앱으로`}<br />회원을 더 쉽게 관리하세요.</h2>
+              <p className="lp-final-sub">회원·수강권 관리, 수업 스케줄, 예약 요청 알림, 정산·실적까지<br />강사와 센터를 위한 올인원 관리 앱입니다.</p>
+              <div className="lp-final-buttons">
+                <AppStoreButton href="https://apps.apple.com/kr/app/id6796166468" track="app_store_trainer" />
+                <GooglePlayButton comingSoon />
+              </div>
+            </div>
           </div>
         </section>
 

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const { store } = await request.json();
-    if (!store || !["google_play", "app_store"].includes(store)) {
+    if (!store || !["google_play", "app_store", "app_store_trainer", "google_play_trainer"].includes(store)) {
       return NextResponse.json({ error: "invalid store" }, { status: 400 });
     }
 
