@@ -1017,6 +1017,19 @@ export default function AdminPage() {
                     <KpiCard label="거래 북마크 (기간)" value={kpiData.trades?.bookmarksInRange ?? 0} />
                   </KpiSubsection>
 
+                  <KpiSubsection title="회원관리 (CRM)">
+                    <KpiCard label="전체 회원" value={kpiData.crm?.membersTotal ?? 0} />
+                    <KpiCard label="신규 회원 (기간)" value={kpiData.crm?.membersInRange ?? 0} accent />
+                    <KpiCard label="신규 수강권 (기간)" value={kpiData.crm?.passesInRange ?? 0} />
+                    <KpiCard label="신규 회원권 (기간)" value={kpiData.crm?.membershipsInRange ?? 0} />
+                    <KpiCard label="신규 센터 (기간)" value={kpiData.crm?.centersInRange ?? 0} />
+                  </KpiSubsection>
+
+                  <KpiSubsection title="스포츠마켓">
+                    <KpiCard label="전체 방문" value={kpiData.market?.visitsTotal ?? 0} />
+                    <KpiCard label="기간 방문" value={kpiData.market?.visitsInRange ?? 0} accent />
+                  </KpiSubsection>
+
                   <KpiSubsection title="참여 (기간)">
                     <KpiCard label="게시글 좋아요" value={kpiData.engagement?.postLikesInRange ?? 0} />
                     <KpiCard label="댓글 좋아요" value={kpiData.engagement?.commentLikesInRange ?? 0} />
@@ -2613,12 +2626,13 @@ function ReportTabContent({
       {/* ── 방문 후 지표 (3카드) ── */}
       <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 p-4">
         <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200 mb-3">
-          방문 후 지표 <span className="text-emerald-500 ml-1">3</span>
+          방문 후 지표 <span className="text-emerald-500 ml-1">4</span>
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <ReportSummaryCard label="게시글 작성" m={data.metrics.posts} />
           <ReportSummaryCard label="댓글 작성" m={data.metrics.comments} />
           <ReportSummaryCard label="구인글 등록" m={data.metrics.jobs} />
+          {data.metrics.marketVisits && <ReportSummaryCard label="스포츠마켓 방문" m={data.metrics.marketVisits} />}
         </div>
       </div>
 
@@ -2626,7 +2640,7 @@ function ReportTabContent({
       {data.crm && (
         <div className="rounded-xl border border-lime-200 bg-lime-50/40 dark:border-lime-900/60 dark:bg-lime-950/20 p-4">
           <h3 className="text-sm font-bold text-lime-800 dark:text-lime-300 mb-3">
-            CRM 지표 <span className="text-lime-500 ml-1">6</span>
+            회원관리 (CRM) <span className="text-lime-500 ml-1">6</span>
             <span className="ml-2 text-[11px] font-normal text-lime-700/70 dark:text-lime-400/70">
               전 기간 대비 변화율 표시 · CRM 탭에서 상세 확인
             </span>

@@ -253,6 +253,7 @@ export async function POST(request: Request) {
   const [
     visits, signups, posts, comments, jobs, storeApp, storeGoogle, inflow, topCats,
     crmCenters, crmMembers, crmPasses, crmMemberships, crmConsultations, crmAttendances,
+    marketVisits,
   ] = await Promise.all([
     buildMetric("site_visits", "visited_at", cur, prev),
     buildMetric("nicknames", "created_at", cur, prev),
@@ -270,6 +271,8 @@ export async function POST(request: Request) {
     buildMetric("crm_memberships", "created_at", cur, prev),
     buildMetric("crm_pt_consultations", "created_at", cur, prev),
     buildMetric("crm_attendances", "checked_in_at", cur, prev),
+    // 스포츠마켓(/market) 방문
+    buildMetric("site_visits", "visited_at", cur, prev, (q: any) => q.eq("path", "/market")),
   ]);
 
   // 스토어 클릭은 두 스토어 합산
@@ -289,7 +292,7 @@ export async function POST(request: Request) {
     offset: off,
     range: { from: cur.from.toISOString(), to: cur.to.toISOString(), days: cur.days },
     prevRange: { from: prev.from.toISOString(), to: prev.to.toISOString(), days: prev.days },
-    metrics: { visits, signups, posts, comments, jobs, storeClicks },
+    metrics: { visits, signups, posts, comments, jobs, storeClicks, marketVisits },
     crm: {
       centers: crmCenters,
       members: crmMembers,

@@ -461,9 +461,41 @@ export async function POST(request: Request) {
     reportsTotalForRange = reportsByType.reduce((s, r) => s + r.count, 0);
   } catch { /* skip */ }
 
+  // 회원관리(CRM) 지표
+  const [crmMembersTotal, crmMembersInRange, crmPassesInRange, crmMembershipsInRange, crmCentersInRange] =
+    await Promise.all([
+      countAll("crm_members"),
+      countRange("crm_members", "created_at"),
+      countRange("crm_passes", "created_at"),
+      countRange("crm_memberships", "created_at"),
+      countRange("crm_centers", "created_at"),
+    ]);
+
+  // 스포츠마켓(/market) 방문 — site_visits.path 기준 (방문 기간 필터)
+  const marketVisit = async (ranged: boolean) => {
+    try {
+      let q = sb.from("site_visits").select("*", { count: "exact", head: true }).eq("path", "/market");
+      if (ranged && visitFromDate) q = q.gte("visited_at", visitFromDate);
+      if (ranged && visitToDate) q = q.lte("visited_at", visitToDate);
+      const { count } = await q;
+      return count ?? 0;
+    } catch {
+      return 0;
+    }
+  };
+  const [marketVisitsTotal, marketVisitsInRange] = await Promise.all([marketVisit(false), marketVisit(true)]);
+
   return NextResponse.json({
     range: { from: fromDate, to: toDate },
     visitRange: { from: visitFromDate, to: visitToDate },
+    crm: {
+      membersTotal: crmMembersTotal,
+      membersInRange: crmMembersInRange,
+      passesInRange: crmPassesInRange,
+      membershipsInRange: crmMembershipsInRange,
+      centersInRange: crmCentersInRange,
+    },
+    market: { visitsTotal: marketVisitsTotal, visitsInRange: marketVisitsInRange },
     users: { total: usersTotal, inRange: usersInRange },
     posts: { total: postsTotal, inRange: postsInRange },
     comments: { total: commentsTotal, inRange: commentsInRange },
