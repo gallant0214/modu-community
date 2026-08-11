@@ -155,6 +155,23 @@ export default async function Home() {
               </div>
             </div>
 
+            <div className="lp-gc" style={{ marginTop: 24 }}>
+              <h3>Q. 회원관리 CRM은 뭔가요?</h3>
+              <p>
+                여러 체육시설을 오가며 수업을 진행하는 1인(프리랜서) 강사부터, 여러 회원의 수업 예약을
+                관리해야 하는 운동 센터까지 — 모두를 위한 회원관리 도구입니다.
+              </p>
+              <p style={{ marginTop: 8 }}>
+                회원 등록, 이용권·수강권 발급, 스케줄·예약 관리, 얼굴/번호 터치 출석, 마일리지, 락커,
+                전자 계약서, 강사 급여 자동 산정까지 별도 프로그램 설치 없이 웹 브라우저 하나로 이용할 수
+                있습니다.
+              </p>
+              <p style={{ marginTop: 8 }}>
+                이용 형태도 두 가지로 나뉘어, 여러 강사가 함께 쓰는 &lsquo;센터 CRM&rsquo;과 혼자 수업을
+                운영하는 강사를 위한 &lsquo;개인 CRM&rsquo; 중 상황에 맞게 선택할 수 있습니다.
+              </p>
+            </div>
+
             <div className="lp-section-cta">
               <Link href="/crm/members" className="lp-btn lp-btn-primary">회원관리 CRM 시작하기 →</Link>
             </div>
