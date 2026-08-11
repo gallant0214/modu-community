@@ -454,10 +454,11 @@ export function CategorySearch({
                   <span className="w-6 h-px bg-[#6B7B3A]" />
                 </div>
                 <h2 className="text-xl sm:text-2xl font-bold text-[#2A251D] dark:text-zinc-100 mb-2 tracking-tight">
-                  시험 후기를 공유해 주세요
+                  종목별 이야기를 나눠 주세요
                 </h2>
                 <p className="text-[14px] text-[#6B5D47] dark:text-zinc-400 mb-6 max-w-md mx-auto leading-relaxed">
-                  나의 경험이 다음 수험생에게 큰 도움이 됩니다. 위 종목 중 하나를 골라 이야기를 남겨보세요.
+                  시험 후기·연수 후기·현장 노하우·질문·정보 공유까지 —
+                  종목별로 자유롭게 이야기하는 공간입니다. 위 종목 중 하나를 골라 글을 남겨보세요.
                 </p>
                 <button
                   onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
