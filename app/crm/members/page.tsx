@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { MEMBER_TYPE_LABEL, GENDER_LABEL, formatPhone } from "../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
+import { SortIndicator } from "../_components/use-column-widths";
 import { BulkActionBar } from "./_components/bulk-actions";
 
 interface PassItem {
@@ -1725,14 +1726,12 @@ function MembersTable({
                       <button
                         type="button"
                         onClick={() => onSort(c.sortKey!)}
-                        className={`inline-flex items-center gap-0.5 hover:text-[#6B7B3A] truncate ${
-                          active ? "text-[#6B7B3A] dark:text-[#A8B87A] font-semibold" : ""
+                        className={`inline-flex items-center gap-0.5 truncate ${
+                          active ? "text-[#B47B2A] dark:text-amber-300 font-semibold" : "hover:text-[#6B7B3A]"
                         }`}
                       >
                         {c.label}
-                        <span className="text-[9px] leading-none shrink-0">
-                          {active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
-                        </span>
+                        <SortIndicator state={active ? (sortDir === "asc" ? "asc" : "desc") : "none"} />
                       </button>
                     ) : (
                       <span className="truncate">{c.label}</span>

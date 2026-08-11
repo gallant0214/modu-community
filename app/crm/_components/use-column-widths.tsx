@@ -119,8 +119,51 @@ export function useColumnWidths<K extends string>(
 }
 
 /**
+ * 정렬 표시 아이콘.
+ * - none: 이중 화살표(정렬 가능하나 미정렬) — 은은한 회색
+ * - asc/desc: 단일 화살표(정렬됨) — 주황(amber) 강조
+ */
+export function SortIndicator({ state }: { state: "none" | "asc" | "desc" }) {
+  if (state === "none") {
+    return (
+      <svg
+        viewBox="0 0 16 16"
+        className="w-3 h-3 shrink-0 text-[#C7B89B] dark:text-zinc-600"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M5 6.3 L8 3.3 L11 6.3" />
+        <path d="M5 9.7 L8 12.7 L11 9.7" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="w-3 h-3 shrink-0 text-[#B47B2A] dark:text-amber-400"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.9}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {state === "asc" ? (
+        <path d="M8 12.5 V3.6 M4.6 7 L8 3.5 L11.4 7" />
+      ) : (
+        <path d="M8 3.5 V12.4 M4.6 9 L8 12.5 L11.4 9" />
+      )}
+    </svg>
+  );
+}
+
+/**
  * 너비 조절 핸들이 달린 헤더 셀.
- * onSort 를 넘기면 라벨이 정렬 버튼이 되고 활성 컬럼에 ▲/▼ 표시(회원 관리와 동일 UX).
+ * onSort 를 넘기면 라벨이 정렬 버튼이 되고 활성 컬럼에 정렬 화살표 표시(회원 관리와 동일 UX).
  */
 export function ResizableTh<K extends string>({
   colKey,
@@ -151,10 +194,8 @@ export function ResizableTh<K extends string>({
           className="flex items-center gap-1 w-full pr-2 text-left hover:text-[#6B7B3A] dark:hover:text-[#A8B87A]"
           title="정렬"
         >
-          <span className="truncate">{label}</span>
-          <span className={`text-[10px] shrink-0 ${active ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#C7B89B] dark:text-zinc-600"}`}>
-            {active ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
-          </span>
+          <span className={`truncate ${active ? "text-[#B47B2A] dark:text-amber-300 font-semibold" : ""}`}>{label}</span>
+          <SortIndicator state={active ? (sortDir ?? "asc") : "none"} />
         </button>
       ) : (
         <span className="block truncate pr-2">{label}</span>
