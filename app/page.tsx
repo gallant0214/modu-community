@@ -87,6 +87,83 @@ export default async function Home() {
         </section>
 
 
+        {/* ===== 5.5 회원관리 CRM ===== */}
+        <section className="lp-section" id="section-crm">
+          <div className="lp-c"><div className="lp-card">
+            <div className="lp-label">회원관리 CRM · 신규</div>
+            <h2 className="lp-title">체육시설 사장님과 프리랜서 강사를 위한<br />올인원 회원관리 도구</h2>
+            <p className="lp-desc">회원 등록부터 이용권·수강권 발급, 스케줄·예약·출석, 마일리지, 락커, 전자 계약서까지 — 별도 프로그램 없이 웹 브라우저 하나로 관리하세요.</p>
+            <div className="lp-grid-2">
+              <div className="lp-gc">
+                <h3>🏢 센터 CRM</h3>
+                <ul>
+                  <li>다인 사업장(센터장 · 관리자 · 강사 · 프론트) 권한 분리</li>
+                  <li>회원별 이용권·락커·운동복 · 결제 · 미수금 · 예약 · 출석 통합</li>
+                  <li>강사 수업료 · 급여 자동 산정, 성과급 구간 지원</li>
+                  <li>얼굴 인식/번호 입력 터치 출석, 음성 안내</li>
+                </ul>
+                <p className="lp-gc-example">예: &ldquo;3층 필라테스 스튜디오, 강사 5명 · 회원 200명 관리&rdquo;</p>
+              </div>
+              <div className="lp-gc">
+                <h3>🧑‍🏫 개인 CRM</h3>
+                <ul>
+                  <li>1인 프리랜서 강사 전용 축소 UI</li>
+                  <li>내 회원 · 내 수강권 · 내 스케줄 · 내 급여만 한눈에</li>
+                  <li>여러 센터를 오가며 담당하는 회원도 통합 조회</li>
+                  <li>개인 상품 카탈로그(PT · 그룹 수업) 별도 관리</li>
+                </ul>
+                <p className="lp-gc-example">예: &ldquo;여러 센터에 출강하는 PT 강사, 회원별 진행 상황을 한 화면에&rdquo;</p>
+              </div>
+            </div>
+
+            <div className="lp-grid-3" style={{ marginTop: 24 }}>
+              <div className="lp-feature-card">
+                <div className="lp-feature-icon">📅</div>
+                <h3>스케줄 · 예약</h3>
+                <p className="lp-feature-example">&ldquo;내일 10시 회원 3명 노쇼 사유까지 기록&rdquo;</p>
+                <p>강사별 캘린더, 드래그 이동, 겹침 자동 분할, 노쇼/취소 사유 이력</p>
+              </div>
+              <div className="lp-feature-card">
+                <div className="lp-feature-icon">✅</div>
+                <h3>터치 출석</h3>
+                <p className="lp-feature-example">&ldquo;출석번호 or 얼굴만 대면 자동 체크인&rdquo;</p>
+                <p>번호 / 얼굴 / 번호+얼굴 3가지 모드 + 만료·생일·저세션 음성 안내</p>
+              </div>
+              <div className="lp-feature-card">
+                <div className="lp-feature-icon">💳</div>
+                <h3>이용권 · 결제</h3>
+                <p className="lp-feature-example">&ldquo;회원권+락커+운동복 장바구니 한번에 결제&rdquo;</p>
+                <p>회원권/수강권 발급, 정지·홀딩, 미수금, 자동 마일리지 적립</p>
+              </div>
+              <div className="lp-feature-card">
+                <div className="lp-feature-icon">📝</div>
+                <h3>전자 계약서</h3>
+                <p className="lp-feature-example">&ldquo;결제 즉시 서명 링크 발송, 서명 이력 자동 보관&rdquo;</p>
+                <p>템플릿 선택 → 회원 서명 → 이중 서명 저장 (SMS · 앱 푸시 발송 예정)</p>
+              </div>
+              <div className="lp-feature-card">
+                <div className="lp-feature-icon">📈</div>
+                <h3>대시보드 · 통계</h3>
+                <p className="lp-feature-example">&ldquo;이번 달 매출·수업료·미수금·만료 임박 한 눈에&rdquo;</p>
+                <p>센터장/강사 관점 분리, 시간대 · 요일 매출, 리텐션 · 활성 회원 KPI</p>
+              </div>
+              <div className="lp-feature-card">
+                <div className="lp-feature-icon">🔔</div>
+                <h3>자동 알림</h3>
+                <p className="lp-feature-example">&ldquo;만료 D-3, 생일, 저세션 회원에 자동 안내&rdquo;</p>
+                <p>트리거별 on/off · 개별 문구 관리 (실 발송 채널은 순차 오픈)</p>
+              </div>
+            </div>
+
+            <div className="lp-section-cta">
+              <Link href="/crm/members" className="lp-btn lp-btn-primary">회원관리 CRM 시작하기 →</Link>
+            </div>
+            <p className="lp-hero-note" style={{ marginTop: 12 }}>
+              현재 무료 이용 중 · 자동 알림 발송 · POS · 전자 계약서 채널 등 일부 기능은 추후 유료 전환될 수 있습니다.
+            </p>
+          </div></div>
+        </section>
+
         {/* ===== 3. Before → After ===== */}
         <section className="lp-section">
           <div className="lp-c"><div className="lp-card">
@@ -182,83 +259,6 @@ export default async function Home() {
           </div></div>
         </section>
 
-        {/* ===== 5.5 회원관리 CRM ===== */}
-        <section className="lp-section" id="section-crm">
-          <div className="lp-c"><div className="lp-card">
-            <div className="lp-label">회원관리 CRM · 신규</div>
-            <h2 className="lp-title">체육시설 사장님과 프리랜서 강사를 위한<br />올인원 회원관리 도구</h2>
-            <p className="lp-desc">회원 등록부터 이용권·수강권 발급, 스케줄·예약·출석, 마일리지, 락커, 전자 계약서까지 — 별도 프로그램 없이 웹 브라우저 하나로 관리하세요.</p>
-            <div className="lp-grid-2">
-              <div className="lp-gc">
-                <h3>🏢 센터 CRM</h3>
-                <ul>
-                  <li>다인 사업장(센터장 · 관리자 · 강사 · 프론트) 권한 분리</li>
-                  <li>회원별 이용권·락커·운동복 · 결제 · 미수금 · 예약 · 출석 통합</li>
-                  <li>강사 수업료 · 급여 자동 산정, 성과급 구간 지원</li>
-                  <li>얼굴 인식/번호 입력 터치 출석, 음성 안내</li>
-                </ul>
-                <p className="lp-gc-example">예: &ldquo;3층 필라테스 스튜디오, 강사 5명 · 회원 200명 관리&rdquo;</p>
-              </div>
-              <div className="lp-gc">
-                <h3>🧑‍🏫 개인 CRM</h3>
-                <ul>
-                  <li>1인 프리랜서 강사 전용 축소 UI</li>
-                  <li>내 회원 · 내 수강권 · 내 스케줄 · 내 급여만 한눈에</li>
-                  <li>여러 센터를 오가며 담당하는 회원도 통합 조회</li>
-                  <li>개인 상품 카탈로그(PT · 그룹 수업) 별도 관리</li>
-                </ul>
-                <p className="lp-gc-example">예: &ldquo;여러 센터에 출강하는 PT 강사, 회원별 진행 상황을 한 화면에&rdquo;</p>
-              </div>
-            </div>
-
-            <div className="lp-grid-3" style={{ marginTop: 24 }}>
-              <div className="lp-feature-card">
-                <div className="lp-feature-icon">📅</div>
-                <h3>스케줄 · 예약</h3>
-                <p className="lp-feature-example">&ldquo;내일 10시 회원 3명 노쇼 사유까지 기록&rdquo;</p>
-                <p>강사별 캘린더, 드래그 이동, 겹침 자동 분할, 노쇼/취소 사유 이력</p>
-              </div>
-              <div className="lp-feature-card">
-                <div className="lp-feature-icon">✅</div>
-                <h3>터치 출석</h3>
-                <p className="lp-feature-example">&ldquo;출석번호 or 얼굴만 대면 자동 체크인&rdquo;</p>
-                <p>번호 / 얼굴 / 번호+얼굴 3가지 모드 + 만료·생일·저세션 음성 안내</p>
-              </div>
-              <div className="lp-feature-card">
-                <div className="lp-feature-icon">💳</div>
-                <h3>이용권 · 결제</h3>
-                <p className="lp-feature-example">&ldquo;회원권+락커+운동복 장바구니 한번에 결제&rdquo;</p>
-                <p>회원권/수강권 발급, 정지·홀딩, 미수금, 자동 마일리지 적립</p>
-              </div>
-              <div className="lp-feature-card">
-                <div className="lp-feature-icon">📝</div>
-                <h3>전자 계약서</h3>
-                <p className="lp-feature-example">&ldquo;결제 즉시 서명 링크 발송, 서명 이력 자동 보관&rdquo;</p>
-                <p>템플릿 선택 → 회원 서명 → 이중 서명 저장 (SMS · 앱 푸시 발송 예정)</p>
-              </div>
-              <div className="lp-feature-card">
-                <div className="lp-feature-icon">📈</div>
-                <h3>대시보드 · 통계</h3>
-                <p className="lp-feature-example">&ldquo;이번 달 매출·수업료·미수금·만료 임박 한 눈에&rdquo;</p>
-                <p>센터장/강사 관점 분리, 시간대 · 요일 매출, 리텐션 · 활성 회원 KPI</p>
-              </div>
-              <div className="lp-feature-card">
-                <div className="lp-feature-icon">🔔</div>
-                <h3>자동 알림</h3>
-                <p className="lp-feature-example">&ldquo;만료 D-3, 생일, 저세션 회원에 자동 안내&rdquo;</p>
-                <p>트리거별 on/off · 개별 문구 관리 (실 발송 채널은 순차 오픈)</p>
-              </div>
-            </div>
-
-            <div className="lp-section-cta">
-              <Link href="/crm/members" className="lp-btn lp-btn-primary">회원관리 CRM 시작하기 →</Link>
-            </div>
-            <p className="lp-hero-note" style={{ marginTop: 12 }}>
-              현재 무료 이용 중 · 자동 알림 발송 · POS · 전자 계약서 채널 등 일부 기능은 추후 유료 전환될 수 있습니다.
-            </p>
-          </div></div>
-        </section>
-
         {/* ===== 6. 타겟별 어필 ===== */}
         <section className="lp-section">
           <div className="lp-c"><div className="lp-card">
@@ -329,24 +329,25 @@ export default async function Home() {
         {/* ===== 9. 최종 CTA ===== */}
         <section id="app-download" className="lp-section" style={{ scrollMarginTop: "calc(56px + env(safe-area-inset-top, 0px) + 8px)" }}>
           <div className="lp-c">
-            <div className="lp-final-cta">
-              <div className="lp-label" style={{background:"rgba(255,255,255,.15)",color:"#fff"}}>앱 다운로드</div>
-              <h2 className="lp-final-title">{`'모두의 지도사 커뮤니티' 앱에서`}<br />더 편하게 이용하세요.</h2>
-              <p className="lp-final-sub">시험 후기 알림, 관심 종목 즐겨찾기, 구인 공고 필터링, 운동 장비 거래까지<br />앱에서 더 빠르고 편리하게 사용할 수 있습니다.</p>
-              <div className="lp-final-buttons">
-                <AppStoreButton />
-                <GooglePlayButton />
-              </div>
-            </div>
-
-            {/* 강사용(회원관리) 앱 카드 */}
-            <div className="lp-final-cta" style={{ marginTop: 20 }}>
+            {/* 강사·센터용 앱 카드 (위) */}
+            <div className="lp-final-cta" style={{ background: "linear-gradient(135deg,#3E5170 0%,#2C3B54 100%)" }}>
               <div className="lp-label" style={{background:"rgba(255,255,255,.15)",color:"#fff"}}>강사·센터용 앱</div>
               <h2 className="lp-final-title">{`'모두의지도사 강사용' 앱으로`}<br />회원을 더 쉽게 관리하세요.</h2>
               <p className="lp-final-sub">회원·수강권 관리, 수업 스케줄, 예약 요청 알림, 정산·실적까지<br />강사와 센터를 위한 올인원 관리 앱입니다.</p>
               <div className="lp-final-buttons">
                 <AppStoreButton href="https://apps.apple.com/kr/app/id6796166468" track="app_store_trainer" />
                 <GooglePlayButton comingSoon />
+              </div>
+            </div>
+
+            {/* 커뮤니티 앱 카드 (아래) */}
+            <div className="lp-final-cta" style={{ marginTop: 20 }}>
+              <div className="lp-label" style={{background:"rgba(255,255,255,.15)",color:"#fff"}}>앱 다운로드</div>
+              <h2 className="lp-final-title">{`'모두의 지도사 커뮤니티' 앱에서`}<br />더 편하게 이용하세요.</h2>
+              <p className="lp-final-sub">시험 후기 알림, 관심 종목 즐겨찾기, 구인 공고 필터링, 운동 장비 거래까지<br />앱에서 더 빠르고 편리하게 사용할 수 있습니다.</p>
+              <div className="lp-final-buttons">
+                <AppStoreButton />
+                <GooglePlayButton />
               </div>
             </div>
           </div>
