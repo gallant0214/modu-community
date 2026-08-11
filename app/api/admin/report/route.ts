@@ -200,7 +200,7 @@ async function inflowAnalysis(cur: Range) {
     const channels = [...channelMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
       .map(([name, count]) => ({ name, count, percent: Math.round((count / totalCh) * 1000) / 10 }));
     const totalKw = [...keywordMap.values()].reduce((a, b) => a + b, 0) || 1;
-    const keywords = [...keywordMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
+    const keywords = [...keywordMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)
       .map(([keyword, count]) => ({ keyword, count, percent: Math.round((count / totalKw) * 1000) / 10 }));
     return { channels, keywords };
   } catch { return { channels: [], keywords: [] }; }

@@ -2663,17 +2663,38 @@ function ReportTabContent({
           m={data.metrics.visits}
           period={period}
           extra={
-            data.inflow?.channels?.length > 0 && (
-              <div className="mt-4 space-y-1">
-                <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1.5">유입 채널 Top 5</p>
-                {data.inflow.channels.map((c: any, i: number) => (
-                  <div key={c.name} className="flex items-center gap-2 py-0.5">
-                    <span className="text-xs font-bold text-zinc-400 w-4">{i+1}</span>
-                    <span className="flex-1 text-xs text-zinc-700 dark:text-zinc-300 truncate">{c.name}</span>
-                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{c.count}회</span>
+            (data.inflow?.channels?.length > 0 || data.inflow?.keywords?.length > 0) && (
+              <>
+                {data.inflow?.channels?.length > 0 && (
+                  <div className="mt-4 space-y-1">
+                    <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1.5">유입 채널 Top 5</p>
+                    {data.inflow.channels.map((c: any, i: number) => (
+                      <div key={c.name} className="flex items-center gap-2 py-0.5">
+                        <span className="text-xs font-bold text-zinc-400 w-4">{i+1}</span>
+                        <span className="flex-1 text-xs text-zinc-700 dark:text-zinc-300 truncate">{c.name}</span>
+                        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{c.count}회</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+                {data.inflow?.keywords?.length > 0 ? (
+                  <div className="mt-4 space-y-1">
+                    <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1.5">유입 검색 키워드 Top 10</p>
+                    {data.inflow.keywords.map((k: any, i: number) => (
+                      <div key={k.keyword} className="flex items-center gap-2 py-0.5">
+                        <span className="text-xs font-bold text-zinc-400 w-4">{i+1}</span>
+                        <span className="flex-1 text-xs text-zinc-700 dark:text-zinc-300 truncate">{k.keyword}</span>
+                        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{k.count}회</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-4 text-[11px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                    유입 검색 키워드가 아직 없어요. 네이버·다음 등은 검색어가 함께 넘어오지만,
+                    구글은 개인정보 보호로 검색어를 넘기지 않아 집계되지 않을 수 있어요.
+                  </p>
+                )}
+              </>
             )
           }
         />
