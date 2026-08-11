@@ -842,7 +842,7 @@ export default function CrmMembersPage() {
       "남은 일수",
       "최근 방문일",
       "마지막 출석일",
-      "마지막 구매일",
+      "최근 구매일",
       "누적 결제",
       "출석번호",
       "락커",
@@ -1527,7 +1527,7 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
   },
   last_purchase_at: {
     key: "last_purchase_at",
-    label: "마지막 구매일",
+    label: "최근 구매일",
     sortKey: "last_purchase_at",
     render: (m) => (
       <span className="text-[#8C8270] dark:text-zinc-500">{m.last_purchase_at ?? "—"}</span>
