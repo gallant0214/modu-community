@@ -4,7 +4,7 @@ import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAdminPassword } from "@/app/lib/admin-auth";
 import { getAuth } from "firebase-admin/auth";
-import "@/app/lib/firebase-admin";
+import { getFirebaseAdmin } from "@/app/lib/firebase-admin";
 
 // POST /api/admin/users/lookup
 // body: { password, nickname }
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
   } | null = null;
   let firebaseError: string | null = null;
   try {
-    const u = await getAuth().getUser(uid);
+    const u = await getAuth(getFirebaseAdmin()).getUser(uid);
     firebaseUser = {
       email: u.email || null,
       emailVerified: !!u.emailVerified,

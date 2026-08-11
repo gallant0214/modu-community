@@ -4,7 +4,7 @@ import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { verifyAdminPassword } from "@/app/lib/admin-auth";
 import { getAuth } from "firebase-admin/auth";
-import "@/app/lib/firebase-admin";
+import { getFirebaseAdmin } from "@/app/lib/firebase-admin";
 
 // POST /api/admin/users/list
 // body: { password, page=1, limit=30 }
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
   // 3) Firebase Auth 이메일 bulk lookup (최대 100명/요청)
   const emailMap: Record<string, string | null> = {};
   try {
-    const r = await getAuth().getUsers(uids.map((uid) => ({ uid })));
+    const r = await getAuth(getFirebaseAdmin()).getUsers(uids.map((uid) => ({ uid })));
     for (const u of r.users) emailMap[u.uid] = u.email || null;
   } catch {
     /* ignore — 이메일 누락 허용 */
