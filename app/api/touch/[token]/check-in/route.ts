@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { resolveKioskCenter } from "@/app/lib/kiosk-auth";
 import { runCheckIn } from "@/app/lib/crm-checkin";
+import { notifyCenterStaffAttendance } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,10 @@ export async function POST(
   const result = await runCheckIn(center.centerId, member, "touch_number");
   if ("error" in result) {
     return NextResponse.json({ error: result.error, detail: result.detail }, { status: result.status });
+  }
+  if (!("duplicate" in result && result.duplicate)) {
+    const memberName = member.name;
+    after(() => notifyCenterStaffAttendance({ centerId: center.centerId, memberName, kind: "in" }));
   }
   return NextResponse.json(result);
 }

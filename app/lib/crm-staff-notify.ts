@@ -37,6 +37,7 @@ export async function notifyStaffMember(params: {
     const PREF_COLUMN: Record<string, string> = {
       reservation_request: "notify_reservation_request",
       reservation_cancelled: "notify_reservation_cancelled",
+      member_attendance: "notify_attendance",
     };
     const prefCol = PREF_COLUMN[type];
     if (prefCol) {
@@ -91,5 +92,52 @@ export async function notifyStaffMember(params: {
   } catch (e) {
     console.error("[crm-staff-notify] error", e);
     return true;
+  }
+}
+
+/**
+ * 회원 출석/퇴실 시 해당 센터의 대표자·관리자(출석알림 ON)에게 알림.
+ * - 대상: 그 센터의 owner/admin 중 crm_staff_notification_prefs.notify_attendance=true
+ * - kind: 'in'(출석) | 'out'(퇴실)
+ */
+export async function notifyCenterStaffAttendance(params: {
+  centerId: number;
+  memberName: string;
+  kind: "in" | "out";
+}) {
+  const { centerId, memberName, kind } = params;
+  try {
+    const { data: staff } = await supabase
+      .from("crm_center_members")
+      .select("id")
+      .eq("center_id", centerId)
+      .eq("status", "active")
+      .in("role", ["owner", "admin"]);
+    const ids = (staff ?? []).map((s) => s.id);
+    if (ids.length === 0) return;
+
+    const { data: prefs } = await supabase
+      .from("crm_staff_notification_prefs")
+      .select("center_member_id, notify_attendance")
+      .in("center_member_id", ids);
+    const onIds = new Set(
+      (prefs ?? []).filter((p) => p.notify_attendance === true).map((p) => p.center_member_id)
+    );
+    if (onIds.size === 0) return;
+
+    const title = kind === "in" ? "출석" : "퇴실";
+    const body = `${memberName}님이 ${kind === "in" ? "출석했어요" : "퇴실했어요"}`;
+    for (const cmId of onIds) {
+      await notifyStaffMember({
+        centerId,
+        centerMemberId: cmId,
+        type: "member_attendance",
+        title,
+        body,
+        data: { kind: "member_attendance", direction: kind },
+      }).catch(() => {});
+    }
+  } catch (e) {
+    console.error("[crm-staff-notify] attendance error", e);
   }
 }

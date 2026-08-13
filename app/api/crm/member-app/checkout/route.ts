@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
+import { notifyCenterStaffAttendance } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,11 @@ export async function POST(request: Request) {
     reason: "checkout",
     balance_after: balanceAfter,
   } as never);
+
+  // 퇴실 알림(대표자·관리자 중 ON)
+  const centerId = ctx.centerId;
+  const memberName = ctx.name;
+  after(() => notifyCenterStaffAttendance({ centerId, memberName, kind: "out" }));
 
   return NextResponse.json({ ok: true, earned: earn, mileage: balanceAfter });
 }

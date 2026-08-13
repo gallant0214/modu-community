@@ -3443,6 +3443,7 @@ export type Database = {
           center_id: number | null
           notify_reservation_request: boolean
           notify_reservation_cancelled: boolean
+          notify_attendance: boolean
           updated_at: string
         }
         Insert: {
@@ -3450,6 +3451,7 @@ export type Database = {
           center_id?: number | null
           notify_reservation_request?: boolean
           notify_reservation_cancelled?: boolean
+          notify_attendance?: boolean
           updated_at?: string
         }
         Update: {
@@ -3457,6 +3459,7 @@ export type Database = {
           center_id?: number | null
           notify_reservation_request?: boolean
           notify_reservation_cancelled?: boolean
+          notify_attendance?: boolean
           updated_at?: string
         }
         Relationships: []

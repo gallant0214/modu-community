@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { runCheckIn } from "@/app/lib/crm-checkin";
+import { notifyCenterStaffAttendance } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,11 @@ export async function POST(request: Request) {
   const result = await runCheckIn(targetCenterId, member, source);
   if ("error" in result) {
     return NextResponse.json({ error: result.error, detail: result.detail }, { status: result.status });
+  }
+  // 중복(최근 5분)이 아니면 출석 알림(대표자·관리자 중 ON) 발송
+  if (!("duplicate" in result && result.duplicate)) {
+    const memberName = member.name;
+    after(() => notifyCenterStaffAttendance({ centerId: targetCenterId, memberName, kind: "in" }));
   }
   return NextResponse.json(result);
 }
