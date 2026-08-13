@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/crm-notifications",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/crm-attendance-reminders",
+      "schedule": "30 0 * * *"
     }
   ]
 }

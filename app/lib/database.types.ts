@@ -3161,6 +3161,7 @@ export type Database = {
           approved_by_uid: string | null
           rejected_reason: string | null
           booking_reason: string | null
+          attendance_reminded_at: string | null
         }
         Insert: {
           id?: number
