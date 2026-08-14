@@ -245,7 +245,9 @@ export async function POST(request: Request) {
   //   1) 클라이언트가 body.trainer_member_id 를 명시 → 유효성 확인 후 그 값 사용
   //      - 그 강사가 pass 의 주강사/추가강사 이거나
   //      - 요청자가 canManageAll(대표/관리자·직급권한·can_manage_all_schedules) 이면 허용
-  //   2) 미명시면 기존 fallback: 예약자가 지정 강사면 본인, 아니면 주강사
+  //      (관리자가 "타 강사 수업"을 예약할 때 담당 강사를 선택하는 경로)
+  //   2) 미명시면 **예약자 본인**에 귀속 = "수업을 하려고 예약한 사람"의 스케줄에 표시.
+  //      (수강권 주강사와 달라도 예약한 사람이 실제 진행자. 웹은 항상 trainer_member_id 를 보내므로 영향 없음)
   const requestedTrainer =
     body.trainer_member_id && Number.isFinite(Number(body.trainer_member_id))
       ? Number(body.trainer_member_id)
@@ -257,9 +259,8 @@ export async function POST(request: Request) {
   if (requestedTrainer != null && (requestedInAssigned || canManageAll)) {
     reservationTrainerId = requestedTrainer;
   } else {
-    reservationTrainerId = isAssignedTrainer
-      ? (ctx.centerMemberId as number)
-      : pass.trainer_member_id;
+    // 예약자 본인. (centerMemberId 가 없을 극단적 경우만 주강사로 폴백)
+    reservationTrainerId = (ctx.centerMemberId as number) ?? pass.trainer_member_id;
   }
 
   // 종료 시각: 수강권 session_minutes 로 서버측 파생 (웹·앱 공통 규칙).
