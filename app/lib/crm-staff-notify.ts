@@ -157,7 +157,8 @@ export async function notifyCenterStaffAttendance(params: {
     for (const p of summary?.passes ?? []) {
       const total = p.total_sessions ?? 0;
       if (total > 0) {
-        lines.push(`${p.lesson_kind} ${total}회 ${p.remaining_sessions}/${total} 남음`);
+        // (수강권 이름) 10/10회 남음
+        lines.push(`${p.lesson_kind} ${p.remaining_sessions}/${total}회 남음`);
       } else {
         lines.push(`${p.lesson_kind} ${dLabel(p.expires_at)}`.trim());
       }
