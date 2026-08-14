@@ -154,13 +154,16 @@ export async function notifyCenterStaffAttendance(params: {
     for (const m of summary?.memberships ?? []) {
       lines.push(`${m.plan_name}${m.is_paused ? " (정지중)" : ""} ${dLabel(m.expires_at)}`.trim());
     }
+    // 수강권 이름 끝에 중복으로 붙는 총횟수 표기 "(10회)" 제거 → "10회 이벤트(10회)" → "10회 이벤트"
+    const cleanKind = (s: string) => (s || "").replace(/\s*\(\d+\s*회\)\s*$/, "").trim();
     for (const p of summary?.passes ?? []) {
       const total = p.total_sessions ?? 0;
+      const name = cleanKind(p.lesson_kind);
       if (total > 0) {
-        // (수강권 이름) 10/10회 남음
-        lines.push(`${p.lesson_kind} ${p.remaining_sessions}/${total}회 남음`);
+        // (수강권 이름) 8/10회 남음
+        lines.push(`${name} ${p.remaining_sessions}/${total}회 남음`);
       } else {
-        lines.push(`${p.lesson_kind} ${dLabel(p.expires_at)}`.trim());
+        lines.push(`${name} ${dLabel(p.expires_at)}`.trim());
       }
     }
 
