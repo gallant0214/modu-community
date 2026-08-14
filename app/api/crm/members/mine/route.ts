@@ -67,14 +67,15 @@ export async function GET(request: Request) {
 
     let allowedIds: number[] | null = null;
     if (restricted) {
-      // 주강사(trainer_member_id) · 추가강사(co_trainer_ids) · 판매자(seller_member_id)로 연결된 회원
-      // (웹 /api/crm/members·트레이너 대시보드 스코프와 동일하게 3종 모두 포함)
+      // 🚨 수업 담당 기준만: 주강사(trainer_member_id) · 추가강사(co_trainer_ids).
+      // 판매자(seller_member_id)는 '판매만' 했을 뿐 수업 담당이 아니므로 제외
+      // (강사앱 멤버십 목록·예약 대상은 담당/추가강사 회원만 노출).
       const { data: passes } = await supabase
         .from("crm_passes")
         .select("member_id")
         .eq("center_id", m.center_id)
         .or(
-          `trainer_member_id.eq.${m.id},co_trainer_ids.cs.{${m.id}},seller_member_id.eq.${m.id}`
+          `trainer_member_id.eq.${m.id},co_trainer_ids.cs.{${m.id}}`
         );
       allowedIds = Array.from(new Set((passes ?? []).map((p) => p.member_id)));
       if (allowedIds.length === 0) continue;
