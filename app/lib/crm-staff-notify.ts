@@ -1,6 +1,7 @@
 import { getApps } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import { supabase } from "./supabase";
+import { buildCheckinSummary } from "./crm-checkin";
 
 function getAdmin() {
   const apps = getApps();
@@ -102,10 +103,11 @@ export async function notifyStaffMember(params: {
  */
 export async function notifyCenterStaffAttendance(params: {
   centerId: number;
+  memberId?: number;
   memberName: string;
   kind: "in" | "out";
 }) {
-  const { centerId, memberName, kind } = params;
+  const { centerId, memberId, memberName, kind } = params;
   try {
     const { data: staff } = await supabase
       .from("crm_center_members")
@@ -125,8 +127,46 @@ export async function notifyCenterStaffAttendance(params: {
     );
     if (onIds.size === 0) return;
 
-    const title = kind === "in" ? "출석" : "퇴실";
-    const body = `${memberName}님이 ${kind === "in" ? "출석했어요" : "퇴실했어요"}`;
+    // 센터명 + 금일 방문 인원 + 회원 이용권/수강권 요약
+    const todayYmd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const dayStartUtc = new Date(`${todayYmd}T00:00:00+09:00`).toISOString();
+    const [{ data: center }, todayAtt, summary] = await Promise.all([
+      supabase.from("crm_centers").select("name").eq("id", centerId).maybeSingle(),
+      supabase.from("crm_attendances").select("member_id").eq("center_id", centerId).gte("checked_in_at", dayStartUtc),
+      memberId ? buildCheckinSummary(centerId, memberId).catch(() => null) : Promise.resolve(null),
+    ]);
+    const centerName = center?.name ?? "";
+    const visitCount = new Set((todayAtt.data ?? []).map((a) => a.member_id)).size;
+
+    // 만료일 → "N일 남음" / "무기한"(sentinel 2999·9999) / "오늘까지"
+    const dLabel = (exp: string | null | undefined) => {
+      if (!exp) return "";
+      const e = String(exp).slice(0, 10);
+      if (e >= "2999-01-01") return "무기한";
+      const days = Math.round(
+        (Date.parse(`${e}T00:00:00Z`) - Date.parse(`${todayYmd}T00:00:00Z`)) / 86400000
+      );
+      if (days <= 0) return "오늘까지";
+      return `${days}일 남음`;
+    };
+
+    const lines: string[] = [];
+    for (const m of summary?.memberships ?? []) {
+      lines.push(`${m.plan_name}${m.is_paused ? " (정지중)" : ""} ${dLabel(m.expires_at)}`.trim());
+    }
+    for (const p of summary?.passes ?? []) {
+      const total = p.total_sessions ?? 0;
+      if (total > 0) {
+        lines.push(`${p.lesson_kind} ${total}회 ${p.remaining_sessions}/${total} 남음`);
+      } else {
+        lines.push(`${p.lesson_kind} ${dLabel(p.expires_at)}`.trim());
+      }
+    }
+
+    const title = `[${centerName}] ${memberName}님 ${kind === "in" ? "출석!" : "퇴실!"}`;
+    const bodyLines = [`금일 방문 ${visitCount}명`, ...lines.slice(0, 5)];
+    const body = bodyLines.join("\n");
+
     for (const cmId of onIds) {
       await notifyStaffMember({
         centerId,
@@ -134,7 +174,7 @@ export async function notifyCenterStaffAttendance(params: {
         type: "member_attendance",
         title,
         body,
-        data: { kind: "member_attendance", direction: kind },
+        data: { kind: "member_attendance", direction: kind, member_id: String(memberId) },
       }).catch(() => {});
     }
   } catch (e) {

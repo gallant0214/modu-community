@@ -84,7 +84,8 @@ export async function POST(request: Request) {
   // 중복(최근 5분)이 아니면 출석 알림(대표자·관리자 중 ON) 발송
   if (!("duplicate" in result && result.duplicate)) {
     const memberName = member.name;
-    after(() => notifyCenterStaffAttendance({ centerId: targetCenterId, memberName, kind: "in" }));
+    const mId = member.id;
+    after(() => notifyCenterStaffAttendance({ centerId: targetCenterId, memberId: mId, memberName, kind: "in" }));
   }
   return NextResponse.json(result);
 }

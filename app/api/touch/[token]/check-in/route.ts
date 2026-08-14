@@ -49,7 +49,8 @@ export async function POST(
   }
   if (!("duplicate" in result && result.duplicate)) {
     const memberName = member.name;
-    after(() => notifyCenterStaffAttendance({ centerId: center.centerId, memberName, kind: "in" }));
+    const mId = member.id;
+    after(() => notifyCenterStaffAttendance({ centerId: center.centerId, memberId: mId, memberName, kind: "in" }));
   }
   return NextResponse.json(result);
 }
