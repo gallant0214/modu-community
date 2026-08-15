@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../_components/crm-modal";
+import { speakMessages } from "../touch-attendance/_speak";
 
 interface Settings {
   center_id: number;
@@ -196,15 +197,31 @@ export default function TouchAttendanceSettingsPage() {
                     />
                   </button>
                 </div>
-                <input
-                  type="text"
-                  disabled={!on}
-                  value={(s[f.key] ?? "") as string}
-                  onChange={(e) => patch(f.key, e.target.value as never)}
-                  placeholder={f.placeholder}
-                  maxLength={200}
-                  className={`${crmInputClass} disabled:opacity-60`}
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    disabled={!on}
+                    value={(s[f.key] ?? "") as string}
+                    onChange={(e) => patch(f.key, e.target.value as never)}
+                    placeholder={f.placeholder}
+                    maxLength={200}
+                    className={`${crmInputClass} disabled:opacity-60`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const text =
+                        String(s[f.key] ?? "").trim() ||
+                        f.placeholder.replace(/^예:\s*/, "");
+                      speakMessages([text]);
+                    }}
+                    disabled={!on}
+                    title="입력한 멘트를 음성으로 미리 들어보기"
+                    className="shrink-0 inline-flex items-center gap-1 px-3 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/5 disabled:opacity-40"
+                  >
+                    ▶ 미리듣기
+                  </button>
+                </div>
                 {f.daysKey && (
                   <div className={`mt-2 flex items-center gap-2 ${on ? "" : "opacity-60"}`}>
                     <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">만료 후</span>
