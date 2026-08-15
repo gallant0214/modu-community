@@ -756,6 +756,25 @@ function IssueModal({
     })();
   }, [open, getIdToken]);
 
+  // 회원 선택 시: 같은 종류(회원권) 유효 이용권이 있으면 만료 다음날부터 시작하도록 시작일 자동 세팅.
+  const pickMember = async (m: { id: number; name: string; phone: string | null }) => {
+    setPicked(m);
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/crm/members/${m.id}/next-start?type=membership`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const d = await res.json();
+        if (d.start_date) setStartDate(d.start_date);
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
   const applyProduct = (id: number) => {
     setPickedProductId(id);
     const p = products.find((x) => x.id === id);
@@ -867,7 +886,7 @@ function IssueModal({
                   {memberResults.map((m) => (
                     <li key={m.id}>
                       <button
-                        onClick={() => setPicked(m)}
+                        onClick={() => pickMember(m)}
                         className="w-full text-left px-3 py-2 rounded-lg border border-[#E8E0D0] hover:border-[#6B7B3A]/40"
                       >
                         <div className="text-[13px] font-medium">{m.name}</div>

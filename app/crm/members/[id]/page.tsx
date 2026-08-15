@@ -4381,6 +4381,26 @@ function UsageIssueModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, type]);
 
+  // 같은 종류의 유효한 이용권이 이미 있으면 그 만료 다음날부터 이어서 시작(없으면 오늘).
+  const fetchChainedStart = async (t: UsageType): Promise<string> => {
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const token = await getIdToken();
+      if (!token) return today;
+      const res = await fetch(`/api/crm/members/${memberId}/next-start?type=${t}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const d = await res.json();
+        return (d.start_date as string) || today;
+      }
+    } catch {
+      /* ignore */
+    }
+    return today;
+  };
+
   const applyProduct = (p: UsageProduct) => {
     setName(p.name);
     setPriceWon(p.price_won ?? 0);
@@ -4390,8 +4410,9 @@ function UsageIssueModal({
     setPickedComponents(p.components ?? []);
     setPickedProductId(p.id);
     if (p.mileage_usable === false) setMileageUse(0);
-    // 상품 선택 시점에 시작일을 오늘로 자동 세팅 (사용자가 이후 수정 가능)
-    setStartDate(new Date().toISOString().slice(0, 10));
+    // 시작일: 기존 같은 종류 이용권이 있으면 만료 다음날, 없으면 오늘 (사용자가 이후 수정 가능)
+    setStartDate(new Date().toISOString().slice(0, 10)); // 즉시 fallback
+    fetchChainedStart(type).then(setStartDate);
     if (p.duration_value && p.duration_unit) {
       // 12개월 = 365일이 되도록 unitToDays 공통 헬퍼 사용
       setDurationDays(Math.max(1, unitToDays(p.duration_value, p.duration_unit)));
