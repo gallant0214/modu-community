@@ -102,6 +102,7 @@ export default function CrmMemberDetailPage() {
   const [holdMs, setHoldMs] = useState<MembershipRow[]>([]);
   const [holdRs, setHoldRs] = useState<RentalRow[]>([]);
   const [bodyOpen, setBodyOpen] = useState(false);
+  const [bodyReload, setBodyReload] = useState(0);
   // 탭: 정보 / 예약내역 / 결제내역 / 로그
   const [tab, setTab] = useState<"info" | "reservations" | "payments" | "workout" | "logs">("info");
   // 현재 유저 권한 (members.edit_basic / members.edit_usage / members.delete)
@@ -675,7 +676,7 @@ export default function CrmMemberDetailPage() {
 
       <SignedContractsSection memberId={member.id} />
 
-      <BodyMeasurementSection memberId={member.id} onOpen={() => setBodyOpen(true)} />
+      <BodyMeasurementSection memberId={member.id} onOpen={() => setBodyOpen(true)} reloadKey={bodyReload} />
       </>
       )}
 
@@ -683,7 +684,10 @@ export default function CrmMemberDetailPage() {
         memberId={member.id}
         open={bodyOpen}
         onClose={() => setBodyOpen(false)}
-        onDone={() => setBodyOpen(false)}
+        onDone={() => {
+          setBodyOpen(false);
+          setBodyReload((n) => n + 1);
+        }}
       />
 
       <PassIssueModal
@@ -6839,7 +6843,15 @@ interface Measurement {
   memo: string | null;
 }
 
-function BodyMeasurementSection({ memberId, onOpen }: { memberId: number; onOpen: () => void }) {
+function BodyMeasurementSection({
+  memberId,
+  onOpen,
+  reloadKey = 0,
+}: {
+  memberId: number;
+  onOpen: () => void;
+  reloadKey?: number;
+}) {
   const { getIdToken } = useAuth();
   const [list, setList] = useState<Measurement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -6862,11 +6874,10 @@ function BodyMeasurementSection({ memberId, onOpen }: { memberId: number; onOpen
     }
   }, [getIdToken, memberId]);
 
+  // 최초 로드 + 저장(reloadKey 변경) 시에만 갱신. (5초 폴링 제거 — 계속 새로고침되던 원인)
   useEffect(() => {
     load();
-    const t = setInterval(load, 5000);
-    return () => clearInterval(t);
-  }, [load]);
+  }, [load, reloadKey]);
 
   // 최신 → 오래된 순. 차트는 오래된 → 최신 순.
   const chronological = [...list].reverse();
