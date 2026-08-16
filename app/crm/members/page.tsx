@@ -752,6 +752,47 @@ export default function CrmMembersPage() {
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const pageRows = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  // 얼굴 썸네일 지연 로드: 현재 페이지에 보이는 회원 것만 배치로 가져와 캐시.
+  // (벌크 목록에서 무거운 base64 썸네일을 빼서 초기 로딩을 빠르게 함)
+  const [thumbMap, setThumbMap] = useState<Record<number, string>>({});
+  const thumbReqRef = useRef<Set<number>>(new Set());
+  const pageIdsSig = pageRows.map((r) => r.id).join(",");
+  useEffect(() => {
+    const need = pageRows
+      .map((r) => r.id)
+      .filter((id) => !(id in thumbMap) && !thumbReqRef.current.has(id));
+    if (need.length === 0) return;
+    need.forEach((id) => thumbReqRef.current.add(id));
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/members/thumbs", {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ ids: need }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const got = (data.thumbs ?? {}) as Record<number, string>;
+        // 응답에 없는 id(썸네일 없음)는 빈 문자열로 캐시해 재요청 방지
+        const merged: Record<number, string> = {};
+        for (const id of need) merged[id] = got[id] ?? "";
+        setThumbMap((prev) => ({ ...prev, ...merged }));
+      } catch {
+        /* ignore */
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageIdsSig, getIdToken]);
+
+  // 지연 로드된 썸네일을 현재 페이지 행에 병합해서 렌더 (render 함수는 m.face_image_thumb 사용)
+  const pageRowsWithThumbs = useMemo(
+    () => pageRows.map((m) => (thumbMap[m.id] ? { ...m, face_image_thumb: thumbMap[m.id] } : m)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pageIdsSig, thumbMap]
+  );
+
   // 필터/검색 변경 시에만 1페이지로. 마운트·정렬변경·StrictMode 이중호출에는 반응하지 않음
   // (ref 시그니처 비교: 실제로 필터가 바뀔 때만 리셋 → 뒤로가기 시 memoPage 유지)
   const filterSig = JSON.stringify([
@@ -1149,7 +1190,7 @@ export default function CrmMembersPage() {
         <EmptyBox title="조건에 맞는 회원이 없어요" desc="필터를 초기화하거나 검색어를 바꿔 보세요." />
       ) : (
         <MembersTable
-          rows={pageRows}
+          rows={pageRowsWithThumbs}
           selectable
           selected={selected}
           onToggle={toggleSelect}

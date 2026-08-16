@@ -120,8 +120,10 @@ export async function GET(request: Request) {
     center_id: number;
   };
 
+  // 목록 성능: 얼굴썸네일(base64, 회원당 ~12KB)은 벌크에서 제외한다.
+  // 리스트에 보이는 페이지(≤50명) 것만 /api/crm/members/thumbs 로 지연 로드.
   const MEMBER_SELECT =
-    "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, registration_type, first_use_at, total_paid_won, final_expire_at, last_purchase_at, last_attended_at, attendance_no, current_membership, current_pass, current_rental, current_locker, face_image_thumb, created_at, center_id";
+    "id, member_type, name, phone, email, birth, gender, linked_firebase_uid, memo, status, address, visit_route, workout_goal, counselor, mileage, marketing_consent, registered_at, registration_type, first_use_at, total_paid_won, final_expire_at, last_purchase_at, last_attended_at, attendance_no, current_membership, current_pass, current_rental, current_locker, created_at, center_id";
 
   const fetchScope = (s: CenterScope) =>
     paginateAll<MemberBase>(
