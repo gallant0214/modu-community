@@ -29,8 +29,9 @@ export async function runCheckIn(
   member: CheckinMember,
   source: string
 ) {
-  // 중복 차단: 최근 5분 이내 같은 회원 체크인이 있으면 건너뜀
-  const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  // 중복 차단 시간: 얼굴 출석은 지나가다 재인식되기 쉬워 2시간, 그 외(번호/수동)는 5분.
+  const dedupMinutes = source === "touch_face" ? 120 : 5;
+  const cutoff = new Date(Date.now() - dedupMinutes * 60 * 1000).toISOString();
   const { data: recent } = await supabase
     .from("crm_attendances")
     .select("id, checked_in_at")
@@ -46,7 +47,7 @@ export async function runCheckIn(
       duplicate: true,
       member,
       attendance: recent[0],
-      message: "이미 최근 5분 안에 체크인 기록이 있어요.",
+      message: "이미 출석하셨습니다.",
       voice_messages: [] as string[],
     };
   }

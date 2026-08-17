@@ -17,7 +17,8 @@ const REQUIRED_FRAMES = 3;
 // 얼굴 박스 최소 너비(px). 너무 작으면(멀면) 디스크립터 품질 낮아 스킵
 const MIN_FACE_PX = 110;
 // 같은 회원 재인식 무시 시간(ms)
-const COOLDOWN_MS = 60_000;
+// 얼굴 출석: 같은 회원이 2시간 이내 다시 인식돼도 재출석으로 인정하지 않음.
+const COOLDOWN_MS = 2 * 60 * 60 * 1000;
 
 let scriptPromise: Promise<any> | null = null;
 function loadFaceApi(): Promise<any> {
@@ -106,9 +107,15 @@ export default function FaceAttendance({ fill = false }: { fill?: boolean } = {}
         });
         const data = await res.json();
         if (res.ok) {
-          setLastHit({ name: data.member?.name ?? name, at: Date.now() });
-          // 서버가 매칭한 안내 음성 재생 (중복 체크인이면 voice_messages=[])
-          speakMessages(Array.isArray(data.voice_messages) ? data.voice_messages : []);
+          const who = data.member?.name ?? name;
+          if (data.duplicate) {
+            // 2시간 이내 이미 출석 → 재출석 불인정, 안내만.
+            setStatus(`${who} · 이미 출석하셨습니다`);
+          } else {
+            setLastHit({ name: who, at: Date.now() });
+            // 서버가 매칭한 안내 음성 재생
+            speakMessages(Array.isArray(data.voice_messages) ? data.voice_messages : []);
+          }
         }
       } catch {
         /* 무시 - 다음 프레임에 재시도 */
@@ -161,10 +168,11 @@ export default function FaceAttendance({ fill = false }: { fill?: boolean } = {}
                     if (now - last > COOLDOWN_MS) {
                       cooldownRef.current.set(best.id, now);
                       pendingRef.current = { id: 0, count: 0 };
-                      setStatus(`${name} 출석! (거리 ${best.dist.toFixed(2)})`);
+                      setStatus(`${name} 확인됨…`);
                       await checkin(best.id, name);
                     } else {
-                      setStatus(`${name} · 이미 출석 처리됨`);
+                      // 2시간 이내 재인식 → 재출석 불인정, 안내만
+                      setStatus(`${name} · 이미 출석하셨습니다`);
                     }
                   } else {
                     setStatus(`${name} 확인 중… ${nextCount}/${REQUIRED_FRAMES} (거리 ${best.dist.toFixed(2)})`);
