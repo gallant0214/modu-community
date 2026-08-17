@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
       centerId: r.center_id,
       centerMemberId: r.trainer_member_id as number,
       type: "attendance_pending",
-      title: "출석 처리 필요",
+      title: `${memberName} 회원님 출석 처리가 필요해요`,
       body: `${memberName} 회원님 · ${slotLabel(r.starts_at)} 수업의 출석/노쇼 처리가 필요해요.`,
       data: { kind: "attendance_pending", reservation_id: String(r.id) },
     }).catch(() => {});
