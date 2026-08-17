@@ -104,6 +104,8 @@ export async function POST(request: Request) {
     issue_type?: string;
     lesson_kind?: string;
     total_sessions?: number;
+    /** 서비스(무상) 회차 — 있으면 본 수강권과 별개로 '서비스 수강권'을 0원으로 추가 발급 */
+    service_sessions?: number;
     session_minutes?: number;
     price_won?: number;
     payment_method?: string;
@@ -296,6 +298,66 @@ export async function POST(request: Request) {
     } as never,
   });
 
+  // 서비스(무상) 회차: 본 수강권과 별개로 '서비스 수강권'을 0원으로 추가 발급.
+  // 담당강사·추가강사·시작일·만료일·수업시간 등은 본 수강권과 동일. (수업료 계산 오류 방지)
+  let servicePassId: number | null = null;
+  const serviceSessions = Math.max(0, Math.floor(Number(body.service_sessions) || 0));
+  if (serviceSessions > 0) {
+    const baseName =
+      body.lesson_kind.trim().replace(/\s*\(\d+회\)\s*$/, "").trim() || body.lesson_kind.trim();
+    const serviceName = `${baseName} 서비스(${serviceSessions}회)`;
+    const { data: svc } = await supabase
+      .from("crm_passes")
+      .insert({
+        center_id: ctx.centerId,
+        member_id: memberId,
+        trainer_member_id: trainerMemberId,
+        co_trainer_ids: coTrainerIds,
+        seller_member_id: sellerMemberId,
+        issue_type: "service",
+        lesson_kind: serviceName,
+        total_sessions: serviceSessions,
+        remaining_sessions: serviceSessions,
+        session_minutes: Number(body.session_minutes),
+        price_won: 0,
+        payment_method: paymentMethod,
+        payment_method_custom:
+          paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
+        vat_included: false,
+        issued_at: body.issued_at,
+        start_date: body.start_date || body.issued_at,
+        expires_at: body.expires_at,
+        status: "valid",
+        memo: body.memo?.trim() || null,
+        outstanding_won: 0,
+        payment_status: "paid",
+        product_id: productId,
+        group_capacity: groupCapacity,
+        attendance_mileage_earn: productAttendanceMileage,
+      })
+      .select("id")
+      .single();
+    if (svc) {
+      servicePassId = svc.id;
+      await supabase.from("crm_audit_logs").insert({
+        center_id: ctx.centerId,
+        actor_uid: ctx.uid,
+        action: "pass.issue",
+        entity_type: "pass",
+        entity_id: svc.id,
+        payload: {
+          member_id: memberId,
+          trainer_member_id: trainerMemberId,
+          lesson_kind: serviceName,
+          total_sessions: serviceSessions,
+          price_won: 0,
+          service: true,
+        } as never,
+      });
+    }
+    // 서비스 수강권은 결제기록 없음(0원). 배정 알림은 본 수강권 것으로 갈음(중복 발송 방지).
+  }
+
   // 배정 알림 — 주강사/추가강사(본인 제외)에게 "회원이 배정되었습니다" (알림함 + 푸시)
   const assignTargets = Array.from(
     new Set([trainerMemberId, ...coTrainerIds].filter((id) => id && id !== ctx.centerMemberId))
@@ -324,5 +386,5 @@ export async function POST(request: Request) {
     });
   }
 
-  return NextResponse.json({ ok: true, passId: created.id });
+  return NextResponse.json({ ok: true, passId: created.id, servicePassId });
 }

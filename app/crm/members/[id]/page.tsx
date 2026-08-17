@@ -5455,8 +5455,10 @@ function PassIssueModal({
           co_trainer_ids: coTrainerIds,
           seller_member_id: Number(sellerId) || Number(trainerId),
           issue_type: issueType,
-          lesson_kind: `${lessonKind}(${totalSessions + (serviceSessions || 0)}회)`,
-          total_sessions: totalSessions + (serviceSessions || 0),
+          // 본 수강권은 원래 회차만. 서비스 회차는 서버가 '서비스 수강권'으로 0원 별도 발급.
+          lesson_kind: `${lessonKind}(${totalSessions}회)`,
+          total_sessions: totalSessions,
+          service_sessions: serviceSessions || 0,
           session_minutes: sessionMinutes,
           price_won: priceWon,
           vat_included: vatIncluded,
@@ -5692,7 +5694,7 @@ function PassIssueModal({
               </button>
             </div>
             <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
-              서비스 섹션은 수업료에 포함되지 않습니다. 총 세션에 무료로 얹어져요.
+              서비스 회차는 별도 &lsquo;서비스 수강권&rsquo;(0원)으로 따로 발급돼요. 담당·추가강사, 시작·만료일은 본 수강권과 동일합니다.
             </p>
           </CrmField>
         )}
