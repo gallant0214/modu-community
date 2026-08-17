@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
   const { data: pending, error } = await supabase
     .from("crm_reservations")
-    .select("id, center_id, trainer_member_id, starts_at")
+    .select("id, center_id, trainer_member_id, member_id, starts_at")
     .eq("status", "booked")
     .is("attendance_reminded_at", null)
     .lt("ends_at", todayStartUtc)
@@ -40,39 +40,42 @@ export async function GET(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
-  const rows = pending ?? [];
+  const rows = (pending ?? []).filter((r) => r.trainer_member_id);
   if (rows.length === 0) {
-    return NextResponse.json({ ok: true, reminded: 0, trainers: 0 });
+    return NextResponse.json({ ok: true, reminded: 0 });
   }
 
-  // (센터, 강사)별 그룹
-  const groups = new Map<
-    string,
-    { centerId: number; trainerId: number; count: number; firstId: number }
-  >();
-  const allIds: number[] = [];
+  // 회원 이름
+  const memberIds = Array.from(new Set(rows.map((r) => r.member_id)));
+  const { data: members } = memberIds.length
+    ? await supabase.from("crm_members").select("id, name").in("id", memberIds)
+    : { data: [] as { id: number; name: string }[] };
+  const nameMap = new Map((members ?? []).map((m) => [m.id, m.name]));
+
+  // 수업 시각(KST) 라벨: "8/15(금) 18:00"
+  const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+  const slotLabel = (iso: string) => {
+    const k = new Date(new Date(iso).getTime() + 9 * 3600 * 1000);
+    const hh = String(k.getUTCHours()).padStart(2, "0");
+    const mm = String(k.getUTCMinutes()).padStart(2, "0");
+    return `${k.getUTCMonth() + 1}/${k.getUTCDate()}(${DOW[k.getUTCDay()]}) ${hh}:${mm}`;
+  };
+
+  // 수업(회원)별 개별 알림 — "○○ 회원님 수업의 출석 처리가 필요해요"
   for (const r of rows) {
-    if (!r.trainer_member_id) continue;
-    allIds.push(r.id);
-    const key = `${r.center_id}:${r.trainer_member_id}`;
-    const g = groups.get(key);
-    if (g) g.count += 1;
-    else groups.set(key, { centerId: r.center_id, trainerId: r.trainer_member_id, count: 1, firstId: r.id });
-  }
-
-  // 그룹별 알림
-  for (const g of groups.values()) {
+    const memberName = nameMap.get(r.member_id) || "회원";
     await notifyStaffMember({
-      centerId: g.centerId,
-      centerMemberId: g.trainerId,
+      centerId: r.center_id,
+      centerMemberId: r.trainer_member_id as number,
       type: "attendance_pending",
       title: "출석 처리 필요",
-      body: `출석/노쇼 처리가 안 된 수업이 ${g.count}건 있어요. 출석 여부를 처리해 주세요.`,
-      data: { kind: "attendance_pending", reservation_id: String(g.firstId) },
+      body: `${memberName} 회원님 · ${slotLabel(r.starts_at)} 수업의 출석/노쇼 처리가 필요해요.`,
+      data: { kind: "attendance_pending", reservation_id: String(r.id) },
     }).catch(() => {});
   }
 
   // 재알림 방지: 이번에 알린 예약 전부 표시
+  const allIds = rows.map((r) => r.id);
   const nowIso = new Date().toISOString();
   for (let i = 0; i < allIds.length; i += 500) {
     await supabase
@@ -81,5 +84,5 @@ export async function GET(req: NextRequest) {
       .in("id", allIds.slice(i, i + 500));
   }
 
-  return NextResponse.json({ ok: true, reminded: allIds.length, trainers: groups.size });
+  return NextResponse.json({ ok: true, reminded: allIds.length });
 }
