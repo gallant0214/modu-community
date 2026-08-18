@@ -106,7 +106,7 @@ export default function PayrollDetailPage() {
       </div>
 
       {tab === "revenue" && <RevenueTab memberId={memberId} />}
-      {tab === "members" && <MembersTab />}
+      {tab === "members" && <MembersTab memberId={memberId} />}
       {tab === "sessions" && <SessionsTab memberId={memberId} />}
     </div>
   );
@@ -395,20 +395,83 @@ function RevenueKpi({
 
 /* ─── 담당 회원 탭 ────────────────────────────── */
 
-function MembersTab() {
+interface MemberRow {
+  id: number;
+  name: string;
+  phone: string | null;
+  birth: string | null;
+  gender: string | null;
+  linked: boolean;
+  registered_at: string | null;
+  final_expire_at: string | null;
+  current_pass: string | null;
+  has_pt: boolean;
+  lesson_experience: boolean;
+  total_paid_won: number;
+  outstanding_total: number;
+}
+
+function ageFromBirth(birth: string | null): string {
+  if (!birth || !/^\d{4}-\d{2}-\d{2}$/.test(birth)) return "—";
+  const b = new Date(`${birth}T00:00:00`);
+  const now = new Date();
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+  return age >= 0 && age < 130 ? `${age}세` : "—";
+}
+const GENDER_KO: Record<string, string> = { M: "남", F: "여", N: "기타" };
+
+function MembersTab({ memberId }: { memberId: number }) {
+  const { getIdToken } = useAuth();
+  const [rows, setRows] = useState<MemberRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "dormant">("all");
+  const [q, setQ] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`/api/crm/payroll/${memberId}/members`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) setRows((await res.json()).members ?? []);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [memberId, getIdToken]);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const filtered = rows.filter((r) => {
+    if (statusFilter === "active" && !(r.final_expire_at && r.final_expire_at >= today)) return false;
+    if (statusFilter === "dormant" && r.final_expire_at && r.final_expire_at >= today) return false;
+    const kw = q.trim().toLowerCase();
+    if (kw && !`${r.name} ${r.phone ?? ""}`.toLowerCase().includes(kw)) return false;
+    return true;
+  });
+
   return (
     <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
       <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-        총 0명
+        총 {filtered.length}명
       </h2>
 
       <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-2 mb-3">
         <div>
           <div className="text-[11.5px] text-[#A89B80] mb-1">필터</div>
-          <select className={crmInputClass}>
-            <option>회원 전체</option>
-            <option>활성</option>
-            <option>휴면</option>
+          <select
+            className={crmInputClass}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "dormant")}
+          >
+            <option value="all">회원 전체</option>
+            <option value="active">활성</option>
+            <option value="dormant">휴면</option>
           </select>
         </div>
         <div>
@@ -417,6 +480,8 @@ function MembersTab() {
             type="text"
             className={crmInputClass}
             placeholder="이름 및 연락처로 검색"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
           />
         </div>
       </div>
@@ -441,16 +506,49 @@ function MembersTab() {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td colSpan={13} className="px-3 py-12 text-center">
-                <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">
-                  데이터가 없어요
-                </div>
-                <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
-                  아직 담당 회원이 없어요.
-                </div>
-              </td>
-            </tr>
+            {loading ? (
+              <tr>
+                <td colSpan={13} className="px-3 py-12 text-center text-[13px] text-[#8C8270]">
+                  불러오는 중…
+                </td>
+              </tr>
+            ) : filtered.length === 0 ? (
+              <tr>
+                <td colSpan={13} className="px-3 py-12 text-center">
+                  <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">데이터가 없어요</div>
+                  <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
+                    {rows.length === 0 ? "아직 담당 회원이 없어요." : "조건에 맞는 회원이 없어요."}
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              filtered.map((r) => (
+                <tr
+                  key={r.id}
+                  className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 text-[#3A342A] dark:text-zinc-200"
+                >
+                  <td className="px-3 py-2.5 whitespace-nowrap tabular-nums text-[#8C8270]">{r.id}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap font-medium">
+                    <a href={`/crm/members/${r.id}`} className="hover:underline">{r.name}</a>
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">{r.has_pt ? "PT" : "—"}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">{r.linked ? "사용" : "—"}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">{r.lesson_experience ? "있음" : "없음"}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">{ageFromBirth(r.birth)}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">{r.gender ? GENDER_KO[r.gender] ?? "—" : "—"}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap tabular-nums">
+                    {r.phone ? formatPhone(r.phone) : "—"}
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">{r.registered_at ?? "—"}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">{r.final_expire_at ?? "—"}</td>
+                  <td className="px-3 py-2.5">{r.current_pass ?? "—"}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap tabular-nums">{formatWon(r.total_paid_won)} 원</td>
+                  <td className={`px-3 py-2.5 whitespace-nowrap tabular-nums ${r.outstanding_total > 0 ? "text-[#B4452A] font-medium" : "text-[#A89B80]"}`}>
+                    {formatWon(r.outstanding_total)} 원
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -460,24 +558,58 @@ function MembersTab() {
 
 /* ─── 수업 내역 탭 (개인·그룹 통합) ────────────────── */
 
-interface SessionRow {
+interface LessonRow {
   id: number;
+  starts_at: string;
+  status: string;
+  member_id: number;
   member_name: string;
-  age: number | null;
-  gender: string | null;
-  phone: string | null;
-  product: string;
-  total: number;
-  used: number;
-  remaining: number;
-  per_session_won: number;
+  member_phone: string | null;
+  trainer_member_id: number;
+  trainer_name: string;
+  lesson_kind: string | null;
 }
 
+// 기간 → KST 로컬 기준 from/to (YYYY-MM-DD)
+function periodRange(p: Period): { from: string; to: string } {
+  const ymd = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const now = new Date();
+  if (p === "last_month") {
+    return {
+      from: ymd(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+      to: ymd(new Date(now.getFullYear(), now.getMonth(), 0)),
+    };
+  }
+  if (p === "this_year") {
+    return { from: ymd(new Date(now.getFullYear(), 0, 1)), to: ymd(new Date(now.getFullYear(), 11, 31)) };
+  }
+  // this_month (기본)
+  return {
+    from: ymd(new Date(now.getFullYear(), now.getMonth(), 1)),
+    to: ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  };
+}
+
+// ISO(UTC) → KST "8/17 (일) 14:30"
+function fmtKstDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const k = new Date(d.getTime() + 9 * 3600 * 1000);
+  const mo = k.getUTCMonth() + 1;
+  const day = k.getUTCDate();
+  const dow = ["일", "월", "화", "수", "목", "금", "토"][k.getUTCDay()];
+  const hh = String(k.getUTCHours()).padStart(2, "0");
+  const mm = String(k.getUTCMinutes()).padStart(2, "0");
+  return `${mo}/${day} (${dow}) ${hh}:${mm}`;
+}
+
+// 통계 → 수업진행목록 을 이 강사(담당강사 자동 선택)로 고정하고 기간만 선택.
 function SessionsTab({ memberId }: { memberId: number }) {
   const { getIdToken } = useAuth();
   const [period, setPeriod] = useState<Period>("this_month");
-  const [rows, setRows] = useState<SessionRow[]>([]);
-  const [totalSessions, setTotalSessions] = useState(0);
+  const [rows, setRows] = useState<LessonRow[]>([]);
+  const [summary, setSummary] = useState<{ total: number; attended: number; noshow: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -485,14 +617,16 @@ function SessionsTab({ memberId }: { memberId: number }) {
     try {
       const token = await getIdToken();
       if (!token) return;
-      const res = await fetch(`/api/crm/payroll/${memberId}/sessions?period=${period}`, {
+      const { from, to } = periodRange(period);
+      const params = new URLSearchParams({ from, to, trainer_id: String(memberId) });
+      const res = await fetch(`/api/crm/stats/lessons?${params}`, {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
       if (!res.ok) return;
       const d = await res.json();
-      setRows(d.sessions ?? []);
-      setTotalSessions(d.total_sessions ?? 0);
+      setRows(d.lessons ?? []);
+      setSummary(d.summary ?? null);
     } finally {
       setLoading(false);
     }
@@ -502,20 +636,17 @@ function SessionsTab({ memberId }: { memberId: number }) {
     load();
   }, [load]);
 
-  const genderLabel = (g: string | null) => (g === "M" ? "남" : g === "F" ? "여" : "-");
+  const statusLabel = (s: string) =>
+    s === "attended" ? "출석" : s === "noshow" ? "노쇼" : s;
 
   return (
     <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
-      <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-        수업 내역
-      </h2>
-
       <div className="flex flex-wrap items-center gap-3 mb-3">
-        <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
-          총 수업 횟수 ({totalSessions}회)
-        </span>
+        <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+          수업 내역 <span className="text-[11.5px] text-[#A89B80] font-normal">(진행분: 출석·노쇼)</span>
+        </h2>
         <div className="ml-auto flex items-center gap-2">
-          <span className="text-[11.5px] text-[#A89B80]">필터</span>
+          <span className="text-[11.5px] text-[#A89B80]">기간</span>
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value as Period)}
@@ -529,33 +660,43 @@ function SessionsTab({ memberId }: { memberId: number }) {
         </div>
       </div>
 
+      {summary && (
+        <div className="flex flex-wrap items-center gap-2 text-[12.5px] mb-3">
+          <span className="px-2.5 py-1 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 text-[#3A342A] dark:text-zinc-300 font-semibold">
+            총 {summary.total}건
+          </span>
+          <span className="px-2.5 py-1 rounded-full bg-[#EFE7D5] text-[#6B7B3A] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A] font-semibold">
+            출석 {summary.attended}
+          </span>
+          <span className="px-2.5 py-1 rounded-full bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 font-semibold">
+            노쇼 {summary.noshow}
+          </span>
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
         <table className="w-full text-[13px]">
           <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
             <tr>
               <Th>번호</Th>
-              <Th>이름</Th>
-              <Th>나이</Th>
-              <Th>성별</Th>
+              <Th>수업 일시</Th>
+              <Th>회원</Th>
               <Th>연락처</Th>
-              <Th>상품명</Th>
-              <Th>계약 수</Th>
-              <Th>사용 완료</Th>
-              <Th>잔여</Th>
-              <Th>회당 수업료<span className="text-[10.5px] text-[#A89B80] ml-0.5">(부가세 제외)</span></Th>
+              <Th>수업</Th>
+              <Th>상태</Th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={10} className="px-3 py-12 text-center text-[13px] text-[#8C8270]">불러오는 중…</td>
+                <td colSpan={6} className="px-3 py-12 text-center text-[13px] text-[#8C8270]">불러오는 중…</td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-3 py-12 text-center">
+                <td colSpan={6} className="px-3 py-12 text-center">
                   <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">데이터가 없어요</div>
                   <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
-                    해당 기간에 발급된 수업 내역이 없어요.
+                    해당 기간에 진행된 수업이 없어요.
                   </div>
                 </td>
               </tr>
@@ -563,16 +704,16 @@ function SessionsTab({ memberId }: { memberId: number }) {
               rows.map((r, i) => (
                 <tr key={r.id} className="border-t border-[#E8E0D0]/70 dark:border-zinc-800">
                   <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400">{i + 1}</td>
-                  <td className="px-3 py-2.5 font-medium text-[#2A251D] dark:text-zinc-100 whitespace-nowrap">{r.member_name}</td>
-                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400">{r.age ?? "-"}</td>
-                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400">{genderLabel(r.gender)}</td>
-                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap">{r.phone ? formatPhone(r.phone) : "-"}</td>
-                  <td className="px-3 py-2.5 text-[#3A342A] dark:text-zinc-300 whitespace-nowrap">{r.product}</td>
-                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400">{r.total}회</td>
-                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400">{r.used}회</td>
-                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400">{r.remaining}회</td>
-                  <td className="px-3 py-2.5 font-semibold text-[#2A251D] dark:text-zinc-100 whitespace-nowrap">
-                    {formatWon(r.per_session_won)}원
+                  <td className="px-3 py-2.5 whitespace-nowrap text-[#3A342A] dark:text-zinc-200">{fmtKstDateTime(r.starts_at)}</td>
+                  <td className="px-3 py-2.5 font-medium text-[#2A251D] dark:text-zinc-100 whitespace-nowrap">
+                    <a href={`/crm/members/${r.member_id}`} className="hover:underline">{r.member_name}</a>
+                  </td>
+                  <td className="px-3 py-2.5 text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap tabular-nums">{r.member_phone ? formatPhone(r.member_phone) : "-"}</td>
+                  <td className="px-3 py-2.5 text-[#3A342A] dark:text-zinc-300 whitespace-nowrap">{r.lesson_kind ?? "-"}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <span className={r.status === "noshow" ? "text-[#B4452A] font-medium" : "text-[#6B7B3A] dark:text-[#A8B87A] font-medium"}>
+                      {statusLabel(r.status)}
+                    </span>
                   </td>
                 </tr>
               ))
