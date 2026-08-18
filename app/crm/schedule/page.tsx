@@ -2457,6 +2457,10 @@ function NewReservationModal({
   }, [onClose]);
 
   const startsAt = slot.startsAt;
+  // 예약 날짜(KST). 이 날짜에 유효기간이 지난 수강권/회원은 선택 목록에서 제외.
+  const slotDateKst = new Date(new Date(startsAt).getTime() + 9 * 3600 * 1000)
+    .toISOString()
+    .slice(0, 10);
   const endsAt = useMemo(() => {
     const s = new Date(startsAt);
     s.setMinutes(s.getMinutes() + duration);
@@ -2489,7 +2493,8 @@ function NewReservationModal({
         if (!res.ok) throw new Error(data?.error || "조회 실패");
         setAssigned(
           (data.passes ?? []).filter(
-            (p: { remaining_sessions: number }) => p.remaining_sessions > 0
+            (p: { remaining_sessions: number; expires_at?: string }) =>
+              p.remaining_sessions > 0 && String(p.expires_at ?? "").slice(0, 10) >= slotDateKst
           )
         );
       } catch (e) {
@@ -2534,8 +2539,10 @@ function NewReservationModal({
       if (!res.ok) throw new Error(data?.error || "조회 실패");
       const active: AssignedPass[] = (data.passes ?? [])
         .filter(
-          (p: { status: string; remaining_sessions: number }) =>
-            p.status === "valid" && p.remaining_sessions > 0
+          (p: { status: string; remaining_sessions: number; expires_at?: string }) =>
+            p.status === "valid" &&
+            p.remaining_sessions > 0 &&
+            String(p.expires_at ?? "").slice(0, 10) >= slotDateKst
         )
         .map((p: AssignedPass) => ({
           ...p,
