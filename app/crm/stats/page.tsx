@@ -291,8 +291,9 @@ function fmtKstDateTime(iso: string): string {
 function LessonsTab() {
   const { getIdToken } = useAuth();
   const now = new Date();
+  // 기본값: 이번 달 1일 ~ 말일 (달에 따라 28/29/30/31 자동)
   const [from, setFrom] = useState(() => localYmd(new Date(now.getFullYear(), now.getMonth(), 1)));
-  const [to, setTo] = useState(() => localYmd(now));
+  const [to, setTo] = useState(() => localYmd(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
   const [trainerId, setTrainerId] = useState<number | "">("");
   const [staff, setStaff] = useState<StaffLite[]>([]);
   const [rows, setRows] = useState<LessonRow[]>([]);
