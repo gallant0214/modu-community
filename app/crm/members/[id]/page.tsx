@@ -659,6 +659,7 @@ export default function CrmMemberDetailPage() {
         reloadKey={usageReload}
         staffList={staffList}
         onOpenDetail={setPaymentDetail}
+        onOpenLocker={() => setLockerOpen(true)}
       />
 
       <HoldingDetailModal
@@ -3441,15 +3442,21 @@ function UsageSection({
   reloadKey,
   staffList,
   onOpenDetail,
+  onOpenLocker,
 }: {
   memberId: number;
   reloadKey: number;
   staffList: { id: number; display_name: string; role: string; status: string }[];
   onOpenDetail: (d: PaymentDetail) => void;
+  onOpenLocker: () => void;
 }) {
   const { getIdToken } = useAuth();
   const [memberships, setMemberships] = useState<MembershipRow[]>([]);
   const [rentals, setRentals] = useState<RentalRow[]>([]);
+  const [lockers, setLockers] = useState<
+    { id: number; zone_name: string; number: number; start_date: string | null; expires_at: string | null }[]
+  >([]);
+  const [lockerFee, setLockerFee] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -3459,19 +3466,25 @@ function UsageSection({
         const token = await getIdToken();
         if (!token) return;
         const headers = { authorization: `Bearer ${token}` };
-        const [mRes, rRes] = await Promise.all([
+        const [mRes, rRes, lRes] = await Promise.all([
           fetch(`/api/crm/memberships?member_id=${memberId}`, { headers, cache: "no-store" }),
           fetch(`/api/crm/rentals?member_id=${memberId}`, { headers, cache: "no-store" }),
+          fetch(`/api/crm/lockers/of-member?member_id=${memberId}`, { headers, cache: "no-store" }),
         ]);
         if (mRes.ok) setMemberships((await mRes.json()).memberships ?? []);
         if (rRes.ok) setRentals((await rRes.json()).rentals ?? []);
+        if (lRes.ok) {
+          const lData = await lRes.json();
+          setLockers(lData.lockers ?? []);
+          setLockerFee(lData.payment?.total_won ?? 0);
+        }
       } finally {
         setLoading(false);
       }
     })();
   }, [memberId, reloadKey, getIdToken]);
 
-  const total = memberships.length + rentals.length;
+  const total = memberships.length + rentals.length + lockers.length;
   const todayStr = new Date().toISOString().slice(0, 10);
   const isValid = (s: string, exp: string) => s === "valid" && exp >= todayStr;
   const sellerName = (id: number | null) =>
@@ -3480,13 +3493,13 @@ function UsageSection({
   return (
     <section className="mt-6 mb-2">
       <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-        회원권 · 대여권 ({total})
+        회원권 · 대여권 · 락커 ({total})
       </h2>
       {loading && total === 0 ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : total === 0 ? (
         <div className="px-4 py-6 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-          발급된 회원권·대여권이 없습니다. &quot;+ 회원권 발급&quot;으로 추가해 주세요.
+          발급된 회원권·대여권·락커가 없습니다. &quot;+ 회원권 발급&quot;으로 추가해 주세요.
         </div>
       ) : (
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -3512,6 +3525,17 @@ function UsageSection({
               valid={isValid(r.status, r.expires_at)}
               paused={r.is_paused}
               onClick={() => onOpenDetail(rentalToDetail(r, sellerName))}
+            />
+          ))}
+          {lockers.map((l) => (
+            <UsageCard
+              key={`l${l.id}`}
+              tag="락커"
+              name={`${l.zone_name} ${l.number}번`}
+              price={lockerFee}
+              period={fmtPeriod(l.start_date, l.expires_at)}
+              valid={!l.expires_at || l.expires_at >= todayStr}
+              onClick={onOpenLocker}
             />
           ))}
         </ul>
@@ -3540,7 +3564,9 @@ function UsageCard({
   const tone =
     tag === "회원권"
       ? "text-[#6B7B3A] dark:text-[#A8B87A]"
-      : "text-[#3E7C8C] dark:text-cyan-300";
+      : tag === "락커"
+        ? "text-[#8B6BB1] dark:text-purple-300"
+        : "text-[#3E7C8C] dark:text-cyan-300";
   return (
     <li>
       <button
