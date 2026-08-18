@@ -64,9 +64,11 @@ export async function POST(request: Request) {
   if (pass.status !== "valid") {
     return NextResponse.json({ error: "사용할 수 없는 수강권입니다" }, { status: 400 });
   }
-  const todayYmd = new Date(now + 9 * 3600 * 1000).toISOString().slice(0, 10);
-  if ((pass.expires_at ?? "") < todayYmd) {
-    return NextResponse.json({ error: "만료된 수강권입니다" }, { status: 400 });
+  // 유효기간 만료 검사: 수업일(예약 시각, KST)이 수강권 만료일 이후면 잔여 횟수가 있어도 예약 불가.
+  // (무기한 9999-12-31 은 항상 통과)
+  const startsKstYmd = new Date(startsAt.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  if (pass.expires_at && pass.expires_at !== "9999-12-31" && startsKstYmd > pass.expires_at) {
+    return NextResponse.json({ error: "유효기간이 만료된 수강권입니다." }, { status: 400 });
   }
 
   const isPeriod = (pass.total_sessions ?? 0) <= 0;

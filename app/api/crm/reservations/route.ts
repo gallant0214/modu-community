@@ -201,13 +201,21 @@ export async function POST(request: Request) {
   // session_minutes 까지 조회 → 예약 종료 시각 서버측 파생
   const { data: pass } = await supabase
     .from("crm_passes")
-    .select("id, center_id, member_id, trainer_member_id, co_trainer_ids, remaining_sessions, total_sessions, status, session_minutes, group_capacity")
+    .select("id, center_id, member_id, trainer_member_id, co_trainer_ids, remaining_sessions, total_sessions, status, session_minutes, group_capacity, expires_at")
     .eq("id", passId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
   if (!pass) return NextResponse.json({ error: "수강권을 찾을 수 없습니다" }, { status: 404 });
   if (pass.status !== "valid") {
     return NextResponse.json({ error: "사용할 수 없는 수강권입니다" }, { status: 400 });
+  }
+  // 유효기간 만료 검사: 수업일(예약 시각)이 수강권 만료일 이후면 잔여 횟수가 남아 있어도 예약 불가.
+  // (무기한 9999-12-31 은 항상 통과. 서버는 UTC 이므로 KST(+9h) 로 수업일 산출.)
+  const startsKstYmd = new Date(new Date(body.starts_at).getTime() + 9 * 3600 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  if (pass.expires_at && pass.expires_at !== "9999-12-31" && startsKstYmd > pass.expires_at) {
+    return NextResponse.json({ error: "유효기간이 만료된 수강권입니다." }, { status: 400 });
   }
   // 기간제(총 세션 0)는 기간 내 횟수 제한 없이 예약 가능 → 잔여/슬롯 검사 건너뜀.
   const isPeriodPass = !pass.total_sessions || pass.total_sessions <= 0;
