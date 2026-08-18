@@ -154,25 +154,24 @@ function RevenueTab({ memberId }: { memberId: number }) {
     category_totals?: Record<string, number>;
   } | null>(null);
   const [productFilter, setProductFilter] = useState<string>("all");
+  // 직접 선택(custom) 기간
+  const [customFrom, setCustomFrom] = useState(() => periodRange("this_month").from);
+  const [customTo, setCustomTo] = useState(() => periodRange("this_month").to);
 
-  const ymForPeriod = (p: Period): string => {
-    const now = new Date();
-    if (p === "last_month") now.setMonth(now.getMonth() - 1);
-    return now.toISOString().slice(0, 7);
-  };
-  const ym = ymForPeriod(period);
+  const { from, to } =
+    period === "custom" ? { from: customFrom, to: customTo } : periodRange(period);
 
   useEffect(() => {
     (async () => {
       const token = await getIdToken();
       if (!token) return;
-      const res = await fetch(`/api/crm/payroll/${memberId}?ym=${ym}`, {
+      const res = await fetch(`/api/crm/payroll/${memberId}?from=${from}&to=${to}`, {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
       if (res.ok) setData(await res.json());
     })();
-  }, [memberId, ym, getIdToken]);
+  }, [memberId, from, to, getIdToken]);
 
   return (
     <>
@@ -194,6 +193,27 @@ function RevenueTab({ memberId }: { memberId: number }) {
               <option value="this_year">올해</option>
               <option value="custom">직접 선택</option>
             </select>
+            {period === "custom" && (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  value={customFrom}
+                  max={customTo}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className={crmInputClass}
+                  style={{ width: 140 }}
+                />
+                <span className="text-[12px] text-[#A89B80]">~</span>
+                <input
+                  type="date"
+                  value={customTo}
+                  min={customFrom}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className={crmInputClass}
+                  style={{ width: 140 }}
+                />
+              </div>
+            )}
           </div>
         </div>
 
