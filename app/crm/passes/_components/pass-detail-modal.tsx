@@ -93,6 +93,12 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
       consumed: boolean;
       cancelled_reason: string | null;
       cancelled_at: string | null;
+      reschedule_history?: {
+        from_starts_at?: string;
+        to_starts_at?: string;
+        reason?: string | null;
+        changed_at?: string;
+      }[] | null;
     }[]
   >([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -394,6 +400,12 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
                               )}
                             </div>
                           )}
+                          {(r.reschedule_history ?? []).map((h, hi) => (
+                            <div key={hi} className="mt-1 text-[11px] text-[#EA7A3C] leading-snug">
+                              🔁 시간 변경: {h.from_starts_at ? kstDate(h.from_starts_at) : "?"} → {h.to_starts_at ? kstDate(h.to_starts_at) : "?"}
+                              {h.reason ? <span className="whitespace-pre-wrap break-words"> · {h.reason}</span> : null}
+                            </div>
+                          ))}
                         </div>
                       );
                     })}
