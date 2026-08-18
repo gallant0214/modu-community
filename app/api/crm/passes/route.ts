@@ -66,13 +66,37 @@ export async function GET(request: Request) {
   const members = (membersRes.data ?? []) as unknown as MemberLite[];
   const memberMap = new Map(members.map((m) => [m.id, m]));
 
+  // 예약 점유 수(취소·거절 제외) → 예약 가능 횟수 = 총 횟수 - 점유 수.
+  // remaining_sessions 는 "수업 완료(출석)" 시에만 줄어드므로, 아직 완료 안 된 예약도
+  // 이미 한 자리씩 차지한다. 강사 예약 UI 에서 실제 예약 가능 수를 보여주기 위함.
+  const passIds = (data ?? []).map((p) => p.id);
+  const reservedMap = new Map<number, number>();
+  if (passIds.length > 0) {
+    const { data: resv } = await supabase
+      .from("crm_reservations")
+      .select("pass_id")
+      .eq("center_id", ctx.centerId)
+      .in("pass_id", passIds)
+      .not("status", "in", "(cancelled,rejected)");
+    for (const r of resv ?? []) {
+      if (r.pass_id != null) reservedMap.set(r.pass_id, (reservedMap.get(r.pass_id) ?? 0) + 1);
+    }
+  }
+
   return NextResponse.json({
-    passes: (data ?? []).map((p) => ({
-      ...p,
-      member_name: memberMap.get(p.member_id)?.name ?? "",
-      member_phone: memberMap.get(p.member_id)?.phone ?? null,
-      member_face_thumb: memberMap.get(p.member_id)?.face_image_thumb ?? null,
-    })),
+    passes: (data ?? []).map((p) => {
+      const reserved = reservedMap.get(p.id) ?? 0;
+      const isPeriod = !p.total_sessions || p.total_sessions <= 0;
+      return {
+        ...p,
+        member_name: memberMap.get(p.member_id)?.name ?? "",
+        member_phone: memberMap.get(p.member_id)?.phone ?? null,
+        member_face_thumb: memberMap.get(p.member_id)?.face_image_thumb ?? null,
+        reserved_count: reserved,
+        // 기간제(총 0)는 횟수 제한 없음 → null. 그 외엔 남은 예약 가능 횟수.
+        bookable_sessions: isPeriod ? null : Math.max(0, (p.total_sessions ?? 0) - reserved),
+      };
+    }),
   });
 }
 

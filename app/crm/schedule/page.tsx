@@ -2406,6 +2406,10 @@ function NewReservationModal({
     member_id: number;
     member_name: string;
     group_capacity?: number;
+    // 이미 잡힌 예약(취소·거절 제외) 수. 예약 가능 = total - reserved.
+    reserved_count?: number;
+    // 남은 예약 가능 횟수(기간제는 null). 서버에서 계산.
+    bookable_sessions?: number | null;
   }
   const [assigned, setAssigned] = useState<AssignedPass[]>([]);
   const [loadingAssigned, setLoadingAssigned] = useState(false);
@@ -2903,7 +2907,13 @@ function NewReservationModal({
                     {filteredAssigned.map((p) => {
                       const selected = passId === p.id;
                       const expiry = formatExpiryBadge(p.expires_at);
-                      const remainingCls = passMetricClasses(remainingTone(p.remaining_sessions));
+                      const bookable =
+                        p.total_sessions > 0
+                          ? Math.max(0, p.total_sessions - (p.reserved_count ?? 0))
+                          : null;
+                      const remainingCls = passMetricClasses(
+                        remainingTone(bookable ?? p.remaining_sessions)
+                      );
                       const expiryCls = passMetricClasses(expiry.tone);
                       return (
                         <li key={p.id}>
@@ -2938,10 +2948,15 @@ function NewReservationModal({
                             </div>
                             <div className="mt-3 grid grid-cols-2 gap-2">
                               <div className={`rounded-lg border px-2.5 py-2 ${remainingCls}`}>
-                                <div className="text-[10.5px] font-medium opacity-75">잔여 회수</div>
+                                <div className="text-[10.5px] font-medium opacity-75">예약 가능</div>
                                 <div className="mt-0.5 text-[13px] font-bold">
-                                  {p.remaining_sessions}/{p.total_sessions}회
+                                  {bookable === null ? "무제한" : `${bookable}회`}
                                 </div>
+                                {bookable !== null && (
+                                  <div className="text-[10px] opacity-70">
+                                    잔여 {p.remaining_sessions}/{p.total_sessions}
+                                  </div>
+                                )}
                               </div>
                               <div className={`rounded-lg border px-2.5 py-2 ${expiryCls}`}>
                                 <div className="text-[10.5px] font-medium opacity-75">유효기간</div>
@@ -3000,7 +3015,13 @@ function NewReservationModal({
                         {otherPasses.map((p) => {
                           const selected = passId === p.id;
                           const expiry = formatExpiryBadge(p.expires_at);
-                          const remainingCls = passMetricClasses(remainingTone(p.remaining_sessions));
+                          const bookable =
+                            p.total_sessions > 0
+                              ? Math.max(0, p.total_sessions - (p.reserved_count ?? 0))
+                              : null;
+                          const remainingCls = passMetricClasses(
+                            remainingTone(bookable ?? p.remaining_sessions)
+                          );
                           const expiryCls = passMetricClasses(expiry.tone);
                           return (
                             <li key={p.id}>
@@ -3038,10 +3059,15 @@ function NewReservationModal({
                                 </div>
                                 <div className="mt-3 grid grid-cols-2 gap-2">
                                   <div className={`rounded-lg border px-2.5 py-2 ${remainingCls}`}>
-                                    <div className="text-[10.5px] font-medium opacity-75">잔여 회수</div>
+                                    <div className="text-[10.5px] font-medium opacity-75">예약 가능</div>
                                     <div className="mt-0.5 text-[13px] font-bold">
-                                      {p.remaining_sessions}/{p.total_sessions}회
+                                      {bookable === null ? "무제한" : `${bookable}회`}
                                     </div>
+                                    {bookable !== null && (
+                                      <div className="text-[10px] opacity-70">
+                                        잔여 {p.remaining_sessions}/{p.total_sessions}
+                                      </div>
+                                    )}
                                   </div>
                                   <div className={`rounded-lg border px-2.5 py-2 ${expiryCls}`}>
                                     <div className="text-[10.5px] font-medium opacity-75">유효기간</div>
