@@ -884,6 +884,8 @@ function ContactSection({
   const { getIdToken } = useAuth();
   const [n, setN] = useState(name ?? "");
   const [b, setB] = useState(birth ?? "");
+  const bMonthRef = useRef<HTMLInputElement>(null);
+  const bDayRef = useRef<HTMLInputElement>(null);
   const [p, setP] = useState(formatPhone(phone ?? ""));
   const [e, setE] = useState(email ?? "");
   const [a, setA] = useState(address ?? "");
@@ -913,7 +915,8 @@ function ContactSection({
   const save = () => {
     const patch: { display_name?: string; birth?: string | null; phone?: string | null; email?: string | null; address?: string | null } = {};
     if (dirtyName && n.trim()) patch.display_name = n.trim();
-    if (dirtyBirth) patch.birth = b.trim() || null;
+    // 완전한 날짜(YYYY-MM-DD)만 저장. 부분 입력이면 null(빈 값)로.
+    if (dirtyBirth) patch.birth = /^\d{4}-\d{2}-\d{2}$/.test(b.trim()) ? b.trim() : null;
     if (dirtyPhone) patch.phone = p.trim() || null;
     if (dirtyEmail) patch.email = e.trim() || null;
     if (dirtyAddress) patch.address = a.trim() || null;
@@ -983,12 +986,63 @@ function ContactSection({
       <div className="space-y-3">
         <div>
           <div className="text-[12.5px] text-[#A89B80] mb-1.5">생년월일</div>
-          <input
-            type="date"
-            className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A] max-w-[220px]"
-            value={b}
-            onChange={(ev) => setB(ev.target.value)}
-          />
+          {(() => {
+            const parts = (b || "").split("-");
+            const yy = parts[0] ?? "";
+            const mm = parts[1] ?? "";
+            const dd = parts[2] ?? "";
+            const compose = (y: string, m: string, d: string) =>
+              !y ? "" : !m ? y : !d ? `${y}-${m}` : `${y}-${m}-${d}`;
+            const cellCls =
+              "px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-center tabular-nums text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A]";
+            return (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="YYYY"
+                  value={yy}
+                  onChange={(ev) => {
+                    const y = ev.target.value.replace(/\D/g, "").slice(0, 4);
+                    setB(compose(y, mm, dd));
+                    if (y.length === 4) bMonthRef.current?.focus();
+                  }}
+                  className={`${cellCls} w-20`}
+                />
+                <span className="text-[13px] text-[#A89B80]">년</span>
+                <input
+                  ref={bMonthRef}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={2}
+                  placeholder="MM"
+                  value={mm}
+                  onChange={(ev) => {
+                    const m = ev.target.value.replace(/\D/g, "").slice(0, 2);
+                    setB(compose(yy, m, dd));
+                    if (m.length === 2) bDayRef.current?.focus();
+                  }}
+                  className={`${cellCls} w-14`}
+                />
+                <span className="text-[13px] text-[#A89B80]">월</span>
+                <input
+                  ref={bDayRef}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={2}
+                  placeholder="DD"
+                  value={dd}
+                  onChange={(ev) => {
+                    const d = ev.target.value.replace(/\D/g, "").slice(0, 2);
+                    setB(compose(yy, mm, d));
+                  }}
+                  className={`${cellCls} w-14`}
+                />
+                <span className="text-[13px] text-[#A89B80]">일</span>
+              </div>
+            );
+          })()}
         </div>
 
         <div>
