@@ -608,6 +608,9 @@ function fmtKstDateTime(iso: string): string {
 function SessionsTab({ memberId }: { memberId: number }) {
   const { getIdToken } = useAuth();
   const [period, setPeriod] = useState<Period>("this_month");
+  // 직접 선택용 from/to (기본값 = 이번 달)
+  const [customFrom, setCustomFrom] = useState(() => periodRange("this_month").from);
+  const [customTo, setCustomTo] = useState(() => periodRange("this_month").to);
   const [rows, setRows] = useState<LessonRow[]>([]);
   const [summary, setSummary] = useState<{ total: number; attended: number; noshow: number } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -617,7 +620,8 @@ function SessionsTab({ memberId }: { memberId: number }) {
     try {
       const token = await getIdToken();
       if (!token) return;
-      const { from, to } = periodRange(period);
+      const { from, to } = period === "custom" ? { from: customFrom, to: customTo } : periodRange(period);
+      if (!from || !to) return;
       const params = new URLSearchParams({ from, to, trainer_id: String(memberId) });
       const res = await fetch(`/api/crm/stats/lessons?${params}`, {
         headers: { authorization: `Bearer ${token}` },
@@ -630,7 +634,7 @@ function SessionsTab({ memberId }: { memberId: number }) {
     } finally {
       setLoading(false);
     }
-  }, [getIdToken, memberId, period]);
+  }, [getIdToken, memberId, period, customFrom, customTo]);
 
   useEffect(() => {
     load();
@@ -645,7 +649,7 @@ function SessionsTab({ memberId }: { memberId: number }) {
         <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
           수업 내역 <span className="text-[11.5px] text-[#A89B80] font-normal">(진행분: 출석·노쇼)</span>
         </h2>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <span className="text-[11.5px] text-[#A89B80]">기간</span>
           <select
             value={period}
@@ -656,7 +660,29 @@ function SessionsTab({ memberId }: { memberId: number }) {
             <option value="this_month">이번 달</option>
             <option value="last_month">지난 달</option>
             <option value="this_year">올해</option>
+            <option value="custom">직접 선택</option>
           </select>
+          {period === "custom" && (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={customFrom}
+                max={customTo || undefined}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className={crmInputClass}
+                style={{ width: 150 }}
+              />
+              <span className="text-[12px] text-[#A89B80]">~</span>
+              <input
+                type="date"
+                value={customTo}
+                min={customFrom || undefined}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className={crmInputClass}
+                style={{ width: 150 }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
