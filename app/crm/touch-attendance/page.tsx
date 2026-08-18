@@ -5,7 +5,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
 import FaceAttendance from "./face-attendance";
 import FaceEnroll from "./face-enroll";
-import { speakMessages } from "./_speak";
+import { speakMessages, playWarningBeep } from "./_speak";
 
 interface MemberLite {
   id: number;
@@ -184,6 +184,10 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           mileageAwarded: data.mileage_awarded ?? 0,
           summary: data.summary as CheckinSummary | undefined,
         });
+        // 회원권 만료/입장 권한 없음(유효 이용권 없음) → 경고음
+        if (!data.duplicate && data.summary && data.summary.can_enter === false) {
+          playWarningBeep();
+        }
         // 서버에서 매칭된 음성 안내(예: 회원권 만료 임박) 재생
         speakMessages(Array.isArray(data.voice_messages) ? data.voice_messages : []);
       }

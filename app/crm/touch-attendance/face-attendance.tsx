@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
-import { speakMessages } from "./_speak";
+import { speakMessages, playWarningBeep } from "./_speak";
 
 // face-api.js (@vladmandic/face-api) CDN — 런타임 로드(번들 미포함)
 const FACEAPI_SRC = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js";
@@ -127,6 +127,8 @@ export default function FaceAttendance({
             setStatus(`${who} · 이미 출석하셨습니다`);
           } else {
             setLastHit({ name: who, at: Date.now() });
+            // 회원권 만료/입장 권한 없음(유효 이용권 없음) → 경고음
+            if (data.summary && data.summary.can_enter === false) playWarningBeep();
             // 서버가 매칭한 안내 음성 재생
             speakMessages(Array.isArray(data.voice_messages) ? data.voice_messages : []);
           }
