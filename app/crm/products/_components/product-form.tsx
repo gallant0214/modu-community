@@ -220,8 +220,10 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
   const [durationUnit, setDurationUnit] = useState<DurationUnit>(
     (initial?.duration_unit as DurationUnit) ?? (isFacility(type) ? "month" : "day")
   );
-  // 유효 기간 기본 40일 (무기한 기본 체크 X)
-  const [serviceDays, setServiceDays] = useState(initial?.service_days ?? 40);
+  // serviceDays 는 모드별 의미가 다름: 횟수제=유효 기간(기본 40일), 기간제=서비스 기간(기본 0일).
+  const [serviceDays, setServiceDays] = useState(
+    initial?.service_days ?? (billingMode === "period" ? 0 : 40)
+  );
   const [totalSessions, setTotalSessions] = useState(initial?.total_sessions ?? 10);
   const [pauseEnabled, setPauseEnabled] = useState(initial?.pause_enabled ?? false);
   const [pauseDays, setPauseDays] = useState(initial?.pause_days ?? 0);
