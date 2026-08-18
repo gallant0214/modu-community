@@ -175,7 +175,7 @@ export async function notifyCenterStaffAttendance(params: {
     if (lines.length > 0) {
       bodyLines = [visitLine, ...lines.slice(0, 5)];
     } else if (summary != null) {
-      bodyLines = [`미등록 회원이 ${kind === "in" ? "출석" : "퇴실"}하였습니다`, visitLine];
+      bodyLines = [`🚫 미등록 회원이 ${kind === "in" ? "출석" : "퇴실"}하였습니다`, visitLine];
     } else {
       bodyLines = [visitLine];
     }
