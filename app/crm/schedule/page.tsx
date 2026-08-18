@@ -2493,8 +2493,10 @@ function NewReservationModal({
         if (!res.ok) throw new Error(data?.error || "조회 실패");
         setAssigned(
           (data.passes ?? []).filter(
-            (p: { remaining_sessions: number; expires_at?: string }) =>
-              p.remaining_sessions > 0 && String(p.expires_at ?? "").slice(0, 10) >= slotDateKst
+            (p: { bookable_sessions?: number | null; expires_at?: string }) =>
+              // 예약가능(기간제=null 은 항상 가능) + 예약 날짜에 유효
+              (p.bookable_sessions == null || p.bookable_sessions > 0) &&
+              String(p.expires_at ?? "").slice(0, 10) >= slotDateKst
           )
         );
       } catch (e) {
@@ -2539,10 +2541,18 @@ function NewReservationModal({
       if (!res.ok) throw new Error(data?.error || "조회 실패");
       const active: AssignedPass[] = (data.passes ?? [])
         .filter(
-          (p: { status: string; remaining_sessions: number; expires_at?: string }) =>
-            p.status === "valid" &&
-            p.remaining_sessions > 0 &&
-            String(p.expires_at ?? "").slice(0, 10) >= slotDateKst
+          (p: {
+            status: string;
+            total_sessions?: number;
+            reserved_count?: number;
+            expires_at?: string;
+          }) => {
+            if (p.status !== "valid") return false;
+            if (String(p.expires_at ?? "").slice(0, 10) < slotDateKst) return false;
+            const isPeriod = !p.total_sessions || p.total_sessions <= 0;
+            if (isPeriod) return true;
+            return Math.max(0, (p.total_sessions ?? 0) - (p.reserved_count ?? 0)) > 0;
+          }
         )
         .map((p: AssignedPass) => ({
           ...p,
