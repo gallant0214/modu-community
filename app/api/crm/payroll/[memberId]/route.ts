@@ -65,7 +65,7 @@ export async function GET(
   const [{ data: passes }, { data: overrideRules }, { data: defaultRules }] = await Promise.all([
     supabase
       .from("crm_passes")
-      .select("id, issue_type, price_won, total_sessions, issued_at, status, vat_included")
+      .select("id, member_id, lesson_kind, group_capacity, issue_type, price_won, total_sessions, issued_at, status, vat_included")
       .eq("center_id", ctx.centerId)
       .eq("trainer_member_id", trainerId)
       .neq("status", "deleted")
@@ -94,6 +94,55 @@ export async function GET(
     .eq("id", trainerId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
+
+  // 매출 내역(회원명·연락처 포함) — 지급액 근거가 된 수강권 매출을 표로 보여주기 위함.
+  const recMemberIds = Array.from(
+    new Set((passes ?? []).map((p) => (p as { member_id?: number }).member_id).filter((v): v is number => !!v))
+  );
+  const { data: recMembers } = recMemberIds.length
+    ? await supabase
+        .from("crm_members")
+        .select("id, name, phone")
+        .eq("center_id", ctx.centerId)
+        .in("id", recMemberIds)
+    : { data: [] };
+  const recMemberMap = new Map((recMembers ?? []).map((m) => [m.id, m]));
+  const ISSUE_LABEL: Record<string, string> = {
+    new: "신규",
+    renewal: "재등록",
+    trial: "체험",
+    service: "서비스",
+  };
+  const records = (passes ?? []).map((p) => {
+    const pp = p as {
+      id: number;
+      member_id?: number;
+      lesson_kind?: string;
+      group_capacity?: number | null;
+      issue_type?: string;
+      price_won?: number;
+      issued_at?: string;
+    };
+    const mem = pp.member_id ? recMemberMap.get(pp.member_id) : null;
+    const isGroup = (pp.group_capacity ?? 1) > 1;
+    return {
+      id: pp.id,
+      issued_at: pp.issued_at ?? null,
+      member_id: pp.member_id ?? null,
+      member_name: mem?.name ?? "(회원 미상)",
+      member_phone: mem?.phone ?? null,
+      product_name: pp.lesson_kind ?? "수강권",
+      amount_won: pp.price_won ?? 0,
+      issue_type: pp.issue_type ?? null,
+      issue_label: pp.issue_type ? ISSUE_LABEL[pp.issue_type] ?? pp.issue_type : null,
+      category: isGroup ? "group" : "personal", // 그룹 수업 / 개인 레슨
+    };
+  });
+  // 카테고리별 매출 적용 금액 (개인 레슨 / 그룹 수업)
+  const categoryTotals: Record<string, number> = {};
+  for (const r of records) {
+    categoryTotals[r.category] = (categoryTotals[r.category] ?? 0) + (r.amount_won ?? 0);
+  }
 
   type Rule = {
     mode: string;
@@ -219,6 +268,8 @@ export async function GET(
   return NextResponse.json({
     ym,
     passes: passes ?? [],
+    records,
+    category_totals: categoryTotals,
     rules,
     breakdown,
     payout,

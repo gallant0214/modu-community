@@ -141,7 +141,19 @@ function RevenueTab({ memberId }: { memberId: number }) {
     withholding_rate: number;
     withholding_tax: number;
     net_pay: number;
+    records?: {
+      id: number;
+      issued_at: string | null;
+      member_name: string;
+      member_phone: string | null;
+      product_name: string;
+      amount_won: number;
+      issue_label: string | null;
+      category: string;
+    }[];
+    category_totals?: Record<string, number>;
   } | null>(null);
+  const [productFilter, setProductFilter] = useState<string>("all");
 
   const ymForPeriod = (p: Period): string => {
     const now = new Date();
@@ -262,7 +274,7 @@ function RevenueTab({ memberId }: { memberId: number }) {
               {c.label}
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              <RevenueKpi label="매출 적용 금액" value={0} small />
+              <RevenueKpi label="매출 적용 금액" value={data?.category_totals?.[c.key] ?? 0} small />
               <RevenueKpi label="잔여 미수금" value={0} small muted />
             </div>
           </div>
@@ -270,46 +282,81 @@ function RevenueTab({ memberId }: { memberId: number }) {
       </section>
 
       <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
-        <div className="flex flex-wrap items-center gap-3 mb-3">
-          <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
-            매출 내역 (0건)
-          </h2>
-          <select className={`${crmInputClass} ml-auto`} style={{ maxWidth: 160 }}>
-            <option>전체 상품</option>
-            <option>회원권</option>
-            <option>그룹 수업</option>
-            <option>개인 레슨</option>
-            <option>락커</option>
-            <option>운동 용품</option>
-          </select>
-        </div>
+        {(() => {
+          const all = data?.records ?? [];
+          const rows = productFilter === "all" ? all : all.filter((r) => r.category === productFilter);
+          return (
+            <>
+              <div className="flex flex-wrap items-center gap-3 mb-3">
+                <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                  매출 내역 ({rows.length}건)
+                </h2>
+                <select
+                  className={`${crmInputClass} ml-auto`}
+                  style={{ maxWidth: 160 }}
+                  value={productFilter}
+                  onChange={(e) => setProductFilter(e.target.value)}
+                >
+                  <option value="all">전체 상품</option>
+                  <option value="membership">회원권</option>
+                  <option value="group">그룹 수업</option>
+                  <option value="personal">개인 레슨</option>
+                  <option value="locker">락커</option>
+                  <option value="goods">운동 용품</option>
+                </select>
+              </div>
 
-        <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
-          <table className="w-full text-[13px]">
-            <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
-              <tr>
-                <Th>결제일</Th>
-                <Th>회원명</Th>
-                <Th>연락처</Th>
-                <Th>결제 상품</Th>
-                <Th>결제 금액</Th>
-                <Th>비고</Th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td colSpan={6} className="px-3 py-12 text-center">
-                  <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">
-                    데이터가 없어요
-                  </div>
-                  <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
-                    보여드릴 매출 내역이 없어요.
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+              <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
+                <table className="w-full text-[13px]">
+                  <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+                    <tr>
+                      <Th>결제일</Th>
+                      <Th>회원명</Th>
+                      <Th>연락처</Th>
+                      <Th>결제 상품</Th>
+                      <Th>결제 금액</Th>
+                      <Th>비고</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-3 py-12 text-center">
+                          <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">
+                            데이터가 없어요
+                          </div>
+                          <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
+                            이 기간에 보여드릴 매출 내역이 없어요.
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      rows.map((r) => (
+                        <tr
+                          key={r.id}
+                          className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 text-[#3A342A] dark:text-zinc-200"
+                        >
+                          <td className="px-3 py-2.5 whitespace-nowrap">{r.issued_at ?? "—"}</td>
+                          <td className="px-3 py-2.5 whitespace-nowrap">{r.member_name}</td>
+                          <td className="px-3 py-2.5 whitespace-nowrap tabular-nums">
+                            {r.member_phone ? formatPhone(r.member_phone) : "—"}
+                          </td>
+                          <td className="px-3 py-2.5">{r.product_name}</td>
+                          <td className="px-3 py-2.5 whitespace-nowrap tabular-nums font-medium">
+                            {formatWon(r.amount_won)} 원
+                          </td>
+                          <td className="px-3 py-2.5 whitespace-nowrap text-[#6B5D47] dark:text-zinc-400">
+                            {r.issue_label ?? "—"}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          );
+        })()}
       </section>
     </>
   );
