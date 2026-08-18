@@ -168,7 +168,17 @@ export async function notifyCenterStaffAttendance(params: {
     }
 
     const title = `[${centerName}] ${memberName}님 ${kind === "in" ? "출석!" : "퇴실!"}`;
-    const bodyLines = [`금일 방문 ${visitCount}명`, ...lines.slice(0, 5)];
+    // 유효한 회원권·수강권이 하나도 없는(미등록/만료) 회원은 안내 문구 표시.
+    // (summary 조회가 실패/미조회면 null → 오탐 방지 위해 문구 생략)
+    const visitLine = `금일 방문 ${visitCount}명`;
+    let bodyLines: string[];
+    if (lines.length > 0) {
+      bodyLines = [visitLine, ...lines.slice(0, 5)];
+    } else if (summary != null) {
+      bodyLines = [`미등록 회원이 ${kind === "in" ? "출석" : "퇴실"}하였습니다`, visitLine];
+    } else {
+      bodyLines = [visitLine];
+    }
     const body = bodyLines.join("\n");
 
     for (const cmId of onIds) {
