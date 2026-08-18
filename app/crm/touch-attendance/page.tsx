@@ -394,21 +394,23 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           }}
         />
       ) : candidates ? (
-        /* 동일 번호 여러 명 → 이름 선택 */
-        <div className={`w-full ${landscape ? "max-w-[min(96vw,900px)]" : "max-w-[min(92vw,560px)]"}`}>
-          <div className="mb-3 text-center text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
+        /* 동일 번호 여러 명 → 이름 선택 (크게 표시해 잘 보이고 누르기 쉽게) */
+        <div className={`w-full ${landscape ? "max-w-[min(98vw,1200px)]" : "max-w-[min(96vw,720px)]"}`}>
+          <div className="mb-5 text-center text-[clamp(20px,3vmin,30px)] font-bold text-[#2A251D] dark:text-zinc-100">
             본인 이름을 선택해 주세요
           </div>
-          <ul className={landscape ? "grid grid-cols-2 gap-2.5" : "space-y-2.5"}>
+          <ul className={landscape ? "grid grid-cols-2 gap-4" : "space-y-4"}>
             {candidates.map((m) => (
               <li key={m.id}>
                 <button
                   onClick={() => checkin(m)}
                   disabled={busy}
-                  className="w-full px-5 py-4 rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-left hover:border-[#6B7B3A] disabled:opacity-50"
+                  className="w-full px-7 py-6 rounded-3xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-left hover:border-[#6B7B3A] active:bg-[#F5F0E5] dark:active:bg-zinc-800 disabled:opacity-50"
                 >
-                  <div className="text-[19px] font-bold text-[#2A251D] dark:text-zinc-100">{m.name}</div>
-                  <div className="mt-0.5 text-[13px] text-[#6B5D47] dark:text-zinc-400 flex flex-wrap gap-x-2">
+                  <div className="text-[clamp(26px,4vmin,40px)] font-bold text-[#2A251D] dark:text-zinc-100 leading-tight">
+                    {m.name}
+                  </div>
+                  <div className="mt-2 text-[clamp(16px,2.2vmin,22px)] text-[#6B5D47] dark:text-zinc-400 flex flex-wrap gap-x-3">
                     {m.phone && <span className="tabular-nums font-semibold">{formatPhone(m.phone)}</span>}
                     {m.birth && <span className="text-[#A89B80]">· 생년월일 {m.birth}</span>}
                   </div>
@@ -418,7 +420,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           </ul>
           <button
             onClick={clearAll}
-            className="mt-4 w-full px-4 py-3 rounded-2xl border border-[#E8E0D0] dark:border-zinc-700 text-[15px] font-semibold text-[#6B5D47] dark:text-zinc-300"
+            className="mt-6 w-full px-4 py-5 rounded-3xl border-2 border-[#E8E0D0] dark:border-zinc-700 text-[clamp(17px,2.4vmin,24px)] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
           >
             취소
           </button>
