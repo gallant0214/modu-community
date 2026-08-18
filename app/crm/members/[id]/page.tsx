@@ -101,6 +101,10 @@ export default function CrmMemberDetailPage() {
   // 현재 보유(상단 요약) 편집용 실제 레코드
   const [holdMs, setHoldMs] = useState<MembershipRow[]>([]);
   const [holdRs, setHoldRs] = useState<RentalRow[]>([]);
+  // 배정된 락커(실제 레코드) — current_locker 스냅샷이 없어도 현재 보유에 표시
+  const [holdLockers, setHoldLockers] = useState<
+    { id: number; zone_name: string; number: number; start_date: string | null; expires_at: string | null }[]
+  >([]);
   const [bodyOpen, setBodyOpen] = useState(false);
   const [bodyReload, setBodyReload] = useState(0);
   // 탭: 정보 / 예약내역 / 결제내역 / 로그
@@ -162,12 +166,14 @@ export default function CrmMemberDetailPage() {
       const token = await getIdToken();
       if (!token) return;
       const h = { authorization: `Bearer ${token}` };
-      const [mR, rR] = await Promise.all([
+      const [mR, rR, lR] = await Promise.all([
         fetch(`/api/crm/memberships?member_id=${memberId}`, { headers: h, cache: "no-store" }),
         fetch(`/api/crm/rentals?member_id=${memberId}`, { headers: h, cache: "no-store" }),
+        fetch(`/api/crm/lockers/of-member?member_id=${memberId}`, { headers: h, cache: "no-store" }),
       ]);
       if (mR.ok) setHoldMs((await mR.json()).memberships ?? []);
       if (rR.ok) setHoldRs((await rR.json()).rentals ?? []);
+      if (lR.ok) setHoldLockers((await lR.json()).lockers ?? []);
     })();
   }, [memberId, usageReload, getIdToken]);
 
@@ -260,6 +266,8 @@ export default function CrmMemberDetailPage() {
   const holdToday = new Date().toISOString().slice(0, 10);
   const validHoldMs = holdMs.filter((m) => m.status === "valid" && m.expires_at >= holdToday);
   const validHoldRs = holdRs.filter((r) => r.status === "valid" && r.expires_at >= holdToday);
+  // 배정된 락커 중 유효기간이 남은 것 (만료 락커는 현재 보유에 제외 — 회원권·대여권과 동일 기준)
+  const validHoldLockers = holdLockers.filter((l) => !l.expires_at || l.expires_at >= holdToday);
   const validHoldPasses = passes.filter(
     (p) => p.status === "valid" && p.expires_at >= holdToday
   );
@@ -267,17 +275,21 @@ export default function CrmMemberDetailPage() {
     validHoldMs.length > 0 ||
     validHoldRs.length > 0 ||
     validHoldPasses.length > 0 ||
+    validHoldLockers.length > 0 ||
     !!member.current_membership ||
     !!member.current_pass ||
     !!member.current_rental ||
     !!member.current_locker;
 
-  const currentHoldings = [
-    member.current_membership,
-    member.current_pass,
-    member.current_rental,
-    member.current_locker,
-  ].filter(Boolean).length;
+  const currentHoldings =
+    validHoldLockers.length +
+    [
+      member.current_membership,
+      member.current_pass,
+      member.current_rental,
+      // 락커: 실제 배정이 있으면 그걸로, 없으면 스냅샷
+      validHoldLockers.length === 0 ? member.current_locker : null,
+    ].filter(Boolean).length;
 
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-5xl mx-auto">
@@ -468,20 +480,30 @@ export default function CrmMemberDetailPage() {
                 />
               ))
             : holdingCards("대여권", member.current_rental, onSnapSelect)}
-          {/* 락커: 클릭 시 전용 상세(락커 결제·위치 이동) */}
-          {member.current_locker &&
-            splitTopLevel(member.current_locker).map((chunk, i) => {
-              const { name, period } = splitNamePeriod(chunk);
-              return (
+          {/* 락커: 실제 배정 레코드 우선(스냅샷 없이도 표시), 없으면 스냅샷. 클릭 시 전용 상세(락커 결제·위치 이동) */}
+          {validHoldLockers.length > 0
+            ? validHoldLockers.map((l) => (
                 <SnapHoldingCard
-                  key={`locker-${i}`}
+                  key={`locker-${l.id}`}
                   tag="락커"
-                  name={name}
-                  period={period}
+                  name={`${l.zone_name} ${l.number}번`}
+                  period={fmtPeriod(l.start_date, l.expires_at)}
                   onClick={() => setLockerOpen(true)}
                 />
-              );
-            })}
+              ))
+            : member.current_locker &&
+              splitTopLevel(member.current_locker).map((chunk, i) => {
+                const { name, period } = splitNamePeriod(chunk);
+                return (
+                  <SnapHoldingCard
+                    key={`locker-${i}`}
+                    tag="락커"
+                    name={name}
+                    period={period}
+                    onClick={() => setLockerOpen(true)}
+                  />
+                );
+              })}
           </div>
         </section>
       )}
