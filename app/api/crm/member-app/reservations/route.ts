@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("crm_reservations")
-    .select("id, pass_id, trainer_member_id, starts_at, ends_at, status, source, cancelled_reason, rejected_reason")
+    .select("id, pass_id, trainer_member_id, starts_at, ends_at, status, source, cancelled_reason, rejected_reason, reschedule_history")
     .eq("center_id", ctx.centerId)
     .eq("member_id", ctx.memberId);
 
@@ -99,6 +99,7 @@ export async function GET(request: Request) {
       sessionTotal: r.pass_id ? passTotal.get(r.pass_id) ?? null : null,
       cancelledReason: r.cancelled_reason,
       rejectedReason: r.rejected_reason,
+      rescheduleHistory: r.reschedule_history ?? [],
     })),
   });
 }

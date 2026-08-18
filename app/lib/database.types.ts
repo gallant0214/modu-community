@@ -3162,6 +3162,7 @@ export type Database = {
           rejected_reason: string | null
           booking_reason: string | null
           attendance_reminded_at: string | null
+          reschedule_history: Json
         }
         Insert: {
           id?: number
@@ -3186,6 +3187,7 @@ export type Database = {
           approved_by_uid?: string | null
           rejected_reason?: string | null
           booking_reason?: string | null
+          reschedule_history?: Json
         }
         Update: {
           id?: number
@@ -3210,6 +3212,7 @@ export type Database = {
           approved_by_uid?: string | null
           rejected_reason?: string | null
           booking_reason?: string | null
+          reschedule_history?: Json
         }
         Relationships: []
       }

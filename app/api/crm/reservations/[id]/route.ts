@@ -64,7 +64,7 @@ export async function PATCH(
   const { data: cur, error: curErr } = await supabase
     .from("crm_reservations")
     .select(
-      "id, center_id, pass_id, member_id, trainer_member_id, status, consumed, starts_at, ends_at"
+      "id, center_id, pass_id, member_id, trainer_member_id, status, consumed, starts_at, ends_at, reschedule_history"
     )
     .eq("id", reservationId)
     .eq("center_id", ctx.centerId)
@@ -269,6 +269,22 @@ export async function PATCH(
       patch.trainer_member_id = trainerId;
     }
 
+    // 변경 이력(사유 포함) — 예약 row 에 누적 저장(강사앱·회원앱·CRM 예약내역에서 표시).
+    const reschedReason = (body.reason || "").trim();
+    const prevHistory = Array.isArray((cur as { reschedule_history?: unknown }).reschedule_history)
+      ? ((cur as { reschedule_history?: unknown[] }).reschedule_history as unknown[])
+      : [];
+    const historyEntry = {
+      from_starts_at: cur.starts_at,
+      from_ends_at: cur.ends_at,
+      to_starts_at: patch.starts_at,
+      to_ends_at: patch.ends_at,
+      reason: reschedReason || null,
+      changed_at: new Date().toISOString(),
+      changed_by_uid: ctx.uid,
+    };
+    patch.reschedule_history = [...prevHistory, historyEntry];
+
     const { error: upErr } = await supabase
       .from("crm_reservations")
       .update(patch as never)
@@ -288,6 +304,7 @@ export async function PATCH(
       payload: {
         from: { starts_at: cur.starts_at, ends_at: cur.ends_at, trainer_member_id: cur.trainer_member_id },
         to: { starts_at: patch.starts_at, ends_at: patch.ends_at, trainer_member_id: patch.trainer_member_id ?? cur.trainer_member_id },
+        reason: reschedReason || null,
       } as never,
     });
 
@@ -296,8 +313,8 @@ export async function PATCH(
       await sendPushToMember(
         cur.member_id,
         "reservation_rescheduled",
-        "예약 시간이 변경됐어요",
-        `${formatKstSlot(String(patch.starts_at))} 로 수업 시간이 변경됐어요`,
+        "예약 시간이 변경되었습니다",
+        `${formatKstSlot(String(patch.starts_at))} 로 수업 시간이 변경되었습니다.`,
         { reservationId: String(reservationId) }
       ).catch(() => {});
     });
@@ -383,12 +400,21 @@ export async function PATCH(
   if (newStatus !== cur.status) {
     const slot = formatKstSlot(cur.starts_at);
     const reason = body.reason?.trim();
-    const noticeMap: Record<string, { title: string; body: string }> = {
-      booked: { title: "예약이 확정됐어요 ✅", body: `${slot} 수업 예약이 확정됐어요` },
-      attended: { title: "수업 완료 처리됐어요 ✅", body: `${slot} 수업이 출석(완료) 처리됐어요` },
-      cancelled: { title: "예약이 취소됐어요", body: `${slot} 수업 예약이 취소됐어요${reason ? ` · 사유: ${reason}` : ""}` },
-      noshow: { title: "노쇼 처리됐어요", body: `${slot} 수업이 노쇼(미출석)로 처리됐어요` },
-    };
+
+    // 서비스 세션(0원 수업) 여부 — 수강권 미연결이거나 결제금액 0 이면 서비스로 본다.
+    let isService = !cur.pass_id;
+    if (cur.pass_id) {
+      const { data: pr } = await supabase
+        .from("crm_passes")
+        .select("price_won")
+        .eq("id", cur.pass_id)
+        .maybeSingle();
+      isService = ((pr as { price_won?: number | null } | null)?.price_won ?? 0) <= 0;
+    }
+    // 유료 수강권의 마지막 수업(출석/노쇼로 잔여 0). 서비스 세션은 마일스톤 제외.
+    const isPaidLastSession =
+      (newStatus === "attended" || newStatus === "noshow") && remainingAfter === 0 && !isService;
+
     // 수업 완료·노쇼 알림 on/off (notify_class_result) — attended/noshow 만 적용
     let skipClassNotice = false;
     if (newStatus === "attended" || newStatus === "noshow") {
@@ -401,38 +427,45 @@ export async function PATCH(
         (mrow as { notify_class_result?: boolean } | null)?.notify_class_result === false;
     }
 
-    const n = noticeMap[newStatus];
-    if (n && !skipClassNotice) {
-      after(async () => {
-        await sendPushToMember(cur.member_id, `reservation_${newStatus}`, n.title, n.body, {
-          reservationId: String(reservationId),
-        }).catch(() => {});
-      });
-    }
-  }
-
-  // 출석으로 잔여 회차가 1/0 이 되면 잔여 안내 알림 (세션제 수강권만)
-  if (newStatus === "attended" && remainingAfter !== null) {
-    if (remainingAfter === 1) {
-      after(async () => {
-        await sendPushToMember(
-          cur.member_id,
-          "pass_last_session",
-          "수업 1회 남았어요",
-          "다음 수업이 1회 남았습니다.",
-          {}
-        ).catch(() => {});
-      });
-    } else if (remainingAfter === 0) {
+    if (isPaidLastSession) {
+      // 마지막 수업(출석/노쇼) → 완료 통합 안내. 마일스톤이라 토글과 무관하게 항상 발송.
       after(async () => {
         await sendPushToMember(
           cur.member_id,
           "pass_completed",
-          "수업을 모두 완료했어요 🎉",
-          "수업을 모두 진행하였습니다.",
-          {}
+          "수업 완료 처리됐어요 ✅",
+          "수강권의 수업을 모두 완료했어요 🎉",
+          { reservationId: String(reservationId) }
         ).catch(() => {});
       });
+    } else {
+      // 일반 상태 알림. 서비스 세션(0원)은 마지막이든 아니든 여기서 '수업 완료 처리됐어요 ✅' 로 통일.
+      const noticeMap: Record<string, { title: string; body: string }> = {
+        booked: { title: "예약이 확정됐어요 ✅", body: `${slot} 수업 예약이 확정됐어요` },
+        attended: { title: "수업 완료 처리됐어요 ✅", body: `${slot} 수업이 출석(완료) 처리됐어요` },
+        cancelled: { title: "예약이 취소됐어요", body: `${slot} 수업 예약이 취소됐어요${reason ? ` · 사유: ${reason}` : ""}` },
+        noshow: { title: "노쇼 처리됐어요", body: `${slot} 수업이 노쇼(미출석)로 처리됐어요` },
+      };
+      const n = noticeMap[newStatus];
+      if (n && !skipClassNotice) {
+        after(async () => {
+          await sendPushToMember(cur.member_id, `reservation_${newStatus}`, n.title, n.body, {
+            reservationId: String(reservationId),
+          }).catch(() => {});
+        });
+      }
+      // 유료 수강권 1회 남음 안내(출석 시). 서비스 세션 제외.
+      if (newStatus === "attended" && remainingAfter === 1 && !isService) {
+        after(async () => {
+          await sendPushToMember(
+            cur.member_id,
+            "pass_last_session",
+            "수업 1회 남았어요",
+            "다음 수업이 1회 남았습니다.",
+            {}
+          ).catch(() => {});
+        });
+      }
     }
   }
 

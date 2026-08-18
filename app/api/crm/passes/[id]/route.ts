@@ -64,7 +64,7 @@ export async function GET(
     supabase.from("crm_members").select("id, name, phone, face_image_thumb").eq("id", pass.member_id).maybeSingle(),
     supabase
       .from("crm_reservations")
-      .select("id, starts_at, ends_at, status, consumed, cancelled_reason, cancelled_at")
+      .select("id, starts_at, ends_at, status, consumed, cancelled_reason, cancelled_at, reschedule_history")
       .eq("pass_id", passId)
       .order("starts_at", { ascending: false })
       .limit(100),

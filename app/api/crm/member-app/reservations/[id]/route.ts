@@ -16,7 +16,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const { data: res } = await supabase
     .from("crm_reservations")
-    .select("id, pass_id, trainer_member_id, starts_at, ends_at, status, source, booking_reason, cancelled_reason, rejected_reason")
+    .select("id, pass_id, trainer_member_id, starts_at, ends_at, status, source, booking_reason, cancelled_reason, rejected_reason, reschedule_history")
     .eq("id", Number(id))
     .eq("center_id", ctx.centerId)
     .eq("member_id", ctx.memberId)
@@ -49,6 +49,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       bookingReason: res.booking_reason,
       cancelledReason: res.cancelled_reason,
       rejectedReason: res.rejected_reason,
+      rescheduleHistory: res.reschedule_history ?? [],
       cancelEnabled: settings?.cancel_enabled ?? true,
       cancelHours: settings?.cancel_hours ?? 6,
     },
