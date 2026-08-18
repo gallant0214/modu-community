@@ -4221,6 +4221,10 @@ function UsageIssueModal({
   const [lockerZone, setLockerZone] = useState<number | "">("");
   const [lockerId, setLockerId] = useState<number | "">("");
   const [lockerPassword, setLockerPassword] = useState("");
+  // 회수 전 기존 배정 락커(만료 포함) — 있으면 그 자리를 이어서 배정하고 비밀번호를 유지한다.
+  const [existingLocker, setExistingLocker] = useState<
+    { id: number; zone_id: number; zone_name: string; number: number; password: string | null } | null
+  >(null);
   const [showProducts, setShowProducts] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -4425,13 +4429,40 @@ function UsageIssueModal({
         setProducts(data.products ?? []);
       }
       if (type === "locker") {
-        const lr = await fetch("/api/crm/lockers/vacant", {
-          headers: { authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        if (lr.ok) {
-          const ld = await lr.json();
-          setLockers(ld.lockers ?? []);
+        const [lr, mr] = await Promise.all([
+          fetch("/api/crm/lockers/vacant", {
+            headers: { authorization: `Bearer ${token}` },
+            cache: "no-store",
+          }),
+          // 회수 전 기존 락커 조회(만료여도 state='assigned' 라 vacant 에는 안 잡힘)
+          fetch(`/api/crm/lockers/of-member?member_id=${memberId}`, {
+            headers: { authorization: `Bearer ${token}` },
+            cache: "no-store",
+          }),
+        ]);
+        const vacant: VacantLocker[] = lr.ok ? (await lr.json()).lockers ?? [] : [];
+        const mine = mr.ok ? (await mr.json()).lockers ?? [] : [];
+        const held = mine[0]
+          ? {
+              id: mine[0].id,
+              zone_id: mine[0].zone_id,
+              zone_name: mine[0].zone_name,
+              number: mine[0].number,
+              password: mine[0].password ?? null,
+            }
+          : null;
+        setExistingLocker(held);
+        if (held) {
+          // 기존 자리를 선택지에 포함(빈 자리 목록엔 없으므로 주입) + 자동 이어서 배정 + 비밀번호 유지
+          setLockers([
+            { id: held.id, zone_id: held.zone_id, zone_name: held.zone_name, number: held.number },
+            ...vacant.filter((v) => v.id !== held.id),
+          ]);
+          setLockerZone(held.zone_id);
+          setLockerId(held.id);
+          setLockerPassword(held.password ?? "");
+        } else {
+          setLockers(vacant);
         }
       }
     })();
@@ -4845,8 +4876,15 @@ function UsageIssueModal({
                     onChange={(e) => {
                       const id = e.target.value ? Number(e.target.value) : "";
                       setLockerId(id);
-                      // 자리를 선택하면 락커 비밀번호를 자동 생성(비어 있을 때만 — 직접 입력값은 유지)
-                      if (id && !lockerPassword) setLockerPassword(genLockerPassword());
+                      if (!id) return;
+                      const carried = existingLocker ? existingLocker.password ?? "" : "";
+                      if (existingLocker && id === existingLocker.id) {
+                        // 회수 전 기존 자리 이어서 → 기존 비밀번호 유지
+                        setLockerPassword(existingLocker.password ?? "");
+                      } else if (!lockerPassword || lockerPassword === carried) {
+                        // 새(빈) 자리 → 자동 생성(직접 입력값은 유지)
+                        setLockerPassword(genLockerPassword());
+                      }
                     }}
                   >
                     <option value="">
@@ -4856,16 +4894,22 @@ function UsageIssueModal({
                       .filter((l) => l.zone_id === lockerZone)
                       .map((l) => (
                         <option key={l.id} value={l.id}>
-                          {l.number}번
+                          {l.number}번{existingLocker && l.id === existingLocker.id ? " (기존·이어서)" : ""}
                         </option>
                       ))}
                   </select>
                 </CrmField>
               </div>
             )}
-            <p className="text-[11.5px] text-[#A89B80] -mt-1">
-              구역·자리를 지금 지정하지 않으면 결제만 먼저 진행하고, 나중에 <strong>락커 관리</strong> 에서 배정할 수 있어요.
-            </p>
+            {existingLocker ? (
+              <p className="text-[11.5px] text-[#8B6BB1] dark:text-purple-300 -mt-1">
+                회수 전 <strong>{existingLocker.zone_name} {existingLocker.number}번</strong> 락커가 있어 이어서 배정됩니다(비밀번호 유지). 새 자리를 원하면 변경하세요.
+              </p>
+            ) : (
+              <p className="text-[11.5px] text-[#A89B80] -mt-1">
+                구역·자리를 지금 지정하지 않으면 결제만 먼저 진행하고, 나중에 <strong>락커 관리</strong> 에서 배정할 수 있어요.
+              </p>
+            )}
             <CrmField label="락커 비밀번호">
               <div className="flex gap-1.5">
                 <input
