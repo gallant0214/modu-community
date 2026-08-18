@@ -53,7 +53,11 @@ type Stage = "init" | "models" | "faces" | "ready" | "error";
  * @param fill true 이면 부모 flex 컨테이너를 꽉 채우도록 내부 max-width 를 해제.
  * '번호+얼굴' 모드처럼 카메라를 다른 UI와 나란히 놓을 때 사용.
  */
-export default function FaceAttendance({ fill = false }: { fill?: boolean } = {}) {
+export default function FaceAttendance({
+  fill = false,
+  kioskToken,
+}: { fill?: boolean; kioskToken?: string } = {}) {
+  const kiosk = !!kioskToken;
   const { getIdToken } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -76,7 +80,9 @@ export default function FaceAttendance({ fill = false }: { fill?: boolean } = {}
   const [lastHit, setLastHit] = useState<{ name: string; at: number } | null>(null);
 
   // 임계값(정밀도)은 터치출석 설정에서 관리 — 여기서는 조회만.
+  // 공개(kiosk) 모드는 로그인 없이 접근하므로 faces 응답에서 threshold 를 받는다(여기선 스킵).
   useEffect(() => {
+    if (kiosk) return;
     (async () => {
       try {
         const token = await getIdToken();
@@ -99,12 +105,20 @@ export default function FaceAttendance({ fill = false }: { fill?: boolean } = {}
   const checkin = useCallback(
     async (memberId: number, name: string) => {
       try {
-        const token = await getIdToken();
-        const res = await fetch("/api/crm/attendances/check-in", {
-          method: "POST",
-          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-          body: JSON.stringify({ member_id: memberId, source: "touch_face" }),
-        });
+        const res = kiosk
+          ? await fetch(`/api/touch/${kioskToken}/check-in`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ member_id: memberId, source: "touch_face" }),
+            })
+          : await fetch("/api/crm/attendances/check-in", {
+              method: "POST",
+              headers: {
+                authorization: `Bearer ${await getIdToken()}`,
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({ member_id: memberId, source: "touch_face" }),
+            });
         const data = await res.json();
         if (res.ok) {
           const who = data.member?.name ?? name;
@@ -262,13 +276,20 @@ export default function FaceAttendance({ fill = false }: { fill?: boolean } = {}
         // 3) 등록 얼굴 → 디스크립터
         setStage("faces");
         setStatus("등록된 얼굴 불러오는 중…");
-        const token = await getIdToken();
-        const res = await fetch("/api/crm/members/faces", {
-          headers: { authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
+        const token = kiosk ? "" : await getIdToken();
+        const res = kiosk
+          ? await fetch(`/api/touch/${kioskToken}/faces`, { cache: "no-store" })
+          : await fetch("/api/crm/members/faces", {
+              headers: { authorization: `Bearer ${token}` },
+              cache: "no-store",
+            });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || "등록 얼굴 조회 실패");
+        // 공개 모드: 정밀도 임계값을 faces 응답에서 반영
+        if (kiosk) {
+          const raw = Number(data?.face_threshold);
+          if (Number.isFinite(raw) && raw >= 0.3 && raw <= 0.7) thresholdRef.current = raw;
+        }
         const faces: FaceRow[] = (data.faces ?? []).filter(
           (f: FaceRow) => (Array.isArray(f.face_descriptor) && f.face_descriptor.length > 0) || f.face_image_data
         );
@@ -301,12 +322,14 @@ export default function FaceAttendance({ fill = false }: { fill?: boolean } = {}
               if (det?.descriptor) {
                 built.push({ id: f.id, descriptor: det.descriptor });
                 nameMapRef.current.set(f.id, f.name);
-                // 백필(실패해도 무시 — 매칭에는 영향 없음)
-                fetch("/api/crm/members/faces", {
-                  method: "POST",
-                  headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-                  body: JSON.stringify({ member_id: f.id, descriptor: Array.from(det.descriptor as Float32Array) }),
-                }).catch(() => {});
+                // 백필(실패해도 무시 — 매칭에는 영향 없음). 공개 모드는 인증이 없어 스킵.
+                if (!kiosk) {
+                  fetch("/api/crm/members/faces", {
+                    method: "POST",
+                    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+                    body: JSON.stringify({ member_id: f.id, descriptor: Array.from(det.descriptor as Float32Array) }),
+                  }).catch(() => {});
+                }
               } else {
                 skipped++;
               }

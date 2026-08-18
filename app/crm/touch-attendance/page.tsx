@@ -59,7 +59,8 @@ export default function TouchAttendancePage() {
 
 /**
  * 터치출석 코어. kioskToken 이 있으면 로그인 없이 공개 링크(/touch/[token]) 모드로
- * 동작 — 번호 출석만, 공개 엔드포인트(/api/touch/[token]/*) 사용, 얼굴/등록 없음.
+ * 동작 — 번호/얼굴/번호+얼굴 3개 모드 모두 공개 엔드포인트(/api/touch/[token]/*) 사용.
+ * (공개 모드는 얼굴 '등록'은 없고 인식만; 번호 조회 결과의 얼굴 미등록자는 바로 체크인)
  */
 export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   const kiosk = !!kioskToken;
@@ -330,33 +331,31 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         </p>
       </header>
 
-      {/* 번호 / 얼굴 / 번호+얼굴 인식 방식 전환 (공개 링크는 번호 전용이라 숨김) */}
-      {!kiosk && (
-        <div className="mb-6 inline-flex rounded-xl border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden bg-white dark:bg-zinc-900">
-          {(
-            [
-              { k: "number", label: "번호 출석" },
-              { k: "face", label: "얼굴 출석" },
-              { k: "both", label: "번호+얼굴" },
-            ] as const
-          ).map(({ k, label }) => (
-            <button
-              key={k}
-              onClick={() => setRecogMode(k)}
-              className={`px-5 py-2.5 text-[14px] font-semibold ${
-                recogMode === k
-                  ? "bg-[#6B7B3A] text-white"
-                  : "text-[#6B5D47] dark:text-zinc-300"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* 번호 / 얼굴 / 번호+얼굴 인식 방식 전환 (공개 링크에서도 3개 모두 사용) */}
+      <div className="mb-6 inline-flex rounded-xl border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden bg-white dark:bg-zinc-900">
+        {(
+          [
+            { k: "number", label: "번호 출석" },
+            { k: "face", label: "얼굴 출석" },
+            { k: "both", label: "번호+얼굴" },
+          ] as const
+        ).map(({ k, label }) => (
+          <button
+            key={k}
+            onClick={() => setRecogMode(k)}
+            className={`px-5 py-2.5 text-[14px] font-semibold ${
+              recogMode === k
+                ? "bg-[#6B7B3A] text-white"
+                : "text-[#6B5D47] dark:text-zinc-300"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       {recogMode === "face" ? (
-        <FaceAttendance />
+        <FaceAttendance kioskToken={kioskToken} />
       ) : (
         <>
       {/* 결과 화면 (에러는 상단 토스트, 성공은 전체 화면 카드) */}
@@ -425,7 +424,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         landscape ? (
           <div className="w-full max-w-[98vw] flex flex-row items-stretch gap-[clamp(12px,2.5vmin,32px)]">
             <div className="flex-1 min-w-0 flex items-center justify-center">
-              <FaceAttendance fill />
+              <FaceAttendance fill kioskToken={kioskToken} />
             </div>
             <div className="flex-1 min-w-0 flex flex-col justify-center gap-[clamp(12px,2.5vmin,28px)]">
               {display}
@@ -436,7 +435,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         ) : (
           <div className="w-full max-w-[96vw] space-y-6 flex flex-col items-center">
             <div className="w-full flex items-center justify-center">
-              <FaceAttendance fill />
+              <FaceAttendance fill kioskToken={kioskToken} />
             </div>
             <div className="w-full pt-2 border-t border-[#E8E0D0] dark:border-zinc-700">
               <div className="mb-[clamp(12px,2vmin,24px)] mt-4">{display}</div>

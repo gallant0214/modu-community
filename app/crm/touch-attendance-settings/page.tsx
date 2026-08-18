@@ -468,7 +468,7 @@ function KioskLinkSection() {
   return (
     <Section title="공개 터치출석 링크 (로그인 없이 접속)">
       <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-        이 링크로 열면 로그인 없이 이 센터의 터치출석(출석번호 방식) 화면이 열려요.
+        이 링크로 열면 로그인 없이 이 센터의 터치출석 화면(번호·얼굴·번호+얼굴)이 열려요.
         태블릿·키오스크를 그 링크로 열어두면 회원이 바로 출석할 수 있어요.
         <br />
         <span className="text-[#B47B2A]">

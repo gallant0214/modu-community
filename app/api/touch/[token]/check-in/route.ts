@@ -20,13 +20,15 @@ export async function POST(
     return NextResponse.json({ error: "유효하지 않은 링크예요" }, { status: 404 });
   }
 
-  let body: { member_id?: number };
+  let body: { member_id?: number; source?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
   const memberId = Number(body.member_id) || 0;
+  // 공개 링크는 번호/얼굴만 허용(그 외 값은 번호로 처리)
+  const source = body.source === "touch_face" ? "touch_face" : "touch_number";
   if (!memberId) {
     return NextResponse.json({ error: "회원을 선택해 주세요" }, { status: 400 });
   }
@@ -43,7 +45,7 @@ export async function POST(
     return NextResponse.json({ error: "회원을 찾을 수 없습니다" }, { status: 404 });
   }
 
-  const result = await runCheckIn(center.centerId, member, "touch_number");
+  const result = await runCheckIn(center.centerId, member, source);
   if ("error" in result) {
     return NextResponse.json({ error: result.error, detail: result.detail }, { status: result.status });
   }
