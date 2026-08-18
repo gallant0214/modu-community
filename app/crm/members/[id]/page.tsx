@@ -1110,6 +1110,11 @@ function fmtPaidAt(iso: string | null | undefined): string {
   return `${y}.${mo}.${da} ${hh}:${mi}`;
 }
 
+// 락커 비밀번호 자동 생성 — 4자리 숫자(앞자리 0 허용).
+function genLockerPassword(): string {
+  return String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+}
+
 // 결제 상태 한글 라벨. paid/completed 는 정상 완료라 별도 표시하지 않음.
 const PAYMENT_STATUS_KO: Record<string, string> = {
   partial: "부분 결제",
@@ -4837,7 +4842,12 @@ function UsageIssueModal({
                     className={crmInputClass}
                     value={lockerId}
                     disabled={lockerZone === ""}
-                    onChange={(e) => setLockerId(e.target.value ? Number(e.target.value) : "")}
+                    onChange={(e) => {
+                      const id = e.target.value ? Number(e.target.value) : "";
+                      setLockerId(id);
+                      // 자리를 선택하면 락커 비밀번호를 자동 생성(비어 있을 때만 — 직접 입력값은 유지)
+                      if (id && !lockerPassword) setLockerPassword(genLockerPassword());
+                    }}
                   >
                     <option value="">
                       {lockerZone === "" ? "배정 나중에" : "자리 선택"}
@@ -4857,12 +4867,21 @@ function UsageIssueModal({
               구역·자리를 지금 지정하지 않으면 결제만 먼저 진행하고, 나중에 <strong>락커 관리</strong> 에서 배정할 수 있어요.
             </p>
             <CrmField label="락커 비밀번호">
-              <input
-                className={crmInputClass}
-                value={lockerPassword}
-                onChange={(e) => setLockerPassword(e.target.value)}
-                placeholder="선택 입력"
-              />
+              <div className="flex gap-1.5">
+                <input
+                  className={crmInputClass}
+                  value={lockerPassword}
+                  onChange={(e) => setLockerPassword(e.target.value)}
+                  placeholder="자리 선택 시 자동 생성"
+                />
+                <button
+                  type="button"
+                  onClick={() => setLockerPassword(genLockerPassword())}
+                  className="shrink-0 px-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#6B5D47] dark:text-zinc-300 hover:border-[#8B6BB1]/50"
+                >
+                  재생성
+                </button>
+              </div>
             </CrmField>
           </>
         )}
