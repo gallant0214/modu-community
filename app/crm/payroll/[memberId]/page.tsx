@@ -785,7 +785,7 @@ function TabBtn({
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-2 -mb-px text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap
+      className={`px-3.5 py-2 -mb-px text-[15px] font-bold border-b-2 transition-colors whitespace-nowrap
         ${active
           ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A]"
           : "border-transparent text-[#8C8270] dark:text-zinc-500 hover:text-[#3A342A] dark:hover:text-zinc-300"
