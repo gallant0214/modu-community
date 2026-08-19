@@ -263,7 +263,8 @@ export default function CrmMemberDetailPage() {
   // 현재 보유(상단 요약) — 실제 유효 레코드가 있으면 그걸로 (편집 가능), 없으면 POS 스냅샷 fallback
   const staffName = (id: number | null) =>
     id ? staffList.find((s) => s.id === id)?.display_name ?? null : null;
-  const holdToday = new Date().toISOString().slice(0, 10);
+  // 오늘(KST) 기준. UTC 로 하면 한국 자정~오전9시 사이 만료 판정이 하루 어긋난다.
+  const holdToday = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const validHoldMs = holdMs.filter((m) => m.status === "valid" && m.expires_at >= holdToday);
   const validHoldRs = holdRs.filter((r) => r.status === "valid" && r.expires_at >= holdToday);
   // 배정된 락커 중 유효기간이 남은 것 (만료 락커는 현재 보유에 제외 — 회원권·대여권과 동일 기준)
