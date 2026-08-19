@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { fetchSales } from "@/app/lib/crm-sales";
+import { perSessionFee } from "@/app/lib/crm-commission";
 
 export const dynamic = "force-dynamic";
 
@@ -59,20 +60,37 @@ export async function GET(request: Request) {
   const totalExVat = Math.round(totalRevenue / (1 + VAT_RATE));
   const vatAmount = totalRevenue - totalExVat;
 
-  // 강사별 기간 매출 (수업료 정산 계산용) — 강사 귀속은 crm_passes 에만 있어 유지
-  const { data: passRowsData } = await supabase
-    .from("crm_passes")
-    .select("price_won, trainer_member_id")
+  // 강사별 수업료 정산 기준 = "진행(출석)한 수업 소진분" (판매가 아니라 진행 기준).
+  //   회당 수업료 = perSessionFee(pass) = 부가세제외가 ÷ 총횟수
+  //   강사 매출 = Σ(기간 내 출석 예약의 회당 수업료)
+  const startUtcS = new Date(`${startDate}T00:00:00+09:00`).toISOString();
+  const endUtcS = new Date(`${nextMonth}T00:00:00+09:00`).toISOString();
+  const { data: attRes } = await supabase
+    .from("crm_reservations")
+    .select("pass_id, trainer_member_id")
     .eq("center_id", ctx.centerId)
-    .neq("status", "deleted")
-    .gte("issued_at", startDate)
-    .lt("issued_at", nextMonth);
+    .eq("status", "attended")
+    .gte("starts_at", startUtcS)
+    .lt("starts_at", endUtcS);
+  const attPassIds = Array.from(
+    new Set((attRes ?? []).map((r) => r.pass_id).filter((v): v is number => !!v))
+  );
+  const { data: attPasses } = attPassIds.length
+    ? await supabase
+        .from("crm_passes")
+        .select("id, price_won, vat_included, total_sessions")
+        .eq("center_id", ctx.centerId)
+        .in("id", attPassIds)
+    : { data: [] };
+  const attPassMap = new Map((attPasses ?? []).map((p) => [p.id, p]));
   const revenueByTrainer = new Map<number, number>();
-  for (const p of (passRowsData ?? []) as { price_won: number | null; trainer_member_id: number | null }[]) {
-    if (!p.trainer_member_id) continue;
+  for (const r of attRes ?? []) {
+    if (!r.trainer_member_id || !r.pass_id) continue;
+    const p = attPassMap.get(r.pass_id);
+    if (!p) continue;
     revenueByTrainer.set(
-      p.trainer_member_id,
-      (revenueByTrainer.get(p.trainer_member_id) ?? 0) + (p.price_won ?? 0)
+      r.trainer_member_id,
+      (revenueByTrainer.get(r.trainer_member_id) ?? 0) + perSessionFee(p)
     );
   }
 
