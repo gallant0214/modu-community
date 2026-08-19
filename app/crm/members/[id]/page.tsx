@@ -441,9 +441,28 @@ export default function CrmMemberDetailPage() {
         <MemberWorkoutLogsSection memberId={member.id} canEdit={canEditUsage} />
       ) : (
       <>
-      {hasHoldings && (
+      {(hasHoldings || !readOnly) && (
         <section className="mb-4">
-          <div className="mb-2 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400">현재 보유</div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400">현재 보유</div>
+            {!readOnly && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setUsageOpen(true)}
+                  className="px-3 py-1.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/5"
+                >
+                  + 회원권 발급
+                </button>
+                <button
+                  onClick={() => setPassOpen(true)}
+                  className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]"
+                >
+                  + 수강권 발급
+                </button>
+              </div>
+            )}
+          </div>
+          {hasHoldings ? (
           <div className="flex flex-wrap gap-1.5 px-3.5 py-3 rounded-xl border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
           {/* 회원권: 실제 레코드 우선(편집 가능), 없으면 스냅샷 */}
           {validHoldMs.length > 0
@@ -506,6 +525,11 @@ export default function CrmMemberDetailPage() {
                 );
               })}
           </div>
+          ) : (
+            <div className="px-3.5 py-3 rounded-xl border border-dashed border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#8C8270] dark:text-zinc-500">
+              보유 중인 상품이 없어요. 오른쪽 발급 버튼으로 추가해 주세요.
+            </div>
+          )}
         </section>
       )}
 
@@ -570,22 +594,6 @@ export default function CrmMemberDetailPage() {
           <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
             수강권 ({passes.length})
           </h2>
-          {!readOnly && (
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setUsageOpen(true)}
-                className="px-3 py-1.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/5"
-              >
-                + 회원권 발급
-              </button>
-              <button
-                onClick={() => setPassOpen(true)}
-                className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]"
-              >
-                + 수강권 발급
-              </button>
-            </div>
-          )}
         </div>
         {passes.length === 0 ? (
           member.current_pass ? (
