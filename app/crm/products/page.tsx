@@ -54,6 +54,8 @@ interface Product {
   capacity: number;
   session_minutes?: number;
   status?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface CustomType {
@@ -69,6 +71,7 @@ export default function CrmProductsPage() {
   const [type, setType] = useState<string>("");
   const [query, setQuery] = useState("");
   const [metricFilter, setMetricFilter] = useState<"all" | "period" | "lesson">("all");
+  const [sortBy, setSortBy] = useState<"created" | "updated" | "name">("created");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -171,13 +174,21 @@ export default function CrmProductsPage() {
   const periodCount = list.filter((p) => p.billing_mode === "period").length;
   const lessonCount = list.filter((p) => p.type === "group" || p.type === "personal").length;
   // 지표 카드 클릭 필터 (서버 필터 결과 list 위에 클라이언트 세부 필터)
-  const shown = list.filter((p) =>
-    metricFilter === "period"
-      ? p.billing_mode === "period"
-      : metricFilter === "lesson"
-      ? p.type === "group" || p.type === "personal"
-      : true
-  );
+  const shown = list
+    .filter((p) =>
+      metricFilter === "period"
+        ? p.billing_mode === "period"
+        : metricFilter === "lesson"
+        ? p.type === "group" || p.type === "personal"
+        : true
+    )
+    // 정렬: 이름순(가나다 오름) / 생성순·수정순(최신 먼저)
+    .slice()
+    .sort((a, b) => {
+      if (sortBy === "name") return a.name.localeCompare(b.name, "ko");
+      const key = sortBy === "updated" ? "updated_at" : "created_at";
+      return String(b[key] ?? "").localeCompare(String(a[key] ?? ""));
+    });
 
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-7xl mx-auto">
@@ -259,6 +270,27 @@ export default function CrmProductsPage() {
                   }`}
               >
                 {t ? typeLabelOf(t) : "전체"}
+              </button>
+            ))}
+          </div>
+          {/* 정렬 순서 */}
+          <div className="flex items-center gap-1.5 pt-0.5">
+            <span className="text-[11.5px] text-[#A89B80] mr-0.5">정렬</span>
+            {([
+              { key: "name", label: "이름순" },
+              { key: "created", label: "생성순" },
+              { key: "updated", label: "수정순" },
+            ] as const).map((s) => (
+              <button
+                key={s.key}
+                onClick={() => setSortBy(s.key)}
+                className={`px-2.5 py-1.5 rounded-lg text-[12px] font-medium border whitespace-nowrap transition-colors
+                  ${sortBy === s.key
+                    ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
+                    : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F6F1E8] dark:hover:bg-zinc-800"
+                  }`}
+              >
+                {s.label}
               </button>
             ))}
           </div>
