@@ -345,7 +345,7 @@ export default function CrmMembersPage() {
         } catch {
           /* ignore */
         }
-        window.history.replaceState(window.history.state, "", "/crm/members");
+        window.history.replaceState(window.history.state, "", "/crm/members?page=1");
         // 최상단부터 보이도록 + 스크롤 복원 억제
         memoScroll = 0;
         scrollRestoredRef.current = true;
@@ -369,18 +369,35 @@ export default function CrmMembersPage() {
   const setPage = useCallback((p: number) => {
     memoPage = p;
     setPageState(p);
-    // URL 에 page 동기화 (Next 재렌더 없이 history 만 갱신 → 뒤로가기 시 복원)
+    // URL 에 page 동기화 (Next 재렌더 없이 history 만 갱신 → 뒤로가기 시 복원).
+    // 1페이지도 ?page=1 을 남겨 히스토리 항목이 페이지를 명확히 담게 한다.
+    // (예전엔 1페이지에서 param 을 지워 뒤로가기 시 stale memoPage 로 복원되는 버그)
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      if (p > 1) params.set("page", String(p));
-      else params.delete("page");
-      const qs = params.toString();
+      params.set("page", String(p));
       window.history.replaceState(
         window.history.state,
         "",
-        qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+        `${window.location.pathname}?${params}`
       );
     }
+  }, []);
+
+  // 최초 진입 시 현재 페이지를 URL 에 반영 → 회원 클릭 후 뒤로가기 시 그 페이지로 정확히 복원.
+  const pageUrlSyncedRef = useRef(false);
+  useEffect(() => {
+    if (pageUrlSyncedRef.current || typeof window === "undefined") return;
+    pageUrlSyncedRef.current = true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("page") !== String(page)) {
+      params.set("page", String(page));
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}?${params}`
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 스크롤 위치: 스크롤 시 memoScroll 기록, 로드 완료 후 복원
