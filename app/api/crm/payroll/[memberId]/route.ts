@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { perSessionFee } from "@/app/lib/crm-commission";
 
 export const dynamic = "force-dynamic";
 
@@ -162,17 +163,13 @@ export async function GET(
     return null;
   };
 
+  // breakdown = 판매(발급) 매출 실적 (매출 탭 표시용). 지급액 산정과는 별개.
   const breakdown = { new: 0, renewal: 0, trial: 0, service: 0, total: 0 };
   const payout = { new: 0, renewal: 0, trial: 0, total: 0 };
-  let sessionCount = 0;
-  // 커미션 기준 = 부가세 제외 수업료 합. vat_included 면 price/1.1, 아니면 그대로.
-  let revenueExVat = 0;
 
   for (const p of passes ?? []) {
     const price = p.price_won ?? 0;
     breakdown.total += price;
-    revenueExVat += (p as { vat_included?: boolean }).vat_included ? Math.round(price / 1.1) : price;
-    sessionCount += p.total_sessions ?? 0;
     if (p.issue_type === "new") breakdown.new += p.price_won ?? 0;
     else if (p.issue_type === "renewal") breakdown.renewal += p.price_won ?? 0;
     else if (p.issue_type === "trial") breakdown.trial += p.price_won ?? 0;
@@ -207,8 +204,80 @@ export async function GET(
   const commissionTiers: Tier[] = Array.isArray(trainer?.commission_tiers)
     ? (trainer!.commission_tiers as Tier[])
     : [];
-  // 커미션 % 는 부가세 제외 수업료 기준 (구간 판정·보너스 매출 조건도 동일 기준)
-  const revenue = revenueExVat;
+  // ── 지급액 근거 = "진행(출석) 수업 소진분" ──────────────────────────
+  // 판매 시점이 아니라 수업을 진행할 때마다 커미션이 쌓인다.
+  //   진행 수업료(회당) = perSessionFee(pass) = 부가세제외가 ÷ 총횟수
+  //   revenue(커미션 기준) = Σ(기간 내 출석 예약의 회당 수업료)
+  // 기간: startDate~nextMonth (KST) → UTC 변환해 starts_at 으로 조회.
+  // 진행 수업 = 출석(attended) + 노쇼(noshow). 둘 다 회차가 소진되는 '수업 진행'으로 처리.
+  const startUtc = new Date(`${startDate}T00:00:00+09:00`).toISOString();
+  const endUtc = new Date(`${nextMonth}T00:00:00+09:00`).toISOString();
+  const { data: attendedRes } = await supabase
+    .from("crm_reservations")
+    .select("id, pass_id, member_id, status, starts_at")
+    .eq("center_id", ctx.centerId)
+    .eq("trainer_member_id", trainerId)
+    .in("status", ["attended", "noshow"])
+    .gte("starts_at", startUtc)
+    .lt("starts_at", endUtc)
+    .order("starts_at", { ascending: true });
+  const attendedPassIds = Array.from(
+    new Set((attendedRes ?? []).map((r) => r.pass_id).filter((v): v is number => !!v))
+  );
+  const attendedMemberIds = Array.from(
+    new Set((attendedRes ?? []).map((r) => (r as { member_id?: number }).member_id).filter((v): v is number => !!v))
+  );
+  const [{ data: sessionPasses }, { data: sessionMembers }] = await Promise.all([
+    attendedPassIds.length
+      ? supabase
+          .from("crm_passes")
+          .select("id, price_won, vat_included, total_sessions, lesson_kind")
+          .eq("center_id", ctx.centerId)
+          .in("id", attendedPassIds)
+      : Promise.resolve({ data: [] as { id: number; price_won: number | null; vat_included: boolean | null; total_sessions: number | null; lesson_kind: string | null }[] }),
+    attendedMemberIds.length
+      ? supabase.from("crm_members").select("id, name, phone").eq("center_id", ctx.centerId).in("id", attendedMemberIds)
+      : Promise.resolve({ data: [] as { id: number; name: string; phone: string | null }[] }),
+  ]);
+  const sessionPassMap = new Map((sessionPasses ?? []).map((p) => [p.id, p]));
+  const sessionMemberMap = new Map(
+    ((sessionMembers ?? []) as { id: number; name: string; phone: string | null }[]).map((m) => [m.id, m])
+  );
+  // 회당 수업료(부가세 제외)까지 라인별로 수집 → 아래에서 커미션율 적용해 수업료 산출
+  const rawSessionLines: {
+    id: number;
+    starts_at: string;
+    member_id: number | null;
+    member_name: string;
+    member_phone: string | null;
+    lesson_kind: string | null;
+    status: string;
+    per_session_won: number;
+  }[] = [];
+  let sessionRevenue = 0;
+  let sessionCount = 0;
+  for (const r of attendedRes ?? []) {
+    const rr = r as { id: number; pass_id: number | null; member_id: number | null; status: string; starts_at: string };
+    const p = rr.pass_id ? sessionPassMap.get(rr.pass_id) : null;
+    if (!p) continue;
+    const per = perSessionFee(p);
+    sessionRevenue += per;
+    sessionCount += 1;
+    const mem = rr.member_id ? sessionMemberMap.get(rr.member_id) : null;
+    rawSessionLines.push({
+      id: rr.id,
+      starts_at: rr.starts_at,
+      member_id: rr.member_id,
+      member_name: mem?.name ?? "—",
+      member_phone: mem?.phone ?? null,
+      lesson_kind: p.lesson_kind ?? null,
+      status: rr.status,
+      per_session_won: per,
+    });
+  }
+
+  // 커미션 % 는 진행 수업료(부가세 제외) 합 기준
+  const revenue = sessionRevenue;
   let effectiveRate = commissionRate;
   if (commissionType === "tiered") {
     const sorted = [...commissionTiers].sort(
@@ -219,6 +288,13 @@ export async function GET(
   }
   const commissionPayout = Math.round((revenue * effectiveRate) / 100);
   const baseSalary = Math.max(0, Number(trainer?.base_salary ?? 0));
+
+  // 라인별 수업료 = 회당 수업료 × 유효 커미션율. (합계 ≈ commissionPayout)
+  const sessionLines = rawSessionLines.map((l) => ({
+    ...l,
+    fee_won: Math.round((l.per_session_won * effectiveRate) / 100),
+  }));
+  const sessionFeeTotal = sessionLines.reduce((s, l) => s + l.fee_won, 0);
 
   // 커미션(성과급): 조건 달성 시 보너스 가산.
   // metric: revenue=월매출 / sessions=이번달 진행세션. reward_type: won=정액 / percent=수업료의 %
@@ -284,6 +360,9 @@ export async function GET(
       payout: commissionPayout,
     },
     base_salary: baseSalary,
+    // 진행 수업(출석·노쇼) 라인별 수업료 + 합계 (수업 내역 탭)
+    session_lines: sessionLines,
+    session_fee_total: sessionFeeTotal,
     bonuses,
     achieved_bonuses: achievedBonuses,
     bonus_payout: bonusPayout,

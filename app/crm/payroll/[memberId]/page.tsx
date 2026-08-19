@@ -178,7 +178,7 @@ function RevenueTab({ memberId }: { memberId: number }) {
       <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5 mb-4">
         <div className="flex flex-wrap items-baseline justify-between gap-3 mb-3">
           <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
-            전체 매출 <span className="text-[11.5px] text-[#A89B80] font-normal">(매출 적용 금액)</span>
+            전체 매출 <span className="text-[11.5px] text-[#A89B80] font-normal">(판매 실적)</span>
           </h2>
           <div className="flex items-center gap-2">
             <span className="text-[12px] text-[#A89B80]">조회 기간</span>
@@ -218,7 +218,7 @@ function RevenueTab({ memberId }: { memberId: number }) {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <RevenueKpi label="매출 적용 금액" value={data?.breakdown.total ?? 0} />
+          <RevenueKpi label="판매 매출" value={data?.breakdown.total ?? 0} />
           <RevenueKpi label="잔여 미수금" value={0} muted />
         </div>
       </section>
@@ -261,7 +261,7 @@ function RevenueTab({ memberId }: { memberId: number }) {
         )}
 
         <p className="mt-3 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
-          고정 {formatWon(data?.base_salary ?? 0)}원 + 수업료(부가세 제외 {formatWon(data?.commission.base ?? data?.breakdown.total ?? 0)}원 × {data?.commission.effective_rate ?? 0}%)
+          고정 {formatWon(data?.base_salary ?? 0)}원 + 수업료(진행 수업료 {formatWon(data?.commission.base ?? 0)}원 × {data?.commission.effective_rate ?? 0}%)
           {!!(data?.bonus_payout) && data.bonus_payout > 0 && ` + 커미션 ${formatWon(data.bonus_payout)}원`}
           {!!(data?.cash_pay) && data.cash_pay > 0 && ` + 현금 ${formatWon(data.cash_pay)}원`}
           {" = "}
@@ -585,9 +585,9 @@ interface LessonRow {
   member_id: number;
   member_name: string;
   member_phone: string | null;
-  trainer_member_id: number;
-  trainer_name: string;
   lesson_kind: string | null;
+  per_session_won?: number;
+  fee_won?: number;
 }
 
 // 기간 → KST 로컬 기준 from/to (YYYY-MM-DD)
@@ -633,6 +633,7 @@ function SessionsTab({ memberId }: { memberId: number }) {
   const [customTo, setCustomTo] = useState(() => periodRange("this_month").to);
   const [rows, setRows] = useState<LessonRow[]>([]);
   const [summary, setSummary] = useState<{ total: number; attended: number; noshow: number } | null>(null);
+  const [feeTotal, setFeeTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -642,15 +643,21 @@ function SessionsTab({ memberId }: { memberId: number }) {
       if (!token) return;
       const { from, to } = period === "custom" ? { from: customFrom, to: customTo } : periodRange(period);
       if (!from || !to) return;
-      const params = new URLSearchParams({ from, to, trainer_id: String(memberId) });
-      const res = await fetch(`/api/crm/stats/lessons?${params}`, {
+      // 급여 라우트의 진행 수업(출석·노쇼) 라인 = 회원별 회당 수업료 포함. 합계=이달 지급 수업료.
+      const res = await fetch(`/api/crm/payroll/${memberId}?from=${from}&to=${to}`, {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
       if (!res.ok) return;
       const d = await res.json();
-      setRows(d.lessons ?? []);
-      setSummary(d.summary ?? null);
+      const lines: LessonRow[] = d.session_lines ?? [];
+      setRows(lines);
+      setFeeTotal(Number(d.session_fee_total) || 0);
+      setSummary({
+        total: lines.length,
+        attended: lines.filter((l) => l.status === "attended").length,
+        noshow: lines.filter((l) => l.status === "noshow").length,
+      });
     } finally {
       setLoading(false);
     }
@@ -730,16 +737,17 @@ function SessionsTab({ memberId }: { memberId: number }) {
               <Th>연락처</Th>
               <Th>수업</Th>
               <Th>상태</Th>
+              <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">수업료</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-3 py-12 text-center text-[13px] text-[#8C8270]">불러오는 중…</td>
+                <td colSpan={7} className="px-3 py-12 text-center text-[13px] text-[#8C8270]">불러오는 중…</td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-12 text-center">
+                <td colSpan={7} className="px-3 py-12 text-center">
                   <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">데이터가 없어요</div>
                   <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
                     해당 기간에 진행된 수업이 없어요.
@@ -761,10 +769,25 @@ function SessionsTab({ memberId }: { memberId: number }) {
                       {statusLabel(r.status)}
                     </span>
                   </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums font-semibold text-[#2A251D] dark:text-zinc-100">
+                    {formatWon(r.fee_won ?? 0)}원
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
+          {!loading && rows.length > 0 && (
+            <tfoot>
+              <tr className="border-t-2 border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-900/80">
+                <td colSpan={6} className="px-3 py-3 text-right font-bold text-[#3A342A] dark:text-zinc-100">
+                  총 수업료 합계
+                </td>
+                <td className="px-3 py-3 text-right tabular-nums font-bold text-[#6B7B3A] dark:text-[#A8B87A]">
+                  {formatWon(feeTotal)}원
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </section>
