@@ -108,6 +108,7 @@ const MENU_GROUPS: MenuItem["group"][] = [
 interface Props {
   role: Role;
   centerName: string;
+  centerLogo?: string | null;
   isSoloOwner: boolean;
   centerKind?: "solo" | "center";
   centerMemberId?: number | null;
@@ -115,7 +116,7 @@ interface Props {
   permissions?: Record<string, boolean>;
 }
 
-export function CrmSidebar({ role, centerName, centerKind, centerMemberId, permissions }: Props) {
+export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMemberId, permissions }: Props) {
   const pathname = usePathname();
   const { getIdToken } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -277,7 +278,7 @@ export function CrmSidebar({ role, centerName, centerKind, centerMemberId, permi
 
       {/* 데스크탑 사이드바 — navbar(56px) 아래 완전 고정(fixed). 스크롤·overflow 무관하게 항상 고정 */}
       <aside className="hidden md:flex flex-col w-60 border-r border-[#E1D5C0] dark:border-zinc-800 bg-[#FBF7EB]/82 dark:bg-zinc-950/88 backdrop-blur fixed top-14 left-0 z-30 h-[calc(100dvh-3.5rem)]">
-        <SidebarHeader centerName={centerName} />
+        <SidebarHeader centerName={centerName} initialLogo={centerLogo ?? null} canEdit={role === "owner" || role === "admin"} />
         <nav className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-3">{links}</nav>
         <SidebarFooter />
       </aside>
@@ -290,7 +291,7 @@ export function CrmSidebar({ role, centerName, centerKind, centerMemberId, permi
             onClick={() => setMobileOpen(false)}
           />
           <aside className="absolute left-0 top-0 bottom-0 w-72 flex flex-col bg-[#FEFCF7] dark:bg-zinc-950 border-r border-[#E1D5C0] dark:border-zinc-800 shadow-xl">
-            <SidebarHeader centerName={centerName} />
+            <SidebarHeader centerName={centerName} initialLogo={centerLogo ?? null} canEdit={role === "owner" || role === "admin"} />
             <nav className="flex-1 px-3 pt-2 pb-3 overflow-y-auto">{links}</nav>
             <SidebarFooter />
           </aside>
@@ -300,21 +301,51 @@ export function CrmSidebar({ role, centerName, centerKind, centerMemberId, permi
   );
 }
 
-function SidebarHeader({ centerName }: { centerName: string }) {
+function SidebarHeader({
+  centerName,
+  initialLogo,
+  canEdit,
+}: {
+  centerName: string;
+  initialLogo?: string | null;
+  canEdit?: boolean;
+}) {
+  const { getIdToken } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const initial = (centerName || "C").trim().slice(0, 1).toUpperCase();
-  const storageKey = `crm-sidebar-logo:${centerName || "default"}`;
-  const [logoSrc, setLogoSrc] = useState(() => {
-    if (typeof window === "undefined") return "/logo.png";
-    try {
-      return localStorage.getItem(storageKey) || "/logo.png";
-    } catch {
-      return "/logo.png";
-    }
-  });
+  // 로고는 서버(센터 정보)에 저장 → 모든 계정·기기에서 동일하게 보임.
+  const [logoSrc, setLogoSrc] = useState<string>(initialLogo || "/logo.png");
   const [logoBroken, setLogoBroken] = useState(false);
   const [pendingLogoSrc, setPendingLogoSrc] = useState("");
   const [logoScale, setLogoScale] = useState(100);
+  const [saving, setSaving] = useState(false);
+
+  // bootstrap 로 서버 로고가 도착하면 반영
+  useEffect(() => {
+    setLogoSrc(initialLogo || "/logo.png");
+    setLogoBroken(false);
+  }, [initialLogo]);
+
+  const saveLogoToServer = async (dataUrl: string | null): Promise<boolean> => {
+    try {
+      const token = await getIdToken();
+      if (!token) return false;
+      const res = await fetch("/api/crm/centers/me", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ logo_data_url: dataUrl }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        window.alert(d?.error || "로고 저장에 실패했어요.");
+        return false;
+      }
+      return true;
+    } catch {
+      window.alert("네트워크 오류로 로고를 저장하지 못했어요.");
+      return false;
+    }
+  };
 
   const handleLogoFile = (file: File | undefined) => {
     if (!file || !file.type.startsWith("image/")) return;
@@ -331,7 +362,7 @@ function SidebarHeader({ centerName }: { centerName: string }) {
   const saveEditedLogo = () => {
     if (!pendingLogoSrc) return;
     const img = new Image();
-    img.onload = () => {
+    img.onload = async () => {
       const size = 192;
       const canvas = document.createElement("canvas");
       canvas.width = size;
@@ -351,12 +382,10 @@ function SidebarHeader({ centerName }: { centerName: string }) {
       ctx.drawImage(img, x, y, drawW, drawH);
 
       const next = canvas.toDataURL("image/png");
-      try {
-        localStorage.setItem(storageKey, next);
-      } catch {
-        window.alert("이미지 용량이 커서 저장할 수 없어요. 더 작은 로고 이미지를 선택해주세요.");
-        return;
-      }
+      setSaving(true);
+      const ok = await saveLogoToServer(next);
+      setSaving(false);
+      if (!ok) return;
       setLogoSrc(next);
       setLogoBroken(false);
       setPendingLogoSrc("");
@@ -364,12 +393,11 @@ function SidebarHeader({ centerName }: { centerName: string }) {
     img.src = pendingLogoSrc;
   };
 
-  const resetLogo = () => {
-    try {
-      localStorage.removeItem(storageKey);
-    } catch {
-      /* ignore */
-    }
+  const resetLogo = async () => {
+    setSaving(true);
+    const ok = await saveLogoToServer(null);
+    setSaving(false);
+    if (!ok) return;
     setLogoSrc("/logo.png");
     setLogoBroken(false);
     setPendingLogoSrc("");
@@ -380,9 +408,12 @@ function SidebarHeader({ centerName }: { centerName: string }) {
       <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
-          className="group relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#E4D9C6] bg-white shadow-sm transition-colors hover:border-[#6B7B3A]/50 dark:border-zinc-800 dark:bg-zinc-900"
-          aria-label="사이드바 로고 이미지 변경"
+          onClick={() => canEdit && inputRef.current?.click()}
+          disabled={!canEdit}
+          className={`group relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#E4D9C6] bg-white shadow-sm transition-colors dark:border-zinc-800 dark:bg-zinc-900 ${
+            canEdit ? "hover:border-[#6B7B3A]/50 cursor-pointer" : "cursor-default"
+          }`}
+          aria-label={canEdit ? "사이드바 로고 이미지 변경" : "센터 로고"}
         >
           {!logoBroken && logoSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -397,9 +428,11 @@ function SidebarHeader({ centerName }: { centerName: string }) {
               {initial}
             </span>
           )}
-          <span className="absolute inset-0 hidden items-center justify-center bg-[#2F3A2B]/82 px-1 text-center text-[10px] font-bold leading-tight text-white group-hover:flex dark:bg-zinc-950/82">
-            로고 변경
-          </span>
+          {canEdit && (
+            <span className="absolute inset-0 hidden items-center justify-center bg-[#2F3A2B]/82 px-1 text-center text-[10px] font-bold leading-tight text-white group-hover:flex dark:bg-zinc-950/82">
+              로고 변경
+            </span>
+          )}
         </button>
         <input
           ref={inputRef}
@@ -464,7 +497,8 @@ function SidebarHeader({ centerName }: { centerName: string }) {
                 <button
                   type="button"
                   onClick={resetLogo}
-                  className="rounded-lg border border-[#D9CDB8] px-3 py-2 text-[12.5px] font-semibold text-[#6B5D47] hover:bg-[#F5F0E5] dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                  disabled={saving}
+                  className="rounded-lg border border-[#D9CDB8] px-3 py-2 text-[12.5px] font-semibold text-[#6B5D47] hover:bg-[#F5F0E5] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
                 >
                   기본 로고
                 </button>
@@ -472,16 +506,18 @@ function SidebarHeader({ centerName }: { centerName: string }) {
                   <button
                     type="button"
                     onClick={() => setPendingLogoSrc("")}
-                    className="rounded-lg border border-[#D9CDB8] px-3 py-2 text-[12.5px] font-semibold text-[#6B5D47] hover:bg-[#F5F0E5] dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    disabled={saving}
+                    className="rounded-lg border border-[#D9CDB8] px-3 py-2 text-[12.5px] font-semibold text-[#6B5D47] hover:bg-[#F5F0E5] disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
                   >
                     취소
                   </button>
                   <button
                     type="button"
                     onClick={saveEditedLogo}
-                    className="rounded-lg bg-[#2F3A2B] px-3.5 py-2 text-[12.5px] font-semibold text-white hover:bg-[#263121] dark:bg-[#A8B87A] dark:text-zinc-950"
+                    disabled={saving}
+                    className="rounded-lg bg-[#2F3A2B] px-3.5 py-2 text-[12.5px] font-semibold text-white hover:bg-[#263121] disabled:opacity-60 dark:bg-[#A8B87A] dark:text-zinc-950"
                   >
-                    적용
+                    {saving ? "저장 중…" : "적용"}
                   </button>
                 </div>
               </div>

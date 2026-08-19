@@ -6,7 +6,7 @@ import { verifyCenterIdentity } from "@/app/lib/crm-center-verify";
 export const dynamic = "force-dynamic";
 
 const PROFILE_COLUMNS =
-  "id, name, kind, region_sido, region_sigungu, phone, business_no, address, naver_url, google_url, instagram_id, youtube_url, operating_hours, status" as unknown as "*";
+  "id, name, kind, region_sido, region_sigungu, phone, business_no, address, naver_url, google_url, instagram_id, youtube_url, operating_hours, logo_data_url, status" as unknown as "*";
 
 /**
  * GET /api/crm/centers/me — 센터 프로필 조회 (센터 정보 탭용)
@@ -49,6 +49,8 @@ export async function PATCH(request: Request) {
     instagram_id?: string | null;
     youtube_url?: string | null;
     operating_hours?: string | null;
+    /** 사이드바 로고 (data URL png). 빈 문자열/null → 로고 삭제 */
+    logo_data_url?: string | null;
   };
   try {
     body = await request.json();
@@ -75,6 +77,17 @@ export async function PATCH(request: Request) {
     body.instagram_id!.replace(/^@/, "") : body.instagram_id);
   setNullable("youtube_url", body.youtube_url ?? undefined);
   setNullable("operating_hours", body.operating_hours ?? undefined);
+  // 로고: data URL(png) 문자열 저장, 빈 값이면 삭제. 과도한 용량 방지(~2MB).
+  if (body.logo_data_url !== undefined) {
+    const v = body.logo_data_url === null ? "" : String(body.logo_data_url).trim();
+    if (v && !v.startsWith("data:image/")) {
+      return NextResponse.json({ error: "로고 이미지 형식이 올바르지 않습니다" }, { status: 400 });
+    }
+    if (v.length > 2_000_000) {
+      return NextResponse.json({ error: "로고 이미지 용량이 너무 큽니다" }, { status: 400 });
+    }
+    patch.logo_data_url = v || null;
+  }
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
@@ -88,13 +101,18 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "수정 실패", detail: error.message }, { status: 500 });
   }
 
+  // 감사 로그: 로고 data URL 은 용량이 커서 값 대신 변경 여부만 기록
+  const auditPayload = { ...patch } as Record<string, unknown>;
+  if ("logo_data_url" in auditPayload) {
+    auditPayload.logo_data_url = auditPayload.logo_data_url ? "(변경됨)" : "(삭제됨)";
+  }
   await supabase.from("crm_audit_logs").insert({
     center_id: ctx.centerId,
     actor_uid: ctx.uid,
     action: "center.profile.update",
     entity_type: "crm_centers",
     entity_id: ctx.centerId,
-    payload: patch as never,
+    payload: auditPayload as never,
   });
 
   return NextResponse.json({ ok: true });

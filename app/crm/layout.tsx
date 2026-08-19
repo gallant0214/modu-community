@@ -17,6 +17,7 @@ interface BootstrapResp {
   centerMemberId?: number | null;
   centerName?: string;
   centerKind?: "solo" | "center";
+  centerLogo?: string | null;
   role?: Role;
   accessLevel?: "admin" | "schedule" | "none";
   isSoloOwner?: boolean;
@@ -146,6 +147,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
         <CrmSidebar
           role={ctx.role ?? "trainer"}
           centerName={ctx.centerName ?? ""}
+          centerLogo={ctx.centerLogo ?? null}
           isSoloOwner={ctx.isSoloOwner ?? false}
           centerKind={ctx.centerKind}
           centerMemberId={ctx.centerMemberId ?? null}

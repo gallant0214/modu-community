@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   }
   const { data: centerInfo } = await supabase
     .from("crm_centers")
-    .select("business_no")
+    .select("business_no, logo_data_url")
     .eq("id", ctx.centerId)
     .maybeSingle();
   const { data: me } = await supabase
@@ -75,6 +75,7 @@ export async function GET(request: Request) {
     accessLevel: ctx.accessLevel,
     isSoloOwner: ctx.isSoloOwner,
     businessNo: centerInfo?.business_no ?? null,
+    centerLogo: (centerInfo as { logo_data_url?: string | null } | null)?.logo_data_url ?? null,
     displayName: me?.display_name ?? null,
     permissions,
   });
