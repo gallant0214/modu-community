@@ -118,11 +118,12 @@ export async function GET(request: Request) {
   );
   const sessionIndexMap = new Map<number, number>(); // reservation id → 회차
   const passTotalMap = new Map<number, number>(); // pass id → total_sessions
+  const passLessonMap = new Map<number, string>(); // pass id → lesson_kind(수강권명)
   if (passIds.length > 0) {
     const [{ data: passes }, { data: allRes }] = await Promise.all([
       supabase
         .from("crm_passes")
-        .select("id, total_sessions")
+        .select("id, total_sessions, lesson_kind")
         .eq("center_id", ctx.centerId)
         .in("id", passIds),
       supabase
@@ -133,7 +134,10 @@ export async function GET(request: Request) {
         .neq("status", "cancelled")
         .order("starts_at", { ascending: true }),
     ]);
-    for (const p of passes ?? []) passTotalMap.set(p.id, p.total_sessions ?? 0);
+    for (const p of passes ?? []) {
+      passTotalMap.set(p.id, p.total_sessions ?? 0);
+      if (p.lesson_kind) passLessonMap.set(p.id, p.lesson_kind);
+    }
     const counter = new Map<number, number>();
     for (const r of allRes ?? []) {
       if (!r.pass_id) continue;
@@ -151,6 +155,7 @@ export async function GET(request: Request) {
       created_by_name: r.created_by_uid ? creatorNameMap.get(r.created_by_uid) ?? null : null,
       session_index: r.pass_id ? sessionIndexMap.get(r.id) ?? null : null,
       session_total: r.pass_id ? passTotalMap.get(r.pass_id) ?? null : null,
+      lesson_kind: r.pass_id ? passLessonMap.get(r.pass_id) ?? null : null,
     })),
   });
 }

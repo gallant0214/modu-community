@@ -25,6 +25,7 @@ interface Reservation {
   booking_reason?: string | null;
   session_index: number | null;
   session_total: number | null;
+  lesson_kind?: string | null;
   created_by_uid?: string | null;
   created_by_name?: string | null;
   created_at?: string | null;
@@ -116,6 +117,8 @@ function layoutOverlaps<
 export default function CrmSchedulePage() {
   const { getIdToken } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>("week");
+  // 화면 모드: 캘린더 / 수업 예약 내역(리스트)
+  const [panelMode, setPanelMode] = useState<"calendar" | "list">("calendar");
   const [anchor, setAnchor] = useState(() => new Date().toISOString().slice(0, 10));
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -345,30 +348,44 @@ export default function CrmSchedulePage() {
         </div>
       </header>
 
-      {/* 강사 필터 (관리자/팀장 이상만) */}
-      {canPickTrainer && (viewMode === "week" || viewMode === "month") && (
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-            강사:
-          </span>
-          <select
-            value={selectedTrainerId}
-            onChange={(e) =>
-              setSelectedTrainerId(
-                e.target.value === "all" ? "all" : Number(e.target.value)
-              )
-            }
-            className="px-2.5 py-1 rounded border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
-          >
-            <option value="all">전체 강사</option>
-            {trainers.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.display_name}
-              </option>
-            ))}
-          </select>
+      {/* 강사 필터(관리자/팀장 이상) + 캘린더/수업 예약 내역 탭 */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {canPickTrainer && (
+          <>
+            <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">강사:</span>
+            <select
+              value={selectedTrainerId}
+              onChange={(e) =>
+                setSelectedTrainerId(e.target.value === "all" ? "all" : Number(e.target.value))
+              }
+              className="px-2.5 py-1 rounded border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+            >
+              <option value="all">전체 강사</option>
+              {trainers.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.display_name}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+        {/* 캘린더 / 수업 예약 내역 탭 */}
+        <div className="inline-flex border border-[#E8E0D0] dark:border-zinc-700 rounded-lg overflow-hidden">
+          {(["calendar", "list"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setPanelMode(m)}
+              className={`px-3 py-1.5 text-[12.5px] font-medium transition-colors
+                ${panelMode === m
+                  ? "bg-[#6B7B3A] text-white"
+                  : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                }`}
+            >
+              {m === "calendar" ? "캘린더" : "수업 예약 내역"}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
         <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
@@ -393,6 +410,8 @@ export default function CrmSchedulePage() {
 
       {loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : panelMode === "list" ? (
+        <ReservationListView reservations={reservations} onPick={setPicked} />
       ) : viewMode === "day" ? (
         <DayView
           trainers={visibleTrainers}
@@ -989,6 +1008,76 @@ type DayDragState = {
     width: number;
   }[];
 } | null;
+
+/* ─── 수업 예약 내역 (선택 기간 리스트) ────────────────────────────── */
+function ReservationListView({
+  reservations,
+  onPick,
+}: {
+  reservations: Reservation[];
+  onPick: (r: Reservation) => void;
+}) {
+  const rows = [...reservations].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+
+  const fmtKst = (iso: string) => {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const k = new Date(d.getTime() + 9 * 3600 * 1000);
+    const dow = ["일", "월", "화", "수", "목", "금", "토"][k.getUTCDay()];
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${k.getUTCFullYear()}.${p(k.getUTCMonth() + 1)}.${p(k.getUTCDate())} (${dow}) ${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`;
+  };
+
+  if (rows.length === 0) {
+    return (
+      <div className="px-4 py-12 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+        이 기간에 수업 예약 내역이 없어요.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
+      <table className="w-full text-[13px]">
+        <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
+          <tr>
+            <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">번호</th>
+            <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">수업 예약일</th>
+            <th className="text-left font-medium px-3 py-2.5">회원명</th>
+            <th className="text-left font-medium px-3 py-2.5">수강권 이름</th>
+            <th className="text-left font-medium px-3 py-2.5">강사명</th>
+            <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">회차</th>
+            <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">상태</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr
+              key={r.id}
+              onClick={() => onPick(r)}
+              className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 text-[#3A342A] dark:text-zinc-200 cursor-pointer hover:bg-[#FBF7EB]/60 dark:hover:bg-zinc-900/50"
+            >
+              <td className="px-3 py-2.5 text-[#8C8270] tabular-nums">{i + 1}</td>
+              <td className="px-3 py-2.5 whitespace-nowrap tabular-nums">{fmtKst(r.starts_at)}</td>
+              <td className="px-3 py-2.5 whitespace-nowrap font-medium">{r.member_name || "-"}</td>
+              <td className="px-3 py-2.5 whitespace-nowrap">{r.lesson_kind ?? "-"}</td>
+              <td className="px-3 py-2.5 whitespace-nowrap">{r.trainer_name ?? "-"}</td>
+              <td className="px-3 py-2.5 whitespace-nowrap text-[#6B5D47] dark:text-zinc-400">
+                {r.session_index && r.session_total ? `${r.session_index}/${r.session_total}회` : "-"}
+              </td>
+              <td className="px-3 py-2.5 whitespace-nowrap">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${RESERVATION_STATUS_COLOR[r.status]?.dot ?? "bg-zinc-400"}`} />
+                  {RESERVATION_STATUS_LABEL[r.status] ?? r.status}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function DayView({
   trainers,
