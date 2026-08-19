@@ -482,7 +482,7 @@ export default function CrmMemberDetailPage() {
                 <SnapHoldingCard
                   key={`hp${p.id}`}
                   tag="수강권"
-                  name={p.lesson_kind}
+                  name={stripPassCountSuffix(p.lesson_kind)}
                   period={`잔여 ${p.remaining_sessions}/${p.total_sessions}회 · ${p.expires_at === "9999-12-31" ? "무기한" : `~${p.expires_at}`}`}
                   onClick={() => setDetailPassId(p.id)}
                 />
@@ -1122,6 +1122,12 @@ function fmtPaidAt(iso: string | null | undefined): string {
 // 락커 비밀번호 자동 생성 — 4자리 숫자(앞자리 0 허용).
 function genLockerPassword(): string {
   return String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+}
+
+// 수강권명 끝의 중복 횟수 표기 "(N회)" 제거 (잔여 X/Y회 로 이미 표시돼 불필요).
+// 예: "점장 10회(10회)" → "점장 10회"
+function stripPassCountSuffix(name: string | null | undefined): string {
+  return (name ?? "").replace(/\s*\(\d+\s*회\)\s*$/, "").trim();
 }
 
 // 결제 상태 한글 라벨. paid/completed 는 정상 완료라 별도 표시하지 않음.
