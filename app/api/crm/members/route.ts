@@ -306,6 +306,23 @@ export async function GET(request: Request) {
     if (!prev || a.checked_in_at > prev) lastVisitMap.set(a.member_id, a.checked_in_at);
   }
 
+  // 최근 구매일 = 결제(crm_payments) 최신 paid_at(KST 날짜). 발급 시 자동 갱신이 없던
+  // last_purchase_at 컬럼 대신 실제 결제 기록으로 계산(없으면 기존 컬럼값 유지).
+  const paymentsData = await gather<{ member_id: number; paid_at: string }>((c) =>
+    supabase
+      .from("crm_payments")
+      .select("member_id, paid_at")
+      .in("center_id", centerIds)
+      .in("member_id", c)
+  );
+  const lastPurchaseMap = new Map<number, string>();
+  for (const p of paymentsData) {
+    if (!p.member_id || !p.paid_at) continue;
+    const ymd = new Date(new Date(p.paid_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const prev = lastPurchaseMap.get(p.member_id);
+    if (!prev || ymd > prev) lastPurchaseMap.set(p.member_id, ymd);
+  }
+
   const enriched = members.map((m) => {
     const items = passMap.get(m.id) ?? [];
     const maxExpires = items.reduce<string | null>(
@@ -317,6 +334,8 @@ export async function GET(request: Request) {
       items,
       locker_label: lockerMap.get(m.id) ?? null,
       last_visit_at: lastVisitMap.get(m.id) ?? null,
+      // 결제 기록 기반 최근 구매일(없으면 기존 컬럼값)
+      last_purchase_at: lastPurchaseMap.get(m.id) ?? m.last_purchase_at,
       max_expires_at: maxExpires,
       on_hold: holdSet.has(m.id),
       outstanding_won: outstandingMap.get(m.id) ?? 0,
