@@ -1287,6 +1287,7 @@ export type Database = {
           youtube_url: string | null
           operating_hours: string | null
           kiosk_token: string | null
+          logo_data_url: string | null
           created_at: string
           updated_at: string
         }
@@ -1307,6 +1308,7 @@ export type Database = {
           youtube_url?: string | null
           operating_hours?: string | null
           kiosk_token?: string | null
+          logo_data_url?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1327,6 +1329,7 @@ export type Database = {
           youtube_url?: string | null
           operating_hours?: string | null
           kiosk_token?: string | null
+          logo_data_url?: string | null
           created_at?: string
           updated_at?: string
         }
