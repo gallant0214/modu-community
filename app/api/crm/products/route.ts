@@ -15,6 +15,7 @@ export function sanitizeComponents(input: unknown): {
   price_won: number;
   billing_mode: string;
   duration_value: number;
+  duration_unit: string;
   total_sessions: number;
   session_minutes: number;
 }[] {
@@ -29,6 +30,10 @@ export function sanitizeComponents(input: unknown): {
         price_won: Math.max(0, Math.floor(Number(o.price_won) || 0)),
         billing_mode: o.billing_mode === "count" ? "count" : "period",
         duration_value: Math.max(0, Math.floor(Number(o.duration_value) || 0)),
+        // 기간제 단위(일/개월/년). 기본 일.
+        duration_unit: ["day", "month", "year"].includes(String(o.duration_unit))
+          ? String(o.duration_unit)
+          : "day",
         total_sessions: Math.max(0, Math.floor(Number(o.total_sessions) || 0)),
         session_minutes: Math.max(0, Math.floor(Number(o.session_minutes) || 0)),
       };

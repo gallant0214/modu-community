@@ -4044,6 +4044,7 @@ interface BundleComp {
   price_won?: number;
   billing_mode?: string;
   duration_value?: number;
+  duration_unit?: string;
   total_sessions?: number;
   session_minutes?: number;
 }
@@ -4081,7 +4082,11 @@ async function postBundleComponent(
   const name = (comp.name || "").trim() || "구성 상품";
   const price = Math.max(0, Math.floor(comp.price_won ?? 0));
   const isCount = comp.billing_mode === "count";
-  const durationDays = Math.max(0, Math.floor(comp.duration_value ?? 0));
+  // 기간제 구성 상품: duration_value + duration_unit(일/개월/년) → 일수로 환산 (12개월=365)
+  const durationDays = unitToDays(
+    Math.max(0, Math.floor(comp.duration_value ?? 0)),
+    comp.duration_unit ?? "day"
+  );
   const expires = isCount
     ? UNLIMITED_EXPIRY
     : addDaysYmd(args.startDate, durationDays || 30);

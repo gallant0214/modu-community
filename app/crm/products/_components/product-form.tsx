@@ -45,6 +45,7 @@ export interface BundleComponent {
   price_won?: number;
   billing_mode: BillingMode;
   duration_value?: number;
+  duration_unit?: DurationUnit;
   total_sessions?: number;
   session_minutes?: number;
 }
@@ -304,6 +305,7 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
         price_won: 0,
         billing_mode: isLesson ? "count" : "period",
         duration_value: isLesson ? 0 : 30,
+        duration_unit: "day",
         total_sessions: isLesson ? 10 : 0,
         session_minutes: isLesson ? 50 : 0,
       },
@@ -382,6 +384,7 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
           price_won: Math.max(0, Math.floor(c.price_won ?? 0)),
           billing_mode: c.billing_mode,
           duration_value: c.billing_mode === "period" ? c.duration_value ?? 0 : 0,
+          duration_unit: c.billing_mode === "period" ? c.duration_unit ?? "day" : "day",
           total_sessions: c.billing_mode === "count" ? c.total_sessions ?? 0 : 0,
           session_minutes: c.type === "personal" || c.type === "group" ? c.session_minutes ?? 0 : 0,
         })),
@@ -1070,14 +1073,27 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
                     <div className="grid grid-cols-2 gap-2">
                       {c.billing_mode === "period" ? (
                         <div>
-                          <FieldLabel>기간 (일)</FieldLabel>
-                          <input
-                            type="number"
-                            min={0}
-                            value={c.duration_value ?? 0}
-                            onChange={(e) => updateComponent(i, { duration_value: Math.max(0, Number(e.target.value) || 0) })}
-                            className={crmInputClass}
-                          />
+                          <FieldLabel>기간</FieldLabel>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min={0}
+                              value={c.duration_value ?? 0}
+                              onChange={(e) => updateComponent(i, { duration_value: Math.max(0, Number(e.target.value) || 0) })}
+                              className={crmInputClass}
+                            />
+                            <select
+                              value={c.duration_unit ?? "day"}
+                              onChange={(e) => updateComponent(i, { duration_unit: e.target.value as DurationUnit })}
+                              className={`${crmInputClass} max-w-[76px]`}
+                            >
+                              {UNIT_OPTIONS.map((u) => (
+                                <option key={u.value} value={u.value}>
+                                  {u.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
                       ) : (
                         <div>
