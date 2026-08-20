@@ -202,6 +202,9 @@ export default function CrmMemberDetailPage() {
   const canEditBasic = !readOnly && !!perms["members.edit_basic"];
   const canEditUsage = !readOnly && !!perms["members.edit_usage"];
   const canDelete = !readOnly && !!perms["members.delete"];
+  const canEditSales = !readOnly && !!perms["sales.edit"];
+  const canRefundSales = !readOnly && (!!perms["sales.refund"] || !!perms["sales.edit"]);
+  const canDeleteSales = !readOnly && !!perms["sales.delete"];
 
   // 직원 목록 1회 로드 (수강권 발급 모달 + 상세 모달 공용)
   useEffect(() => {
@@ -440,7 +443,13 @@ export default function CrmMemberDetailPage() {
       {tab === "logs" ? (
         <MemberLogsSection memberId={member.id} staffList={staffList} />
       ) : tab === "payments" ? (
-        <MemberPaymentsSection memberId={member.id} />
+        <MemberPaymentsSection
+          memberId={member.id}
+          canEdit={canEditSales}
+          canRefund={canRefundSales}
+          canDelete={canDeleteSales}
+          onChanged={load}
+        />
       ) : tab === "reservations" ? (
         <MemberReservationsSection memberId={member.id} />
       ) : tab === "workout" ? (
@@ -2417,33 +2426,146 @@ function MemberWorkoutLogsSection({ memberId, canEdit }: { memberId: number; can
   );
 }
 
-function MemberPaymentsSection({ memberId }: { memberId: number }) {
+function MemberPaymentsSection({
+  memberId,
+  canEdit = false,
+  canRefund = false,
+  canDelete = false,
+  onChanged,
+}: {
+  memberId: number;
+  canEdit?: boolean;
+  canRefund?: boolean;
+  canDelete?: boolean;
+  onChanged?: () => void;
+}) {
   const { getIdToken } = useAuth();
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState<number | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const token = await getIdToken();
-        if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-        const res = await fetch(`/api/crm/payments?member_id=${memberId}`, {
-          headers: { authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "조회 실패");
-        setPayments(data.payments ?? []);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "네트워크 오류");
-      } finally {
-        setLoading(false);
-      }
-    })();
+  // 인라인 수정 상태
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editMethod, setEditMethod] = useState("cash");
+  const [editMethodCustom, setEditMethodCustom] = useState("");
+  const [editPaidDate, setEditPaidDate] = useState("");
+  const [editNote, setEditNote] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch(`/api/crm/payments?member_id=${memberId}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setPayments(data.payments ?? []);
+      setError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
   }, [memberId, getIdToken]);
 
-  const total = payments.reduce((s, p) => s + (p.amount_won ?? 0), 0);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function startEdit(p: PaymentRow) {
+    setEditingId(p.id);
+    setEditAmount(String(p.amount_won ?? 0));
+    setEditMethod(p.method || "cash");
+    setEditMethodCustom(p.method_custom || "");
+    setEditPaidDate(
+      p.paid_at
+        ? new Date(new Date(p.paid_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+        : ""
+    );
+    setEditNote(p.note || "");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  async function saveEdit(id: number) {
+    setBusyId(id);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch(`/api/crm/payments/${id}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          amount_won: Number(editAmount) || 0,
+          method: editMethod,
+          method_custom: editMethod === "etc" ? editMethodCustom : null,
+          paid_at: editPaidDate || undefined,
+          note: editNote,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "수정 실패");
+      setEditingId(null);
+      await load();
+      onChanged?.();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function refund(id: number) {
+    if (!window.confirm("이 결제를 환불 처리할까요?\n환불하면 누적 결제 합계에서 제외됩니다.")) return;
+    setBusyId(id);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch(`/api/crm/payments/${id}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ status: "refunded" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "환불 실패");
+      await load();
+      onChanged?.();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function remove(id: number) {
+    if (!window.confirm("이 결제내역을 삭제할까요?\n삭제하면 누적 결제 합계에서 제외되며 되돌릴 수 없습니다.")) return;
+    setBusyId(id);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch(`/api/crm/payments/${id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "삭제 실패");
+      await load();
+      onChanged?.();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // 누적 = 환불 제외한 유효 결제 합계
+  const total = payments.reduce((s, p) => s + (p.status === "refunded" ? 0 : p.amount_won ?? 0), 0);
 
   if (loading) return <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>;
   if (error)
@@ -2478,6 +2600,9 @@ function MemberPaymentsSection({ memberId }: { memberId: number }) {
               ? p.method_custom
               : PAYMENT_METHOD_KO[p.method] ?? p.method;
           const statusLabel = PAYMENT_STATUS_KO[p.status];
+          const isRefunded = p.status === "refunded";
+          const isEditing = editingId === p.id;
+          const busy = busyId === p.id;
           return (
             <li key={p.id} className="px-4 py-3">
               {/* 1줄: 결제 상품 + 금액 */}
@@ -2485,7 +2610,13 @@ function MemberPaymentsSection({ memberId }: { memberId: number }) {
                 <span className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 truncate">
                   {productLabel}
                 </span>
-                <span className="text-[14px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] shrink-0">
+                <span
+                  className={`text-[14px] font-bold shrink-0 ${
+                    isRefunded
+                      ? "text-[#A89B80] line-through"
+                      : "text-[#6B7B3A] dark:text-[#A8B87A]"
+                  }`}
+                >
                   {p.amount_won.toLocaleString()}원
                 </span>
               </div>
@@ -2512,6 +2643,115 @@ function MemberPaymentsSection({ memberId }: { memberId: number }) {
               {p.note && (
                 <div className="mt-1 text-[12px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap">
                   {p.note}
+                </div>
+              )}
+
+              {/* 인라인 수정 폼 */}
+              {isEditing && (
+                <div className="mt-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 p-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                      금액(원)
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={editAmount}
+                        onChange={(e) => setEditAmount(e.target.value)}
+                        className="mt-0.5 w-full px-2 py-1.5 rounded border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+                      />
+                    </label>
+                    <label className="text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                      결제일
+                      <input
+                        type="date"
+                        value={editPaidDate}
+                        onChange={(e) => setEditPaidDate(e.target.value)}
+                        className="mt-0.5 w-full px-2 py-1.5 rounded border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+                      />
+                    </label>
+                    <label className="text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                      결제수단
+                      <select
+                        value={editMethod}
+                        onChange={(e) => setEditMethod(e.target.value)}
+                        className="mt-0.5 w-full px-2 py-1.5 rounded border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+                      >
+                        <option value="cash">현금</option>
+                        <option value="card">카드</option>
+                        <option value="transfer">계좌이체</option>
+                        <option value="etc">기타</option>
+                      </select>
+                    </label>
+                    {editMethod === "etc" && (
+                      <label className="text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                        수단(직접입력)
+                        <input
+                          type="text"
+                          value={editMethodCustom}
+                          onChange={(e) => setEditMethodCustom(e.target.value)}
+                          className="mt-0.5 w-full px-2 py-1.5 rounded border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+                        />
+                      </label>
+                    )}
+                  </div>
+                  <label className="block text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                    메모
+                    <input
+                      type="text"
+                      value={editNote}
+                      onChange={(e) => setEditNote(e.target.value)}
+                      className="mt-0.5 w-full px-2 py-1.5 rounded border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+                    />
+                  </label>
+                  <div className="flex justify-end gap-1.5">
+                    <button
+                      onClick={cancelEdit}
+                      disabled={busy}
+                      className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300 bg-[#F0EAD9] dark:bg-zinc-800 disabled:opacity-50"
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={() => saveEdit(p.id)}
+                      disabled={busy}
+                      className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white bg-[#6B7B3A] disabled:opacity-50"
+                    >
+                      {busy ? "저장 중…" : "저장"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 액션 버튼: 수정 / 환불 / 삭제 */}
+              {!isEditing && (canEdit || canRefund || canDelete) && (
+                <div className="mt-2 flex items-center gap-1.5">
+                  {canEdit && (
+                    <button
+                      onClick={() => startEdit(p)}
+                      disabled={busy}
+                      className="px-2.5 py-1 rounded-lg text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300 bg-[#F0EAD9] dark:bg-zinc-800 disabled:opacity-50"
+                    >
+                      수정
+                    </button>
+                  )}
+                  {canRefund && !isRefunded && (
+                    <button
+                      onClick={() => refund(p.id)}
+                      disabled={busy}
+                      className="px-2.5 py-1 rounded-lg text-[12px] font-semibold text-[#B47B2A] bg-[#B47B2A]/10 dark:bg-amber-900/30 dark:text-amber-300 disabled:opacity-50"
+                    >
+                      환불
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      onClick={() => remove(p.id)}
+                      disabled={busy}
+                      className="px-2.5 py-1 rounded-lg text-[12px] font-semibold text-red-700 bg-red-50 dark:bg-red-950/40 dark:text-red-300 disabled:opacity-50"
+                    >
+                      삭제
+                    </button>
+                  )}
                 </div>
               )}
             </li>
