@@ -391,22 +391,27 @@ export async function POST(request: Request) {
   );
   if (assignTargets.length > 0) {
     after(async () => {
-      const { data: mem } = await supabase
-        .from("crm_members")
-        .select("name")
-        .eq("id", memberId)
-        .maybeSingle();
+      const [{ data: mem }, { data: trainers }] = await Promise.all([
+        supabase.from("crm_members").select("name").eq("id", memberId).maybeSingle(),
+        supabase
+          .from("crm_center_members")
+          .select("id, display_name")
+          .eq("center_id", ctx.centerId)
+          .in("id", assignTargets),
+      ]);
       const memberName = mem?.name ?? "회원";
+      const trainerNameMap = new Map((trainers ?? []).map((t) => [t.id, t.display_name]));
       for (const tid of assignTargets) {
         const isCo = tid !== trainerMemberId;
+        const trainerName = trainerNameMap.get(tid) ?? "강사";
         await notifyStaffMember({
           centerId: ctx.centerId,
           centerMemberId: tid,
           type: "member_assigned",
           title: "회원 배정",
           body: isCo
-            ? `${memberName}님의 추가 강사로 배정되었습니다`
-            : `${memberName}님이 배정되었습니다`,
+            ? `${trainerName} 강사에게 ${memberName}님의 추가 강사로 배정되었습니다`
+            : `${trainerName} 강사에게 ${memberName}님이 배정되었습니다`,
           data: { kind: "member_assigned", member_id: String(memberId) },
         }).catch(() => {});
       }
