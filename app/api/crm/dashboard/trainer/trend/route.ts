@@ -64,9 +64,9 @@ export async function GET(request: Request) {
   const { data: passes } = passIds.length
     ? await supabase
         .from("crm_passes")
-        .select("id, price_won, vat_included, total_sessions")
+        .select("id, price_won, discount_won, vat_included, total_sessions")
         .in("id", passIds)
-    : { data: [] as { id: number; price_won: number; vat_included: boolean; total_sessions: number }[] };
+    : { data: [] as { id: number; price_won: number; discount_won: number; vat_included: boolean; total_sessions: number }[] };
   const passMap = new Map((passes ?? []).map((p) => [p.id, p]));
 
   // 월별 매출(회당 수업료 합)

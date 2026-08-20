@@ -66,7 +66,7 @@ export async function GET(
   const [{ data: passes }, { data: overrideRules }, { data: defaultRules }] = await Promise.all([
     supabase
       .from("crm_passes")
-      .select("id, member_id, lesson_kind, group_capacity, issue_type, price_won, total_sessions, issued_at, status, vat_included")
+      .select("id, member_id, lesson_kind, group_capacity, issue_type, price_won, discount_won, total_sessions, issued_at, status, vat_included")
       .eq("center_id", ctx.centerId)
       .eq("trainer_member_id", trainerId)
       .neq("status", "deleted")

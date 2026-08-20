@@ -35,14 +35,20 @@ export function commissionPayout(cfg: CommissionConfig, revenueExVat: number): n
   return Math.round((revenueExVat * effectiveCommissionRate(cfg, revenueExVat)) / 100);
 }
 
-/** 수강권 1건의 회당 수업료(부가세 제외). total_sessions 0 이면 전액. */
+/**
+ * 수강권 1건의 회당 수업료(부가세 제외). total_sessions 0 이면 전액.
+ * 기준액 = 최종 결제 금액(정가 price_won − 할인 discount_won).
+ * 부가세 포함 건은 최종 결제 금액에서 부가세(÷1.1)를 뺀 공급가 기준.
+ * 예) 정가 66만(부가세포함) − 할인 6만 = 60만 → 부가세제외 545,454 ÷ 총횟수.
+ */
 export function perSessionFee(pass: {
   price_won?: number | null;
+  discount_won?: number | null;
   vat_included?: boolean | null;
   total_sessions?: number | null;
 }): number {
-  const price = pass.price_won ?? 0;
-  const exVat = pass.vat_included ? Math.round(price / 1.1) : price;
+  const net = Math.max(0, (pass.price_won ?? 0) - (pass.discount_won ?? 0));
+  const exVat = pass.vat_included ? Math.round(net / 1.1) : net;
   const total = pass.total_sessions ?? 0;
   return total > 0 ? Math.round(exVat / total) : exVat;
 }

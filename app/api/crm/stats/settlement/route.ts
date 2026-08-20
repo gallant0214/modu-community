@@ -78,7 +78,7 @@ export async function GET(request: Request) {
   const { data: attPasses } = attPassIds.length
     ? await supabase
         .from("crm_passes")
-        .select("id, price_won, vat_included, total_sessions")
+        .select("id, price_won, discount_won, vat_included, total_sessions")
         .eq("center_id", ctx.centerId)
         .in("id", attPassIds)
     : { data: [] };

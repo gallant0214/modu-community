@@ -137,9 +137,9 @@ export async function GET(request: Request) {
   const { data: feePasses } = passIds.size
     ? await supabase
         .from("crm_passes")
-        .select("id, price_won, vat_included, total_sessions, payment_status")
+        .select("id, price_won, discount_won, vat_included, total_sessions, payment_status")
         .in("id", Array.from(passIds))
-    : { data: [] as { id: number; price_won: number; vat_included: boolean; total_sessions: number; payment_status: string }[] };
+    : { data: [] as { id: number; price_won: number; discount_won: number; vat_included: boolean; total_sessions: number; payment_status: string }[] };
   const passMap = new Map((feePasses ?? []).map((p) => [p.id, p]));
 
   // ── 회원 이름/최근출석 사전 ──
