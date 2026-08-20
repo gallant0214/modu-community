@@ -4109,10 +4109,6 @@ function HoldingDetailModal({
       : detail
         ? PAYMENT_METHOD_LABEL[detail.paymentMethod ?? ""] ?? detail.paymentMethod ?? "—"
         : "—";
-  const listPrice =
-    detail && detail.priceWon !== undefined
-      ? detail.priceWon + (detail.discountWon ?? 0)
-      : null;
 
   return (
     <>
@@ -4173,15 +4169,22 @@ function HoldingDetailModal({
               ...(detail.expiresAt
                 ? ([["만료일", detail.expiresAt === "9999-12-31" ? "무기한" : detail.expiresAt]] as [string, React.ReactNode][])
                 : []),
-              ...(detail.discountWon && detail.discountWon > 0
-                ? ([
-                    ["정가", listPrice !== null ? `${formatWon(listPrice)}원` : "—"],
-                    ["할인", `-${formatWon(detail.discountWon)}원`],
-                  ] as [string, React.ReactNode][])
-                : []),
               [
                 "결제 금액",
                 `${formatWon(detail.priceWon ?? 0)}원${detail.vatIncluded ? " (부가세 포함)" : " (부가세 별도)"}`,
+              ],
+              [
+                "할인 금액",
+                (detail.discountWon ?? 0) > 0
+                  ? `-${formatWon(detail.discountWon ?? 0)}원`
+                  : "0원",
+              ],
+              [
+                "최종 결제 금액",
+                <span key="final" className="font-bold text-[#6B7B3A] dark:text-[#A8B87A]">
+                  {formatWon(Math.max(0, (detail.priceWon ?? 0) - (detail.discountWon ?? 0)))}원
+                  {detail.vatIncluded ? " (부가세 포함)" : " (부가세 별도)"}
+                </span>,
               ],
               ["결제 수단", paymentLabel],
               ...(detail.mileageUsed && detail.mileageUsed > 0

@@ -2765,6 +2765,7 @@ export type Database = {
           service_sessions: number
           session_minutes: number
           price_won: number
+          discount_won: number
           vat_included: boolean
           payment_method: string
           payment_method_custom: string | null
@@ -2796,6 +2797,7 @@ export type Database = {
           service_sessions?: number
           session_minutes: number
           price_won?: number
+          discount_won?: number
           vat_included?: boolean
           payment_method?: string
           payment_method_custom?: string | null
@@ -2827,6 +2829,7 @@ export type Database = {
           service_sessions?: number
           session_minutes?: number
           price_won?: number
+          discount_won?: number
           vat_included?: boolean
           payment_method?: string
           payment_method_custom?: string | null
