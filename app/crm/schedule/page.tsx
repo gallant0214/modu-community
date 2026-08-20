@@ -1142,17 +1142,17 @@ function DayView({
   }
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+    <div className="overflow-auto max-h-[calc(100vh-180px)] rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
       <div className="min-w-[640px]">
         {(() => {
           const now = nowKst();
           const anchorIsToday = anchorDate === now.ymd;
           return (
             <div
-              className={`grid border-b border-[#E8E0D0] dark:border-zinc-800 sticky top-0 z-10
+              className={`grid border-b border-[#E8E0D0] dark:border-zinc-800 sticky top-0 z-30
                 ${anchorIsToday
                   ? "bg-[#6B7B3A]/10 dark:bg-[#6B7B3A]/20"
-                  : "bg-[#FBF7EB] dark:bg-zinc-900/80"
+                  : "bg-[#FBF7EB] dark:bg-zinc-900"
                 }`}
               style={{ gridTemplateColumns: `64px repeat(${trainers.length}, minmax(120px, 1fr))` }}
             >
@@ -1604,10 +1604,10 @@ function WeekView({
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+    <div className="overflow-auto max-h-[calc(100vh-180px)] rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
       <div className="min-w-[840px]">
         <div
-          className="grid border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/80 sticky top-0 z-10"
+          className="grid border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900 sticky top-0 z-30"
           style={{ gridTemplateColumns: `56px repeat(7, minmax(100px, 1fr))` }}
         >
           <div className="px-2 py-2 text-[11px] font-medium text-[#A89B80]">시간</div>
