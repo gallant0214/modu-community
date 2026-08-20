@@ -54,6 +54,7 @@ export default function AdminPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: storedPassword, page, limit: 30 }),
+        cache: "no-store",
       });
       const data = await res.json();
       if (!res.ok) {
@@ -68,12 +69,15 @@ export default function AdminPage() {
       setUserListLoading(false);
     }
   }, [storedPassword]);
-  // USER 탭 진입 시 첫 페이지 자동 로드 (캐시 없을 때만)
+  // USER 탭에 진입할 때마다 항상 최신 정보를 다시 조회 (1페이지로 초기화)
   useEffect(() => {
-    if (tab === "user" && storedPassword && !userListData && !userListLoading) {
-      loadUserList(userListPage);
+    if (tab === "user" && storedPassword) {
+      setUserListPage(1);
+      loadUserList(1);
     }
-  }, [tab, storedPassword, userListData, userListLoading, userListPage, loadUserList]);
+    // tab 이 "user" 로 바뀌는 시점에만 실행. userListData/page 는 의존성에서 제외(재조회 루프 방지).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, storedPassword, loadUserList]);
   const lookupUser = async () => {
     if (!storedPassword) return;
     const q = userQuery.trim();
