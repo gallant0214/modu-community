@@ -272,6 +272,12 @@ export default function CrmMemberDetailPage() {
   const validHoldPasses = passes.filter(
     (p) => p.status === "valid" && p.expires_at >= holdToday
   );
+  // 락커(배정) + 락커 대여권 병합 → 현재 보유에서 중복 제거
+  const { cards: holdLockerCards, usedRentalIds: holdUsedRentalIds } = mergeLockerItems(
+    validHoldLockers,
+    validHoldRs
+  );
+  const holdOtherRs = validHoldRs.filter((r) => !holdUsedRentalIds.has(r.id));
   const hasHoldings =
     validHoldMs.length > 0 ||
     validHoldRs.length > 0 ||
@@ -488,9 +494,9 @@ export default function CrmMemberDetailPage() {
                 />
               ))
             : holdingCards("수강권", member.current_pass, onSnapSelect)}
-          {/* 대여권: 실제 레코드 우선(편집 가능) */}
-          {validHoldRs.length > 0
-            ? validHoldRs.map((r) => (
+          {/* 대여권: 실제 레코드 우선(편집 가능). 락커 대여권은 아래 락커 항목으로 합쳐 표시 */}
+          {holdOtherRs.length > 0
+            ? holdOtherRs.map((r) => (
                 <SnapHoldingCard
                   key={`hr${r.id}`}
                   tag="대여권"
@@ -499,16 +505,25 @@ export default function CrmMemberDetailPage() {
                   onClick={() => setPaymentDetail(rentalToDetail(r, staffName))}
                 />
               ))
-            : holdingCards("대여권", member.current_rental, onSnapSelect)}
-          {/* 락커: 실제 배정 레코드 우선(스냅샷 없이도 표시), 없으면 스냅샷. 클릭 시 전용 상세(락커 결제·위치 이동) */}
-          {validHoldLockers.length > 0
-            ? validHoldLockers.map((l) => (
+            : validHoldLockers.length === 0 && holdLockerCards.length === 0
+              ? holdingCards("대여권", member.current_rental, onSnapSelect)
+              : null}
+          {/* 락커: 배정(자리) + 락커 대여권 을 하나로 합쳐 표시. 미배정이면 빨간 칩 */}
+          {holdLockerCards.length > 0
+            ? holdLockerCards.map((c) => (
                 <SnapHoldingCard
-                  key={`locker-${l.id}`}
+                  key={c.key}
                   tag="락커"
-                  name={`${l.zone_name} ${l.number}번`}
-                  period={fmtPeriod(l.start_date, l.expires_at)}
-                  onClick={() => setLockerOpen(true)}
+                  name={c.assign ? `${c.assign.zone_name} ${c.assign.number}번` : c.name}
+                  period={fmtPeriod(c.start, c.exp)}
+                  lockerUnassigned={!c.assign}
+                  onClick={
+                    c.assign
+                      ? () => setLockerOpen(true)
+                      : c.rental
+                        ? () => setPaymentDetail(rentalToDetail(c.rental!, staffName))
+                        : () => setLockerOpen(true)
+                  }
                 />
               ))
             : member.current_locker &&
@@ -3076,11 +3091,13 @@ function SnapHoldingCard({
   tag,
   name,
   period,
+  lockerUnassigned,
   onClick,
 }: {
   tag: string;
   name: string;
   period: string | null;
+  lockerUnassigned?: boolean;
   onClick?: () => void;
 }) {
   return (
@@ -3092,7 +3109,14 @@ function SnapHoldingCard({
       }`}
     >
       <span className="text-[9.5px] font-bold uppercase tracking-wide opacity-80">{tag}</span>
-      <span className="text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">{name}</span>
+      <span className="flex items-center gap-1 text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+        {name}
+        {lockerUnassigned && (
+          <span className="px-1.5 py-0.5 rounded-full bg-red-500/12 text-red-600 dark:text-red-400 text-[9.5px] font-bold">
+            미배정
+          </span>
+        )}
+      </span>
       {period && <span className="text-[10.5px] text-[#A89B80] dark:text-zinc-500">{period}</span>}
     </button>
   );
@@ -3457,6 +3481,65 @@ function rentalToDetail(
   };
 }
 
+// 락커 배정 레코드
+type LockerAssignRow = {
+  id: number;
+  zone_name: string;
+  number: number;
+  start_date: string | null;
+  expires_at: string | null;
+};
+// 락커 발급 = 대여권(락커) 행 + 물리 배정 이 함께 생겨 목록에 중복 표시됨.
+// 배정 memo("남자탈의실 20번")로 대여권을 매칭해 하나로 합친다.
+type MergedLocker = {
+  key: string;
+  name: string;
+  price: number;
+  start: string | null;
+  exp: string | null;
+  assign: LockerAssignRow | null; // null = 미배정
+  rental: RentalRow | null;
+};
+function mergeLockerItems(
+  lockers: LockerAssignRow[],
+  rentals: RentalRow[]
+): { cards: MergedLocker[]; usedRentalIds: Set<number> } {
+  const used = new Set<number>();
+  const cards: MergedLocker[] = [];
+  // 1) 배정된 락커 → memo 로 매칭되는 대여권(락커) 결합
+  for (const l of lockers) {
+    const label = `${l.zone_name} ${l.number}번`;
+    const r = rentals.find((x) => !used.has(x.id) && (x.memo ?? "").includes(label)) ?? null;
+    if (r) used.add(r.id);
+    cards.push({
+      key: `la${l.id}`,
+      name: r?.item_name ?? "락커",
+      price: r?.price_won ?? 0,
+      start: l.start_date,
+      exp: l.expires_at,
+      assign: l,
+      rental: r,
+    });
+  }
+  // 2) 배정 안 된 락커 대여권(미배정) — memo '미배정' 또는 락커/상가 상품명
+  for (const x of rentals) {
+    if (used.has(x.id)) continue;
+    const isLocker = (x.memo ?? "").includes("미배정") || /^(락커|상가)/.test((x.item_name ?? "").trim());
+    if (!isLocker) continue;
+    used.add(x.id);
+    cards.push({
+      key: `lr${x.id}`,
+      name: x.item_name,
+      price: x.price_won,
+      start: x.start_date,
+      exp: x.expires_at,
+      assign: null,
+      rental: x,
+    });
+  }
+  return { cards, usedRentalIds: used };
+}
+
 function UsageSection({
   memberId,
   reloadKey,
@@ -3476,7 +3559,6 @@ function UsageSection({
   const [lockers, setLockers] = useState<
     { id: number; zone_name: string; number: number; start_date: string | null; expires_at: string | null }[]
   >([]);
-  const [lockerFee, setLockerFee] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -3496,7 +3578,6 @@ function UsageSection({
         if (lRes.ok) {
           const lData = await lRes.json();
           setLockers(lData.lockers ?? []);
-          setLockerFee(lData.payment?.total_won ?? 0);
         }
       } finally {
         setLoading(false);
@@ -3504,11 +3585,15 @@ function UsageSection({
     })();
   }, [memberId, reloadKey, getIdToken]);
 
-  const total = memberships.length + rentals.length + lockers.length;
   const todayStr = new Date().toISOString().slice(0, 10);
   const isValid = (s: string, exp: string) => s === "valid" && exp >= todayStr;
   const sellerName = (id: number | null) =>
     id ? staffList.find((s) => s.id === id)?.display_name ?? null : null;
+
+  // 락커(배정) + 락커 대여권 을 하나로 합침. 남은 대여권 = 운동복 등.
+  const { cards: lockerCards, usedRentalIds } = mergeLockerItems(lockers, rentals);
+  const otherRentals = rentals.filter((r) => !usedRentalIds.has(r.id));
+  const total = memberships.length + otherRentals.length + lockerCards.length;
 
   return (
     <section className="mt-6 mb-2">
@@ -3535,7 +3620,7 @@ function UsageSection({
               onClick={() => onOpenDetail(membershipToDetail(m, sellerName))}
             />
           ))}
-          {rentals.map((r) => (
+          {otherRentals.map((r) => (
             <UsageCard
               key={`r${r.id}`}
               tag="대여권"
@@ -3547,15 +3632,16 @@ function UsageSection({
               onClick={() => onOpenDetail(rentalToDetail(r, sellerName))}
             />
           ))}
-          {lockers.map((l) => (
+          {lockerCards.map((c) => (
             <UsageCard
-              key={`l${l.id}`}
+              key={c.key}
               tag="락커"
-              name={`${l.zone_name} ${l.number}번`}
-              price={lockerFee}
-              period={fmtPeriod(l.start_date, l.expires_at)}
-              valid={!l.expires_at || l.expires_at >= todayStr}
-              onClick={onOpenLocker}
+              name={c.name}
+              price={c.price}
+              period={fmtPeriod(c.start, c.exp)}
+              valid={c.assign ? !c.exp || c.exp >= todayStr : !!c.rental && isValid(c.rental.status, c.rental.expires_at)}
+              lockerAssign={c.assign ? { zone_name: c.assign.zone_name, number: c.assign.number } : "unassigned"}
+              onClick={c.assign ? onOpenLocker : c.rental ? () => onOpenDetail(rentalToDetail(c.rental!, sellerName)) : onOpenLocker}
             />
           ))}
         </ul>
@@ -3571,6 +3657,7 @@ function UsageCard({
   period,
   valid,
   paused,
+  lockerAssign,
   onClick,
 }: {
   tag: string;
@@ -3579,6 +3666,8 @@ function UsageCard({
   period: string;
   valid: boolean;
   paused?: boolean;
+  // 락커 배정 상태 칩: 배정됨(구역·번호) / "unassigned"(미배정) / 없음
+  lockerAssign?: { zone_name: string; number: number } | "unassigned";
   onClick: () => void;
 }) {
   const tone =
@@ -3594,9 +3683,23 @@ function UsageCard({
         className="w-full text-left px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors"
       >
         <div className="flex items-baseline justify-between gap-2">
-          <span className="flex items-center gap-1.5">
+          <span className="flex flex-wrap items-center gap-1.5">
             <span className={`text-[10.5px] font-bold ${tone}`}>{tag}</span>
             <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{name}</span>
+            {lockerAssign === "unassigned" ? (
+              <span className="px-1.5 py-0.5 rounded-full bg-red-500/12 text-red-600 dark:text-red-400 text-[10px] font-bold">
+                미배정
+              </span>
+            ) : lockerAssign ? (
+              <>
+                <span className="px-1.5 py-0.5 rounded-full bg-[#8B6BB1]/12 text-[#8B6BB1] dark:text-purple-300 text-[10px] font-semibold">
+                  {lockerAssign.zone_name}
+                </span>
+                <span className="px-1.5 py-0.5 rounded-full bg-[#8B6BB1]/12 text-[#8B6BB1] dark:text-purple-300 text-[10px] font-bold">
+                  {lockerAssign.number}번
+                </span>
+              </>
+            ) : null}
             {paused && (
               <span className="px-1.5 py-0.5 rounded-full bg-[#B47B2A]/12 text-[#B47B2A] dark:text-amber-300 text-[10px] font-semibold">
                 홀딩중
