@@ -140,6 +140,8 @@ export async function POST(request: Request) {
     vat_included?: boolean;
     memo?: string;
     co_trainer_ids?: number[];
+    /** 할인 금액(원). price_won 은 이미 할인 후 실결제가로 받음. 기록용. */
+    discount_won?: number;
     /** 발급 시점에 받은 금액. 미입력 시 price_won 전액(=완납) 으로 간주. */
     paid_amount_won?: number;
     /** 발급 소스 상품(있으면 정원·유형 스냅샷용). */
@@ -271,6 +273,7 @@ export async function POST(request: Request) {
       remaining_sessions: totalSessions,
       session_minutes: Number(body.session_minutes),
       price_won: priceWon,
+      discount_won: Math.max(0, Math.floor(Number(body.discount_won) || 0)),
       payment_method: paymentMethod,
       payment_method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
       vat_included: !!body.vat_included,

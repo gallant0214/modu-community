@@ -5815,6 +5815,7 @@ function PassIssueModal({
   const [showServiceSessions, setShowServiceSessions] = useState(false);
   const [sessionMinutes, setSessionMinutes] = useState(50);
   const [priceWon, setPriceWon] = useState(0);
+  const [discountWon, setDiscountWon] = useState(0);
   const [vatIncluded, setVatIncluded] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "etc">("card");
   const [paymentCustom, setPaymentCustom] = useState("");
@@ -5899,6 +5900,7 @@ function PassIssueModal({
     if (p.total_sessions && p.total_sessions > 0) setTotalSessions(p.total_sessions);
     if (p.session_minutes && p.session_minutes > 0) setSessionMinutes(p.session_minutes);
     setPriceWon(p.price_won ?? 0);
+    setDiscountWon(0);
     if (p.service_days && p.service_days > 0) {
       setDurationDays(p.service_days);
       setUnlimited(false);
@@ -5934,7 +5936,9 @@ function PassIssueModal({
           total_sessions: totalSessions,
           service_sessions: serviceSessions || 0,
           session_minutes: sessionMinutes,
-          price_won: priceWon,
+          // price_won = 할인 적용 후 실결제가, discount_won = 할인액(기록용)
+          price_won: Math.max(0, priceWon - discountWon),
+          discount_won: discountWon,
           vat_included: vatIncluded,
           payment_method: paymentMethod,
           payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
@@ -6194,6 +6198,16 @@ function PassIssueModal({
             </span>
           </label>
         </CrmField>
+        <CrmField label="할인 금액 (원)">
+          <input
+            type="text"
+            inputMode="numeric"
+            className={crmInputClass}
+            value={discountWon ? formatWon(discountWon) : ""}
+            onChange={(e) => setDiscountWon(parseWon(e.target.value))}
+            placeholder="0"
+          />
+        </CrmField>
         <CrmField label="결제 수단">
           <div className="grid grid-cols-4 gap-1.5">
             {(["card", "cash", "transfer", "etc"] as const).map((m) => (
@@ -6314,6 +6328,17 @@ function PassIssueModal({
             {error}
           </div>
         )}
+        {/* 최종 결제 금액 = (결제금액 − 할인) + 묶음 구성 합 */}
+        <div className="flex items-baseline justify-between px-1 mt-1.5">
+          <span className="text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-200">최종 결제 금액</span>
+          <span className="text-[17px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] tabular-nums">
+            {formatWon(
+              Math.max(0, priceWon - discountWon) +
+                pickedComponents.reduce((s, c) => s + Math.max(0, Math.floor(c.price_won ?? 0)), 0)
+            )}
+            원
+          </span>
+        </div>
         <button
           onClick={submit}
           disabled={submitting}
