@@ -1937,6 +1937,35 @@ function LockerActionModal({
     }
   };
 
+  // 입력 즉시 실시간 검색 (디바운스 250ms) — 검색 버튼 안 눌러도 목록이 바로 뜬다.
+  // 회원을 이미 고른 뒤엔 재검색하지 않음.
+  useEffect(() => {
+    if (pickedMember) return;
+    const q = memberQuery.trim();
+    if (!q) {
+      setMemberResults([]);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const token = await getIdToken();
+        const res = await fetch(`/api/crm/members?q=${encodeURIComponent(q)}`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!cancelled && res.ok) setMemberResults(data.members ?? []);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [memberQuery, pickedMember, getIdToken]);
+
   const callAction = async (
     action: "assign" | "return" | "update" | "broken" | "repaired",
     payload: Record<string, unknown> = {}
