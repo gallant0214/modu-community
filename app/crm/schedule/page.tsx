@@ -148,6 +148,11 @@ export default function CrmSchedulePage() {
 
   const range = useMemo(() => computeRange(viewMode, anchor), [viewMode, anchor]);
   const rangeLabel = useMemo(() => formatRangeLabel(viewMode, anchor, range), [viewMode, anchor, range]);
+  // 리스트 뷰는 anchor 월(KST)만 보이도록 필터 — 캘린더는 기존 6주 범위 유지
+  const listReservations = useMemo(
+    () => filterReservationsForListView(reservations, viewMode, anchor),
+    [reservations, viewMode, anchor]
+  );
 
   const canPickTrainer = role === "owner" || role === "admin" || role === "manager";
 
@@ -389,7 +394,7 @@ export default function CrmSchedulePage() {
 
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
         <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
-          {rangeLabel} · 예약 {reservations.length}건 · 일정 {events.length}건
+          {rangeLabel} · 예약 {panelMode === "list" ? listReservations.length : reservations.length}건 · 일정 {events.length}건
         </span>
         {/* 상태 색상 범례 */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -411,7 +416,7 @@ export default function CrmSchedulePage() {
       {loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : panelMode === "list" ? (
-        <ReservationListView reservations={reservations} onPick={setPicked} />
+        <ReservationListView reservations={listReservations} onPick={setPicked} />
       ) : viewMode === "day" ? (
         <DayView
           trainers={visibleTrainers}
@@ -2324,6 +2329,25 @@ function ActionBtn({
 }
 
 /* ─── 유틸 ────────────────────────────── */
+
+// 리스트 뷰용 필터: 월 모드에선 anchor 월(KST) 내 예약만 남김.
+// day/week 는 이미 좁은 범위라 그대로 반환. 브라우저 TZ 가 KST 라 로컬 시각 비교로 충분.
+function filterReservationsForListView(
+  list: Reservation[],
+  view: ViewMode,
+  anchor: string
+): Reservation[] {
+  if (view !== "month") return list;
+  const d = new Date(anchor);
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  const startTs = new Date(y, m, 1).getTime();
+  const endTs = new Date(y, m + 1, 1).getTime();
+  return list.filter((r) => {
+    const t = new Date(r.starts_at).getTime();
+    return t >= startTs && t < endTs;
+  });
+}
 
 function computeRange(view: ViewMode, anchor: string): { from: string; to: string } {
   if (view === "day") {
