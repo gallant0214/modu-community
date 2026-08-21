@@ -8,6 +8,7 @@ import {
   SCHEDULE_LEGEND,
 } from "../_components/crm-labels";
 import BookingRequestsPanel from "../_components/booking-requests-panel";
+import { CrmLessonsList } from "../_components/crm-lessons-list";
 
 interface Reservation {
   id: number;
@@ -148,11 +149,6 @@ export default function CrmSchedulePage() {
 
   const range = useMemo(() => computeRange(viewMode, anchor), [viewMode, anchor]);
   const rangeLabel = useMemo(() => formatRangeLabel(viewMode, anchor, range), [viewMode, anchor, range]);
-  // 리스트 뷰는 anchor 월(KST)만 보이도록 필터 — 캘린더는 기존 6주 범위 유지
-  const listReservations = useMemo(
-    () => filterReservationsForListView(reservations, viewMode, anchor),
-    [reservations, viewMode, anchor]
-  );
 
   const canPickTrainer = role === "owner" || role === "admin" || role === "manager";
 
@@ -307,6 +303,8 @@ export default function CrmSchedulePage() {
           스케줄 관리
         </h1>
 
+        {panelMode === "calendar" && (
+        <>
         {/* 뷰 모드 토글 */}
         <div className="inline-flex border border-[#E8E0D0] dark:border-zinc-700 rounded-lg overflow-hidden">
           {(["day", "week", "month"] as const).map((m) => (
@@ -351,11 +349,13 @@ export default function CrmSchedulePage() {
             다음 ›
           </button>
         </div>
+        </>
+        )}
       </header>
 
-      {/* 강사 필터(관리자/팀장 이상) + 캘린더/수업 예약 내역 탭 */}
+      {/* 강사 필터(관리자/팀장 이상, 캘린더 모드만) + 캘린더/수업진행목록 탭 */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        {canPickTrainer && (
+        {panelMode === "calendar" && canPickTrainer && (
           <>
             <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">강사:</span>
             <select
@@ -386,15 +386,16 @@ export default function CrmSchedulePage() {
                   : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
                 }`}
             >
-              {m === "calendar" ? "캘린더" : "수업 예약 내역"}
+              {m === "calendar" ? "캘린더" : "수업진행목록"}
             </button>
           ))}
         </div>
       </div>
 
+      {panelMode === "calendar" && (
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
         <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
-          {rangeLabel} · 예약 {panelMode === "list" ? listReservations.length : reservations.length}건 · 일정 {events.length}건
+          {rangeLabel} · 예약 {reservations.length}건 · 일정 {events.length}건
         </span>
         {/* 상태 색상 범례 */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -406,6 +407,7 @@ export default function CrmSchedulePage() {
           ))}
         </div>
       </div>
+      )}
 
       {error && (
         <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
@@ -416,7 +418,7 @@ export default function CrmSchedulePage() {
       {loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : panelMode === "list" ? (
-        <ReservationListView reservations={listReservations} onPick={setPicked} />
+        <CrmLessonsList />
       ) : viewMode === "day" ? (
         <DayView
           trainers={visibleTrainers}
@@ -1013,76 +1015,6 @@ type DayDragState = {
     width: number;
   }[];
 } | null;
-
-/* ─── 수업 예약 내역 (선택 기간 리스트) ────────────────────────────── */
-function ReservationListView({
-  reservations,
-  onPick,
-}: {
-  reservations: Reservation[];
-  onPick: (r: Reservation) => void;
-}) {
-  const rows = [...reservations].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-
-  const fmtKst = (iso: string) => {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso;
-    const k = new Date(d.getTime() + 9 * 3600 * 1000);
-    const dow = ["일", "월", "화", "수", "목", "금", "토"][k.getUTCDay()];
-    const p = (n: number) => String(n).padStart(2, "0");
-    return `${k.getUTCFullYear()}.${p(k.getUTCMonth() + 1)}.${p(k.getUTCDate())} (${dow}) ${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`;
-  };
-
-  if (rows.length === 0) {
-    return (
-      <div className="px-4 py-12 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-        이 기간에 수업 예약 내역이 없어요.
-      </div>
-    );
-  }
-
-  return (
-    <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
-      <table className="w-full text-[13px]">
-        <thead className="bg-[#FBF7EB] dark:bg-zinc-900/80 text-[#6B5D47] dark:text-zinc-400">
-          <tr>
-            <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">번호</th>
-            <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">수업 예약일</th>
-            <th className="text-left font-medium px-3 py-2.5">회원명</th>
-            <th className="text-left font-medium px-3 py-2.5">수강권 이름</th>
-            <th className="text-left font-medium px-3 py-2.5">강사명</th>
-            <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">회차</th>
-            <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">상태</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr
-              key={r.id}
-              onClick={() => onPick(r)}
-              className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 text-[#3A342A] dark:text-zinc-200 cursor-pointer hover:bg-[#FBF7EB]/60 dark:hover:bg-zinc-900/50"
-            >
-              <td className="px-3 py-2.5 text-[#8C8270] tabular-nums">{i + 1}</td>
-              <td className="px-3 py-2.5 whitespace-nowrap tabular-nums">{fmtKst(r.starts_at)}</td>
-              <td className="px-3 py-2.5 whitespace-nowrap font-medium">{r.member_name || "-"}</td>
-              <td className="px-3 py-2.5 whitespace-nowrap">{r.lesson_kind ?? "-"}</td>
-              <td className="px-3 py-2.5 whitespace-nowrap">{r.trainer_name ?? "-"}</td>
-              <td className="px-3 py-2.5 whitespace-nowrap text-[#6B5D47] dark:text-zinc-400">
-                {r.session_index && r.session_total ? `${r.session_index}/${r.session_total}회` : "-"}
-              </td>
-              <td className="px-3 py-2.5 whitespace-nowrap">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full ${RESERVATION_STATUS_COLOR[r.status]?.dot ?? "bg-zinc-400"}`} />
-                  {RESERVATION_STATUS_LABEL[r.status] ?? r.status}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 function DayView({
   trainers,
@@ -2329,25 +2261,6 @@ function ActionBtn({
 }
 
 /* ─── 유틸 ────────────────────────────── */
-
-// 리스트 뷰용 필터: 월 모드에선 anchor 월(KST) 내 예약만 남김.
-// day/week 는 이미 좁은 범위라 그대로 반환. 브라우저 TZ 가 KST 라 로컬 시각 비교로 충분.
-function filterReservationsForListView(
-  list: Reservation[],
-  view: ViewMode,
-  anchor: string
-): Reservation[] {
-  if (view !== "month") return list;
-  const d = new Date(anchor);
-  const y = d.getFullYear();
-  const m = d.getMonth();
-  const startTs = new Date(y, m, 1).getTime();
-  const endTs = new Date(y, m + 1, 1).getTime();
-  return list.filter((r) => {
-    const t = new Date(r.starts_at).getTime();
-    return t >= startTs && t < endTs;
-  });
-}
 
 function computeRange(view: ViewMode, anchor: string): { from: string; to: string } {
   if (view === "day") {
