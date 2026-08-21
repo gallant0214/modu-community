@@ -107,7 +107,50 @@ export async function GET(
     reserved_count: reservedMap.get(p.id) ?? 0,
   }));
 
-  return NextResponse.json({ member, passes: passesOut, read_only: readOnly });
+  // 최근 구매일·최종 만료일은 발급 시 stored 컬럼이 자동 갱신되지 않으므로 실시간 계산해 덮어씀.
+  const isUnlimited = (d?: string | null) =>
+    !!d && (d.startsWith("9999") || d.startsWith("2999"));
+
+  // 최근 구매일 = crm_payments 최신 paid_at (KST 날짜)
+  const { data: pays } = await supabase
+    .from("crm_payments")
+    .select("paid_at")
+    .eq("center_id", targetCenterId)
+    .eq("member_id", memberId)
+    .order("paid_at", { ascending: false })
+    .limit(1);
+  const lastPaid = pays?.[0]?.paid_at
+    ? new Date(new Date(pays[0].paid_at as string).getTime() + 9 * 3600 * 1000)
+        .toISOString()
+        .slice(0, 10)
+    : null;
+
+  // 최종 만료일 = 유효 상품(회원권·수강권·대여권·락커) 중 가장 늦은 만료일. 무기한 있으면 무기한.
+  const [msE, psE, rsE, lkE] = await Promise.all([
+    supabase.from("crm_memberships").select("expires_at").eq("center_id", targetCenterId).eq("member_id", memberId).eq("status", "valid"),
+    supabase.from("crm_passes").select("expires_at").eq("center_id", targetCenterId).eq("member_id", memberId).eq("status", "valid"),
+    supabase.from("crm_rentals").select("expires_at").eq("center_id", targetCenterId).eq("member_id", memberId).in("status", ["valid", "active"]),
+    supabase.from("crm_lockers").select("expires_at").eq("center_id", targetCenterId).eq("assigned_member_id", memberId).eq("state", "assigned"),
+  ]);
+  const allExp = [
+    ...(msE.data ?? []),
+    ...(psE.data ?? []),
+    ...(rsE.data ?? []),
+    ...(lkE.data ?? []),
+  ]
+    .map((x) => (x as { expires_at: string | null }).expires_at)
+    .filter((v): v is string => !!v);
+  let finalExp: string | null = null;
+  if (allExp.some(isUnlimited)) finalExp = "9999-12-31";
+  else if (allExp.length) finalExp = allExp.reduce((a, b) => (a > b ? a : b)).slice(0, 10);
+
+  const memberOut = {
+    ...member,
+    last_purchase_at: lastPaid ?? member.last_purchase_at,
+    final_expire_at: finalExp ?? member.final_expire_at,
+  };
+
+  return NextResponse.json({ member: memberOut, passes: passesOut, read_only: readOnly });
 }
 
 // 회원 필드 그룹 — 권한 매트릭스와 매핑
