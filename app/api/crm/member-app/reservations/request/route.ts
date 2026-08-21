@@ -64,6 +64,10 @@ export async function POST(request: Request) {
   if (pass.status !== "valid") {
     return NextResponse.json({ error: "사용할 수 없는 수강권입니다" }, { status: 400 });
   }
+  // 담당 강사 미배정 수강권은 예약 불가 (배정될 강사가 없어 유령 예약 방지)
+  if (!pass.trainer_member_id) {
+    return NextResponse.json({ error: "담당 강사가 아직 배정되지 않아 예약할 수 없어요. 센터에 문의해 주세요." }, { status: 400 });
+  }
   // 이용기간 검사: 수업일(예약 시각, KST)은 수강권 시작일~만료일 안이어야 함.
   //  시작일 전이면 예약 불가, 만료일 이후면 잔여 횟수가 있어도 예약 불가. (무기한 9999-12-31 은 만료 제외)
   const startsKstYmd = new Date(startsAt.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);

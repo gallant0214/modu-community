@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const { data: passes, error } = await supabase
     .from("crm_passes")
     .select(
-      "id, lesson_kind, issue_type, total_sessions, remaining_sessions, session_minutes, group_capacity, trainer_member_id, co_trainer_ids, issued_at, price_won, start_date, expires_at, status"
+      "id, lesson_kind, issue_type, total_sessions, remaining_sessions, session_minutes, group_capacity, trainer_member_id, co_trainer_ids, issued_at, price_won, discount_won, start_date, expires_at, status"
     )
     .eq("center_id", ctx.centerId)
     .eq("member_id", ctx.memberId)
@@ -68,6 +68,8 @@ export async function GET(request: Request) {
       const isPeriod = (p.total_sessions ?? 0) <= 0;
       const reserved = reservedMap.get(p.id) ?? 0;
       const notExpired = p.status === "valid" && (p.expires_at ?? "") >= todayYmd;
+      // 담당 강사 미배정이면 예약 불가 (배정 후에 예약 가능)
+      const hasTrainer = !!p.trainer_member_id;
       const hasRoom = isPeriod ? true : reserved < (p.total_sessions ?? 0) && (p.remaining_sessions ?? 0) > 0;
       const dday = p.expires_at
         ? Math.ceil(
@@ -90,11 +92,12 @@ export async function GET(request: Request) {
         trainerName: nameMap.get(p.trainer_member_id) ?? "트레이너",
         issuedAt: p.issued_at,
         priceWon: p.price_won ?? null,
+        discountWon: p.discount_won ?? null,
         startDate: p.start_date,
         expiresAt: p.expires_at,
         dday,
         status: p.status,
-        bookable: notExpired && hasRoom,
+        bookable: notExpired && hasRoom && hasTrainer,
       };
     }),
   });
