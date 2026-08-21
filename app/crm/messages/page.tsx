@@ -5,6 +5,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass, CrmModal } from "../_components/crm-modal";
 import { formatPhone } from "../_components/crm-labels";
 import { AutoMessagesTab } from "./_auto-messages";
+import { SmsSendTab } from "./_sms-send";
 
 type AudienceKind = "all" | "active" | "dormant" | "expiring" | "expired" | "unassigned" | "individual";
 
@@ -288,11 +289,12 @@ export default function CrmMessagesPage() {
 
       {activeTab === "auto" && <AutoMessagesTab />}
 
-      {activeTab === "sms" && (
-        <div className="px-4 py-16 text-center text-[14px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-          페이지 준비중입니다.
+      {activeTab === "sms" && canSend === false && (
+        <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          메세지 전송 권한이 없습니다. 센터 관리자에게 문의해 주세요.
         </div>
       )}
+      {activeTab === "sms" && canSend !== false && <SmsSendTab />}
 
       {activeTab === "send" && canSend === false && (
         <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">

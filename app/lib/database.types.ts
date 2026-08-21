@@ -3877,6 +3877,63 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_sms_logs: {
+        Row: {
+          id: number
+          center_id: number
+          sender: string
+          receivers: string
+          receiver_cnt: number
+          msg: string
+          msg_type: string | null
+          title: string | null
+          testmode: boolean
+          result_code: number | null
+          result_msg: string | null
+          success_cnt: number | null
+          error_cnt: number | null
+          aligo_msg_id: string | null
+          sent_by_uid: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          sender: string
+          receivers: string
+          receiver_cnt?: number
+          msg: string
+          msg_type?: string | null
+          title?: string | null
+          testmode?: boolean
+          result_code?: number | null
+          result_msg?: string | null
+          success_cnt?: number | null
+          error_cnt?: number | null
+          aligo_msg_id?: string | null
+          sent_by_uid?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          sender?: string
+          receivers?: string
+          receiver_cnt?: number
+          msg?: string
+          msg_type?: string | null
+          title?: string | null
+          testmode?: boolean
+          result_code?: number | null
+          result_msg?: string | null
+          success_cnt?: number | null
+          error_cnt?: number | null
+          aligo_msg_id?: string | null
+          sent_by_uid?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       crm_audit_logs: {
         Row: {
           id: number
