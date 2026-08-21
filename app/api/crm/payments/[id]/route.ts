@@ -157,7 +157,14 @@ export async function DELETE(
     txAt = (data as { created_at: string } | null)?.created_at ?? null;
   }
 
-  const removed = { memberships: 0, passes: 0, rentals: 0, lockers_returned: 0, lockers_reverted: 0 };
+  // 취소로 삭제/원복되는 항목의 상세 스냅샷(로그 보존용).
+  const removed = {
+    counts: { memberships: 0, passes: 0, rentals: 0, lockers_returned: 0, lockers_reverted: 0 },
+    memberships: [] as unknown[],
+    passes: [] as unknown[],
+    rentals: [] as unknown[],
+    lockers: [] as unknown[],
+  };
 
   if (txAt && memberId) {
     // 동일 트랜잭션 판정: created_at ±3초
@@ -165,9 +172,9 @@ export async function DELETE(
     const hi = new Date(Date.parse(txAt) + 3000).toISOString();
 
     const [msRes, psRes, rsRes, lhRes] = await Promise.all([
-      supabase.from("crm_memberships").select("id").eq("center_id", ctx.centerId).eq("member_id", memberId).gte("created_at", lo).lte("created_at", hi),
-      supabase.from("crm_passes").select("id").eq("center_id", ctx.centerId).eq("member_id", memberId).gte("created_at", lo).lte("created_at", hi),
-      supabase.from("crm_rentals").select("id").eq("center_id", ctx.centerId).eq("member_id", memberId).gte("created_at", lo).lte("created_at", hi),
+      supabase.from("crm_memberships").select("id, plan_name, price_won, start_date, expires_at, payment_method").eq("center_id", ctx.centerId).eq("member_id", memberId).gte("created_at", lo).lte("created_at", hi),
+      supabase.from("crm_passes").select("id, lesson_kind, price_won, total_sessions, start_date, expires_at, payment_method").eq("center_id", ctx.centerId).eq("member_id", memberId).gte("created_at", lo).lte("created_at", hi),
+      supabase.from("crm_rentals").select("id, item_name, price_won, start_date, expires_at, payment_method").eq("center_id", ctx.centerId).eq("member_id", memberId).gte("created_at", lo).lte("created_at", hi),
       supabase.from("crm_locker_history").select("locker_id, created_at").eq("center_id", ctx.centerId).eq("member_id", memberId).eq("action", "assign").gte("created_at", lo).lte("created_at", hi),
     ]);
 
@@ -216,7 +223,14 @@ export async function DELETE(
             actor_uid: ctx.uid,
           } as never);
         }
-        removed.lockers_reverted++;
+        removed.counts.lockers_reverted++;
+        removed.lockers.push({
+          id: lid,
+          action: "reverted",
+          zone_id: lk ? (lk as { zone_id: number }).zone_id : null,
+          number: lk ? (lk as { number: number }).number : null,
+          restored_expires: prevRow.expires_at,
+        });
       } else {
         // 이 구매로 새로 배정된 락커 → 회수(미배정)
         await supabase
@@ -235,25 +249,37 @@ export async function DELETE(
             actor_uid: ctx.uid,
           } as never);
         }
-        removed.lockers_returned++;
+        removed.counts.lockers_returned++;
+        removed.lockers.push({
+          id: lid,
+          action: "returned",
+          zone_id: lk ? (lk as { zone_id: number }).zone_id : null,
+          number: lk ? (lk as { number: number }).number : null,
+        });
       }
     }
 
     // 상품 삭제 (회원권/수강권 삭제 시 연결 결제·예약은 FK CASCADE 로 함께 삭제)
-    const msIds = (msRes.data ?? []).map((m) => (m as { id: number }).id);
-    const psIds = (psRes.data ?? []).map((p) => (p as { id: number }).id);
-    const rsIds = (rsRes.data ?? []).map((r) => (r as { id: number }).id);
+    const msRows = msRes.data ?? [];
+    const psRows = psRes.data ?? [];
+    const rsRows = rsRes.data ?? [];
+    const msIds = msRows.map((m) => (m as { id: number }).id);
+    const psIds = psRows.map((p) => (p as { id: number }).id);
+    const rsIds = rsRows.map((r) => (r as { id: number }).id);
     if (msIds.length) {
       await supabase.from("crm_memberships").delete().in("id", msIds).eq("center_id", ctx.centerId);
-      removed.memberships = msIds.length;
+      removed.counts.memberships = msIds.length;
+      removed.memberships = msRows;
     }
     if (psIds.length) {
       await supabase.from("crm_passes").delete().in("id", psIds).eq("center_id", ctx.centerId);
-      removed.passes = psIds.length;
+      removed.counts.passes = psIds.length;
+      removed.passes = psRows;
     }
     if (rsIds.length) {
       await supabase.from("crm_rentals").delete().in("id", rsIds).eq("center_id", ctx.centerId);
-      removed.rentals = rsIds.length;
+      removed.counts.rentals = rsIds.length;
+      removed.rentals = rsRows;
     }
   }
 
