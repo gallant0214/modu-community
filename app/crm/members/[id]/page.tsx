@@ -6316,12 +6316,12 @@ function PassIssueModal({
               type="checkbox"
               checked={vatIncluded}
               onChange={(e) => {
-              const checked = e.target.checked;
-              setVatIncluded(checked);
-              // 부가세 포함↔별도 토글 시 표시 금액을 환산(체크 해제=÷1.1, 재체크=×1.1).
-              // 예) 550,000(포함) → 해제 → 500,000. 이후 수동 변경은 자유.
-              setPriceWon((prev) => (prev ? Math.round(checked ? prev * 1.1 : prev / 1.1) : prev));
-            }}
+                const checked = e.target.checked;
+                setVatIncluded(checked);
+                // 부가세 포함↔별도 토글 시 표시 금액을 환산(체크 해제=÷1.1, 재체크=×1.1).
+                // 예) 550,000(포함) → 해제 → 500,000. 이후 수동 변경은 자유.
+                setPriceWon((prev) => (prev ? Math.round(checked ? prev * 1.1 : prev / 1.1) : prev));
+              }}
               className="w-4 h-4 accent-[#6B7B3A]"
             />
             <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
