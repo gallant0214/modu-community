@@ -448,7 +448,10 @@ export default function CrmMemberDetailPage() {
           canEdit={canEditSales}
           canRefund={canRefundSales}
           canDelete={canDeleteSales}
-          onChanged={load}
+          onChanged={() => {
+            load();
+            setUsageReload((n) => n + 1);
+          }}
         />
       ) : tab === "reservations" ? (
         <MemberReservationsSection memberId={member.id} />
@@ -2544,7 +2547,12 @@ function MemberPaymentsSection({
   }
 
   async function remove(id: number) {
-    if (!window.confirm("이 결제내역을 삭제할까요?\n삭제하면 누적 결제 합계에서 제외되며 되돌릴 수 없습니다.")) return;
+    if (
+      !window.confirm(
+        "이 결제를 삭제(구매 취소)할까요?\n연결된 회원권·수강권과 함께 발급된 묶음 구성(대여권·락커)까지 모두 삭제되고, 락커는 이전 상태로 되돌아갑니다.\n되돌릴 수 없습니다."
+      )
+    )
+      return;
     setBusyId(id);
     try {
       const token = await getIdToken();
