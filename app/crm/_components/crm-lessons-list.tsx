@@ -50,6 +50,7 @@ export function CrmLessonsList() {
   const [from, setFrom] = useState(() => localYmd(new Date(now.getFullYear(), now.getMonth(), 1)));
   const [to, setTo] = useState(() => localYmd(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
   const [trainerId, setTrainerId] = useState<number | "">("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "attended" | "noshow">("all"); // 상태 필터(기본 전체)
   const [staff, setStaff] = useState<StaffLite[]>([]);
   const [rows, setRows] = useState<LessonRow[]>([]);
   const [summary, setSummary] = useState<{ total: number; attended: number; noshow: number } | null>(null);
@@ -107,6 +108,9 @@ export function CrmLessonsList() {
   const inputCls =
     "px-2.5 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100";
 
+  // 상태 필터(클라이언트) — 조회한 목록에서 출석/노쇼만 보기
+  const filteredRows = statusFilter === "all" ? rows : rows.filter((r) => r.status === statusFilter);
+
   return (
     <div className="space-y-4">
       {/* 필터 바 */}
@@ -133,6 +137,18 @@ export function CrmLessonsList() {
                 {s.display_name}
               </option>
             ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-[11.5px] text-[#8C8270]">
+          상태
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as "all" | "attended" | "noshow")}
+            className={inputCls}
+          >
+            <option value="all">전체</option>
+            <option value="attended">출석</option>
+            <option value="noshow">노쇼</option>
           </select>
         </label>
         <button
@@ -167,9 +183,11 @@ export function CrmLessonsList() {
 
       {loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
-      ) : rows.length === 0 ? (
+      ) : filteredRows.length === 0 ? (
         <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-          해당 기간에 진행된 수업이 없어요.
+          {rows.length === 0
+            ? "해당 기간에 진행된 수업이 없어요."
+            : `해당 기간에 '${statusFilter === "attended" ? "출석" : "노쇼"}' 수업이 없어요.`}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
@@ -184,7 +202,7 @@ export function CrmLessonsList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
-              {rows.map((r) => (
+              {filteredRows.map((r) => (
                 <tr key={r.id} className="bg-[#FEFCF7] dark:bg-zinc-900">
                   <td className="px-3 py-2.5 whitespace-nowrap tabular-nums text-[#3A342A] dark:text-zinc-300">
                     {fmtKstDateTime(r.starts_at)}
