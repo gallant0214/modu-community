@@ -821,7 +821,7 @@ interface SettlementResp {
   fixed_monthly: number;
   fixed_total: number;
   salary_total: number;
-  staff_breakdown: { id: number; name: string; base: number; commission: number; total: number }[];
+  staff_breakdown: { id: number; name: string; base: number; commission: number; bonus?: number; cash?: number; total: number }[];
   additional_total: number;
   net_profit: number;
 }
@@ -993,7 +993,9 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
               <div key={s.id} className="flex items-center justify-between px-5 py-2.5 border-b border-[#E8E0D0]/50 dark:border-zinc-800/50 last:border-0">
                 <span className="text-[13px] text-[#3A342A] dark:text-zinc-300">{s.name}</span>
                 <span className="text-[12px] text-[#A89B80] tabular-nums">
-                  고정 {formatWon(s.base)} + 수업료 {formatWon(s.commission)} ={" "}
+                  고정 {formatWon(s.base)} + 수업료 {formatWon(s.commission)}
+                  {!!s.bonus && s.bonus > 0 && ` + 성과급 ${formatWon(s.bonus)}`}
+                  {!!s.cash && s.cash > 0 && ` + 현금 ${formatWon(s.cash)}`} ={" "}
                   <strong className="text-[#3A342A] dark:text-zinc-200 text-[13px]">{formatWon(s.total)}원</strong>
                 </span>
               </div>

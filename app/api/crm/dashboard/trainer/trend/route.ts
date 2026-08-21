@@ -52,7 +52,8 @@ export async function GET(request: Request) {
       .select("pass_id, starts_at")
       .eq("center_id", centerId)
       .eq("trainer_member_id", me)
-      .eq("status", "attended")
+      // 진행 = 출석 + 노쇼 (급여/정산과 동일 기준)
+      .in("status", ["attended", "noshow"])
       .gte("starts_at", kstMonthStart(earliest))
       .lt("starts_at", kstMonthStart(endExcl)),
   ]);

@@ -53,7 +53,8 @@ export async function GET(request: Request) {
       .select("id, pass_id, status, starts_at")
       .eq("center_id", centerId)
       .eq("trainer_member_id", me)
-      .in("status", ["attended", "booked"])
+      // 진행(출석+노쇼)=확정, booked=예정. 급여/정산과 동일 기준.
+      .in("status", ["attended", "noshow", "booked"])
       .gte("starts_at", kstStart(monthStart))
       .lt("starts_at", kstStart(nextMonthStart)),
   ]);
@@ -75,9 +76,9 @@ export async function GET(request: Request) {
   for (const r of monthRes ?? []) {
     const p = r.pass_id ? passMap.get(r.pass_id) : null;
     const fee = p ? perSessionFee(p) : 0;
-    if (r.status === "attended") {
-      confirmedRevenue += fee;
-      attendedCount += 1;
+    if (r.status === "attended" || r.status === "noshow") {
+      confirmedRevenue += fee; // 진행(출석+노쇼) 소진분 = 확정 매출
+      if (r.status === "attended") attendedCount += 1;
     } else if (r.status === "booked") {
       bookedCount += 1;
     }

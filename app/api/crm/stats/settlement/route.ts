@@ -85,6 +85,7 @@ export async function GET(request: Request) {
     : { data: [] };
   const attPassMap = new Map((attPasses ?? []).map((p) => [p.id, p]));
   const revenueByTrainer = new Map<number, number>();
+  const sessionCountByTrainer = new Map<number, number>(); // 진행 세션 수 (성과급 조건용)
   for (const r of attRes ?? []) {
     if (!r.trainer_member_id || !r.pass_id) continue;
     const p = attPassMap.get(r.pass_id);
@@ -92,6 +93,10 @@ export async function GET(request: Request) {
     revenueByTrainer.set(
       r.trainer_member_id,
       (revenueByTrainer.get(r.trainer_member_id) ?? 0) + perSessionFee(p)
+    );
+    sessionCountByTrainer.set(
+      r.trainer_member_id,
+      (sessionCountByTrainer.get(r.trainer_member_id) ?? 0) + 1
     );
   }
 
@@ -105,10 +110,14 @@ export async function GET(request: Request) {
   const fixedTotal = fixedMonthly * monthsInPeriod;
 
   // ── 직원 급여 ───────────────────────────────────────────
+  // 직원급여 상세(payroll)와 동일하게 base + 수업료(commission) + 성과급(bonus) + 현금지급(cash) 합산.
   type Tier = { upTo: number | null; rate: number };
+  type Bonus = { metric: string; gte: number; reward_type?: string; bonus_won?: number; bonus_percent?: number };
   const { data: staff } = await supabase
     .from("crm_center_members")
-    .select("id, display_name, role, commission_type, commission_rate, commission_tiers, base_salary")
+    .select(
+      "id, display_name, role, commission_type, commission_rate, commission_tiers, base_salary, commission_bonuses, cash_pay_enabled, cash_pay_won"
+    )
     .eq("center_id", ctx.centerId)
     .eq("status", "active")
     .in("role", ["owner", "admin", "manager", "trainer"]);
@@ -118,11 +127,14 @@ export async function GET(request: Request) {
     name: string;
     base: number;
     commission: number;
+    bonus: number;
+    cash: number;
     total: number;
   }[] = [];
   let salaryTotal = 0;
   for (const s of staff ?? []) {
     const revenue = revenueByTrainer.get(s.id) ?? 0;
+    const sessionCount = sessionCountByTrainer.get(s.id) ?? 0;
     const type = (s.commission_type as string) ?? "fixed";
     const rate = Number(s.commission_rate ?? 0);
     const tiers: Tier[] = Array.isArray(s.commission_tiers) ? (s.commission_tiers as Tier[]) : [];
@@ -136,9 +148,27 @@ export async function GET(request: Request) {
     }
     const commission = Math.round((revenue * effectiveRate) / 100);
     const base = Math.max(0, Number(s.base_salary ?? 0)) * monthsInPeriod;
-    const pay = base + commission;
+
+    // 성과급: 지표(revenue/sessions)별 '가장 높은 달성 구간 1개'만 적용(누적 X). payroll 과 동일.
+    const bonuses: Bonus[] = Array.isArray(s.commission_bonuses) ? (s.commission_bonuses as Bonus[]) : [];
+    const bestByMetric = new Map<string, Bonus>();
+    for (const b of bonuses) {
+      const actual = b.metric === "sessions" ? sessionCount : revenue;
+      if (actual < (Number(b.gte) || 0)) continue;
+      const cur = bestByMetric.get(b.metric);
+      if (!cur || (Number(b.gte) || 0) > (Number(cur.gte) || 0)) bestByMetric.set(b.metric, b);
+    }
+    const bonus = [...bestByMetric.values()].reduce((sum, b) => {
+      if (b.reward_type === "percent") return sum + Math.round((commission * (Number(b.bonus_percent) || 0)) / 100);
+      return sum + Math.max(0, Number(b.bonus_won) || 0);
+    }, 0);
+
+    // 현금 지급 (원천징수 대상 아님 — 정산 순이익엔 지출로 포함)
+    const cash = s.cash_pay_enabled ? Math.max(0, Number(s.cash_pay_won ?? 0)) : 0;
+
+    const pay = base + commission + bonus + cash;
     if (pay <= 0) continue;
-    staffBreakdown.push({ id: s.id, name: s.display_name ?? "", base, commission, total: pay });
+    staffBreakdown.push({ id: s.id, name: s.display_name ?? "", base, commission, bonus, cash, total: pay });
     salaryTotal += pay;
   }
   staffBreakdown.sort((a, b) => b.total - a.total);

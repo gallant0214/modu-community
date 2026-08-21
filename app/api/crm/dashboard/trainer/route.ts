@@ -72,7 +72,8 @@ export async function GET(request: Request) {
       .select("id, pass_id, member_id, status, starts_at")
       .eq("center_id", centerId)
       .eq("trainer_member_id", me)
-      .in("status", ["attended", "booked"])
+      // 진행(출석+노쇼)은 확정, booked 는 예정. (급여/정산과 동일하게 노쇼도 회차 소진=수업료)
+      .in("status", ["attended", "noshow", "booked"])
       .gte("starts_at", kstStart(monthStart))
       .lt("starts_at", kstStart(nextMonthStart)),
     // 이번주 내 담당 예약 (오늘/주간 일정)
@@ -174,13 +175,13 @@ export async function GET(request: Request) {
   for (const r of monthRes ?? []) {
     const p = r.pass_id ? passMap.get(r.pass_id) : null;
     const fee = p ? perSessionFee(p) : 0;
-    if (r.status === "attended") {
-      confirmedRevenue += fee;
-      attendedCount += 1;
+    if (r.status === "attended" || r.status === "noshow") {
+      confirmedRevenue += fee; // 진행(출석+노쇼) 소진분 = 확정 수업료 (급여/정산과 동일 기준)
+      if (r.status === "attended") attendedCount += 1;
     } else if (r.status === "booked") {
       bookedCount += 1;
     }
-    expectedRevenue += fee; // attended + booked
+    expectedRevenue += fee; // 진행(출석+노쇼) + 예정(booked)
   }
   const cfg: CommissionConfig = meRow ?? {};
   const hasCommission =
