@@ -694,7 +694,11 @@ export default function CrmMemberDetailPage() {
                     <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
                       {p.lesson_kind}
                     </span>
-                    <PassStatusChip status={p.status} />
+                    <PassStatusChip
+                      status={p.status}
+                      totalSessions={p.total_sessions}
+                      remainingSessions={p.remaining_sessions}
+                    />
                   </div>
                   <div className="mt-1 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
                     {ISSUE_TYPE_LABEL[p.issue_type] ?? p.issue_type} ·{" "}
@@ -3627,12 +3631,24 @@ function LockerDetailModal({
   );
 }
 
-function PassStatusChip({ status }: { status: string }) {
-  const label = PASS_STATUS_LABEL[status] ?? status;
+function PassStatusChip({
+  status,
+  totalSessions,
+  remainingSessions,
+}: {
+  status: string;
+  totalSessions?: number | null;
+  remainingSessions?: number | null;
+}) {
+  // 횟수제(총 회차>0) 수강권이 모두 소진(잔여<=0)되면 날짜 유효기간과 무관하게 '만료'로 표시.
+  const exhausted =
+    status === "valid" && (totalSessions ?? 0) > 0 && (remainingSessions ?? 0) <= 0;
+  const eff = exhausted ? "expired" : status;
+  const label = PASS_STATUS_LABEL[eff] ?? eff;
   const cls =
-    status === "valid"
+    eff === "valid"
       ? "bg-[#EFE7D5] text-[#6B7B3A] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A]"
-      : status === "expired"
+      : eff === "expired"
       ? "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500"
       : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
   return (
@@ -7087,7 +7103,11 @@ function PassDetailModal({
               <span className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">
                 {pass.lesson_kind}
               </span>
-              <PassStatusChip status={pass.status} />
+              <PassStatusChip
+                status={pass.status}
+                totalSessions={pass.total_sessions}
+                remainingSessions={pass.remaining_sessions}
+              />
             </div>
             <div className="mt-1.5 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
               {ISSUE_TYPE_LABEL[pass.issue_type] ?? pass.issue_type} ·{" "}

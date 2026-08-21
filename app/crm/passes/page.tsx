@@ -473,7 +473,11 @@ export default function CrmPassesPage() {
                     <ExpiryCell expiresAt={p.expires_at} status={p.status} />
                   </Td>
                   <Td>
-                    <StatusChip status={p.status} />
+                    <StatusChip
+                      status={p.status}
+                      totalSessions={p.total_sessions}
+                      remainingSessions={p.remaining_sessions}
+                    />
                   </Td>
                 </tr>
               ))}
@@ -605,12 +609,24 @@ function PassIssueMemberPicker({
   );
 }
 
-function StatusChip({ status }: { status: string }) {
-  const label = PASS_STATUS_LABEL[status] ?? status;
+function StatusChip({
+  status,
+  totalSessions,
+  remainingSessions,
+}: {
+  status: string;
+  totalSessions?: number | null;
+  remainingSessions?: number | null;
+}) {
+  // 횟수제 수강권이 모두 소진되면 날짜와 무관하게 '만료' 표시
+  const exhausted =
+    status === "valid" && (totalSessions ?? 0) > 0 && (remainingSessions ?? 0) <= 0;
+  const eff = exhausted ? "expired" : status;
+  const label = PASS_STATUS_LABEL[eff] ?? eff;
   const cls =
-    status === "valid"
+    eff === "valid"
       ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-      : status === "expired"
+      : eff === "expired"
       ? "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500"
       : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
   return (
