@@ -5460,6 +5460,38 @@ function UsageIssueModal({
           </p>
         </CrmField>
 
+        <CrmField label="결제 수단">
+          <div className="grid grid-cols-4 gap-1.5">
+            {(["card", "cash", "transfer", "etc"] as const).map((mth) => (
+              <button
+                key={mth}
+                onClick={() => {
+                  setPaymentMethod(mth);
+                  // 카드 결제는 부가세 포함 강제 (체크 꺼져 있으면 켜면서 금액 ×1.1)
+                  if (mth === "card" && !vatIncluded) {
+                    setVatIncluded(true);
+                    setPriceWon((prev) => (prev ? Math.round(prev * 1.1) : prev));
+                  }
+                }}
+                className={`px-2 py-2 rounded-lg text-[12px] font-medium
+                  ${paymentMethod === mth
+                    ? "border border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
+                    : "border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                  }`}
+              >
+                {PAYMENT_METHOD_LABEL[mth]}
+              </button>
+            ))}
+          </div>
+          {paymentMethod === "etc" && (
+            <input
+              className={`${crmInputClass} mt-2`}
+              value={paymentCustom}
+              onChange={(e) => setPaymentCustom(e.target.value)}
+              placeholder="결제 수단을 직접 입력하세요"
+            />
+          )}
+        </CrmField>
         <div className="grid grid-cols-2 gap-2">
           <CrmField label={type === "locker" ? "대여료 (원)" : "정가 (원)"}>
             <input
@@ -5488,9 +5520,13 @@ function UsageIssueModal({
             checked={vatIncluded}
             onChange={(e) => {
               const checked = e.target.checked;
+              // 카드 결제는 부가세 포함 해제 불가
+              if (!checked && paymentMethod === "card") {
+                alert("카드 결제는 부가세 포함입니다.");
+                return;
+              }
               setVatIncluded(checked);
               // 부가세 포함↔별도 토글 시 표시 금액을 환산(체크 해제=÷1.1, 재체크=×1.1).
-              // 예) 550,000(포함) → 해제 → 500,000. 이후 수동 변경은 자유.
               setPriceWon((prev) => (prev ? Math.round(checked ? prev * 1.1 : prev / 1.1) : prev));
             }}
             className="w-4 h-4 accent-[#6B7B3A]"
@@ -5557,32 +5593,6 @@ function UsageIssueModal({
             )}
           </div>
         )}
-
-        <CrmField label="결제 수단">
-          <div className="grid grid-cols-4 gap-1.5">
-            {(["card", "cash", "transfer", "etc"] as const).map((mth) => (
-              <button
-                key={mth}
-                onClick={() => setPaymentMethod(mth)}
-                className={`px-2 py-2 rounded-lg text-[12px] font-medium
-                  ${paymentMethod === mth
-                    ? "border border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
-                    : "border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
-                  }`}
-              >
-                {PAYMENT_METHOD_LABEL[mth]}
-              </button>
-            ))}
-          </div>
-          {paymentMethod === "etc" && (
-            <input
-              className={`${crmInputClass} mt-2`}
-              value={paymentCustom}
-              onChange={(e) => setPaymentCustom(e.target.value)}
-              placeholder="결제 수단을 직접 입력하세요"
-            />
-          )}
-        </CrmField>
 
         <CrmField label="메모">
           <textarea
@@ -6311,49 +6321,19 @@ function PassIssueModal({
           </CrmField>
         )}
 
-        <CrmField label="결제 금액 (원)">
-          <input
-            type="text"
-            inputMode="numeric"
-            className={crmInputClass}
-            value={priceWon ? formatWon(priceWon) : ""}
-            onChange={(e) => setPriceWon(parseWon(e.target.value))}
-            placeholder="0"
-          />
-          <label className="mt-2 flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={vatIncluded}
-              onChange={(e) => {
-                const checked = e.target.checked;
-                setVatIncluded(checked);
-                // 부가세 포함↔별도 토글 시 표시 금액을 환산(체크 해제=÷1.1, 재체크=×1.1).
-                // 예) 550,000(포함) → 해제 → 500,000. 이후 수동 변경은 자유.
-                setPriceWon((prev) => (prev ? Math.round(checked ? prev * 1.1 : prev / 1.1) : prev));
-              }}
-              className="w-4 h-4 accent-[#6B7B3A]"
-            />
-            <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-              부가세 포함 금액
-            </span>
-          </label>
-        </CrmField>
-        <CrmField label="할인 금액 (원)">
-          <input
-            type="text"
-            inputMode="numeric"
-            className={crmInputClass}
-            value={discountWon ? formatWon(discountWon) : ""}
-            onChange={(e) => setDiscountWon(parseWon(e.target.value))}
-            placeholder="0"
-          />
-        </CrmField>
         <CrmField label="결제 수단">
           <div className="grid grid-cols-4 gap-1.5">
             {(["card", "cash", "transfer", "etc"] as const).map((m) => (
               <button
                 key={m}
-                onClick={() => setPaymentMethod(m)}
+                onClick={() => {
+                  setPaymentMethod(m);
+                  // 카드 결제는 부가세 포함 강제 (체크 꺼져 있으면 켜면서 금액 ×1.1)
+                  if (m === "card" && !vatIncluded) {
+                    setVatIncluded(true);
+                    setPriceWon((prev) => (prev ? Math.round(prev * 1.1) : prev));
+                  }
+                }}
                 className={`px-2 py-2 rounded-lg text-[12px] font-medium
                   ${paymentMethod === m
                     ? "border border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
@@ -6372,6 +6352,47 @@ function PassIssueModal({
               placeholder="결제 수단을 직접 입력하세요"
             />
           )}
+        </CrmField>
+        <CrmField label="결제 금액 (원)">
+          <input
+            type="text"
+            inputMode="numeric"
+            className={crmInputClass}
+            value={priceWon ? formatWon(priceWon) : ""}
+            onChange={(e) => setPriceWon(parseWon(e.target.value))}
+            placeholder="0"
+          />
+          <label className="mt-2 flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={vatIncluded}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                // 카드 결제는 부가세 포함 해제 불가
+                if (!checked && paymentMethod === "card") {
+                  alert("카드 결제는 부가세 포함입니다.");
+                  return;
+                }
+                setVatIncluded(checked);
+                // 부가세 포함↔별도 토글 시 표시 금액을 환산(체크 해제=÷1.1, 재체크=×1.1).
+                setPriceWon((prev) => (prev ? Math.round(checked ? prev * 1.1 : prev / 1.1) : prev));
+              }}
+              className="w-4 h-4 accent-[#6B7B3A]"
+            />
+            <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+              부가세 포함 금액
+            </span>
+          </label>
+        </CrmField>
+        <CrmField label="할인 금액 (원)">
+          <input
+            type="text"
+            inputMode="numeric"
+            className={crmInputClass}
+            value={discountWon ? formatWon(discountWon) : ""}
+            onChange={(e) => setDiscountWon(parseWon(e.target.value))}
+            placeholder="0"
+          />
         </CrmField>
         <div className="grid grid-cols-2 gap-2">
           <CrmField label="발급일" required>
