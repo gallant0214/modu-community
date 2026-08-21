@@ -158,10 +158,12 @@ export async function POST(request: Request) {
   }
 
   const memberId = Number(body.member_id);
-  const trainerMemberId = Number(body.trainer_member_id);
-  const sellerMemberId = Number(body.seller_member_id) || trainerMemberId;
-  if (!memberId || !trainerMemberId) {
-    return NextResponse.json({ error: "회원과 담당 강사가 필요합니다" }, { status: 400 });
+  // 담당 강사 '미배정' 허용 → null. (당장 배정 못 하고 나중에 배정하는 경우)
+  const trainerMemberId = Number(body.trainer_member_id) || null;
+  // 판매자 기본값 = 담당 강사, 없으면 로그인 직원. (미배정이어도 판매자는 있어야 함)
+  const sellerMemberId = Number(body.seller_member_id) || trainerMemberId || ctx.centerMemberId || null;
+  if (!memberId) {
+    return NextResponse.json({ error: "회원이 필요합니다" }, { status: 400 });
   }
   const issueType = body.issue_type;
   if (!issueType || !ISSUE_TYPES.includes(issueType as (typeof ISSUE_TYPES)[number])) {
@@ -184,7 +186,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "필수 항목이 비어있습니다" }, { status: 400 });
   }
 
-  // 회원·강사가 본 센터 소속인지 확인
+  // 회원·강사가 본 센터 소속인지 확인 (강사는 미배정이면 검사 생략)
   const [{ data: m }, { data: t }] = await Promise.all([
     supabase
       .from("crm_members")
@@ -192,15 +194,20 @@ export async function POST(request: Request) {
       .eq("id", memberId)
       .eq("center_id", ctx.centerId)
       .maybeSingle(),
-    supabase
-      .from("crm_center_members")
-      .select("id")
-      .eq("id", trainerMemberId)
-      .eq("center_id", ctx.centerId)
-      .maybeSingle(),
+    trainerMemberId
+      ? supabase
+          .from("crm_center_members")
+          .select("id")
+          .eq("id", trainerMemberId)
+          .eq("center_id", ctx.centerId)
+          .maybeSingle()
+      : Promise.resolve({ data: { id: 0 } as { id: number } | null }),
   ]);
-  if (!m || !t) {
-    return NextResponse.json({ error: "회원 또는 강사를 찾을 수 없습니다" }, { status: 404 });
+  if (!m) {
+    return NextResponse.json({ error: "회원을 찾을 수 없습니다" }, { status: 404 });
+  }
+  if (trainerMemberId && !t) {
+    return NextResponse.json({ error: "담당 강사를 찾을 수 없습니다" }, { status: 404 });
   }
 
   // 추가 강사(공동 진행) — 본인 센터 소속 + 주 강사 제외 + 중복 제거

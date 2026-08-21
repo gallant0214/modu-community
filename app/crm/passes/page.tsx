@@ -460,7 +460,9 @@ export default function CrmPassesPage() {
                   </Td>
                   <Td className="text-[#6B5D47] dark:text-zinc-400">
                     {(() => {
-                      const primary = staffMap.get(p.trainer_member_id) ?? "—";
+                      const primary = p.trainer_member_id
+                        ? staffMap.get(p.trainer_member_id) ?? "—"
+                        : "미배정";
                       const extra = (p.co_trainer_ids ?? []).length;
                       return extra > 0 ? `${primary} 외 ${extra}명` : primary;
                     })()}

@@ -6082,7 +6082,7 @@ function PassIssueModal({
   const submit = async () => {
     setError("");
     if (!lessonKind.trim()) return setError("수업 종류를 입력해주세요");
-    if (!trainerId) return setError("담당 강사를 선택해주세요");
+    // 담당 강사는 '미배정' 허용 (나중에 배정). 필수 검사 없음.
     if (totalSessions < 1) return setError("총 세션 수는 1 이상이어야 합니다");
     setSubmitting(true);
     try {
@@ -6092,9 +6092,9 @@ function PassIssueModal({
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify({
           member_id: memberId,
-          trainer_member_id: Number(trainerId),
+          trainer_member_id: trainerId ? Number(trainerId) : null,
           co_trainer_ids: coTrainerIds,
-          seller_member_id: Number(sellerId) || Number(trainerId),
+          seller_member_id: Number(sellerId) || (trainerId ? Number(trainerId) : null) || myMemberId,
           issue_type: issueType,
           // 본 수강권은 원래 회차만. 서비스 회차는 서버가 '서비스 수강권'으로 0원 별도 발급.
           lesson_kind: `${lessonKind}(${totalSessions}회)`,
@@ -6225,13 +6225,13 @@ function PassIssueModal({
             수강권을 선택하면 금액·세션·기간이 자동 채워져요. 미선택 시 직접 입력하면 됩니다.
           </p>
         </CrmField>
-        <CrmField label="담당 강사" required>
+        <CrmField label="담당 강사">
           <select
             className={crmInputClass}
             value={trainerId}
             onChange={(e) => setTrainerId(e.target.value ? Number(e.target.value) : "")}
           >
-            <option value="">선택해주세요</option>
+            <option value="">미배정 (나중에 배정)</option>
             {staffList.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.display_name}
@@ -7075,7 +7075,11 @@ function PassDetailModal({
   const open = passId !== null;
   const staffMap = new Map(staffList.map((s) => [s.id, s.display_name]));
   const pass = detail?.pass;
-  const trainerName = pass ? staffMap.get(pass.trainer_member_id) ?? "—" : "—";
+  const trainerName = pass
+    ? pass.trainer_member_id
+      ? staffMap.get(pass.trainer_member_id) ?? "—"
+      : "미배정"
+    : "—";
   const coTrainerNames = (detail?.co_trainers ?? [])
     .map((c) => c.name || staffMap.get(c.id) || "")
     .filter(Boolean)
@@ -7164,7 +7168,7 @@ function PassDetailModal({
                     }
                     className={crmInputClass}
                   >
-                    <option value="">선택</option>
+                    <option value="">미배정 (나중에 배정)</option>
                     {staffList
                       .filter((s) => s.status === "active")
                       .map((s) => (
