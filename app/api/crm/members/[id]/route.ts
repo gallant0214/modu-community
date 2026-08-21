@@ -125,24 +125,70 @@ export async function GET(
         .slice(0, 10)
     : null;
 
-  // 최종 만료일 = 유효 상품(회원권·수강권·대여권·락커) 중 가장 늦은 만료일. 무기한 있으면 무기한.
+  // 최종 만료일 계산 규칙:
+  // - 회원권·대여권·락커: 유효 건의 expires_at (무기한 sentinel 이면 무기한)
+  // - 수강권: 무기한(count제)이고 잔여>0 → '무기한'(진행 중).
+  //           무기한이지만 잔여 0(수업 종료) → 종료 시점(마지막 출석일, 없으면 갱신일)으로 만료 처리.
+  //           기간제 → expires_at.
+  const kstYmd = (iso: string) =>
+    new Date(new Date(iso).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+
   const [msE, psE, rsE, lkE] = await Promise.all([
     supabase.from("crm_memberships").select("expires_at").eq("center_id", targetCenterId).eq("member_id", memberId).eq("status", "valid"),
-    supabase.from("crm_passes").select("expires_at").eq("center_id", targetCenterId).eq("member_id", memberId).eq("status", "valid"),
+    supabase.from("crm_passes").select("id, expires_at, remaining_sessions, updated_at").eq("center_id", targetCenterId).eq("member_id", memberId).eq("status", "valid"),
     supabase.from("crm_rentals").select("expires_at").eq("center_id", targetCenterId).eq("member_id", memberId).in("status", ["valid", "active"]),
     supabase.from("crm_lockers").select("expires_at").eq("center_id", targetCenterId).eq("assigned_member_id", memberId).eq("state", "assigned"),
   ]);
-  const allExp = [
-    ...(msE.data ?? []),
-    ...(psE.data ?? []),
-    ...(rsE.data ?? []),
-    ...(lkE.data ?? []),
-  ]
-    .map((x) => (x as { expires_at: string | null }).expires_at)
-    .filter((v): v is string => !!v);
+
+  let hasActiveUnlimited = false;
+  const expCandidates: string[] = [];
+
+  // 회원권·대여권·락커 (기간형)
+  for (const x of [...(msE.data ?? []), ...(rsE.data ?? []), ...(lkE.data ?? [])]) {
+    const exp = (x as { expires_at: string | null }).expires_at;
+    if (!exp) continue;
+    if (isUnlimited(exp)) hasActiveUnlimited = true;
+    else expCandidates.push(exp.slice(0, 10));
+  }
+
+  // 수강권
+  const usedUpUnlimited: { id: number; updated_at: string | null }[] = [];
+  for (const p of (psE.data ?? []) as { id: number; expires_at: string | null; remaining_sessions: number | null; updated_at: string | null }[]) {
+    if (isUnlimited(p.expires_at)) {
+      if ((p.remaining_sessions ?? 0) > 0) hasActiveUnlimited = true; // 진행 중 → 무기한
+      else usedUpUnlimited.push({ id: p.id, updated_at: p.updated_at }); // 종료 → 종료 시점 필요
+    } else if (p.expires_at) {
+      expCandidates.push(p.expires_at.slice(0, 10));
+    }
+  }
+
+  // 종료된 무기한 수강권: 마지막 출석일(없으면 갱신일)을 만료 시점으로.
+  if (usedUpUnlimited.length) {
+    const ids = usedUpUnlimited.map((p) => p.id);
+    const { data: att } = await supabase
+      .from("crm_reservations")
+      .select("pass_id, attended_at, starts_at")
+      .eq("center_id", targetCenterId)
+      .in("pass_id", ids)
+      .eq("status", "attended");
+    const lastAttByPass = new Map<number, string>();
+    for (const r of (att ?? []) as { pass_id: number | null; attended_at: string | null; starts_at: string | null }[]) {
+      if (!r.pass_id) continue;
+      const d = r.attended_at ?? r.starts_at;
+      if (!d) continue;
+      const ymd = kstYmd(d);
+      const prev = lastAttByPass.get(r.pass_id);
+      if (!prev || ymd > prev) lastAttByPass.set(r.pass_id, ymd);
+    }
+    for (const p of usedUpUnlimited) {
+      const end = lastAttByPass.get(p.id) ?? (p.updated_at ? kstYmd(p.updated_at) : null);
+      if (end) expCandidates.push(end);
+    }
+  }
+
   let finalExp: string | null = null;
-  if (allExp.some(isUnlimited)) finalExp = "9999-12-31";
-  else if (allExp.length) finalExp = allExp.reduce((a, b) => (a > b ? a : b)).slice(0, 10);
+  if (hasActiveUnlimited) finalExp = "9999-12-31";
+  else if (expCandidates.length) finalExp = expCandidates.reduce((a, b) => (a > b ? a : b));
 
   const memberOut = {
     ...member,
