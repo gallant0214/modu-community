@@ -43,7 +43,7 @@ const AUDIENCE_LABEL = Object.fromEntries(
 export default function CrmMessagesPage() {
   const { getIdToken } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<"send" | "auto">("send");
+  const [activeTab, setActiveTab] = useState<"send" | "auto" | "sms">("send");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState<AudienceKind>("all");
@@ -269,6 +269,7 @@ export default function CrmMessagesPage() {
         {([
           { key: "send", label: "메세지 전송" },
           { key: "auto", label: "자동 메세지 전송" },
+          { key: "sms", label: "문자 메세지 전송" },
         ] as const).map((tab) => (
           <button
             key={tab.key}
@@ -286,6 +287,12 @@ export default function CrmMessagesPage() {
       </div>
 
       {activeTab === "auto" && <AutoMessagesTab />}
+
+      {activeTab === "sms" && (
+        <div className="px-4 py-16 text-center text-[14px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          페이지 준비중입니다.
+        </div>
+      )}
 
       {activeTab === "send" && canSend === false && (
         <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
