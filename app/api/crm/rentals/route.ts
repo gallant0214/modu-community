@@ -31,6 +31,11 @@ export async function GET(request: Request) {
   if (memberId) query = query.eq("member_id", Number(memberId));
   if (status) query = query.eq("status", status);
 
+  // 데이터 격리: 강사/매니저(1인 강사 제외)는 본인이 판매한 대여권만.
+  if ((ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner) {
+    query = query.eq("seller_member_id", ctx.centerMemberId);
+  }
+
   const { data, error } = await query;
   if (error) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
