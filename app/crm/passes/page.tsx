@@ -286,22 +286,14 @@ export default function CrmPassesPage() {
               발급된 레슨권의 잔여 세션, 만료일, 결제 상태를 한 화면에서 확인합니다.
             </p>
           </div>
-          <div className="flex items-end gap-2">
-            <div className="flex flex-col items-end gap-1.5">
-              <PeriodSelect value={periodFilter} onChange={setPeriodFilter} />
-              <div className="rounded-lg border border-[#D9CDB8] bg-white/70 px-3 py-2 text-right dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">현재 결과</div>
-                <div className="mt-0.5 text-[18px] font-bold text-[#2F3A2B] dark:text-[#A8B87A]">
-                  {visibleList.length.toLocaleString()}건
-                </div>
+          <div className="flex flex-col items-end gap-1.5">
+            <PeriodSelect value={periodFilter} onChange={setPeriodFilter} />
+            <div className="rounded-lg border border-[#D9CDB8] bg-white/70 px-3 py-2 text-right dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">현재 결과</div>
+              <div className="mt-0.5 text-[18px] font-bold text-[#2F3A2B] dark:text-[#A8B87A]">
+                {visibleList.length.toLocaleString()}건
               </div>
             </div>
-            <button
-              onClick={() => setIssueOpen(true)}
-              className="h-[50px] px-4 rounded-lg bg-[#2F3A2B] text-white text-[13px] font-semibold hover:bg-[#243020] whitespace-nowrap shadow-sm dark:bg-[#A8B87A] dark:text-zinc-950"
-            >
-              + 수강권 발급
-            </button>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 lg:grid-cols-5 gap-2.5">
@@ -337,6 +329,12 @@ export default function CrmPassesPage() {
               </option>
             ))}
           </select>
+          <button
+            onClick={() => setIssueOpen(true)}
+            className="px-3.5 py-2 rounded-lg bg-[#2F3A2B] text-white text-[13px] font-semibold hover:bg-[#243020] whitespace-nowrap shadow-sm dark:bg-[#A8B87A] dark:text-zinc-950"
+          >
+            + 수강권 발급
+          </button>
           <select
             className={`${crmInputClass} !w-auto min-w-[150px]`}
             value={paymentFilter}
