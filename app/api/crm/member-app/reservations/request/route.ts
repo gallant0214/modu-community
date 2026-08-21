@@ -55,7 +55,7 @@ export async function POST(request: Request) {
   // 내 수강권
   const { data: pass } = await supabase
     .from("crm_passes")
-    .select("id, member_id, trainer_member_id, total_sessions, remaining_sessions, status, session_minutes, group_capacity, expires_at")
+    .select("id, member_id, trainer_member_id, total_sessions, remaining_sessions, status, session_minutes, group_capacity, start_date, expires_at")
     .eq("id", passId)
     .eq("center_id", ctx.centerId)
     .eq("member_id", ctx.memberId)
@@ -64,9 +64,13 @@ export async function POST(request: Request) {
   if (pass.status !== "valid") {
     return NextResponse.json({ error: "사용할 수 없는 수강권입니다" }, { status: 400 });
   }
-  // 유효기간 만료 검사: 수업일(예약 시각, KST)이 수강권 만료일 이후면 잔여 횟수가 있어도 예약 불가.
-  // (무기한 9999-12-31 은 항상 통과)
+  // 이용기간 검사: 수업일(예약 시각, KST)은 수강권 시작일~만료일 안이어야 함.
+  //  시작일 전이면 예약 불가, 만료일 이후면 잔여 횟수가 있어도 예약 불가. (무기한 9999-12-31 은 만료 제외)
   const startsKstYmd = new Date(startsAt.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const passStart = (pass as { start_date?: string | null }).start_date;
+  if (passStart && startsKstYmd < passStart) {
+    return NextResponse.json({ error: "수강권 시작일 이전에는 예약할 수 없어요." }, { status: 400 });
+  }
   if (pass.expires_at && pass.expires_at !== "9999-12-31" && startsKstYmd > pass.expires_at) {
     return NextResponse.json({ error: "유효기간이 만료된 수강권입니다." }, { status: 400 });
   }

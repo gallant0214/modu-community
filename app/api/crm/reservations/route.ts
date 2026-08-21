@@ -2,7 +2,7 @@ import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
-import { sendPushToMember, formatKstSlot } from "@/app/lib/member-notify";
+import { sendPushToMember, formatKstSlot, memberNotifyOn } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -206,7 +206,7 @@ export async function POST(request: Request) {
   // session_minutes 까지 조회 → 예약 종료 시각 서버측 파생
   const { data: pass } = await supabase
     .from("crm_passes")
-    .select("id, center_id, member_id, trainer_member_id, co_trainer_ids, remaining_sessions, total_sessions, status, session_minutes, group_capacity, expires_at")
+    .select("id, center_id, member_id, trainer_member_id, co_trainer_ids, remaining_sessions, total_sessions, status, session_minutes, group_capacity, start_date, expires_at")
     .eq("id", passId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -214,11 +214,15 @@ export async function POST(request: Request) {
   if (pass.status !== "valid") {
     return NextResponse.json({ error: "사용할 수 없는 수강권입니다" }, { status: 400 });
   }
-  // 유효기간 만료 검사: 수업일(예약 시각)이 수강권 만료일 이후면 잔여 횟수가 남아 있어도 예약 불가.
-  // (무기한 9999-12-31 은 항상 통과. 서버는 UTC 이므로 KST(+9h) 로 수업일 산출.)
+  // 이용기간 검사: 수업일(예약 시각)은 수강권 시작일~만료일 안이어야 함.
+  //  - 시작일 전이면 예약 불가, 만료일 이후면 잔여 횟수가 남아 있어도 예약 불가.
+  //  (무기한 9999-12-31 은 만료 검사 제외. 서버는 UTC 이므로 KST(+9h) 로 수업일 산출.)
   const startsKstYmd = new Date(new Date(body.starts_at).getTime() + 9 * 3600 * 1000)
     .toISOString()
     .slice(0, 10);
+  if ((pass as { start_date?: string | null }).start_date && startsKstYmd < (pass as { start_date?: string }).start_date!) {
+    return NextResponse.json({ error: "수강권 시작일 이전에는 예약할 수 없습니다." }, { status: 400 });
+  }
   if (pass.expires_at && pass.expires_at !== "9999-12-31" && startsKstYmd > pass.expires_at) {
     return NextResponse.json({ error: "유효기간이 만료된 수강권입니다." }, { status: 400 });
   }
@@ -346,8 +350,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "예약 생성 실패", detail: error?.message }, { status: 500 });
   }
 
-  // 회원 알림: 강사가 수업을 예약함
+  // 회원 알림: 강사가 수업을 예약함 (수업 예약 알림 on 일 때만)
   after(async () => {
+    if (!(await memberNotifyOn(pass.member_id, "notify_reservation"))) return;
     await sendPushToMember(
       pass.member_id,
       "reservation_booked",
