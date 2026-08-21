@@ -60,16 +60,17 @@ export async function GET(request: Request) {
   const totalExVat = Math.round(totalRevenue / (1 + VAT_RATE));
   const vatAmount = totalRevenue - totalExVat;
 
-  // 강사별 수업료 정산 기준 = "진행(출석)한 수업 소진분" (판매가 아니라 진행 기준).
+  // 강사별 수업료 정산 기준 = "진행한 수업 소진분" (판매가 아니라 진행 기준).
+  //   진행 수업 = 출석(attended) + 노쇼(noshow) — 둘 다 회차 소진. (직원급여 상세와 동일 기준)
   //   회당 수업료 = perSessionFee(pass) = 부가세제외가 ÷ 총횟수
-  //   강사 매출 = Σ(기간 내 출석 예약의 회당 수업료)
+  //   강사 매출 = Σ(기간 내 진행 예약의 회당 수업료)
   const startUtcS = new Date(`${startDate}T00:00:00+09:00`).toISOString();
   const endUtcS = new Date(`${nextMonth}T00:00:00+09:00`).toISOString();
   const { data: attRes } = await supabase
     .from("crm_reservations")
     .select("pass_id, trainer_member_id")
     .eq("center_id", ctx.centerId)
-    .eq("status", "attended")
+    .in("status", ["attended", "noshow"])
     .gte("starts_at", startUtcS)
     .lt("starts_at", endUtcS);
   const attPassIds = Array.from(

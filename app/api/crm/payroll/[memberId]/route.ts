@@ -231,10 +231,11 @@ export async function GET(
     attendedPassIds.length
       ? supabase
           .from("crm_passes")
-          .select("id, price_won, vat_included, total_sessions, lesson_kind")
+          // discount_won 필수 — perSessionFee 가 (정가−할인) 기준이라 빠지면 정산 탭과 금액이 달라짐
+          .select("id, price_won, discount_won, vat_included, total_sessions, lesson_kind")
           .eq("center_id", ctx.centerId)
           .in("id", attendedPassIds)
-      : Promise.resolve({ data: [] as { id: number; price_won: number | null; vat_included: boolean | null; total_sessions: number | null; lesson_kind: string | null }[] }),
+      : Promise.resolve({ data: [] as { id: number; price_won: number | null; discount_won: number | null; vat_included: boolean | null; total_sessions: number | null; lesson_kind: string | null }[] }),
     attendedMemberIds.length
       ? supabase.from("crm_members").select("id, name, phone").eq("center_id", ctx.centerId).in("id", attendedMemberIds)
       : Promise.resolve({ data: [] as { id: number; name: string; phone: string | null }[] }),
