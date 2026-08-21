@@ -98,6 +98,7 @@ export default function CrmMemberDetailPage() {
   const [lockerOpen, setLockerOpen] = useState(false);
   const [holdTarget, setHoldTarget] = useState<{ kind: "membership" | "rental"; id: number } | null>(null);
   const [detailPassId, setDetailPassId] = useState<number | null>(null);
+  const [passStartEdit, setPassStartEdit] = useState(false); // 결제내역 '수정' 진입 시 편집 모드로 열기
   // 현재 보유(상단 요약) 편집용 실제 레코드
   const [holdMs, setHoldMs] = useState<MembershipRow[]>([]);
   const [holdRs, setHoldRs] = useState<RentalRow[]>([]);
@@ -452,6 +453,15 @@ export default function CrmMemberDetailPage() {
             load();
             setUsageReload((n) => n + 1);
           }}
+          onEditPass={(passId) => {
+            setPassStartEdit(true);
+            setDetailPassId(passId);
+          }}
+          onEditMembership={(membershipId) => {
+            const m = holdMs.find((x) => x.id === membershipId);
+            if (m) setPaymentDetail({ ...membershipToDetail(m, staffName), startInEdit: true });
+            else alert("회원권 정보를 불러오지 못했어요. 새로고침 후 다시 시도해 주세요.");
+          }}
         />
       ) : tab === "reservations" ? (
         <MemberReservationsSection memberId={member.id} />
@@ -502,7 +512,7 @@ export default function CrmMemberDetailPage() {
                   tag="수강권"
                   name={stripPassCountSuffix(p.lesson_kind)}
                   period={`잔여 ${p.remaining_sessions}/${p.total_sessions}회 · ${p.expires_at === "9999-12-31" ? "무기한" : `~${p.expires_at}`}`}
-                  onClick={() => setDetailPassId(p.id)}
+                  onClick={() => { setPassStartEdit(false); setDetailPassId(p.id); }}
                 />
               ))
             : holdingCards("수강권", member.current_pass, onSnapSelect)}
@@ -662,7 +672,7 @@ export default function CrmMemberDetailPage() {
             {passes.map((p) => (
               <li key={p.id}>
                 <button
-                  onClick={() => setDetailPassId(p.id)}
+                  onClick={() => { setPassStartEdit(false); setDetailPassId(p.id); }}
                   className="w-full text-left px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors"
                 >
                   <div className="flex items-baseline justify-between gap-2">
@@ -811,9 +821,14 @@ export default function CrmMemberDetailPage() {
       <PassDetailModal
         passId={detailPassId}
         staffList={staffList}
-        onClose={() => setDetailPassId(null)}
+        startInEdit={passStartEdit}
+        onClose={() => {
+          setDetailPassId(null);
+          setPassStartEdit(false);
+        }}
         onRefunded={() => {
           setDetailPassId(null);
+          setPassStartEdit(false);
           load();
         }}
       />
@@ -2435,12 +2450,17 @@ function MemberPaymentsSection({
   canRefund = false,
   canDelete = false,
   onChanged,
+  onEditPass,
+  onEditMembership,
 }: {
   memberId: number;
   canEdit?: boolean;
   canRefund?: boolean;
   canDelete?: boolean;
   onChanged?: () => void;
+  // 결제항목 '수정' → 수강권/회원권 발급 창(편집 모드)으로 열기
+  onEditPass?: (passId: number) => void;
+  onEditMembership?: (membershipId: number) => void;
 }) {
   const { getIdToken } = useAuth();
   const [payments, setPayments] = useState<PaymentRow[]>([]);
@@ -2735,7 +2755,12 @@ function MemberPaymentsSection({
                 <div className="mt-2 flex items-center gap-1.5">
                   {canEdit && (
                     <button
-                      onClick={() => startEdit(p)}
+                      onClick={() => {
+                        // 수강권/회원권 결제는 해당 발급 창(편집 모드)으로, 그 외엔 인라인 수정
+                        if (p.pass_id && onEditPass) onEditPass(p.pass_id);
+                        else if (p.membership_id && onEditMembership) onEditMembership(p.membership_id);
+                        else startEdit(p);
+                      }}
                       disabled={busy}
                       className="px-2.5 py-1 rounded-lg text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300 bg-[#F0EAD9] dark:bg-zinc-800 disabled:opacity-50"
                     >
@@ -3667,6 +3692,8 @@ interface PaymentDetail {
   paidAt?: string | null;
   memo?: string | null;
   note?: string | null;
+  /** 열자마자 편집(발급 창 형태) 모드로 시작 — 결제내역 '수정' 진입용 */
+  startInEdit?: boolean;
 }
 
 function membershipToDetail(
@@ -4076,6 +4103,12 @@ function HoldingDetailModal({
     setError("");
     setEditing(true);
   };
+
+  // 결제내역 '수정' 진입 시(detail.startInEdit) 권한 확인 후 바로 편집 폼으로 시작
+  useEffect(() => {
+    if (open && detail?.startInEdit && editable && canEdit && !editing) startEdit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, canEdit, editable, detail?.startInEdit]);
 
   const saveEdit = async () => {
     if (!detail?.id || !detail.kind || saving) return;
@@ -5444,7 +5477,13 @@ function UsageIssueModal({
           <input
             type="checkbox"
             checked={vatIncluded}
-            onChange={(e) => setVatIncluded(e.target.checked)}
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setVatIncluded(checked);
+              // 부가세 포함↔별도 토글 시 표시 금액을 환산(체크 해제=÷1.1, 재체크=×1.1).
+              // 예) 550,000(포함) → 해제 → 500,000. 이후 수동 변경은 자유.
+              setPriceWon((prev) => (prev ? Math.round(checked ? prev * 1.1 : prev / 1.1) : prev));
+            }}
             className="w-4 h-4 accent-[#6B7B3A]"
           />
           <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">부가세 포함 금액</span>
@@ -6276,7 +6315,13 @@ function PassIssueModal({
             <input
               type="checkbox"
               checked={vatIncluded}
-              onChange={(e) => setVatIncluded(e.target.checked)}
+              onChange={(e) => {
+              const checked = e.target.checked;
+              setVatIncluded(checked);
+              // 부가세 포함↔별도 토글 시 표시 금액을 환산(체크 해제=÷1.1, 재체크=×1.1).
+              // 예) 550,000(포함) → 해제 → 500,000. 이후 수동 변경은 자유.
+              setPriceWon((prev) => (prev ? Math.round(checked ? prev * 1.1 : prev / 1.1) : prev));
+            }}
               className="w-4 h-4 accent-[#6B7B3A]"
             />
             <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
@@ -6774,11 +6819,13 @@ function CoTrainerPicker({
 function PassDetailModal({
   passId,
   staffList,
+  startInEdit,
   onClose,
   onRefunded,
 }: {
   passId: number | null;
   staffList: { id: number; display_name: string; role: string; status: string }[];
+  startInEdit?: boolean;
   onClose: () => void;
   onRefunded: () => void;
 }) {
@@ -6851,6 +6898,7 @@ function PassDetailModal({
   }, [getIdToken]);
 
   useEffect(() => {
+    setEditing(false); // 열 때마다 보기 모드로 초기화 (startInEdit 이면 아래 이펙트가 편집으로 전환)
     if (passId === null) {
       setDetail(null);
       setError("");
@@ -6924,6 +6972,12 @@ function PassDetailModal({
     setEditing(true);
     setError("");
   };
+
+  // 결제내역 '수정' 진입 시(startInEdit) 권한 확인 후 바로 편집 폼으로 시작
+  useEffect(() => {
+    if (startInEdit && detail?.pass && canEdit && !editing) startEdit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startInEdit, detail, canEdit]);
 
   const saveEdit = async () => {
     if (!detail?.pass || saving) return;
