@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -361,11 +362,14 @@ export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  // owner/admin 또는 1인 강사(solo owner)만 회원 등록 가능.
-  // 일반 trainer/manager 는 본인 회원 등록 불가 ([[feedback-crm-data-isolation]]).
+  // owner/admin/1인 강사 기본 허용 + 직급권한 members.create 부여받은 직급(예: FC·팀장)도 허용.
+  // (FC 역할의 핵심 = 회원 등록/판매 — 직급권한 토글이 실제로 동작하도록)
   const isAdminRole = ctx.role === "owner" || ctx.role === "admin";
   if (!isAdminRole && !ctx.isSoloOwner) {
-    return NextResponse.json({ error: "회원 등록 권한이 없습니다" }, { status: 403 });
+    const perms = await loadPermissionsForContext(ctx);
+    if (perms["members.create"] !== true) {
+      return NextResponse.json({ error: "회원 등록 권한이 없습니다" }, { status: 403 });
+    }
   }
 
   let body: {
