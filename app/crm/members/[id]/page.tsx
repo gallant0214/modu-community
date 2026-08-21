@@ -4469,7 +4469,7 @@ async function postBundleComponent(
           expires_at: expires,
         }),
       });
-    } else if (comp.type === "locker" || comp.type === "apparel") {
+    } else if (comp.type === "apparel") {
       res = await fetch("/api/crm/rentals", {
         method: "POST",
         headers,
@@ -4484,6 +4484,75 @@ async function postBundleComponent(
           expires_at: expires,
         }),
       });
+    } else if (comp.type === "locker") {
+      // 묶음에 락커가 포함된 경우: 회원이 이미 배정받은 락커가 있으면
+      // 그 자리를 그대로 이어서(기간 연장) 배정한다(미배정 방지).
+      // 시작일 = 기존 락커 만료 다음날부터 체인(없으면 부모 시작일).
+      let lockerStart = args.startDate;
+      let existingLocker:
+        | { id: number; zone_name: string; number: number; expires_at?: string | null }
+        | null = null;
+      try {
+        const [nsRes, ofRes] = await Promise.all([
+          fetch(`/api/crm/members/${args.memberId}/next-start?type=locker`, { headers }),
+          fetch(`/api/crm/lockers/of-member?member_id=${args.memberId}`, {
+            headers,
+            cache: "no-store",
+          }),
+        ]);
+        const ns = await nsRes.json().catch(() => ({}));
+        if (nsRes.ok && ns?.start_date && ns?.chained) lockerStart = ns.start_date;
+        const of = await ofRes.json().catch(() => ({}));
+        const lks: Array<{ id: number; zone_name: string; number: number; expires_at?: string | null }> =
+          Array.isArray(of?.lockers) ? of.lockers : [];
+        // 만료일이 가장 늦은(가장 최근) 배정 락커 선택
+        existingLocker =
+          lks
+            .slice()
+            .sort((a, b) =>
+              String(b.expires_at ?? "").localeCompare(String(a.expires_at ?? ""))
+            )[0] ?? null;
+      } catch {
+        /* 조회 실패 시 미배정 대여권만 생성(기존 동작) */
+      }
+      const lockerExpires = addDaysYmd(lockerStart, durationDays || 30);
+      res = await fetch("/api/crm/rentals", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          member_id: args.memberId,
+          seller_member_id: args.sellerId,
+          item_name: name,
+          price_won: price,
+          payment_method: args.paymentMethod,
+          payment_method_custom: args.paymentCustom,
+          start_date: lockerStart,
+          expires_at: lockerExpires,
+          memo: existingLocker
+            ? `${existingLocker.zone_name} ${existingLocker.number}번`
+            : "구역 미배정",
+        }),
+      });
+      const rentalData = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: rentalData?.error || `${name} 발급 실패` };
+      // 기존 락커를 같은 자리로 이어서 연장 배정
+      if (existingLocker) {
+        const aRes = await fetch(`/api/crm/lockers/${existingLocker.id}`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({
+            action: "assign",
+            member_id: args.memberId,
+            start_date: lockerStart,
+            expires_at: lockerExpires,
+          }),
+        });
+        if (!aRes.ok) {
+          const ad = await aRes.json().catch(() => ({}));
+          return { ok: false, error: ad?.error || "락커 이어배정 실패" };
+        }
+      }
+      return { ok: true };
     } else {
       // personal | group (수강권)
       const totalSessions = Math.max(0, Math.floor(comp.total_sessions ?? 0));
