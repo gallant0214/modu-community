@@ -307,15 +307,14 @@ export default function CrmMemberDetailPage() {
     !!member.current_rental ||
     !!member.current_locker;
 
+  // '보유 상품' 개수 = 현재 보유에 실제 표시되는 항목 수.
+  // 회원권/수강권/대여권은 라이브 유효 레코드 우선(없으면 POS 스냅샷), 락커는 병합 카드 수.
+  const snapCount = (s: string | null | undefined) => (s ? splitTopLevel(s).length : 0);
   const currentHoldings =
-    validHoldLockers.length +
-    [
-      member.current_membership,
-      member.current_pass,
-      member.current_rental,
-      // 락커: 실제 배정이 있으면 그걸로, 없으면 스냅샷
-      validHoldLockers.length === 0 ? member.current_locker : null,
-    ].filter(Boolean).length;
+    (validHoldMs.length > 0 ? validHoldMs.length : snapCount(member.current_membership)) +
+    (validHoldPasses.length > 0 ? validHoldPasses.length : snapCount(member.current_pass)) +
+    (holdOtherRs.length > 0 ? holdOtherRs.length : snapCount(member.current_rental)) +
+    holdLockerCards.length;
 
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-5xl mx-auto">
@@ -424,7 +423,7 @@ export default function CrmMemberDetailPage() {
               <SummaryMetric label="최종 만료" value={fmtExp(member.final_expire_at)} hint={expireHint(member.final_expire_at)} tone={expireTone(member.final_expire_at)} />
               <SummaryMetric label="누적 결제" value={`${formatWon(member.total_paid_won)}원`} hint={member.last_purchase_at ? `최근 ${member.last_purchase_at}` : "결제 기록 없음"} tone="money" />
               <SummaryMetric label="마지막 출석" value={member.last_attended_at ?? "—"} hint={attendanceHint(member.last_attended_at)} />
-              <SummaryMetric label="보유 상품" value={`${currentHoldings}종`} hint={member.current_pass || member.current_membership ? "보유 내역 있음" : "보유 내역 없음"} />
+              <SummaryMetric label="보유 상품" value={`${currentHoldings}종`} hint={currentHoldings > 0 ? "보유 내역 있음" : "보유 내역 없음"} />
             </div>
           </div>
         </div>
