@@ -283,7 +283,13 @@ export default function CrmMemberDetailPage() {
   // 배정된 락커 중 유효기간이 남은 것 (만료 락커는 현재 보유에 제외 — 회원권·대여권과 동일 기준)
   const validHoldLockers = holdLockers.filter((l) => !l.expires_at || l.expires_at >= holdToday);
   const validHoldPasses = passes.filter(
-    (p) => p.status === "valid" && p.expires_at >= holdToday
+    (p) =>
+      p.status === "valid" &&
+      p.expires_at >= holdToday &&
+      // 횟수제(총 회차 > 0)는 잔여가 남아 있어야 '현재 보유'.
+      // 모두 예약·출석 완료(잔여 0)면 소진된 수강권이라 현재 보유에서 제외.
+      // 기간제(총 0)는 회차 개념이 없어 만료일까지 계속 보유로 표시.
+      (!p.total_sessions || p.total_sessions <= 0 || (p.remaining_sessions ?? 0) > 0)
   );
   // 락커(배정) + 락커 대여권 병합 → 현재 보유에서 중복 제거
   const { cards: holdLockerCards, usedRentalIds: holdUsedRentalIds } = mergeLockerItems(
