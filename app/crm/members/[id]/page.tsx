@@ -5953,20 +5953,26 @@ function PassIssueModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // 발급 유형 기본값: 이전에 수강권 이력이 있으면 '재등록', 처음이면 '신규'.
-  // (트레이너 앱 app/pass/issue.tsx 와 동일 기준: 기존 수강권 존재 여부)
+  // 발급 유형 기본값: 이전에 '수강권 또는 회원권' 구매 이력이 있으면 '재등록', 처음이면 '신규'.
   useEffect(() => {
     if (!open) return;
     (async () => {
       const token = await getIdToken();
       if (!token) return;
-      const res = await fetch(`/api/crm/members/${memberId}`, {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      const hasPrior = Array.isArray(data.passes) && data.passes.length > 0;
+      const headers = { authorization: `Bearer ${token}` };
+      const [pRes, mRes] = await Promise.all([
+        fetch(`/api/crm/members/${memberId}`, { headers, cache: "no-store" }),
+        fetch(`/api/crm/memberships?member_id=${memberId}`, { headers, cache: "no-store" }),
+      ]);
+      let hasPrior = false;
+      if (pRes.ok) {
+        const d = await pRes.json();
+        if (Array.isArray(d.passes) && d.passes.length > 0) hasPrior = true;
+      }
+      if (!hasPrior && mRes.ok) {
+        const d = await mRes.json();
+        if (Array.isArray(d.memberships) && d.memberships.length > 0) hasPrior = true;
+      }
       setIssueType(hasPrior ? "renewal" : "new");
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
