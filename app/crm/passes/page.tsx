@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import {
   PAYMENT_METHOD_LABEL,
@@ -80,6 +81,7 @@ function passDisplayName(lessonKind: string): string {
 
 export default function CrmPassesPage() {
   const { getIdToken } = useAuth();
+  const router = useRouter();
   const [list, setList] = useState<PassRow[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,6 +90,7 @@ export default function CrmPassesPage() {
   const [detailPassId, setDetailPassId] = useState<number | null>(null);
   const canEdit = !!perms["passes.edit"];
 
+  const [issueOpen, setIssueOpen] = useState(false); // 수강권 발급(회원 선택 → 발급 창)
   // 필터
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [trainerFilter, setTrainerFilter] = useState<string>("");
@@ -283,14 +286,22 @@ export default function CrmPassesPage() {
               발급된 레슨권의 잔여 세션, 만료일, 결제 상태를 한 화면에서 확인합니다.
             </p>
           </div>
-          <div className="flex flex-col items-end gap-1.5">
-            <PeriodSelect value={periodFilter} onChange={setPeriodFilter} />
-            <div className="rounded-lg border border-[#D9CDB8] bg-white/70 px-3 py-2 text-right dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">현재 결과</div>
-              <div className="mt-0.5 text-[18px] font-bold text-[#2F3A2B] dark:text-[#A8B87A]">
-                {visibleList.length.toLocaleString()}건
+          <div className="flex items-end gap-2">
+            <div className="flex flex-col items-end gap-1.5">
+              <PeriodSelect value={periodFilter} onChange={setPeriodFilter} />
+              <div className="rounded-lg border border-[#D9CDB8] bg-white/70 px-3 py-2 text-right dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">현재 결과</div>
+                <div className="mt-0.5 text-[18px] font-bold text-[#2F3A2B] dark:text-[#A8B87A]">
+                  {visibleList.length.toLocaleString()}건
+                </div>
               </div>
             </div>
+            <button
+              onClick={() => setIssueOpen(true)}
+              className="h-[50px] px-4 rounded-lg bg-[#2F3A2B] text-white text-[13px] font-semibold hover:bg-[#243020] whitespace-nowrap shadow-sm dark:bg-[#A8B87A] dark:text-zinc-950"
+            >
+              + 수강권 발급
+            </button>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 lg:grid-cols-5 gap-2.5">
@@ -480,6 +491,116 @@ export default function CrmPassesPage() {
           onSaved={load}
         />
       )}
+
+      <PassIssueMemberPicker
+        open={issueOpen}
+        onClose={() => setIssueOpen(false)}
+        onPick={(memberId) => {
+          setIssueOpen(false);
+          router.push(`/crm/members/${memberId}?issue=pass`);
+        }}
+      />
+    </div>
+  );
+}
+
+/** 수강권 발급 — 회원을 먼저 선택하면 그 회원 상세로 이동해 발급 창이 자동으로 열린다. */
+function PassIssueMemberPicker({
+  open,
+  onClose,
+  onPick,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onPick: (memberId: number) => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<{ id: number; name: string; phone: string | null }[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setQ("");
+      setResults([]);
+    }
+  }, [open]);
+
+  const search = useCallback(async () => {
+    const kw = q.trim();
+    if (!kw) {
+      setResults([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/crm/members?q=${encodeURIComponent(kw)}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) setResults((await res.json()).members ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, [q, getIdToken]);
+
+  // 입력 디바운스 검색
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(search, 300);
+    return () => clearTimeout(t);
+  }, [q, open, search]);
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/45 px-4 pt-[10vh]" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-2xl border border-[#E4D9C6] bg-[#FEFCF7] p-4 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">수강권 발급 — 회원 선택</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md px-2 py-1 text-[12.5px] font-semibold text-[#8C8270] hover:bg-[#F5F0E5] dark:text-zinc-400 dark:hover:bg-zinc-800"
+          >
+            닫기
+          </button>
+        </div>
+        <input
+          autoFocus
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="이름 또는 연락처로 검색"
+          className={crmInputClass}
+        />
+        <div className="mt-2 max-h-[50vh] overflow-y-auto rounded-lg border border-[#E8E0D0] dark:border-zinc-800 divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
+          {loading ? (
+            <div className="px-3 py-6 text-center text-[13px] text-[#8C8270]">검색 중…</div>
+          ) : results.length === 0 ? (
+            <div className="px-3 py-6 text-center text-[13px] text-[#8C8270]">
+              {q.trim() ? "검색 결과가 없어요." : "회원 이름·연락처를 입력해 주세요."}
+            </div>
+          ) : (
+            results.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => onPick(m.id)}
+                className="w-full text-left px-3 py-2.5 hover:bg-[#FBF7EB] dark:hover:bg-zinc-900/60"
+              >
+                <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{m.name}</span>
+                {m.phone && (
+                  <span className="ml-2 text-[12px] text-[#A89B80] tabular-nums">{formatPhone(m.phone)}</span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+        <p className="mt-2 text-[11.5px] text-[#A89B80]">회원을 선택하면 상세 화면에서 수강권 발급 창이 열려요.</p>
+      </div>
     </div>
   );
 }

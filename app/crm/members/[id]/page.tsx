@@ -130,6 +130,15 @@ export default function CrmMemberDetailPage() {
     }
   }, [searchParams, router, memberId]);
 
+  // 수강권/회원권 관리 페이지의 '발급' 버튼 → 회원 선택 후 ?issue=pass|membership 로 진입 시 자동으로 발급 창 열기
+  useEffect(() => {
+    const issue = searchParams.get("issue");
+    if (issue === "pass") setPassOpen(true);
+    else if (issue === "membership") setUsageOpen(true);
+    if (issue) router.replace(`/crm/members/${memberId}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, memberId]);
+
   // 개인 CRM에서 다른 센터 담당 회원을 조회 전용으로 열람할 때 ?center=<id>
   const foreignCenter = searchParams.get("center");
 
