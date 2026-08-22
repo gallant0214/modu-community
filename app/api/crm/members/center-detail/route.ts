@@ -47,7 +47,7 @@ export async function GET(request: Request) {
   const [{ data: member }, { data: memberships }, { data: passes }] = await Promise.all([
     supabase
       .from("crm_members")
-      .select("id, name, phone, birth, gender, address, status, face_image_thumb, memo, registered_at, member_type")
+      .select("id, name, phone, birth, gender, address, status, face_image_thumb, face_image_data, memo, registered_at, member_type")
       .eq("id", memberId)
       .eq("center_id", centerId)
       .maybeSingle(),
