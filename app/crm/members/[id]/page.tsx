@@ -16,7 +16,7 @@ import {
 } from "../../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../../_components/crm-modal";
 import { CrmLineChart } from "../../_components/crm-line-chart";
-import { unitToDays } from "@/app/lib/duration-convert";
+import { unitToDays, formatDuration } from "@/app/lib/duration-convert";
 import { computeFaceDescriptor } from "../../_lib/faceapi";
 
 interface Member {
@@ -5634,7 +5634,7 @@ function UsageIssueModal({
             <ul className="space-y-0.5">
               {pickedComponents.map((c, i) => (
                 <li key={i} className="flex items-baseline justify-between text-[12px] text-[#6B5D47] dark:text-zinc-400">
-                  <span className="truncate">+ {c.name || "구성 상품"} {c.billing_mode === "count" ? `${c.total_sessions ?? 0}회` : `${c.duration_value ?? 0}일`}</span>
+                  <span className="truncate">+ {c.name || "구성 상품"} {c.billing_mode === "count" ? `${c.total_sessions ?? 0}회` : formatDuration(c.duration_value, c.duration_unit)}</span>
                   <span className="tabular-nums shrink-0 ml-2">{formatWon(c.price_won ?? 0)}원</span>
                 </li>
               ))}
@@ -6492,7 +6492,7 @@ function PassIssueModal({
             <ul className="space-y-0.5">
               {pickedComponents.map((c, i) => (
                 <li key={i} className="flex items-baseline justify-between text-[12px] text-[#6B5D47] dark:text-zinc-400">
-                  <span className="truncate">+ {c.name || "구성 상품"} {c.billing_mode === "count" ? `${c.total_sessions ?? 0}회` : `${c.duration_value ?? 0}일`}</span>
+                  <span className="truncate">+ {c.name || "구성 상품"} {c.billing_mode === "count" ? `${c.total_sessions ?? 0}회` : formatDuration(c.duration_value, c.duration_unit)}</span>
                   <span className="tabular-nums shrink-0 ml-2">{formatWon(c.price_won ?? 0)}원</span>
                 </li>
               ))}

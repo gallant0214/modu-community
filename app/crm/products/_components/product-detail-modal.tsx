@@ -154,7 +154,7 @@ export function ProductDetailModal({ product, typeLabel, onClose, onEdit, onDele
                   className="text-[13px] text-[#3A342A] dark:text-zinc-200 flex items-center gap-2 border border-[#E8E0D0] dark:border-zinc-800 rounded-lg px-3 py-1.5 bg-[#FBF7EB]/50 dark:bg-zinc-900/50"
                 >
                   <span className="font-semibold">[{TYPE_LABEL[c.type] ?? c.type}]</span>
-                  <span>{c.billing_mode === "count" ? `${c.total_sessions ?? 0}회` : `${c.duration_value ?? 0}일`}</span>
+                  <span>{c.billing_mode === "count" ? `${c.total_sessions ?? 0}회` : `${c.duration_value ?? 0}${UNIT_LABEL[c.duration_unit ?? "day"] ?? "일"}`}</span>
                   {(c.type === "personal" || c.type === "group") && c.session_minutes ? (
                     <span className="text-[#8C8270]">· {c.session_minutes}분</span>
                   ) : null}

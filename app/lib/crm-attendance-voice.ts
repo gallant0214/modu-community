@@ -128,7 +128,7 @@ export async function buildAttendanceVoiceMessages(
     const { data: st } = await supabase
       .from("crm_touch_attendance_settings")
       .select(
-        "msg_active_entry, msg_active_entry_enabled, msg_birthday_entry, msg_birthday_entry_enabled, msg_expiring_membership, msg_expiring_membership_enabled, msg_outstanding, msg_outstanding_enabled, msg_holding, msg_holding_enabled, msg_scheduled_membership, msg_scheduled_membership_enabled, msg_expired_membership, msg_expired_membership_enabled, msg_expired_rental, msg_expired_rental_enabled, msg_expired_rental_days, msg_expired_locker, msg_expired_locker_enabled, msg_expired_locker_days"
+        "msg_active_entry, msg_active_entry_enabled, msg_birthday_entry, msg_birthday_entry_enabled, msg_expiring_membership, msg_expiring_membership_enabled, expiring_threshold_days, msg_outstanding, msg_outstanding_enabled, msg_holding, msg_holding_enabled, msg_scheduled_membership, msg_scheduled_membership_enabled, msg_expired_membership, msg_expired_membership_enabled, msg_expired_rental, msg_expired_rental_enabled, msg_expired_rental_days, msg_expired_locker, msg_expired_locker_enabled, msg_expired_locker_days"
       )
       .eq("center_id", centerId)
       .maybeSingle();
@@ -140,8 +140,8 @@ export async function buildAttendanceVoiceMessages(
         !!s[`${key}_enabled`] && String(s[key] ?? "").trim().length > 0;
       const txt = (key: string) => substitute(String(s[key] ?? ""));
 
-      // 만료 임박 기준일(터치설정엔 별도 임계값 필드 없음 → 기본 7일)
-      const EXPIRING_DEFAULT_DAYS = 7;
+      // 만료 임박 기준일 = 터치출석 설정(expiring_threshold_days). 미설정이면 기본 7일.
+      const EXPIRING_DEFAULT_DAYS = Math.max(1, Number(s.expiring_threshold_days ?? 0) || 7);
 
       // 만료 후 N일 이내인지: expires_at < 오늘 && (N=0 || 만료 경과일 <= N)
       const isExpiredWithin = (ymd: string, days: number): boolean => {

@@ -36,3 +36,18 @@ export function unitToDays(
   if (unit === "month") return monthsToDays(v);
   return v; // day / null / 알 수 없음
 }
+
+/** duration_unit → 한글 라벨 (day 일 / month 개월 / year 년) */
+export function unitLabel(unit: string | null | undefined): string {
+  if (unit === "year") return "년";
+  if (unit === "month") return "개월";
+  return "일";
+}
+
+/** (value, unit) → "12개월" · "365일" · "1년" 표기 */
+export function formatDuration(
+  value: number | null | undefined,
+  unit: string | null | undefined
+): string {
+  return `${Math.max(0, Number(value) || 0)}${unitLabel(unit)}`;
+}

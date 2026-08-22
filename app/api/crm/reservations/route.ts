@@ -131,7 +131,7 @@ export async function GET(request: Request) {
         .select("id, pass_id, starts_at, status")
         .eq("center_id", ctx.centerId)
         .in("pass_id", passIds)
-        .neq("status", "cancelled")
+        .not("status", "in", "(cancelled,rejected)")
         .order("starts_at", { ascending: true }),
     ]);
     for (const p of passes ?? []) {
