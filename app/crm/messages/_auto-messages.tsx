@@ -567,19 +567,29 @@ function AutoMessageEditor({
             <NumberedField no="04" title="전송 방법" hint="실제 발송 채널 연동은 준비중입니다. 선택값은 미리 저장돼요.">
               <div className="flex flex-wrap gap-2">
                 {METHOD_OPTIONS.map((m) => {
-                  const active = methods.includes(m.key);
+                  const locked = m.key === "sms"; // 문자메시지 자동발송은 준비중
+                  const active = !locked && methods.includes(m.key);
                   return (
                     <button
                       key={m.key}
                       type="button"
-                      onClick={() => toggleMethod(m.key)}
+                      onClick={() => {
+                        if (locked) {
+                          alert("준비중입니다.");
+                          return;
+                        }
+                        toggleMethod(m.key);
+                      }}
+                      aria-disabled={locked}
                       className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
-                        active
-                          ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#4d5a29] dark:text-[#A8B87A]"
-                          : "border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-white dark:bg-zinc-900"
+                        locked
+                          ? "border-[#E8E0D0] dark:border-zinc-700 text-[#A89B80] bg-[#F5F0E5] dark:bg-zinc-800 cursor-not-allowed opacity-70"
+                          : active
+                            ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#4d5a29] dark:text-[#A8B87A]"
+                            : "border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-white dark:bg-zinc-900"
                       }`}
                     >
-                      {active ? "✓ " : ""}{m.label}
+                      {active ? "✓ " : ""}{m.label}{locked ? " (준비중)" : ""}
                     </button>
                   );
                 })}
