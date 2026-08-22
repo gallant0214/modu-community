@@ -27,6 +27,7 @@ interface Product {
   session_minutes?: number;
   service_days?: number;
   status?: string;
+  components?: unknown[] | null;
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -167,6 +168,11 @@ export default function CrmPersonalProductsPage() {
                 <span className="text-[10.5px] text-[#A89B80] dark:text-zinc-500">
                   {p.billing_mode === "period" ? "기간제" : "횟수제"}
                 </span>
+                {Array.isArray(p.components) && p.components.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold border border-[#B47B2A]/30 bg-[#B47B2A]/12 text-[#B47B2A] dark:bg-amber-900/30 dark:text-amber-300">
+                    🎁 묶음
+                  </span>
+                )}
               </div>
               <div className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
                 {p.name}

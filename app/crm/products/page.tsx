@@ -56,6 +56,7 @@ interface Product {
   status?: string;
   created_at?: string;
   updated_at?: string;
+  components?: unknown[] | null;
 }
 
 interface CustomType {
@@ -365,6 +366,11 @@ export default function CrmProductsPage() {
                     <span className="inline-flex items-center px-2 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[11px] font-semibold text-[#6B5D47] dark:text-zinc-400">
                       {p.billing_mode === "period" ? "기간제" : "횟수제"}
                     </span>
+                    {Array.isArray(p.components) && p.components.length > 0 && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-md text-[11px] font-bold border border-[#B47B2A]/30 bg-[#B47B2A]/12 text-[#B47B2A] dark:bg-amber-900/30 dark:text-amber-300">
+                        🎁 묶음 상품
+                      </span>
+                    )}
                   </div>
 
                   <div className="mt-3 rounded-xl bg-[#F8F4EC] dark:bg-zinc-950/50 px-3 py-2 text-[13px] text-[#3A342A] dark:text-zinc-200">
