@@ -413,6 +413,9 @@ export async function GET(request: Request) {
     active_by_product: {
       lesson: activeLesson,
       membership: activeMembershipOnly,
+      // 회원권/수강권 유효회원 각각(중복 허용 — 둘 다 보유하면 양쪽 카운트)
+      pass_valid: activePassMemberIds.size,
+      membership_valid: new Set(validMemberships.map((m) => m.member_id)).size,
     },
     action: {
       expiring7d,

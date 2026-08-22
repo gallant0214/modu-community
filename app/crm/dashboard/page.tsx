@@ -82,6 +82,8 @@ interface SummaryResp {
   active_by_product?: {
     lesson: number;
     membership: number;
+    pass_valid?: number;
+    membership_valid?: number;
   };
   action?: {
     expiring7d: number;
@@ -396,6 +398,26 @@ export default function CrmDashboardPage() {
                   })()}
                 />
               </section>
+
+              {/* 유효회원 상품별 구분 (회원권 / 수강권 — 둘 다 보유하면 양쪽 카운트) */}
+              {summary.active_by_product && (
+                <section className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 px-4 py-3">
+                    <div className="text-[12px] text-[#8C8270] dark:text-zinc-500">회원권 유효회원</div>
+                    <div className="mt-0.5 text-[20px] font-extrabold text-[#3A342A] dark:text-zinc-100 tabular-nums">
+                      {(summary.active_by_product.membership_valid ?? 0).toLocaleString()}
+                      <span className="ml-0.5 text-[13px] font-semibold text-[#A89B80]">명</span>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 px-4 py-3">
+                    <div className="text-[12px] text-[#8C8270] dark:text-zinc-500">수강권 유효회원</div>
+                    <div className="mt-0.5 text-[20px] font-extrabold text-[#3A342A] dark:text-zinc-100 tabular-nums">
+                      {(summary.active_by_product.pass_valid ?? 0).toLocaleString()}
+                      <span className="ml-0.5 text-[13px] font-semibold text-[#A89B80]">명</span>
+                    </div>
+                  </div>
+                </section>
+              )}
 
               {/* 신규 vs 재등록 비율 스택바 (이번 기간 등록) */}
               {(summary.members.newly.count + summary.members.reregistered.count) > 0 && (
