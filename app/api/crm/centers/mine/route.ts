@@ -37,15 +37,21 @@ export async function GET(request: Request) {
       // 진입 가능 여부: 개인(solo)·owner 는 항상 허용. 승인 대기(pending)는 불가.
       // 그 외에는 해당 등급의 'center.access_crm' 권한으로 판단.
       let accessAllowed = true;
+      // 강사앱 전체 회원목록 보기 권한 (owner/solo 는 항상 true, 그 외 등급권한)
+      let canViewMembers = false;
       if (m.status === "pending") {
         accessAllowed = false;
-      } else if (!m.is_solo_owner && m.role !== "owner") {
+        canViewMembers = false;
+      } else if (m.is_solo_owner || m.role === "owner") {
+        canViewMembers = true;
+      } else {
         const perms = await loadPermissionsForContext({
           centerId: m.center_id,
           role: m.role,
           gradeId: m.grade_id ?? null,
         } as CrmContext);
         accessAllowed = perms["center.access_crm"] !== false;
+        canViewMembers = perms["members.app_view_all"] === true;
       }
       return {
         centerMemberId: m.id,
@@ -59,6 +65,7 @@ export async function GET(request: Request) {
         isSoloOwner: m.is_solo_owner,
         status: m.status, // active | pending
         accessAllowed,
+        canViewMembers,
       };
     })
   );

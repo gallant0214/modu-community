@@ -55,6 +55,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     label: "회원 관리",
     items: [
       { key: "members.view",       label: "회원 관리 열람",       defaults: D_ALL },
+      { key: "members.app_view_all", label: "강사앱 전체 회원목록 보기", defaults: D_ADMIN },
       { key: "members.excel",      label: "회원 엑셀 추출",       defaults: D_MGR },
       { key: "members.create",     label: "회원 추가",             defaults: D_MGR_FC },
       { key: "members.edit_basic", label: "회원 기본정보 수정",   defaults: D_MGR_FC },
