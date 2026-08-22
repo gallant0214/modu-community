@@ -172,6 +172,21 @@ export async function notifyMembersByIds(
   }
 }
 
+/** 회원의 알림 수신 설정(notify_* 컬럼) 조회. 미설정(null)이면 기본 on(true). */
+export async function memberNotifyOn(memberId: number, column: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from("crm_members")
+      .select(column)
+      .eq("id", memberId)
+      .maybeSingle();
+    const v = (data as Record<string, boolean | null> | null)?.[column];
+    return v !== false;
+  } catch {
+    return true;
+  }
+}
+
 /** ISO 시각 → "5월 2일 (월) 08:30" (KST) */
 export function formatKstSlot(iso: string): string {
   const d = new Date(iso);

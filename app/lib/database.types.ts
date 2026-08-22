@@ -2658,6 +2658,8 @@ export type Database = {
           last_attended_at: string | null
           notify_center_messages: boolean
           notify_class_result: boolean
+          notify_point_earn: boolean
+          notify_reservation: boolean
           attendance_no: string | null
           current_membership: string | null
           current_pass: string | null
@@ -2697,6 +2699,8 @@ export type Database = {
           last_attended_at?: string | null
           notify_center_messages?: boolean
           notify_class_result?: boolean
+          notify_point_earn?: boolean
+          notify_reservation?: boolean
           attendance_no?: string | null
           current_membership?: string | null
           current_pass?: string | null
@@ -2736,6 +2740,8 @@ export type Database = {
           last_attended_at?: string | null
           notify_center_messages?: boolean
           notify_class_result?: boolean
+          notify_point_earn?: boolean
+          notify_reservation?: boolean
           attendance_no?: string | null
           current_membership?: string | null
           current_pass?: string | null
@@ -2755,7 +2761,7 @@ export type Database = {
           id: number
           center_id: number
           member_id: number
-          trainer_member_id: number
+          trainer_member_id: number | null
           co_trainer_ids: number[]
           seller_member_id: number
           issue_type: string
@@ -2787,7 +2793,7 @@ export type Database = {
           id?: number
           center_id: number
           member_id: number
-          trainer_member_id: number
+          trainer_member_id: number | null
           co_trainer_ids?: number[]
           seller_member_id: number
           issue_type: string
@@ -2819,7 +2825,7 @@ export type Database = {
           id?: number
           center_id?: number
           member_id?: number
-          trainer_member_id?: number
+          trainer_member_id?: number | null
           co_trainer_ids?: number[]
           seller_member_id?: number
           issue_type?: string

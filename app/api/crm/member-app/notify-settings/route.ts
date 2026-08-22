@@ -17,16 +17,23 @@ export async function GET(request: Request) {
 
   const { data } = await supabase
     .from("crm_members")
-    .select("notify_center_messages, notify_class_result")
+    .select("notify_center_messages, notify_class_result, notify_point_earn, notify_reservation")
     .eq("id", ctx.memberId)
     .maybeSingle();
 
-  const row = data as { notify_center_messages?: boolean; notify_class_result?: boolean } | null;
+  const row = data as {
+    notify_center_messages?: boolean;
+    notify_class_result?: boolean;
+    notify_point_earn?: boolean;
+    notify_reservation?: boolean;
+  } | null;
 
   return NextResponse.json({
     // 미설정(null)이면 기본 on
     centerMessages: row?.notify_center_messages !== false,
     classResult: row?.notify_class_result !== false,
+    pointEarn: row?.notify_point_earn !== false,
+    reservation: row?.notify_reservation !== false,
   });
 }
 
@@ -35,7 +42,7 @@ export async function GET(request: Request) {
  * 넘어온 항목만 갱신.
  */
 export async function PATCH(request: Request) {
-  let body: { centerId?: number; centerMessages?: boolean; classResult?: boolean };
+  let body: { centerId?: number; centerMessages?: boolean; classResult?: boolean; pointEarn?: boolean; reservation?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -47,6 +54,8 @@ export async function PATCH(request: Request) {
   const patch: Record<string, boolean> = {};
   if (typeof body.centerMessages === "boolean") patch.notify_center_messages = body.centerMessages;
   if (typeof body.classResult === "boolean") patch.notify_class_result = body.classResult;
+  if (typeof body.pointEarn === "boolean") patch.notify_point_earn = body.pointEarn;
+  if (typeof body.reservation === "boolean") patch.notify_reservation = body.reservation;
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });

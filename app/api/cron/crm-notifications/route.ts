@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  *
  * 발송 종류:
  *  1) 회원권 만료 D-7: 7일 후 만료되는 crm_memberships(valid) → linked_firebase_uid 가 있는 회원에게 푸시
- *  2) 수강권 만료 D-7: 같은 패턴, crm_passes(valid) 의 expires_at
+ *  2) 수강권 유효기간 안내: 총 회차별 리드타임(30↑:30일 / 20:20일 / 10:10일 전). 무제한·10미만 제외
  *  3) 예약 D-1: 내일 예약된 crm_reservations(booked)
  *
  * 응답: 발송 통계
@@ -62,15 +62,52 @@ export async function GET(request: Request) {
     }
   }
 
-  // 2) 수강권 만료 D-7 (잔여 세션이 1회 이상일 때만 의미있는 알림)
+  // 1-b) 회원권 종료일 당일(D-0)
+  const { data: membershipsToday } = await supabase
+    .from("crm_memberships")
+    .select("id, member_id, plan_name, expires_at, center_id")
+    .eq("status", "valid")
+    .eq("expires_at", todayStr);
+  for (const m of membershipsToday ?? []) {
+    try {
+      const { data: member } = await supabase
+        .from("crm_members")
+        .select("name, linked_firebase_uid")
+        .eq("id", m.member_id)
+        .maybeSingle();
+      if (!member?.linked_firebase_uid) continue;
+      await sendPushToUser(
+        member.linked_firebase_uid,
+        "crm",
+        "회원권 종료 안내",
+        `${member.name}님, 오늘이 ${m.plan_name} 회원권 종료일이에요. 그동안 함께해 주셔서 감사합니다 🙏`,
+        { kind: "membership_expired", id: String(m.id) }
+      );
+      sent += 1;
+    } catch (e) {
+      errors.push(`membership_today#${m.id}: ${e instanceof Error ? e.message : "error"}`);
+    }
+  }
+
+  // 2) 수강권 유효기간 안내 — 회차별 리드타임(총 30회↑:30일전 / 20회대:20일전 / 10회대:10일전).
+  //    무제한 만료(sentinel 9999 등)는 today+30 범위 밖이라 자동 제외, 총 10회 미만도 제외.
+  const in30Str = toKstYMD(addDays(today, 30));
   const { data: passes } = await supabase
     .from("crm_passes")
-    .select("id, member_id, lesson_kind, remaining_sessions, expires_at")
+    .select("id, member_id, lesson_kind, total_sessions, expires_at")
     .eq("status", "valid")
-    .gte("remaining_sessions", 1)
-    .eq("expires_at", d7Str);
+    .gte("expires_at", todayStr)
+    .lte("expires_at", in30Str);
   for (const p of passes ?? []) {
     try {
+      const total = p.total_sessions ?? 0;
+      const lead = total >= 30 ? 30 : total >= 20 ? 20 : total >= 10 ? 10 : null;
+      if (lead == null) continue;
+      const exp = String(p.expires_at).slice(0, 10);
+      const daysLeft = Math.round(
+        (Date.parse(`${exp}T00:00:00Z`) - Date.parse(`${todayStr}T00:00:00Z`)) / 86400000
+      );
+      if (daysLeft !== lead) continue;
       const { data: member } = await supabase
         .from("crm_members")
         .select("name, linked_firebase_uid")
@@ -80,8 +117,8 @@ export async function GET(request: Request) {
       await sendPushToUser(
         member.linked_firebase_uid,
         "crm",
-        "수강권 만료 임박",
-        `${member.name}님의 ${p.lesson_kind}이 7일 후 만료돼요. 잔여 ${p.remaining_sessions}회.`,
+        "수강권 유효기간 안내",
+        `${p.lesson_kind}의 수강권이 유효기간 ${daysLeft}일 남았습니다`,
         { kind: "pass_expire", id: String(p.id) }
       );
       sent += 1;
@@ -125,6 +162,7 @@ export async function GET(request: Request) {
     sent,
     counts: {
       memberships: memberships?.length ?? 0,
+      membershipsToday: membershipsToday?.length ?? 0,
       passes: passes?.length ?? 0,
       reservations: reservations?.length ?? 0,
     },

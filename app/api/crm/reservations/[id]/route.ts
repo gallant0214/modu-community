@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
-import { sendPushToMember, formatKstSlot } from "@/app/lib/member-notify";
+import { sendPushToMember, formatKstSlot, memberNotifyOn } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -121,6 +121,7 @@ export async function PATCH(
       }
 
       after(async () => {
+        if (!(await memberNotifyOn(cur.member_id, "notify_reservation"))) return;
         await sendPushToMember(
           cur.member_id,
           "reservation_approved",
@@ -415,16 +416,12 @@ export async function PATCH(
     const isPaidLastSession =
       (newStatus === "attended" || newStatus === "noshow") && remainingAfter === 0 && !isService;
 
-    // 수업 완료·노쇼 알림 on/off (notify_class_result) — attended/noshow 만 적용
-    let skipClassNotice = false;
+    // 알림 on/off: 수업 완료·노쇼(notify_class_result) / 예약 확정·취소(notify_reservation)
+    let skipNotice = false;
     if (newStatus === "attended" || newStatus === "noshow") {
-      const { data: mrow } = await supabase
-        .from("crm_members")
-        .select("notify_class_result")
-        .eq("id", cur.member_id)
-        .maybeSingle();
-      skipClassNotice =
-        (mrow as { notify_class_result?: boolean } | null)?.notify_class_result === false;
+      skipNotice = !(await memberNotifyOn(cur.member_id, "notify_class_result"));
+    } else if (newStatus === "booked" || newStatus === "cancelled") {
+      skipNotice = !(await memberNotifyOn(cur.member_id, "notify_reservation"));
     }
 
     if (isPaidLastSession) {
@@ -447,7 +444,7 @@ export async function PATCH(
         noshow: { title: "노쇼 처리됐어요", body: `${slot} 수업이 노쇼(미출석)로 처리됐어요` },
       };
       const n = noticeMap[newStatus];
-      if (n && !skipClassNotice) {
+      if (n && !skipNotice) {
         after(async () => {
           await sendPushToMember(cur.member_id, `reservation_${newStatus}`, n.title, n.body, {
             reservationId: String(reservationId),

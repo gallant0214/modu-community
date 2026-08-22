@@ -2,6 +2,7 @@ import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { notifyCenterStaffAttendance } from "@/app/lib/crm-staff-notify";
+import { sendPushToMember } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -60,10 +61,11 @@ export async function POST(request: Request) {
 
   const { data: mem } = await supabase
     .from("crm_members")
-    .select("mileage")
+    .select("mileage, notify_point_earn")
     .eq("id", ctx.memberId)
     .maybeSingle();
   const balanceAfter = (mem?.mileage ?? 0) + earn;
+  const pointEarnOn = (mem as { notify_point_earn?: boolean } | null)?.notify_point_earn !== false;
 
   const { error: upErr } = await supabase
     .from("crm_members")
@@ -84,7 +86,21 @@ export async function POST(request: Request) {
   // 퇴실 알림(대표자·관리자 중 ON)
   const centerId = ctx.centerId;
   const memberName = ctx.name;
-  after(() => notifyCenterStaffAttendance({ centerId, memberName, kind: "out" }));
+  const memberId = ctx.memberId;
+  after(() => notifyCenterStaffAttendance({ centerId, memberId, memberName, kind: "out" }));
+
+  // 회원 본인에게 포인트 적립 안내 푸시 (설정 ON일 때). 탭하면 앱에서 마일리지 상세로 이동.
+  if (pointEarnOn) {
+    after(() =>
+      sendPushToMember(
+        memberId,
+        "mileage_earn",
+        "포인트 적립",
+        `퇴실할 때 ${earn}P가 적립되었습니다. 현재 적립된 포인트는 ${balanceAfter}P 입니다.`,
+        { kind: "mileage_earn" }
+      )
+    );
+  }
 
   return NextResponse.json({ ok: true, earned: earn, mileage: balanceAfter });
 }
