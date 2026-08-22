@@ -4762,6 +4762,9 @@ function UsageIssueModal({
     components?: BundleComp[];
   }
   const [cart, setCart] = useState<CartLine[]>([]);
+  // 시작일 일괄변경 모달
+  const [bulkStartOpen, setBulkStartOpen] = useState(false);
+  const [bulkStartDate, setBulkStartDate] = useState("");
   // 현재 폼에 선택된 상품의 묶음 구성 (담기/결제 시 라인에 실려 함께 발급)
   const [pickedComponents, setPickedComponents] = useState<BundleComp[]>([]);
   // 목록에서 선택한 상품 id (선택 여부 시각 표시용)
@@ -5659,11 +5662,25 @@ function UsageIssueModal({
         {/* 우측: 장바구니 + 총액 + 결제하기 */}
         <aside className="md:sticky md:top-0 md:self-start space-y-3">
           <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 p-3 space-y-2">
-            <div className="flex items-baseline justify-between">
-              <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
-                장바구니
-              </span>
-              <span className="text-[11.5px] text-[#A89B80]">{cart.length}건</span>
+            <div className="flex items-baseline justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                  장바구니
+                </span>
+                {cart.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkStartDate(cart[0]?.startDate || new Date().toISOString().slice(0, 10));
+                      setBulkStartOpen(true);
+                    }}
+                    className="px-2 py-0.5 rounded-md border border-[#6B7B3A]/50 text-[11px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/8 whitespace-nowrap"
+                  >
+                    시작일 일괄변경
+                  </button>
+                )}
+              </div>
+              <span className="text-[11.5px] text-[#A89B80] shrink-0">{cart.length}건</span>
             </div>
             {cart.length === 0 ? (
               <div className="py-6 text-center text-[12px] text-[#A89B80]">
@@ -5723,6 +5740,58 @@ function UsageIssueModal({
               </ul>
             )}
           </div>
+
+          {/* 시작일 일괄변경 모달 — 장바구니 전체 상품의 시작일을 한 번에 맞추고 종료일은 각 상품 기간대로 자동 반영 */}
+          <CrmModal open={bulkStartOpen} onClose={() => setBulkStartOpen(false)} title="시작일 일괄변경" size="sm">
+            <div className="space-y-3">
+              <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+                장바구니에 담긴 <strong>{cart.length}건</strong>의 시작일을 아래 날짜로 모두 변경해요.
+                종료일은 각 상품의 기간에 맞춰 자동으로 계산됩니다.
+              </p>
+              <CrmField label="시작일" required>
+                <input
+                  type="date"
+                  className={crmInputClass}
+                  value={bulkStartDate}
+                  onChange={(e) => setBulkStartDate(e.target.value)}
+                />
+              </CrmField>
+              {/* 변경 미리보기 */}
+              {bulkStartDate && (
+                <ul className="rounded-lg border border-[#E8E0D0]/70 dark:border-zinc-800 divide-y divide-[#E8E0D0]/60 dark:divide-zinc-800 max-h-40 overflow-y-auto text-[12px]">
+                  {cart.map((c) => (
+                    <li key={c.key} className="px-2.5 py-1.5 flex items-center justify-between gap-2">
+                      <span className="truncate text-[#3A342A] dark:text-zinc-200">{c.name}</span>
+                      <span className="text-[#8C8270] shrink-0 tabular-nums">
+                        {bulkStartDate} ~ {addDaysYmd(bulkStartDate, Math.max(1, c.durationDays))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setBulkStartOpen(false)}
+                  className="px-3.5 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  disabled={!bulkStartDate}
+                  onClick={() => {
+                    if (!bulkStartDate) return;
+                    setCart((cur) => cur.map((c) => ({ ...c, startDate: bulkStartDate })));
+                    setBulkStartOpen(false);
+                  }}
+                  className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold disabled:opacity-50"
+                >
+                  모두 적용
+                </button>
+              </div>
+            </div>
+          </CrmModal>
 
           <div className="rounded-xl border-2 border-[#6B7B3A]/40 bg-[#6B7B3A]/5 p-3 space-y-1">
             <div className="flex items-baseline justify-between">
