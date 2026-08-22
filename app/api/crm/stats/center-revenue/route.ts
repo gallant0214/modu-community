@@ -59,7 +59,9 @@ export async function GET(request: Request) {
   //   2) 폴백: crm_memberships / crm_passes / crm_rentals 발급 기준
   //      (CRM UI 로만 발급한 신규 센터는 crm_sales 가 비어 있으므로)
   //   회원권 그룹 = 멤버십 + 대여권 + 락커 / 수강권 그룹 = 이용권 + 예약권(PT) / 일반 = goods
-  const centerHasSales = await centerHasSalesLedger(ctx.centerId);
+  // crm_sales 원장 존재 여부 + 임포트 커버 컷오프(원장 마지막 거래일, KST).
+  // 컷오프 이후 발생한 CRM 신규 발급은 원장에 없으므로 발급 테이블에서 합산해야 함.
+  const { hasSales: centerHasSales, cutoffYmd } = await centerSalesInfo(ctx.centerId);
   const periodSales = centerHasSales
     ? await fetchSales(ctx.centerId, startDate, nextMonth)
     : [];
@@ -119,9 +121,14 @@ export async function GET(request: Request) {
     addReg(regTotal, s);
   }
 
-  // ── 폴백: crm_sales 원장이 없는 센터 → 발급 테이블에서 직접 집계 ──
-  if (!centerHasSales) {
-    // 기간: [startDate, nextMonth) 을 issued_at 기준으로 조회
+  // ── crm_sales 원장이 커버하지 못하는 구간(컷오프 이후)의 CRM 발급을 합산 ──
+  // 원장 없는 센터 → 전체 기간 발급 집계. 원장 있는 센터 → 컷오프 다음날부터만(이중집계 방지).
+  const issuanceStart =
+    centerHasSales && cutoffYmd
+      ? (nextYmd(cutoffYmd) > startDate ? nextYmd(cutoffYmd) : startDate)
+      : startDate;
+  if (issuanceStart < nextMonth) {
+    // 기간: [issuanceStart, nextMonth) 을 issued_at/start_date 기준으로 조회
     const [issMemberships, issPasses, issRentals] = await Promise.all([
       paginateAll<{
         price_won: number;
@@ -135,7 +142,7 @@ export async function GET(request: Request) {
           .from("crm_memberships")
           .select("price_won, payment_method, registration_type, purchased_at, start_date")
           .eq("center_id", ctx.centerId)
-          .gte("start_date", startDate)
+          .gte("start_date", issuanceStart)
           .lt("start_date", nextMonth)
           .range(f, t)
       ),
@@ -149,7 +156,7 @@ export async function GET(request: Request) {
           .from("crm_passes")
           .select("price_won, payment_method, issue_type, issued_at")
           .eq("center_id", ctx.centerId)
-          .gte("issued_at", startDate)
+          .gte("issued_at", issuanceStart)
           .lt("issued_at", nextMonth)
           .range(f, t)
       ),
@@ -163,7 +170,7 @@ export async function GET(request: Request) {
           .from("crm_rentals")
           .select("price_won, payment_method, start_date")
           .eq("center_id", ctx.centerId)
-          .gte("start_date", startDate)
+          .gte("start_date", issuanceStart)
           .lt("start_date", nextMonth)
           .range(f, t)
       ),
@@ -398,16 +405,30 @@ function kstYmd(): string {
   return kst.toISOString().slice(0, 10);
 }
 
-/** 이 센터가 crm_sales 원장(BROJ 임포트)을 갖고 있는지 확인.
- *  없으면 CRM UI 발급 테이블로 폴백 집계해야 함. */
-async function centerHasSalesLedger(centerId: number): Promise<boolean> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { count } = await (supabase as any)
+/** crm_sales 원장(BROJ 임포트) 존재 여부 + 커버 컷오프(마지막 거래일, KST YYYY-MM-DD).
+ *  컷오프 이후 CRM 신규 발급은 원장에 없어 발급 테이블에서 합산해야 한다. */
+async function centerSalesInfo(
+  centerId: number
+): Promise<{ hasSales: boolean; cutoffYmd: string | null }> {
+  const { data } = await supabase
     .from("crm_sales")
-    .select("id", { head: true, count: "exact" })
+    .select("tx_at")
     .eq("center_id", centerId)
+    .order("tx_at", { ascending: false })
     .limit(1);
-  return (count ?? 0) > 0;
+  const maxTx = (data?.[0] as { tx_at?: string } | undefined)?.tx_at;
+  if (!maxTx) return { hasSales: false, cutoffYmd: null };
+  const cutoffYmd = new Date(new Date(maxTx).getTime() + 9 * 3600 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  return { hasSales: true, cutoffYmd };
+}
+
+/** KST 날짜 다음날 (YYYY-MM-DD) */
+function nextYmd(ymd: string): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
 }
 
 function daysBetween(from: string, to: string): number {
