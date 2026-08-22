@@ -36,7 +36,9 @@ export async function GET(request: Request) {
   const list = passes ?? [];
 
   // 트레이너 이름
-  const trainerIds = Array.from(new Set(list.map((p) => p.trainer_member_id)));
+  const trainerIds = Array.from(
+    new Set(list.map((p) => p.trainer_member_id).filter((v): v is number => !!v))
+  );
   const nameMap = new Map<number, string>();
   if (trainerIds.length) {
     const { data: staff } = await supabase
@@ -89,7 +91,7 @@ export async function GET(request: Request) {
         groupCapacity: p.group_capacity ?? 1,
         isPeriod,
         trainerId: p.trainer_member_id,
-        trainerName: nameMap.get(p.trainer_member_id) ?? "트레이너",
+        trainerName: (p.trainer_member_id ? nameMap.get(p.trainer_member_id) : null) ?? "트레이너",
         issuedAt: p.issued_at,
         priceWon: p.price_won ?? null,
         discountWon: p.discount_won ?? null,

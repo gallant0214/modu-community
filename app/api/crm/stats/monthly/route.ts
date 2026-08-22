@@ -137,6 +137,7 @@ export async function GET(request: Request) {
   });
 
   (passes ?? []).forEach((p) => {
+    if (!p.trainer_member_id) return; // 담당 강사 미배정 수강권은 강사별 집계 제외
     const t = addTrainer(p.trainer_member_id);
     t.passes.total += 1;
     t.passes.revenue += p.price_won ?? 0;

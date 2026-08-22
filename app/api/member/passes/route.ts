@@ -62,7 +62,7 @@ export async function GET(request: Request) {
       remainingSessions: p.remaining_sessions,
       sessionMinutes: p.session_minutes,
       trainerId: p.trainer_member_id,
-      trainerName: nameMap.get(p.trainer_member_id) ?? "트레이너",
+      trainerName: (p.trainer_member_id ? nameMap.get(p.trainer_member_id) : null) ?? "트레이너",
       startDate: p.start_date,
       expiresAt: p.expires_at,
     })),

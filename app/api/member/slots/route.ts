@@ -37,6 +37,9 @@ export async function GET(request: Request) {
     .eq("member_id", ctx.memberId)
     .maybeSingle();
   if (!pass) return NextResponse.json({ error: "수강권을 찾을 수 없습니다" }, { status: 404 });
+  // 담당 강사 미배정이면 예약 가능 슬롯 없음.
+  if (!pass.trainer_member_id) return NextResponse.json({ slots: [] });
+  const trainerId: number = pass.trainer_member_id;
 
   const { data: settings } = await supabase
     .from("crm_center_settings")
@@ -64,7 +67,7 @@ export async function GET(request: Request) {
       .from("crm_reservations")
       .select("starts_at, ends_at")
       .eq("center_id", ctx.centerId)
-      .eq("trainer_member_id", pass.trainer_member_id)
+      .eq("trainer_member_id", trainerId)
       .in("status", ["requested", "booked", "attended"])
       .gte("starts_at", dayStartUtc.toISOString())
       .lt("starts_at", dayEndUtc.toISOString()),
@@ -83,7 +86,7 @@ export async function GET(request: Request) {
     busy.push([new Date(r.starts_at).getTime(), new Date(r.ends_at).getTime()]);
   }
   for (const e of events ?? []) {
-    if (e.type === "center" || e.trainer_member_id === pass.trainer_member_id) {
+    if (e.type === "center" || e.trainer_member_id === trainerId) {
       busy.push([new Date(e.starts_at).getTime(), new Date(e.ends_at).getTime()]);
     }
   }

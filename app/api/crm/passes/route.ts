@@ -165,6 +165,9 @@ export async function POST(request: Request) {
   if (!memberId) {
     return NextResponse.json({ error: "회원이 필요합니다" }, { status: 400 });
   }
+  if (!sellerMemberId) {
+    return NextResponse.json({ error: "판매자 정보를 확인할 수 없습니다" }, { status: 400 });
+  }
   const issueType = body.issue_type;
   if (!issueType || !ISSUE_TYPES.includes(issueType as (typeof ISSUE_TYPES)[number])) {
     return NextResponse.json({ error: "발급 유형이 잘못됨" }, { status: 400 });
@@ -394,7 +397,11 @@ export async function POST(request: Request) {
 
   // 배정 알림 — 주강사/추가강사(본인 제외)에게 "회원이 배정되었습니다" (알림함 + 푸시)
   const assignTargets = Array.from(
-    new Set([trainerMemberId, ...coTrainerIds].filter((id) => id && id !== ctx.centerMemberId))
+    new Set(
+      [trainerMemberId, ...coTrainerIds].filter(
+        (id): id is number => !!id && id !== ctx.centerMemberId
+      )
+    )
   );
   if (assignTargets.length > 0) {
     after(async () => {

@@ -141,10 +141,16 @@ export async function POST(request: Request) {
   if (pass.remaining_sessions <= 0) {
     return NextResponse.json({ error: "잔여 세션이 없어요" }, { status: 400 });
   }
+  if (!pass.trainer_member_id) {
+    return NextResponse.json(
+      { error: "담당 강사가 아직 배정되지 않아 예약할 수 없어요. 센터에 문의해 주세요." },
+      { status: 400 }
+    );
+  }
 
   const sessionMinutes = pass.session_minutes && pass.session_minutes > 0 ? pass.session_minutes : 50;
   const endsAt = new Date(startsAt.getTime() + sessionMinutes * 60 * 1000);
-  const trainerId = pass.trainer_member_id;
+  const trainerId: number = pass.trainer_member_id;
 
   // 트레이너 시간 충돌 (요청/확정/출석 상태와 겹치면 불가)
   const { data: conflicts } = await supabase

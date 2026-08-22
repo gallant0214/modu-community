@@ -30,12 +30,30 @@ export async function GET(request: Request) {
 
   const { data: pass } = await supabase
     .from("crm_passes")
-    .select("id, member_id, trainer_member_id, session_minutes, group_capacity, status")
+    .select(
+      "id, member_id, trainer_member_id, session_minutes, group_capacity, status, total_sessions, remaining_sessions, start_date, expires_at"
+    )
     .eq("id", passId)
     .eq("center_id", ctx.centerId)
     .eq("member_id", ctx.memberId)
     .maybeSingle();
   if (!pass) return NextResponse.json({ error: "수강권을 찾을 수 없습니다" }, { status: 404 });
+  // 담당 강사 미배정·유효하지 않은 수강권·잔여 없음이면 예약 가능 슬롯 없음.
+  const isPeriod = (pass.total_sessions ?? 0) <= 0;
+  if (
+    pass.status !== "valid" ||
+    !pass.trainer_member_id ||
+    (!isPeriod && (pass.remaining_sessions ?? 0) <= 0)
+  ) {
+    return NextResponse.json({ slots: [] });
+  }
+  // 예약 요청 날짜(KST)가 시작일 이전이거나 만료일 이후(무기한 제외)면 슬롯 없음.
+  if (pass.start_date && date < pass.start_date) {
+    return NextResponse.json({ slots: [] });
+  }
+  if (pass.expires_at && pass.expires_at !== "9999-12-31" && date > pass.expires_at) {
+    return NextResponse.json({ slots: [] });
+  }
 
   const { data: settings } = await supabase
     .from("crm_center_settings")
@@ -46,6 +64,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ slots: [], bookingDisabled: true });
   }
 
+  const trainerId = pass.trainer_member_id; // 위 가드로 non-null 보장
   const unit = settings?.booking_unit_min ?? 60;
   const sessionMin = pass.session_minutes && pass.session_minutes > 0 ? pass.session_minutes : 50;
   const capacity = pass.group_capacity && pass.group_capacity > 0 ? pass.group_capacity : 1;
@@ -61,7 +80,7 @@ export async function GET(request: Request) {
       .from("crm_reservations")
       .select("starts_at, ends_at, member_id")
       .eq("center_id", ctx.centerId)
-      .eq("trainer_member_id", pass.trainer_member_id)
+      .eq("trainer_member_id", trainerId)
       .in("status", ["requested", "booked", "attended"])
       .gte("starts_at", dayStartUtc.toISOString())
       .lt("starts_at", dayEndUtc.toISOString()),
@@ -82,7 +101,7 @@ export async function GET(request: Request) {
   // 스케줄이벤트(휴무/개인일정)는 정원과 무관하게 완전 차단
   const blocks: Array<[number, number]> = [];
   for (const ev of events ?? []) {
-    if (ev.type === "center" || ev.trainer_member_id === pass.trainer_member_id) {
+    if (ev.type === "center" || ev.trainer_member_id === trainerId) {
       blocks.push([new Date(ev.starts_at).getTime(), new Date(ev.ends_at).getTime()]);
     }
   }
