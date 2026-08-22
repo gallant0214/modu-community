@@ -1498,12 +1498,23 @@ function AssignLockerForMemberModal({
     (async () => {
       const token = await getIdToken();
       if (!token) return;
-      const res = await fetch("/api/crm/lockers/vacant", {
-        headers: { authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setVacant(data.lockers ?? []);
+      const [vacantRes, prodRes] = await Promise.all([
+        fetch("/api/crm/lockers/vacant", { headers: { authorization: `Bearer ${token}` } }),
+        fetch(`/api/crm/lockers/member-products?member_id=${member.id}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }),
+      ]);
+      if (vacantRes.ok) setVacant((await vacantRes.json()).lockers ?? []);
+      // 결제한 락커 상품의 시작일·만료일 자동 입력 (가장 최근 대여권)
+      if (prodRes.ok) {
+        const items: { start_date: string | null; expires_at: string | null }[] =
+          (await prodRes.json()).items ?? [];
+        const paid = items.find((p) => p.start_date || p.expires_at);
+        if (paid) {
+          if (paid.start_date) setStartDate(paid.start_date);
+          if (paid.expires_at) setExpiresAt(paid.expires_at);
+        }
       }
     })();
   }, [member, getIdToken]);
@@ -1828,7 +1839,7 @@ function LockerActionModal({
   const [memo, setMemo] = useState("");
   // 선택한 회원이 구매한 락커 상품 (crm_sales) — 선택 시 만료일 자동 계산
   const [lockerPurchases, setLockerPurchases] = useState<
-    { product_name: string; purchased_at: string; duration_value: number | null; duration_unit: string | null; amount_won: number }[]
+    { product_name: string; purchased_at: string; duration_value: number | null; duration_unit: string | null; amount_won: number; start_date: string | null; expires_at: string | null }[]
   >([]);
   const [pickedProductName, setPickedProductName] = useState<string>("");
 
@@ -1841,11 +1852,19 @@ function LockerActionModal({
     else d.setUTCMonth(d.getUTCMonth() + dv); // 기본 month
     return d.toISOString().slice(0, 10);
   };
-  const applyProduct = (name: string, start: string) => {
+  // 구매한 락커 상품 선택 시 결제 시 지정한 '시작일·만료일'을 그대로 자동 입력.
+  //   대여권(crm_rentals)에 저장된 실제 기간이 있으면 그것을 우선 사용하고,
+  //   없으면 (시작일 + 상품 기간)으로 만료일만 계산(하위 호환).
+  const applyProduct = (name: string) => {
     setPickedProductName(name);
     const prod = lockerPurchases.find((p) => p.product_name === name);
-    if (prod) {
-      const exp = computeExpires(start, prod.duration_value, prod.duration_unit);
+    if (!prod) return;
+    if (prod.start_date) setStartDate(prod.start_date);
+    if (prod.expires_at) {
+      setExpiresAt(prod.expires_at);
+    } else {
+      const base = prod.start_date || startDate;
+      const exp = computeExpires(base, prod.duration_value, prod.duration_unit);
       if (exp) setExpiresAt(exp);
     }
   };
@@ -1894,8 +1913,25 @@ function LockerActionModal({
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
-      if (res.ok) setLockerPurchases((await res.json()).items ?? []);
-      else setLockerPurchases([]);
+      if (!res.ok) {
+        setLockerPurchases([]);
+        return;
+      }
+      const items = (await res.json()).items ?? [];
+      setLockerPurchases(items);
+      // 결제한 락커 상품이 있으면 가장 최근 것으로 시작일·만료일 자동 입력
+      if (items.length > 0) {
+        const p = items[0];
+        setPickedProductName(p.product_name);
+        if (p.start_date) setStartDate(p.start_date);
+        if (p.expires_at) {
+          setExpiresAt(p.expires_at);
+        } else {
+          const base = p.start_date || today;
+          const exp = computeExpires(base, p.duration_value, p.duration_unit);
+          if (exp) setExpiresAt(exp);
+        }
+      }
     })();
   }, [pickedMember, getIdToken]);
 
@@ -2180,7 +2216,7 @@ function LockerActionModal({
                 <select
                   className={crmInputClass}
                   value={pickedProductName}
-                  onChange={(e) => applyProduct(e.target.value, startDate)}
+                  onChange={(e) => applyProduct(e.target.value)}
                 >
                   <option value="">선택 안 함 (직접 입력)</option>
                   {lockerPurchases.map((p) => (
@@ -2189,12 +2225,12 @@ function LockerActionModal({
                       {p.duration_value
                         ? ` · ${p.duration_value}${p.duration_unit === "year" ? "년" : p.duration_unit === "day" ? "일" : "개월"}`
                         : ""}
-                      {` · 구매 ${p.purchased_at}`}
+                      {p.start_date ? ` · ${p.start_date}~${p.expires_at ?? ""}` : ` · 구매 ${p.purchased_at}`}
                     </option>
                   ))}
                 </select>
                 <p className="mt-1 text-[11.5px] text-[#A89B80]">
-                  구매한 상품을 선택하면 만료일이 자동 계산돼요.
+                  구매한 상품을 선택하면 결제 시 지정한 시작일·만료일이 자동 입력돼요.
                 </p>
               </CrmField>
             )}
@@ -2206,9 +2242,16 @@ function LockerActionModal({
                   className={crmInputClass}
                   value={startDate}
                   onChange={(e) => {
-                    setStartDate(e.target.value);
-                    // 상품 선택 상태면 시작일 변경 시 만료일 재계산
-                    if (pickedProductName) applyProduct(pickedProductName, e.target.value);
+                    const v = e.target.value;
+                    setStartDate(v);
+                    // 시작일을 직접 바꾸면(수동 조정) 상품 기간만큼 만료일 재계산 (시작일은 유지)
+                    if (pickedProductName) {
+                      const prod = lockerPurchases.find((p) => p.product_name === pickedProductName);
+                      if (prod) {
+                        const exp = computeExpires(v, prod.duration_value, prod.duration_unit);
+                        if (exp) setExpiresAt(exp);
+                      }
+                    }
                   }}
                 />
               </CrmField>
