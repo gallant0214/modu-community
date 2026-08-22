@@ -1206,18 +1206,20 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
             </div>
           )}
 
-          {/* 유형별 추가 버튼 — 이미 추가한 유형은 버튼 숨김(각 유형 1개까지) */}
-          {(type === "personal" || type === "group") && !components.some((c) => c.type === "membership") && (
-            <button
-              type="button"
-              onClick={() => addComponent("membership")}
-              className="w-full px-3.5 py-2.5 rounded-lg text-[13px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
-            >
-              + 회원권 추가하고 묶음 상품 만들기
-            </button>
-          )}
-          {type === "membership" && (
+          {/* 유형별 추가 버튼 — 이미 추가한 유형은 버튼 숨김(각 유형 1개까지).
+              부모가 수강권(personal/group)이든 회원권(membership)이든 락커·운동복을 함께 묶을 수 있음. */}
+          {(type === "personal" || type === "group" || type === "membership") && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {(type === "personal" || type === "group") &&
+                !components.some((c) => c.type === "membership") && (
+                  <button
+                    type="button"
+                    onClick={() => addComponent("membership")}
+                    className="px-3 py-2.5 rounded-lg text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A] hover:bg-[#6B7B3A]/5"
+                  >
+                    + 회원권 추가
+                  </button>
+                )}
               {!components.some((c) => c.type === "locker") && (
                 <button
                   type="button"
@@ -1236,7 +1238,7 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
                   + 운동복 상품 추가
                 </button>
               )}
-              {!components.some((c) => c.type === "personal") && (
+              {type === "membership" && !components.some((c) => c.type === "personal") && (
                 <button
                   type="button"
                   onClick={() => addComponent("personal")}
