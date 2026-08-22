@@ -51,6 +51,11 @@ export async function GET(request: Request) {
     .eq("center_id", ctx.centerId)
     .eq("firebase_uid", ctx.uid)
     .maybeSingle();
+  const { data: touchSt } = await supabase
+    .from("crm_touch_attendance_settings")
+    .select("photo_suggest_enabled")
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
   const permissions = await loadPermissionsForContext(ctx);
   // 직급권한 '센터 CRM 접속' 차단: 센터 컨텍스트 + owner 아님 + 권한 OFF → 진입 차단 신호.
   // 개인 CRM(solo)·owner 는 항상 허용.
@@ -77,6 +82,8 @@ export async function GET(request: Request) {
     businessNo: centerInfo?.business_no ?? null,
     centerLogo: (centerInfo as { logo_data_url?: string | null } | null)?.logo_data_url ?? null,
     displayName: me?.display_name ?? null,
+    photoSuggestEnabled:
+      (touchSt as { photo_suggest_enabled?: boolean } | null)?.photo_suggest_enabled !== false,
     permissions,
   });
 }

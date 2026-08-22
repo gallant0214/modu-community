@@ -349,25 +349,7 @@ export default function TouchAttendanceSettingsPage() {
           on={s.lesson_reentry_until_end}
           onChange={(v) => patch("lesson_reentry_until_end", v)}
         />
-        <div>
-          <div className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 mb-1.5">
-            출석 마일리지 적립
-          </div>
-          <div className="relative max-w-[160px]">
-            <input
-              type="number"
-              min={0}
-              value={s.attendance_mileage_earn}
-              onChange={(e) =>
-                patch("attendance_mileage_earn", Math.max(0, Number(e.target.value) || 0))
-              }
-              className={`${crmInputClass} pr-14`}
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-              마일리지
-            </span>
-          </div>
-        </div>
+        {/* 출석 마일리지 적립은 상품(회원권·수강권)별 설정으로 대체됨 — 이 전역 필드는 미사용이라 제거 */}
         <div>
           <div className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 mb-1.5">
             이용권 &lsquo;만료 임박&rsquo; 기준

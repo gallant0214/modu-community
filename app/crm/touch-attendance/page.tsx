@@ -20,6 +20,7 @@ interface CheckinSummary {
   mileage: number;
   coupon_count: number;
   can_enter: boolean;
+  not_started?: boolean;
   memberships: { id: number; plan_name: string; expires_at: string; is_paused: boolean }[];
   passes: {
     id: number;
@@ -73,6 +74,8 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   const [centerName, setCenterName] = useState("");
   const [mode, setMode] = useState<"portrait" | "landscape">("portrait");
   const [recogMode, setRecogMode] = useState<"number" | "face" | "both">("number");
+  // 얼굴 미등록 회원 체크인 시 '사진 촬영 권유' 여부 (터치출석 설정 photo_suggest_enabled)
+  const [photoSuggest, setPhotoSuggest] = useState(true);
 
   // 가로/세로 레이아웃 기억
   useEffect(() => {
@@ -111,6 +114,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         if (res.ok) {
           const data = await res.json();
           setCenterName(data.centerName ?? "");
+          setPhotoSuggest(data.photoSuggestEnabled !== false);
         }
       } catch {
         /* ignore */
@@ -226,11 +230,11 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         setNum("");
       } else if (members.length === 1) {
         const m = members[0];
-        if (kiosk || m.has_face) {
-          // 공개 키오스크(번호 전용)는 얼굴 등록 없이 바로 체크인
+        if (kiosk || m.has_face || !photoSuggest) {
+          // 공개 키오스크(번호 전용) / 이미 얼굴 등록 / 사진 촬영 권유 OFF → 바로 체크인
           await checkin(m);
         } else {
-          // 얼굴 미등록 → 촬영/동의 플로우
+          // 얼굴 미등록 + 사진 촬영 권유 ON → 촬영/동의 플로우
           setEnrollTarget(m);
           setBusy(false);
         }
@@ -624,6 +628,11 @@ function CheckinResultScreen({
                 </>
               )}
             </div>
+            {s?.not_started && (
+              <div className="mt-3 px-4 py-2 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[15px] md:text-[17px] font-semibold text-center">
+                아직 출석시작일이 아닙니다
+              </div>
+            )}
           </div>
 
           {/* 회원 카드 */}

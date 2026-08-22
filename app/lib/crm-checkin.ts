@@ -119,14 +119,14 @@ export async function buildCheckinSummary(centerId: number, memberId: number) {
         .maybeSingle(),
       supabase
         .from("crm_memberships")
-        .select("id, plan_name, expires_at, is_paused")
+        .select("id, plan_name, expires_at, start_date, is_paused")
         .eq("center_id", centerId)
         .eq("member_id", memberId)
         .eq("status", "valid")
         .gte("expires_at", todayYmd),
       supabase
         .from("crm_passes")
-        .select("id, lesson_kind, remaining_sessions, total_sessions, expires_at, is_paused")
+        .select("id, lesson_kind, remaining_sessions, total_sessions, expires_at, start_date, is_paused")
         .eq("center_id", centerId)
         .eq("member_id", memberId)
         .eq("status", "valid")
@@ -195,10 +195,21 @@ export async function buildCheckinSummary(centerId: number, memberId: number) {
     rentals.length > 0 ||
     lockers.length > 0;
 
+  // 출석시작일 전 판정: 유효(미만료) 이용권 중 이미 시작한 것은 없고, 시작일이 미래인 것만 있을 때.
+  //  → "아직 출석시작일이 아닙니다" 안내. (start_date 없으면 즉시 시작으로 간주)
+  const startable = [
+    ...(membershipsRes.data ?? []).map((m) => (m as { start_date?: string | null }).start_date),
+    ...(passesRes.data ?? []).map((p) => (p as { start_date?: string | null }).start_date),
+  ];
+  const hasStarted = startable.some((sd) => !sd || sd <= todayYmd);
+  const hasFutureStart = startable.some((sd) => sd && sd > todayYmd);
+  const notStarted = !hasStarted && hasFutureStart;
+
   return {
     mileage: memberRow.data?.mileage ?? 0,
     coupon_count: 0,
     can_enter: canEnter,
+    not_started: notStarted,
     memberships,
     passes,
     rentals,
