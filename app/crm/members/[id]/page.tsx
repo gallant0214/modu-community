@@ -105,7 +105,7 @@ export default function CrmMemberDetailPage() {
   const [holdRs, setHoldRs] = useState<RentalRow[]>([]);
   // 배정된 락커(실제 레코드) — current_locker 스냅샷이 없어도 현재 보유에 표시
   const [holdLockers, setHoldLockers] = useState<
-    { id: number; zone_name: string; number: number; start_date: string | null; expires_at: string | null }[]
+    { id: number; zone_name: string; number: number; start_date: string | null; expires_at: string | null; password?: string | null }[]
   >([]);
   const [bodyOpen, setBodyOpen] = useState(false);
   const [bodyReload, setBodyReload] = useState(0);
@@ -555,11 +555,17 @@ export default function CrmMemberDetailPage() {
                   period={fmtPeriod(c.start, c.exp)}
                   lockerUnassigned={!c.assign}
                   onClick={
-                    c.assign
-                      ? () => setLockerOpen(true)
-                      : c.rental
-                        ? () => setPaymentDetail(rentalToDetail(c.rental!, staffName))
-                        : () => setLockerOpen(true)
+                    c.rental
+                      ? () =>
+                          setPaymentDetail({
+                            ...rentalToDetail(c.rental!, staffName),
+                            lockerAssignId: c.assign?.id ?? null,
+                            lockerAssignLabel: c.assign
+                              ? `${c.assign.zone_name} ${c.assign.number}번`
+                              : null,
+                            lockerAssignPassword: c.assign?.password ?? null,
+                          })
+                      : () => setLockerOpen(true)
                   }
                 />
               ))
@@ -3480,6 +3486,10 @@ function LockerDetailModal({
   const [targetId, setTargetId] = useState<number | "">("");
   const [targetLabel, setTargetLabel] = useState("");
   const [moving, setMoving] = useState(false);
+  // 비밀번호 수정
+  const [pwEditId, setPwEditId] = useState<number | null>(null);
+  const [pwValue, setPwValue] = useState("");
+  const [savingPw, setSavingPw] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -3548,6 +3558,35 @@ function LockerDetailModal({
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
       setMoving(false);
+    }
+  };
+
+  const startPwEdit = (l: MemberLocker) => {
+    setPwEditId(l.id);
+    setPwValue(l.password ?? "");
+    setEditId(null);
+    setError("");
+  };
+  const savePassword = async () => {
+    if (!pwEditId || savingPw) return;
+    setSavingPw(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/lockers/${pwEditId}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ action: "update", password: pwValue }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "비밀번호 수정 실패");
+      setPwEditId(null);
+      await load();
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSavingPw(false);
     }
   };
 
@@ -3627,13 +3666,52 @@ function LockerDetailModal({
                     </button>
                   </div>
                 </div>
+              ) : pwEditId === l.id ? (
+                <div className="mt-3 rounded-xl border-2 border-[#6B7B3A]/40 bg-white dark:bg-zinc-900 p-3 space-y-2.5">
+                  <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                    비밀번호 수정
+                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={pwValue}
+                    onChange={(e) => setPwValue(e.target.value)}
+                    placeholder="비밀번호 (비우고 저장하면 삭제)"
+                    className={crmInputClass}
+                  />
+                  <p className="text-[11.5px] text-[#A89B80]">락커 관리 페이지에도 동일하게 반영됩니다.</p>
+                  {error && <div className="text-[12px] text-red-600">{error}</div>}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={savePassword}
+                      disabled={savingPw}
+                      className="flex-1 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
+                    >
+                      {savingPw ? "저장 중…" : "저장"}
+                    </button>
+                    <button
+                      onClick={() => setPwEditId(null)}
+                      className="px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] text-[#6B5D47] dark:text-zinc-300"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
               ) : (
-                <button
-                  onClick={() => startMove(l.id)}
-                  className="mt-3 px-4 py-2 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13px] font-semibold hover:bg-[#6B7B3A]/8"
-                >
-                  🔁 락커 이동
-                </button>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => startMove(l.id)}
+                    className="flex-1 px-4 py-2 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13px] font-semibold hover:bg-[#6B7B3A]/8"
+                  >
+                    🔁 락커 이동
+                  </button>
+                  <button
+                    onClick={() => startPwEdit(l)}
+                    className="flex-1 px-4 py-2 rounded-lg border border-[#B47B2A]/60 text-[#B47B2A] dark:text-amber-300 text-[13px] font-semibold hover:bg-[#B47B2A]/8"
+                  >
+                    🔑 비밀번호 수정
+                  </button>
+                </div>
               )}
             </div>
           ))}
@@ -3759,6 +3837,10 @@ interface PaymentDetail {
   note?: string | null;
   /** 열자마자 편집(발급 창 형태) 모드로 시작 — 결제내역 '수정' 진입용 */
   startInEdit?: boolean;
+  /** 배정된 물리 락커 (있으면 결제 상세에서 락커 이동/비밀번호 수정 가능) */
+  lockerAssignId?: number | null;
+  lockerAssignLabel?: string | null;
+  lockerAssignPassword?: string | null;
 }
 
 function membershipToDetail(
@@ -3828,6 +3910,7 @@ type LockerAssignRow = {
   number: number;
   start_date: string | null;
   expires_at: string | null;
+  password?: string | null;
 };
 // 락커 발급 = 대여권(락커) 행 + 물리 배정 이 함께 생겨 목록에 중복 표시됨.
 // 배정 memo("남자탈의실 20번")로 대여권을 매칭해 하나로 합친다.
@@ -3909,7 +3992,7 @@ function UsageSection({
   const [memberships, setMemberships] = useState<MembershipRow[]>([]);
   const [rentals, setRentals] = useState<RentalRow[]>([]);
   const [lockers, setLockers] = useState<
-    { id: number; zone_name: string; number: number; start_date: string | null; expires_at: string | null }[]
+    { id: number; zone_name: string; number: number; start_date: string | null; expires_at: string | null; password?: string | null }[]
   >([]);
   const [loading, setLoading] = useState(true);
 
@@ -3993,7 +4076,17 @@ function UsageSection({
               period={fmtPeriod(c.start, c.exp)}
               valid={c.assign ? !c.exp || c.exp >= todayStr : !!c.rental && isValid(c.rental.status, c.rental.expires_at)}
               lockerAssign={c.assign ? { zone_name: c.assign.zone_name, number: c.assign.number } : "unassigned"}
-              onClick={c.assign ? onOpenLocker : c.rental ? () => onOpenDetail(rentalToDetail(c.rental!, sellerName)) : onOpenLocker}
+              onClick={
+                c.rental
+                  ? () =>
+                      onOpenDetail({
+                        ...rentalToDetail(c.rental!, sellerName),
+                        lockerAssignId: c.assign?.id ?? null,
+                        lockerAssignLabel: c.assign ? `${c.assign.zone_name} ${c.assign.number}번` : null,
+                        lockerAssignPassword: c.assign?.password ?? null,
+                      })
+                  : onOpenLocker
+              }
             />
           ))}
         </ul>
@@ -4132,6 +4225,7 @@ function HoldingDetailModal({
     !!detail &&
     detail.kind === "rental" &&
     detail.status === "valid" &&
+    !detail.lockerAssignId && // 물리 락커가 배정돼 있으면 '이동'으로 처리
     (detail.memo ?? "").includes("미배정");
 
   const openLockerAssign = async () => {
@@ -4195,6 +4289,103 @@ function HoldingDetailModal({
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
       setAssigningLocker(false);
+    }
+  };
+
+  // 배정된 락커: 이동 / 비밀번호 수정
+  const isAssignedLocker = !!detail && detail.kind === "rental" && !!detail.lockerAssignId;
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveZone, setMoveZone] = useState<number | "">("");
+  const [movePickerOpen, setMovePickerOpen] = useState(false);
+  const [moveTargetId, setMoveTargetId] = useState<number | "">("");
+  const [moveTargetLabel, setMoveTargetLabel] = useState("");
+  const [moving, setMoving] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwValue, setPwValue] = useState("");
+  const [savingPw, setSavingPw] = useState(false);
+
+  const loadVacantZones = async (): Promise<{ zone_number: number; name: string }[]> => {
+    try {
+      const token = await getIdToken();
+      const headers = { authorization: `Bearer ${token}` };
+      const [zRes, vRes] = await Promise.all([
+        fetch("/api/crm/lockers/zones", { headers }),
+        fetch("/api/crm/lockers/vacant", { headers, cache: "no-store" }),
+      ]);
+      const allZones: { zone_number: number; name: string }[] = zRes.ok ? (await zRes.json()).zones ?? [] : [];
+      const vacant: { zone_number: number | null }[] = vRes.ok ? (await vRes.json()).lockers ?? [] : [];
+      const vn = new Set(vacant.map((v) => v.zone_number).filter((n): n is number => n != null));
+      return allZones.filter((z) => vn.has(z.zone_number));
+    } catch {
+      return [];
+    }
+  };
+
+  const openMove = async () => {
+    setMoveOpen(true);
+    setLockerAssignOpen(false);
+    setPwOpen(false);
+    setError("");
+    setMoveZone("");
+    setMoveTargetId("");
+    setMoveTargetLabel("");
+    setZones(await loadVacantZones());
+  };
+
+  const doMove = async () => {
+    if (!moveTargetId || !detail?.lockerAssignId || moving) {
+      if (!moveTargetId) setError("이동할 락커를 선택해 주세요");
+      return;
+    }
+    setMoving(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/lockers/${detail.lockerAssignId}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ action: "move", to_locker_id: Number(moveTargetId) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "이동 실패");
+      setMoveOpen(false);
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  const openPw = () => {
+    setPwOpen(true);
+    setMoveOpen(false);
+    setLockerAssignOpen(false);
+    setError("");
+    setPwValue(detail?.lockerAssignPassword ?? "");
+  };
+
+  const savePw = async () => {
+    if (!detail?.lockerAssignId || savingPw) return;
+    setSavingPw(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/lockers/${detail.lockerAssignId}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ action: "update", password: pwValue }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "비밀번호 수정 실패");
+      setPwOpen(false);
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSavingPw(false);
     }
   };
 
@@ -4535,29 +4726,143 @@ function HoldingDetailModal({
           ) : (
             <div className="space-y-2">
               {editable && detail.status === "valid" && (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {isUnassignedLocker && (
                     <button
                       onClick={openLockerAssign}
-                      className="flex-1 px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13.5px] font-semibold hover:bg-[#6B7B3A]/5"
+                      className="flex-1 min-w-[46%] px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13.5px] font-semibold hover:bg-[#6B7B3A]/5"
                     >
                       🔑 락커배정
                     </button>
                   )}
+                  {isAssignedLocker && (
+                    <button
+                      onClick={openMove}
+                      className="flex-1 min-w-[46%] px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13.5px] font-semibold hover:bg-[#6B7B3A]/5"
+                    >
+                      🔁 락커 이동
+                    </button>
+                  )}
+                  {isAssignedLocker && (
+                    <button
+                      onClick={openPw}
+                      className="flex-1 min-w-[46%] px-4 py-2.5 rounded-lg border border-[#8B6BB1]/60 text-[#8B6BB1] dark:text-purple-300 text-[13.5px] font-semibold hover:bg-[#8B6BB1]/8"
+                    >
+                      🔒 비밀번호 수정
+                    </button>
+                  )}
                   {detail.isPaused ? (
-                    <div className="flex-1 px-3 py-2.5 rounded-lg bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300 text-[12.5px] text-center font-medium">
+                    <div className="flex-1 min-w-[46%] px-3 py-2.5 rounded-lg bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300 text-[12.5px] text-center font-medium">
                       홀딩 중 (만료일 연장됨)
                     </div>
                   ) : (
                     <button
                       onClick={() => detail.id && detail.kind && onHold({ kind: detail.kind, id: detail.id })}
-                      className="flex-1 px-4 py-2.5 rounded-lg border border-[#B47B2A]/50 text-[#B47B2A] dark:text-amber-300 text-[13.5px] font-semibold hover:bg-[#B47B2A]/5"
+                      className="flex-1 min-w-[46%] px-4 py-2.5 rounded-lg border border-[#B47B2A]/50 text-[#B47B2A] dark:text-amber-300 text-[13.5px] font-semibold hover:bg-[#B47B2A]/5"
                     >
                       ⏸ 홀딩 (일시정지)
                     </button>
                   )}
                 </div>
               )}
+
+              {/* 락커 이동 패널 (배정된 락커) */}
+              {moveOpen && (
+                <div className="rounded-lg border border-[#6B7B3A]/40 bg-[#6B7B3A]/5 p-3 space-y-2.5">
+                  <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                    락커 이동 {detail.lockerAssignLabel ? `· 현재 ${detail.lockerAssignLabel}` : ""}
+                  </div>
+                  <div>
+                    <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 mb-1">이동할 락커 구역</div>
+                    <select
+                      className={crmInputClass}
+                      value={moveZone}
+                      onChange={(e) => {
+                        setMoveZone(e.target.value ? Number(e.target.value) : "");
+                        setMoveTargetId("");
+                        setMoveTargetLabel("");
+                      }}
+                    >
+                      <option value="">구역 선택</option>
+                      {zones.map((z) => (
+                        <option key={z.zone_number} value={z.zone_number}>
+                          {z.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={moveZone === ""}
+                    onClick={() => setMovePickerOpen(true)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13px] font-semibold hover:bg-[#6B7B3A]/5 disabled:opacity-50"
+                  >
+                    {moveTargetLabel ? `이동할 락커: ${moveTargetLabel} · 다시 선택` : "락커 선택하기 (배치도)"}
+                  </button>
+                  <p className="text-[11.5px] text-[#A89B80]">
+                    회원·기간·비밀번호가 선택한 빈 락커로 옮겨지고 지금 락커는 비워집니다. (비밀번호는 그대로 유지)
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={doMove}
+                      disabled={moving || !moveTargetId}
+                      className="flex-1 px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
+                    >
+                      {moving ? "이동 중…" : "이 락커로 이동"}
+                    </button>
+                    <button
+                      onClick={() => setMoveOpen(false)}
+                      className="px-4 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] dark:text-zinc-300"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 비밀번호 수정 패널 (배정된 락커) */}
+              {pwOpen && (
+                <div className="rounded-lg border border-[#8B6BB1]/40 bg-[#8B6BB1]/5 p-3 space-y-2.5">
+                  <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                    비밀번호 수정 {detail.lockerAssignLabel ? `· ${detail.lockerAssignLabel}` : ""}
+                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={pwValue}
+                    onChange={(e) => setPwValue(e.target.value)}
+                    placeholder="비밀번호 (비우고 저장하면 삭제)"
+                    className={crmInputClass}
+                  />
+                  <p className="text-[11.5px] text-[#A89B80]">락커 관리 페이지에도 동일하게 반영됩니다.</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={savePw}
+                      disabled={savingPw}
+                      className="flex-1 px-4 py-2 rounded-lg bg-[#8B6BB1] text-white text-[13px] font-semibold hover:bg-[#7a5ca0] disabled:opacity-50"
+                    >
+                      {savingPw ? "저장 중…" : "저장"}
+                    </button>
+                    <button
+                      onClick={() => setPwOpen(false)}
+                      className="px-4 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] dark:text-zinc-300"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              )}
+              <LockerPickerModal
+                open={movePickerOpen}
+                zone={moveZone === "" ? null : moveZone}
+                excludeLockerId={detail.lockerAssignId ?? null}
+                onPick={(l) => {
+                  setMoveTargetId(l.id);
+                  setMoveTargetLabel(`${l.zone_name} ${l.number}번`);
+                  setMovePickerOpen(false);
+                }}
+                onClose={() => setMovePickerOpen(false)}
+              />
 
               {/* 락커 배정 패널 (미배정 락커 대여권) */}
               {lockerAssignOpen && (
