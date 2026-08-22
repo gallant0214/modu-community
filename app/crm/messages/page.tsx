@@ -279,7 +279,7 @@ export default function CrmMessagesPage() {
           { key: "send", label: "메세지 전송" },
           { key: "auto", label: "자동 메세지 전송" },
           { key: "sms", label: "문자 메세지 전송" },
-          { key: "sms_logs", label: "문자 발송 로그" },
+          { key: "sms_logs", label: "메세지 전송 로그" },
         ] as const).map((tab) => (
           <button
             key={tab.key}

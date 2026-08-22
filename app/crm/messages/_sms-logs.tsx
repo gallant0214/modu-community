@@ -3,18 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 
-interface SmsLog {
-  id: number;
-  receivers: string;
-  receiver_cnt: number;
-  msg: string;
-  msg_type: string;
+interface MsgLog {
+  key: string;
+  channel: "sms" | "push";
   title: string | null;
+  content: string;
+  receiver_cnt: number;
+  msg_type: string | null;
   testmode: boolean;
-  result_code: number;
-  result_msg: string;
-  success_cnt: number;
-  error_cnt: number;
+  result_code: number | null;
+  result_msg: string | null;
+  success_cnt: number | null;
+  error_cnt: number | null;
+  read_count: number | null;
   sent_by_name: string | null;
   created_at: string;
 }
@@ -31,9 +32,9 @@ function formatDateTime(iso: string): string {
 
 export function SmsLogsTab() {
   const { getIdToken } = useAuth();
-  const [logs, setLogs] = useState<SmsLog[]>([]);
+  const [logs, setLogs] = useState<MsgLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,7 +62,7 @@ export function SmsLogsTab() {
     <div className="max-w-2xl">
       <div className="flex items-center justify-between mb-3">
         <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-          문자 발송 기록과 성공·실패 건수를 확인해요. (최근 100건)
+          문자·앱푸시 등 모든 메세지 전송 기록을 확인해요. (최근 100건)
         </p>
         <button
           type="button"
@@ -76,72 +77,96 @@ export function SmsLogsTab() {
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : logs.length === 0 ? (
         <div className="px-4 py-8 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-          아직 문자 발송 기록이 없어요.
+          아직 메세지 전송 기록이 없어요.
         </div>
       ) : (
         <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
           {logs.map((l) => {
-            const failed = l.error_cnt > 0 || l.result_code < 0;
-            const isOpen = expanded === l.id;
+            const isPush = l.channel === "push";
+            const failed = !isPush && ((l.error_cnt ?? 0) > 0 || (l.result_code ?? 0) < 0);
+            const isOpen = expanded === l.key;
             return (
-              <li key={l.id} className="px-4 py-3">
+              <li key={l.key} className="px-4 py-3">
                 <button
                   type="button"
-                  onClick={() => setExpanded(isOpen ? null : l.id)}
+                  onClick={() => setExpanded(isOpen ? null : l.key)}
                   className="w-full text-left"
                 >
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      {/* 채널 배지 */}
                       <span
                         className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
-                          l.testmode
-                            ? "bg-[#F5F0E5] text-[#A89B80] border-[#E8E0D0] dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
-                            : failed
-                              ? "bg-red-50 text-red-600 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60"
-                              : "bg-[#6B7B3A]/10 text-[#6B7B3A] border-[#6B7B3A]/30 dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]"
+                          isPush
+                            ? "bg-[#5A8BB0]/12 text-[#487596] border-[#5A8BB0]/30 dark:bg-[#5A8BB0]/20 dark:text-[#8FB7D4]"
+                            : "bg-[#B47B2A]/12 text-[#B47B2A] border-[#B47B2A]/30 dark:bg-amber-900/30 dark:text-amber-300"
                         }`}
                       >
-                        {l.testmode ? "테스트" : failed ? "실패 포함" : "발송 완료"}
+                        {isPush ? "앱푸시" : "문자"}
                       </span>
-                      <span className="px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-[#EFE9DA] text-[#6B5D47] dark:bg-zinc-800 dark:text-zinc-400">
-                        {l.msg_type}
-                      </span>
+                      {/* 상태 배지 */}
+                      {!isPush && (
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                            l.testmode
+                              ? "bg-[#F5F0E5] text-[#A89B80] border-[#E8E0D0] dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
+                              : failed
+                                ? "bg-red-50 text-red-600 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/60"
+                                : "bg-[#6B7B3A]/10 text-[#6B7B3A] border-[#6B7B3A]/30 dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]"
+                          }`}
+                        >
+                          {l.testmode ? "테스트" : failed ? "실패 포함" : "발송 완료"}
+                        </span>
+                      )}
+                      {l.msg_type && (
+                        <span className="px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-[#EFE9DA] text-[#6B5D47] dark:bg-zinc-800 dark:text-zinc-400">
+                          {l.msg_type}
+                        </span>
+                      )}
                       <span className="text-[12px] text-[#6B5D47] dark:text-zinc-300">
                         {l.receiver_cnt}명
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-[11.5px]">
-                      <span className="text-[#6B7B3A] dark:text-[#A8B87A] font-semibold">성공 {l.success_cnt}</span>
-                      {l.error_cnt > 0 && (
-                        <span className="text-red-600 dark:text-red-400 font-semibold">실패 {l.error_cnt}</span>
+                      {isPush ? (
+                        l.read_count != null && (
+                          <span className="text-[#487596] dark:text-[#8FB7D4] font-semibold">읽음 {l.read_count}</span>
+                        )
+                      ) : (
+                        <>
+                          <span className="text-[#6B7B3A] dark:text-[#A8B87A] font-semibold">성공 {l.success_cnt ?? 0}</span>
+                          {(l.error_cnt ?? 0) > 0 && (
+                            <span className="text-red-600 dark:text-red-400 font-semibold">실패 {l.error_cnt}</span>
+                          )}
+                        </>
                       )}
                       <span className="text-[#A89B80]">{formatDateTime(l.created_at)}</span>
                     </div>
                   </div>
                   <div className="mt-1.5 text-[12.5px] text-[#3A342A] dark:text-zinc-300 line-clamp-2 whitespace-pre-wrap">
                     {l.title ? <strong>[{l.title}] </strong> : null}
-                    {l.msg}
+                    {l.content}
                   </div>
                 </button>
 
                 {isOpen && (
                   <div className="mt-2 pt-2 border-t border-[#E8E0D0]/70 dark:border-zinc-800 space-y-1 text-[12px] text-[#6B5D47] dark:text-zinc-400">
-                    <div>
-                      <span className="text-[#A89B80]">수신번호: </span>
-                      <span className="font-mono">{l.receivers}</span>
-                    </div>
-                    <div>
-                      <span className="text-[#A89B80]">결과: </span>
-                      <span className={failed ? "text-red-600 dark:text-red-400" : ""}>
-                        {l.result_msg || (failed ? "실패" : "정상")}
-                      </span>
-                    </div>
+                    {!isPush && l.result_msg && (
+                      <div>
+                        <span className="text-[#A89B80]">결과: </span>
+                        <span className={failed ? "text-red-600 dark:text-red-400" : ""}>{l.result_msg}</span>
+                      </div>
+                    )}
                     {l.sent_by_name && (
                       <div>
                         <span className="text-[#A89B80]">발송자: </span>
                         {l.sent_by_name}
                       </div>
                     )}
+                    <div className="whitespace-pre-wrap">
+                      <span className="text-[#A89B80]">내용: </span>
+                      {l.content}
+                    </div>
                   </div>
                 )}
               </li>
