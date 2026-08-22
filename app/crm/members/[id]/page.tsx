@@ -4071,6 +4071,78 @@ function HoldingDetailModal({
   const [eExpires, setEExpires] = useState("");
   const [eMemo, setEMemo] = useState("");
 
+  // 락커 배정 (미배정 락커 대여권 전용)
+  const [lockerAssignOpen, setLockerAssignOpen] = useState(false);
+  const [vacantLockers, setVacantLockers] = useState<
+    { id: number; zone_id: number; zone_name: string; number: number }[]
+  >([]);
+  const [pickedLockerId, setPickedLockerId] = useState<number | "">("");
+  const [lockerPassword, setLockerPassword] = useState("");
+  const [assigningLocker, setAssigningLocker] = useState(false);
+  // 미배정 락커 대여권: 대여권이고 메모가 '…미배정'
+  const isUnassignedLocker =
+    !!detail &&
+    detail.kind === "rental" &&
+    detail.status === "valid" &&
+    (detail.memo ?? "").includes("미배정");
+
+  const openLockerAssign = async () => {
+    setLockerAssignOpen(true);
+    setError("");
+    setPickedLockerId("");
+    setLockerPassword("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/lockers/vacant", {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setVacantLockers((await res.json()).lockers ?? []);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const assignLocker = async () => {
+    if (!pickedLockerId || !detail?.id) {
+      setError("배정할 락커를 선택해 주세요");
+      return;
+    }
+    setAssigningLocker(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const lk = vacantLockers.find((v) => v.id === pickedLockerId);
+      // 1) 락커 배정 — 기간은 이 대여권의 시작·만료일로
+      const aRes = await fetch(`/api/crm/lockers/${pickedLockerId}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "assign",
+          member_id: memberId,
+          start_date: detail.startDate || undefined,
+          expires_at: detail.expiresAt || undefined,
+          password: lockerPassword || undefined,
+        }),
+      });
+      const aData = await aRes.json();
+      if (!aRes.ok) throw new Error(aData?.error || "락커 배정 실패");
+      // 2) 대여권 메모: '구역 미배정' → '{구역} {번호}번 락커 배정'
+      const label = lk ? `${lk.zone_name} ${lk.number}번 락커 배정` : "락커 배정";
+      await fetch(`/api/crm/rentals/${detail.id}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ memo: label }),
+      });
+      setLockerAssignOpen(false);
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setAssigningLocker(false);
+    }
+  };
+
   // 모달 열릴 때 권한 조회 + 편집 상태 초기화
   useEffect(() => {
     setEditing(false);
@@ -4408,18 +4480,80 @@ function HoldingDetailModal({
           ) : (
             <div className="space-y-2">
               {editable && detail.status === "valid" && (
-                detail.isPaused ? (
-                  <div className="px-3 py-2 rounded-lg bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300 text-[12.5px] text-center font-medium">
-                    홀딩 중 (만료일이 홀딩 기간만큼 연장되었어요)
+                <div className="flex gap-2">
+                  {isUnassignedLocker && (
+                    <button
+                      onClick={openLockerAssign}
+                      className="flex-1 px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13.5px] font-semibold hover:bg-[#6B7B3A]/5"
+                    >
+                      🔑 락커배정
+                    </button>
+                  )}
+                  {detail.isPaused ? (
+                    <div className="flex-1 px-3 py-2.5 rounded-lg bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300 text-[12.5px] text-center font-medium">
+                      홀딩 중 (만료일 연장됨)
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => detail.id && detail.kind && onHold({ kind: detail.kind, id: detail.id })}
+                      className="flex-1 px-4 py-2.5 rounded-lg border border-[#B47B2A]/50 text-[#B47B2A] dark:text-amber-300 text-[13.5px] font-semibold hover:bg-[#B47B2A]/5"
+                    >
+                      ⏸ 홀딩 (일시정지)
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* 락커 배정 패널 (미배정 락커 대여권) */}
+              {lockerAssignOpen && (
+                <div className="rounded-lg border border-[#6B7B3A]/40 bg-[#6B7B3A]/5 p-3 space-y-2.5">
+                  <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                    락커 배정 · 기간 {detail.startDate ?? "—"} ~ {detail.expiresAt ?? "—"}
                   </div>
-                ) : (
-                  <button
-                    onClick={() => detail.id && detail.kind && onHold({ kind: detail.kind, id: detail.id })}
-                    className="w-full px-4 py-2.5 rounded-lg border border-[#B47B2A]/50 text-[#B47B2A] dark:text-amber-300 text-[13.5px] font-semibold hover:bg-[#B47B2A]/5"
-                  >
-                    ⏸ 홀딩 (일시정지)
-                  </button>
-                )
+                  {vacantLockers.length === 0 ? (
+                    <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] text-center text-[12px] text-[#8C8270]">
+                      비어있는 락커가 없어요. 락커 설정에서 갯수를 늘려주세요.
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        className={crmInputClass}
+                        value={pickedLockerId}
+                        onChange={(e) => setPickedLockerId(e.target.value ? Number(e.target.value) : "")}
+                      >
+                        <option value="">배정할 락커 선택</option>
+                        {vacantLockers.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.zone_name} · {v.number}번
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={lockerPassword}
+                        onChange={(e) => setLockerPassword(e.target.value)}
+                        placeholder="락커 비밀번호 (선택)"
+                        className={crmInputClass}
+                      />
+                    </>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={assignLocker}
+                      disabled={assigningLocker || !pickedLockerId}
+                      className="flex-1 px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
+                    >
+                      {assigningLocker ? "배정 중…" : "배정하기"}
+                    </button>
+                    <button
+                      onClick={() => setLockerAssignOpen(false)}
+                      className="px-4 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] dark:text-zinc-300"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
               )}
               <div className="flex gap-2">
                 {editable && canEdit && (
