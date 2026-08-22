@@ -54,7 +54,10 @@ export async function GET(request: Request) {
     .select("id, name, phone, status, face_image_thumb", { count: "exact" })
     .eq("center_id", centerId)
     .eq("status", "active")
-    .order("name", { ascending: true })
+    // 최근 등록/구매 회원이 최상단. last_purchase_at 우선, 없으면 registered_at.
+    .order("last_purchase_at", { ascending: false, nullsFirst: false })
+    .order("registered_at", { ascending: false, nullsFirst: false })
+    .order("id", { ascending: false })
     .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
   if (q) mq = mq.or(`name.ilike.%${q}%,phone.ilike.%${q}%`);
 
@@ -99,14 +102,22 @@ export async function GET(request: Request) {
     }
   }
 
-  const out = list.map((m) => ({
-    id: m.id,
-    name: m.name,
-    phone: m.phone ?? "",
-    status: m.status,
-    face_image_thumb: m.face_image_thumb ?? null,
-    primary: primaryMap.get(m.id) ?? null,
-  }));
+  // 유효/만료: 대표 상품의 만료일이 오늘 이후면 유효(무기한 9999 포함).
+  const todayYmd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const isValid = (exp: string | null) => !!exp && String(exp).slice(0, 10) >= todayYmd;
+
+  const out = list.map((m) => {
+    const primary = primaryMap.get(m.id) ?? null;
+    return {
+      id: m.id,
+      name: m.name,
+      phone: m.phone ?? "",
+      status: m.status,
+      face_image_thumb: m.face_image_thumb ?? null,
+      primary,
+      valid: primary ? isValid(primary.expires_at) : false,
+    };
+  });
 
   const total = count ?? 0;
   const hasMore = page * PAGE_SIZE + list.length < total;
