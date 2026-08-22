@@ -123,23 +123,22 @@ export async function POST(request: Request) {
   }
 
   // 결제내역(crm_payments)에 기록 — 회원권·수강권과 동일하게 결제내역 탭에 표시.
+  // 0원(예: 재등록 무료 이어붙이기)도 구매 이벤트로 기록해 결제내역에 남긴다.
   const paidWon = Math.max(
     0,
     (Number(body.price_won) || 0) - Math.max(0, Math.floor(Number(body.discount_won) || 0))
   );
-  if (paidWon > 0) {
-    await supabase.from("crm_payments").insert({
-      center_id: ctx.centerId,
-      member_id: memberId,
-      rental_id: created.id,
-      amount_won: paidWon,
-      method: paymentMethod,
-      method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
-      paid_at: new Date().toISOString(),
-      recorded_by_uid: ctx.uid,
-      status: "completed",
-    } as never);
-  }
+  await supabase.from("crm_payments").insert({
+    center_id: ctx.centerId,
+    member_id: memberId,
+    rental_id: created.id,
+    amount_won: paidWon,
+    method: paymentMethod,
+    method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
+    paid_at: new Date().toISOString(),
+    recorded_by_uid: ctx.uid,
+    status: "completed",
+  } as never);
 
   // 마일리지 적립/사용 → 회원 잔고 갱신
   const mileageEarned = Math.max(0, Math.floor(Number(body.mileage_earned) || 0));

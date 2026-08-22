@@ -3935,6 +3935,8 @@ function mergeLockerItems(
     (x.memo ?? "").includes("락커") ||
     /\d+번/.test(x.memo ?? "") ||
     /^(락커|상가)/.test((x.item_name ?? "").trim());
+  // 배정된 물리 락커의 라벨 목록 — 재등록(같은 자리 여러 대여권) 판정에 사용
+  const assignedLabels = lockers.map((l) => `${l.zone_name} ${l.number}번`);
   // 1) 배정된 락커 → 대여권 결합.
   //    ① memo 라벨("여자탈의실 39번") 정확 매칭 우선
   //    ② 없으면(락커관리에서 따로 배정해 memo 가 '구역 미배정' 그대로인 경우)
@@ -3961,6 +3963,11 @@ function mergeLockerItems(
   for (const x of rentals) {
     if (used.has(x.id)) continue;
     if (!isLockerRental(x)) continue;
+    // 이미 배정된 락커와 같은 자리를 가리키는 대여권(재등록 이력)은 별도 미배정 카드로 표시하지 않음
+    if (assignedLabels.some((lbl) => (x.memo ?? "").includes(lbl))) {
+      used.add(x.id);
+      continue;
+    }
     used.add(x.id);
     cards.push({
       key: `lr${x.id}`,
