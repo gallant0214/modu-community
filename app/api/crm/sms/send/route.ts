@@ -21,6 +21,10 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // 문자 발송은 스페셜바디(center 1) 전용 (발신번호·크레딧 보호)
+  if (ctx.centerId !== 1) {
+    return NextResponse.json({ error: "현재 잠금 기능입니다." }, { status: 403 });
+  }
   const perms = await loadPermissionsForContext(ctx);
   if (perms["messages.send"] === false) {
     return NextResponse.json({ error: "메세지 전송 권한이 없습니다" }, { status: 403 });

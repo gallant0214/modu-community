@@ -65,6 +65,8 @@ export default function CrmMessagesPage() {
 
   // 직급권한: 메세지 전송 가능 여부 (null=확인 중)
   const [canSend, setCanSend] = useState<boolean | null>(null);
+  // 현재 센터 id (문자 메세지 전송은 스페셜바디=1 만 사용 가능)
+  const [centerId, setCenterId] = useState<number | null>(null);
   useEffect(() => {
     (async () => {
       try {
@@ -76,11 +78,16 @@ export default function CrmMessagesPage() {
         });
         const data = await res.json();
         setCanSend(data?.permissions?.["messages.send"] !== false);
+        setCenterId(typeof data?.centerId === "number" ? data.centerId : null);
       } catch {
         setCanSend(true);
       }
     })();
   }, [getIdToken]);
+
+  // 문자 메세지 전송 잠금 여부: 스페셜바디(center 1) 외 잠금
+  const SMS_ALLOWED_CENTER = 1;
+  const smsLocked = centerId !== SMS_ALLOWED_CENTER;
 
   // 수신자 확인 모달
   const [recipientModal, setRecipientModal] = useState<{
@@ -275,7 +282,17 @@ export default function CrmMessagesPage() {
           <button
             key={tab.key}
             type="button"
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => {
+              if (tab.key === "sms" && smsLocked) {
+                alert(
+                  centerId == null
+                    ? "권한 확인 중입니다. 잠시 후 다시 시도해 주세요."
+                    : "현재 잠금 기능입니다."
+                );
+                return;
+              }
+              setActiveTab(tab.key);
+            }}
             className={`px-3.5 py-2 -mb-px text-[13.5px] font-semibold border-b-2 transition-colors ${
               activeTab === tab.key
                 ? "border-[#6B7B3A] text-[#3A342A] dark:text-zinc-100"
@@ -283,18 +300,24 @@ export default function CrmMessagesPage() {
             }`}
           >
             {tab.label}
+            {tab.key === "sms" && <span className="ml-1">🔒</span>}
           </button>
         ))}
       </div>
 
       {activeTab === "auto" && <AutoMessagesTab />}
 
-      {activeTab === "sms" && canSend === false && (
+      {activeTab === "sms" && smsLocked && (
+        <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          🔒 현재 잠금 기능입니다.
+        </div>
+      )}
+      {activeTab === "sms" && !smsLocked && canSend === false && (
         <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
           메세지 전송 권한이 없습니다. 센터 관리자에게 문의해 주세요.
         </div>
       )}
-      {activeTab === "sms" && canSend !== false && <SmsSendTab />}
+      {activeTab === "sms" && !smsLocked && canSend !== false && <SmsSendTab />}
 
       {activeTab === "send" && canSend === false && (
         <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
