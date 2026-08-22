@@ -63,6 +63,20 @@ export async function GET(
     nextMonth = new Date(y, m, 1).toISOString().slice(0, 10);
   }
 
+  // 기간에 포함된 월 수 (고정급 개월수 반영 — 정산 탭과 동일 기준). 단일월=1.
+  const monthsInPeriod = (() => {
+    const start = new Date(`${startDate.slice(0, 7)}-01T00:00:00Z`);
+    const end = new Date(`${nextMonth.slice(0, 10)}T00:00:00Z`);
+    let n = 0;
+    const cur = new Date(start);
+    for (let g = 0; g < 240; g += 1) {
+      if (cur >= end) break;
+      n += 1;
+      cur.setUTCMonth(cur.getUTCMonth() + 1);
+    }
+    return Math.max(1, n);
+  })();
+
   const [{ data: passes }, { data: overrideRules }, { data: defaultRules }] = await Promise.all([
     supabase
       .from("crm_passes")
@@ -288,7 +302,8 @@ export async function GET(
     effectiveRate = tier ? Number(tier.rate) : 0;
   }
   const commissionPayout = Math.round((revenue * effectiveRate) / 100);
-  const baseSalary = Math.max(0, Number(trainer?.base_salary ?? 0));
+  // 고정급은 기간 개월수만큼 (다기간 조회 시 정산 탭과 동일 기준). 단일월=1.
+  const baseSalary = Math.max(0, Number(trainer?.base_salary ?? 0)) * monthsInPeriod;
 
   // 라인별 수업료 = 회당 수업료 × 유효 커미션율. (합계 ≈ commissionPayout)
   const sessionLines = rawSessionLines.map((l) => ({
