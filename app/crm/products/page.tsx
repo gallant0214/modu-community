@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass, CrmModal } from "../_components/crm-modal";
 import { formatWon } from "../_components/crm-labels";
-import { unitToDays } from "@/app/lib/duration-convert";
 import { ProductDetailModal, ProductDetail } from "./_components/product-detail-modal";
 import { ProductEditModal } from "./_components/product-edit-modal";
 
@@ -512,12 +511,9 @@ function productSubMeta(p: Product): string {
   if ((p.type === "group" || p.type === "personal") && p.session_minutes) {
     parts.push(`${p.session_minutes}분 수업`);
   }
-  // 횟수제 수강권: 유효기간(일) 표시 (service_days 우선, 없으면 duration 환산)
+  // 횟수제 수강권: 유효기간(일) = service_days (폼 수정창과 동일 필드, 0=무제한)
   if ((p.type === "group" || p.type === "personal") && p.billing_mode === "count") {
-    const vd =
-      p.service_days && p.service_days > 0
-        ? p.service_days
-        : unitToDays(p.duration_value, p.duration_unit);
+    const vd = p.service_days ?? 0;
     parts.push(vd > 0 ? `유효기간 ${vd.toLocaleString()}일` : "유효기간 무제한");
   }
   if (p.pause_enabled) parts.push("정지 가능");

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmModal } from "../../_components/crm-modal";
 import { formatWon } from "../../_components/crm-labels";
-import { unitToDays } from "@/app/lib/duration-convert";
 import { ProductForm } from "../_components/product-form";
 import { ProductDetailModal, ProductDetail } from "../_components/product-detail-modal";
 import { ProductEditModal } from "../_components/product-edit-modal";
@@ -184,13 +183,7 @@ export default function CrmPersonalProductsPage() {
                   : `${p.total_sessions ?? 0}회`}
                 {p.session_minutes ? ` · ${p.session_minutes}분` : ""}
                 {p.billing_mode === "count"
-                  ? (() => {
-                      const vd =
-                        p.service_days && p.service_days > 0
-                          ? p.service_days
-                          : unitToDays(p.duration_value, p.duration_unit);
-                      return ` · 유효기간 ${vd > 0 ? `${vd.toLocaleString()}일` : "무제한"}`;
-                    })()
+                  ? ` · 유효기간 ${(p.service_days ?? 0) > 0 ? `${(p.service_days ?? 0).toLocaleString()}일` : "무제한"}`
                   : ""}
               </div>
               <div className="mt-2 text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 tabular-nums">
