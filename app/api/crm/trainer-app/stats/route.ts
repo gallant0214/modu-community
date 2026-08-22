@@ -46,6 +46,7 @@ export async function GET(request: Request) {
     { count: rolling28Attended },
     { data: scopedPasses },
     { data: scopedMemberships },
+    { data: scopedMembershipsAll },
   ] = await Promise.all([
     supabase
       .from("crm_reservations")
@@ -83,6 +84,13 @@ export async function GET(request: Request) {
       .eq("center_id", centerId)
       .eq("seller_member_id", me)
       .in("payment_status", ["unpaid", "partial"]),
+    // 만료 회원 계산용: 내가 판매한 회원권(회원별 만료일)
+    supabase
+      .from("crm_memberships")
+      .select("member_id, expires_at")
+      .eq("center_id", centerId)
+      .eq("status", "valid")
+      .eq("seller_member_id", me),
   ]);
 
   const weekAttended = (weekRes ?? []).filter((r) => r.status === "attended").length;
@@ -111,6 +119,24 @@ export async function GET(request: Request) {
     }
   }
 
+  // 만료 회원 = 담당(내 스코프) 회원 중 유효(미만료) 상품이 하나도 없고, 만료된 상품이 있는 회원.
+  //   재등록해서 새 유효 상품이 생기면 valid=true 가 되어 자동으로 제외(-1)된다.
+  const memberExp = new Map<number, { valid: boolean; expired: boolean }>();
+  const markExp = (mid: number | null | undefined, exp: string | null | undefined) => {
+    if (!mid) return;
+    const c = memberExp.get(mid) ?? { valid: false, expired: false };
+    const ymd = exp ? String(exp).slice(0, 10) : "";
+    if (ymd) {
+      if (ymd >= today) c.valid = true; // 무기한(9999) 포함
+      else c.expired = true;
+    }
+    memberExp.set(mid, c);
+  };
+  for (const p of scopedPasses ?? []) markExp(p.member_id, p.expires_at as string | null);
+  for (const m of scopedMembershipsAll ?? []) markExp(m.member_id, (m as { expires_at?: string }).expires_at ?? null);
+  let expiredMemberCount = 0;
+  for (const [, c] of memberExp) if (c.expired && !c.valid) expiredMemberCount += 1;
+
   return NextResponse.json({
     weekAttended,
     weekBooked,
@@ -119,6 +145,7 @@ export async function GET(request: Request) {
     avgPerWeek: Math.round(((rolling28Attended ?? 0) / 4) * 10) / 10,
     memberCount: memberSet.size,
     expiringCount,
+    expiredMemberCount,
     outstandingCount,
     outstandingWon,
   });
