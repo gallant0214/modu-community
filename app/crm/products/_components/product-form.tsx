@@ -52,6 +52,20 @@ export interface BundleComponent {
   group_capacity?: number;
 }
 
+/** 기존 등록 상품(묶음 구성에 가져오기용) */
+interface ExistingProduct {
+  id: number;
+  type: string;
+  name: string;
+  price_won: number;
+  billing_mode: string;
+  duration_value: number | null;
+  duration_unit: string | null;
+  total_sessions: number | null;
+  session_minutes: number | null;
+  capacity: number | null;
+}
+
 interface TypeOption {
   value: string;
   label: string;
@@ -318,6 +332,43 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
     setComponents((prev) => prev.map((c, x) => (x === i ? { ...c, ...patch } : c)));
   const removeComponent = (i: number) =>
     setComponents((prev) => prev.filter((_, x) => x !== i));
+
+  // 묶음 구성에 "기존 등록 상품 가져오기"용 상품 목록
+  const [existingProducts, setExistingProducts] = useState<ExistingProduct[]>([]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/products", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setExistingProducts(data.products ?? []);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [getIdToken]);
+
+  // 선택한 기존 상품의 값으로 구성 상품 채우기
+  const applyExistingToComponent = (i: number, productId: string) => {
+    const p = existingProducts.find((x) => String(x.id) === productId);
+    if (!p) return;
+    updateComponent(i, {
+      name: p.name,
+      price_won: p.price_won ?? 0,
+      billing_mode: p.billing_mode === "count" ? "count" : "period",
+      duration_value: p.duration_value ?? 0,
+      duration_unit: (p.duration_unit as DurationUnit) ?? "day",
+      total_sessions: p.total_sessions ?? 0,
+      session_minutes: p.session_minutes ?? 0,
+      group_capacity: p.type === "group" ? p.capacity ?? 2 : 1,
+    });
+  };
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -599,19 +650,14 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
 
         <div className="mt-3">
           <FieldLabel>판매 가격 (원)</FieldLabel>
-          <div className="relative">
-            <input
-              type="text"
-              inputMode="numeric"
-              value={priceWon === 0 ? "" : formatWon(priceWon)}
-              onChange={(e) => setPriceWon(parseWon(e.target.value))}
-              placeholder="0"
-              className={`${crmInputClass} pr-8 text-right tabular-nums`}
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#A89B80] pointer-events-none">
-              원
-            </span>
-          </div>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={priceWon === 0 ? "" : formatWon(priceWon) + "원"}
+            onChange={(e) => setPriceWon(parseWon(e.target.value))}
+            placeholder="0원"
+            className={`${crmInputClass} text-left tabular-nums`}
+          />
           <label className="mt-2 flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -1025,6 +1071,29 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
                       </button>
                     </div>
 
+                    {existingProducts.some((p) => p.type === c.type) && (
+                      <div>
+                        <FieldLabel>기존 상품에서 가져오기</FieldLabel>
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) applyExistingToComponent(i, e.target.value);
+                          }}
+                          className={crmInputClass}
+                        >
+                          <option value="">직접 입력 · 또는 등록된 상품 선택</option>
+                          {existingProducts
+                            .filter((p) => p.type === c.type)
+                            .map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} · {formatWon(p.price_won)}원
+                              </option>
+                            ))}
+                        </select>
+                        <p className="mt-1 text-[11px] text-[#A89B80]">선택하면 아래 값이 자동 입력돼요. 이후 수정 가능.</p>
+                      </div>
+                    )}
+
                     <div>
                       <FieldLabel>상품명</FieldLabel>
                       <input
@@ -1039,19 +1108,14 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
 
                     <div>
                       <FieldLabel>판매 가격 (원)</FieldLabel>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={(c.price_won ?? 0) === 0 ? "" : formatWon(c.price_won ?? 0)}
-                          onChange={(e) => updateComponent(i, { price_won: parseWon(e.target.value) })}
-                          placeholder="0"
-                          className={`${crmInputClass} pr-8 text-right tabular-nums`}
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#A89B80] pointer-events-none">
-                          원
-                        </span>
-                      </div>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={(c.price_won ?? 0) === 0 ? "" : formatWon(c.price_won ?? 0) + "원"}
+                        onChange={(e) => updateComponent(i, { price_won: parseWon(e.target.value) })}
+                        placeholder="0원"
+                        className={`${crmInputClass} text-left tabular-nums`}
+                      />
                     </div>
 
                     <div>
