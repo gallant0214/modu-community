@@ -3516,11 +3516,16 @@ function LockerDetailModal({
     setError("");
     try {
       const token = await getIdToken();
-      const res = await fetch("/api/crm/lockers/zones", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      if (res.ok) setMoveZones((await res.json()).zones ?? []);
+      const headers = { authorization: `Bearer ${token}` };
+      // 빈 락커가 있는 구역만 노출 (이동 가능한 락커가 없는 구역은 숨김)
+      const [zRes, vRes] = await Promise.all([
+        fetch("/api/crm/lockers/zones", { headers, cache: "no-store" }),
+        fetch("/api/crm/lockers/vacant", { headers, cache: "no-store" }),
+      ]);
+      const allZones: { zone_number: number; name: string }[] = zRes.ok ? (await zRes.json()).zones ?? [] : [];
+      const vacant: { zone_number: number | null }[] = vRes.ok ? (await vRes.json()).lockers ?? [] : [];
+      const vacantZoneNums = new Set(vacant.map((v) => v.zone_number).filter((n): n is number => n != null));
+      setMoveZones(allZones.filter((z) => vacantZoneNums.has(z.zone_number)));
     } catch {
       /* ignore */
     }
@@ -4138,10 +4143,16 @@ function HoldingDetailModal({
     setLockerPassword("");
     try {
       const token = await getIdToken();
-      const res = await fetch("/api/crm/lockers/zones", {
-        headers: { authorization: `Bearer ${token}` },
-      });
-      if (res.ok) setZones((await res.json()).zones ?? []);
+      const headers = { authorization: `Bearer ${token}` };
+      // 빈 락커가 있는 구역만 노출 (배정할 락커가 없는 구역은 숨김)
+      const [zRes, vRes] = await Promise.all([
+        fetch("/api/crm/lockers/zones", { headers }),
+        fetch("/api/crm/lockers/vacant", { headers, cache: "no-store" }),
+      ]);
+      const allZones: { zone_number: number; name: string }[] = zRes.ok ? (await zRes.json()).zones ?? [] : [];
+      const vacant: { zone_number: number | null }[] = vRes.ok ? (await vRes.json()).lockers ?? [] : [];
+      const vacantZoneNums = new Set(vacant.map((v) => v.zone_number).filter((n): n is number => n != null));
+      setZones(allZones.filter((z) => vacantZoneNums.has(z.zone_number)));
     } catch {
       /* ignore */
     }
