@@ -233,12 +233,13 @@ export function SmsSendTab() {
     }
   };
 
-  // 무료수신거부 문구를 내용 맨 아래에 자동 추가(중복 방지)
+  // 무료수신거부 문구를 내용 맨 아래에 자동 추가(중복 방지). 별도 080 번호 미설정 → 발신번호 사용.
   const appendOptout = () => {
+    const optout = formatPhone(sender) || "발신번호로 문의";
     setMsg((prev) => {
       if (prev.includes("무료수신거부")) return prev;
       const base = prev.replace(/\s+$/, "");
-      return base ? `${base}\n무료수신거부 ${OPTOUT_NUMBER}` : `무료수신거부 ${OPTOUT_NUMBER}`;
+      return base ? `${base}\n무료수신거부 ${optout}` : `무료수신거부 ${optout}`;
     });
   };
 

@@ -6,6 +6,7 @@ import { crmInputClass, CrmModal } from "../_components/crm-modal";
 import { formatPhone } from "../_components/crm-labels";
 import { AutoMessagesTab } from "./_auto-messages";
 import { SmsSendTab } from "./_sms-send";
+import { SmsLogsTab } from "./_sms-logs";
 
 type AudienceKind = "all" | "active" | "dormant" | "expiring" | "expired" | "unassigned" | "individual";
 
@@ -44,7 +45,7 @@ const AUDIENCE_LABEL = Object.fromEntries(
 export default function CrmMessagesPage() {
   const { getIdToken } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<"send" | "auto" | "sms">("send");
+  const [activeTab, setActiveTab] = useState<"send" | "auto" | "sms" | "sms_logs">("send");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState<AudienceKind>("all");
@@ -278,12 +279,13 @@ export default function CrmMessagesPage() {
           { key: "send", label: "메세지 전송" },
           { key: "auto", label: "자동 메세지 전송" },
           { key: "sms", label: "문자 메세지 전송" },
+          { key: "sms_logs", label: "문자 발송 로그" },
         ] as const).map((tab) => (
           <button
             key={tab.key}
             type="button"
             onClick={() => {
-              if (tab.key === "sms" && smsLocked) {
+              if ((tab.key === "sms" || tab.key === "sms_logs") && smsLocked) {
                 alert(
                   centerId == null
                     ? "권한 확인 중입니다. 잠시 후 다시 시도해 주세요."
@@ -300,7 +302,7 @@ export default function CrmMessagesPage() {
             }`}
           >
             {tab.label}
-            {tab.key === "sms" && <span className="ml-1">🔒</span>}
+            {(tab.key === "sms" || tab.key === "sms_logs") && <span className="ml-1">🔒</span>}
           </button>
         ))}
       </div>
