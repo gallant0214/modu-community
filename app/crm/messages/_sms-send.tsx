@@ -378,14 +378,37 @@ export function SmsSendTab() {
           <Panel title="직접 입력" step="2">
         <label className="block mb-1 text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">
           수신번호 직접 입력{" "}
-          <span className="text-[#8C8270] font-normal">(쉼표·줄바꿈으로 여러 명, 선택사항)</span>
+          <span className="text-[#8C8270] font-normal">
+            (명단을 통째로 붙여넣고 Enter → 전화번호만 자동 추출)
+          </span>
         </label>
         <textarea
           className={`${inputCls} min-h-[70px] font-mono`}
           value={numbersRaw}
           onChange={(e) => setNumbersRaw(e.target.value)}
-          placeholder={"010-1234-5678, 01098765432\n053-755-4455"}
+          onPaste={(e) => {
+            // 붙여넣기 즉시: 원문(이름·날짜·금액 등)에서 전화번호만 추출해 정리
+            const text = e.clipboardData.getData("text");
+            const phones = parseNumbers(`${numbersRaw ? numbersRaw + "\n" : ""}${text}`);
+            if (phones.length) {
+              e.preventDefault();
+              setNumbersRaw(phones.map(formatPhone).join("\n"));
+            }
+          }}
+          onKeyDown={(e) => {
+            // Enter: 현재 내용에서 전화번호만 추출해 정리 (줄바꿈은 Shift+Enter)
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              const phones = parseNumbers(numbersRaw);
+              if (phones.length) setNumbersRaw(phones.map(formatPhone).join("\n"));
+            }
+          }}
+          placeholder={"명단을 통째로 붙여넣고 Enter 를 누르세요.\n예: 010-1234-5678, 01098765432"}
         />
+        <div className="mt-1 text-[12px] text-[#8C8270]">
+          인식된 번호: <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{directNumbers.length}개</strong>
+          {directNumbers.length > 0 && " · Enter 로 정리됩니다"}
+        </div>
           </Panel>
 
       {/* 장문 제목 (LMS 전용) */}
