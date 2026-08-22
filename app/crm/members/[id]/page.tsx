@@ -3811,10 +3811,23 @@ function mergeLockerItems(
 ): { cards: MergedLocker[]; usedRentalIds: Set<number> } {
   const used = new Set<number>();
   const cards: MergedLocker[] = [];
-  // 1) 배정된 락커 → memo 로 매칭되는 대여권(락커) 결합
+  // 락커 대여권 판별: memo 가 락커 배정/미배정 이거나, 상품명이 락커/상가.
+  const isLockerRental = (x: RentalRow) =>
+    (x.memo ?? "").includes("미배정") ||
+    (x.memo ?? "").includes("락커") ||
+    /\d+번/.test(x.memo ?? "") ||
+    /^(락커|상가)/.test((x.item_name ?? "").trim());
+  // 1) 배정된 락커 → 대여권 결합.
+  //    ① memo 라벨("여자탈의실 39번") 정확 매칭 우선
+  //    ② 없으면(락커관리에서 따로 배정해 memo 가 '구역 미배정' 그대로인 경우)
+  //       미배정 락커 대여권을 흡수 — 시작일 동일 우선, 아니면 아무거나 하나
   for (const l of lockers) {
     const label = `${l.zone_name} ${l.number}번`;
-    const r = rentals.find((x) => !used.has(x.id) && (x.memo ?? "").includes(label)) ?? null;
+    let r = rentals.find((x) => !used.has(x.id) && (x.memo ?? "").includes(label)) ?? null;
+    if (!r) {
+      const cands = rentals.filter((x) => !used.has(x.id) && isLockerRental(x));
+      r = cands.find((x) => x.start_date && x.start_date === l.start_date) ?? cands[0] ?? null;
+    }
     if (r) used.add(r.id);
     cards.push({
       key: `la${l.id}`,
@@ -3826,11 +3839,10 @@ function mergeLockerItems(
       rental: r,
     });
   }
-  // 2) 배정 안 된 락커 대여권(미배정) — memo '미배정' 또는 락커/상가 상품명
+  // 2) 남은 락커 대여권 = 실제로 물리 락커가 배정 안 된 미배정 건
   for (const x of rentals) {
     if (used.has(x.id)) continue;
-    const isLocker = (x.memo ?? "").includes("미배정") || /^(락커|상가)/.test((x.item_name ?? "").trim());
-    if (!isLocker) continue;
+    if (!isLockerRental(x)) continue;
     used.add(x.id);
     cards.push({
       key: `lr${x.id}`,
