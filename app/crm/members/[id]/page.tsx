@@ -4479,6 +4479,7 @@ interface BundleComp {
   duration_unit?: string;
   total_sessions?: number;
   session_minutes?: number;
+  group_capacity?: number;
 }
 
 // 무기한 만료 sentinel (count 기반 구성 수강권은 기간 개념이 없어 무기한으로).
@@ -4645,7 +4646,8 @@ async function postBundleComponent(
           start_date: args.startDate,
           expires_at: expires,
           billing_mode: isCount ? "count" : "period",
-          group_capacity: comp.type === "group" ? 2 : 1,
+          group_capacity:
+            comp.type === "group" ? Math.max(2, Math.floor(comp.group_capacity ?? 0) || 2) : 1,
         }),
       });
     }

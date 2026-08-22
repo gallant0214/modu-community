@@ -18,6 +18,7 @@ export function sanitizeComponents(input: unknown): {
   duration_unit: string;
   total_sessions: number;
   session_minutes: number;
+  group_capacity: number;
 }[] {
   if (!Array.isArray(input)) return [];
   return input
@@ -36,6 +37,8 @@ export function sanitizeComponents(input: unknown): {
           : "day",
         total_sessions: Math.max(0, Math.floor(Number(o.total_sessions) || 0)),
         session_minutes: Math.max(0, Math.floor(Number(o.session_minutes) || 0)),
+        group_capacity:
+          o.type === "group" ? Math.max(2, Math.floor(Number(o.group_capacity) || 0) || 2) : 1,
       };
     })
     .filter((c) => c.duration_value > 0 || c.total_sessions > 0);

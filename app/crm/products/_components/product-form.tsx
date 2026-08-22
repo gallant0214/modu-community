@@ -48,6 +48,8 @@ export interface BundleComponent {
   duration_unit?: DurationUnit;
   total_sessions?: number;
   session_minutes?: number;
+  /** 그룹 수업 구성 상품의 정원(명). group 타입에서만 사용. */
+  group_capacity?: number;
 }
 
 interface TypeOption {
@@ -308,6 +310,7 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
         duration_unit: "day",
         total_sessions: isLesson ? 10 : 0,
         session_minutes: isLesson ? 50 : 0,
+        group_capacity: compType === "group" ? 2 : 1,
       },
     ]);
   };
@@ -387,6 +390,7 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
           duration_unit: c.billing_mode === "period" ? c.duration_unit ?? "day" : "day",
           total_sessions: c.billing_mode === "count" ? c.total_sessions ?? 0 : 0,
           session_minutes: c.type === "personal" || c.type === "group" ? c.session_minutes ?? 0 : 0,
+          group_capacity: c.type === "group" ? Math.max(2, Math.floor(c.group_capacity ?? 0) || 2) : 1,
         })),
         // create 모드에서만 scope 를 서버로 전송 (edit 는 소유가 이미 정해져 있음)
         ...(mode === "create" && scope === "personal" ? { scope: "personal" } : {}),
@@ -1115,6 +1119,18 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
                             min={0}
                             value={c.session_minutes ?? 0}
                             onChange={(e) => updateComponent(i, { session_minutes: Math.max(0, Number(e.target.value) || 0) })}
+                            className={crmInputClass}
+                          />
+                        </div>
+                      )}
+                      {c.type === "group" && (
+                        <div>
+                          <FieldLabel>정원 (명)</FieldLabel>
+                          <input
+                            type="number"
+                            min={2}
+                            value={c.group_capacity ?? 2}
+                            onChange={(e) => updateComponent(i, { group_capacity: Math.max(2, Number(e.target.value) || 2) })}
                             className={crmInputClass}
                           />
                         </div>
