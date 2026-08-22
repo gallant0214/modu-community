@@ -20,9 +20,10 @@ export async function GET(request: Request) {
   if (!solapiConfigured()) {
     return NextResponse.json({ configured: false }, { status: 200 });
   }
+  const sender = (process.env.SOLAPI_SENDER ?? "").replace(/\D/g, "");
   const r = await solapiBalance();
   if (!r.ok) {
-    return NextResponse.json({ configured: true, ok: false, message: r.message }, { status: 200 });
+    return NextResponse.json({ configured: true, ok: false, message: r.message, sender }, { status: 200 });
   }
-  return NextResponse.json({ configured: true, ok: true, balance: r.balance, point: r.point });
+  return NextResponse.json({ configured: true, ok: true, balance: r.balance, point: r.point, sender });
 }

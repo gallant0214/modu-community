@@ -10,6 +10,18 @@ function byteLen(s: string): number {
   return n;
 }
 
+function formatPhone(raw: string): string {
+  const d = (raw ?? "").replace(/\D/g, "");
+  if (!d) return "";
+  if (d.startsWith("02")) {
+    if (d.length === 9) return `${d.slice(0, 2)}-${d.slice(2, 5)}-${d.slice(5)}`;
+    if (d.length === 10) return `${d.slice(0, 2)}-${d.slice(2, 6)}-${d.slice(6)}`;
+  }
+  if (d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+  if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+  return d;
+}
+
 function parseNumbers(raw: string): string[] {
   return Array.from(
     new Set(
@@ -24,6 +36,7 @@ function parseNumbers(raw: string): string[] {
 export function SmsSendTab() {
   const { getIdToken } = useAuth();
   const [remain, setRemain] = useState<{ balance: number; point: number } | null>(null);
+  const [sender, setSender] = useState<string>("");
   const [remainMsg, setRemainMsg] = useState<string>("");
   const [numbersRaw, setNumbersRaw] = useState("");
   const [msg, setMsg] = useState("");
@@ -49,6 +62,7 @@ export function SmsSendTab() {
         setRemainMsg("문자 발송 설정(API 키)이 아직 등록되지 않았어요.");
         return;
       }
+      if (data?.sender) setSender(data.sender);
       if (data?.ok) setRemain({ balance: data.balance, point: data.point });
       else setRemainMsg(data?.message || "잔액을 불러오지 못했어요.");
     } catch {
@@ -116,6 +130,14 @@ export function SmsSendTab() {
 
   return (
     <div className="max-w-2xl space-y-4">
+      {/* 발신번호 */}
+      <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-white dark:bg-zinc-900">
+        <span className="text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300">발신번호</span>
+        <span className="text-[14px] font-bold text-[#3A342A] dark:text-zinc-100">
+          {sender ? formatPhone(sender) : "—"}
+        </span>
+      </div>
+
       {/* 잔액 */}
       <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/60 dark:bg-zinc-900/40">
         <span className="text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300">발송 잔액</span>
@@ -186,6 +208,10 @@ export function SmsSendTab() {
         </span>
       </label>
 
+      <p className="text-[11.5px] text-[#A89B80] leading-relaxed">
+        90byte 초과 시 자동 LMS 전환. 광고성 문자는 (광고) 표기·무료수신거부번호 명시가 필요합니다.
+      </p>
+
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -199,11 +225,6 @@ export function SmsSendTab() {
         </button>
         {result && <span className="text-[13px] text-[#3A342A] dark:text-zinc-200">{result}</span>}
       </div>
-
-      <p className="text-[11.5px] text-[#A89B80] leading-relaxed">
-        발신번호 053-755-4455 · 솔라피(Solapi) 연동 · 90byte 초과 시 자동 LMS 전환.
-        광고성 문자는 (광고) 표기·무료수신거부번호 명시가 필요합니다.
-      </p>
     </div>
   );
 }
