@@ -263,7 +263,7 @@ export default function CrmMessagesPage() {
   }, [audience, selectedMembers, withinDays, inactiveDays]);
 
   return (
-    <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-4xl mx-auto">
+    <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-5xl mx-auto">
       <header className="mb-5">
         <h1 className="text-[18px] md:text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
           메세지 전송
@@ -302,7 +302,9 @@ export default function CrmMessagesPage() {
             }`}
           >
             {tab.label}
-            {(tab.key === "sms" || tab.key === "sms_logs") && <span className="ml-1">🔒</span>}
+            {(tab.key === "sms" || tab.key === "sms_logs") && smsLocked && (
+              <span className="ml-1 text-[11px]">잠금</span>
+            )}
           </button>
         ))}
       </div>
@@ -320,6 +322,18 @@ export default function CrmMessagesPage() {
         </div>
       )}
       {activeTab === "sms" && !smsLocked && canSend !== false && <SmsSendTab />}
+
+      {activeTab === "sms_logs" && smsLocked && (
+        <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          현재 잠금 기능입니다.
+        </div>
+      )}
+      {activeTab === "sms_logs" && !smsLocked && canSend === false && (
+        <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          메세지 전송 권한이 없습니다. 센터 관리자에게 문의해 주세요.
+        </div>
+      )}
+      {activeTab === "sms_logs" && !smsLocked && canSend !== false && <SmsLogsTab />}
 
       {activeTab === "send" && canSend === false && (
         <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">

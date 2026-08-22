@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 
 /** UTF-8 바이트 길이 (알리고 90byte 초과 시 LMS) */
@@ -9,9 +9,6 @@ function byteLen(s: string): number {
   for (const ch of s) n += ch.charCodeAt(0) > 0x7f ? 2 : 1;
   return n;
 }
-
-// 무료수신거부 번호 (실제 080 수신거부 번호로 교체 필요)
-const OPTOUT_NUMBER = "080-000-0000";
 
 function formatPhone(raw: string): string {
   const d = (raw ?? "").replace(/\D/g, "");
@@ -52,6 +49,39 @@ const SEGMENTS: { key: string; label: string }[] = [
   { key: "expired", label: "만료 회원" },
   { key: "locker_expired", label: "락커 만료 회원" },
 ];
+
+function StepBadge({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#2F3A2B] px-1.5 text-[11px] font-bold text-white dark:bg-[#A8B87A] dark:text-zinc-950">
+      {children}
+    </span>
+  );
+}
+
+function Panel({
+  title,
+  step,
+  action,
+  children,
+}: {
+  title: string;
+  step?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-[#E8E0D0] bg-[#FEFCF7] p-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          {step && <StepBadge>{step}</StepBadge>}
+          <h2 className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100">{title}</h2>
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export function SmsSendTab() {
   const { getIdToken } = useAuth();
@@ -192,7 +222,7 @@ export function SmsSendTab() {
     }
     const label = testmode
       ? `[테스트 모드] 실제 발송 없이 검증만 합니다.\n${allNumbers.length}명 대상, ${msgType}.`
-      : `⚠️ 실제 발송됩니다.\n${allNumbers.length}명에게 ${msgType} 발송(과금).`;
+      : `실제 발송됩니다.\n${allNumbers.length}명에게 ${msgType} 발송(과금).`;
     if (!window.confirm(`${label}\n\n계속할까요?`)) return;
 
     setSending(true);
@@ -211,10 +241,10 @@ export function SmsSendTab() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setResult(`❌ ${data?.error || "발송 실패"}`);
+        setResult(`실패: ${data?.error || "발송 실패"}`);
       } else {
         setResult(
-          `${data.testmode ? "🧪 테스트 성공" : "✅ 발송 완료"} · ${data.msg_type} · 성공 ${data.success_cnt}건${
+          `${data.testmode ? "테스트 성공" : "발송 완료"} · ${data.msg_type} · 성공 ${data.success_cnt}건${
             data.error_cnt ? ` · 실패 ${data.error_cnt}건` : ""
           }`
         );
@@ -227,7 +257,7 @@ export function SmsSendTab() {
         loadRemain();
       }
     } catch (e) {
-      setResult(`❌ ${e instanceof Error ? e.message : "네트워크 오류"}`);
+      setResult(`실패: ${e instanceof Error ? e.message : "네트워크 오류"}`);
     } finally {
       setSending(false);
     }
@@ -243,76 +273,27 @@ export function SmsSendTab() {
     });
   };
 
+  const canSubmit = allNumbers.length > 0 && msg.trim().length > 0;
   const inputCls =
-    "w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13.5px] text-[#2A251D] dark:text-zinc-100";
+    "w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13.5px] text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:outline-none focus:border-[#6B7B3A]";
 
   return (
-    <div className="max-w-2xl space-y-4">
-      {/* 주의사항: 광고성 메시지 필수 표기 */}
-      <div className="px-4 py-3.5 rounded-xl border border-[#E5C07B]/60 dark:border-amber-700/50 bg-[#FBF3DE] dark:bg-amber-950/25">
-        <div className="flex items-center gap-1.5 text-[13px] font-bold text-[#8A6D1F] dark:text-amber-300">
-          <span>⚠️</span>
-          <span>광고성 메시지 필수 표기 사항</span>
-        </div>
-        <p className="mt-1.5 text-[12px] text-[#6B5D47] dark:text-zinc-300 leading-relaxed">
-          광고성 메시지를 발송할 때는 관련 법령에 따라 아래 항목을 본문/제목에 반드시 포함해야 합니다.
-        </p>
-        <ul className="mt-2 space-y-1 text-[12px] text-[#6B5D47] dark:text-zinc-300 leading-relaxed">
-          <li>
-            <strong className="text-[#3A342A] dark:text-zinc-100">(광고) 표기</strong> : 메시지 제목 및 본문 시작 부분에 소괄호로 표기
-          </li>
-          <li>
-            <strong className="text-[#3A342A] dark:text-zinc-100">발신자 정보</strong> : 업체명 또는 브랜드명 명시 (대괄호 등 특수문자 없이 표기)
-          </li>
-          <li>
-            <strong className="text-[#3A342A] dark:text-zinc-100">무료 수신거부 안내</strong> : 메시지 하단에 무료 수신거부 번호 포함
-          </li>
-        </ul>
-        <div className="mt-2.5 text-[12px]">
-          <div className="mb-1 font-semibold text-[#8A6D1F] dark:text-amber-300">작성 예시</div>
-          <pre className="whitespace-pre-wrap rounded-lg bg-white/70 dark:bg-zinc-900/60 border border-[#E8E0D0] dark:border-zinc-800 px-3 py-2 text-[12px] text-[#3A342A] dark:text-zinc-200 leading-relaxed font-sans">{`(광고) [업체명] 봄맞이 특가 이벤트 안내
-이벤트 기간 동안 전 품목 20% 할인 혜택을 드립니다.
-자세히 보기: https://...
-무료수신거부 080-500-4233`}</pre>
-        </div>
-      </div>
-
-      {/* 발신번호 */}
-      <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-white dark:bg-zinc-900">
-        <span className="text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300">발신번호</span>
-        <span className="text-[14px] font-bold text-[#3A342A] dark:text-zinc-100">
-          {sender ? formatPhone(sender) : "—"}
-        </span>
-      </div>
-
-      {/* 잔액 */}
-      <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/60 dark:bg-zinc-900/40">
-        <span className="text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300">발송 잔액</span>
-        {remain ? (
-          <span className="text-[13px] text-[#3A342A] dark:text-zinc-200">
-            캐시 <strong>{remain.balance.toLocaleString()}원</strong> · 포인트{" "}
-            <strong>{remain.point.toLocaleString()}P</strong>
-          </span>
-        ) : (
-          <span className="text-[12px] text-[#A89B80]">{remainMsg || "불러오는 중…"}</span>
-        )}
-      </div>
-
-      {/* 수신자 선택 (회원) */}
-      <div className="px-4 py-3.5 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 space-y-3">
-        <div className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">수신자 선택</div>
+    <div className="max-w-5xl space-y-4">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="space-y-4">
+          <Panel title="수신자" step="1">
 
         {/* 세그먼트 일괄 선택 */}
-        <div className="flex flex-wrap gap-1.5">
+        <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {SEGMENTS.map((s) => (
             <button
               key={s.key}
               type="button"
               onClick={() => addSegment(s.key)}
               disabled={segBusy !== null}
-              className="px-3 py-1.5 rounded-lg border border-[#6B7B3A]/50 text-[12.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/8 disabled:opacity-50"
+              className="min-h-10 rounded-lg border border-[#D8CDB7] bg-white px-3 py-2 text-left text-[12.5px] font-semibold text-[#3A342A] hover:border-[#6B7B3A] hover:bg-[#FBF7EB] disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
             >
-              {segBusy === s.key ? "불러오는 중…" : `+ ${s.label}`}
+              {segBusy === s.key ? "불러오는 중..." : s.label}
             </button>
           ))}
         </div>
@@ -326,13 +307,18 @@ export function SmsSendTab() {
             placeholder="회원 이름 또는 연락처 검색"
             className={inputCls}
           />
+          {searching && (
+            <div className="mt-1.5 px-3 py-2 text-center text-[12.5px] text-[#8C8270]">
+              검색 중...
+            </div>
+          )}
           {memberQuery.trim() && !searching && memberResults.length === 0 && (
             <div className="mt-1.5 px-3 py-2 text-[12.5px] text-[#8C8270] text-center border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-lg">
               검색 결과가 없어요.
             </div>
           )}
           {memberResults.length > 0 && (
-            <ul className="mt-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 max-h-44 overflow-y-auto">
+            <ul className="mt-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 max-h-44 overflow-y-auto bg-white dark:bg-zinc-950">
               {memberResults
                 .filter((m) => (m.phone ?? "").replace(/\D/g, "").length >= 9)
                 .filter((m) => !recipients.some((r) => r.phone === onlyDigits(m.phone ?? "")))
@@ -347,10 +333,8 @@ export function SmsSendTab() {
                       }}
                       className="w-full text-left px-3 py-2 border-b border-[#E8E0D0]/60 dark:border-zinc-800 hover:bg-[#FBF7EB] dark:hover:bg-zinc-800"
                     >
-                      <span className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">{m.name}</span>
-                      {m.phone && (
-                        <span className="ml-2 text-[11.5px] text-[#8C8270]">{formatPhone(m.phone)}</span>
-                      )}
+                      <span className="block text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">{m.name}</span>
+                      {m.phone && <span className="text-[11.5px] text-[#8C8270]">{formatPhone(m.phone)}</span>}
                     </button>
                   </li>
                 ))}
@@ -373,7 +357,7 @@ export function SmsSendTab() {
                 전체 지우기
               </button>
             </div>
-            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+            <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto rounded-lg bg-white/60 p-2 dark:bg-zinc-950/60">
               {recipients.map((r) => (
                 <span
                   key={r.phone}
@@ -388,10 +372,10 @@ export function SmsSendTab() {
             </div>
           </div>
         )}
-      </div>
+          </Panel>
 
       {/* 수신번호 직접 입력 */}
-      <div>
+          <Panel title="직접 입력" step="2">
         <label className="block mb-1 text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">
           수신번호 직접 입력{" "}
           <span className="text-[#8C8270] font-normal">(쉼표·줄바꿈으로 여러 명, 선택사항)</span>
@@ -402,20 +386,24 @@ export function SmsSendTab() {
           onChange={(e) => setNumbersRaw(e.target.value)}
           placeholder={"010-1234-5678, 01098765432\n053-755-4455"}
         />
-      </div>
-
-      {/* 최종 수신자 수 */}
-      <div className="px-3 py-2 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 text-[12.5px] text-[#3A342A] dark:text-zinc-300">
-        최종 수신자:{" "}
-        <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{allNumbers.length}명</strong>
-        <span className="ml-2 text-[#8C8270]">
-          (회원 선택 {recipients.length} · 직접 입력 {directNumbers.length}, 중복 제외)
-        </span>
-      </div>
+          </Panel>
 
       {/* 장문 제목 (LMS 전용) */}
-      {msgType === "LMS" && (
-        <div>
+          <Panel
+            title="문자 내용"
+            step="3"
+            action={
+              <span className={`rounded-full px-2.5 py-1 text-[12px] font-bold ${
+                msgType === "LMS"
+                  ? "bg-[#B47B2A]/12 text-[#B47B2A] dark:bg-amber-900/30 dark:text-amber-300"
+                  : "bg-[#6B7B3A]/12 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]"
+              }`}>
+                {bytes} byte · {msgType}
+              </span>
+            }
+          >
+        {msgType === "LMS" && (
+        <div className="mb-3">
           <label className="block mb-1 text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">
             제목 <span className="text-[#8C8270] font-normal">(장문 LMS 전용, 선택)</span>
           </label>
@@ -425,14 +413,6 @@ export function SmsSendTab() {
 
       {/* 내용 */}
       <div>
-        <label className="mb-1 flex items-center justify-between text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">
-          <span>내용</span>
-          <span className="text-[12px] font-normal text-[#8C8270]">
-            {bytes} byte ·{" "}
-            <strong className={msgType === "LMS" ? "text-[#B47B2A]" : "text-[#6B7B3A]"}>{msgType}</strong>
-            {msgType === "SMS" ? " (90byte↓)" : " (90byte↑)"}
-          </span>
-        </label>
         <textarea
           className={`${inputCls} min-h-[140px]`}
           value={msg}
@@ -449,36 +429,101 @@ export function SmsSendTab() {
           </button>
         </div>
       </div>
+          </Panel>
+        </div>
 
-      {/* 테스트 모드 */}
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={testmode}
-          onChange={(e) => setTestmode(e.target.checked)}
-          className="w-4 h-4 accent-[#6B7B3A]"
-        />
-        <span className="text-[13px] text-[#6B5D47] dark:text-zinc-300">
-          테스트 모드 <span className="text-[#8C8270]">(체크 시 실제 발송·과금 없이 검증만)</span>
-        </span>
-      </label>
+        <aside className="lg:sticky lg:top-20 self-start space-y-3">
+          <div className="rounded-xl border border-[#E8E0D0] bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300">발송 모드</span>
+              <button
+                type="button"
+                onClick={() => setTestmode((v) => !v)}
+                className={`relative h-7 w-12 rounded-full transition-colors ${testmode ? "bg-[#6B7B3A]" : "bg-[#B4472A]"}`}
+                aria-pressed={!testmode}
+                aria-label="테스트 모드 전환"
+              >
+                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${testmode ? "left-1" : "left-6"}`} />
+              </button>
+            </div>
+            <div className={`rounded-lg px-3 py-2 text-[12.5px] font-semibold ${
+              testmode
+                ? "bg-[#6B7B3A]/10 text-[#5D6D2F] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]"
+                : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+            }`}>
+              {testmode ? "테스트 검증만 진행" : "실제 발송 및 과금"}
+            </div>
 
-      <p className="text-[11.5px] text-[#A89B80] leading-relaxed">
-        90byte 초과 시 자동 LMS 전환. 광고성 문자는 (광고) 표기·무료수신거부번호 명시가 필요합니다.
-      </p>
+            <dl className="mt-4 space-y-2 text-[12.5px]">
+              <div className="flex justify-between gap-3">
+                <dt className="text-[#8C8270]">최종 수신자</dt>
+                <dd className="font-bold text-[#2A251D] dark:text-zinc-100">{allNumbers.length}명</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-[#8C8270]">회원 선택</dt>
+                <dd className="text-[#3A342A] dark:text-zinc-200">{recipients.length}명</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-[#8C8270]">직접 입력</dt>
+                <dd className="text-[#3A342A] dark:text-zinc-200">{directNumbers.length}건</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-[#8C8270]">문자 유형</dt>
+                <dd className="font-bold text-[#3A342A] dark:text-zinc-100">{msgType}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-[#8C8270]">발신번호</dt>
+                <dd className="font-semibold text-[#3A342A] dark:text-zinc-100">{sender ? formatPhone(sender) : "-"}</dd>
+              </div>
+            </dl>
 
-      <div className="flex items-center gap-3">
+            <div className="mt-4 rounded-lg bg-[#FBF7EB] px-3 py-2 text-[12px] text-[#6B5D47] dark:bg-zinc-950 dark:text-zinc-300">
+              {remain ? (
+                <>
+                  캐시 <strong>{remain.balance.toLocaleString()}원</strong> · 포인트{" "}
+                  <strong>{remain.point.toLocaleString()}P</strong>
+                </>
+              ) : (
+                remainMsg || "잔액 불러오는 중..."
+              )}
+            </div>
+          </div>
+
+          <details className="rounded-xl border border-[#E5C07B]/60 bg-[#FBF3DE] p-4 dark:border-amber-700/50 dark:bg-amber-950/25">
+            <summary className="cursor-pointer text-[13px] font-bold text-[#8A6D1F] dark:text-amber-300">
+              광고 문자 필수 표기 확인
+            </summary>
+            <ul className="mt-3 space-y-1.5 text-[12px] leading-relaxed text-[#6B5D47] dark:text-zinc-300">
+              <li>(광고) 표기: 제목 및 본문 시작 부분</li>
+              <li>발신자 정보: 업체명 또는 브랜드명</li>
+              <li>무료 수신거부 안내: 하단에 번호 포함</li>
+            </ul>
+            <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-[#E8E0D0] bg-white/70 px-3 py-2 font-sans text-[12px] leading-relaxed text-[#3A342A] dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200">{`(광고) 업체명 봄맞이 이벤트
+전 품목 20% 할인 혜택을 드립니다.
+무료수신거부 080-500-4233`}</pre>
+          </details>
+
+          <div className="rounded-xl border border-[#E8E0D0] bg-[#FEFCF7] p-4 dark:border-zinc-800 dark:bg-zinc-900">
         <button
           type="button"
           onClick={send}
-          disabled={sending || allNumbers.length === 0 || !msg.trim()}
-          className={`px-5 py-2.5 rounded-lg text-[13.5px] font-bold text-white disabled:opacity-50 ${
+          disabled={sending || !canSubmit}
+          className={`w-full px-5 py-3 rounded-lg text-[14px] font-bold text-white disabled:opacity-45 ${
             testmode ? "bg-[#6B7B3A]" : "bg-[#B4472A]"
           }`}
         >
-          {sending ? "발송 중…" : testmode ? "테스트 발송" : "실제 발송"}
+          {sending ? "발송 중..." : testmode ? "테스트 발송" : "실제 발송"}
         </button>
-        {result && <span className="text-[13px] text-[#3A342A] dark:text-zinc-200">{result}</span>}
+        {result && (
+          <div className="mt-3 rounded-lg bg-[#FBF7EB] px-3 py-2 text-[12.5px] font-semibold text-[#3A342A] dark:bg-zinc-950 dark:text-zinc-200">
+            {result}
+          </div>
+        )}
+        <p className="mt-3 text-[11.5px] leading-relaxed text-[#A89B80]">
+          90byte 초과 시 LMS로 자동 전환됩니다. 실제 발송 전 테스트 발송으로 대상과 본문을 먼저 검증하세요.
+        </p>
+      </div>
+        </aside>
       </div>
     </div>
   );
