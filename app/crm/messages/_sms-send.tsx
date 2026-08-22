@@ -23,7 +23,7 @@ function parseNumbers(raw: string): string[] {
 
 export function SmsSendTab() {
   const { getIdToken } = useAuth();
-  const [remain, setRemain] = useState<{ sms: number; lms: number; mms: number } | null>(null);
+  const [remain, setRemain] = useState<{ balance: number; point: number } | null>(null);
   const [remainMsg, setRemainMsg] = useState<string>("");
   const [numbersRaw, setNumbersRaw] = useState("");
   const [msg, setMsg] = useState("");
@@ -49,10 +49,10 @@ export function SmsSendTab() {
         setRemainMsg("문자 발송 설정(API 키)이 아직 등록되지 않았어요.");
         return;
       }
-      if (data?.ok) setRemain({ sms: data.sms, lms: data.lms, mms: data.mms });
-      else setRemainMsg(data?.message || "잔여 건수를 불러오지 못했어요.");
+      if (data?.ok) setRemain({ balance: data.balance, point: data.point });
+      else setRemainMsg(data?.message || "잔액을 불러오지 못했어요.");
     } catch {
-      setRemainMsg("잔여 건수 조회 중 오류가 발생했어요.");
+      setRemainMsg("잔액 조회 중 오류가 발생했어요.");
     }
   }, [getIdToken]);
 
@@ -116,14 +116,13 @@ export function SmsSendTab() {
 
   return (
     <div className="max-w-2xl space-y-4">
-      {/* 잔여 건수 */}
+      {/* 잔액 */}
       <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/60 dark:bg-zinc-900/40">
-        <span className="text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300">발송 가능 건수</span>
+        <span className="text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300">발송 잔액</span>
         {remain ? (
           <span className="text-[13px] text-[#3A342A] dark:text-zinc-200">
-            SMS <strong>{remain.sms.toLocaleString()}</strong> · LMS{" "}
-            <strong>{remain.lms.toLocaleString()}</strong> · MMS{" "}
-            <strong>{remain.mms.toLocaleString()}</strong>
+            캐시 <strong>{remain.balance.toLocaleString()}원</strong> · 포인트{" "}
+            <strong>{remain.point.toLocaleString()}P</strong>
           </span>
         ) : (
           <span className="text-[12px] text-[#A89B80]">{remainMsg || "불러오는 중…"}</span>
@@ -202,7 +201,7 @@ export function SmsSendTab() {
       </div>
 
       <p className="text-[11.5px] text-[#A89B80] leading-relaxed">
-        발신번호 {process.env.NEXT_PUBLIC_ALIGO_SENDER ?? "053-755-4455"} · 알리고(Aligo) 연동 · 90byte 초과 시 자동 LMS 전환.
+        발신번호 053-755-4455 · 솔라피(Solapi) 연동 · 90byte 초과 시 자동 LMS 전환.
         광고성 문자는 (광고) 표기·무료수신거부번호 명시가 필요합니다.
       </p>
     </div>

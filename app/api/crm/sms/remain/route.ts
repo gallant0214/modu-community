@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
-import { aligoConfigured, aligoRemain } from "@/app/lib/aligo";
+import { solapiConfigured, solapiBalance } from "@/app/lib/solapi";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/crm/sms/remain — 발송 가능 잔여 건수(SMS/LMS/MMS) */
+/** GET /api/crm/sms/remain — 솔라피 잔액(캐시/포인트) 조회 */
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
@@ -13,18 +13,12 @@ export async function GET(request: Request) {
   if (perms["messages.send"] === false) {
     return NextResponse.json({ error: "메세지 전송 권한이 없습니다" }, { status: 403 });
   }
-  if (!aligoConfigured()) {
+  if (!solapiConfigured()) {
     return NextResponse.json({ configured: false }, { status: 200 });
   }
-  const r = await aligoRemain();
+  const r = await solapiBalance();
   if (!r.ok) {
     return NextResponse.json({ configured: true, ok: false, message: r.message }, { status: 200 });
   }
-  return NextResponse.json({
-    configured: true,
-    ok: true,
-    sms: r.SMS_CNT ?? 0,
-    lms: r.LMS_CNT ?? 0,
-    mms: r.MMS_CNT ?? 0,
-  });
+  return NextResponse.json({ configured: true, ok: true, balance: r.balance, point: r.point });
 }
