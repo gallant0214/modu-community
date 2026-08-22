@@ -2210,29 +2210,61 @@ function LockerActionModal({
               )}
             </CrmField>
 
-            {/* 회원이 구매한 락커 상품 — 있을 때만 표시. 선택 시 만료일 자동 계산 */}
+            {/* 회원이 구매한 락커 상품 — 카드로 표시. 카드 선택 시 결제 시 지정한 시작·만료일 자동 입력 */}
             {pickedMember && lockerPurchases.length > 0 && (
-              <CrmField label="구매한 락커 상품">
-                <select
-                  className={crmInputClass}
-                  value={pickedProductName}
-                  onChange={(e) => applyProduct(e.target.value)}
-                >
-                  <option value="">선택 안 함 (직접 입력)</option>
-                  {lockerPurchases.map((p) => (
-                    <option key={p.product_name} value={p.product_name}>
-                      {p.product_name}
-                      {p.duration_value
-                        ? ` · ${p.duration_value}${p.duration_unit === "year" ? "년" : p.duration_unit === "day" ? "일" : "개월"}`
-                        : ""}
-                      {p.start_date ? ` · ${p.start_date}~${p.expires_at ?? ""}` : ` · 구매 ${p.purchased_at}`}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-[11.5px] text-[#A89B80]">
-                  구매한 상품을 선택하면 결제 시 지정한 시작일·만료일이 자동 입력돼요.
+              <div>
+                <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+                  구매한 락커 상품
+                </div>
+                <div className="space-y-1.5">
+                  {lockerPurchases.map((p) => {
+                    const selected = pickedProductName === p.product_name;
+                    const durLbl = p.duration_value
+                      ? `${p.duration_value}${p.duration_unit === "year" ? "년" : p.duration_unit === "day" ? "일" : "개월"}`
+                      : "";
+                    return (
+                      <button
+                        key={p.product_name}
+                        type="button"
+                        onClick={() => applyProduct(selected ? "" : p.product_name)}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors ${
+                          selected
+                            ? "border-[#6B7B3A] bg-[#6B7B3A]/8 dark:bg-[#6B7B3A]/20"
+                            : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <span className="px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-[#6B7B3A]/12 text-[#6B7B3A] dark:text-[#A8B87A]">
+                              락커
+                            </span>
+                            <span className="font-semibold text-[13.5px] text-[#2A251D] dark:text-zinc-100 truncate">
+                              {p.product_name}
+                            </span>
+                            {durLbl && (
+                              <span className="text-[11.5px] text-[#8C8270] shrink-0">{durLbl}</span>
+                            )}
+                          </span>
+                          {p.amount_won > 0 && (
+                            <span className="text-[12.5px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] shrink-0 tabular-nums">
+                              {p.amount_won.toLocaleString()}원
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 text-[11.5px] text-[#8C8270]">
+                          {p.start_date
+                            ? `${p.start_date} ~ ${p.expires_at ?? "—"}`
+                            : `구매 ${p.purchased_at}`}
+                          {selected && <span className="ml-1.5 text-[#6B7B3A] dark:text-[#A8B87A]">· 적용됨</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
+                  카드를 선택하면 결제 시 지정한 시작일·만료일이 자동 입력돼요. (선택 안 하고 직접 입력도 가능)
                 </p>
-              </CrmField>
+              </div>
             )}
 
             <div className="grid grid-cols-2 gap-2">
