@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmModal, crmInputClass } from "../../_components/crm-modal";
 
@@ -9,6 +9,26 @@ type Action = "hold" | "extend" | "message" | "mileage";
 function todayYmd(): string {
   const kst = new Date(Date.now() + 9 * 3600 * 1000);
   return kst.toISOString().slice(0, 10);
+}
+
+function addDaysYmd(ymd: string, n: number): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function inclusiveDays(start: string, end: string): number {
+  if (!start || !end || end < start) return 0;
+  return Math.round((new Date(`${end}T00:00:00Z`).getTime() - new Date(`${start}T00:00:00Z`).getTime()) / (24 * 3600 * 1000)) + 1;
+}
+
+const KIND_LABEL: Record<string, string> = { membership: "회원권", pass: "수강권", rental: "대여권" };
+interface HoldableItem {
+  member_id: number;
+  member_name: string;
+  kind: string;
+  id: number;
+  name: string;
+  expires_at: string | null;
 }
 
 /**
@@ -132,7 +152,43 @@ function BulkActionModal({
   // hold
   const [holdStart, setHoldStart] = useState(todayYmd());
   const [holdEnd, setHoldEnd] = useState(todayYmd());
+  const [holdDuration, setHoldDuration] = useState<number | "">(1); // 홀딩 기간(일)
   const [holdReason, setHoldReason] = useState("");
+  const [holdItems, setHoldItems] = useState<HoldableItem[]>([]);
+  const [holdChecked, setHoldChecked] = useState<Set<string>>(new Set());
+  const [loadingItems, setLoadingItems] = useState(false);
+
+  const itemKey = (it: { kind: string; id: number }) => `${it.kind}:${it.id}`;
+
+  // 홀딩 대상 상품 목록 로드 (기본 전체 체크)
+  const loadHoldable = useCallback(async () => {
+    setLoadingItems(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members/bulk/hold?member_ids=${selectedIds.join(",")}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const items: HoldableItem[] = data.items ?? [];
+        setHoldItems(items);
+        setHoldChecked(new Set(items.map(itemKey)));
+      }
+    } finally {
+      setLoadingItems(false);
+    }
+  }, [getIdToken, selectedIds]);
+
+  useEffect(() => {
+    if (action === "hold") loadHoldable();
+  }, [action, loadHoldable]);
+
+  // 홀딩 기간 입력 → 종료일 자동 계산 (start + (N-1), inclusive)
+  const applyDuration = (n: number, start: string) => {
+    setHoldDuration(n);
+    if (n >= 1 && start) setHoldEnd(addDaysYmd(start, n - 1));
+  };
   // extend
   const [extendDays, setExtendDays] = useState(30);
   const [extendReason, setExtendReason] = useState("");
@@ -151,6 +207,8 @@ function BulkActionModal({
     if (action === "hold") {
       if (!holdStart || !holdEnd) return setError("시작일과 종료일을 입력해 주세요");
       if (holdEnd < holdStart) return setError("종료일이 시작일보다 빠를 수 없어요");
+      if (holdItems.length > 0 && holdChecked.size === 0)
+        return setError("홀딩할 상품을 하나 이상 선택해 주세요");
     }
     if (action === "extend" && (!extendDays || extendDays === 0)) {
       return setError("연장 일수를 입력해 주세요");
@@ -178,6 +236,10 @@ function BulkActionModal({
           start_date: holdStart,
           end_date: holdEnd,
           reason: holdReason.trim() || undefined,
+          items: Array.from(holdChecked).map((k) => {
+            const [kind, id] = k.split(":");
+            return { kind, id: Number(id) };
+          }),
         };
       } else if (action === "extend") {
         url = "/api/crm/members/bulk/extend";
@@ -229,16 +291,145 @@ function BulkActionModal({
       <div className="space-y-3">
         {action === "hold" && (
           <>
+            {/* 홀딩 기간(일) — 입력 시 시작일 기준으로 종료일 자동 계산 */}
+            <div>
+              <Label>홀딩 기간 (일)</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  value={holdDuration}
+                  onChange={(e) => {
+                    const v = e.target.value === "" ? "" : Math.max(1, Math.trunc(Number(e.target.value) || 0));
+                    if (v === "") setHoldDuration("");
+                    else applyDuration(v, holdStart);
+                  }}
+                  placeholder="예: 14"
+                  className={`${crmInputClass} max-w-[120px]`}
+                />
+                <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">일</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[7, 14, 30, 60].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => applyDuration(n, holdStart)}
+                      className={`px-2.5 py-1 rounded-full text-[12px] font-medium border ${
+                        holdDuration === n
+                          ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                          : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                      }`}
+                    >
+                      {n}일
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>홀딩 시작일</Label>
-                <input type="date" value={holdStart} onChange={(e) => setHoldStart(e.target.value)} className={crmInputClass} />
+                <input
+                  type="date"
+                  value={holdStart}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setHoldStart(v);
+                    // 기간이 설정돼 있으면 종료일 재계산, 아니면 기간을 종료일로부터 역산
+                    if (typeof holdDuration === "number" && holdDuration >= 1) setHoldEnd(addDaysYmd(v, holdDuration - 1));
+                    else setHoldDuration(inclusiveDays(v, holdEnd) || "");
+                  }}
+                  className={crmInputClass}
+                />
               </div>
               <div>
                 <Label>홀딩 종료일</Label>
-                <input type="date" value={holdEnd} min={holdStart} onChange={(e) => setHoldEnd(e.target.value)} className={crmInputClass} />
+                <input
+                  type="date"
+                  value={holdEnd}
+                  min={holdStart}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setHoldEnd(v);
+                    setHoldDuration(inclusiveDays(holdStart, v) || "");
+                  }}
+                  className={crmInputClass}
+                />
               </div>
             </div>
+
+            {/* 홀딩할 상품 선택 (기본 전체 체크) */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <Label>홀딩할 상품</Label>
+                {holdItems.length > 0 && (
+                  <div className="flex items-center gap-2 text-[11.5px]">
+                    <button
+                      type="button"
+                      onClick={() => setHoldChecked(new Set(holdItems.map(itemKey)))}
+                      className="text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+                    >
+                      전체 선택
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHoldChecked(new Set())}
+                      className="text-[#B4472A] hover:underline"
+                    >
+                      전체 해제
+                    </button>
+                  </div>
+                )}
+              </div>
+              {loadingItems ? (
+                <div className="px-3 py-3 text-[12.5px] text-[#8C8270] text-center">불러오는 중…</div>
+              ) : holdItems.length === 0 ? (
+                <div className="px-3 py-3 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#8C8270] text-center">
+                  홀딩 가능한(유효·미홀딩) 상품이 없어요.
+                </div>
+              ) : (
+                <ul className="rounded-lg border border-[#E8E0D0] dark:border-zinc-700 divide-y divide-[#E8E0D0]/60 dark:divide-zinc-800 max-h-56 overflow-y-auto">
+                  {holdItems.map((it) => {
+                    const k = itemKey(it);
+                    const checked = holdChecked.has(k);
+                    return (
+                      <li key={k}>
+                        <label className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-[#FBF7EB] dark:hover:bg-zinc-800/50">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              setHoldChecked((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(k);
+                                else next.delete(k);
+                                return next;
+                              });
+                            }}
+                            className="w-4 h-4 accent-[#6B7B3A]"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">
+                              {it.name || KIND_LABEL[it.kind]}
+                            </span>
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]">
+                              {KIND_LABEL[it.kind] ?? it.kind}
+                            </span>
+                            {selectedIds.length > 1 && (
+                              <span className="ml-1.5 text-[11.5px] text-[#8C8270]">{it.member_name}</span>
+                            )}
+                          </span>
+                          {it.expires_at && (
+                            <span className="text-[11px] text-[#A89B80] shrink-0">~{it.expires_at}</span>
+                          )}
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
             <div>
               <Label>사유</Label>
               <input
@@ -250,7 +441,7 @@ function BulkActionModal({
               />
             </div>
             <p className="text-[11.5px] text-[#A89B80] dark:text-zinc-500">
-              각 회원의 유효한 회원권·수강권·대여권 전체에 홀딩이 적용되고, 홀딩 기간만큼 만료일이 자동 연장됩니다.
+              선택한 상품에만 홀딩이 적용되고, 홀딩 기간만큼 만료일이 자동 연장됩니다.
             </p>
           </>
         )}

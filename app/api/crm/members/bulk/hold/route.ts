@@ -15,6 +15,64 @@ const addDays = (ymd: string, n: number) => {
 
 type Target = { table: "crm_memberships" | "crm_passes" | "crm_rentals"; id: number; member_id: number; expires_at: string };
 
+const KIND_BY_TABLE = {
+  crm_memberships: "membership",
+  crm_passes: "pass",
+  crm_rentals: "rental",
+} as const;
+
+/**
+ * GET /api/crm/members/bulk/hold?member_ids=1,2,3
+ * 선택 회원들의 '홀딩 가능한'(유효·미홀딩) 회원권·수강권·대여권 목록. 일괄 홀딩 모달의 상품 체크박스용.
+ */
+export async function GET(request: Request) {
+  const ctx = await requireCrmContext(request, { needRole: "manager" });
+  if (isCrmError(ctx)) return ctx;
+
+  const raw = new URL(request.url).searchParams.get("member_ids") ?? "";
+  const memberIds = Array.from(
+    new Set(raw.split(",").map((s) => Number(s)).filter((n) => Number.isInteger(n) && n > 0))
+  );
+  if (memberIds.length === 0) return NextResponse.json({ items: [] });
+
+  const nameCol = {
+    crm_memberships: "plan_name",
+    crm_passes: "lesson_kind",
+    crm_rentals: "item_name",
+  } as const;
+  const items: { member_id: number; kind: string; id: number; name: string; expires_at: string | null }[] = [];
+  for (const table of ["crm_memberships", "crm_passes", "crm_rentals"] as const) {
+    const { data } = await supabase
+      .from(table)
+      .select(`id, member_id, expires_at, ${nameCol[table]}`)
+      .eq("center_id", ctx.centerId)
+      .in("member_id", memberIds)
+      .eq("status", "valid")
+      .eq("is_paused", false);
+    for (const r of (data ?? []) as unknown as Record<string, unknown>[]) {
+      items.push({
+        member_id: r.member_id as number,
+        kind: KIND_BY_TABLE[table],
+        id: r.id as number,
+        name: (r[nameCol[table]] as string) ?? "",
+        expires_at: (r.expires_at as string) ?? null,
+      });
+    }
+  }
+
+  // 회원 이름
+  const { data: members } = await supabase
+    .from("crm_members")
+    .select("id, name")
+    .eq("center_id", ctx.centerId)
+    .in("id", memberIds);
+  const nameMap = new Map((members ?? []).map((m) => [m.id, m.name]));
+
+  return NextResponse.json({
+    items: items.map((it) => ({ ...it, member_name: nameMap.get(it.member_id) ?? "" })),
+  });
+}
+
 /**
  * POST /api/crm/members/bulk/hold — 선택 회원 일괄 홀딩
  * body: { member_ids: number[], start_date, end_date, reason?, requested_by? }
@@ -25,12 +83,25 @@ export async function POST(request: Request) {
   const ctx = await requireCrmContext(request, { needRole: "manager" });
   if (isCrmError(ctx)) return ctx;
 
-  let body: { member_ids?: number[]; start_date?: string; end_date?: string; reason?: string; requested_by?: string };
+  let body: {
+    member_ids?: number[];
+    start_date?: string;
+    end_date?: string;
+    reason?: string;
+    requested_by?: string;
+    // 선택한 상품만 홀딩 (없으면 전체). { kind: 'membership'|'pass'|'rental', id }
+    items?: { kind?: string; id?: number }[];
+  };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
+
+  // 선택 상품 필터: items 가 배열로 오면 그 (kind,id) 만 홀딩. undefined 면 전체(하위호환).
+  const selection = Array.isArray(body.items)
+    ? new Set(body.items.map((it) => `${it.kind}:${it.id}`))
+    : null;
 
   const memberIds = Array.from(
     new Set((body.member_ids ?? []).map((n) => Number(n)).filter((n) => Number.isInteger(n) && n > 0))
@@ -60,6 +131,8 @@ export async function POST(request: Request) {
     }
     for (const r of data ?? []) {
       if (!r.expires_at) continue;
+      // 선택 모드면 체크된 상품만
+      if (selection && !selection.has(`${KIND_BY_TABLE[table]}:${r.id}`)) continue;
       targets.push({ table, id: r.id, member_id: r.member_id, expires_at: r.expires_at });
     }
   }
