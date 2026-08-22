@@ -4727,6 +4727,14 @@ function HoldingDetailModal({
             <div className="space-y-2">
               {editable && detail.status === "valid" && (
                 <div className="flex flex-wrap gap-2">
+                  {canEdit && (
+                    <button
+                      onClick={startEdit}
+                      className="flex-1 min-w-[46%] px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[#3A342A] dark:text-zinc-200 text-[13.5px] font-semibold hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                    >
+                      ✏️ 수정
+                    </button>
+                  )}
                   {isUnassignedLocker && (
                     <button
                       onClick={openLockerAssign}
