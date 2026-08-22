@@ -248,6 +248,35 @@ export function SmsSendTab() {
 
   return (
     <div className="max-w-2xl space-y-4">
+      {/* 주의사항: 광고성 메시지 필수 표기 */}
+      <div className="px-4 py-3.5 rounded-xl border border-[#E5C07B]/60 dark:border-amber-700/50 bg-[#FBF3DE] dark:bg-amber-950/25">
+        <div className="flex items-center gap-1.5 text-[13px] font-bold text-[#8A6D1F] dark:text-amber-300">
+          <span>⚠️</span>
+          <span>광고성 메시지 필수 표기 사항</span>
+        </div>
+        <p className="mt-1.5 text-[12px] text-[#6B5D47] dark:text-zinc-300 leading-relaxed">
+          광고성 메시지를 발송할 때는 관련 법령에 따라 아래 항목을 본문/제목에 반드시 포함해야 합니다.
+        </p>
+        <ul className="mt-2 space-y-1 text-[12px] text-[#6B5D47] dark:text-zinc-300 leading-relaxed">
+          <li>
+            <strong className="text-[#3A342A] dark:text-zinc-100">(광고) 표기</strong> : 메시지 제목 및 본문 시작 부분에 소괄호로 표기
+          </li>
+          <li>
+            <strong className="text-[#3A342A] dark:text-zinc-100">발신자 정보</strong> : 업체명 또는 브랜드명 명시 (대괄호 등 특수문자 없이 표기)
+          </li>
+          <li>
+            <strong className="text-[#3A342A] dark:text-zinc-100">무료 수신거부 안내</strong> : 메시지 하단에 무료 수신거부 번호 포함
+          </li>
+        </ul>
+        <div className="mt-2.5 text-[12px]">
+          <div className="mb-1 font-semibold text-[#8A6D1F] dark:text-amber-300">작성 예시</div>
+          <pre className="whitespace-pre-wrap rounded-lg bg-white/70 dark:bg-zinc-900/60 border border-[#E8E0D0] dark:border-zinc-800 px-3 py-2 text-[12px] text-[#3A342A] dark:text-zinc-200 leading-relaxed font-sans">{`(광고) [업체명] 봄맞이 특가 이벤트 안내
+이벤트 기간 동안 전 품목 20% 할인 혜택을 드립니다.
+자세히 보기: https://...
+무료수신거부 080-500-4233`}</pre>
+        </div>
+      </div>
+
       {/* 발신번호 */}
       <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-white dark:bg-zinc-900">
         <span className="text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300">발신번호</span>
