@@ -267,15 +267,21 @@ export async function GET(request: Request) {
     outstandingMap.set(memberId, (outstandingMap.get(memberId) ?? 0) + won);
   };
   for (const p of passesData) {
-    const arr = passMap.get(p.member_id) ?? [];
-    arr.push({
-      kind: p.lesson_kind,
-      type: "lesson",
-      remaining: p.remaining_sessions ?? null,
-      expires: p.expires_at,
-    });
-    passMap.set(p.member_id, arr);
-    classify(p.member_id, p.start_date, p.expires_at, p.is_paused);
+    // 횟수제 수강권이 모두 소진(출석완료)됐으면 '이용 가능 상품'에서 제외.
+    // (기간제(total_sessions<=0)는 잔여 개념이 없어 그대로 표시)
+    const isCount = (p.total_sessions ?? 0) > 0;
+    const usedUp = isCount && (p.remaining_sessions ?? 0) <= 0;
+    if (!usedUp) {
+      const arr = passMap.get(p.member_id) ?? [];
+      arr.push({
+        kind: p.lesson_kind,
+        type: "lesson",
+        remaining: p.remaining_sessions ?? null,
+        expires: p.expires_at,
+      });
+      passMap.set(p.member_id, arr);
+      classify(p.member_id, p.start_date, p.expires_at, p.is_paused);
+    }
     feedOutstanding(p.member_id, p.outstanding_won, p.payment_status);
   }
   for (const m of mbData) {
