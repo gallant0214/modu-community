@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     .select("item_name, start_date, expires_at, price_won, created_at, memo")
     .eq("center_id", ctx.centerId)
     .eq("member_id", memberId)
-    .eq("status", "active")
+    .eq("status", "valid")
     .order("created_at", { ascending: false });
   for (const r of rentals ?? []) {
     const name = r.item_name ?? "";
