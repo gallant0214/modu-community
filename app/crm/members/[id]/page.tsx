@@ -15,6 +15,7 @@ import {
   formatPhone,
 } from "../../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../../_components/crm-modal";
+import { LockerPickerModal } from "../../_components/locker-picker-modal";
 import { CrmLineChart } from "../../_components/crm-line-chart";
 import { unitToDays, formatDuration } from "@/app/lib/duration-convert";
 import { computeFaceDescriptor } from "../../_lib/faceapi";
@@ -3471,10 +3472,13 @@ function LockerDetailModal({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  // 이동 편집
+  // 이동 편집 — 구역 선택 → 배치도에서 빈 락커 선택
   const [editId, setEditId] = useState<number | null>(null);
-  const [vacant, setVacant] = useState<LockerMoveTarget[]>([]);
+  const [moveZones, setMoveZones] = useState<{ zone_number: number; name: string }[]>([]);
+  const [movePickedZone, setMovePickedZone] = useState<number | "">("");
+  const [movePickerOpen, setMovePickerOpen] = useState(false);
   const [targetId, setTargetId] = useState<number | "">("");
+  const [targetLabel, setTargetLabel] = useState("");
   const [moving, setMoving] = useState(false);
 
   const load = useCallback(async () => {
@@ -3507,14 +3511,16 @@ function LockerDetailModal({
   const startMove = async (lockerId: number) => {
     setEditId(lockerId);
     setTargetId("");
+    setTargetLabel("");
+    setMovePickedZone("");
     setError("");
     try {
       const token = await getIdToken();
-      const res = await fetch("/api/crm/lockers/vacant", {
+      const res = await fetch("/api/crm/lockers/zones", {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
-      if (res.ok) setVacant((await res.json()).lockers ?? []);
+      if (res.ok) setMoveZones((await res.json()).zones ?? []);
     } catch {
       /* ignore */
     }
@@ -3567,27 +3573,40 @@ function LockerDetailModal({
               />
 
               {editId === l.id ? (
-                <div className="mt-3 rounded-xl border-2 border-[#6B7B3A]/40 bg-white dark:bg-zinc-900 p-3">
-                  <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200 mb-2">
-                    이동할 빈 락커 선택
+                <div className="mt-3 rounded-xl border-2 border-[#6B7B3A]/40 bg-white dark:bg-zinc-900 p-3 space-y-2.5">
+                  <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                    이동할 락커 구역
                   </div>
                   <select
-                    value={targetId}
-                    onChange={(e) => setTargetId(e.target.value ? Number(e.target.value) : "")}
+                    value={movePickedZone}
+                    onChange={(e) => {
+                      setMovePickedZone(e.target.value ? Number(e.target.value) : "");
+                      setTargetId("");
+                      setTargetLabel("");
+                    }}
                     className={crmInputClass}
                   >
-                    <option value="">빈 락커 선택</option>
-                    {vacant.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.zone_name} · {v.number}번
+                    <option value="">구역 선택</option>
+                    {moveZones.map((z) => (
+                      <option key={z.zone_number} value={z.zone_number}>
+                        {z.name}
                       </option>
                     ))}
                   </select>
-                  <p className="mt-1.5 text-[11.5px] text-[#A89B80]">
+                  <button
+                    type="button"
+                    disabled={movePickedZone === ""}
+                    onClick={() => setMovePickerOpen(true)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13px] font-semibold hover:bg-[#6B7B3A]/5 disabled:opacity-50"
+                  >
+                    {targetLabel ? `이동할 락커: ${targetLabel} · 다시 선택` : "락커 선택하기 (배치도)"}
+                  </button>
+                  <p className="text-[11.5px] text-[#A89B80]">
                     현재 락커의 회원·기간·비밀번호가 선택한 빈 락커로 옮겨지고, 지금 락커는 비워집니다.
+                    (비밀번호는 락커 관리 설정 그대로 유지)
                   </p>
-                  {error && <div className="mt-2 text-[12px] text-red-600">{error}</div>}
-                  <div className="mt-3 flex gap-2">
+                  {error && <div className="text-[12px] text-red-600">{error}</div>}
+                  <div className="flex gap-2">
                     <button
                       onClick={move}
                       disabled={moving || !targetId}
@@ -3608,7 +3627,7 @@ function LockerDetailModal({
                   onClick={() => startMove(l.id)}
                   className="mt-3 px-4 py-2 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13px] font-semibold hover:bg-[#6B7B3A]/8"
                 >
-                  수정 (락커 위치 이동)
+                  🔁 락커 이동
                 </button>
               )}
             </div>
@@ -3626,6 +3645,17 @@ function LockerDetailModal({
           </div>
         </div>
       )}
+      <LockerPickerModal
+        open={movePickerOpen}
+        zone={movePickedZone === "" ? null : movePickedZone}
+        excludeLockerId={editId}
+        onPick={(l) => {
+          setTargetId(l.id);
+          setTargetLabel(`${l.zone_name} ${l.number}번`);
+          setMovePickerOpen(false);
+        }}
+        onClose={() => setMovePickerOpen(false)}
+      />
     </CrmModal>
   );
 }
@@ -4083,12 +4113,13 @@ function HoldingDetailModal({
   const [eExpires, setEExpires] = useState("");
   const [eMemo, setEMemo] = useState("");
 
-  // 락커 배정 (미배정 락커 대여권 전용)
+  // 락커 배정 (미배정 락커 대여권 전용) — 구역 선택 → 배치도에서 빈 락커 선택
   const [lockerAssignOpen, setLockerAssignOpen] = useState(false);
-  const [vacantLockers, setVacantLockers] = useState<
-    { id: number; zone_id: number; zone_name: string; number: number }[]
-  >([]);
+  const [zones, setZones] = useState<{ zone_number: number; name: string }[]>([]);
+  const [pickedZone, setPickedZone] = useState<number | "">("");
+  const [lockerPickerOpen, setLockerPickerOpen] = useState(false);
   const [pickedLockerId, setPickedLockerId] = useState<number | "">("");
+  const [pickedLockerLabel, setPickedLockerLabel] = useState("");
   const [lockerPassword, setLockerPassword] = useState("");
   const [assigningLocker, setAssigningLocker] = useState(false);
   // 미배정 락커 대여권: 대여권이고 메모가 '…미배정'
@@ -4101,14 +4132,16 @@ function HoldingDetailModal({
   const openLockerAssign = async () => {
     setLockerAssignOpen(true);
     setError("");
+    setPickedZone("");
     setPickedLockerId("");
+    setPickedLockerLabel("");
     setLockerPassword("");
     try {
       const token = await getIdToken();
-      const res = await fetch("/api/crm/lockers/vacant", {
+      const res = await fetch("/api/crm/lockers/zones", {
         headers: { authorization: `Bearer ${token}` },
       });
-      if (res.ok) setVacantLockers((await res.json()).lockers ?? []);
+      if (res.ok) setZones((await res.json()).zones ?? []);
     } catch {
       /* ignore */
     }
@@ -4123,8 +4156,7 @@ function HoldingDetailModal({
     setError("");
     try {
       const token = await getIdToken();
-      const lk = vacantLockers.find((v) => v.id === pickedLockerId);
-      // 1) 락커 배정 — 기간은 이 대여권의 시작·만료일로
+      // 1) 락커 배정 — 기간은 이 대여권의 시작·만료일로, 비밀번호는 그대로 저장(락커관리 연동)
       const aRes = await fetch(`/api/crm/lockers/${pickedLockerId}`, {
         method: "PATCH",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
@@ -4139,7 +4171,7 @@ function HoldingDetailModal({
       const aData = await aRes.json();
       if (!aRes.ok) throw new Error(aData?.error || "락커 배정 실패");
       // 2) 대여권 메모: '구역 미배정' → '{구역} {번호}번 락커 배정'
-      const label = lk ? `${lk.zone_name} ${lk.number}번 락커 배정` : "락커 배정";
+      const label = pickedLockerLabel ? `${pickedLockerLabel} 락커 배정` : "락커 배정";
       await fetch(`/api/crm/rentals/${detail.id}`, {
         method: "PATCH",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
@@ -4522,34 +4554,47 @@ function HoldingDetailModal({
                   <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
                     락커 배정 · 기간 {detail.startDate ?? "—"} ~ {detail.expiresAt ?? "—"}
                   </div>
-                  {vacantLockers.length === 0 ? (
-                    <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] text-center text-[12px] text-[#8C8270]">
-                      비어있는 락커가 없어요. 락커 설정에서 갯수를 늘려주세요.
-                    </div>
-                  ) : (
-                    <>
-                      <select
-                        className={crmInputClass}
-                        value={pickedLockerId}
-                        onChange={(e) => setPickedLockerId(e.target.value ? Number(e.target.value) : "")}
-                      >
-                        <option value="">배정할 락커 선택</option>
-                        {vacantLockers.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.zone_name} · {v.number}번
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={lockerPassword}
-                        onChange={(e) => setLockerPassword(e.target.value)}
-                        placeholder="락커 비밀번호 (선택)"
-                        className={crmInputClass}
-                      />
-                    </>
-                  )}
+                  {/* 배정할 락커 구역 */}
+                  <div>
+                    <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 mb-1">배정할 락커 구역</div>
+                    <select
+                      className={crmInputClass}
+                      value={pickedZone}
+                      onChange={(e) => {
+                        setPickedZone(e.target.value ? Number(e.target.value) : "");
+                        setPickedLockerId("");
+                        setPickedLockerLabel("");
+                      }}
+                    >
+                      <option value="">구역 선택</option>
+                      {zones.map((z) => (
+                        <option key={z.zone_number} value={z.zone_number}>
+                          {z.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* 락커 선택하기 → 배치도 모달 */}
+                  <button
+                    type="button"
+                    disabled={pickedZone === ""}
+                    onClick={() => setLockerPickerOpen(true)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13px] font-semibold hover:bg-[#6B7B3A]/5 disabled:opacity-50"
+                  >
+                    {pickedLockerLabel ? `선택: ${pickedLockerLabel} · 다시 선택` : "락커 선택하기 (배치도)"}
+                  </button>
+                  {/* 락커 비밀번호 (락커관리 연동) */}
+                  <div>
+                    <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 mb-1">락커 비밀번호</div>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={lockerPassword}
+                      onChange={(e) => setLockerPassword(e.target.value)}
+                      placeholder="비밀번호 (선택) — 락커 관리에도 함께 반영됩니다"
+                      className={crmInputClass}
+                    />
+                  </div>
                   <div className="flex gap-2">
                     <button
                       onClick={assignLocker}
@@ -4567,6 +4612,16 @@ function HoldingDetailModal({
                   </div>
                 </div>
               )}
+              <LockerPickerModal
+                open={lockerPickerOpen}
+                zone={pickedZone === "" ? null : pickedZone}
+                onPick={(l) => {
+                  setPickedLockerId(l.id);
+                  setPickedLockerLabel(`${l.zone_name} ${l.number}번`);
+                  setLockerPickerOpen(false);
+                }}
+                onClose={() => setLockerPickerOpen(false)}
+              />
               <div className="flex gap-2">
                 {editable && canEdit && (
                   <button
