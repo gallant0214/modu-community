@@ -428,7 +428,7 @@ export default function CrmLockersPage() {
 
           <div className={pickedLocker && isDesktop ? "lg:flex lg:gap-4 lg:items-start" : ""}>
           <div className={pickedLocker && isDesktop ? "lg:flex-1 lg:min-w-0" : ""}>
-          {/* 뷰 모드 토글 */}
+          {/* 뷰 모드 토글 + 검색 */}
           <div className="flex items-center gap-2 mb-3">
             <div className="inline-flex border border-[#E8E0D0] dark:border-zinc-700 rounded-lg overflow-hidden">
               {(["compact", "box", "list"] as const).map((v) => (
@@ -445,9 +445,17 @@ export default function CrmLockersPage() {
                 </button>
               ))}
             </div>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="회원 이름 또는 락커 번호로 검색"
+              className={`${crmInputClass} ml-auto`}
+              style={{ maxWidth: 260 }}
+            />
           </div>
 
-          {/* 상태 카운트 칩 + 검색 */}
+          {/* 상태 카운트 칩 */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
             {STATE_FILTERS.map((s) => (
               <button
@@ -463,14 +471,6 @@ export default function CrmLockersPage() {
                 {s.label} {counts[s.key === "all" ? "all" : s.key]}
               </button>
             ))}
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="회원 이름 또는 락커 번호로 검색"
-              className={`${crmInputClass} ml-auto`}
-              style={{ maxWidth: 260 }}
-            />
           </div>
 
           {/* 락커 그리드 / 리스트 */}
