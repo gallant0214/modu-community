@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -165,6 +166,10 @@ export async function POST(request: Request) {
   );
 
   const isPersonalScope = body.scope === "personal";
+  // 센터 공용 상품 추가는 products.create 권한 필요. (개인 카탈로그는 본인 소유라 예외)
+  if (!isPersonalScope && !(await ctxHasPermission(ctx, "products.create"))) {
+    return NextResponse.json({ error: "상품을 추가할 권한이 없습니다" }, { status: 403 });
+  }
   // 개인 상품 등록 시엔 커스텀 유형 이슈 방지 위해 pass 계열만 허용 (수강권 = personal/group)
   if (isPersonalScope && !(body.type === "personal" || body.type === "group")) {
     return NextResponse.json(

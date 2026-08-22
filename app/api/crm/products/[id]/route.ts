@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { sanitizeComponents } from "../route";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +60,7 @@ export async function PATCH(
   const trainerOwnerId = (existing as { trainer_member_id: number | null }).trainer_member_id;
   const isAdmin = ctx.role === "owner" || ctx.role === "admin";
   const isPersonalOwner = trainerOwnerId != null && trainerOwnerId === ctx.centerMemberId;
-  if (!isAdmin && !isPersonalOwner) {
+  if (!isAdmin && !isPersonalOwner && !(await ctxHasPermission(ctx, "products.edit"))) {
     return NextResponse.json({ error: "수정 권한이 없습니다" }, { status: 403 });
   }
 
@@ -145,7 +146,7 @@ export async function DELETE(
   const trainerOwnerId = (existing as { trainer_member_id: number | null }).trainer_member_id;
   const isAdmin = ctx.role === "owner" || ctx.role === "admin";
   const isPersonalOwner = trainerOwnerId != null && trainerOwnerId === ctx.centerMemberId;
-  if (!isAdmin && !isPersonalOwner) {
+  if (!isAdmin && !isPersonalOwner && !(await ctxHasPermission(ctx, "products.delete"))) {
     return NextResponse.json({ error: "삭제 권한이 없습니다" }, { status: 403 });
   }
 

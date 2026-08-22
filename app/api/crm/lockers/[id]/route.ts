@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,9 @@ export async function PATCH(
   const { id } = await params;
   const lockerId = Number(id);
   if (!lockerId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  if (!(await ctxHasPermission(ctx, "lockers.edit"))) {
+    return NextResponse.json({ error: "락커를 변경할 권한이 없습니다" }, { status: 403 });
+  }
 
   let body: {
     action?: "assign" | "return" | "update" | "broken" | "repaired" | "move";

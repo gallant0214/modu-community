@@ -78,3 +78,14 @@ export async function loadPermissionsForContext(
   if (ctx.gradeId) return loadPermissionsForGrade(ctx.centerId, ctx.gradeId);
   return loadPermissionsForRole(ctx.centerId, ctx.role);
 }
+
+/**
+ * 추가 권한 가드(additive). owner/admin/solo-owner 는 항상 통과하고,
+ * 그 외 직급은 해당 권한 key 가 명시적으로 true 여야 통과.
+ * (기존 members.create 가드와 동일한 관례 — 대표/관리자/개인원장은 직급 토글과 무관하게 접근)
+ */
+export async function ctxHasPermission(ctx: CrmContext, key: string): Promise<boolean> {
+  if (ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner) return true;
+  const perms = await loadPermissionsForContext(ctx);
+  return perms[key] === true;
+}

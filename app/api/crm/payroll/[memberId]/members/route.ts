@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function GET(
 
   const isAdmin = ctx.accessLevel === "admin" || ctx.role === "owner" || ctx.role === "admin";
   const isSelf = trainerId === (ctx.centerMemberId ?? -1);
-  if (!isAdmin && !isSelf) {
+  if (!isAdmin && !isSelf && !(await ctxHasPermission(ctx, "sales.payroll_view"))) {
     return NextResponse.json({ error: "본인 담당 회원만 조회할 수 있습니다" }, { status: 403 });
   }
 

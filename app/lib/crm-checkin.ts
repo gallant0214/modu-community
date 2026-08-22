@@ -29,8 +29,21 @@ export async function runCheckIn(
   member: CheckinMember,
   source: string
 ) {
-  // 중복 차단 시간: 얼굴 출석은 지나가다 재인식되기 쉬워 2시간, 그 외(번호/수동)는 5분.
-  const dedupMinutes = source === "touch_face" ? 120 : 5;
+  // 중복 차단(재입장) 시간: 얼굴 출석은 지나가다 재인식되기 쉬워 2시간 고정.
+  // 그 외(번호/수동)는 터치출석 설정 entry_reentry_minutes 값 사용(미설정 기본 5분).
+  let reentryMin = 5;
+  try {
+    const { data: st } = await supabase
+      .from("crm_touch_attendance_settings")
+      .select("entry_reentry_minutes")
+      .eq("center_id", centerId)
+      .maybeSingle();
+    const v = Number((st as { entry_reentry_minutes?: number } | null)?.entry_reentry_minutes ?? 0);
+    if (v > 0) reentryMin = v;
+  } catch {
+    /* 설정 조회 실패 시 기본 5분 */
+  }
+  const dedupMinutes = source === "touch_face" ? 120 : reentryMin;
   const cutoff = new Date(Date.now() - dedupMinutes * 60 * 1000).toISOString();
   const { data: recent } = await supabase
     .from("crm_attendances")

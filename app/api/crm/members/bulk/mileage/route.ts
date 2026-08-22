@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +11,11 @@ export const dynamic = "force-dynamic";
  * 각 회원 crm_members.mileage 를 amount 만큼 증감 (0 미만이면 0 으로 clamp).
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "manager" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "members.mileage"))) {
+    return NextResponse.json({ error: "마일리지를 조정할 권한이 없습니다" }, { status: 403 });
+  }
 
   let body: { member_ids?: number[]; amount?: number; reason?: string };
   try {

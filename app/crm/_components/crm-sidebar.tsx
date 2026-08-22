@@ -23,12 +23,12 @@ interface MenuItem {
 
 const MENU: MenuItem[] = [
   { href: "/crm/dashboard",   label: "대시보드",     group: "main", icon: IconDashboard },
-  { href: "/crm/members",     label: "회원 관리",     group: "main", icon: IconMembers },
+  { href: "/crm/members",     label: "회원 관리",     group: "main", perm: "members.view", icon: IconMembers },
   { href: "/crm/schedule",    label: "스케줄 관리",   group: "main", icon: IconCalendar },
   { href: "/crm/attendances", label: "출석 현황",     group: "main", icon: IconAttendance },
   { href: "/crm/lockers",     label: "락커 관리",     group: "sales", icon: IconLocker },
-  { href: "/crm/products",    label: "상품 관리",     group: "sales", icon: IconProduct },
-  { href: "/crm/memberships", label: "회원권 관리",   group: "sales", icon: IconMembership },
+  { href: "/crm/products",    label: "상품 관리",     group: "sales", perm: "products.view", icon: IconProduct },
+  { href: "/crm/memberships", label: "회원권 관리",   group: "sales", perm: "sales.view", icon: IconMembership },
   { href: "/crm/passes",      label: "수강권 관리",   group: "sales", icon: IconPass },
   { href: "/crm/consultations", label: "PT 상담",       group: "sales", icon: IconConsult },
   { href: "/crm/messages",    label: "메세지 전송",   group: "engage", perm: "messages.send", icon: IconMessage },
