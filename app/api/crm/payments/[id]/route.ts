@@ -126,7 +126,7 @@ export async function DELETE(
 
   const { data: cur } = await supabase
     .from("crm_payments")
-    .select("id, member_id, pass_id, membership_id")
+    .select("id, member_id, pass_id, membership_id, rental_id")
     .eq("id", paymentId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -135,6 +135,7 @@ export async function DELETE(
   const memberId = (cur as { member_id: number | null }).member_id ?? null;
   const membershipId = (cur as { membership_id: number | null }).membership_id ?? null;
   const passId = (cur as { pass_id: number | null }).pass_id ?? null;
+  const rentalId = (cur as { rental_id: number | null }).rental_id ?? null;
 
   // 구매 취소 = 결제 + 연결 상품 + 같은 구매(동일 트랜잭션)의 묶음 구성까지 삭제.
   // 트랜잭션 시각 = 연결된 회원권/수강권의 created_at. (결제만 있고 상품 링크가 없으면 결제만 삭제)
@@ -152,6 +153,14 @@ export async function DELETE(
       .from("crm_passes")
       .select("created_at")
       .eq("id", passId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    txAt = (data as { created_at: string } | null)?.created_at ?? null;
+  } else if (rentalId) {
+    const { data } = await supabase
+      .from("crm_rentals")
+      .select("created_at")
+      .eq("id", rentalId)
       .eq("center_id", ctx.centerId)
       .maybeSingle();
     txAt = (data as { created_at: string } | null)?.created_at ?? null;

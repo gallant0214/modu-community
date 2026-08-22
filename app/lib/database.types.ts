@@ -1746,6 +1746,7 @@ export type Database = {
           member_id: number
           pass_id: number | null
           membership_id: number | null
+          rental_id: number | null
           amount_won: number
           method: string
           method_custom: string | null
@@ -1762,6 +1763,7 @@ export type Database = {
           member_id: number
           pass_id?: number | null
           membership_id?: number | null
+          rental_id?: number | null
           amount_won: number
           method?: string
           method_custom?: string | null
@@ -1778,6 +1780,7 @@ export type Database = {
           member_id?: number
           pass_id?: number | null
           membership_id?: number | null
+          rental_id?: number | null
           amount_won?: number
           method?: string
           method_custom?: string | null

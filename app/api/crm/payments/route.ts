@@ -78,7 +78,7 @@ export async function GET(request: Request) {
   let q = supabase
     .from("crm_payments")
     .select(
-      "id, member_id, pass_id, membership_id, amount_won, method, method_custom, paid_at, note, status, created_at, recorded_by_uid"
+      "id, member_id, pass_id, membership_id, rental_id, amount_won, method, method_custom, paid_at, note, status, created_at, recorded_by_uid"
     )
     .eq("center_id", ctx.centerId)
     .order("paid_at", { ascending: false })
@@ -101,11 +101,16 @@ export async function GET(request: Request) {
   const membershipIds = Array.from(
     new Set(rows.map((r) => r.membership_id).filter((v): v is number => !!v))
   );
+  const rentalIds = Array.from(
+    new Set(rows.map((r) => r.rental_id).filter((v): v is number => !!v))
+  );
   const passNameMap = new Map<number, string>();
   const membershipNameMap = new Map<number, string>();
+  const rentalNameMap = new Map<number, string>();
   // 상품을 결제 받은 판매 직원(seller_member_id) 매핑
   const passSellerMap = new Map<number, number | null>();
   const membershipSellerMap = new Map<number, number | null>();
+  const rentalSellerMap = new Map<number, number | null>();
   if (passIds.length > 0) {
     const { data: passes } = await supabase
       .from("crm_passes")
@@ -128,12 +133,23 @@ export async function GET(request: Request) {
       membershipSellerMap.set(m.id, m.seller_member_id);
     }
   }
+  if (rentalIds.length > 0) {
+    const { data: rentals } = await supabase
+      .from("crm_rentals")
+      .select("id, item_name, seller_member_id")
+      .eq("center_id", ctx.centerId)
+      .in("id", rentalIds);
+    for (const r of rentals ?? []) {
+      rentalNameMap.set(r.id, r.item_name);
+      rentalSellerMap.set(r.id, r.seller_member_id);
+    }
+  }
 
   // 판매 직원 id → 이름, 그리고 결제를 기록한 직원(recorded_by_uid) → 이름 매핑.
   // 담당 직원(결제 받은 직원) = 상품 판매 직원 우선, 없으면 결제 기록 직원.
   const sellerIds = Array.from(
     new Set(
-      [...passSellerMap.values(), ...membershipSellerMap.values()].filter(
+      [...passSellerMap.values(), ...membershipSellerMap.values(), ...rentalSellerMap.values()].filter(
         (v): v is number => !!v
       )
     )
@@ -167,7 +183,9 @@ export async function GET(request: Request) {
       ? passSellerMap.get(r.pass_id) ?? null
       : r.membership_id
         ? membershipSellerMap.get(r.membership_id) ?? null
-        : null;
+        : r.rental_id
+          ? rentalSellerMap.get(r.rental_id) ?? null
+          : null;
     const handlerName =
       (sellerId ? staffByIdMap.get(sellerId) : null) ??
       (r.recorded_by_uid ? staffByUidMap.get(r.recorded_by_uid) : null) ??
@@ -178,7 +196,9 @@ export async function GET(request: Request) {
         ? passNameMap.get(r.pass_id) ?? "수강권"
         : r.membership_id
           ? membershipNameMap.get(r.membership_id) ?? "회원권"
-          : null,
+          : r.rental_id
+            ? rentalNameMap.get(r.rental_id) ?? "대여"
+            : null,
       handler_name: handlerName,
     };
   });
