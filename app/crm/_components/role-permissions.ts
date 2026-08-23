@@ -41,6 +41,8 @@ const D_MGR = { owner: true, admin: true, manager: true, trainer: false, fc: fal
 const D_OWNER = { owner: true, admin: true, manager: false, trainer: false, fc: false, alba: false };
 // FC 에게 부여하는 팀장급 회원·판매 권한 (D_MGR + fc)
 const D_MGR_FC = { owner: true, admin: true, manager: true, trainer: false, fc: true, alba: false };
+// 알바 제외 전 직원(예약·출석·발급 등 강사가 하는 운영 업무 기본값)
+const D_STAFF_NO_ALBA = { owner: true, admin: true, manager: true, trainer: true, fc: true, alba: false };
 
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
@@ -62,6 +64,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "members.edit_usage", label: "회원 이용정보 수정",   defaults: D_MGR_FC },
       { key: "members.delete",     label: "회원 삭제",             defaults: D_ADMIN },
       { key: "members.mileage",    label: "마일리지 적립/사용",   defaults: D_MGR_FC },
+      { key: "members.face",       label: "얼굴(생체) 등록·삭제", defaults: D_ADMIN },
+      { key: "members.records",    label: "운동기록·체성분 작성·삭제", defaults: D_ALL },
     ],
   },
   {
@@ -75,6 +79,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "sales.excel",        label: "매출 엑셀 추출",       defaults: D_ADMIN },
       { key: "sales.payroll_view", label: "급여 정책 열람",       defaults: D_ADMIN },
       { key: "sales.commission_edit", label: "강사 수업료(정산) 설정", defaults: D_ADMIN },
+      { key: "stats.view",         label: "통계(매출·재무) 열람", defaults: D_ADMIN },
     ],
   },
   {
@@ -114,14 +119,18 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     key: "passes",
     label: "수강권 관리",
     items: [
+      { key: "passes.issue",  label: "수강권 발급",                          defaults: D_STAFF_NO_ALBA },
       { key: "passes.edit",   label: "수강권 수정 (담당강사·세션·메모 등)", defaults: D_ADMIN },
       { key: "passes.refund", label: "수강권 환불",                          defaults: D_ADMIN },
     ],
   },
   {
     key: "schedule",
-    label: "스케줄 관리",
+    label: "스케줄 · 예약 · 출석",
     items: [
+      { key: "schedule.reserve", label: "예약 생성·취소·변경",   defaults: D_STAFF_NO_ALBA },
+      { key: "schedule.attend",  label: "출석 확정·취소(예약)",  defaults: D_STAFF_NO_ALBA },
+      { key: "attendance.manage", label: "출석 체크인·출석 삭제", defaults: D_STAFF_NO_ALBA },
       {
         key: "schedule.view_others",
         label: "타 강사 스케줄 열람",
@@ -135,11 +144,12 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
-    key: "staff_contracts",
-    label: "직원 계약서 (근로·아르바이트)",
+    key: "contracts",
+    label: "계약서",
     items: [
       { key: "staff_contracts.view", label: "직원 계약서 열람", defaults: D_ADMIN },
       { key: "staff_contracts.edit", label: "직원 계약서 작성·수정", defaults: D_OWNER },
+      { key: "contracts.member_edit", label: "회원 전자계약서 작성·발송·템플릿", defaults: D_MGR_FC },
     ],
   },
   {
@@ -147,6 +157,22 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     label: "메세지 전송",
     items: [
       { key: "messages.send", label: "메세지 전송 (회원에게 수동 발송)", defaults: D_MGR },
+      { key: "messages.auto_edit", label: "자동 메세지 설정·수동 발송", defaults: D_ADMIN },
+    ],
+  },
+  {
+    key: "staff",
+    label: "직원 · 권한 관리",
+    items: [
+      { key: "staff.manage", label: "직원 생성·승인·역할/등급 관리", defaults: D_ADMIN },
+      { key: "staff.permissions_edit", label: "직급 권한·등급 편집", defaults: D_OWNER },
+    ],
+  },
+  {
+    key: "settings",
+    label: "센터 설정",
+    items: [
+      { key: "settings.edit", label: "센터 설정 저장(예약·음성·키오스크·사업자)", defaults: D_ADMIN },
     ],
   },
 ];
