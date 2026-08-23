@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
     : { data: [] };
   const zoneMap = new Map((zones ?? []).map((z) => [z.id, z.name]));
 
+  const canSeePw = await ctxHasPermission(ctx, "lockers.edit");
   const lockers = (lockersRaw ?? []).map((l) => ({
     id: l.id,
     zone_id: l.zone_id,
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
     number: l.number,
     start_date: l.start_date,
     expires_at: l.expires_at,
-    password: l.password,
+    password: canSeePw ? l.password : null,
     memo: l.memo,
   }));
 

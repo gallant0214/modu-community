@@ -14,6 +14,12 @@ export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
+  // 발송 이력(내용·발송자) 열람도 메세지 전송 권한 필요
+  const perms = await loadPermissionsForContext(ctx);
+  if (perms["messages.send"] === false) {
+    return NextResponse.json({ error: "메세지 전송 권한이 없습니다" }, { status: 403 });
+  }
+
   const { data, error } = await supabase
     .from("crm_message_broadcasts")
     .select(

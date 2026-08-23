@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "contracts.member_edit"))) {
+    return NextResponse.json({ error: "계약서 편집 권한이 없습니다" }, { status: 403 });
+  }
 
   let body: { label?: string };
   try {

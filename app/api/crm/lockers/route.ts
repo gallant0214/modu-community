@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -56,10 +57,13 @@ export async function GET(request: Request) {
     : { data: [] };
   const memberMap = new Map((members ?? []).map((m) => [m.id, m]));
 
+  // 락커 비밀번호는 lockers.edit 권한자에게만 노출 (공유 PIN = 보안 크레덴셜)
+  const canSeePw = await ctxHasPermission(ctx, "lockers.edit");
   return NextResponse.json({
     zone: zoneRow,
     lockers: (lockers ?? []).map((l) => ({
       ...l,
+      password: canSeePw ? l.password : null,
       member: l.assigned_member_id ? memberMap.get(l.assigned_member_id) ?? null : null,
     })),
   });

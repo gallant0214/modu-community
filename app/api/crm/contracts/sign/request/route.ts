@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { sendPushToMember } from "@/app/lib/member-notify";
 import crypto from "node:crypto";
 
@@ -40,6 +41,11 @@ export async function POST(request: Request) {
   const staffMemberId = Number(body.staff_member_id) || 0;
   if (!memberId && !staffMemberId) {
     return NextResponse.json({ error: "대상을 선택해 주세요" }, { status: 400 });
+  }
+  // 발송 권한: 직원 계약은 staff_contracts.edit, 회원 계약은 contracts.member_edit
+  const reqKey = staffMemberId ? "staff_contracts.edit" : "contracts.member_edit";
+  if (!(await ctxHasPermission(ctx, reqKey))) {
+    return NextResponse.json({ error: "계약서 발송 권한이 없습니다" }, { status: 403 });
   }
 
   // 대상 정보 (회원 또는 직원)

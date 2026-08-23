@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
-import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { loadPermissionsForContext, ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -33,12 +33,20 @@ export async function GET(request: Request) {
   if (scope === "staff") query = query.not("staff_member_id", "is", null);
   if (scope === "member") query = query.is("staff_member_id", null);
 
+  // 열람 권한: 직원 계약서는 staff_contracts.view, 회원 계약서는 contracts.member_edit.
+  const canStaff = await ctxHasPermission(ctx, "staff_contracts.view");
+  const canMember = await ctxHasPermission(ctx, "contracts.member_edit");
+  if (!canStaff && !canMember) {
+    return NextResponse.json({ error: "계약서 열람 권한이 없습니다" }, { status: 403 });
+  }
+
   const { data, error } = await query;
   if (error) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
 
-  let rows = data ?? [];
+  // 권한 없는 종류(직원/회원)의 계약서는 결과에서 제외 (PII·서명 보호)
+  let rows = (data ?? []).filter((r) => (r.staff_member_id ? canStaff : canMember));
   if (q) {
     const needle = q.toLowerCase();
     rows = rows.filter((r) => {

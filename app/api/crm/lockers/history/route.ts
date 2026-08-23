@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,10 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // 이력에 비밀번호 변경값(from/to)이 포함되므로 lockers.edit 권한자만
+  if (!(await ctxHasPermission(ctx, "lockers.edit"))) {
+    return NextResponse.json({ error: "락커 이력 열람 권한이 없습니다" }, { status: 403 });
+  }
 
   const url = new URL(request.url);
   const action = url.searchParams.get("action") || "return";

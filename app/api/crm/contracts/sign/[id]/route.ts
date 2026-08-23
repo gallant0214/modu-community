@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,13 @@ export async function GET(
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
   if (!data) return NextResponse.json({ error: "계약서를 찾을 수 없습니다" }, { status: 404 });
+  // 직원 계약서는 staff_contracts.view, 회원 계약서는 contracts.member_edit 권한 필요
+  const needKey = (data as { staff_member_id: number | null }).staff_member_id
+    ? "staff_contracts.view"
+    : "contracts.member_edit";
+  if (!(await ctxHasPermission(ctx, needKey))) {
+    return NextResponse.json({ error: "계약서 열람 권한이 없습니다" }, { status: 403 });
+  }
   return NextResponse.json({ contract: data });
 }
 

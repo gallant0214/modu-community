@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,12 @@ export async function GET(
 ) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+
+  // 수신자 이름·전화번호(PII) 열람은 메세지 전송 권한 필요
+  const perms = await loadPermissionsForContext(ctx);
+  if (perms["messages.send"] === false) {
+    return NextResponse.json({ error: "메세지 전송 권한이 없습니다" }, { status: 403 });
+  }
 
   const { id } = await params;
   const broadcastId = Number(id) || 0;

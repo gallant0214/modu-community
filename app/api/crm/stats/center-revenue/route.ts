@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { fetchSales, saleCategory } from "@/app/lib/crm-sales";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,10 @@ const VAT_RATE = 0.1; // 부가세 10%
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // 센터 전체 재무 통계 열람 권한
+  if (!(await ctxHasPermission(ctx, "stats.view"))) {
+    return NextResponse.json({ error: "통계 열람 권한이 없습니다" }, { status: 403 });
+  }
 
   const url = new URL(request.url);
   const ymRaw = url.searchParams.get("ym");
