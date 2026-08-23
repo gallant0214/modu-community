@@ -997,6 +997,12 @@ export default function CrmMembersPage() {
 
       {/* 액션 툴바 */}
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
+        <button
+          onClick={() => setRegisterOpen(true)}
+          className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932]"
+        >
+          + 회원 추가
+        </button>
         <ActionBtn onClick={() => showNotReady("미수 관리")}>미수 관리</ActionBtn>
         <ActionBtn onClick={() => setLogOpen(true)}>수정 기록</ActionBtn>
       </div>
@@ -1224,13 +1230,6 @@ export default function CrmMembersPage() {
 
       {/* 하단 액션 + 페이지네이션 */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <button
-          onClick={() => setRegisterOpen(true)}
-          className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932]"
-        >
-          + 회원 추가
-        </button>
-
         <Pagination page={page} totalPages={totalPages} onChange={setPage} />
 
         <button
