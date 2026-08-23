@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import crypto from "node:crypto";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +12,11 @@ export const dynamic = "force-dynamic";
  * 권한: owner/admin (센터 설정 관리자).
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "settings.edit"))) {
+    return NextResponse.json({ error: "센터 설정 권한이 없습니다" }, { status: 403 });
+  }
 
   const { data } = await supabase
     .from("crm_centers")
@@ -23,8 +27,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "settings.edit"))) {
+    return NextResponse.json({ error: "센터 설정 권한이 없습니다" }, { status: 403 });
+  }
 
   const token = crypto.randomBytes(24).toString("hex"); // 48자
   const { error } = await supabase

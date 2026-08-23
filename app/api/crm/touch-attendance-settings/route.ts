@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -118,8 +119,11 @@ export async function GET(request: Request) {
  * PUT — 설정 저장 (upsert). owner/admin 만.
  */
 export async function PUT(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "settings.edit"))) {
+    return NextResponse.json({ error: "센터 설정 권한이 없습니다" }, { status: 403 });
+  }
 
   let body: Record<string, unknown>;
   try {

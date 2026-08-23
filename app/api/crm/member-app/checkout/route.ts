@@ -2,7 +2,7 @@ import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { notifyCenterStaffAttendance } from "@/app/lib/crm-staff-notify";
-import { sendPushToMember } from "@/app/lib/member-notify";
+import { sendLocalizedPushToMember } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -92,11 +92,11 @@ export async function POST(request: Request) {
   // 회원 본인에게 포인트 적립 안내 푸시 (설정 ON일 때). 탭하면 앱에서 마일리지 상세로 이동.
   if (pointEarnOn) {
     after(() =>
-      sendPushToMember(
+      sendLocalizedPushToMember(
         memberId,
         "mileage_earn",
-        "포인트 적립",
-        `퇴실할 때 ${earn}P가 적립되었습니다. 현재 적립된 포인트는 ${balanceAfter}P 입니다.`,
+        "mileageEarn",
+        { earn, bal: balanceAfter },
         { kind: "mileage_earn" }
       )
     );

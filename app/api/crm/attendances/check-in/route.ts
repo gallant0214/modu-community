@@ -1,6 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { runCheckIn } from "@/app/lib/crm-checkin";
 import { notifyCenterStaffAttendance } from "@/app/lib/crm-staff-notify";
 
@@ -16,6 +17,9 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "attendance.manage"))) {
+    return NextResponse.json({ error: "출석 관리 권한이 없습니다" }, { status: 403 });
+  }
 
   let body: { token?: string; member_id?: number; source?: string; center_id?: number };
   try {

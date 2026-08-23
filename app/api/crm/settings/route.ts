@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +12,9 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
-  // owner/admin, 또는 1인 강사(solo owner)만. 일반 trainer/manager 는 불가.
-  if (ctx.role !== "owner" && ctx.role !== "admin" && !ctx.isSoloOwner) {
-    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  // 센터 설정 저장 권한(settings.edit). owner/admin/solo 는 자동 통과.
+  if (!(await ctxHasPermission(ctx, "settings.edit"))) {
+    return NextResponse.json({ error: "센터 설정 권한이 없습니다" }, { status: 403 });
   }
 
   const { data, error } = await supabase
@@ -49,9 +50,9 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
-  // owner/admin, 또는 1인 강사(solo owner)만. 일반 trainer/manager 는 불가.
-  if (ctx.role !== "owner" && ctx.role !== "admin" && !ctx.isSoloOwner) {
-    return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  // 센터 설정 저장 권한(settings.edit). owner/admin/solo 는 자동 통과.
+  if (!(await ctxHasPermission(ctx, "settings.edit"))) {
+    return NextResponse.json({ error: "센터 설정 권한이 없습니다" }, { status: 403 });
   }
 
   let body: Record<string, unknown>;

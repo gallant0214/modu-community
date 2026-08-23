@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { verifyCenterIdentity } from "@/app/lib/crm-center-verify";
 
 export const dynamic = "force-dynamic";
@@ -36,8 +37,8 @@ export async function PATCH(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  if (ctx.role !== "owner" && ctx.role !== "admin") {
-    return NextResponse.json({ error: "센터 정보 수정 권한이 없어요" }, { status: 403 });
+  if (!(await ctxHasPermission(ctx, "settings.edit"))) {
+    return NextResponse.json({ error: "센터 설정 권한이 없습니다" }, { status: 403 });
   }
 
   let body: {

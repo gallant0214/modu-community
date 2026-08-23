@@ -3,6 +3,7 @@ import { getMessaging } from "firebase-admin/messaging";
 import { supabase } from "./supabase";
 import { sendPushToUser } from "./notifications";
 import { notifyStaffMember } from "./crm-staff-notify";
+import { renderNotif, formatSlot, normalizeLang, type NotifLang } from "./notify-i18n";
 
 function getAdmin() {
   const apps = getApps();
@@ -170,6 +171,41 @@ export async function notifyMembersByIds(
   } catch (e) {
     console.error("[member-notify] notifyMembersByIds error", e);
   }
+}
+
+/** 회원의 앱 언어(app_language) 조회. 미설정이면 ko. */
+export async function getMemberLang(memberId: number): Promise<NotifLang> {
+  try {
+    const { data } = await supabase
+      .from("crm_members")
+      .select("app_language")
+      .eq("id", memberId)
+      .maybeSingle();
+    return normalizeLang((data as { app_language?: string | null } | null)?.app_language);
+  } catch {
+    return "ko";
+  }
+}
+
+/**
+ * 회원의 앱 언어에 맞춰 title/body 를 렌더해 푸시+알림함 저장.
+ * params 에 _slotIso 가 있으면 해당 언어 포맷으로 params.slot 을 채운다.
+ */
+export async function sendLocalizedPushToMember(
+  memberId: number,
+  type: string,
+  key: string,
+  params?: Record<string, string | number>,
+  extraData?: Record<string, string>
+): Promise<number> {
+  const lang = await getMemberLang(memberId);
+  const p: Record<string, string | number> = { ...(params ?? {}) };
+  if (p._slotIso) {
+    p.slot = formatSlot(String(p._slotIso), lang);
+    delete p._slotIso;
+  }
+  const { title, body } = renderNotif(key, lang, p);
+  return sendPushToMember(memberId, type, title, body, extraData);
 }
 
 /** 회원의 알림 수신 설정(notify_* 컬럼) 조회. 미설정(null)이면 기본 on(true). */

@@ -89,12 +89,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
-  // 직원 근로계약은 staff_contracts.edit 권한 필요
+  // 직원 근로계약은 staff_contracts.edit, 회원 계약은 contracts.member_edit 권한 필요
   if (body.staff_member_id) {
-    const perms = await loadPermissionsForContext(ctx);
-    if (!perms["staff_contracts.edit"]) {
+    if (!(await ctxHasPermission(ctx, "staff_contracts.edit"))) {
       return NextResponse.json({ error: "직원 계약서 작성 권한이 없습니다" }, { status: 403 });
     }
+  } else if (!(await ctxHasPermission(ctx, "contracts.member_edit"))) {
+    return NextResponse.json({ error: "회원 계약서 작성 권한이 없습니다" }, { status: 403 });
   }
 
   const name = (body.customer_info?.name as string | undefined)?.trim();

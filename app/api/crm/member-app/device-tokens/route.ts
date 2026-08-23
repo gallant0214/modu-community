@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  * 토큰은 crm_member_device_tokens 에 저장(센터 무관, 회원 uid 기준).
  */
 export async function POST(request: Request) {
-  let body: { centerId?: number; token?: string; platform?: string };
+  let body: { centerId?: number; token?: string; platform?: string; lang?: string };
   try {
     body = await request.json();
   } catch {
@@ -23,6 +23,14 @@ export async function POST(request: Request) {
   const token = (body.token ?? "").trim();
   if (!token) return NextResponse.json({ error: "토큰이 없습니다" }, { status: 400 });
   const platform = body.platform === "ios" || body.platform === "android" ? body.platform : null;
+
+  // 앱 언어를 회원 계정(uid) 전체 레코드에 저장 — 알림을 이 언어로 발송
+  if (body.lang && ["ko", "en", "ja", "zh"].includes(body.lang)) {
+    await supabase
+      .from("crm_members")
+      .update({ app_language: body.lang } as never)
+      .eq("linked_firebase_uid", ctx.uid);
+  }
 
   const { error } = await supabase
     .from("crm_member_device_tokens")

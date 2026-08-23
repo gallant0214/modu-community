@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +14,11 @@ export const dynamic = "force-dynamic";
  * owner/admin 만.
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "lockers.zone_edit"))) {
+    return NextResponse.json({ error: "락커룸 편집 권한이 없습니다" }, { status: 403 });
+  }
 
   let body: {
     zone?: number;

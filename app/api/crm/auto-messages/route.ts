@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { AUTO_MESSAGE_TRIGGER_KEYS } from "@/app/lib/auto-message-triggers";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +11,11 @@ export const dynamic = "force-dynamic";
  * 센터의 자동 메세지 트리거별 설정 목록. owner/admin 만.
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "messages.auto_edit"))) {
+    return NextResponse.json({ error: "자동 메세지 권한이 없습니다" }, { status: 403 });
+  }
 
   const { data, error } = await supabase
     .from("crm_auto_message_settings")
@@ -31,8 +35,11 @@ export async function GET(request: Request) {
  *         methods?, audience?, message_body?, coupon_id?, config? }
  */
 export async function PATCH(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "messages.auto_edit"))) {
+    return NextResponse.json({ error: "자동 메세지 권한이 없습니다" }, { status: 403 });
+  }
 
   let body: Record<string, unknown>;
   try {

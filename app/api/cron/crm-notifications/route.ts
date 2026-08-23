@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
-import { sendPushToUser } from "@/app/lib/notifications";
+import { sendLocalizedPushToMember } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -49,11 +49,11 @@ export async function GET(request: Request) {
         .eq("id", m.member_id)
         .maybeSingle();
       if (!member?.linked_firebase_uid) continue;
-      await sendPushToUser(
-        member.linked_firebase_uid,
-        "crm",
-        "회원권 만료 임박",
-        `${member.name}님의 ${m.plan_name} 회원권이 7일 후 만료돼요.`,
+      await sendLocalizedPushToMember(
+        m.member_id,
+        "membership_expire",
+        "membershipExpiring",
+        { name: member.name, plan: m.plan_name },
         { kind: "membership_expire", id: String(m.id) }
       );
       sent += 1;
@@ -76,11 +76,11 @@ export async function GET(request: Request) {
         .eq("id", m.member_id)
         .maybeSingle();
       if (!member?.linked_firebase_uid) continue;
-      await sendPushToUser(
-        member.linked_firebase_uid,
-        "crm",
-        "회원권 종료 안내",
-        `${member.name}님, 오늘이 ${m.plan_name} 회원권 종료일이에요. 그동안 함께해 주셔서 감사합니다 🙏`,
+      await sendLocalizedPushToMember(
+        m.member_id,
+        "membership_expired",
+        "membershipExpired",
+        { name: member.name, plan: m.plan_name },
         { kind: "membership_expired", id: String(m.id) }
       );
       sent += 1;
@@ -114,11 +114,11 @@ export async function GET(request: Request) {
         .eq("id", p.member_id)
         .maybeSingle();
       if (!member?.linked_firebase_uid) continue;
-      await sendPushToUser(
-        member.linked_firebase_uid,
-        "crm",
-        "수강권 유효기간 안내",
-        `${p.lesson_kind}의 수강권이 유효기간 ${daysLeft}일 남았습니다`,
+      await sendLocalizedPushToMember(
+        p.member_id,
+        "pass_expire",
+        "passExpiring",
+        { lesson: p.lesson_kind, days: daysLeft },
         { kind: "pass_expire", id: String(p.id) }
       );
       sent += 1;
@@ -143,11 +143,11 @@ export async function GET(request: Request) {
         .maybeSingle();
       if (!member?.linked_firebase_uid) continue;
       const t = formatTimeKst(r.starts_at);
-      await sendPushToUser(
-        member.linked_firebase_uid,
-        "crm",
-        "내일 수업 예약 안내",
-        `${member.name}님, 내일 ${t} 수업이 있어요.`,
+      await sendLocalizedPushToMember(
+        r.member_id,
+        "reservation_reminder",
+        "reservationReminder",
+        { name: member.name, time: t },
         { kind: "reservation_reminder", id: String(r.id) }
       );
       sent += 1;

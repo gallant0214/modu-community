@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,8 +20,12 @@ export async function GET(request: Request) {
   const namesOnly = new URL(request.url).searchParams.get("scope") === "names";
 
   // names 모드는 일반 멤버(trainer 포함)도 접근 가능 — PII 제외
-  const ctx = await requireCrmContext(request, namesOnly ? undefined : { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // 전체 직원 PII 목록은 직원 관리 권한(staff.manage) 필요
+  if (!namesOnly && !(await ctxHasPermission(ctx, "staff.manage"))) {
+    return NextResponse.json({ error: "직원 관리 권한이 없습니다" }, { status: 403 });
+  }
 
   if (namesOnly) {
     const { data, error } = await supabase
@@ -81,8 +86,11 @@ export async function GET(request: Request) {
  * 신규: 멤버십 INSERT + (trainer/manager 면) 권한 row INSERT
  */
 export async function POST(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "staff.manage"))) {
+    return NextResponse.json({ error: "직원 관리 권한이 없습니다" }, { status: 403 });
+  }
 
   let body: {
     firebase_uid?: string;

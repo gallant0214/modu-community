@@ -404,6 +404,18 @@ export async function PATCH(
       { status: 403 }
     );
   }
+  // 얼굴(생체) 등록·삭제는 별도 권한(members.face)
+  const touchedFace =
+    patch.face_image_data !== undefined ||
+    patch.face_image_thumb !== undefined ||
+    patch.face_descriptor !== undefined;
+  if (touchedFace && !perms["members.face"]) {
+    return NextResponse.json({ error: "얼굴(생체) 등록·삭제 권한이 없습니다" }, { status: 403 });
+  }
+  // 마일리지 개별 수정도 마일리지 권한(members.mileage)
+  if (patch.mileage !== undefined && !perms["members.mileage"]) {
+    return NextResponse.json({ error: "마일리지 조정 권한이 없습니다" }, { status: 403 });
+  }
 
   // 변경 전 스냅샷 (diff 로 audit log 에 기록)
   const { data: before } = await supabase

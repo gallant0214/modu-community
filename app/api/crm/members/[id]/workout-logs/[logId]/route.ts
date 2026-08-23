@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,9 @@ export async function PATCH(
 ) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "members.records"))) {
+    return NextResponse.json({ error: "운동기록·체성분 수정 권한이 없습니다" }, { status: 403 });
+  }
   const { id, logId } = await params;
   const memberId = Number(id);
   const lid = Number(logId);
@@ -52,6 +56,9 @@ export async function DELETE(
 ) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "members.records"))) {
+    return NextResponse.json({ error: "운동기록·체성분 수정 권한이 없습니다" }, { status: 403 });
+  }
   const { id, logId } = await params;
   const memberId = Number(id);
   const lid = Number(logId);

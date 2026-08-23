@@ -32,7 +32,7 @@ const MENU: MenuItem[] = [
   { href: "/crm/passes",      label: "수강권 관리",   group: "sales", icon: IconPass },
   { href: "/crm/consultations", label: "PT 상담",       group: "sales", icon: IconConsult },
   { href: "/crm/messages",    label: "메세지 전송",   group: "engage", perm: "messages.send", icon: IconMessage },
-  { href: "/crm/stats",       label: "통계",          group: "admin", icon: IconStats },
+  { href: "/crm/stats",       label: "통계",          group: "admin", perm: "stats.view", icon: IconStats },
   { href: "/crm/settings",    label: "센터설정",       group: "admin", staffOnly: true, icon: IconSettings },
   { href: "/crm/touch-attendance", label: "터치출석", group: "tools", staffOnly: true, newWindow: true, icon: IconTouch },
   { href: "/crm/touch-attendance-settings", label: "터치출석 설정", group: "tools", staffOnly: true, icon: IconSettings },

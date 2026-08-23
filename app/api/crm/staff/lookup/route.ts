@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { getFirebaseAdmin } from "@/app/lib/firebase-admin";
 import { getAuth } from "firebase-admin/auth";
 
@@ -16,8 +17,11 @@ export const dynamic = "force-dynamic";
  *  - 결과에 이메일 함께 반환 + 본인 센터 가입(active/inactive) 여부
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "staff.manage"))) {
+    return NextResponse.json({ error: "직원 관리 권한이 없습니다" }, { status: 403 });
+  }
 
   const url = new URL(request.url);
   const q = (url.searchParams.get("q") || "").trim();
