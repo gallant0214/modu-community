@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
-import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { loadPermissionsForContext, ctxHasPermission } from "@/app/lib/crm-permissions";
 import { residentHash, residentBirth } from "@/app/lib/crm-identity";
 
 export const dynamic = "force-dynamic";
 
 const ALLOWED_ROLES: CrmRole[] = ["owner", "admin", "manager", "trainer"];
+
+// 역할 서열 — 상위 역할을 하위가 부여하지 못하도록(권한 상승 방지)
+const ROLE_RANK: Record<string, number> = { owner: 3, admin: 2, manager: 1, trainer: 0, fc: 0, alba: 0 };
 
 /**
  * GET /api/crm/staff/[id] — 직원 상세 + 권한 row
@@ -148,6 +151,18 @@ export async function PATCH(
     }
   }
 
+  // 직원의 역할/등급/접근권한/재직상태 변경은 staff.manage 권한 필요 (팀장도 토글 없으면 불가)
+  const touchesStaffCore =
+    body.role !== undefined ||
+    body.grade_id !== undefined ||
+    body.access_level !== undefined ||
+    body.status !== undefined ||
+    body.employment_status !== undefined ||
+    body.employment_type !== undefined;
+  if (touchesStaffCore && !isSelf && !(await ctxHasPermission(ctx, "staff.manage"))) {
+    return NextResponse.json({ error: "직원 관리 권한이 없습니다" }, { status: 403 });
+  }
+
   const patch: Record<string, unknown> = {};
 
   // 본인 확인 정보(생년월일·주민번호) — 센터 탈퇴/양도 방지용
@@ -256,11 +271,18 @@ export async function PATCH(
     // fc(FC)·alba(아르바이트) 기반 등급은 역할·접근권한상 강사(trainer)로 매핑.
     // (권한은 등급별 설정을 그대로 사용, 메뉴/접근 게이트만 강사 기준)
     const effRole = g.base_role === "fc" || g.base_role === "alba" ? "trainer" : g.base_role;
+    // 역할 상한: 본인 서열보다 높은 등급(특히 owner)을 부여할 수 없음
+    if ((ROLE_RANK[effRole] ?? 0) > (ROLE_RANK[ctx.role] ?? 0)) {
+      return NextResponse.json({ error: "본인보다 상위 역할의 등급은 부여할 수 없습니다" }, { status: 403 });
+    }
     patch.role = effRole;
     patch.access_level = accessForRole(effRole);
   } else if (body.role !== undefined) {
     if (!ALLOWED_ROLES.includes(body.role as CrmRole)) {
       return NextResponse.json({ error: "등급 값이 잘못됨" }, { status: 400 });
+    }
+    if ((ROLE_RANK[body.role] ?? 0) > (ROLE_RANK[ctx.role] ?? 0)) {
+      return NextResponse.json({ error: "본인보다 상위 역할은 부여할 수 없습니다" }, { status: 403 });
     }
     patch.role = body.role;
     patch.access_level = accessForRole(body.role);

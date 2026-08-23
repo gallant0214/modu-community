@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 const ALLOWED_ROLES: CrmRole[] = ["owner", "admin", "manager", "trainer"];
 const ALLOWED_ACCESS_LEVELS = ["none", "schedule", "admin"] as const;
+const ROLE_RANK: Record<string, number> = { owner: 3, admin: 2, manager: 1, trainer: 0, fc: 0, alba: 0 };
 
 /**
  * GET /api/crm/staff
@@ -126,6 +127,10 @@ export async function POST(request: Request) {
   }
   if (!role || !ALLOWED_ROLES.includes(role)) {
     return NextResponse.json({ error: "등급 값이 잘못됨" }, { status: 400 });
+  }
+  // 역할 상한: 본인 서열보다 높은 역할(특히 owner)의 직원은 만들 수 없음
+  if ((ROLE_RANK[role] ?? 0) > (ROLE_RANK[ctx.role] ?? 0)) {
+    return NextResponse.json({ error: "본인보다 상위 역할의 직원은 등록할 수 없습니다" }, { status: 403 });
   }
 
   const accessLevel = body.access_level as (typeof ALLOWED_ACCESS_LEVELS)[number] | undefined;

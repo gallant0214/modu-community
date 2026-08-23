@@ -30,7 +30,7 @@ export async function GET(request: Request) {
  * owner base_role 등급은 언제나 true 로 고정 (변경 시도 시 무시).
  */
 export async function PATCH(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request, { needRole: "owner" });
   if (isCrmError(ctx)) return ctx;
 
   let body: { grade_id?: number; permission_key?: string; enabled?: boolean };
