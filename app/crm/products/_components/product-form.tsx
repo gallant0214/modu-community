@@ -79,10 +79,10 @@ const BUILT_IN_TYPES: TypeOption[] = [
   { value: "apparel", label: "운동복" },
   { value: "personal", label: "개인 레슨" },
   { value: "group", label: "그룹 수업" },
-  { value: "goods", label: "운동 용품" },
+  { value: "class", label: "클래스" },
 ];
 
-const BUILT_IN_KEYS = new Set(["membership", "group", "personal", "locker", "apparel", "goods"]);
+const BUILT_IN_KEYS = new Set(["membership", "group", "personal", "locker", "apparel", "class"]);
 
 const UNIT_OPTIONS: { value: DurationUnit; label: string }[] = [
   { value: "month", label: "개월" },

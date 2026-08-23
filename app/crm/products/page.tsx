@@ -14,10 +14,11 @@ const BUILT_IN_TYPE_LABEL: Record<string, string> = {
   personal: "개인 레슨",
   locker: "락커",
   apparel: "운동복",
-  goods: "운동 용품",
+  class: "클래스",
+  goods: "운동 용품", // legacy(기본 아님) — 배지 라벨 폴백용
 };
 
-const BUILT_IN_KEYS = ["membership", "group", "personal", "locker", "apparel", "goods"];
+const BUILT_IN_KEYS = ["membership", "group", "personal", "locker", "apparel", "class"];
 
 /** 상품 유형별 배지 색상 — 기본 6종 */
 const BUILT_IN_BADGE: Record<string, string> = {
@@ -31,6 +32,8 @@ const BUILT_IN_BADGE: Record<string, string> = {
     "bg-[#5A8BB0]/15 text-[#487596] dark:bg-[#5A8BB0]/25 dark:text-[#8FB7D4] border border-[#5A8BB0]/30",
   apparel:
     "bg-[#C76C8E]/15 text-[#A8557A] dark:bg-[#C76C8E]/25 dark:text-[#E2A0BA] border border-[#C76C8E]/30",
+  class:
+    "bg-[#4C9A8A]/15 text-[#3B7C6E] dark:bg-[#4C9A8A]/25 dark:text-[#8ED0C2] border border-[#4C9A8A]/30",
   goods:
     "bg-[#A68654]/15 text-[#8B6F42] dark:bg-[#A68654]/25 dark:text-[#D4B584] border border-[#A68654]/30",
 };
@@ -647,7 +650,7 @@ function TypeManagerModal({
     <CrmModal open={open} onClose={onClose} title="상품 유형 관리" size="md">
       <div className="space-y-4">
         <p className="text-[12.5px] text-[#8C8270]">
-          기본 6종 유형은 이름만 변경할 수 있어요(복원 가능). 새로 만든 커스텀 유형은 이름 변경·삭제 모두 가능해요.
+          기본 유형은 이름만 변경할 수 있어요(복원 가능). 추가한 유형은 이름 변경·삭제 모두 가능해요.
         </p>
 
         {/* 신규 추가 */}
@@ -725,9 +728,13 @@ function TypeManagerModal({
                 <>
                   <span className="flex-1 text-[14px] font-medium text-[#2A251D] dark:text-zinc-100 flex items-center gap-2">
                     {row.label}
-                    {row.isBuiltin && (
+                    {row.isBuiltin ? (
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-normal bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]">
                         기본
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-normal bg-[#B47B2A]/10 text-[#B47B2A] dark:bg-amber-900/30 dark:text-amber-300">
+                        추가
                       </span>
                     )}
                   </span>
