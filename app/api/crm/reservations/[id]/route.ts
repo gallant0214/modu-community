@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
-import { sendPushToMember, formatKstSlot, memberNotifyOn } from "@/app/lib/member-notify";
+import { sendLocalizedPushToMember, memberNotifyOn } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -122,11 +122,11 @@ export async function PATCH(
 
       after(async () => {
         if (!(await memberNotifyOn(cur.member_id, "notify_reservation"))) return;
-        await sendPushToMember(
+        await sendLocalizedPushToMember(
           cur.member_id,
           "reservation_approved",
-          "예약이 확정됐어요 ✅",
-          `${formatKstSlot(cur.starts_at)} 수업 예약이 확정됐어요`,
+          "reservationConfirmed",
+          { _slotIso: cur.starts_at },
           { reservationId: String(reservationId) }
         ).catch(() => {});
       });
@@ -150,11 +150,12 @@ export async function PATCH(
     }
 
     after(async () => {
-      await sendPushToMember(
+      const rjReason = body.reason?.trim();
+      await sendLocalizedPushToMember(
         cur.member_id,
         "reservation_rejected",
-        "예약요청이 반려됐어요",
-        `${formatKstSlot(cur.starts_at)} 수업 예약이 어려워요.${body.reason ? " 사유: " + body.reason.trim() : " 다른 시간을 선택해주세요."}`,
+        rjReason ? "reservationRejectedReason" : "reservationRejected",
+        { _slotIso: cur.starts_at, ...(rjReason ? { reason: rjReason } : {}) },
         { reservationId: String(reservationId) }
       ).catch(() => {});
     });
@@ -164,6 +165,18 @@ export async function PATCH(
   // 직급권한(schedule.manage_others) 도 타 강사 예약 관리 게이트에 반영
   const rolePerms = await loadPermissionsForContext(ctx);
   const roleAllowsAll = rolePerms["schedule.manage_others"] === true;
+
+  // 직급권한 추가 게이트: 예약 변경·취소=schedule.reserve, 출석확정·취소=schedule.attend
+  // (owner/admin/solo 는 통과. 강사별 crm_trainer_permissions 는 아래에서 추가로 확인)
+  const gradeBypass = ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner;
+  const gradeAllows = (key: string) => gradeBypass || rolePerms[key] === true;
+  const isCancelAttendance = cur.status === "attended" && newStatus === "booked";
+  if ((isReschedule || newStatus === "cancelled") && !gradeAllows("schedule.reserve")) {
+    return NextResponse.json({ error: "예약 변경·취소 권한이 없습니다" }, { status: 403 });
+  }
+  if ((newStatus === "attended" || newStatus === "noshow" || isCancelAttendance) && !gradeAllows("schedule.attend")) {
+    return NextResponse.json({ error: "출석 확정·취소 권한이 없습니다" }, { status: 403 });
+  }
 
   // trainer 권한 게이트
   if (ctx.role === "trainer") {
@@ -311,11 +324,11 @@ export async function PATCH(
 
     // 회원 알림: 예약 시간 변경
     after(async () => {
-      await sendPushToMember(
+      await sendLocalizedPushToMember(
         cur.member_id,
         "reservation_rescheduled",
-        "예약 시간이 변경되었습니다",
-        `${formatKstSlot(String(patch.starts_at))} 로 수업 시간이 변경되었습니다.`,
+        "reschedule",
+        { _slotIso: String(patch.starts_at) },
         { reservationId: String(reservationId) }
       ).catch(() => {});
     });
@@ -397,10 +410,10 @@ export async function PATCH(
     });
   }
 
-  // 회원 알림: 상태 변경(취소/출석완료/노쇼/예약복구). 실제 변경이 있을 때만.
+  // 회원 알림: 상태 변경(취소/출석완료/노쇼/예약복구). 실제 변경이 있을 때만. — 회원 언어로 발송
   if (newStatus !== cur.status) {
-    const slot = formatKstSlot(cur.starts_at);
     const reason = body.reason?.trim();
+    const slotIso = cur.starts_at;
 
     // 서비스 세션(0원 수업) 여부 — 수강권 미연결이거나 결제금액 0 이면 서비스로 본다.
     let isService = !cur.pass_id;
@@ -427,40 +440,38 @@ export async function PATCH(
     if (isPaidLastSession) {
       // 마지막 수업(출석/노쇼) → 완료 통합 안내. 마일스톤이라 토글과 무관하게 항상 발송.
       after(async () => {
-        await sendPushToMember(
+        await sendLocalizedPushToMember(
           cur.member_id,
           "pass_completed",
-          "수업 완료 처리됐어요 ✅",
-          "수강권의 수업을 모두 완료했어요 🎉",
+          "passCompleted",
+          {},
           { reservationId: String(reservationId) }
         ).catch(() => {});
       });
     } else {
-      // 일반 상태 알림. 서비스 세션(0원)은 마지막이든 아니든 여기서 '수업 완료 처리됐어요 ✅' 로 통일.
-      const noticeMap: Record<string, { title: string; body: string }> = {
-        booked: { title: "예약이 확정됐어요 ✅", body: `${slot} 수업 예약이 확정됐어요` },
-        attended: { title: "수업 완료 처리됐어요 ✅", body: `${slot} 수업이 출석(완료) 처리됐어요` },
-        cancelled: { title: "예약이 취소됐어요", body: `${slot} 수업 예약이 취소됐어요${reason ? ` · 사유: ${reason}` : ""}` },
-        noshow: { title: "노쇼 처리됐어요", body: `${slot} 수업이 노쇼(미출석)로 처리됐어요` },
+      // 일반 상태 알림. 서비스 세션(0원)은 마지막이든 아니든 여기서 '수업 완료 처리' 로 통일.
+      const keyMap: Record<string, string> = {
+        booked: "reservationConfirmed",
+        attended: "classDone",
+        cancelled: reason ? "reservationCancelledReason" : "reservationCancelled",
+        noshow: "noshow",
       };
-      const n = noticeMap[newStatus];
-      if (n && !skipNotice) {
+      const key = keyMap[newStatus];
+      if (key && !skipNotice) {
         after(async () => {
-          await sendPushToMember(cur.member_id, `reservation_${newStatus}`, n.title, n.body, {
-            reservationId: String(reservationId),
-          }).catch(() => {});
+          await sendLocalizedPushToMember(
+            cur.member_id,
+            `reservation_${newStatus}`,
+            key,
+            { _slotIso: slotIso, ...(reason ? { reason } : {}) },
+            { reservationId: String(reservationId) }
+          ).catch(() => {});
         });
       }
       // 유료 수강권 1회 남음 안내(출석 시). 서비스 세션 제외.
       if (newStatus === "attended" && remainingAfter === 1 && !isService) {
         after(async () => {
-          await sendPushToMember(
-            cur.member_id,
-            "pass_last_session",
-            "수업 1회 남았어요",
-            "다음 수업이 1회 남았습니다.",
-            {}
-          ).catch(() => {});
+          await sendLocalizedPushToMember(cur.member_id, "pass_last_session", "passLast", {}, {}).catch(() => {});
         });
       }
     }

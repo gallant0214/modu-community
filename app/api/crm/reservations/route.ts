@@ -2,7 +2,7 @@ import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
-import { sendPushToMember, formatKstSlot, memberNotifyOn } from "@/app/lib/member-notify";
+import { sendLocalizedPushToMember, memberNotifyOn } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -175,6 +175,11 @@ export async function POST(request: Request) {
 
   // 타 강사 스케줄 예약·수정·삭제 권한: 직급권한(schedule.manage_others) + 개별 강사(can_manage_all_schedules) 병합
   const rolePerms = await loadPermissionsForContext(ctx);
+  // 직급권한: 예약 생성은 schedule.reserve (owner/admin/solo 통과). 강사별 컬럼은 아래에서 추가 확인.
+  const gradeBypassR = ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner;
+  if (!gradeBypassR && rolePerms["schedule.reserve"] !== true) {
+    return NextResponse.json({ error: "예약 생성 권한이 없습니다" }, { status: 403 });
+  }
   let canManageAll =
     ctx.role === "owner" ||
     ctx.role === "admin" ||
@@ -350,14 +355,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "예약 생성 실패", detail: error?.message }, { status: 500 });
   }
 
-  // 회원 알림: 강사가 수업을 예약함 (수업 예약 알림 on 일 때만)
+  // 회원 알림: 강사가 수업을 예약함 (수업 예약 알림 on 일 때만) — 회원 언어로 발송
   after(async () => {
     if (!(await memberNotifyOn(pass.member_id, "notify_reservation"))) return;
-    await sendPushToMember(
+    await sendLocalizedPushToMember(
       pass.member_id,
       "reservation_booked",
-      "수업이 예약됐어요 ✅",
-      `${formatKstSlot(startsAt.toISOString())} 수업이 예약됐어요`,
+      "reservationCreated",
+      { _slotIso: startsAt.toISOString() },
       { reservationId: String(created.id) }
     ).catch(() => {});
   });

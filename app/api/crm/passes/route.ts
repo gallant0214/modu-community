@@ -1,6 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
@@ -109,7 +110,11 @@ export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  // trainer 권한 체크
+  // 직급권한: 수강권 발급은 passes.issue (owner/admin/solo 통과). 강사별 컬럼은 아래에서 추가 확인.
+  if (!(await ctxHasPermission(ctx, "passes.issue"))) {
+    return NextResponse.json({ error: "수강권 발급 권한이 없습니다" }, { status: 403 });
+  }
+  // trainer 개별 권한(can_issue_pass) 추가 게이트
   if (ctx.role === "trainer") {
     const { data: perm } = await supabase
       .from("crm_trainer_permissions")
