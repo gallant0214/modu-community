@@ -6,6 +6,7 @@ import {
   RESERVATION_STATUS_LABEL,
   RESERVATION_STATUS_COLOR,
   SCHEDULE_LEGEND,
+  formatPhone,
 } from "../_components/crm-labels";
 import BookingRequestsPanel from "../_components/booking-requests-panel";
 import { CrmLessonsList } from "../_components/crm-lessons-list";
@@ -604,6 +605,7 @@ function EditReservationModal({
     Math.round((endKst.getTime() - startKst.getTime()) / 60000)
   );
 
+  const [memberDetailOpen, setMemberDetailOpen] = useState(false);
   const [trainerId, setTrainerId] = useState<number>(reservation.trainer_member_id);
   const [date, setDate] = useState<string>(initDate);
   const [time, setTime] = useState<string>(initTime);
@@ -703,7 +705,15 @@ function EditReservationModal({
         <div className="p-5 space-y-3">
           <div className="px-3 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 space-y-1">
             <div>
-              회원: <strong className="text-[#2A251D] dark:text-zinc-100">{reservation.member_name || "회원"}</strong>
+              회원:{" "}
+              <button
+                type="button"
+                onClick={() => setMemberDetailOpen(true)}
+                className="font-bold text-[#6B7B3A] dark:text-[#A8B87A] underline decoration-dotted underline-offset-2 hover:text-[#4d5a29]"
+                title="회원 상세 보기"
+              >
+                {reservation.member_name || "회원"}
+              </button>
               {sessionBadge(reservation) && (
                 <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10.5px] font-semibold bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]">
                   {sessionBadge(reservation)}
@@ -827,6 +837,156 @@ function EditReservationModal({
             className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
           >
             {saving ? "저장 중…" : "예약 수정"}
+          </button>
+        </div>
+      </div>
+      {memberDetailOpen && (
+        <MemberQuickModal
+          memberId={reservation.member_id}
+          memberName={reservation.member_name}
+          onClose={() => setMemberDetailOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** 스케줄에서 회원 이름 클릭 시 뜨는 회원 상세 요약 팝업 (닫기=스케줄로 복귀) */
+function MemberQuickModal({
+  memberId,
+  memberName,
+  onClose,
+}: {
+  memberId: number;
+  memberName: string;
+  onClose: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [member, setMember] = useState<Record<string, unknown> | null>(null);
+  const [passes, setPasses] = useState<Array<Record<string, unknown>>>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+        const res = await fetch(`/api/crm/members/${memberId}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "조회 실패");
+        setMember(data.member ?? null);
+        setPasses(data.passes ?? []);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "네트워크 오류");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [memberId, getIdToken]);
+
+  const s = (v: unknown): string => (v == null ? "" : String(v));
+  const fmtExp = (v: unknown): string => {
+    const d = s(v);
+    if (!d) return "—";
+    return d.slice(0, 10) === "9999-12-31" ? "무기한" : d.slice(0, 10);
+  };
+  const holdings: string[] = [];
+  if (member) {
+    if (member.current_membership) holdings.push(`회원권 · ${s(member.current_membership)}`);
+    if (member.current_pass) holdings.push(`수강권 · ${s(member.current_pass)}`);
+    if (member.current_rental) holdings.push(`대여권 · ${s(member.current_rental)}`);
+    if (member.current_locker) holdings.push(`락커 · ${s(member.current_locker)}`);
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative w-full max-w-md rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-xl max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#E8E0D0]/70 dark:border-zinc-800">
+          <h2 className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            회원 상세 · {member ? s(member.name) : memberName}
+          </h2>
+          <button onClick={onClose} className="p-1 -m-1 text-[#A89B80] hover:text-[#3A342A]" aria-label="닫기">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-5 overflow-y-auto space-y-3 text-[13px]">
+          {loading ? (
+            <div className="py-8 text-center text-[#8C8270]">불러오는 중…</div>
+          ) : error ? (
+            <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300">{error}</div>
+          ) : member ? (
+            <>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[#3A342A] dark:text-zinc-200">
+                <span className="text-[16px] font-bold">{s(member.name)}</span>
+                {member.gender ? <span className="text-[#6B5D47] dark:text-zinc-400">{member.gender === "M" ? "남" : member.gender === "F" ? "여" : ""}</span> : null}
+                {member.phone ? <span className="text-[#6B5D47] dark:text-zinc-400">{formatPhone(s(member.phone))}</span> : null}
+              </div>
+
+              <div>
+                <div className="text-[11.5px] text-[#A89B80] mb-1">현재 보유</div>
+                {holdings.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {holdings.map((h, i) => (
+                      <span key={i} className="px-2 py-0.5 rounded-md text-[12px] bg-[#6B7B3A]/10 text-[#4d5a29] dark:text-[#A8B87A]">{h}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-[12px] text-[#A89B80]">보유 상품 없음</span>
+                )}
+              </div>
+
+              {passes.length > 0 && (
+                <div>
+                  <div className="text-[11.5px] text-[#A89B80] mb-1">수강권</div>
+                  <ul className="space-y-1">
+                    {passes.slice(0, 5).map((p, i) => (
+                      <li key={i} className="flex items-center justify-between gap-2 text-[12.5px] text-[#3A342A] dark:text-zinc-200">
+                        <span className="truncate">{s(p.lesson_kind) || "수강권"}</span>
+                        <span className="shrink-0 text-[#6B5D47] dark:text-zinc-400">
+                          잔여 {s(p.remaining_sessions)}/{s(p.total_sessions)}회
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="px-3 py-2 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800">
+                  <div className="text-[11px] text-[#A89B80]">최종 만료일</div>
+                  <div className="font-semibold">{fmtExp(member.final_expire_at)}</div>
+                </div>
+                <div className="px-3 py-2 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800">
+                  <div className="text-[11px] text-[#A89B80]">마지막 출석일</div>
+                  <div className="font-semibold">{s(member.last_attended_at).slice(0, 10) || "—"}</div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="py-8 text-center text-[#8C8270]">회원 정보를 찾을 수 없어요.</div>
+          )}
+        </div>
+
+        <div className="flex gap-2 px-5 py-3.5 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+          <a
+            href={`/crm/members/${memberId}`}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[13.5px] font-semibold text-center hover:bg-[#6B7B3A]/5"
+          >
+            전체 상세 페이지
+          </a>
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+          >
+            닫기
           </button>
         </div>
       </div>
