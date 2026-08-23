@@ -1960,11 +1960,33 @@ function RegisterModal({
   const [visitRoute, setVisitRoute] = useState("");
   const [workoutGoal, setWorkoutGoal] = useState("");
   const [counselor, setCounselor] = useState("");
+  const [staffList, setStaffList] = useState<{ id: number; display_name: string }[]>([]);
   const [mileage, setMileage] = useState("0");
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [registeredAt, setRegisteredAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // 상담 담당자 선택용 직원 목록
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/staff", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setStaffList(data.staff ?? []);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [open, getIdToken]);
 
   useEffect(() => {
     if (!open) {
@@ -2249,7 +2271,21 @@ function RegisterModal({
         </div>
         <div className="grid grid-cols-2 gap-2">
           <CrmField label="상담 담당자">
-            <input className={crmInputClass} value={counselor} onChange={(e) => setCounselor(e.target.value)} />
+            <select
+              className={crmInputClass}
+              value={counselor}
+              onChange={(e) => setCounselor(e.target.value)}
+            >
+              <option value="">선택 안 함</option>
+              {counselor && !staffList.some((s) => s.display_name === counselor) && (
+                <option value={counselor}>{counselor}</option>
+              )}
+              {staffList.map((s) => (
+                <option key={s.id} value={s.display_name}>
+                  {s.display_name}
+                </option>
+              ))}
+            </select>
           </CrmField>
           <CrmField label="마일리지">
             <input
