@@ -18,7 +18,8 @@ const BUILT_IN_TYPE_LABEL: Record<string, string> = {
   goods: "운동 용품", // legacy(기본 아님) — 배지 라벨 폴백용
 };
 
-const BUILT_IN_KEYS = ["membership", "group", "personal", "locker", "apparel", "class"];
+// 유형 리스트 기본 노출 순서: 회원권 · 개인레슨 · 그룹 · 클래스 · 운동복 · 락커
+const BUILT_IN_KEYS = ["membership", "personal", "group", "class", "apparel", "locker"];
 
 /** 상품 유형별 배지 색상 — 기본 6종 */
 const BUILT_IN_BADGE: Record<string, string> = {

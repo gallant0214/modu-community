@@ -75,11 +75,11 @@ interface TypeOption {
 
 const BUILT_IN_TYPES: TypeOption[] = [
   { value: "membership", label: "회원권" },
-  { value: "locker", label: "락커" },
-  { value: "apparel", label: "운동복" },
   { value: "personal", label: "개인 레슨" },
   { value: "group", label: "그룹 수업" },
   { value: "class", label: "클래스" },
+  { value: "apparel", label: "운동복" },
+  { value: "locker", label: "락커" },
 ];
 
 const BUILT_IN_KEYS = new Set(["membership", "group", "personal", "locker", "apparel", "class"]);
