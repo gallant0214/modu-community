@@ -57,6 +57,40 @@ export async function GET(request: Request) {
   const periodSales = await fetchSales(ctx.centerId, startDate, nextMonth);
   let totalRevenue = 0;
   for (const s of periodSales) totalRevenue += s.amount_won;
+
+  // crm_sales 원장은 임포트 스냅샷(컷오프)까지만 커버 → 컷오프 이후 CRM 신규 발급을 합산
+  // (센터 매출 리포트와 동일 규칙. 이중집계 방지 위해 컷오프 이후만.)
+  const { data: maxSale } = await supabase
+    .from("crm_sales")
+    .select("tx_at")
+    .eq("center_id", ctx.centerId)
+    .order("tx_at", { ascending: false })
+    .limit(1);
+  const maxTx = (maxSale?.[0] as { tx_at?: string } | undefined)?.tx_at;
+  const cutoffYmd = maxTx
+    ? new Date(new Date(maxTx).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+    : null;
+  const nextYmd = (ymd: string) => {
+    const d = new Date(`${ymd}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+  };
+  const issuanceStart = cutoffYmd
+    ? nextYmd(cutoffYmd) > startDate
+      ? nextYmd(cutoffYmd)
+      : startDate
+    : startDate;
+  if (issuanceStart < nextMonth) {
+    const [im, ip, ir] = await Promise.all([
+      supabase.from("crm_memberships").select("price_won").eq("center_id", ctx.centerId).gte("start_date", issuanceStart).lt("start_date", nextMonth),
+      supabase.from("crm_passes").select("price_won").eq("center_id", ctx.centerId).gte("issued_at", issuanceStart).lt("issued_at", nextMonth),
+      supabase.from("crm_rentals").select("price_won").eq("center_id", ctx.centerId).gte("start_date", issuanceStart).lt("start_date", nextMonth),
+    ]);
+    for (const m of im.data ?? []) totalRevenue += (m as { price_won: number }).price_won ?? 0;
+    for (const p of ip.data ?? []) totalRevenue += (p as { price_won: number }).price_won ?? 0;
+    for (const r of ir.data ?? []) totalRevenue += (r as { price_won: number }).price_won ?? 0;
+  }
+
   const totalExVat = Math.round(totalRevenue / (1 + VAT_RATE));
   const vatAmount = totalRevenue - totalExVat;
 
