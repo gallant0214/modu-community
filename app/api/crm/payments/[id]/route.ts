@@ -137,36 +137,8 @@ export async function DELETE(
   const passId = (cur as { pass_id: number | null }).pass_id ?? null;
   const rentalId = (cur as { rental_id: number | null }).rental_id ?? null;
 
-  // 구매 취소 = 결제 + 연결 상품 + 같은 구매(동일 트랜잭션)의 묶음 구성까지 삭제.
-  // 트랜잭션 시각 = 연결된 회원권/수강권의 created_at. (결제만 있고 상품 링크가 없으면 결제만 삭제)
-  let txAt: string | null = null;
-  if (membershipId) {
-    const { data } = await supabase
-      .from("crm_memberships")
-      .select("created_at")
-      .eq("id", membershipId)
-      .eq("center_id", ctx.centerId)
-      .maybeSingle();
-    txAt = (data as { created_at: string } | null)?.created_at ?? null;
-  } else if (passId) {
-    const { data } = await supabase
-      .from("crm_passes")
-      .select("created_at")
-      .eq("id", passId)
-      .eq("center_id", ctx.centerId)
-      .maybeSingle();
-    txAt = (data as { created_at: string } | null)?.created_at ?? null;
-  } else if (rentalId) {
-    const { data } = await supabase
-      .from("crm_rentals")
-      .select("created_at")
-      .eq("id", rentalId)
-      .eq("center_id", ctx.centerId)
-      .maybeSingle();
-    txAt = (data as { created_at: string } | null)?.created_at ?? null;
-  }
-
-  // 취소로 삭제/원복되는 항목의 상세 스냅샷(로그 보존용).
+  // 이 결제에 연결된 '단일 상품'만 삭제. 묶음(장바구니) 결제라도 각 상품이 각자 결제행이므로
+  // 한 결제내역을 지우면 그 상품 하나만 삭제된다. (락커 대여권일 때만 해당 락커 원복)
   const removed = {
     counts: { memberships: 0, passes: 0, rentals: 0, lockers_returned: 0, lockers_reverted: 0 },
     memberships: [] as unknown[],
@@ -174,122 +146,102 @@ export async function DELETE(
     rentals: [] as unknown[],
     lockers: [] as unknown[],
   };
+  const nowIso = new Date().toISOString();
 
-  if (txAt && memberId) {
-    // 동일 트랜잭션 판정: created_at ±3초
-    const lo = new Date(Date.parse(txAt) - 3000).toISOString();
-    const hi = new Date(Date.parse(txAt) + 3000).toISOString();
-
-    const [msRes, psRes, rsRes, lhRes] = await Promise.all([
-      supabase.from("crm_memberships").select("id, plan_name, price_won, start_date, expires_at, payment_method").eq("center_id", ctx.centerId).eq("member_id", memberId).gte("created_at", lo).lte("created_at", hi),
-      supabase.from("crm_passes").select("id, lesson_kind, price_won, total_sessions, start_date, expires_at, payment_method").eq("center_id", ctx.centerId).eq("member_id", memberId).gte("created_at", lo).lte("created_at", hi),
-      supabase.from("crm_rentals").select("id, item_name, price_won, start_date, expires_at, payment_method").eq("center_id", ctx.centerId).eq("member_id", memberId).gte("created_at", lo).lte("created_at", hi),
-      supabase.from("crm_locker_history").select("locker_id, created_at").eq("center_id", ctx.centerId).eq("member_id", memberId).eq("action", "assign").gte("created_at", lo).lte("created_at", hi),
-    ]);
-
-    // 락커: 이 구매로 배정/연장된 락커를 이전 상태로 되돌리거나 회수
-    const lockerHist = (lhRes.data ?? []) as { locker_id: number; created_at: string }[];
-    const lockerIds = Array.from(new Set(lockerHist.map((h) => h.locker_id)));
-    const nowIso = new Date().toISOString();
-    for (const lid of lockerIds) {
-      const thisAssign = lockerHist
-        .filter((h) => h.locker_id === lid)
-        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
-      if (!thisAssign) continue;
-      // 이 구매 assign 직전 이력
-      const { data: prev } = await supabase
+  // 락커 대여권 삭제 시: 이 구매(±3초)로 배정/연장된 락커만 원복
+  if (rentalId && memberId) {
+    const { data: rentalInfo } = await supabase
+      .from("crm_rentals")
+      .select("created_at, item_name, memo")
+      .eq("id", rentalId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    const ri = rentalInfo as { created_at: string; item_name: string | null; memo: string | null } | null;
+    const isLockerRental =
+      !!ri &&
+      ((ri.memo ?? "").includes("미배정") ||
+        /\d+번/.test(ri.memo ?? "") ||
+        (ri.memo ?? "").includes("락커") ||
+        /^(락커|상가)/.test((ri.item_name ?? "").trim()));
+    if (isLockerRental && ri) {
+      const lo = new Date(Date.parse(ri.created_at) - 3000).toISOString();
+      const hi = new Date(Date.parse(ri.created_at) + 3000).toISOString();
+      const { data: lhData } = await supabase
         .from("crm_locker_history")
-        .select("action, start_date, expires_at")
-        .eq("locker_id", lid)
-        .lt("created_at", thisAssign.created_at)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const { data: lk } = await supabase
-        .from("crm_lockers")
-        .select("zone_id, number")
-        .eq("id", lid)
+        .select("locker_id, created_at")
         .eq("center_id", ctx.centerId)
-        .maybeSingle();
-      const prevRow = prev as { action: string; start_date: string | null; expires_at: string | null } | null;
-      if (prevRow && prevRow.action === "assign") {
-        // 기존 락커 연장분 → 이전 기간으로 원복
-        await supabase
+        .eq("member_id", memberId)
+        .eq("action", "assign")
+        .gte("created_at", lo)
+        .lte("created_at", hi);
+      const lockerHist = (lhData ?? []) as { locker_id: number; created_at: string }[];
+      const lockerIds = Array.from(new Set(lockerHist.map((h) => h.locker_id)));
+      for (const lid of lockerIds) {
+        const thisAssign = lockerHist
+          .filter((h) => h.locker_id === lid)
+          .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
+        if (!thisAssign) continue;
+        const { data: prev } = await supabase
+          .from("crm_locker_history")
+          .select("action, start_date, expires_at")
+          .eq("locker_id", lid)
+          .lt("created_at", thisAssign.created_at)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const { data: lk } = await supabase
           .from("crm_lockers")
-          .update({ start_date: prevRow.start_date, expires_at: prevRow.expires_at, updated_at: nowIso } as never)
+          .select("zone_id, number")
           .eq("id", lid)
-          .eq("center_id", ctx.centerId);
-        if (lk) {
-          await supabase.from("crm_locker_history").insert({
-            center_id: ctx.centerId,
-            locker_id: lid,
-            zone_id: (lk as { zone_id: number }).zone_id,
-            number: (lk as { number: number }).number,
-            action: "update",
-            member_id: memberId,
-            start_date: prevRow.start_date,
-            expires_at: prevRow.expires_at,
-            actor_uid: ctx.uid,
-          } as never);
+          .eq("center_id", ctx.centerId)
+          .maybeSingle();
+        const prevRow = prev as { action: string; start_date: string | null; expires_at: string | null } | null;
+        if (prevRow && prevRow.action === "assign") {
+          await supabase
+            .from("crm_lockers")
+            .update({ start_date: prevRow.start_date, expires_at: prevRow.expires_at, updated_at: nowIso } as never)
+            .eq("id", lid)
+            .eq("center_id", ctx.centerId);
+          if (lk) {
+            await supabase.from("crm_locker_history").insert({
+              center_id: ctx.centerId, locker_id: lid,
+              zone_id: (lk as { zone_id: number }).zone_id, number: (lk as { number: number }).number,
+              action: "update", member_id: memberId,
+              start_date: prevRow.start_date, expires_at: prevRow.expires_at, actor_uid: ctx.uid,
+            } as never);
+          }
+          removed.counts.lockers_reverted++;
+          removed.lockers.push({ id: lid, action: "reverted" });
+        } else {
+          await supabase
+            .from("crm_lockers")
+            .update({ state: "unassigned", assigned_member_id: null, start_date: null, expires_at: null, password: null, memo: null, updated_at: nowIso } as never)
+            .eq("id", lid)
+            .eq("center_id", ctx.centerId);
+          if (lk) {
+            await supabase.from("crm_locker_history").insert({
+              center_id: ctx.centerId, locker_id: lid,
+              zone_id: (lk as { zone_id: number }).zone_id, number: (lk as { number: number }).number,
+              action: "return", member_id: memberId, actor_uid: ctx.uid,
+            } as never);
+          }
+          removed.counts.lockers_returned++;
+          removed.lockers.push({ id: lid, action: "returned" });
         }
-        removed.counts.lockers_reverted++;
-        removed.lockers.push({
-          id: lid,
-          action: "reverted",
-          zone_id: lk ? (lk as { zone_id: number }).zone_id : null,
-          number: lk ? (lk as { number: number }).number : null,
-          restored_expires: prevRow.expires_at,
-        });
-      } else {
-        // 이 구매로 새로 배정된 락커 → 회수(미배정)
-        await supabase
-          .from("crm_lockers")
-          .update({ state: "unassigned", assigned_member_id: null, start_date: null, expires_at: null, password: null, memo: null, updated_at: nowIso } as never)
-          .eq("id", lid)
-          .eq("center_id", ctx.centerId);
-        if (lk) {
-          await supabase.from("crm_locker_history").insert({
-            center_id: ctx.centerId,
-            locker_id: lid,
-            zone_id: (lk as { zone_id: number }).zone_id,
-            number: (lk as { number: number }).number,
-            action: "return",
-            member_id: memberId,
-            actor_uid: ctx.uid,
-          } as never);
-        }
-        removed.counts.lockers_returned++;
-        removed.lockers.push({
-          id: lid,
-          action: "returned",
-          zone_id: lk ? (lk as { zone_id: number }).zone_id : null,
-          number: lk ? (lk as { number: number }).number : null,
-        });
       }
     }
+  }
 
-    // 상품 삭제 (회원권/수강권 삭제 시 연결 결제·예약은 FK CASCADE 로 함께 삭제)
-    const msRows = msRes.data ?? [];
-    const psRows = psRes.data ?? [];
-    const rsRows = rsRes.data ?? [];
-    const msIds = msRows.map((m) => (m as { id: number }).id);
-    const psIds = psRows.map((p) => (p as { id: number }).id);
-    const rsIds = rsRows.map((r) => (r as { id: number }).id);
-    if (msIds.length) {
-      await supabase.from("crm_memberships").delete().in("id", msIds).eq("center_id", ctx.centerId);
-      removed.counts.memberships = msIds.length;
-      removed.memberships = msRows;
-    }
-    if (psIds.length) {
-      await supabase.from("crm_passes").delete().in("id", psIds).eq("center_id", ctx.centerId);
-      removed.counts.passes = psIds.length;
-      removed.passes = psRows;
-    }
-    if (rsIds.length) {
-      await supabase.from("crm_rentals").delete().in("id", rsIds).eq("center_id", ctx.centerId);
-      removed.counts.rentals = rsIds.length;
-      removed.rentals = rsRows;
-    }
+  // 단일 상품 삭제 (연결 결제·예약은 FK CASCADE 로 함께 삭제)
+  if (membershipId) {
+    await supabase.from("crm_memberships").delete().eq("id", membershipId).eq("center_id", ctx.centerId);
+    removed.counts.memberships = 1;
+  } else if (passId) {
+    await supabase.from("crm_passes").delete().eq("id", passId).eq("center_id", ctx.centerId);
+    removed.counts.passes = 1;
+  } else if (rentalId) {
+    await supabase.from("crm_rentals").delete().eq("id", rentalId).eq("center_id", ctx.centerId);
+    removed.counts.rentals = 1;
   }
 
   // 결제 레코드 삭제 (상품 CASCADE 로 이미 지워졌으면 no-op)
