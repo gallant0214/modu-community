@@ -1102,15 +1102,15 @@ export default function CrmMembersPage() {
       )}
 
       {/* 통계 카드 = 상태 필터. 누르면 회원 목록이 해당 상태로 필터링됨 */}
-      <div className="mb-4 grid grid-cols-3 md:grid-cols-6 gap-2">
+      <div className="mb-4 grid grid-cols-4 md:grid-cols-8 gap-1.5">
         <StatCard label="전체 회원" value={totals.all} active={fStatus === "all"} onClick={() => setFStatus("all")} />
-        <StatCard label="수강권 유효" value={totals.validPass} tone="ok" active={fStatus === "valid_pass"} onClick={() => setFStatus("valid_pass")} />
         <StatCard label="회원권 유효" value={totals.validMembership} tone="ok" active={fStatus === "valid_membership"} onClick={() => setFStatus("valid_membership")} />
+        <StatCard label="수강권 유효" value={totals.validPass} tone="ok" active={fStatus === "valid_pass"} onClick={() => setFStatus("valid_pass")} />
         <StatCard label="예정" value={totals.scheduled} tone="info" active={fStatus === "scheduled"} onClick={() => setFStatus("scheduled")} />
         <StatCard label="만료" value={totals.expired} tone="warn" active={fStatus === "expired"} onClick={() => setFStatus("expired")} />
         <StatCard label="홀딩" value={totals.hold} tone="hold" active={fStatus === "hold"} onClick={() => setFStatus("hold")} />
-        <StatCard label={`수강권 임박 (${EXPIRING_DAYS}일)`} value={totals.expiringPass} tone="warn" active={fStatus === "expiring_pass"} onClick={() => setFStatus("expiring_pass")} />
         <StatCard label={`회원권 임박 (${EXPIRING_DAYS}일)`} value={totals.expiringMembership} tone="warn" active={fStatus === "expiring_membership"} onClick={() => setFStatus("expiring_membership")} />
+        <StatCard label={`수강권 임박 (${EXPIRING_DAYS}일)`} value={totals.expiringPass} tone="warn" active={fStatus === "expiring_pass"} onClick={() => setFStatus("expiring_pass")} />
       </div>
 
       {/* 검색 */}
@@ -1386,14 +1386,14 @@ function StatCard({
     <button
       type="button"
       onClick={onClick}
-      className={`text-left px-3 py-2.5 rounded-xl border transition-colors ${
+      className={`text-left px-2 py-2 rounded-lg border transition-colors ${
         active
           ? "border-[#6B7B3A] bg-[#6B7B3A]/10 dark:bg-[#6B7B3A]/20 ring-1 ring-[#6B7B3A]/40"
           : "border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
       }`}
     >
-      <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 truncate">{label}</div>
-      <div className={`text-[16px] font-bold mt-0.5 ${color}`}>{value}명</div>
+      <div className="text-[10.5px] leading-tight text-[#6B5D47] dark:text-zinc-400">{label}</div>
+      <div className={`text-[15px] font-bold mt-0.5 ${color}`}>{value}명</div>
     </button>
   );
 }
