@@ -271,28 +271,36 @@ export async function GET(request: Request) {
     // (기간제(total_sessions<=0)는 잔여 개념이 없어 그대로 표시)
     const isCount = (p.total_sessions ?? 0) > 0;
     const usedUp = isCount && (p.remaining_sessions ?? 0) <= 0;
+    // 이용기간이 지난(만료) 상품은 '이용 가능 상품'에서 제외
+    const expired = !!p.expires_at && p.expires_at < todayKstYmd;
     if (!usedUp) {
-      const arr = passMap.get(p.member_id) ?? [];
-      arr.push({
-        kind: p.lesson_kind,
-        type: "lesson",
-        remaining: p.remaining_sessions ?? null,
-        expires: p.expires_at,
-      });
-      passMap.set(p.member_id, arr);
+      if (!expired) {
+        const arr = passMap.get(p.member_id) ?? [];
+        arr.push({
+          kind: p.lesson_kind,
+          type: "lesson",
+          remaining: p.remaining_sessions ?? null,
+          expires: p.expires_at,
+        });
+        passMap.set(p.member_id, arr);
+      }
       classify(p.member_id, p.start_date, p.expires_at, p.is_paused);
     }
     feedOutstanding(p.member_id, p.outstanding_won, p.payment_status);
   }
   for (const m of mbData) {
-    const arr = passMap.get(m.member_id) ?? [];
-    arr.push({
-      kind: m.plan_name,
-      type: "membership",
-      remaining: null,
-      expires: m.expires_at,
-    });
-    passMap.set(m.member_id, arr);
+    // 이용기간이 지난(만료) 회원권은 '이용 가능 상품'에서 제외
+    const expired = !!m.expires_at && m.expires_at < todayKstYmd;
+    if (!expired) {
+      const arr = passMap.get(m.member_id) ?? [];
+      arr.push({
+        kind: m.plan_name,
+        type: "membership",
+        remaining: null,
+        expires: m.expires_at,
+      });
+      passMap.set(m.member_id, arr);
+    }
     classify(m.member_id, m.start_date, m.expires_at, m.is_paused);
     feedOutstanding(m.member_id, m.outstanding_won, m.payment_status);
   }
