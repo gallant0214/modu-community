@@ -353,7 +353,18 @@ export default async function Home() {
               <p className="lp-final-sub">회원·수강권 관리, 수업 스케줄, 예약 요청 알림, 정산·실적까지<br />강사와 센터를 위한 올인원 관리 앱입니다.</p>
               <div className="lp-final-buttons">
                 <AppStoreButton href="https://apps.apple.com/kr/app/id6796166468" track="app_store_trainer" />
-                <GooglePlayButton comingSoon />
+                <GooglePlayButton href="https://play.google.com/store/apps/details?id=com.moduji.trainer" track="google_play_trainer" />
+              </div>
+            </div>
+
+            {/* 회원용 앱 카드 */}
+            <div className="lp-final-cta" style={{ marginTop: 20, background: "linear-gradient(135deg,#4B6A57 0%,#33503F 100%)" }}>
+              <div className="lp-label" style={{background:"rgba(255,255,255,.15)",color:"#fff"}}>회원용 앱</div>
+              <h2 className="lp-final-title">{`'모두의지도사 회원용' 앱으로`}<br />내 수업을 더 편하게.</h2>
+              <p className="lp-final-sub">수업 예약·출석, 이용권·수강권 잔여 확인, 데일리 기록, 센터 알림까지<br />회원을 위한 전용 앱입니다.</p>
+              <div className="lp-final-buttons">
+                <AppStoreButton href="https://apps.apple.com/kr/app/id6797501332" track="app_store_member" />
+                <GooglePlayButton href="https://play.google.com/store/apps/details?id=com.moduji.member" track="google_play_member" />
               </div>
             </div>
 
