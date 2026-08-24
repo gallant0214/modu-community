@@ -51,6 +51,7 @@ export function CrmLessonsList() {
   const [to, setTo] = useState(() => localYmd(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
   const [trainerId, setTrainerId] = useState<number | "">("");
   const [statusFilter, setStatusFilter] = useState<"all" | "attended" | "noshow">("all"); // 상태 필터(기본 전체)
+  const [memberQuery, setMemberQuery] = useState(""); // 회원명/연락처 검색(클라이언트)
   const [staff, setStaff] = useState<StaffLite[]>([]);
   const [rows, setRows] = useState<LessonRow[]>([]);
   const [summary, setSummary] = useState<{ total: number; attended: number; noshow: number } | null>(null);
@@ -108,8 +109,17 @@ export function CrmLessonsList() {
   const inputCls =
     "px-2.5 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100";
 
-  // 상태 필터(클라이언트) — 조회한 목록에서 출석/노쇼만 보기
-  const filteredRows = statusFilter === "all" ? rows : rows.filter((r) => r.status === statusFilter);
+  // 상태 + 회원명 필터(클라이언트) — 조회한 목록에서 출석/노쇼·회원명으로 좁혀 보기
+  const mq = memberQuery.trim().toLowerCase();
+  const mqDigits = mq.replace(/\D/g, "");
+  const filteredRows = rows
+    .filter((r) => statusFilter === "all" || r.status === statusFilter)
+    .filter(
+      (r) =>
+        !mq ||
+        r.member_name.toLowerCase().includes(mq) ||
+        (mqDigits.length > 0 && (r.member_phone ?? "").replace(/\D/g, "").includes(mqDigits))
+    );
 
   return (
     <div className="space-y-4">
@@ -151,6 +161,16 @@ export function CrmLessonsList() {
             <option value="noshow">노쇼</option>
           </select>
         </label>
+        <label className="flex flex-col gap-1 text-[11.5px] text-[#8C8270]">
+          회원 검색
+          <input
+            type="text"
+            value={memberQuery}
+            onChange={(e) => setMemberQuery(e.target.value)}
+            placeholder="회원명 또는 연락처"
+            className={`${inputCls} min-w-[160px]`}
+          />
+        </label>
         <button
           type="button"
           onClick={load}
@@ -187,7 +207,9 @@ export function CrmLessonsList() {
         <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
           {rows.length === 0
             ? "해당 기간에 진행된 수업이 없어요."
-            : `해당 기간에 '${statusFilter === "attended" ? "출석" : "노쇼"}' 수업이 없어요.`}
+            : mq
+              ? `'${memberQuery.trim()}' 회원의 수업이 없어요.`
+              : `해당 기간에 '${statusFilter === "attended" ? "출석" : "노쇼"}' 수업이 없어요.`}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
