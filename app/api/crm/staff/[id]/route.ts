@@ -309,6 +309,18 @@ export async function PATCH(
       return NextResponse.json({ error: "재직상태 값이 잘못됨" }, { status: 400 });
     }
     patch.employment_status = body.employment_status;
+    // 재직상태 ↔ 접근상태(status) 항상 동기화 — 드리프트 방지.
+    // 퇴사(resigned)=CRM 접근 차단(inactive), 재직/휴직=접근 허용(active).
+    // 단, 이 요청에 status 가 명시돼 있으면 그 값을 존중한다.
+    if (body.status === undefined) {
+      if (body.employment_status === "resigned") {
+        patch.status = "inactive";
+        patch.left_at = new Date().toISOString();
+      } else {
+        patch.status = "active";
+        patch.left_at = null;
+      }
+    }
   }
   if (body.employment_type !== undefined) {
     if (body.employment_type && !["regular", "freelance", "part_time"].includes(body.employment_type)) {
