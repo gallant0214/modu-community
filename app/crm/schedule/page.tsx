@@ -2515,6 +2515,12 @@ function fmtKstHm(iso: string): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+/** KST 기준 'M월 D일' */
+function fmtKstMd(iso: string): string {
+  const k = new Date(new Date(iso).getTime() + 9 * 3600 * 1000);
+  return `${k.getUTCMonth() + 1}월 ${k.getUTCDate()}일`;
+}
+
 function formatExpiryBadge(ymd: string): { label: string; detail: string; tone: "normal" | "warn" | "expired" | "infinite" } {
   if (!ymd) return { label: "-", detail: "만료일 없음", tone: "normal" };
   if (ymd === "9999-12-31") return { label: "무기한", detail: "기간 제한 없음", tone: "infinite" };
@@ -2625,6 +2631,38 @@ function NewReservationModal({
   }
   const [groupParticipants, setGroupParticipants] = useState<GroupParticipant[]>([]);
   const [showAddParticipant, setShowAddParticipant] = useState(false);
+
+  // 반복 예약 설정 (회원 선택 후) — 강사앱과 동일. JS getDay: 0=일 … 6=토
+  const [recurring, setRecurring] = useState(false);
+  const [weekdays, setWeekdays] = useState<Set<number>>(new Set());
+  const [repeatMode, setRepeatMode] = useState<"count" | "date">("count");
+  const [repeatCount, setRepeatCount] = useState("4");
+  const [repeatEndDate, setRepeatEndDate] = useState("");
+
+  // 반복 일정 전개: 시작일 이후 요일 매칭 날짜(YYYY-MM-DD) 목록
+  const buildOccurrenceDates = (): string[] => {
+    const baseYmd = new Date(new Date(slot.startsAt).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    if (!recurring) return [baseYmd];
+    const HARD_MAX = 60;
+    const baseDow = new Date(`${baseYmd}T00:00:00Z`).getUTCDay();
+    const wd = weekdays.size > 0 ? weekdays : new Set([baseDow]);
+    let limit = HARD_MAX;
+    if (repeatMode === "count") limit = Math.min(Math.max(Number(repeatCount) || 1, 1), HARD_MAX);
+    const bound = repeatMode === "date" && repeatEndDate ? repeatEndDate : null;
+    const out: string[] = [];
+    const [y, m, d] = baseYmd.split("-").map(Number);
+    let cur = Date.UTC(y, m - 1, d);
+    let guard = 0;
+    while (out.length < limit && guard < 400) {
+      const dt = new Date(cur);
+      const ymd = dt.toISOString().slice(0, 10);
+      if (bound && ymd > bound) break;
+      if (wd.has(dt.getUTCDay())) out.push(ymd);
+      cur += 86400000;
+      guard += 1;
+    }
+    return out;
+  };
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -2826,30 +2864,44 @@ function NewReservationModal({
       const token = await getIdToken();
       let res: Response;
       if (eventType === "lesson") {
-        // 주 pass + 그룹 참가자들 각각 예약 생성 (같은 시간대 공유).
+        // 주 pass + 그룹 참가자들 각각 예약 생성. 반복 설정이면 요일별 날짜마다 반복.
         const allPassIds = [passId!, ...groupParticipants.map((g) => g.passId)];
+        const dates = buildOccurrenceDates();
+        const { h, m } = kstParts(slot.startsAt);
         let lastRes: Response | null = null;
         const failed: string[] = [];
-        for (const pid of allPassIds) {
-          const r = await fetch("/api/crm/reservations", {
-            method: "POST",
-            headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-            body: JSON.stringify({
-              pass_id: pid,
-              starts_at: startsAt,
-              ends_at: endsAt,
-              // 사용자가 모달에서 선택한 담당 강사를 서버가 존중하도록 명시 전달.
-              // 서버는 그 강사가 pass 의 담당/추가 강사이거나, 요청자가 canManageAll 이면 허용.
-              trainer_member_id: slot.trainerId,
-            }),
-          });
-          lastRes = r;
-          if (!r.ok) {
-            const d = await r.json().catch(() => ({}));
-            failed.push(d?.error || `${pid} 예약 실패`);
+        let okCount = 0;
+        for (const ymd of dates) {
+          const sIso = kstDateToUTCISO(ymd, h, m);
+          const eIso = kstDateToUTCISO(ymd, h, m + duration);
+          for (const pid of allPassIds) {
+            const r = await fetch("/api/crm/reservations", {
+              method: "POST",
+              headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+              body: JSON.stringify({
+                pass_id: pid,
+                starts_at: sIso,
+                ends_at: eIso,
+                // 사용자가 모달에서 선택한 담당 강사를 서버가 존중하도록 명시 전달.
+                trainer_member_id: slot.trainerId,
+              }),
+            });
+            lastRes = r;
+            if (!r.ok) {
+              const d = await r.json().catch(() => ({}));
+              failed.push(`${fmtKstMd(sIso)}: ${d?.error || "예약 실패"}`);
+            } else {
+              okCount += 1;
+            }
           }
         }
-        if (failed.length > 0) throw new Error(failed.join(" · "));
+        // 반복 예약: 일부 성공 시 성공분은 유지하고 실패만 안내
+        if (failed.length > 0) {
+          if (okCount > 0) {
+            throw new Error(`${okCount}건 예약 완료. 아래는 실패: ${failed.slice(0, 5).join(" · ")}${failed.length > 5 ? " 외" : ""}`);
+          }
+          throw new Error(failed.join(" · "));
+        }
         res = lastRes as Response;
       } else {
         res = await fetch("/api/crm/schedule-events", {
@@ -2921,7 +2973,7 @@ function NewReservationModal({
             <div>
               시간:{" "}
               <strong className="text-[#2A251D] dark:text-zinc-100">
-                {fmtKstHm(startsAt)} ~ {fmtKstHm(endsAt)}
+                {fmtKstMd(startsAt)} {fmtKstHm(startsAt)} ~ {fmtKstHm(endsAt)}
               </strong>{" "}
               ({duration}분)
             </div>
@@ -3444,6 +3496,100 @@ function NewReservationModal({
                     + 참가 회원 추가
                   </button>
                 )
+              )}
+            </div>
+          )}
+
+          {/* 반복 예약 설정 (회원·수강권 선택 후) */}
+          {eventType === "lesson" && picked && passId && (
+            <div className="rounded-lg border border-[#E8E0D0] dark:border-zinc-800 p-3 space-y-2.5">
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">반복 예약 설정</span>
+                <input
+                  type="checkbox"
+                  checked={recurring}
+                  onChange={(e) => setRecurring(e.target.checked)}
+                  className="w-4 h-4 accent-[#6B7B3A]"
+                />
+              </label>
+              {recurring && (
+                <>
+                  <div>
+                    <div className="text-[12px] text-[#6B5D47] dark:text-zinc-400 mb-1.5">반복 요일</div>
+                    <div className="flex gap-1">
+                      {([[1, "월"], [2, "화"], [3, "수"], [4, "목"], [5, "금"], [6, "토"], [0, "일"]] as [number, string][]).map(
+                        ([dow, label]) => {
+                          const on = weekdays.has(dow);
+                          return (
+                            <button
+                              key={dow}
+                              type="button"
+                              onClick={() =>
+                                setWeekdays((prev) => {
+                                  const n = new Set(prev);
+                                  if (n.has(dow)) n.delete(dow);
+                                  else n.add(dow);
+                                  return n;
+                                })
+                              }
+                              className={`flex-1 py-1.5 rounded-md text-[12.5px] font-semibold border ${
+                                on
+                                  ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                                  : "border-[#E8E0D0] dark:border-zinc-700 text-[#3A342A] dark:text-zinc-300"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        }
+                      )}
+                    </div>
+                    <div className="mt-1 text-[11px] text-[#A89B80]">미선택 시 시작일 요일로 반복돼요.</div>
+                  </div>
+                  <div>
+                    <div className="text-[12px] text-[#6B5D47] dark:text-zinc-400 mb-1.5">종료 기준</div>
+                    <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
+                      {([["count", "반복 횟수"], ["date", "종료일까지"]] as const).map(([k, l]) => (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => setRepeatMode(k)}
+                          className={`px-3 py-1.5 text-[12.5px] font-medium ${
+                            repeatMode === k
+                              ? "bg-[#6B7B3A] text-white"
+                              : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                          }`}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                    {repeatMode === "count" ? (
+                      <div className="mt-2 flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          max={60}
+                          value={repeatCount}
+                          onChange={(e) => setRepeatCount(e.target.value)}
+                          className="w-24 px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+                        />
+                        <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">회</span>
+                      </div>
+                    ) : (
+                      <input
+                        type="date"
+                        value={repeatEndDate}
+                        onChange={(e) => setRepeatEndDate(e.target.value)}
+                        className="mt-2 w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+                      />
+                    )}
+                  </div>
+                  <div className="text-[12px] font-medium text-[#6B7B3A] dark:text-[#A8B87A]">
+                    총 {buildOccurrenceDates().length}회 예약이 생성돼요
+                    {groupParticipants.length > 0 ? ` (회당 ${groupParticipants.length + 1}명)` : ""}.
+                  </div>
+                </>
               )}
             </div>
           )}
