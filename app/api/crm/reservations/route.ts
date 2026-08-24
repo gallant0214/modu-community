@@ -173,28 +173,15 @@ export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
 
-  // 타 강사 스케줄 예약·수정·삭제 권한: 직급권한(schedule.manage_others) + 개별 강사(can_manage_all_schedules) 병합
+  // 권한은 직급 권한(직급 권한 화면)으로 일원화. owner/admin/solo 는 통과.
   const rolePerms = await loadPermissionsForContext(ctx);
-  // 직급권한: 예약 생성은 schedule.reserve (owner/admin/solo 통과). 강사별 컬럼은 아래에서 추가 확인.
   const gradeBypassR = ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner;
+  // 예약 생성 = schedule.reserve
   if (!gradeBypassR && rolePerms["schedule.reserve"] !== true) {
     return NextResponse.json({ error: "예약 생성 권한이 없습니다" }, { status: 403 });
   }
-  let canManageAll =
-    ctx.role === "owner" ||
-    ctx.role === "admin" ||
-    rolePerms["schedule.manage_others"] === true;
-  if (ctx.role === "trainer" || ctx.role === "manager") {
-    const { data: perm } = await supabase
-      .from("crm_trainer_permissions")
-      .select("can_create_reservation, can_manage_all_schedules")
-      .eq("center_member_id", ctx.centerMemberId)
-      .maybeSingle();
-    if (ctx.role === "trainer" && !perm?.can_create_reservation) {
-      return NextResponse.json({ error: "예약 생성 권한이 없습니다" }, { status: 403 });
-    }
-    if (perm?.can_manage_all_schedules) canManageAll = true;
-  }
+  // 타 강사 예약 = schedule.manage_others (개별 강사 컬럼 폐지)
+  const canManageAll = gradeBypassR || rolePerms["schedule.manage_others"] === true;
 
   let body: { pass_id?: number; starts_at?: string; ends_at?: string; trainer_member_id?: number; force?: boolean; booking_reason?: string };
   try {

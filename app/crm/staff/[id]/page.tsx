@@ -272,8 +272,12 @@ export default function CrmStaffDetailPage() {
       </Section>
 
       {isTrainerLike && (
-        <Section title="기능 권한 (강사·팀장)">
-          <PermsGrid perms={perms} onToggle={patchPerms} disabled={saving} />
+        <Section title="기능 권한">
+          <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
+            예약 생성·변경·취소, 출석 확정·취소, 수강권 발급, 타 강사 스케줄 관리 등 기능 권한은
+            이제 <strong>센터설정 → 직급 권한</strong>에서 <strong>등급별로</strong> 설정합니다.
+            (개인별 권한 토글은 직급 권한으로 통합되었습니다.)
+          </p>
         </Section>
       )}
 

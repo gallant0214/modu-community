@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +33,9 @@ export async function DELETE(
   const isOwnerOfEvent = ev.created_by_uid === ctx.uid;
   let hasManageAll = false;
   if (!isAdmin && !isOwnerOfEvent) {
-    const { data: perm } = await supabase
-      .from("crm_trainer_permissions")
-      .select("can_manage_all_schedules")
-      .eq("center_member_id", ctx.centerMemberId)
-      .maybeSingle();
-    hasManageAll = !!perm?.can_manage_all_schedules;
+    // 타 강사 일정 관리 = schedule.manage_others (직급 권한 일원화)
+    hasManageAll =
+      ctx.isSoloOwner || (await loadPermissionsForContext(ctx))["schedule.manage_others"] === true;
   }
   if (!isAdmin && !isOwnerOfEvent && !hasManageAll) {
     return NextResponse.json({ error: "삭제 권한이 없어요" }, { status: 403 });
@@ -95,12 +93,8 @@ export async function PATCH(
   const isOwnerOfEvent = ev.created_by_uid === ctx.uid;
   let hasManageAll = isAdmin;
   if (!hasManageAll) {
-    const { data: perm } = await supabase
-      .from("crm_trainer_permissions")
-      .select("can_manage_all_schedules")
-      .eq("center_member_id", ctx.centerMemberId)
-      .maybeSingle();
-    hasManageAll = !!perm?.can_manage_all_schedules;
+    // 타 강사 일정 관리 = schedule.manage_others (직급 권한 일원화)
+    hasManageAll = (await loadPermissionsForContext(ctx))["schedule.manage_others"] === true;
   }
   if (!isAdmin && !isOwnerOfEvent && !hasManageAll) {
     return NextResponse.json({ error: "수정 권한이 없어요" }, { status: 403 });

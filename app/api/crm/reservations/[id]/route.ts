@@ -77,16 +77,14 @@ export async function PATCH(
 
   /* ── 회원 예약요청 승인/거절 ─────────────────────────────────── */
   if (action) {
-    // 담당 트레이너(또는 전체관리 권한)만 처리 가능
-    if (ctx.role === "trainer" || ctx.role === "manager") {
-      const { data: perm } = await supabase
-        .from("crm_trainer_permissions")
-        .select("can_manage_all_schedules")
-        .eq("center_member_id", ctx.centerMemberId)
-        .maybeSingle();
-      if (!perm?.can_manage_all_schedules && cur.trainer_member_id !== ctx.centerMemberId) {
-        return NextResponse.json({ error: "본인 담당 예약요청만 처리할 수 있어요" }, { status: 403 });
-      }
+    // 예약 처리 = schedule.reserve, 타 강사 요청은 schedule.manage_others (직급 권한 일원화)
+    const reqPerms = await loadPermissionsForContext(ctx);
+    const reqBypass = ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner;
+    if (!reqBypass && reqPerms["schedule.reserve"] !== true) {
+      return NextResponse.json({ error: "예약 처리 권한이 없습니다" }, { status: 403 });
+    }
+    if (!reqBypass && cur.trainer_member_id !== ctx.centerMemberId && reqPerms["schedule.manage_others"] !== true) {
+      return NextResponse.json({ error: "본인 담당 예약요청만 처리할 수 있어요" }, { status: 403 });
     }
     if (cur.status !== "requested") {
       return NextResponse.json({ error: "이미 처리된 예약요청이에요" }, { status: 409 });
@@ -178,47 +176,9 @@ export async function PATCH(
     return NextResponse.json({ error: "출석 확정·취소 권한이 없습니다" }, { status: 403 });
   }
 
-  // trainer 권한 게이트
-  if (ctx.role === "trainer") {
-    const { data: perm } = await supabase
-      .from("crm_trainer_permissions")
-      .select("can_modify_reservation, can_cancel_reservation, can_cancel_attendance, attendance_mode, can_manage_all_schedules")
-      .eq("center_member_id", ctx.centerMemberId)
-      .maybeSingle();
-    if (
-      !roleAllowsAll &&
-      !perm?.can_manage_all_schedules &&
-      cur.trainer_member_id !== ctx.centerMemberId
-    ) {
-      return NextResponse.json({ error: "본인 담당 예약만 수정할 수 있습니다" }, { status: 403 });
-    }
-    if (isReschedule && !perm?.can_modify_reservation) {
-      return NextResponse.json({ error: "예약 시간 변경 권한이 없어요" }, { status: 403 });
-    }
-    if (newStatus === "cancelled" && !perm?.can_cancel_reservation) {
-      return NextResponse.json({ error: "예약 취소 권한이 없습니다" }, { status: 403 });
-    }
-    if (newStatus === "attended" && perm?.attendance_mode === "owner_only") {
-      return NextResponse.json({ error: "출석 확인 권한이 없습니다" }, { status: 403 });
-    }
-    if (cur.status === "attended" && !perm?.can_cancel_attendance) {
-      return NextResponse.json({ error: "출석 취소 권한이 없습니다" }, { status: 403 });
-    }
-  } else if (ctx.role === "manager") {
-    // manager 는 본인 담당 아니면 schedule.manage_others 또는 can_manage_all_schedules 필요
-    if (cur.trainer_member_id !== ctx.centerMemberId && !roleAllowsAll) {
-      const { data: perm } = await supabase
-        .from("crm_trainer_permissions")
-        .select("can_manage_all_schedules")
-        .eq("center_member_id", ctx.centerMemberId)
-        .maybeSingle();
-      if (!perm?.can_manage_all_schedules) {
-        return NextResponse.json(
-          { error: "다른 강사 예약을 수정할 권한이 없어요" },
-          { status: 403 }
-        );
-      }
-    }
+  // 타 강사 예약 관리 = schedule.manage_others (개별 강사 컬럼 폐지, 직급 권한으로 일원화)
+  if (!gradeBypass && cur.trainer_member_id !== ctx.centerMemberId && !roleAllowsAll) {
+    return NextResponse.json({ error: "다른 강사 예약을 관리할 권한이 없어요" }, { status: 403 });
   }
 
   /* ── reschedule (드래그 이동) 경로 ────────────────────────────── */

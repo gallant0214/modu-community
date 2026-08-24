@@ -119,16 +119,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "시작·종료 시각이 필요해요" }, { status: 400 });
   }
 
-  // 권한 확인
-  let canManageAll = ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner;
-  if (!canManageAll) {
-    const { data: perm } = await supabase
-      .from("crm_trainer_permissions")
-      .select("can_manage_all_schedules")
-      .eq("center_member_id", ctx.centerMemberId)
-      .maybeSingle();
-    if (perm?.can_manage_all_schedules) canManageAll = true;
-  }
+  // 권한 확인 — 타 강사/센터 일정 관리 = schedule.manage_others (직급 권한 일원화)
+  const canManageAll =
+    ctx.role === "owner" ||
+    ctx.role === "admin" ||
+    ctx.isSoloOwner ||
+    (await loadPermissionsForContext(ctx))["schedule.manage_others"] === true;
 
   // 센터 일정: 관리자 또는 can_manage_all_schedules 있는 경우만
   if (type === "center" && !canManageAll) {
