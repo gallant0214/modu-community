@@ -565,7 +565,9 @@ export default function CrmMemberDetailPage() {
                               : null,
                             lockerAssignPassword: c.assign?.password ?? null,
                           })
-                      : () => setLockerOpen(true)
+                      : c.assign
+                        ? () => setPaymentDetail(lockerAssignToDetail(c.assign!))
+                        : () => setLockerOpen(true)
                   }
                 />
               ))
@@ -3916,6 +3918,27 @@ type LockerAssignRow = {
   expires_at: string | null;
   password?: string | null;
 };
+
+/** 대여권(결제) 기록 없이 직접 배정된 락커 → 결제 상세 모달용 합성 detail.
+ *  id 없음(가격/기간 수정·홀딩 불가) + lockerAssignId 있음(락커 이동·비밀번호 수정 가능). */
+function lockerAssignToDetail(a: LockerAssignRow): PaymentDetail {
+  const label = `${a.zone_name} ${a.number}번`;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  return {
+    tag: "락커",
+    name: `${label} 락커`,
+    period: fmtPeriod(a.start_date, a.expires_at),
+    source: "record",
+    kind: "rental",
+    status: !a.expires_at || a.expires_at >= todayStr ? "valid" : "expired",
+    startDate: a.start_date,
+    expiresAt: a.expires_at,
+    priceWon: 0,
+    lockerAssignId: a.id,
+    lockerAssignLabel: label,
+    lockerAssignPassword: a.password ?? null,
+  };
+}
 // 락커 발급 = 대여권(락커) 행 + 물리 배정 이 함께 생겨 목록에 중복 표시됨.
 // 배정 memo("남자탈의실 20번")로 대여권을 매칭해 하나로 합친다.
 type MergedLocker = {
@@ -4096,7 +4119,9 @@ function UsageSection({
                         lockerAssignLabel: c.assign ? `${c.assign.zone_name} ${c.assign.number}번` : null,
                         lockerAssignPassword: c.assign?.password ?? null,
                       })
-                  : onOpenLocker
+                  : c.assign
+                    ? () => onOpenDetail(lockerAssignToDetail(c.assign!))
+                    : onOpenLocker
               }
             />
           ))}
@@ -4202,7 +4227,14 @@ function HoldingDetailModal({
   const { getIdToken } = useAuth();
   const open = detail !== null;
   const [contractPickerOpen, setContractPickerOpen] = useState(false);
-  const editable = !!detail && detail.source === "record" && !!detail.id && !!detail.kind;
+  // 편집 가능: 결제 레코드(대여권/회원권)가 있거나, 배정된 락커(대여권 없이 직접 배정)면 가능.
+  const editable =
+    !!detail &&
+    detail.source === "record" &&
+    !!detail.kind &&
+    (!!detail.id || !!detail.lockerAssignId);
+  // 결제 레코드가 실제로 있는지(가격/기간 '수정'·'홀딩'은 레코드가 있어야 가능)
+  const hasRecord = !!detail?.id;
 
   const [canEdit, setCanEdit] = useState(false);
   const [canRefund, setCanRefund] = useState(false);
@@ -4779,7 +4811,7 @@ function HoldingDetailModal({
             <div className="space-y-2">
               {editable && detail.status === "valid" && (
                 <div className="flex flex-wrap gap-2">
-                  {canEdit && (
+                  {canEdit && hasRecord && (
                     <button
                       onClick={startEdit}
                       className="flex-1 min-w-[46%] px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[#3A342A] dark:text-zinc-200 text-[13.5px] font-semibold hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
@@ -4811,18 +4843,19 @@ function HoldingDetailModal({
                       🔒 비밀번호 수정
                     </button>
                   )}
-                  {detail.isPaused ? (
-                    <div className="flex-1 min-w-[46%] px-3 py-2.5 rounded-lg bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300 text-[12.5px] text-center font-medium">
-                      홀딩 중 (만료일 연장됨)
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => detail.id && detail.kind && onHold({ kind: detail.kind, id: detail.id })}
-                      className="flex-1 min-w-[46%] px-4 py-2.5 rounded-lg border border-[#B47B2A]/50 text-[#B47B2A] dark:text-amber-300 text-[13.5px] font-semibold hover:bg-[#B47B2A]/5"
-                    >
-                      ⏸ 홀딩 (일시정지)
-                    </button>
-                  )}
+                  {hasRecord &&
+                    (detail.isPaused ? (
+                      <div className="flex-1 min-w-[46%] px-3 py-2.5 rounded-lg bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300 text-[12.5px] text-center font-medium">
+                        홀딩 중 (만료일 연장됨)
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => detail.id && detail.kind && onHold({ kind: detail.kind, id: detail.id })}
+                        className="flex-1 min-w-[46%] px-4 py-2.5 rounded-lg border border-[#B47B2A]/50 text-[#B47B2A] dark:text-amber-300 text-[13.5px] font-semibold hover:bg-[#B47B2A]/5"
+                      >
+                        ⏸ 홀딩 (일시정지)
+                      </button>
+                    ))}
                 </div>
               )}
 
