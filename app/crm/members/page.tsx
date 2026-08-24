@@ -68,7 +68,9 @@ type StatusFilter =
   | "scheduled"
   | "expired"
   | "hold"
-  | "expiring";
+  | "expiring"
+  | "expiring_membership"
+  | "expiring_pass";
 /** 만료 임박 기준 일수 */
 const EXPIRING_DAYS = 7;
 type SignupFilter = "all" | "this_week" | "this_month" | "this_year" | "custom";
@@ -246,6 +248,28 @@ const addDaysYmd = (ymd: string, n: number): string => {
   return d.toISOString().slice(0, 10);
 };
 
+// 만료 임박(EXPIRING_DAYS 이내) 회원권/수강권 보유 여부
+const hasExpiringMembership = (m: MemberRow, todayStr: string): boolean => {
+  const cutoff = addDaysYmd(todayStr, EXPIRING_DAYS);
+  if ((m.items?.length ?? 0) > 0) {
+    return (m.items ?? []).some(
+      (it) => it.type === "membership" && !!it.expires && it.expires >= todayStr && it.expires <= cutoff
+    );
+  }
+  const eff = effExpiry(m);
+  return !!m.current_membership && !!eff && eff >= todayStr && eff <= cutoff && !m.scheduled;
+};
+const hasExpiringPass = (m: MemberRow, todayStr: string): boolean => {
+  const cutoff = addDaysYmd(todayStr, EXPIRING_DAYS);
+  if ((m.items?.length ?? 0) > 0) {
+    return (m.items ?? []).some(
+      (it) => it.type === "lesson" && !!it.expires && it.expires >= todayStr && it.expires <= cutoff
+    );
+  }
+  const eff = effExpiry(m);
+  return !!m.current_pass && !!eff && eff >= todayStr && eff <= cutoff && !m.scheduled;
+};
+
 /**
  * 회원이 특정 상태 카테고리에 해당하는지 판정.
  * - valid(유효): 유효 이용권 보유(만료 전) & 아직 시작 예정 아님
@@ -273,6 +297,10 @@ const matchStatus = (m: MemberRow, filter: StatusFilter, todayStr: string): bool
       return !!m.on_hold;
     case "expiring":
       return activeNow && eff! <= addDaysYmd(todayStr, EXPIRING_DAYS);
+    case "expiring_membership":
+      return hasExpiringMembership(m, todayStr);
+    case "expiring_pass":
+      return hasExpiringPass(m, todayStr);
     default:
       return true;
   }
@@ -307,7 +335,7 @@ export default function CrmMembersPage() {
   const [fStatus, setFStatus] = useState<StatusFilter>(() => {
     if (memoUi) return memoUi.fStatus;
     const v = searchParamsHook.get("status");
-    const allowed: StatusFilter[] = ["valid", "valid_membership", "valid_pass", "scheduled", "expired", "hold", "expiring"];
+    const allowed: StatusFilter[] = ["valid", "valid_membership", "valid_pass", "scheduled", "expired", "hold", "expiring", "expiring_membership", "expiring_pass"];
     return allowed.includes(v as StatusFilter) ? (v as StatusFilter) : "all";
   });
   const [fSignup, setFSignup] = useState<SignupFilter>(() => {
@@ -787,6 +815,8 @@ export default function CrmMembersPage() {
     let expired = 0;
     let hold = 0;
     let expiring = 0;
+    let expiringMembership = 0;
+    let expiringPass = 0;
     for (const m of list) {
       if (matchStatus(m, "valid", todayStr)) valid += 1;
       if (hasValidMembership(m, todayStr)) validMembership += 1;
@@ -795,8 +825,10 @@ export default function CrmMembersPage() {
       if (matchStatus(m, "expired", todayStr)) expired += 1;
       if (matchStatus(m, "hold", todayStr)) hold += 1;
       if (matchStatus(m, "expiring", todayStr)) expiring += 1;
+      if (hasExpiringMembership(m, todayStr)) expiringMembership += 1;
+      if (hasExpiringPass(m, todayStr)) expiringPass += 1;
     }
-    return { all: list.length, valid, validMembership, validPass, scheduled, expired, hold, expiring };
+    return { all: list.length, valid, validMembership, validPass, scheduled, expired, hold, expiring, expiringMembership, expiringPass };
   }, [list]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
@@ -1077,7 +1109,8 @@ export default function CrmMembersPage() {
         <StatCard label="예정" value={totals.scheduled} tone="info" active={fStatus === "scheduled"} onClick={() => setFStatus("scheduled")} />
         <StatCard label="만료" value={totals.expired} tone="warn" active={fStatus === "expired"} onClick={() => setFStatus("expired")} />
         <StatCard label="홀딩" value={totals.hold} tone="hold" active={fStatus === "hold"} onClick={() => setFStatus("hold")} />
-        <StatCard label={`임박 (${EXPIRING_DAYS}일)`} value={totals.expiring} tone="warn" active={fStatus === "expiring"} onClick={() => setFStatus("expiring")} />
+        <StatCard label={`수강권 임박 (${EXPIRING_DAYS}일)`} value={totals.expiringPass} tone="warn" active={fStatus === "expiring_pass"} onClick={() => setFStatus("expiring_pass")} />
+        <StatCard label={`회원권 임박 (${EXPIRING_DAYS}일)`} value={totals.expiringMembership} tone="warn" active={fStatus === "expiring_membership"} onClick={() => setFStatus("expiring_membership")} />
       </div>
 
       {/* 검색 */}
