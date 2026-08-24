@@ -823,6 +823,7 @@ interface SettlementResp {
   salary_total: number;
   staff_breakdown: { id: number; name: string; base: number; commission: number; bonus?: number; cash?: number; total: number }[];
   additional_total: number;
+  additional_income_total?: number;
   net_profit: number;
 }
 
@@ -976,6 +977,7 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
         <SettleRow label="− 부가세" value={-(data?.vat_amount ?? 0)} sub="부가세 포함 결제 건의 10%" />
         <SettleRow label="− 직원 급여" value={-(data?.salary_total ?? 0)} sub="고정급 + 수업료(정산)" />
         <SettleRow label="− 추가 지출" value={-(data?.additional_total ?? 0)} />
+        <SettleRow label="+ 추가 수입" value={data?.additional_income_total ?? 0} />
         <div className="flex items-center justify-between px-5 py-3.5 bg-[#6B7B3A]/8 dark:bg-[#6B7B3A]/15 border-t border-[#6B7B3A]/25">
           <span className="text-[13.5px] font-bold text-[#3A342A] dark:text-zinc-100">= 순이익</span>
           <span className={`text-[16px] font-bold tabular-nums ${net < 0 ? "text-red-600 dark:text-red-400" : "text-[#6B7B3A] dark:text-[#A8B87A]"}`}>
@@ -1106,6 +1108,226 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
         <div className="text-[11.5px] text-[#A89B80] leading-relaxed">
           여기서 등록한 추가 지출은 해당 월이 정산 기간에 포함될 때 순이익에서 차감돼요.
         </div>
+      </section>
+
+      {/* 추가 수입 관리 */}
+      <AdditionalLedgerPanel
+        endpoint="additional-incomes"
+        title="추가 수입 관리 (월별)"
+        placeholder="내용 (예: 자판기 수익, 협찬)"
+        footnote="여기서 등록한 추가 수입은 해당 월이 정산 기간에 포함될 때 순이익에 더해져요."
+        emptyText="에 등록된 추가 수입이 없어요."
+        defaultYm={defaultYm}
+        onChanged={loadSettlement}
+      />
+    </>
+  );
+}
+
+/** 추가 지출/수입 공용 관리 패널 (월별 CRUD). endpoint = additional-expenses | additional-incomes */
+function AdditionalLedgerPanel({
+  endpoint,
+  title,
+  placeholder,
+  footnote,
+  emptyText,
+  defaultYm,
+  onChanged,
+}: {
+  endpoint: string;
+  title: string;
+  placeholder: string;
+  footnote: string;
+  emptyText: string;
+  defaultYm: string;
+  onChanged: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [ym, setYm] = useState(defaultYm);
+  const [list, setList] = useState<AdditionalExpense[]>([]);
+  const [nLabel, setNLabel] = useState("");
+  const [nAmount, setNAmount] = useState("");
+  const [nMemo, setNMemo] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [eLabel, setELabel] = useState("");
+  const [eAmount, setEAmount] = useState("");
+  const [eMemo, setEMemo] = useState("");
+
+  const load = useCallback(async () => {
+    const token = await getIdToken();
+    if (!token) return;
+    const res = await fetch(`/api/crm/${endpoint}?ym=${ym}`, {
+      headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (res.ok) setList((await res.json()).items ?? []);
+  }, [getIdToken, endpoint, ym]);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const add = async () => {
+    setError("");
+    const label = nLabel.trim();
+    if (!label) return setError("내용을 입력해 주세요");
+    setAdding(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/${endpoint}`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ ym, label, amount_won: parseWon(nAmount), memo: nMemo.trim() || null }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "추가 실패");
+      setNLabel("");
+      setNAmount("");
+      setNMemo("");
+      load();
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setAdding(false);
+    }
+  };
+  const startEdit = (x: AdditionalExpense) => {
+    setEditingId(x.id);
+    setELabel(x.label);
+    setEAmount(String(x.amount_won ?? 0));
+    setEMemo(x.memo ?? "");
+  };
+  const saveEdit = async () => {
+    if (!editingId) return;
+    const label = eLabel.trim();
+    if (!label) return setError("내용을 입력해 주세요");
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/${endpoint}/${editingId}`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ label, amount_won: parseWon(eAmount), memo: eMemo.trim() || null }),
+    });
+    if (res.ok) {
+      setEditingId(null);
+      load();
+      onChanged();
+    }
+  };
+  const remove = async (id: number) => {
+    if (!window.confirm("이 항목을 삭제할까요?")) return;
+    const token = await getIdToken();
+    const res = await fetch(`/api/crm/${endpoint}/${id}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      load();
+      onChanged();
+    }
+  };
+
+  return (
+    <>
+      <div className="mb-2 mt-5 flex items-center justify-between gap-2">
+        <span className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">{title}</span>
+        <input
+          type="month"
+          value={ym}
+          onChange={(e) => setYm(e.target.value)}
+          className="px-2.5 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[12.5px] text-[#2A251D] dark:text-zinc-100"
+        />
+      </div>
+      <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-3.5 space-y-2.5">
+        <div className="flex flex-wrap gap-2">
+          <input
+            className="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
+            value={nLabel}
+            onChange={(e) => setNLabel(e.target.value.slice(0, 40))}
+            placeholder={placeholder}
+            maxLength={40}
+          />
+          <input
+            className="w-[130px] px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-right"
+            value={nAmount ? formatWon(parseWon(nAmount)) : ""}
+            onChange={(e) => setNAmount(e.target.value)}
+            inputMode="numeric"
+            placeholder="금액(원)"
+          />
+          <input
+            className="w-[150px] px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
+            value={nMemo}
+            onChange={(e) => setNMemo(e.target.value.slice(0, 100))}
+            placeholder="메모 (선택)"
+            maxLength={100}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                add();
+              }
+            }}
+          />
+          <button
+            onClick={add}
+            disabled={adding || !nLabel.trim()}
+            className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-60 whitespace-nowrap"
+          >
+            {adding ? "…" : "+ 추가"}
+          </button>
+        </div>
+
+        {error && (
+          <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">{error}</div>
+        )}
+
+        {list.length === 0 ? (
+          <div className="px-4 py-6 text-center text-[12.5px] text-[#8C8270]">
+            {ym} {emptyText}
+          </div>
+        ) : (
+          <ul className="space-y-1.5">
+            {list.map((x) => (
+              <li key={x.id} className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 bg-white dark:bg-zinc-950">
+                {editingId === x.id ? (
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      className="flex-1 min-w-[140px] px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
+                      value={eLabel}
+                      onChange={(e) => setELabel(e.target.value.slice(0, 40))}
+                      autoFocus
+                    />
+                    <input
+                      className="w-[120px] px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-right"
+                      value={eAmount ? formatWon(parseWon(eAmount)) : ""}
+                      onChange={(e) => setEAmount(e.target.value)}
+                      inputMode="numeric"
+                    />
+                    <input
+                      className="w-[130px] px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
+                      value={eMemo}
+                      onChange={(e) => setEMemo(e.target.value.slice(0, 100))}
+                      placeholder="메모"
+                    />
+                    <button onClick={saveEdit} className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12px] font-semibold">저장</button>
+                    <button onClick={() => setEditingId(null)} className="px-2 py-1.5 text-[12px] text-[#6B5D47]">취소</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">{x.label}</span>
+                      {x.memo && <span className="ml-2 text-[11.5px] text-[#8C8270]">{x.memo}</span>}
+                    </div>
+                    <span className="text-[13px] font-bold text-[#3A342A] dark:text-zinc-100 tabular-nums whitespace-nowrap">{formatWon(x.amount_won)}원</span>
+                    <button onClick={() => startEdit(x)} className="px-2 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]">수정</button>
+                    <button onClick={() => remove(x.id)} className="px-2 py-1 rounded-md border border-red-200 dark:border-red-900/60 text-[12px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30">삭제</button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="text-[11.5px] text-[#A89B80] leading-relaxed">{footnote}</div>
       </section>
     </>
   );

@@ -2267,6 +2267,39 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_additional_incomes: {
+        Row: {
+          id: number
+          center_id: number
+          ym: string
+          label: string
+          amount_won: number
+          memo: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          ym: string
+          label: string
+          amount_won?: number
+          memo?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          ym?: string
+          label?: string
+          amount_won?: number
+          memo?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_fixed_expenses: {
         Row: {
           id: number

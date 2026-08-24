@@ -181,7 +181,16 @@ export async function GET(request: Request) {
     .in("ym", monthsList.length ? monthsList : [ym]);
   const additionalTotal = (addRows ?? []).reduce((s, x) => s + (x.amount_won ?? 0), 0);
 
-  const netProfit = totalRevenue - fixedTotal - vatAmount - salaryTotal - additionalTotal;
+  // ── 추가 수입 (기간 내 월) ───────────────────────────────
+  const { data: incRows } = await supabase
+    .from("crm_additional_incomes")
+    .select("amount_won, ym")
+    .eq("center_id", ctx.centerId)
+    .in("ym", monthsList.length ? monthsList : [ym]);
+  const additionalIncomeTotal = (incRows ?? []).reduce((s, x) => s + (x.amount_won ?? 0), 0);
+
+  const netProfit =
+    totalRevenue - fixedTotal - vatAmount - salaryTotal - additionalTotal + additionalIncomeTotal;
 
   return NextResponse.json({
     ym,
@@ -195,6 +204,7 @@ export async function GET(request: Request) {
     salary_total: salaryTotal,
     staff_breakdown: staffBreakdown,
     additional_total: additionalTotal,
+    additional_income_total: additionalIncomeTotal,
     net_profit: netProfit,
   });
 }
