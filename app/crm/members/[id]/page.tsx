@@ -5113,6 +5113,7 @@ async function postBundleComponent(
     sellerId: number;
     trainerId: number;
     startDate: string;
+    purchaseDate: string;
     paymentMethod: string;
     paymentCustom?: string;
     token: string;
@@ -5148,6 +5149,7 @@ async function postBundleComponent(
           payment_method: args.paymentMethod,
           payment_method_custom: args.paymentCustom,
           start_date: args.startDate,
+          purchased_at: args.purchaseDate,
           expires_at: expires,
         }),
       });
@@ -5163,6 +5165,7 @@ async function postBundleComponent(
           payment_method: args.paymentMethod,
           payment_method_custom: args.paymentCustom,
           start_date: args.startDate,
+          purchased_at: args.purchaseDate,
           expires_at: expires,
         }),
       });
@@ -5209,6 +5212,7 @@ async function postBundleComponent(
           payment_method: args.paymentMethod,
           payment_method_custom: args.paymentCustom,
           start_date: lockerStart,
+          purchased_at: args.purchaseDate,
           expires_at: lockerExpires,
           memo: existingLocker
             ? `${existingLocker.zone_name} ${existingLocker.number}번`
@@ -5252,7 +5256,7 @@ async function postBundleComponent(
           price_won: price,
           payment_method: args.paymentMethod,
           payment_method_custom: args.paymentCustom,
-          issued_at: args.startDate,
+          issued_at: args.purchaseDate,
           start_date: args.startDate,
           expires_at: expires,
           billing_mode: isCount ? "count" : "period",
@@ -5331,6 +5335,10 @@ function UsageIssueModal({
   const [paymentCustom, setPaymentCustom] = useState("");
   // 상품 선택 전에는 비어 있음. 상품 픽 → applyProduct 에서 자동 채움.
   const [startDate, setStartDate] = useState("");
+  // 구매일(결제일) — 실제 구매/결제가 일어난 날. 기본 오늘(KST). 시작일과 별개(이어붙이기 등에서 다름).
+  const [purchaseDate, setPurchaseDate] = useState(
+    () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+  );
   const [durationDays, setDurationDays] = useState<number>(0);
   const [memo, setMemo] = useState("");
   const [sellerId, setSellerId] = useState<number | "">("");
@@ -5360,6 +5368,7 @@ function UsageIssueModal({
     mileageUsable: boolean;
     vatIncluded: boolean;
     startDate: string;
+    purchaseDate: string;
     durationDays: number;
     lockerId?: number;
     lockerLabel?: string;
@@ -5462,6 +5471,7 @@ function UsageIssueModal({
       mileageUsable,
       vatIncluded,
       startDate,
+      purchaseDate: purchaseDate || new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10),
       durationDays,
       lockerId: type === "locker" && lockerId ? Number(lockerId) : undefined,
       lockerLabel: loc ? `${loc.zone_name} ${loc.number}번` : undefined,
@@ -5499,6 +5509,8 @@ function UsageIssueModal({
       setPaymentCustom("");
       // 상품 선택 전엔 비어 있게 (applyProduct 가 채움)
       setStartDate("");
+      // 구매일은 매 오픈마다 오늘(KST)로 초기화
+      setPurchaseDate(new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10));
       setDurationDays(0);
       setMemo("");
       setLockerZone("");
@@ -5666,6 +5678,7 @@ function UsageIssueModal({
             payment_method: line.paymentMethod,
             payment_method_custom: line.paymentCustom,
             start_date: line.startDate,
+            purchased_at: line.purchaseDate,
             expires_at: lineExpires,
             memo: line.memo || undefined,
           }),
@@ -5686,6 +5699,7 @@ function UsageIssueModal({
             payment_method: line.paymentMethod,
             payment_method_custom: line.paymentCustom,
             start_date: line.startDate,
+            purchased_at: line.purchaseDate,
             expires_at: lineExpires,
             memo: line.memo || undefined,
           }),
@@ -5732,6 +5746,7 @@ function UsageIssueModal({
             payment_method: line.paymentMethod,
             payment_method_custom: line.paymentCustom,
             start_date: line.startDate,
+            purchased_at: line.purchaseDate,
             expires_at: lineExpires,
             memo: rentalMemo,
           }),
@@ -5749,6 +5764,7 @@ function UsageIssueModal({
             sellerId: line.sellerId,
             trainerId: line.sellerId,
             startDate: line.startDate,
+            purchaseDate: line.purchaseDate,
             paymentMethod: line.paymentMethod,
             paymentCustom: line.paymentCustom,
             token,
@@ -5785,6 +5801,7 @@ function UsageIssueModal({
           mileageUsable,
           vatIncluded,
           startDate,
+          purchaseDate: purchaseDate || new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10),
           durationDays,
           lockerId: type === "locker" ? (lockerId as number) : undefined,
           lockerLabel: loc ? `${loc.zone_name} ${loc.number}번` : undefined,
@@ -6050,6 +6067,18 @@ function UsageIssueModal({
             </CrmField>
           </>
         )}
+
+        <CrmField label="구매일(결제일)" required>
+          <input
+            type="date"
+            className={crmInputClass}
+            value={purchaseDate}
+            onChange={(e) => setPurchaseDate(e.target.value)}
+          />
+          <p className="mt-1 text-[11px] text-[#A89B80]">
+            실제 결제한 날이에요. 이용 시작일과 다를 수 있어요(기본 오늘).
+          </p>
+        </CrmField>
 
         <div className="grid grid-cols-2 gap-2">
           <CrmField label="시작일" required>
@@ -6807,6 +6836,7 @@ function PassIssueModal({
             sellerId: seller,
             trainerId: Number(trainerId),
             startDate,
+            purchaseDate: issuedAt,
             paymentMethod,
             paymentCustom: paymentMethod === "etc" ? paymentCustom : undefined,
             token: token || "",

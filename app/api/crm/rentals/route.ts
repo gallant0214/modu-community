@@ -62,6 +62,7 @@ export async function POST(request: Request) {
     payment_method_custom?: string;
     start_date?: string;
     expires_at?: string;
+    purchased_at?: string;
     vat_included?: boolean;
     memo?: string;
   };
@@ -149,11 +150,18 @@ export async function POST(request: Request) {
     0,
     (Number(body.price_won) || 0) - Math.max(0, Math.floor(Number(body.discount_won) || 0))
   );
-  // 결제일(paid_at): 당일 구매면 실제 결제 시각, 과거 시작일(백데이트)이면 그 시작일(정오).
+  // 결제일(paid_at) 기준 = 구매일(purchased_at) 우선, 없으면 시작일(백데이트 하위호환).
+  // 시작일은 '이용 시작'일 뿐 실제 구매/결제일과 다를 수 있어(이어붙이기 등) 구매일을 우선한다.
+  // 당일 구매면 실제 결제 시각, 과거 구매일이면 그 날 정오.
   const rentalTodayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const rentalPurchaseYmd = /^\d{4}-\d{2}-\d{2}$/.test(body.purchased_at ?? "")
+    ? (body.purchased_at as string)
+    : /^\d{4}-\d{2}-\d{2}$/.test(body.start_date ?? "")
+      ? (body.start_date as string)
+      : rentalTodayKst;
   const rentalPaidAt =
-    /^\d{4}-\d{2}-\d{2}$/.test(body.start_date ?? "") && (body.start_date as string) < rentalTodayKst
-      ? new Date(`${body.start_date}T12:00:00+09:00`).toISOString()
+    rentalPurchaseYmd < rentalTodayKst
+      ? new Date(`${rentalPurchaseYmd}T12:00:00+09:00`).toISOString()
       : new Date().toISOString();
   await supabase.from("crm_payments").insert({
     center_id: ctx.centerId,
