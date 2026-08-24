@@ -128,6 +128,10 @@ export async function POST(request: Request) {
     0,
     (Number(body.price_won) || 0) - Math.max(0, Math.floor(Number(body.discount_won) || 0))
   );
+  // 결제일(paid_at) = 이용 시작일(구매일). 오늘 등록해도 구매일은 시작일 기준.
+  const rentalPaidAt = /^\d{4}-\d{2}-\d{2}$/.test(body.start_date ?? "")
+    ? new Date(`${body.start_date}T12:00:00+09:00`).toISOString()
+    : new Date().toISOString();
   await supabase.from("crm_payments").insert({
     center_id: ctx.centerId,
     member_id: memberId,
@@ -135,7 +139,7 @@ export async function POST(request: Request) {
     amount_won: paidWon,
     method: paymentMethod,
     method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
-    paid_at: new Date().toISOString(),
+    paid_at: rentalPaidAt,
     recorded_by_uid: ctx.uid,
     status: "completed",
   } as never);

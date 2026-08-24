@@ -184,7 +184,11 @@ export async function POST(request: Request) {
       .eq("center_id", ctx.centerId);
   }
 
-  // 초기 결제 금액이 있으면 payment 기록 추가
+  // 초기 결제 금액이 있으면 payment 기록 추가. 결제일(paid_at) = 구매일(purchased_at).
+  const purchasedYmd = /^\d{4}-\d{2}-\d{2}$/.test(body.purchased_at ?? "")
+    ? (body.purchased_at as string)
+    : body.start_date || kstYmd();
+  const paidAtIso = new Date(`${purchasedYmd}T12:00:00+09:00`).toISOString();
   if (paidAmount > 0) {
     await supabase.from("crm_payments").insert({
       center_id: ctx.centerId,
@@ -193,7 +197,7 @@ export async function POST(request: Request) {
       amount_won: paidAmount,
       method: paymentMethod,
       method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
-      paid_at: new Date().toISOString(),
+      paid_at: paidAtIso,
       recorded_by_uid: ctx.uid,
       status: "completed",
     });
