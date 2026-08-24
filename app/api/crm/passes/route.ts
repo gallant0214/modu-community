@@ -299,11 +299,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "발급 실패", detail: error?.message }, { status: 500 });
   }
 
-  // 초기 결제 금액이 있으면 payment 기록 추가.
-  // 결제일(paid_at) = 발급일(issued_at). 오늘 등록해도 구매일은 발급일 기준.
-  const paidAtIso = body.issued_at
-    ? new Date(`${body.issued_at}T12:00:00+09:00`).toISOString()
-    : new Date().toISOString();
+  // 결제일(paid_at): 당일 발급이면 실제 결제 시각, 과거 날짜(백데이트)면 그 발급일(정오).
+  const todayKstYmd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const paidAtIso =
+    body.issued_at && body.issued_at < todayKstYmd
+      ? new Date(`${body.issued_at}T12:00:00+09:00`).toISOString()
+      : new Date().toISOString();
   if (paidAmount > 0) {
     await supabase.from("crm_payments").insert({
       center_id: ctx.centerId,

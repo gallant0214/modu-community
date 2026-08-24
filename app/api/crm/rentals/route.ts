@@ -95,6 +95,27 @@ export async function POST(request: Request) {
 
   const sellerId = Number(body.seller_member_id) || ctx.centerMemberId;
 
+  // 중복 발급 방지: 같은 회원에게 동일 대여권(품목·시작일·만료일)이 20초 내 이미 생성됐으면
+  // 새로 만들지 않고 기존 건을 반환(멱등). 회원권 묶음 락커 + 별도 락커 라인 중복 등을 차단.
+  {
+    const dupSince = new Date(Date.now() - 20_000).toISOString();
+    const { data: dup } = await supabase
+      .from("crm_rentals")
+      .select("id")
+      .eq("center_id", ctx.centerId)
+      .eq("member_id", memberId)
+      .eq("item_name", itemName)
+      .eq("start_date", body.start_date ?? "")
+      .eq("expires_at", body.expires_at ?? "")
+      .eq("status", "valid")
+      .gte("created_at", dupSince)
+      .limit(1)
+      .maybeSingle();
+    if (dup) {
+      return NextResponse.json({ ok: true, rentalId: (dup as { id: number }).id, duplicate: true });
+    }
+  }
+
   const { data: created, error } = await supabase
     .from("crm_rentals")
     .insert({
@@ -128,10 +149,12 @@ export async function POST(request: Request) {
     0,
     (Number(body.price_won) || 0) - Math.max(0, Math.floor(Number(body.discount_won) || 0))
   );
-  // 결제일(paid_at) = 이용 시작일(구매일). 오늘 등록해도 구매일은 시작일 기준.
-  const rentalPaidAt = /^\d{4}-\d{2}-\d{2}$/.test(body.start_date ?? "")
-    ? new Date(`${body.start_date}T12:00:00+09:00`).toISOString()
-    : new Date().toISOString();
+  // 결제일(paid_at): 당일 구매면 실제 결제 시각, 과거 시작일(백데이트)이면 그 시작일(정오).
+  const rentalTodayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const rentalPaidAt =
+    /^\d{4}-\d{2}-\d{2}$/.test(body.start_date ?? "") && (body.start_date as string) < rentalTodayKst
+      ? new Date(`${body.start_date}T12:00:00+09:00`).toISOString()
+      : new Date().toISOString();
   await supabase.from("crm_payments").insert({
     center_id: ctx.centerId,
     member_id: memberId,

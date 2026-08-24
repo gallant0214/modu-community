@@ -184,11 +184,14 @@ export async function POST(request: Request) {
       .eq("center_id", ctx.centerId);
   }
 
-  // 초기 결제 금액이 있으면 payment 기록 추가. 결제일(paid_at) = 구매일(purchased_at).
+  // 결제일(paid_at): 당일 구매면 실제 결제 시각, 과거 날짜면 그 구매일(정오).
   const purchasedYmd = /^\d{4}-\d{2}-\d{2}$/.test(body.purchased_at ?? "")
     ? (body.purchased_at as string)
     : body.start_date || kstYmd();
-  const paidAtIso = new Date(`${purchasedYmd}T12:00:00+09:00`).toISOString();
+  const paidAtIso =
+    purchasedYmd < kstYmd()
+      ? new Date(`${purchasedYmd}T12:00:00+09:00`).toISOString()
+      : new Date().toISOString();
   if (paidAmount > 0) {
     await supabase.from("crm_payments").insert({
       center_id: ctx.centerId,
