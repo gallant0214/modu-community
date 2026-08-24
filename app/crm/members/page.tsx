@@ -60,7 +60,15 @@ interface MemberRow {
   foreign?: boolean;
 }
 
-type StatusFilter = "all" | "valid" | "scheduled" | "expired" | "hold" | "expiring";
+type StatusFilter =
+  | "all"
+  | "valid"
+  | "valid_membership"
+  | "valid_pass"
+  | "scheduled"
+  | "expired"
+  | "hold"
+  | "expiring";
 /** 만료 임박 기준 일수 */
 const EXPIRING_DAYS = 7;
 type SignupFilter = "all" | "this_week" | "this_month" | "this_year" | "custom";
@@ -214,6 +222,23 @@ const hasHoldings = (m: MemberRow): boolean =>
   !!m.current_pass ||
   !!m.current_rental;
 
+// 유효 회원권 보유 여부: 실제 items(type=membership) 우선, 없으면 POS 스냅샷
+const hasValidMembership = (m: MemberRow, todayStr: string): boolean => {
+  if ((m.items?.length ?? 0) > 0) {
+    return (m.items ?? []).some((it) => it.type === "membership" && !!it.expires && it.expires >= todayStr);
+  }
+  const eff = effExpiry(m);
+  return !!m.current_membership && !!eff && eff >= todayStr && !m.scheduled;
+};
+// 유효 수강권 보유 여부: 실제 items(type=lesson) 우선, 없으면 POS 스냅샷
+const hasValidPass = (m: MemberRow, todayStr: string): boolean => {
+  if ((m.items?.length ?? 0) > 0) {
+    return (m.items ?? []).some((it) => it.type === "lesson" && !!it.expires && it.expires >= todayStr);
+  }
+  const eff = effExpiry(m);
+  return !!m.current_pass && !!eff && eff >= todayStr && !m.scheduled;
+};
+
 // ymd 문자열에 일수 더하기
 const addDaysYmd = (ymd: string, n: number): string => {
   const d = new Date(`${ymd}T00:00:00Z`);
@@ -236,6 +261,10 @@ const matchStatus = (m: MemberRow, filter: StatusFilter, todayStr: string): bool
   switch (filter) {
     case "valid":
       return activeNow;
+    case "valid_membership":
+      return hasValidMembership(m, todayStr);
+    case "valid_pass":
+      return hasValidPass(m, todayStr);
     case "scheduled":
       return !!m.scheduled;
     case "expired":
@@ -278,7 +307,7 @@ export default function CrmMembersPage() {
   const [fStatus, setFStatus] = useState<StatusFilter>(() => {
     if (memoUi) return memoUi.fStatus;
     const v = searchParamsHook.get("status");
-    const allowed: StatusFilter[] = ["valid", "scheduled", "expired", "hold", "expiring"];
+    const allowed: StatusFilter[] = ["valid", "valid_membership", "valid_pass", "scheduled", "expired", "hold", "expiring"];
     return allowed.includes(v as StatusFilter) ? (v as StatusFilter) : "all";
   });
   const [fSignup, setFSignup] = useState<SignupFilter>(() => {
@@ -752,18 +781,22 @@ export default function CrmMembersPage() {
   const totals = useMemo(() => {
     const todayStr = today().toISOString().slice(0, 10);
     let valid = 0;
+    let validMembership = 0;
+    let validPass = 0;
     let scheduled = 0;
     let expired = 0;
     let hold = 0;
     let expiring = 0;
     for (const m of list) {
       if (matchStatus(m, "valid", todayStr)) valid += 1;
+      if (hasValidMembership(m, todayStr)) validMembership += 1;
+      if (hasValidPass(m, todayStr)) validPass += 1;
       if (matchStatus(m, "scheduled", todayStr)) scheduled += 1;
       if (matchStatus(m, "expired", todayStr)) expired += 1;
       if (matchStatus(m, "hold", todayStr)) hold += 1;
       if (matchStatus(m, "expiring", todayStr)) expiring += 1;
     }
-    return { all: list.length, valid, scheduled, expired, hold, expiring };
+    return { all: list.length, valid, validMembership, validPass, scheduled, expired, hold, expiring };
   }, [list]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
@@ -1039,7 +1072,8 @@ export default function CrmMembersPage() {
       {/* 통계 카드 = 상태 필터. 누르면 회원 목록이 해당 상태로 필터링됨 */}
       <div className="mb-4 grid grid-cols-3 md:grid-cols-6 gap-2">
         <StatCard label="전체 회원" value={totals.all} active={fStatus === "all"} onClick={() => setFStatus("all")} />
-        <StatCard label="유효" value={totals.valid} tone="ok" active={fStatus === "valid"} onClick={() => setFStatus("valid")} />
+        <StatCard label="수강권 유효" value={totals.validPass} tone="ok" active={fStatus === "valid_pass"} onClick={() => setFStatus("valid_pass")} />
+        <StatCard label="회원권 유효" value={totals.validMembership} tone="ok" active={fStatus === "valid_membership"} onClick={() => setFStatus("valid_membership")} />
         <StatCard label="예정" value={totals.scheduled} tone="info" active={fStatus === "scheduled"} onClick={() => setFStatus("scheduled")} />
         <StatCard label="만료" value={totals.expired} tone="warn" active={fStatus === "expired"} onClick={() => setFStatus("expired")} />
         <StatCard label="홀딩" value={totals.hold} tone="hold" active={fStatus === "hold"} onClick={() => setFStatus("hold")} />
