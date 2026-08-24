@@ -42,7 +42,8 @@ export async function GET(request: Request) {
     .from("crm_reservations")
     .select("id, starts_at, status, member_id, trainer_member_id, pass_id")
     .eq("center_id", ctx.centerId)
-    .in("status", ["attended", "noshow"])
+    // 진행분(출석·노쇼) + 예약(확정) 전체. 취소·거절·요청대기 제외.
+    .in("status", ["booked", "attended", "noshow"])
     .gte("starts_at", fromUtc)
     .lt("starts_at", toUtc)
     .order("starts_at", { ascending: true })
@@ -103,10 +104,11 @@ export async function GET(request: Request) {
 
   const attended = lessons.filter((l) => l.status === "attended").length;
   const noshow = lessons.filter((l) => l.status === "noshow").length;
+  const booked = lessons.filter((l) => l.status === "booked").length;
 
   return NextResponse.json({
     lessons,
-    summary: { total: lessons.length, attended, noshow },
+    summary: { total: lessons.length, attended, noshow, booked },
     full_view: isFullView,
   });
 }

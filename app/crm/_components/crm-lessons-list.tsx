@@ -50,11 +50,11 @@ export function CrmLessonsList() {
   const [from, setFrom] = useState(() => localYmd(new Date(now.getFullYear(), now.getMonth(), 1)));
   const [to, setTo] = useState(() => localYmd(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
   const [trainerId, setTrainerId] = useState<number | "">("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "attended" | "noshow">("all"); // 상태 필터(기본 전체)
+  const [statusFilter, setStatusFilter] = useState<"all" | "booked" | "attended" | "noshow">("all"); // 상태 필터(기본 전체)
   const [memberQuery, setMemberQuery] = useState(""); // 회원명/연락처 검색(클라이언트)
   const [staff, setStaff] = useState<StaffLite[]>([]);
   const [rows, setRows] = useState<LessonRow[]>([]);
-  const [summary, setSummary] = useState<{ total: number; attended: number; noshow: number } | null>(null);
+  const [summary, setSummary] = useState<{ total: number; attended: number; noshow: number; booked: number } | null>(null);
   const [fullView, setFullView] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -153,10 +153,11 @@ export function CrmLessonsList() {
           상태
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as "all" | "attended" | "noshow")}
+            onChange={(e) => setStatusFilter(e.target.value as "all" | "booked" | "attended" | "noshow")}
             className={inputCls}
           >
             <option value="all">전체</option>
+            <option value="booked">예약</option>
             <option value="attended">출석</option>
             <option value="noshow">노쇼</option>
           </select>
@@ -192,6 +193,9 @@ export function CrmLessonsList() {
           <span className="px-2.5 py-1 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 text-[#3A342A] dark:text-zinc-300 font-semibold">
             총 {summary.total}건
           </span>
+          <span className="px-2.5 py-1 rounded-full bg-[#5A8BB0]/12 text-[#487596] dark:bg-[#5A8BB0]/20 dark:text-[#8FB7D4] font-semibold">
+            예약 {summary.booked}
+          </span>
           <span className="px-2.5 py-1 rounded-full bg-[#EFE7D5] text-[#6B7B3A] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A] font-semibold">
             출석 {summary.attended}
           </span>
@@ -209,7 +213,7 @@ export function CrmLessonsList() {
             ? "해당 기간에 진행된 수업이 없어요."
             : mq
               ? `'${memberQuery.trim()}' 회원의 수업이 없어요.`
-              : `해당 기간에 '${statusFilter === "attended" ? "출석" : "노쇼"}' 수업이 없어요.`}
+              : `해당 기간에 '${statusFilter === "attended" ? "출석" : statusFilter === "noshow" ? "노쇼" : "예약"}' 수업이 없어요.`}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-[#E8E0D0] dark:border-zinc-800">
@@ -249,7 +253,9 @@ export function CrmLessonsList() {
                       className={`px-2 py-0.5 rounded text-[11.5px] font-semibold ${
                         r.status === "attended"
                           ? "bg-[#EFE7D5] text-[#6B7B3A] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A]"
-                          : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                          : r.status === "noshow"
+                            ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                            : "bg-[#5A8BB0]/12 text-[#487596] dark:bg-[#5A8BB0]/20 dark:text-[#8FB7D4]"
                       }`}
                     >
                       {RESERVATION_STATUS_LABEL[r.status] ?? r.status}
