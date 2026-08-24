@@ -3788,6 +3788,7 @@ interface MembershipRow {
   outstanding_won: number;
   payment_status: string;
   is_paused?: boolean;
+  attendance_mileage_earn?: number;
   created_at: string;
 }
 interface RentalRow {
@@ -3831,6 +3832,8 @@ interface PaymentDetail {
   paymentStatus?: string | null;
   mileageEarned?: number | null;
   mileageUsed?: number | null;
+  /** 출석 시 적립 마일리지(이 발급 건 스냅샷). 회원권 편집에서 개별 수정 */
+  attendanceMileageEarn?: number | null;
   sellerName?: string | null;
   paidAt?: string | null;
   memo?: string | null;
@@ -3868,6 +3871,7 @@ function membershipToDetail(
     paymentStatus: m.payment_status,
     mileageEarned: m.mileage_earned,
     mileageUsed: m.mileage_used,
+    attendanceMileageEarn: m.attendance_mileage_earn ?? 0,
     sellerName: sellerName(m.seller_member_id),
     paidAt: m.created_at,
     memo: m.memo,
@@ -4217,6 +4221,9 @@ function HoldingDetailModal({
   const [eStart, setEStart] = useState("");
   const [eExpires, setEExpires] = useState("");
   const [eMemo, setEMemo] = useState("");
+  // 출석 마일리지 적립 (이 회원의 이 회원권에만 개별 적용 — 스냅샷)
+  const [eMileageOn, setEMileageOn] = useState(false);
+  const [eMileageAmount, setEMileageAmount] = useState(0);
 
   // 락커 배정 (미배정 락커 대여권 전용) — 구역 선택 → 배치도에서 빈 락커 선택
   const [lockerAssignOpen, setLockerAssignOpen] = useState(false);
@@ -4455,6 +4462,8 @@ function HoldingDetailModal({
     setEStart(detail.startDate ?? "");
     setEExpires(detail.expiresAt ?? "");
     setEMemo(detail.memo ?? "");
+    setEMileageAmount(detail.attendanceMileageEarn ?? 0);
+    setEMileageOn((detail.attendanceMileageEarn ?? 0) > 0);
     setError("");
     setEditing(true);
   };
@@ -4485,6 +4494,9 @@ function HoldingDetailModal({
           start_date: eStart || undefined,
           expires_at: eExpires || undefined,
           memo: eMemo,
+          ...(detail.kind === "membership"
+            ? { attendance_mileage_earn: eMileageOn ? Math.max(0, eMileageAmount) : 0 }
+            : {}),
         }),
       });
       const data = await res.json();
@@ -4714,6 +4726,39 @@ function HoldingDetailModal({
                   onChange={(e) => setEMemo(e.target.value)}
                 />
               </CrmField>
+
+              {/* 출석 마일리지 적립 — 이 회원의 이 회원권에만 개별 적용 */}
+              {detail.kind === "membership" && (
+                <div className="rounded-lg border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/50 dark:bg-zinc-900/40 p-3 space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={eMileageOn}
+                      onChange={(e) => setEMileageOn(e.target.checked)}
+                      className="w-4 h-4 accent-[#6B7B3A]"
+                    />
+                    <span className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                      출석 시 마일리지 적립
+                    </span>
+                  </label>
+                  {eMileageOn && (
+                    <CrmField label="1회 출석당 적립(P)">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        className={`${crmInputClass} text-left`}
+                        value={eMileageAmount ? formatWon(eMileageAmount) + "P" : ""}
+                        onChange={(e) => setEMileageAmount(parseWon(e.target.value))}
+                        placeholder="0P"
+                      />
+                    </CrmField>
+                  )}
+                  <p className="text-[11.5px] text-[#A89B80] leading-relaxed">
+                    이 설정은 <strong>이 회원의 이 회원권에만</strong> 적용돼요(상품 원본·다른 회원과 무관).
+                  </p>
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <button
                   onClick={saveEdit}
