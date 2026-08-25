@@ -2014,17 +2014,13 @@ function MemberReservationsSection({ memberId }: { memberId: number }) {
               const eD = new Date(r.ends_at);
               const eK = new Date(eD.getTime() + 9 * 3600 * 1000);
               const hmE = `${String(eK.getUTCHours()).padStart(2, "0")}:${String(eK.getUTCMinutes()).padStart(2, "0")}`;
-              // 수강권 선택 시: 몇 번째 수업인지 번호 표시 (오래된 것 = 1번, 최신순 목록이므로 뒤에서부터 카운트)
-              const ordinal = selectedPassId != null ? filteredRows.length - i : null;
               return (
                 <li key={r.id} className="px-4 py-2.5">
                   <div className="flex items-baseline justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 min-w-0">
-                      {ordinal != null && (
-                        <span className="shrink-0 inline-flex items-center justify-center min-w-[22px] h-[22px] px-1 rounded-full bg-[#6B7B3A]/12 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A] text-[11px] font-bold tabular-nums">
-                          {ordinal}
-                        </span>
-                      )}
+                      <span className="shrink-0 font-bold text-[#6B7B3A] dark:text-[#A8B87A] text-[12.5px] tabular-nums">
+                        [{i + 1}]
+                      </span>
                       <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
                         {dateStr}
                       </span>
@@ -2344,7 +2340,7 @@ function MemberAttendanceSection({ memberId }: { memberId: number }) {
           </div>
         ) : (
           <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800 max-h-[520px] overflow-y-auto">
-            {rows.map((r) => {
+            {rows.map((r, i) => {
               const d = new Date(r.checked_in_at);
               const k = new Date(d.getTime() + 9 * 3600 * 1000);
               const dateStr = `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")}`;
@@ -2353,6 +2349,9 @@ function MemberAttendanceSection({ memberId }: { memberId: number }) {
                 <li key={r.id} className="px-4 py-2.5">
                   <div className="flex items-baseline justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 min-w-0">
+                      <span className="shrink-0 font-bold text-[#6B7B3A] dark:text-[#A8B87A] text-[12.5px] tabular-nums">
+                        [{i + 1}]
+                      </span>
                       <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
                         {dateStr}
                       </span>
@@ -8435,12 +8434,15 @@ function PassDetailModal({
               </div>
             ) : (
               <ul className="space-y-1.5 max-h-[200px] overflow-y-auto">
-                {detail.reservations.map((r) => (
+                {detail.reservations.map((r, i) => (
                   <li
                     key={r.id}
                     className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-[#E8E0D0]/60 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 text-[12.5px]"
                   >
                     <span className="text-[#3A342A] dark:text-zinc-300">
+                      <span className="mr-1.5 font-bold text-[#6B7B3A] dark:text-[#A8B87A] tabular-nums">
+                        [{i + 1}]
+                      </span>
                       {formatDateRange(r.starts_at, r.ends_at)}
                     </span>
                     <span className="flex items-center gap-1.5 text-[#8C8270] dark:text-zinc-500">
