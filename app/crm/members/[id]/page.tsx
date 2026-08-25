@@ -109,8 +109,10 @@ export default function CrmMemberDetailPage() {
   >([]);
   const [bodyOpen, setBodyOpen] = useState(false);
   const [bodyReload, setBodyReload] = useState(0);
-  // 탭: 정보 / 예약내역 / 결제내역 / 로그
-  const [tab, setTab] = useState<"info" | "reservations" | "payments" | "workout" | "logs">("info");
+  // 탭: 정보 / 예약내역 / 출석내역 / 결제내역 / 로그
+  const [tab, setTab] = useState<
+    "info" | "reservations" | "attendance" | "payments" | "workout" | "logs"
+  >("info");
   // 현재 유저 권한 (members.edit_basic / members.edit_usage / members.delete)
   const [perms, setPerms] = useState<Record<string, boolean>>({});
   // 로그인 직원 본인 center_member_id — 발급 시 판매자 기본값
@@ -430,9 +432,9 @@ export default function CrmMemberDetailPage() {
         </div>
       </header>
 
-      {/* 탭: 정보 / 예약내역 / 결제내역 / 운동기록 / 로그 */}
+      {/* 탭: 정보 / 예약내역 / 출석내역 / 결제내역 / 운동기록 / 로그 */}
       <div className="mb-4 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800">
-        {(["info", "reservations", "payments", "workout", "logs"] as const).map((t) => (
+        {(["info", "reservations", "attendance", "payments", "workout", "logs"] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -447,11 +449,13 @@ export default function CrmMemberDetailPage() {
               ? "정보"
               : t === "reservations"
                 ? "예약내역"
-                : t === "payments"
-                  ? "결제내역"
-                  : t === "workout"
-                    ? "운동기록"
-                    : "로그"}
+                : t === "attendance"
+                  ? "출석내역"
+                  : t === "payments"
+                    ? "결제내역"
+                    : t === "workout"
+                      ? "운동기록"
+                      : "로그"}
           </button>
         ))}
       </div>
@@ -480,6 +484,8 @@ export default function CrmMemberDetailPage() {
         />
       ) : tab === "reservations" ? (
         <MemberReservationsSection memberId={member.id} />
+      ) : tab === "attendance" ? (
+        <MemberAttendanceSection memberId={member.id} />
       ) : tab === "workout" ? (
         <MemberWorkoutLogsSection memberId={member.id} canEdit={canEditUsage} />
       ) : (
@@ -2175,6 +2181,285 @@ function MiniMonthCalendar({
                       {hasNoShow && <span className="w-1.5 h-1.5 rounded-full bg-red-500" title="노쇼" />}
                       {hasCancel && <span className="w-1.5 h-1.5 rounded-full bg-[#A89B80]" title="예약 취소" />}
                       {hasBooked && <span className="w-1.5 h-1.5 rounded-full bg-[#6B7B3A]" title="예약" />}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── 회원 출석내역 (달력 + 리스트 + 통계) ────────────────────────────── */
+
+interface AttendanceRow {
+  id: number;
+  checked_in_at: string;
+  source: string | null;
+  note: string | null;
+}
+
+const SOURCE_LABEL_A: Record<string, string> = {
+  touch: "터치출석",
+  kiosk: "키오스크",
+  face: "얼굴인식",
+  manual: "수동",
+  app: "앱",
+  qr: "QR",
+};
+const SOURCE_STYLE_A: Record<string, string> = {
+  touch: "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]",
+  kiosk: "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
+  face: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+  manual: "bg-[#F5F0E5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-400",
+  app: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+  qr: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+};
+
+function MemberAttendanceSection({ memberId }: { memberId: number }) {
+  const { getIdToken } = useAuth();
+  const [rows, setRows] = useState<AttendanceRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [monthYm, setMonthYm] = useState(() => {
+    const d = new Date();
+    const k = new Date(d.getTime() + 9 * 3600 * 1000);
+    return `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}`;
+  });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+        const res = await fetch(`/api/crm/members/${memberId}/attendances`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "조회 실패");
+        setRows(data.attendances ?? []);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "네트워크 오류");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [memberId, getIdToken]);
+
+  const kstDate = (iso: string) => {
+    const d = new Date(iso);
+    const k = new Date(d.getTime() + 9 * 3600 * 1000);
+    return `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")}`;
+  };
+
+  // 하루 1건만 카운트하는 유니크 출석일 수
+  const uniqueDays = new Set(rows.map((r) => kstDate(r.checked_in_at)));
+  const monthCount = rows.filter((r) => kstDate(r.checked_in_at).slice(0, 7) === monthYm).length;
+  const monthDays = new Set(
+    rows.filter((r) => kstDate(r.checked_in_at).slice(0, 7) === monthYm).map((r) => kstDate(r.checked_in_at))
+  ).size;
+
+  const shiftMonth = (delta: number) => {
+    const [y, m] = monthYm.split("-").map(Number);
+    const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+    setMonthYm(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
+  };
+
+  const prevYm = (() => {
+    const [y, m] = monthYm.split("-").map(Number);
+    const d = new Date(Date.UTC(y, m - 2, 1));
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  })();
+
+  if (loading) return <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>;
+  if (error)
+    return (
+      <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+        {error}
+      </div>
+    );
+
+  const today = (() => {
+    const now = new Date();
+    const k = new Date(now.getTime() + 9 * 3600 * 1000);
+    return `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")}`;
+  })();
+
+  return (
+    <div className="space-y-4">
+      {/* 통계 카드 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <StatMini label="총 출석" value={rows.length} tone="olive" />
+        <StatMini label="출석일 수" value={uniqueDays.size} tone="emerald" />
+        <StatMini label={`${monthYm.slice(5)}월 출석`} value={monthCount} tone="amber" />
+        <StatMini label={`${monthYm.slice(5)}월 출석일`} value={monthDays} tone="gray" />
+      </div>
+
+      {/* 달력: 전 달 + 이번달 좌우 */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => shiftMonth(-1)}
+          className="px-2 py-1 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 hover:text-[#3A342A]"
+        >
+          ‹ 이전
+        </button>
+        <div className="text-[11.5px] text-[#8C8270]">
+          <LegendDot color="bg-emerald-500" label="출석" />
+        </div>
+        <button
+          type="button"
+          onClick={() => shiftMonth(1)}
+          className="px-2 py-1 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 hover:text-[#3A342A]"
+        >
+          다음 ›
+        </button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <MiniAttendanceCalendar ymStr={prevYm} rows={rows} kstDate={kstDate} today={today} muted />
+        <MiniAttendanceCalendar ymStr={monthYm} rows={rows} kstDate={kstDate} today={today} />
+      </div>
+
+      {/* 리스트 (전체 최근 500건) */}
+      <div>
+        <div className="mb-2 flex items-center justify-between gap-2 flex-wrap">
+          <div className="text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            출석 이력 ({rows.length}건, 최신순)
+          </div>
+        </div>
+        {rows.length === 0 ? (
+          <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+            출석 내역이 없습니다.
+          </div>
+        ) : (
+          <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800 max-h-[520px] overflow-y-auto">
+            {rows.map((r) => {
+              const d = new Date(r.checked_in_at);
+              const k = new Date(d.getTime() + 9 * 3600 * 1000);
+              const dateStr = `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")}`;
+              const hm = `${String(k.getUTCHours()).padStart(2, "0")}:${String(k.getUTCMinutes()).padStart(2, "0")}`;
+              return (
+                <li key={r.id} className="px-4 py-2.5">
+                  <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                        {dateStr}
+                      </span>
+                      <span className="text-[12px] text-[#8C8270]">{hm}</span>
+                      {r.source && (
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10.5px] font-semibold ${SOURCE_STYLE_A[r.source] ?? "bg-[#F5F0E5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-400"}`}
+                        >
+                          {SOURCE_LABEL_A[r.source] ?? r.source}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {r.note && (
+                    <div className="mt-0.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+                      {r.note}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 출석내역 탭에서 쓰는 미니 월 달력. (예약내역 달력과 동일 레이아웃)
+ * ymStr='YYYY-MM' 기준 해당 월 셀 렌더. muted=true 이면 전 달용 옅은 톤.
+ */
+function MiniAttendanceCalendar({
+  ymStr,
+  rows,
+  kstDate,
+  today,
+  muted,
+}: {
+  ymStr: string;
+  rows: AttendanceRow[];
+  kstDate: (iso: string) => string;
+  today: string;
+  muted?: boolean;
+}) {
+  const [yy, mm] = ymStr.split("-").map(Number);
+  const daysInMonthMap = new Map<string, AttendanceRow[]>();
+  for (const r of rows) {
+    const d = kstDate(r.checked_in_at);
+    if (d.slice(0, 7) !== ymStr) continue;
+    const list = daysInMonthMap.get(d) ?? [];
+    list.push(r);
+    daysInMonthMap.set(d, list);
+  }
+  const firstDay = new Date(Date.UTC(yy, mm - 1, 1));
+  const startWeekday = firstDay.getUTCDay();
+  const lastDate = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+  const cells: Array<{ date: string | null; day: number | null }> = [];
+  for (let i = 0; i < startWeekday; i += 1) cells.push({ date: null, day: null });
+  for (let d = 1; d <= lastDate; d += 1) {
+    const ymd = `${yy}-${String(mm).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    cells.push({ date: ymd, day: d });
+  }
+  while (cells.length % 7 !== 0) cells.push({ date: null, day: null });
+
+  return (
+    <div
+      className={`rounded-xl border border-[#E8E0D0] dark:border-zinc-800 overflow-hidden ${
+        muted ? "bg-[#FBF7EB]/50 dark:bg-zinc-900/40" : "bg-[#FEFCF7] dark:bg-zinc-900"
+      }`}
+    >
+      <div className="px-3 py-2 border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60 text-center text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+        {yy}년 {mm}월
+      </div>
+      <div className="grid grid-cols-7 text-[11px] text-[#8C8270] border-b border-[#E8E0D0]/60 dark:border-zinc-800">
+        {["일", "월", "화", "수", "목", "금", "토"].map((d, i) => (
+          <div
+            key={i}
+            className={`px-1 py-1.5 text-center ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : ""}`}
+          >
+            {d}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7">
+        {cells.map((c, i) => {
+          const list = c.date ? daysInMonthMap.get(c.date) ?? [] : [];
+          const isToday = c.date === today;
+          const wd = i % 7;
+          return (
+            <div
+              key={i}
+              className={`min-h-[48px] p-1 border-t border-l border-[#E8E0D0]/40 dark:border-zinc-800/60 ${
+                isToday ? "bg-[#6B7B3A]/10" : ""
+              } ${muted && !list.length ? "opacity-70" : ""}`}
+              title={list.length ? `${c.date} · 출석 ${list.length}건` : undefined}
+            >
+              {c.day && (
+                <>
+                  <div
+                    className={`text-[10.5px] font-medium ${
+                      wd === 0 ? "text-red-500" : wd === 6 ? "text-blue-500" : "text-[#3A342A] dark:text-zinc-300"
+                    }`}
+                  >
+                    {c.day}
+                  </div>
+                  {list.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-0.5 items-center">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="출석" />
+                      {list.length > 1 && (
+                        <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                          {list.length}
+                        </span>
+                      )}
                     </div>
                   )}
                 </>
