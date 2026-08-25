@@ -893,12 +893,11 @@ export default function CrmLockersPage() {
 
       <MoveLockerModal
         source={moveSource}
-        candidates={lockers.filter((l) => l.state === "unassigned" && l.id !== moveSource?.id)}
-        zoneName={currentZone?.name ?? ""}
+        sourceZoneName={currentZone?.name ?? ""}
         onClose={() => setMoveSource(null)}
         onDone={() => {
           setMoveSource(null);
-          loadLockers();
+          loadLockers(true);
         }}
       />
     </div>
@@ -909,28 +908,81 @@ export default function CrmLockersPage() {
 
 function MoveLockerModal({
   source,
-  candidates,
-  zoneName,
+  sourceZoneName,
   onClose,
   onDone,
 }: {
   source: Locker | null;
-  candidates: Locker[];
-  zoneName: string;
+  sourceZoneName: string;
   onClose: () => void;
   onDone: () => void;
 }) {
   const { getIdToken } = useAuth();
+  const [vacant, setVacant] = useState<
+    { id: number; zone_id: number; zone_name: string; number: number }[]
+  >([]);
+  const [loading, setLoading] = useState(false);
+  const [zoneId, setZoneId] = useState<number | "">("");
   const [targetId, setTargetId] = useState<number | "">("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // 열릴 때 전체 락커룸의 빈 락커 조회 (구역 넘나드는 이동 지원)
   useEffect(() => {
     if (!source) {
       setTargetId("");
+      setZoneId("");
       setError("");
+      setVacant([]);
+      return;
     }
-  }, [source]);
+    (async () => {
+      setLoading(true);
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/lockers/vacant", {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setVacant(data.lockers ?? []);
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [source, getIdToken]);
+
+  // 빈 락커가 있는 구역만 옵션으로 (구역별 빈 락커 수 포함)
+  const zoneOptions = useMemo(() => {
+    const m = new Map<number, { id: number; name: string; count: number }>();
+    for (const v of vacant) {
+      if (v.id === source?.id) continue;
+      const cur = m.get(v.zone_id);
+      if (cur) cur.count += 1;
+      else m.set(v.zone_id, { id: v.zone_id, name: v.zone_name, count: 1 });
+    }
+    return Array.from(m.values());
+  }, [vacant, source?.id]);
+
+  // 기본 선택 구역 = 원본 구역(이름 일치, 빈 락커 있으면), 없으면 첫 구역
+  useEffect(() => {
+    if (!source || zoneOptions.length === 0) return;
+    setZoneId((prev) => {
+      if (prev !== "" && zoneOptions.some((z) => z.id === prev)) return prev;
+      const same = zoneOptions.find((z) => z.name === sourceZoneName);
+      return (same ?? zoneOptions[0]).id;
+    });
+  }, [source, zoneOptions, sourceZoneName]);
+
+  // 구역이 바뀌면 대상 락커 선택 초기화
+  useEffect(() => {
+    setTargetId("");
+  }, [zoneId]);
+
+  const targets =
+    zoneId === "" ? [] : vacant.filter((v) => v.zone_id === zoneId && v.id !== source?.id);
 
   if (!source) return null;
 
@@ -959,14 +1011,41 @@ function MoveLockerModal({
     <CrmModal open={source !== null} onClose={onClose} title={`락커 ${source.number}번 이동`} size="md">
       <div className="space-y-3.5">
         <div className="px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[13px] text-[#3A342A] dark:text-zinc-300">
-          <strong>{source.member?.name ?? "회원"}</strong>의 정보를{" "}
-          <strong>{zoneName}</strong>의 다른 락커로 옮깁니다.
+          <strong>{source.member?.name ?? "회원"}</strong>의 정보를 다른 락커로 옮깁니다. (다른 락커룸으로도 이동할 수 있어요)
         </div>
 
-        <CrmField label="이동할 락커 번호" required>
-          {candidates.length === 0 ? (
+        <CrmField label="락커룸(구역)" required>
+          {loading ? (
             <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#8C8270] text-center">
-              현재 락커룸에 비어있는 락커가 없어요. 다른 락커룸으로의 이동은 곧 추가됩니다.
+              불러오는 중…
+            </div>
+          ) : zoneOptions.length === 0 ? (
+            <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#8C8270] text-center">
+              비어있는 락커가 있는 락커룸이 없어요.
+            </div>
+          ) : (
+            <select
+              className={crmInputClass}
+              value={zoneId}
+              onChange={(e) => setZoneId(e.target.value ? Number(e.target.value) : "")}
+            >
+              {zoneOptions.map((z) => (
+                <option key={z.id} value={z.id}>
+                  {z.name} (빈 락커 {z.count}개)
+                </option>
+              ))}
+            </select>
+          )}
+        </CrmField>
+
+        <CrmField label="이동할 락커 번호" required>
+          {zoneId === "" ? (
+            <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#8C8270] text-center">
+              먼저 락커룸을 선택해 주세요.
+            </div>
+          ) : targets.length === 0 ? (
+            <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#8C8270] text-center">
+              이 락커룸에 비어있는 락커가 없어요.
             </div>
           ) : (
             <select
@@ -975,7 +1054,7 @@ function MoveLockerModal({
               onChange={(e) => setTargetId(e.target.value ? Number(e.target.value) : "")}
             >
               <option value="">선택해 주세요</option>
-              {candidates.map((c) => (
+              {targets.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.number}번 (미배정)
                 </option>
@@ -998,7 +1077,7 @@ function MoveLockerModal({
           </button>
           <button
             onClick={submit}
-            disabled={submitting || !targetId || candidates.length === 0}
+            disabled={submitting || !targetId || targets.length === 0}
             className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
           >
             {submitting ? "이동 중…" : "이동"}
