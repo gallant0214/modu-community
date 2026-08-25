@@ -151,25 +151,33 @@ export default function CrmLockersPage() {
     }
   }, [getIdToken]);
 
-  const loadLockers = useCallback(async () => {
-    setLoadingLockers(true);
-    setError("");
-    try {
-      const token = await getIdToken();
-      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch(`/api/crm/lockers?zone=${zone}`, {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "조회 실패");
-      setLockers(data.lockers ?? []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "네트워크 오류");
-    } finally {
-      setLoadingLockers(false);
-    }
-  }, [getIdToken, zone]);
+  // silent=true 면 로딩 스피너(그리드 blank) 없이 데이터만 갱신 → 왼쪽 칸만 부분 새로고침되는 느낌.
+  // 갱신된 락커 목록을 반환(호출측에서 선택 락커 최신화에 사용).
+  const loadLockers = useCallback(
+    async (silent = false): Promise<Locker[] | null> => {
+      if (!silent) setLoadingLockers(true);
+      setError("");
+      try {
+        const token = await getIdToken();
+        if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+        const res = await fetch(`/api/crm/lockers?zone=${zone}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "조회 실패");
+        const list = (data.lockers ?? []) as Locker[];
+        setLockers(list);
+        return list;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "네트워크 오류");
+        return null;
+      } finally {
+        if (!silent) setLoadingLockers(false);
+      }
+    },
+    [getIdToken, zone]
+  );
 
   useEffect(() => {
     loadZones();
@@ -683,9 +691,15 @@ export default function CrmLockersPage() {
                 locker={pickedLocker}
                 today={today}
                 onClose={() => setPickedLocker(null)}
-                onDone={() => {
-                  setPickedLocker(null);
-                  loadLockers();
+                onDone={async (opts) => {
+                  // 왼쪽 그리드만 조용히 갱신(전체 화면 새로고침 X).
+                  const list = await loadLockers(true);
+                  if (opts?.keepOpen && list) {
+                    // 배정 유지 액션(비번/메모/수리)은 상세 패널을 최신 데이터로 유지.
+                    setPickedLocker(list.find((l) => l.id === pickedLocker?.id) ?? null);
+                  } else {
+                    setPickedLocker(null);
+                  }
                 }}
                 onMove={(l) => {
                   setPickedLocker(null);
@@ -862,9 +876,13 @@ export default function CrmLockersPage() {
           locker={pickedLocker}
           today={today}
           onClose={() => setPickedLocker(null)}
-          onDone={() => {
-            setPickedLocker(null);
-            loadLockers();
+          onDone={async (opts) => {
+            const list = await loadLockers(true);
+            if (opts?.keepOpen && list) {
+              setPickedLocker(list.find((l) => l.id === pickedLocker?.id) ?? null);
+            } else {
+              setPickedLocker(null);
+            }
           }}
           onMove={(l) => {
             setPickedLocker(null);
@@ -1798,7 +1816,7 @@ function LockerActionModal({
   locker: Locker | null;
   today: string;
   onClose: () => void;
-  onDone: () => void;
+  onDone: (opts?: { keepOpen?: boolean }) => void;
   onMove?: (locker: Locker) => void;
   variant?: "modal" | "panel";
 }) {
@@ -2018,7 +2036,9 @@ function LockerActionModal({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "실패");
-      onDone();
+      // 비밀번호·메모 저장(update)·수리상태 변경은 배정이 유지되므로 상세 패널을 열어둔 채 왼쪽만 갱신.
+      const keepOpen = action === "update" || action === "broken" || action === "repaired";
+      onDone({ keepOpen });
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
