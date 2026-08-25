@@ -111,16 +111,21 @@ export async function GET(
   const isUnlimited = (d?: string | null) =>
     !!d && (d.startsWith("9999") || d.startsWith("2999"));
 
-  // 최근 구매일 = crm_payments 최신 paid_at (KST 날짜)
+  // 최근 구매일 · 누적 결제금액 = crm_payments 실측 (컬럼값은 자동 갱신되지 않아 신뢰 X)
   const { data: pays } = await supabase
     .from("crm_payments")
-    .select("paid_at")
+    .select("paid_at, amount_won, status")
     .eq("center_id", targetCenterId)
-    .eq("member_id", memberId)
-    .order("paid_at", { ascending: false })
-    .limit(1);
-  const lastPaid = pays?.[0]?.paid_at
-    ? new Date(new Date(pays[0].paid_at as string).getTime() + 9 * 3600 * 1000)
+    .eq("member_id", memberId);
+  let lastPaidRaw: string | null = null;
+  let totalPaid = 0;
+  for (const p of (pays ?? []) as { paid_at: string | null; amount_won: number | null; status: string | null }[]) {
+    if (p.status === "cancelled") continue; // 환불/취소는 합계에서 제외
+    if (typeof p.amount_won === "number") totalPaid += p.amount_won;
+    if (p.paid_at && (!lastPaidRaw || p.paid_at > lastPaidRaw)) lastPaidRaw = p.paid_at;
+  }
+  const lastPaid = lastPaidRaw
+    ? new Date(new Date(lastPaidRaw).getTime() + 9 * 3600 * 1000)
         .toISOString()
         .slice(0, 10)
     : null;
@@ -192,6 +197,8 @@ export async function GET(
 
   const memberOut = {
     ...member,
+    // 결제 실측 우선(자동 갱신되지 않는 stored 값 대체). 결제 이력 없을 때만 stored 유지.
+    total_paid_won: (pays && pays.length > 0) ? totalPaid : (member.total_paid_won ?? 0),
     last_purchase_at: lastPaid ?? member.last_purchase_at,
     final_expire_at: finalExp ?? member.final_expire_at,
   };
