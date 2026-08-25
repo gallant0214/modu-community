@@ -1974,10 +1974,7 @@ function MemberReservationsSection({ memberId }: { memberId: number }) {
 
       {/* 리스트 (전체 최근 500건) */}
       <div>
-        <div className="mb-2 flex items-center justify-between gap-2 flex-wrap">
-          <div className="text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
-            예약 이력 ({filteredRows.length}건, 최신순)
-          </div>
+        <div className="mb-2 flex items-center gap-2 flex-wrap">
           {passOptions.length > 0 && (
             <select
               value={selectedPassId ?? ""}
@@ -1993,6 +1990,9 @@ function MemberReservationsSection({ memberId }: { memberId: number }) {
               ))}
             </select>
           )}
+          <div className="text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            예약 이력 ({filteredRows.length}건, 최신순)
+          </div>
         </div>
         {filteredRows.length === 0 ? (
           <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
