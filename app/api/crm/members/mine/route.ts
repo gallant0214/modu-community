@@ -68,16 +68,57 @@ export async function GET(request: Request) {
     let allowedIds: number[] | null = null;
     if (restricted) {
       // 🚨 수업 담당 기준만: 주강사(trainer_member_id) · 추가강사(co_trainer_ids).
-      // 판매자(seller_member_id)는 '판매만' 했을 뿐 수업 담당이 아니므로 제외
-      // (강사앱 멤버십 목록·예약 대상은 담당/추가강사 회원만 노출).
-      const { data: passes } = await supabase
+      // 판매자(seller_member_id)는 '판매만' 했을 뿐 수업 담당이 아니므로 제외.
+      // 🚨 담당 판정은 '유효 수강권' 기준: 회원이 유효 수강권을 가지면 그 유효 수강권의
+      //    담당/추가강사에게만 노출한다. 유효 수강권이 하나도 없는(만료) 회원은 가장 최근
+      //    수강권의 담당/추가강사에게만 노출(마지막 담당강사). → 과거 만료 수강권 담당이었던
+      //    강사에게 회원이 계속 따라붙는 누수 방지.
+      type P = {
+        id: number;
+        member_id: number | null;
+        status: string;
+        trainer_member_id: number | null;
+        co_trainer_ids: number[] | null;
+        expires_at: string | null;
+      };
+      const { data: cPasses } = await supabase
         .from("crm_passes")
-        .select("member_id")
-        .eq("center_id", m.center_id)
-        .or(
-          `trainer_member_id.eq.${m.id},co_trainer_ids.cs.{${m.id}}`
-        );
-      allowedIds = Array.from(new Set((passes ?? []).map((p) => p.member_id)));
+        .select("id, member_id, status, trainer_member_id, co_trainer_ids, expires_at")
+        .eq("center_id", m.center_id);
+      const trainersOf = (p: P): number[] => {
+        const arr: number[] = [];
+        if (p.trainer_member_id != null) arr.push(p.trainer_member_id);
+        for (const c of p.co_trainer_ids ?? []) arr.push(c);
+        return arr;
+      };
+      // 최신 = 만료일 desc, 동률이면 id desc
+      const isNewer = (a: P, b: P | null): boolean => {
+        if (!b) return true;
+        const ae = String(a.expires_at ?? ""),
+          be = String(b.expires_at ?? "");
+        if (ae !== be) return ae > be;
+        return a.id > b.id;
+      };
+      const byMember = new Map<number, { valid: boolean; validTrainers: Set<number>; latest: P | null }>();
+      for (const p of (cPasses ?? []) as P[]) {
+        if (p.member_id == null) continue;
+        const e = byMember.get(p.member_id) ?? { valid: false, validTrainers: new Set<number>(), latest: null };
+        if (p.status === "valid") {
+          e.valid = true;
+          for (const t of trainersOf(p)) e.validTrainers.add(t);
+        }
+        if (isNewer(p, e.latest)) e.latest = p;
+        byMember.set(p.member_id, e);
+      }
+      const allowed = new Set<number>();
+      for (const [mid, e] of byMember) {
+        if (e.valid) {
+          if (e.validTrainers.has(m.id)) allowed.add(mid);
+        } else if (e.latest && trainersOf(e.latest).includes(m.id)) {
+          allowed.add(mid);
+        }
+      }
+      allowedIds = [...allowed];
       if (allowedIds.length === 0) continue;
     }
 
