@@ -177,12 +177,11 @@ export async function GET(request: Request) {
         item_name: string | null;
         price_won: number;
         payment_method: string | null;
-        registration_type: string | null;
         start_date: string | null;
       }>((f, t) =>
         supabase
           .from("crm_rentals")
-          .select("member_id, item_name, price_won, payment_method, registration_type, start_date")
+          .select("member_id, item_name, price_won, payment_method, start_date")
           .eq("center_id", ctx.centerId)
           .gte("start_date", issuanceStart)
           .lt("start_date", nextMonth)
@@ -228,7 +227,7 @@ export async function GET(request: Request) {
         category: "대여권",
         amount_won: r.price_won ?? 0,
         payment_method: methodKo(r.payment_method),
-        registration_type: (r.registration_type ?? "").trim() || null,
+        registration_type: null,
         source: "issuance",
       });
     }
