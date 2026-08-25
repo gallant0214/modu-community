@@ -138,14 +138,12 @@ export async function GET(request: Request) {
       paginateAll<{
         price_won: number;
         payment_method: string | null;
-        issue_type?: string | null;
-        registration_type?: string | null;
-        purchased_at?: string | null;
         start_date?: string | null;
       }>((f, t) =>
+        // 주의: crm_memberships 에는 registration_type 컬럼이 없음(신규/재등록 미구분).
         supabase
           .from("crm_memberships")
-          .select("price_won, payment_method, registration_type, purchased_at, start_date")
+          .select("price_won, payment_method, start_date")
           .eq("center_id", ctx.centerId)
           .gte("start_date", issuanceStart)
           .lt("start_date", nextMonth)
@@ -211,9 +209,8 @@ export async function GET(request: Request) {
     };
 
     for (const m of issMemberships) {
-      const rt = (m.registration_type ?? "").trim();
-      const key = rt === "신규" ? "new" : rt === "재등록" ? "renewal" : "unknown";
-      applyIssuance(m.price_won ?? 0, m.payment_method, key, "membership");
+      // crm_memberships 에 registration_type 없음 → 신규/재등록 미분류
+      applyIssuance(m.price_won ?? 0, m.payment_method, "unknown", "membership");
     }
     for (const p of issPasses) {
       const key: "new" | "renewal" | "unknown" =
