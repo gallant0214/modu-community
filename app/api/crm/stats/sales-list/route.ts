@@ -136,97 +136,68 @@ export async function GET(request: Request) {
     }
   }
 
-  // ── 2) 컷오프 이후 CRM 신규 발급 (이중집계 방지) ──
+  // ── 2) 컷오프 이후 CRM 신규 결제 (paid_at 기준, BROJ 화면과 통일) ──
+  // 기존 로직: 발급 상품(start_date/issued_at) 기반 → 미래 등록도 매출로 잡혀 BROJ 와 불일치
+  // 변경: crm_payments 를 paid_at 기준으로 조회 (실제 결제 시점만)
   const issuanceStart =
     hasSales && cutoffYmd ? (nextYmd(cutoffYmd) > startDate ? nextYmd(cutoffYmd) : startDate) : startDate;
   if (issuanceStart < nextMonth) {
-    const [ms, ps, rs] = await Promise.all([
-      paginateAll<{
-        member_id: number;
-        plan_name: string | null;
-        price_won: number;
-        payment_method: string | null;
-        start_date: string | null;
-      }>((f, t) =>
-        supabase
-          .from("crm_memberships")
-          .select("member_id, plan_name, price_won, payment_method, start_date")
-          .eq("center_id", ctx.centerId)
-          .gte("start_date", issuanceStart)
-          .lt("start_date", nextMonth)
-          .range(f, t)
-      ),
-      paginateAll<{
-        member_id: number;
-        lesson_kind: string | null;
-        price_won: number;
-        payment_method: string | null;
-        issue_type: string | null;
-        issued_at: string | null;
-      }>((f, t) =>
-        supabase
-          .from("crm_passes")
-          .select("member_id, lesson_kind, price_won, payment_method, issue_type, issued_at")
-          .eq("center_id", ctx.centerId)
-          .gte("issued_at", issuanceStart)
-          .lt("issued_at", nextMonth)
-          .range(f, t)
-      ),
-      paginateAll<{
-        member_id: number;
-        item_name: string | null;
-        price_won: number;
-        payment_method: string | null;
-        start_date: string | null;
-      }>((f, t) =>
-        supabase
-          .from("crm_rentals")
-          .select("member_id, item_name, price_won, payment_method, start_date")
-          .eq("center_id", ctx.centerId)
-          .gte("start_date", issuanceStart)
-          .lt("start_date", nextMonth)
-          .range(f, t)
-      ),
+    const pays = await paginateAll<{
+      id: number;
+      member_id: number | null;
+      amount_won: number | null;
+      paid_at: string | null;
+      method: string | null;
+      pass_id: number | null;
+      membership_id: number | null;
+      rental_id: number | null;
+      status: string | null;
+    }>((f, t) =>
+      supabase
+        .from("crm_payments")
+        .select("id, member_id, amount_won, paid_at, method, pass_id, membership_id, rental_id, status")
+        .eq("center_id", ctx.centerId)
+        .gte("paid_at", `${issuanceStart}T00:00:00+09:00`)
+        .lt("paid_at", `${nextMonth}T00:00:00+09:00`)
+        .neq("status", "cancelled")
+        .range(f, t)
+    );
+
+    // 상품 이름 lookup 준비
+    const passIds = Array.from(new Set(pays.map((p) => p.pass_id).filter(Boolean))) as number[];
+    const msIds = Array.from(new Set(pays.map((p) => p.membership_id).filter(Boolean))) as number[];
+    const rnIds = Array.from(new Set(pays.map((p) => p.rental_id).filter(Boolean))) as number[];
+    const memberIds = Array.from(new Set(pays.map((p) => p.member_id).filter(Boolean))) as number[];
+
+    const [passRes, msRes, rnRes, nameMap] = await Promise.all([
+      passIds.length
+        ? supabase.from("crm_passes").select("id, lesson_kind").in("id", passIds)
+        : Promise.resolve({ data: [] as { id: number; lesson_kind: string | null }[] }),
+      msIds.length
+        ? supabase.from("crm_memberships").select("id, plan_name").in("id", msIds)
+        : Promise.resolve({ data: [] as { id: number; plan_name: string | null }[] }),
+      rnIds.length
+        ? supabase.from("crm_rentals").select("id, item_name").in("id", rnIds)
+        : Promise.resolve({ data: [] as { id: number; item_name: string | null }[] }),
+      fetchMemberNames(ctx.centerId, memberIds),
     ]);
+    const passName = new Map((passRes.data ?? []).map((p) => [p.id, p.lesson_kind ?? "수강권"]));
+    const msName = new Map((msRes.data ?? []).map((m) => [m.id, m.plan_name ?? "회원권"]));
+    const rnName = new Map((rnRes.data ?? []).map((r) => [r.id, r.item_name ?? "대여권"]));
 
-    const idSet = new Set<number>();
-    ms.forEach((m) => m.member_id && idSet.add(m.member_id));
-    ps.forEach((p) => p.member_id && idSet.add(p.member_id));
-    rs.forEach((r) => r.member_id && idSet.add(r.member_id));
-    const nameMap = await fetchMemberNames(ctx.centerId, Array.from(idSet));
-
-    for (const m of ms) {
+    for (const p of pays) {
+      let productName = "결제";
+      let category = "기타";
+      if (p.pass_id) { productName = passName.get(p.pass_id) ?? "수강권"; category = "수강권"; }
+      else if (p.membership_id) { productName = msName.get(p.membership_id) ?? "회원권"; category = "회원권"; }
+      else if (p.rental_id) { productName = rnName.get(p.rental_id) ?? "대여권"; category = "대여권"; }
       items.push({
-        date: `${m.start_date}T00:00:00+09:00`,
-        member_name: nameMap.get(m.member_id) ?? null,
-        product_name: m.plan_name ?? "회원권",
-        category: "회원권",
-        amount_won: m.price_won ?? 0,
-        payment_method: methodKo(m.payment_method),
-        registration_type: null,
-        source: "issuance",
-      });
-    }
-    for (const p of ps) {
-      items.push({
-        date: p.issued_at ?? `${issuanceStart}T00:00:00+09:00`,
-        member_name: nameMap.get(p.member_id) ?? null,
-        product_name: p.lesson_kind ?? "수강권",
-        category: "수강권",
-        amount_won: p.price_won ?? 0,
-        payment_method: methodKo(p.payment_method),
-        registration_type: p.issue_type === "new" ? "신규" : p.issue_type === "renewal" ? "재등록" : null,
-        source: "issuance",
-      });
-    }
-    for (const r of rs) {
-      items.push({
-        date: `${r.start_date}T00:00:00+09:00`,
-        member_name: nameMap.get(r.member_id) ?? null,
-        product_name: r.item_name ?? "대여권",
-        category: "대여권",
-        amount_won: r.price_won ?? 0,
-        payment_method: methodKo(r.payment_method),
+        date: p.paid_at ?? `${issuanceStart}T00:00:00+09:00`,
+        member_name: p.member_id ? nameMap.get(p.member_id) ?? null : null,
+        product_name: productName,
+        category,
+        amount_won: p.amount_won ?? 0,
+        payment_method: methodKo(p.method),
         registration_type: null,
         source: "issuance",
       });
