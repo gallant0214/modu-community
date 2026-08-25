@@ -59,15 +59,18 @@ export async function GET(
     passIds.length
       ? supabase
           .from("crm_passes")
-          .select("id, lesson_kind, session_minutes")
+          .select("id, lesson_kind, session_minutes, issued_at")
           .in("id", passIds as number[])
       : Promise.resolve({
-          data: [] as { id: number; lesson_kind: string; session_minutes: number }[],
+          data: [] as { id: number; lesson_kind: string; session_minutes: number; issued_at: string | null }[],
         }),
   ]);
   const trainerMap = new Map((trainerRes.data ?? []).map((t) => [t.id, t.display_name]));
   const passMap = new Map(
-    (passRes.data ?? []).map((p) => [p.id, { lesson_kind: p.lesson_kind, session_minutes: p.session_minutes }])
+    (passRes.data ?? []).map((p) => [
+      p.id,
+      { lesson_kind: p.lesson_kind, session_minutes: p.session_minutes, issued_at: p.issued_at ?? null },
+    ])
   );
 
   return NextResponse.json({

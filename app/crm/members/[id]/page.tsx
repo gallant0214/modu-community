@@ -1817,7 +1817,7 @@ interface ReservationRow {
   attended_at: string | null;
   cancelled_at: string | null;
   cancelled_reason: string | null;
-  pass: { lesson_kind: string; session_minutes: number } | null;
+  pass: { lesson_kind: string; session_minutes: number; issued_at?: string | null } | null;
 }
 
 const STATUS_LABEL_R: Record<string, string> = {
@@ -1843,6 +1843,7 @@ function MemberReservationsSection({ memberId }: { memberId: number }) {
     const k = new Date(d.getTime() + 9 * 3600 * 1000);
     return `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}`;
   });
+  const [selectedPassId, setSelectedPassId] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -1870,11 +1871,30 @@ function MemberReservationsSection({ memberId }: { memberId: number }) {
     const k = new Date(d.getTime() + 9 * 3600 * 1000);
     return `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")}`;
   };
-  const attended = rows.filter((r) => r.status === "attended").length;
-  const cancelled = rows.filter((r) => r.status === "cancelled").length;
-  const noshow = rows.filter((r) => r.status === "noshow").length;
-  const booked = rows.filter((r) => r.status === "booked").length;
-  const monthCount = rows.filter((r) => kstDate(r.starts_at).slice(0, 7) === monthYm).length;
+
+  // 수강권 필터용 unique pass 목록 (발급일 최신순)
+  const passOptions = (() => {
+    const map = new Map<number, { id: number; lesson_kind: string; issued_at: string | null }>();
+    for (const r of rows) {
+      if (!r.pass_id || !r.pass) continue;
+      if (!map.has(r.pass_id)) {
+        map.set(r.pass_id, {
+          id: r.pass_id,
+          lesson_kind: r.pass.lesson_kind,
+          issued_at: r.pass.issued_at ?? null,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => (b.issued_at ?? "").localeCompare(a.issued_at ?? ""));
+  })();
+
+  // 필터 적용된 rows (선택된 pass 없으면 전체)
+  const filteredRows = selectedPassId == null ? rows : rows.filter((r) => r.pass_id === selectedPassId);
+  const attended = filteredRows.filter((r) => r.status === "attended").length;
+  const cancelled = filteredRows.filter((r) => r.status === "cancelled").length;
+  const noshow = filteredRows.filter((r) => r.status === "noshow").length;
+  const booked = filteredRows.filter((r) => r.status === "booked").length;
+  const monthCount = filteredRows.filter((r) => kstDate(r.starts_at).slice(0, 7) === monthYm).length;
 
   const shiftMonth = (delta: number) => {
     const [y, m] = monthYm.split("-").map(Number);
@@ -1907,7 +1927,7 @@ function MemberReservationsSection({ memberId }: { memberId: number }) {
     <div className="space-y-4">
       {/* 통계 카드 */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-        <StatMini label="총 예약" value={rows.length} tone="olive" />
+        <StatMini label="총 예약" value={filteredRows.length} tone="olive" />
         <StatMini label="정상 출석" value={attended} tone="emerald" />
         <StatMini label="예약 취소" value={cancelled} tone="gray" />
         <StatMini label="노쇼" value={noshow} tone="red" />
@@ -1948,22 +1968,39 @@ function MemberReservationsSection({ memberId }: { memberId: number }) {
         </button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <MiniMonthCalendar ymStr={prevYm} rows={rows} kstDate={kstDate} today={today} muted />
-        <MiniMonthCalendar ymStr={monthYm} rows={rows} kstDate={kstDate} today={today} />
+        <MiniMonthCalendar ymStr={prevYm} rows={filteredRows} kstDate={kstDate} today={today} muted />
+        <MiniMonthCalendar ymStr={monthYm} rows={filteredRows} kstDate={kstDate} today={today} />
       </div>
 
       {/* 리스트 (전체 최근 500건) */}
       <div>
-        <div className="mb-2 text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
-          예약 이력 ({rows.length}건, 최신순)
+        <div className="mb-2 flex items-center justify-between gap-2 flex-wrap">
+          <div className="text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            예약 이력 ({filteredRows.length}건, 최신순)
+          </div>
+          {passOptions.length > 0 && (
+            <select
+              value={selectedPassId ?? ""}
+              onChange={(e) => setSelectedPassId(e.target.value ? Number(e.target.value) : null)}
+              className="px-2 py-1 text-[12px] rounded border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#2A251D] dark:text-zinc-100"
+            >
+              <option value="">전체</option>
+              {passOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.lesson_kind}
+                  {p.issued_at ? ` (${p.issued_at})` : ""}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
-        {rows.length === 0 ? (
+        {filteredRows.length === 0 ? (
           <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
             예약 내역이 없습니다.
           </div>
         ) : (
           <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800 max-h-[520px] overflow-y-auto">
-            {rows.map((r) => {
+            {filteredRows.map((r) => {
               const d = new Date(r.starts_at);
               const k = new Date(d.getTime() + 9 * 3600 * 1000);
               const dateStr = `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")}`;
