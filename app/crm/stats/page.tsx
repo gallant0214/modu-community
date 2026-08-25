@@ -26,7 +26,7 @@ interface MonthlyResp {
   }[];
 }
 
-type Tab = "trainer" | "center" | "settlement" | "payroll";
+type Tab = "trainer" | "center" | "saleslist" | "settlement" | "payroll";
 
 type DateMode = "year" | "month" | "range";
 
@@ -35,7 +35,7 @@ export default function CrmStatsPage() {
   const [tab, setTab] = useState<Tab>(() => {
     if (typeof window === "undefined") return "center";
     const t = new URLSearchParams(window.location.search).get("tab");
-    return t === "payroll" || t === "trainer" || t === "settlement" || t === "center"
+    return t === "payroll" || t === "trainer" || t === "settlement" || t === "saleslist" || t === "center"
       ? (t as Tab)
       : "center";
   });
@@ -138,10 +138,12 @@ export default function CrmStatsPage() {
               ? `강사별 매출과 수업 현황을 ${appliedDateMode === "year" ? "연 단위" : appliedDateMode === "month" ? "월 단위" : "지정 기간"}로 확인해요.`
               : tab === "center"
               ? `센터 매출(회원권·운동복·락커·기타)을 ${appliedDateMode === "year" ? "연 단위" : appliedDateMode === "month" ? "월 단위" : "지정 기간"}로 확인해요.`
+              : tab === "saleslist"
+              ? "선택한 기간에 결제된 상품 내역을 리스트로 확인해요."
               : `총매출에서 고정지출·부가세·직원급여·추가지출을 뺀 순이익을 ${appliedDateMode === "year" ? "연 단위" : appliedDateMode === "month" ? "월 단위" : "지정 기간"}로 정산해요.`}
           </p>
         </div>
-        {tab !== "payroll" && (
+        {tab !== "payroll" && tab !== "saleslist" && (
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
             <ModeBtn active={dateMode === "year"} onClick={() => setDateMode("year")}>
@@ -213,6 +215,9 @@ export default function CrmStatsPage() {
         <TabBtn active={tab === "center"} onClick={() => setTab("center")}>
           센터 매출
         </TabBtn>
+        <TabBtn active={tab === "saleslist"} onClick={() => setTab("saleslist")}>
+          매출내역
+        </TabBtn>
         <TabBtn active={tab === "trainer"} onClick={() => setTab("trainer")}>
           강사 매출
         </TabBtn>
@@ -232,6 +237,8 @@ export default function CrmStatsPage() {
 
       {tab === "payroll" ? (
         <PayrollList />
+      ) : tab === "saleslist" ? (
+        <SalesListTab />
       ) : loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : tab === "trainer" ? (
@@ -390,6 +397,294 @@ function TrainerTab({ data }: { data: MonthlyResp | null }) {
       <TrainerSessionsChart />
     </>
   );
+}
+
+/* ─── 매출내역 탭 (기간별 결제 상품 리스트) ────────────────────────────── */
+
+interface SalesListItem {
+  date: string;
+  member_name: string | null;
+  product_name: string;
+  category: string;
+  amount_won: number;
+  payment_method: string | null;
+  registration_type: string | null;
+  source: "ledger" | "issuance";
+}
+interface SalesListResp {
+  ym: string;
+  count: number;
+  total: number;
+  items: SalesListItem[];
+}
+
+type SalesPreset = "yesterday" | "today" | "week" | "month" | "custom";
+
+// KST 기준 오늘 YYYY-MM-DD
+function kstToday(): string {
+  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+}
+function addDaysYmd(ymd: string, delta: number): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+// preset → {from, to} (KST YYYY-MM-DD)
+function salesRange(preset: SalesPreset, customFrom: string, customTo: string): { from: string; to: string } {
+  const today = kstToday();
+  if (preset === "today") return { from: today, to: today };
+  if (preset === "yesterday") {
+    const y = addDaysYmd(today, -1);
+    return { from: y, to: y };
+  }
+  if (preset === "week") {
+    // 월요일 시작 ~ 일요일
+    const d = new Date(`${today}T00:00:00Z`);
+    const dow = d.getUTCDay(); // 0=일
+    const toMon = (dow + 6) % 7;
+    const from = addDaysYmd(today, -toMon);
+    const to = addDaysYmd(from, 6);
+    return { from, to };
+  }
+  if (preset === "custom") return { from: customFrom, to: customTo };
+  // month (기본)
+  const first = `${today.slice(0, 7)}-01`;
+  const [y, m] = today.slice(0, 7).split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  return { from: first, to: last };
+}
+
+function SalesListTab() {
+  const { getIdToken } = useAuth();
+  const [preset, setPreset] = useState<SalesPreset>("month");
+  const [customFrom, setCustomFrom] = useState(() => `${kstToday().slice(0, 7)}-01`);
+  const [customTo, setCustomTo] = useState(() => kstToday());
+  const [applied, setApplied] = useState(() => salesRange("month", "", ""));
+  const [data, setData] = useState<SalesListResp | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch(`/api/crm/stats/sales-list?from=${applied.from}&to=${applied.to}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "조회 실패");
+      setData(json);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken, applied]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // 프리셋 클릭 → 즉시 적용 (custom 은 [검색] 눌러야 적용)
+  const pickPreset = (p: SalesPreset) => {
+    setPreset(p);
+    if (p !== "custom") setApplied(salesRange(p, customFrom, customTo));
+  };
+  const runCustom = () => {
+    if (!customFrom || !customTo || customTo < customFrom) return;
+    setApplied({ from: customFrom, to: customTo });
+  };
+
+  const exportCsv = () => {
+    if (!data || !data.items.length) return;
+    const rows: (string | number)[][] = [
+      ["날짜", "회원", "상품", "구분", "등록", "결제수단", "금액"],
+      ...data.items.map((it) => [
+        kstDateHm(it.date),
+        it.member_name ?? "",
+        it.product_name,
+        it.category,
+        it.registration_type ?? "",
+        it.payment_method ?? "",
+        it.amount_won,
+      ]),
+      ["합계", "", "", "", "", "", data.total],
+    ];
+    downloadCsv(`매출내역_${applied.from}_${applied.to}`, rows);
+  };
+
+  const PRESETS: { key: SalesPreset; label: string }[] = [
+    { key: "yesterday", label: "어제" },
+    { key: "today", label: "오늘" },
+    { key: "week", label: "이번주" },
+    { key: "month", label: "이번달" },
+    { key: "custom", label: "직접선택" },
+  ];
+
+  return (
+    <div>
+      {/* 기간 선택 */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
+          {PRESETS.map((p) => (
+            <ModeBtn key={p.key} active={preset === p.key} onClick={() => pickPreset(p.key)}>
+              {p.label}
+            </ModeBtn>
+          ))}
+        </div>
+        {preset === "custom" && (
+          <div className="inline-flex items-center gap-1">
+            <input
+              type="date"
+              value={customFrom}
+              max={customTo}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="px-2 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+            />
+            <span className="text-[12px] text-[#A89B80]">~</span>
+            <input
+              type="date"
+              value={customTo}
+              min={customFrom}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="px-2 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+            />
+            <button
+              type="button"
+              onClick={runCustom}
+              disabled={loading}
+              className="px-3.5 py-1.5 rounded-lg text-[13px] font-semibold bg-[#6B7B3A] text-white hover:bg-[#5a6932] disabled:opacity-50"
+            >
+              검색
+            </button>
+          </div>
+        )}
+        <span className="text-[12px] text-[#A89B80] dark:text-zinc-500">
+          {applied.from === applied.to ? applied.from : `${applied.from} ~ ${applied.to}`}
+        </span>
+        {data && data.items.length > 0 && (
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="ml-auto px-3 py-1.5 rounded-lg text-[12.5px] font-medium border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+          >
+            엑셀 다운로드
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      {/* 합계 요약 */}
+      <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <div className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
+          결제 건수 <span className="font-bold text-[#2A251D] dark:text-zinc-100">{data?.count ?? 0}</span>건
+        </div>
+        <div className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
+          합계{" "}
+          <span className="font-bold text-[#6B7B3A] dark:text-[#A8B87A] tabular-nums">
+            {formatWon(data?.total ?? 0)}
+          </span>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : !data || data.items.length === 0 ? (
+        <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+          이 기간에 결제된 상품이 없습니다.
+        </div>
+      ) : (
+        <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-x-auto">
+          <table className="w-full text-[13px] min-w-[640px]">
+            <thead>
+              <tr className="border-b border-[#E8E0D0] dark:border-zinc-800 text-[#8C8270] dark:text-zinc-500 text-[12px]">
+                <th className="py-2.5 pl-4 pr-2 text-left font-medium">날짜</th>
+                <th className="py-2.5 px-2 text-left font-medium">회원</th>
+                <th className="py-2.5 px-2 text-left font-medium">상품</th>
+                <th className="py-2.5 px-2 text-left font-medium">구분</th>
+                <th className="py-2.5 px-2 text-left font-medium">결제수단</th>
+                <th className="py-2.5 pr-4 pl-2 text-right font-medium">금액</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.items.map((it, i) => (
+                <tr
+                  key={i}
+                  className="border-b border-[#E8E0D0]/60 dark:border-zinc-800/70 last:border-0"
+                >
+                  <td className="py-2.5 pl-4 pr-2 whitespace-nowrap text-[#6B5D47] dark:text-zinc-400">
+                    {kstDateHm(it.date)}
+                  </td>
+                  <td className="py-2.5 px-2 text-[#2A251D] dark:text-zinc-100">
+                    {it.member_name ?? "—"}
+                  </td>
+                  <td className="py-2.5 px-2 text-[#2A251D] dark:text-zinc-100">
+                    <span>{it.product_name}</span>
+                    {it.registration_type && (
+                      <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-[#F5F0E5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-400">
+                        {it.registration_type}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2.5 px-2">
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${CAT_BADGE[it.category] ?? "bg-[#F5F0E5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-400"}`}
+                    >
+                      {it.category}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-2 text-[#6B5D47] dark:text-zinc-400">
+                    {it.payment_method ?? "—"}
+                  </td>
+                  <td className="py-2.5 pr-4 pl-2 text-right tabular-nums font-semibold text-[#2A251D] dark:text-zinc-100">
+                    {formatWon(it.amount_won)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-[#FBF7EB] dark:bg-zinc-900/60 font-semibold">
+                <td className="py-2.5 pl-4 pr-2 text-[#3A342A] dark:text-zinc-200" colSpan={5}>
+                  합계 ({data.count}건)
+                </td>
+                <td className="py-2.5 pr-4 pl-2 text-right tabular-nums text-[#6B7B3A] dark:text-[#A8B87A]">
+                  {formatWon(data.total)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CAT_BADGE: Record<string, string> = {
+  회원권: "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]",
+  수강권: "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
+  대여권: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+  락커: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+  기타: "bg-[#F5F0E5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-400",
+};
+
+// ISO(또는 date) → KST "MM-DD HH:mm" (00:00 이면 날짜만)
+function kstDateHm(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso.slice(0, 10);
+  const k = new Date(d.getTime() + 9 * 3600 * 1000);
+  const mm = String(k.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(k.getUTCDate()).padStart(2, "0");
+  const hh = String(k.getUTCHours()).padStart(2, "0");
+  const mi = String(k.getUTCMinutes()).padStart(2, "0");
+  return hh === "00" && mi === "00" ? `${mm}-${dd}` : `${mm}-${dd} ${hh}:${mi}`;
 }
 
 /* ─── 센터 매출 탭 ────────────────────────────── */
