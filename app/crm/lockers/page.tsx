@@ -924,6 +924,7 @@ function MoveLockerModal({
   const [loading, setLoading] = useState(false);
   const [zoneId, setZoneId] = useState<number | "">("");
   const [targetId, setTargetId] = useState<number | "">("");
+  const [askSwap, setAskSwap] = useState(false); // 이동 실행 시 비밀번호 교환 여부 확인 단계
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -932,6 +933,7 @@ function MoveLockerModal({
     if (!source) {
       setTargetId("");
       setZoneId("");
+      setAskSwap(false);
       setError("");
       setVacant([]);
       return;
@@ -976,9 +978,10 @@ function MoveLockerModal({
     });
   }, [source, zoneOptions, sourceZoneName]);
 
-  // 구역이 바뀌면 대상 락커 선택 초기화
+  // 구역이 바뀌면 대상 락커 선택·확인 단계 초기화
   useEffect(() => {
     setTargetId("");
+    setAskSwap(false);
   }, [zoneId]);
 
   const targets =
@@ -986,7 +989,7 @@ function MoveLockerModal({
 
   if (!source) return null;
 
-  const submit = async () => {
+  const submit = async (swapPassword: boolean) => {
     if (!targetId) return setError("이동할 락커를 선택해 주세요");
     setSubmitting(true);
     setError("");
@@ -995,7 +998,11 @@ function MoveLockerModal({
       const res = await fetch(`/api/crm/lockers/${source.id}`, {
         method: "PATCH",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ action: "move", to_locker_id: Number(targetId) }),
+        body: JSON.stringify({
+          action: "move",
+          to_locker_id: Number(targetId),
+          swap_password: swapPassword,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "이동 실패");
@@ -1012,9 +1019,6 @@ function MoveLockerModal({
       <div className="space-y-3.5">
         <div className="px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[13px] text-[#3A342A] dark:text-zinc-300">
           <strong>{source.member?.name ?? "회원"}</strong>의 정보를 다른 락커로 옮깁니다. (다른 락커룸으로도 이동할 수 있어요)
-          <span className="mt-1 block text-[12px] text-[#B47B2A] dark:text-amber-400">
-            ⚠️ 비밀번호는 함께 옮겨지지 않아요. 이동 후 새 락커에서 비밀번호를 다시 설정해 주세요.
-          </span>
         </div>
 
         <CrmField label="락커룸(구역)" required>
@@ -1070,22 +1074,53 @@ function MoveLockerModal({
           <div className="px-3 py-2 rounded-lg bg-red-50 text-[13px] text-red-700">{error}</div>
         )}
 
-        <div className="flex gap-2 pt-1">
-          <button
-            onClick={onClose}
-            disabled={submitting}
-            className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] text-[13.5px] font-semibold hover:bg-[#F5F0E5]"
-          >
-            취소
-          </button>
-          <button
-            onClick={submit}
-            disabled={submitting || !targetId || targets.length === 0}
-            className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
-          >
-            {submitting ? "이동 중…" : "이동"}
-          </button>
-        </div>
+        {askSwap ? (
+          <div className="space-y-2.5 pt-1">
+            <div className="px-3.5 py-2.5 rounded-lg bg-[#F5F0E5]/70 dark:bg-zinc-900/60 border border-[#E8E0D0] dark:border-zinc-800 text-[13px] text-[#3A342A] dark:text-zinc-300">
+              이동하는 두 락커의 <strong>비밀번호를 서로 교환</strong>하시겠어요?
+              <span className="mt-1 block text-[12px] text-[#8C8270] dark:text-zinc-500">
+                예: 두 락커의 비밀번호가 서로 바뀝니다 · 아니오: 회원만 이동하고 각 락커 비밀번호는 그대로 유지돼요.
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => submit(false)}
+                disabled={submitting}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold hover:bg-[#F5F0E5] disabled:opacity-50"
+              >
+                {submitting ? "처리 중…" : "아니오 (유지)"}
+              </button>
+              <button
+                onClick={() => submit(true)}
+                disabled={submitting}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+              >
+                {submitting ? "처리 중…" : "예 (교환)"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={onClose}
+              disabled={submitting}
+              className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] text-[13.5px] font-semibold hover:bg-[#F5F0E5]"
+            >
+              취소
+            </button>
+            <button
+              onClick={() => {
+                if (!targetId) return setError("이동할 락커를 선택해 주세요");
+                setError("");
+                setAskSwap(true);
+              }}
+              disabled={submitting || !targetId || targets.length === 0}
+              className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+            >
+              이동
+            </button>
+          </div>
+        )}
       </div>
     </CrmModal>
   );

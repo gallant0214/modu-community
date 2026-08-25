@@ -39,6 +39,8 @@ export async function PATCH(
     memo?: string;
     note?: string;
     to_locker_id?: number;
+    /** move 시 두 락커의 비밀번호를 서로 교환할지. true=교환, false/미지정=각 락커 비번 유지. */
+    swap_password?: boolean;
   };
   try {
     body = await request.json();
@@ -179,7 +181,7 @@ export async function PATCH(
 
     const { data: target } = await supabase
       .from("crm_lockers")
-      .select("id, state")
+      .select("id, state, password")
       .eq("id", toId)
       .eq("center_id", ctx.centerId)
       .maybeSingle();
@@ -198,6 +200,13 @@ export async function PATCH(
       return NextResponse.json({ error: "원본 락커를 찾을 수 없습니다" }, { status: 500 });
     }
 
+    // 비밀번호 처리:
+    //   swap_password=true  → 두 락커의 비밀번호를 서로 교환(대상=원본비번, 원본=대상비번).
+    //   그 외               → 각 물리 락커의 비밀번호를 그대로 유지(회원만 이동).
+    const swap = body.swap_password === true;
+    const targetNewPassword = swap ? fullSource.password : target.password;
+    const sourceNewPassword = swap ? target.password : fullSource.password;
+
     const { error: moveErr } = await supabase
       .from("crm_lockers")
       .update({
@@ -205,8 +214,7 @@ export async function PATCH(
         assigned_member_id: fullSource.assigned_member_id,
         start_date: fullSource.start_date,
         expires_at: fullSource.expires_at,
-        // 비밀번호는 이동 시 넘기지 않는다 — 새 락커에서 이용자가 반드시 수동으로 재설정.
-        password: null,
+        password: targetNewPassword,
         memo: fullSource.memo,
       } as never)
       .eq("id", toId);
@@ -214,12 +222,12 @@ export async function PATCH(
       return NextResponse.json({ error: "이동 실패", detail: moveErr.message }, { status: 500 });
     }
 
-    // 원본 락커 비우기
+    // 원본 락커 비우기 (비밀번호는 위 규칙에 따라 유지/교환)
     updates.state = "unassigned";
     updates.assigned_member_id = null;
     updates.start_date = null;
     updates.expires_at = null;
-    updates.password = null;
+    updates.password = sourceNewPassword;
     updates.memo = null;
 
     // history: move 1건 (원본 락커 기준)
