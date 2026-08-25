@@ -1012,6 +1012,9 @@ function MoveLockerModal({
       <div className="space-y-3.5">
         <div className="px-3.5 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[13px] text-[#3A342A] dark:text-zinc-300">
           <strong>{source.member?.name ?? "회원"}</strong>의 정보를 다른 락커로 옮깁니다. (다른 락커룸으로도 이동할 수 있어요)
+          <span className="mt-1 block text-[12px] text-[#B47B2A] dark:text-amber-400">
+            ⚠️ 비밀번호는 함께 옮겨지지 않아요. 이동 후 새 락커에서 비밀번호를 다시 설정해 주세요.
+          </span>
         </div>
 
         <CrmField label="락커룸(구역)" required>

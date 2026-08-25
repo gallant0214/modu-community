@@ -205,7 +205,8 @@ export async function PATCH(
         assigned_member_id: fullSource.assigned_member_id,
         start_date: fullSource.start_date,
         expires_at: fullSource.expires_at,
-        password: fullSource.password,
+        // 비밀번호는 이동 시 넘기지 않는다 — 새 락커에서 이용자가 반드시 수동으로 재설정.
+        password: null,
         memo: fullSource.memo,
       } as never)
       .eq("id", toId);
