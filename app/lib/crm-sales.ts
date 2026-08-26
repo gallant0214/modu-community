@@ -26,8 +26,10 @@ export function saleCategory(productType: string | null): SalesCategory {
       return "membership";
     case "이용권":
     case "예약권":
+    case "수강권": // 신규 임포트분(PT 수강권) — 기존 이용권/예약권과 동일 그룹
       return "lesson";
     case "대여권":
+    case "SPORTS": // 신규 임포트분(운동복 대여) — 대여권과 동일 그룹
       return "rental";
     case "락커":
       return "locker";

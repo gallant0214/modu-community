@@ -670,7 +670,7 @@ function SalesListTab() {
 const CAT_BADGE: Record<string, string> = {
   회원권: "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]",
   수강권: "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
-  대여권: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+  운동복: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
   락커: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
   기타: "bg-[#F5F0E5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-400",
 };

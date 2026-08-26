@@ -65,7 +65,7 @@ export async function GET(request: Request) {
   const CAT_KO: Record<string, string> = {
     membership: "회원권",
     lesson: "수강권",
-    rental: "대여권",
+    rental: "운동복",
     locker: "락커",
     goods: "기타",
   };
@@ -183,14 +183,14 @@ export async function GET(request: Request) {
     ]);
     const passName = new Map((passRes.data ?? []).map((p) => [p.id, p.lesson_kind ?? "수강권"]));
     const msName = new Map((msRes.data ?? []).map((m) => [m.id, m.plan_name ?? "회원권"]));
-    const rnName = new Map((rnRes.data ?? []).map((r) => [r.id, r.item_name ?? "대여권"]));
+    const rnName = new Map((rnRes.data ?? []).map((r) => [r.id, r.item_name ?? "운동복"]));
 
     for (const p of pays) {
       let productName = "결제";
       let category = "기타";
       if (p.pass_id) { productName = passName.get(p.pass_id) ?? "수강권"; category = "수강권"; }
       else if (p.membership_id) { productName = msName.get(p.membership_id) ?? "회원권"; category = "회원권"; }
-      else if (p.rental_id) { productName = rnName.get(p.rental_id) ?? "대여권"; category = "대여권"; }
+      else if (p.rental_id) { productName = rnName.get(p.rental_id) ?? "운동복"; category = "운동복"; }
       items.push({
         date: p.paid_at ?? `${issuanceStart}T00:00:00+09:00`,
         member_name: p.member_id ? nameMap.get(p.member_id) ?? null : null,
