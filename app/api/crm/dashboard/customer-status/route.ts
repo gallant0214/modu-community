@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { cached, crmCacheKey } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -94,6 +95,9 @@ export async function GET(request: Request) {
   const windowEndExcl = months[months.length - 1].endExcl;
 
   try {
+    // 고객현황 차트는 12~24개월 집계로 무거움 + 과거 데이터라 거의 안 바뀜 → 120초 캐시.
+    const cacheKey = crmCacheKey(ctx, "dashboard:customer-status", `${period}:${todayYmd}`);
+    const payload = await cached(cacheKey, 120, async () => {
     // 회원 성별·생년 (전체) — 유효 고객 구성 산출용
     const members = await paginateAll<{ id: number; gender: string | null; birth: string | null }>(
       (f, t) =>
@@ -324,7 +328,7 @@ export async function GET(request: Request) {
       }
     });
 
-    return NextResponse.json({
+    return {
       months: months.map((m) => m.ym),
       validCount: validSets.map((s) => s.size),
       validMembership: mbSets.map((s) => s.size),
@@ -344,7 +348,10 @@ export async function GET(request: Request) {
       reExpireConverted,
       visited: visitedSets.map((s) => s.size),
       churn,
+    };
     });
+
+    return NextResponse.json(payload);
   } catch (e) {
     return NextResponse.json(
       { error: "조회 실패", detail: e instanceof Error ? e.message : String(e) },

@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { saleCategory } from "@/app/lib/crm-sales";
+import { cached, crmCacheKey } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,13 @@ export async function GET(request: Request) {
     registration_type: string | null; // 신규 / 재등록
     source: "ledger" | "issuance";
   };
+  // 기간별 결제 리스트도 무겁고 실시간성 낮음 → 60초 캐시.
+  const cacheKey = crmCacheKey(
+    ctx,
+    "stats:sales-list",
+    isRange ? `r:${startDate}:${nextMonth}` : ym,
+  );
+  const payload = await cached(cacheKey, 60, async () => {
   const items: Item[] = [];
 
   const CAT_KO: Record<string, string> = {
@@ -208,7 +216,10 @@ export async function GET(request: Request) {
   items.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   const total = items.reduce((s, it) => s + (it.amount_won ?? 0), 0);
 
-  return NextResponse.json({ ym, count: items.length, total, items });
+  return { ym, count: items.length, total, items };
+  });
+
+  return NextResponse.json(payload);
 }
 
 async function fetchMemberNames(

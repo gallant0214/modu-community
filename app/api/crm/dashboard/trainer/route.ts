@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { cached, crmCacheKey } from "@/app/lib/cache";
 import {
   perSessionFee,
   effectiveCommissionRate,
@@ -48,6 +49,9 @@ export async function GET(request: Request) {
   const weekEndExcl = shiftYmd(weekStart, 7);
   const rolling28Start = shiftYmd(today, -27); // 최근 28일(오늘 포함) 평균용
 
+  // 개인 대시보드도 무거움(스코프 예약·수강권 집계) → 30초 캐시(본인 스코프 키).
+  const cacheKey = crmCacheKey(ctx, "dashboard:trainer", today);
+  const payload = await cached(cacheKey, 30, async () => {
   // ── 병렬 1차 조회 ──
   const scopeOr = `trainer_member_id.eq.${me},seller_member_id.eq.${me},co_trainer_ids.cs.{${me}}`;
   const [
@@ -349,7 +353,7 @@ export async function GET(request: Request) {
   const ratioNew = regTotal > 0 ? Math.round((newThisMonth / regTotal) * 100) : 0;
   const ratioRenewal = regTotal > 0 ? 100 - ratioNew : 0;
 
-  return NextResponse.json({
+  return {
     month,
     metrics: {
       activeMembers,
@@ -370,5 +374,8 @@ export async function GET(request: Request) {
     outstanding,
     memberProgress,
     recentCompleted,
+  };
   });
+
+  return NextResponse.json(payload);
 }

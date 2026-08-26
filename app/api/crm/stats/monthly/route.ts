@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { cached, crmCacheKey } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,14 @@ export async function GET(request: Request) {
   }
   const nextMonth = endExclusive; // 기존 변수명 유지 (하위 쿼리 참조)
 
+  // 강사별 매출/수업 집계는 무겁고 초 단위로 안 바뀜 → 60초 캐시.
+  // 키에 role·centerMemberId 포함(강사/매니저는 본인 데이터만 보므로 스코프별 분리).
+  const cacheKey = crmCacheKey(
+    ctx,
+    "stats:monthly",
+    isRange ? `r:${startDate}:${nextMonth}` : ym,
+  );
+  const payload = await cached(cacheKey, 60, async () => {
   // 회원 수 — 서버측 member_type != 'matched' 필터 + count(exact) 로 1000행 상한 우회
   let memberQuery = supabase
     .from("crm_members")
@@ -186,7 +195,7 @@ export async function GET(request: Request) {
     });
   }
 
-  return NextResponse.json({
+  return {
     ym,
     range: isRange ? { from: startDate, to: toRaw } : null,
     summary: {
@@ -214,5 +223,8 @@ export async function GET(request: Request) {
         if (b.passes.revenue !== a.passes.revenue) return b.passes.revenue - a.passes.revenue;
         return a.name.localeCompare(b.name, "ko");
       }),
+  };
   });
+
+  return NextResponse.json(payload);
 }

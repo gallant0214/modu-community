@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { cached, crmCacheKey } from "@/app/lib/cache";
 import { fetchSales, saleCategory } from "@/app/lib/crm-sales";
 
 export const dynamic = "force-dynamic";
@@ -89,6 +90,9 @@ export async function GET(request: Request) {
   else from = firstOfMonth(today);
   const toExcl = shiftYmd(today, 1); // to (exclusive)
 
+  // 대시보드 요약은 가장 자주 열고 무거움(회원 전체 스캔) → 30초 캐시.
+  const cacheKey = crmCacheKey(ctx, "dashboard:summary", `${period}:${today}`);
+  const payload = await cached(cacheKey, 30, async () => {
   // 회원 전체 (성별·POS 스냅샷 필드 포함).
   // crm_passes/memberships 정식 임포트 전이라 final_expire_at·registered_at·registration_type 을
   // 활성/신규/재등록 판정에 사용.
@@ -378,7 +382,7 @@ export async function GET(request: Request) {
     .not("assigned_member_id", "is", null)
     .lt("expires_at", today);
 
-  return NextResponse.json({
+  return {
     period,
     range: { from, to: today },
     members: {
@@ -433,5 +437,8 @@ export async function GET(request: Request) {
       personal: personalClasses,
       ot: otClasses,
     },
+  };
   });
+
+  return NextResponse.json(payload);
 }

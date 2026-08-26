@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { fetchSales, saleCategory } from "@/app/lib/crm-sales";
+import { cached, crmCacheKey } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,13 @@ export async function GET(request: Request) {
   //   회원권 그룹 = 멤버십 + 대여권 + 락커 / 수강권 그룹 = 이용권 + 예약권(PT) / 일반 = goods
   // crm_sales 원장 존재 여부 + 임포트 커버 컷오프(원장 마지막 거래일, KST).
   // 컷오프 이후 발생한 CRM 신규 발급은 원장에 없으므로 발급 테이블에서 합산해야 함.
+  // 센터 전체 재무 집계는 무겁고(전체 유효건 스캔) 초 단위로 안 바뀜 → 60초 캐시.
+  const cacheKey = crmCacheKey(
+    ctx,
+    "stats:center-revenue",
+    isRange ? `r:${startDate}:${nextMonth}` : ym,
+  );
+  const payload = await cached(cacheKey, 60, async () => {
   const { hasSales: centerHasSales, cutoffYmd } = await centerSalesInfo(ctx.centerId);
   const periodSales = centerHasSales
     ? await fetchSales(ctx.centerId, startDate, nextMonth)
@@ -354,7 +362,7 @@ export async function GET(request: Request) {
   const potentialLiability = liabilityMembership + liabilityPass;
   const liabilityVat = potentialLiability - liabilityExVat;
 
-  return NextResponse.json({
+  return {
     ym,
     total,
     total_ex_vat: totalExVat,
@@ -398,7 +406,10 @@ export async function GET(request: Request) {
       membership: regMembership,
       pass: regPass,
     },
+  };
   });
+
+  return NextResponse.json(payload);
 }
 
 function kstYmd(): string {

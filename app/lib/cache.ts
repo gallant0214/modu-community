@@ -52,6 +52,22 @@ export async function cached<T>(
 }
 
 /**
+ * CRM 라우트용 캐시 키 생성.
+ *
+ * ⚠️ 멀티테넌시/권한 안전: 센터·직원·역할·쿼리파라미터를 모두 키에 포함한다.
+ *   - 센터 전체 공용 집계도 이 키면 안전(직원별로 캐시가 쪼개질 뿐 정확도는 보장).
+ *   - 강사/매니저처럼 "본인 데이터만" 보는 라우트도 자동으로 스코프별 분리됨.
+ * name = 라우트 식별자(예: "stats:center-revenue"), extra = 쿼리 파라미터 문자열.
+ */
+export function crmCacheKey(
+  ctx: { centerId: number; centerMemberId: number | null; role?: string | null },
+  name: string,
+  extra = "",
+): string {
+  return `crm:${name}:c${ctx.centerId}:m${ctx.centerMemberId ?? 0}:r${ctx.role ?? "?"}:${extra}`;
+}
+
+/**
  * 특정 패턴의 캐시 무효화 (게시글 작성/수정/삭제 시 호출)
  */
 export async function invalidateCache(pattern: string) {
