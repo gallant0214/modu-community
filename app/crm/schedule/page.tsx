@@ -2179,6 +2179,19 @@ function ReservationDialog({
   const [reasonMode, setReasonMode] = useState<null | "cancelled" | "noshow">(null);
   const cancelMode = reasonMode === "cancelled";
   const noshowMode = reasonMode === "noshow";
+  // ESC 로 창 닫기
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  // 회원 이름 → 회원 상세 / 수강권명 → 수강권 관리 상세 (각각 새 창)
+  const openMemberDetail = () =>
+    window.open(`/crm/members/${reservation.member_id}`, "_blank", "noopener");
+  const openPassDetail = () =>
+    window.open(`/crm/passes?pass=${reservation.pass_id}`, "_blank", "noopener");
   const commitReason = () => {
     // 사전 정의 사유 + 자유 텍스트 병합.
     //   '사유 입력' 프리셋은 라벨 자체를 저장하지 않고 자유 텍스트만 사용.
@@ -2195,8 +2208,28 @@ function ReservationDialog({
         <h2 className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">예약 상세</h2>
         <div className="mt-2 text-[13px] text-[#6B5D47] dark:text-zinc-400">
           <div>
-            <span className="font-medium">{reservation.member_name || "회원"}</span>
+            <button
+              type="button"
+              onClick={openMemberDetail}
+              className="font-medium text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+              title="회원 상세 열기"
+            >
+              {reservation.member_name || "회원"}
+            </button>
           </div>
+          {reservation.pass_id ? (
+            <div className="text-[12px] mt-0.5">
+              <span className="text-[#A89B80]">수강권명 : </span>
+              <button
+                type="button"
+                onClick={openPassDetail}
+                className="text-[#6B7B3A] dark:text-[#A8B87A] hover:underline font-medium"
+                title="수강권 상세 열기"
+              >
+                {reservation.lesson_kind || "수강권"}
+              </button>
+            </div>
+          ) : null}
           <div className="text-[12px] text-[#8C8270] mt-0.5">
             {formatDateTimeKST(reservation.starts_at)} ~ {formatTimeKST(reservation.ends_at)} ·{" "}
             {RESERVATION_STATUS_LABEL[reservation.status]}

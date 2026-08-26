@@ -133,6 +133,13 @@ export default function CrmPassesPage() {
     load();
   }, [load]);
 
+  // 딥링크: /crm/passes?pass=<id> 로 진입 시 해당 수강권 상세 자동 오픈
+  // (스케줄 예약 상세의 '수강권명' 클릭 → 새 창으로 이 페이지 열 때 사용)
+  useEffect(() => {
+    const pid = Number(new URLSearchParams(window.location.search).get("pass"));
+    if (pid) setDetailPassId(pid);
+  }, []);
+
   useEffect(() => {
     (async () => {
       const token = await getIdToken();
