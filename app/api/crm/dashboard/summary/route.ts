@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { cached, crmCacheKey } from "@/app/lib/cache";
 import { fetchSales, saleCategory } from "@/app/lib/crm-sales";
 
@@ -76,6 +77,11 @@ async function paginateAll<T>(
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // 센터 대시보드는 센터 전체 매출·미수금 포함 → 재무 열람 권한 필수(H1).
+  // 강사/개인(solo)은 프론트에서 별도 트레이너 대시보드로 분기되어 여기 접근 안 함.
+  if (!(await ctxHasPermission(ctx, "stats.view"))) {
+    return NextResponse.json({ error: "통계 열람 권한이 없습니다" }, { status: 403 });
+  }
 
   const url = new URL(request.url);
   const period = (url.searchParams.get("period") ?? "month") as

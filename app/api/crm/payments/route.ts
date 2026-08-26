@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,14 @@ export async function GET(request: Request) {
   const passId = url.searchParams.get("pass_id");
   const membershipId = url.searchParams.get("membership_id");
   const outstandingOnly = url.searchParams.get("outstanding") === "1";
+
+  // H2: 센터 전체 결제원장/미수금 조회는 재무 열람 권한 필수.
+  //   - 특정 회원/상품 스코프(member_id·pass_id·membership_id)면 허용(회원 상세 결제탭).
+  //   - 필터 없는 전체 조회 또는 outstanding=1(미수금 개요)은 stats.view 필요.
+  const isCenterWide = !memberId && !passId && !membershipId;
+  if ((isCenterWide || outstandingOnly) && !(await ctxHasPermission(ctx, "stats.view"))) {
+    return NextResponse.json({ error: "통계 열람 권한이 없습니다" }, { status: 403 });
+  }
 
   // 미수금 회원 + 미수액 총합 모드
   if (outstandingOnly) {
