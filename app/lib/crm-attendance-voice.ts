@@ -213,27 +213,62 @@ export async function buildAttendanceVoiceMessages(
           daysUntil(m.expires_at) >= 0 &&
           daysUntil(m.expires_at) <= EXPIRING_DEFAULT_DAYS
       );
-      const hasExpired = ms.some((m) => dateExpired(m));
       const hasOutstanding =
         ms.some((m) => Number(m.outstanding_won ?? 0) > 0) ||
         ((passesOutRes.data ?? []) as { outstanding_won: number }[]).some(
           (p) => Number(p.outstanding_won ?? 0) > 0
         );
 
+      // 사용 가능한(활성/예정/홀딩) 회원권이 하나도 없음 = 회원권 없음/만료 상태.
+      // 이 경우 '만료 회원 입장' 멘트를 우선 안내한다(설정 ON일 때).
+      // 예외: 유효한 수강권 + 오늘 예약된 수업이 있으면(정상 PT 방문) 안내 생략.
+      const noUsableMembership = !hasActive && !hasScheduled && !hasHolding;
+      let skipExpiredForClass = false;
+      if (on("msg_expired_membership") && noUsableMembership) {
+        const tomorrowYmd = (() => {
+          const t = new Date(`${todayYmd}T00:00:00Z`);
+          t.setUTCDate(t.getUTCDate() + 1);
+          return t.toISOString().slice(0, 10);
+        })();
+        const [validPassRes, todayClassRes] = await Promise.all([
+          supabase
+            .from("crm_passes")
+            .select("id")
+            .eq("center_id", centerId)
+            .eq("member_id", member.id)
+            .eq("status", "valid")
+            .limit(1),
+          supabase
+            .from("crm_reservations")
+            .select("id")
+            .eq("center_id", centerId)
+            .eq("member_id", member.id)
+            .in("status", ["booked", "attended"])
+            .gte("starts_at", `${todayYmd}T00:00:00+09:00`)
+            .lt("starts_at", `${tomorrowYmd}T00:00:00+09:00`)
+            .limit(1),
+        ]);
+        const hasValidPass = ((validPassRes.data ?? []) as unknown[]).length > 0;
+        const hasClassToday = ((todayClassRes.data ?? []) as unknown[]).length > 0;
+        skipExpiredForClass = hasValidPass && hasClassToday;
+      }
+
       // 생일
       if (on("msg_birthday_entry")) {
         const birth = (member.birth || "").slice(5, 10);
         if (birth && birth === todayMonthDay) messages.push(txt("msg_birthday_entry"));
       }
-      // 회원 상태 인사(상호 배타): 활성 / 예정 / 홀딩 / 만료
+      // 회원 상태 인사(상호 배타): 활성 / 예정 / 홀딩 / 만료(=회원권 없음)
       if (on("msg_active_entry") && hasActive) {
         messages.push(txt("msg_active_entry"));
-      } else if (on("msg_scheduled_membership") && !hasActive && hasScheduled) {
+      } else if (on("msg_scheduled_membership") && hasScheduled) {
         messages.push(txt("msg_scheduled_membership"));
-      } else if (on("msg_holding") && !hasActive && hasHolding) {
+      } else if (on("msg_holding") && hasHolding) {
         messages.push(txt("msg_holding"));
-      } else if (on("msg_expired_membership") && !hasActive && hasExpired) {
-        messages.push(txt("msg_expired_membership"));
+      } else if (on("msg_expired_membership") && noUsableMembership && !skipExpiredForClass) {
+        // 회원권 없음/만료(활성·예정·홀딩 전무) → 최우선 안내.
+        // hasExpired(만료 기록) 여부와 무관하게, 유효 회원권이 없으면 무조건 안내.
+        messages.unshift(txt("msg_expired_membership"));
       }
       // 만료 임박(활성 회원 대상 추가 안내)
       if (on("msg_expiring_membership") && hasExpiringSoon) {
