@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext, ctxHasPermission } from "@/app/lib/crm-permissions";
+import { sanitizeRichContent, stripTags } from "@/app/lib/sanitize";
 
 export const dynamic = "force-dynamic";
 
@@ -116,18 +117,28 @@ export async function POST(request: Request) {
     }
   }
 
+  // H3(XSS): 클라이언트가 보낸 약관 스냅샷을 그대로 저장하면 서명계약 열람 시(staff)
+  // 저장형 XSS가 됨 → 각 항목 title 태그제거 · body 리치서식 sanitize 후 저장.
+  const safeSnapshot = Array.isArray(body.terms_snapshot)
+    ? (body.terms_snapshot as Record<string, unknown>[]).map((t) => ({
+        ...t,
+        ...(typeof t.title === "string" ? { title: stripTags(t.title) } : {}),
+        ...(typeof t.body === "string" ? { body: sanitizeRichContent(t.body) } : {}),
+      }))
+    : (body.terms_snapshot ?? {});
+
   const insertRow = {
     center_id: ctx.centerId,
     member_id: body.member_id ?? null,
     staff_member_id: body.staff_member_id ?? null,
     pass_id: body.pass_id ?? null,
     membership_id: body.membership_id ?? null,
-    title: body.title?.trim() || "피티 회원가입 계약서",
+    title: stripTags(body.title?.trim() || "피티 회원가입 계약서"),
     customer_info: body.customer_info ?? {},
     product_info: body.product_info ?? {},
     payment_info: body.payment_info ?? {},
     terms_accepted: body.terms_accepted ?? {},
-    terms_snapshot: body.terms_snapshot ?? {},
+    terms_snapshot: safeSnapshot,
     signature_data_url: body.signature_data_url,
     trainer_signature_data_url:
       body.trainer_signature_data_url &&

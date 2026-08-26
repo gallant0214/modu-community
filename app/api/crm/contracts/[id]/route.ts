@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
+import { sanitizeRichContent, stripTags } from "@/app/lib/sanitize";
 
 export const dynamic = "force-dynamic";
 
@@ -94,17 +95,18 @@ export async function PATCH(
       ? (body.sections as { key?: string; title?: string; body?: string; required?: boolean }[])
           .map((s, i) => ({
             key: (s.key || `s${i + 1}`).trim(),
-            title: (s.title || "").trim(),
-            body: (s.body || "").toString(),
+            // H3(XSS): 제목 태그 제거, 본문 리치서식 sanitize.
+            title: stripTags((s.title || "").trim()),
+            body: sanitizeRichContent((s.body || "").toString()),
             required: !!s.required,
           }))
           .filter((s) => s.title || s.body)
       : [];
     patch.sections = normalized;
-    // 하위호환 body 도 함께 갱신
+    // 하위호환 body 도 함께 갱신 (섹션은 이미 sanitize 완료)
     patch.body = normalized.map((s) => `[${s.title}]\n\n${s.body}`).join("\n\n\n");
   } else if (body.body !== undefined) {
-    patch.body = body.body;
+    patch.body = sanitizeRichContent(body.body);
   }
 
   if (Object.keys(patch).length === 0) {

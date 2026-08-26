@@ -20,6 +20,13 @@ export function sanitizePostBody(html: string): string {
 }
 
 /**
+ * 태그 전부 제거 → 순수 텍스트만 남김 (제목·라벨 등 서식 불필요한 필드용).
+ */
+export function stripTags(html: string): string {
+  return sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} });
+}
+
+/**
  * 관리자 TipTap 에디터 출력용 sanitize.
  * 색상/폰트/리스트/표/하이라이트 등 풍부한 포맷팅 허용하되, script/on* 등 제거.
  */

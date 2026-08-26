@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
+import { sanitizeRichContent, stripTags } from "@/app/lib/sanitize";
 
 export const dynamic = "force-dynamic";
 
@@ -66,8 +67,9 @@ function normalizeSections(sections: unknown): {
   return sections
     .map((s: SectionInput, i: number) => ({
       key: (s.key || `s${i + 1}`).trim(),
-      title: (s.title || "").trim(),
-      body: (s.body || "").toString(),
+      // H3(XSS): 제목은 태그 제거, 본문은 리치서식 허용하되 script/on* 등 제거.
+      title: stripTags((s.title || "").trim()),
+      body: sanitizeRichContent((s.body || "").toString()),
       required: !!s.required,
     }))
     .filter((s) => s.title || s.body);
@@ -120,7 +122,8 @@ export async function POST(request: Request) {
   }
 
   const sections = normalizeSections(body.sections);
-  const bodyText = sections.length > 0 ? sectionsToBody(sections) : (body.body ?? "");
+  // sections 기반이면 이미 각 섹션 sanitize 완료. 직접 body 입력만 여기서 sanitize(H3).
+  const bodyText = sections.length > 0 ? sectionsToBody(sections) : sanitizeRichContent(body.body ?? "");
 
   const { data, error } = await supabase
     .from("crm_contract_templates")
