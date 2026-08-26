@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext, ctxHasPermission } from "@/app/lib/crm-permissions";
-import { residentHash, residentBirth } from "@/app/lib/crm-identity";
+import { residentHash, residentBirth, residentEncrypt } from "@/app/lib/crm-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -176,9 +176,10 @@ export async function PATCH(
       return NextResponse.json({ error: "주민번호 13자리를 정확히 입력해 주세요" }, { status: 400 });
     }
     patch.resident_hash = hash;
-    // 원본을 평문 그대로 text 컬럼에 저장. 조회는 GET /resident 에서 본인/대표자만 반환.
-    // 컬럼명은 마이그 이력상 resident_encrypted 이지만 실제로는 평문 문자열 저장.
-    patch.resident_encrypted = trimmed || null;
+    // H4: 주민번호 원문은 AES-256-GCM 암호화해서 저장(평문 저장 금지, 개인정보보호법).
+    //   - RESIDENT_ENC_KEY(Vercel env) 설정 시 암호문(hex) 저장.
+    //   - 키 미설정이면 원문을 저장하지 않음(null) — 평문은 절대 남기지 않는다. (해시는 유지)
+    patch.resident_encrypted = trimmed ? residentEncrypt(trimmed) : null;
     // 생년월일 미입력 시 주민번호 앞 6자리로 자동 채움
     const yymmdd = residentBirth(trimmed);
     if (yymmdd && body.birth === undefined) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { residentDecrypt } from "@/app/lib/crm-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -57,9 +58,17 @@ export async function GET(
     );
   }
 
-  const digits = stored.replace(/[^0-9]/g, "");
-  if (digits.length !== 13) {
-    return NextResponse.json({ error: "저장 데이터 형식 오류" }, { status: 500 });
+  // H4: 암호문(AES-GCM hex) 우선 복호화. 실패 시 레거시 평문(13자리)만 하위호환 처리.
+  let digits = residentDecrypt(stored);
+  if (!digits) {
+    const legacy = stored.replace(/[^0-9]/g, "");
+    digits = legacy.length === 13 ? legacy : null;
+  }
+  if (!digits || digits.length !== 13) {
+    return NextResponse.json(
+      { error: "주민번호를 복호화할 수 없어요. 서버 암호화 키(RESIDENT_ENC_KEY) 설정을 확인해 주세요." },
+      { status: 500 }
+    );
   }
 
   await supabase.from("crm_audit_logs").insert({
