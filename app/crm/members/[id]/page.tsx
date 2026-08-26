@@ -76,6 +76,15 @@ interface Pass {
   attendance_mileage_earn?: number;
 }
 
+// 수강권 만료 판정 — 소진(횟수제 잔여<=0) / 상태 만료 / 만료일 지남
+function isPassExpired(p: Pass): boolean {
+  if (p.total_sessions > 0 && p.remaining_sessions <= 0) return true;
+  if (p.status && p.status !== "valid" && p.status !== "paused") return true;
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  if (p.expires_at && p.expires_at !== "9999-12-31" && p.expires_at < today) return true;
+  return false;
+}
+
 export default function CrmMemberDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -93,6 +102,7 @@ export default function CrmMemberDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [passOpen, setPassOpen] = useState(false);
+  const [showExpiredPasses, setShowExpiredPasses] = useState(false); // 만료 수강권 펼치기
   const [usageOpen, setUsageOpen] = useState(false);
   const [usageReload, setUsageReload] = useState(0);
   const [paymentDetail, setPaymentDetail] = useState<PaymentDetail | null>(null);
@@ -697,8 +707,8 @@ export default function CrmMemberDetailPage() {
             </div>
           )
         ) : (
-          <ul className="space-y-2">
-            {passes.map((p) => (
+          (() => {
+            const renderPass = (p: Pass) => (
               <li key={p.id}>
                 <button
                   onClick={() => { setPassStartEdit(false); setDetailPassId(p.id); }}
@@ -728,8 +738,37 @@ export default function CrmMemberDetailPage() {
                   </div>
                 </button>
               </li>
-            ))}
-          </ul>
+            );
+            const validPasses = passes.filter((p) => !isPassExpired(p));
+            const expiredPasses = passes.filter((p) => isPassExpired(p));
+            return (
+              <>
+                {validPasses.length > 0 ? (
+                  <ul className="space-y-2">{validPasses.map(renderPass)}</ul>
+                ) : (
+                  <div className="px-4 py-4 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+                    유효한 수강권이 없어요.
+                  </div>
+                )}
+                {expiredPasses.length > 0 && (
+                  <div className="mt-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowExpiredPasses((v) => !v)}
+                      className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 bg-[#F5F0E5]/50 dark:bg-zinc-900/50 text-[12.5px] font-semibold text-[#8C8270] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
+                    >
+                      {showExpiredPasses
+                        ? `만료된 수강권 접기 ▴`
+                        : `만료된 수강권 ${expiredPasses.length}건 펼치기 ▾`}
+                    </button>
+                    {showExpiredPasses && (
+                      <ul className="space-y-2 mt-2">{expiredPasses.map(renderPass)}</ul>
+                    )}
+                  </div>
+                )}
+              </>
+            );
+          })()
         )}
       </section>
 
@@ -4357,6 +4396,7 @@ function UsageSection({
     { id: number; zone_name: string; number: number; start_date: string | null; expires_at: string | null; password?: string | null }[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [showExpired, setShowExpired] = useState(false); // 만료 항목 펼치기
 
   useEffect(() => {
     (async () => {
@@ -4392,6 +4432,72 @@ function UsageSection({
   const otherRentals = rentals.filter((r) => !usedRentalIds.has(r.id));
   const total = memberships.length + otherRentals.length + lockerCards.length;
 
+  // 유효/만료 분리 — 유효는 항상 최상단, 만료는 펼치기로.
+  const items: { valid: boolean; node: React.ReactNode }[] = [
+    ...memberships.map((m) => ({
+      valid: isValid(m.status, m.expires_at),
+      node: (
+        <UsageCard
+          key={`m${m.id}`}
+          tag="회원권"
+          name={m.plan_name}
+          price={m.price_won}
+          period={fmtPeriod(m.start_date, m.expires_at)}
+          valid={isValid(m.status, m.expires_at)}
+          paused={m.is_paused}
+          onClick={() => onOpenDetail(membershipToDetail(m, sellerName))}
+        />
+      ),
+    })),
+    ...otherRentals.map((r) => ({
+      valid: isValid(r.status, r.expires_at),
+      node: (
+        <UsageCard
+          key={`r${r.id}`}
+          tag="대여권"
+          name={r.item_name}
+          price={r.price_won}
+          period={fmtPeriod(r.start_date, r.expires_at)}
+          valid={isValid(r.status, r.expires_at)}
+          paused={r.is_paused}
+          onClick={() => onOpenDetail(rentalToDetail(r, sellerName))}
+        />
+      ),
+    })),
+    ...lockerCards.map((c) => {
+      const valid = c.assign ? !c.exp || c.exp >= todayStr : !!c.rental && isValid(c.rental.status, c.rental.expires_at);
+      return {
+        valid,
+        node: (
+          <UsageCard
+            key={c.key}
+            tag="락커"
+            name={c.name}
+            price={c.price}
+            period={fmtPeriod(c.start, c.exp)}
+            valid={valid}
+            lockerAssign={c.assign ? { zone_name: c.assign.zone_name, number: c.assign.number } : "unassigned"}
+            onClick={
+              c.rental
+                ? () =>
+                    onOpenDetail({
+                      ...rentalToDetail(c.rental!, sellerName),
+                      lockerAssignId: c.assign?.id ?? null,
+                      lockerAssignLabel: c.assign ? `${c.assign.zone_name} ${c.assign.number}번` : null,
+                      lockerAssignPassword: c.assign?.password ?? null,
+                    })
+                : c.assign
+                  ? () => onOpenDetail(lockerAssignToDetail(c.assign!))
+                  : onOpenLocker
+            }
+          />
+        ),
+      };
+    }),
+  ];
+  const validNodes = items.filter((i) => i.valid).map((i) => i.node);
+  const expiredNodes = items.filter((i) => !i.valid).map((i) => i.node);
+
   return (
     <section className="mt-6 mb-2">
       <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
@@ -4404,56 +4510,31 @@ function UsageSection({
           발급된 회원권·대여권·락커가 없습니다. &quot;+ 회원권 발급&quot;으로 추가해 주세요.
         </div>
       ) : (
-        <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {memberships.map((m) => (
-            <UsageCard
-              key={`m${m.id}`}
-              tag="회원권"
-              name={m.plan_name}
-              price={m.price_won}
-              period={fmtPeriod(m.start_date, m.expires_at)}
-              valid={isValid(m.status, m.expires_at)}
-              paused={m.is_paused}
-              onClick={() => onOpenDetail(membershipToDetail(m, sellerName))}
-            />
-          ))}
-          {otherRentals.map((r) => (
-            <UsageCard
-              key={`r${r.id}`}
-              tag="대여권"
-              name={r.item_name}
-              price={r.price_won}
-              period={fmtPeriod(r.start_date, r.expires_at)}
-              valid={isValid(r.status, r.expires_at)}
-              paused={r.is_paused}
-              onClick={() => onOpenDetail(rentalToDetail(r, sellerName))}
-            />
-          ))}
-          {lockerCards.map((c) => (
-            <UsageCard
-              key={c.key}
-              tag="락커"
-              name={c.name}
-              price={c.price}
-              period={fmtPeriod(c.start, c.exp)}
-              valid={c.assign ? !c.exp || c.exp >= todayStr : !!c.rental && isValid(c.rental.status, c.rental.expires_at)}
-              lockerAssign={c.assign ? { zone_name: c.assign.zone_name, number: c.assign.number } : "unassigned"}
-              onClick={
-                c.rental
-                  ? () =>
-                      onOpenDetail({
-                        ...rentalToDetail(c.rental!, sellerName),
-                        lockerAssignId: c.assign?.id ?? null,
-                        lockerAssignLabel: c.assign ? `${c.assign.zone_name} ${c.assign.number}번` : null,
-                        lockerAssignPassword: c.assign?.password ?? null,
-                      })
-                  : c.assign
-                    ? () => onOpenDetail(lockerAssignToDetail(c.assign!))
-                    : onOpenLocker
-              }
-            />
-          ))}
-        </ul>
+        <>
+          {validNodes.length > 0 ? (
+            <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">{validNodes}</ul>
+          ) : (
+            <div className="px-4 py-4 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+              유효한 회원권·대여권·락커가 없어요.
+            </div>
+          )}
+          {expiredNodes.length > 0 && (
+            <div className="mt-2.5">
+              <button
+                type="button"
+                onClick={() => setShowExpired((v) => !v)}
+                className="w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 bg-[#F5F0E5]/50 dark:bg-zinc-900/50 text-[12.5px] font-semibold text-[#8C8270] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
+              >
+                {showExpired
+                  ? `만료된 회원권·대여권·락커 접기 ▴`
+                  : `만료된 회원권·대여권·락커 ${expiredNodes.length}건 펼치기 ▾`}
+              </button>
+              {showExpired && (
+                <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">{expiredNodes}</ul>
+              )}
+            </div>
+          )}
+        </>
       )}
     </section>
   );
