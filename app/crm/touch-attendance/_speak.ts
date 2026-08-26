@@ -1,24 +1,88 @@
+// GC 방지: 재생 중인 utterance 참조를 모듈 레벨에 유지.
+// (Chrome 버그 — 지역 변수 utterance 가 재생 도중 GC 되면 소리가 안 나거나 끊김)
+let _utterRefs: SpeechSynthesisUtterance[] = [];
+let _primed = false;
+
+/**
+ * 사용자 제스처(탭/클릭) 시점에 SpeechSynthesis 를 "잠금 해제".
+ * 브라우저 자동재생 정책상, speak() 가 사용자 제스처에서 한 번 호출된 적이 없으면
+ * 이후 await(네트워크) 뒤의 speak() 가 조용히 차단된다. 무음 utterance 로 미리 활성화.
+ * 키패드 탭·출석 실행 등 제스처 핸들러에서 호출할 것.
+ */
+export function primeSpeech() {
+  if (_primed) return;
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  try {
+    _primed = true;
+    const synth = window.speechSynthesis;
+    // 음성 목록 로드 트리거
+    synth.getVoices();
+    const u = new SpeechSynthesisUtterance(" "); // 공백(사실상 무음)
+    u.volume = 0;
+    synth.speak(u);
+    synth.cancel(); // 즉시 큐 비우기 — 잠금 해제 효과만 남김
+  } catch {
+    _primed = false;
+  }
+}
+
 /**
  * 브라우저 내장 SpeechSynthesis 로 한국어 안내 음성 재생.
- * - messages 를 순차 재생. 각 문장 사이 짧은 공백.
- * - 이전 큐를 지우고 새로 시작 (겹치기 방지).
+ * - messages 를 순차 재생. 이전 큐를 지우고 새로 시작.
+ * - 음성 목록 미로드 시 로드 후 재생(Chrome 최초 무음 방지).
+ * - utterance 참조 유지로 GC 로 인한 무음/끊김 방지.
  * - 지원 안 하는 브라우저에서는 조용히 no-op.
  */
 export function speakMessages(messages: string[]) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   const clean = (messages || []).map((m) => (m ?? "").trim()).filter(Boolean);
   if (clean.length === 0) return;
-  try {
-    window.speechSynthesis.cancel();
-    for (const text of clean) {
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = "ko-KR";
-      utter.rate = 1.0;
-      utter.pitch = 1.0;
-      window.speechSynthesis.speak(utter);
+  const synth = window.speechSynthesis;
+
+  const doSpeak = () => {
+    try {
+      synth.cancel();
+      const voices = synth.getVoices();
+      const ko = voices.find((v) => (v.lang || "").toLowerCase().startsWith("ko"));
+      // cancel() 직후 같은 틱에 speak() 하면 Chrome 이 드롭하는 버그 → 짧은 지연 후 재생.
+      setTimeout(() => {
+        try {
+          if (synth.paused) synth.resume(); // 멈춤 상태 복구
+          _utterRefs = [];
+          for (const text of clean) {
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = "ko-KR";
+            if (ko) utter.voice = ko;
+            utter.rate = 1.0;
+            utter.pitch = 1.0;
+            _utterRefs.push(utter); // GC 방지
+            synth.speak(utter);
+          }
+        } catch {
+          /* no-op */
+        }
+      }, 60);
+    } catch {
+      /* no-op */
     }
-  } catch {
-    // 브라우저 정책상 사용자 상호작용 전이면 실패할 수 있음. 조용히 무시.
+  };
+
+  // 음성 목록이 아직 로드 안 됐으면(최초 호출) 로드 완료 후 재생.
+  if (synth.getVoices().length === 0) {
+    let fired = false;
+    const run = () => {
+      if (fired) return;
+      fired = true;
+      doSpeak();
+    };
+    try {
+      synth.addEventListener("voiceschanged", run, { once: true });
+    } catch {
+      /* addEventListener 미지원 */
+    }
+    setTimeout(run, 400); // voiceschanged 안 오는 브라우저 대비
+  } else {
+    doSpeak();
   }
 }
 

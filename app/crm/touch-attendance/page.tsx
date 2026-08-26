@@ -5,7 +5,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
 import FaceAttendance from "./face-attendance";
 import FaceEnroll from "./face-enroll";
-import { speakMessages, playWarningBeep } from "./_speak";
+import { speakMessages, playWarningBeep, primeSpeech } from "./_speak";
 
 interface MemberLite {
   id: number;
@@ -141,6 +141,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
 
   const press = (d: string) => {
     if (busy || candidates || enrollTarget) return;
+    primeSpeech(); // 사용자 제스처에서 음성 잠금 해제 (이후 await 뒤 재생 보장)
     setResult(null);
     setNum((v) => (v.length >= 10 ? v : v + d));
   };
@@ -158,6 +159,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
 
   const checkin = async (member: MemberLite) => {
     if (busy) return;
+    primeSpeech(); // 출석 실행 탭(제스처) 시점에 음성 잠금 해제
     setBusy(true);
     setResult(null);
     try {
@@ -350,7 +352,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         ).map(({ k, label }) => (
           <button
             key={k}
-            onClick={() => setRecogMode(k)}
+            onClick={() => { primeSpeech(); setRecogMode(k); }}
             className={`px-5 py-2.5 text-[14px] font-semibold ${
               recogMode === k
                 ? "bg-[#6B7B3A] text-white"
