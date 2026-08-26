@@ -1801,7 +1801,7 @@ function TransferModal({
     vals.owner_name.trim() &&
     vals.owner_phone.replace(/[^0-9]/g, "").length >= 10 &&
     (!requireBiz || vals.business_no.replace(/[^0-9]/g, "").length >= 8) &&
-    vals.resident_no.replace(/[^0-9]/g, "").length === 13;
+    vals.resident_no.replace(/[^0-9]/g, "").length === 6;
 
   const search = async () => {
     const q = query.trim();
@@ -1990,7 +1990,7 @@ const emptyIdentity: CenterIdentity = {
   resident_no: "",
 };
 
-/** 탈퇴/양도 본인 확인 5개 입력 (센터명·대표자명·대표자 휴대폰·사업자번호·대표자 주민번호) */
+/** 탈퇴/양도 본인 확인 5개 입력 (센터명·대표자명·대표자 휴대폰·사업자번호·대표자 생년월일 6자리) */
 function IdentityVerifyFields({
   vals,
   set,
@@ -2023,18 +2023,17 @@ function IdentityVerifyFields({
         </div>
       )}
       <div>
-        <label className="block text-[12px] text-[#3A342A] dark:text-zinc-300 mb-1">대표자 주민등록번호</label>
+        <label className="block text-[12px] text-[#3A342A] dark:text-zinc-300 mb-1">대표자 생년월일 (6자리)</label>
         <input
           className={`${crmInputClass} tracking-wider`}
-          type="password"
           inputMode="numeric"
-          maxLength={13}
+          maxLength={6}
           value={vals.resident_no}
-          onChange={(e) => set({ resident_no: e.target.value.replace(/[^0-9]/g, "").slice(0, 13) })}
-          placeholder="숫자 13자리"
+          onChange={(e) => set({ resident_no: e.target.value.replace(/[^0-9]/g, "").slice(0, 6) })}
+          placeholder="YYMMDD"
         />
         <p className="mt-1 text-[11px] text-[#A89B80]">
-          직원 관리 &gt; 대표자 상세에 등록한 주민번호와 일치해야 진행됩니다.
+          직원 관리 &gt; 대표자 상세에 등록한 생년월일과 일치해야 진행됩니다.
         </p>
       </div>
     </div>
@@ -2069,7 +2068,7 @@ function WithdrawModal({
     vals.owner_name.trim() &&
     vals.owner_phone.replace(/[^0-9]/g, "").length >= 10 &&
     (!requireBiz || vals.business_no.replace(/[^0-9]/g, "").length >= 8) &&
-    vals.resident_no.replace(/[^0-9]/g, "").length === 13;
+    vals.resident_no.replace(/[^0-9]/g, "").length === 6;
 
   const handleConfirm = async () => {
     if (!filled || submitting) return;

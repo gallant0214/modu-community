@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext, ctxHasPermission } from "@/app/lib/crm-permissions";
-import { residentHash, residentBirth, residentEncrypt } from "@/app/lib/crm-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +39,7 @@ export async function GET(
   const { data: member, error } = await supabase
     .from("crm_center_members")
     .select(
-      "id, firebase_uid, role, grade_id, display_name, phone, email, address, employment_status, employment_type, access_level, is_solo_owner, status, joined_at, left_at, commission_type, commission_rate, commission_tiers, base_salary, cash_pay_enabled, cash_pay_won, commission_bonuses, birth, resident_hash"
+      "id, firebase_uid, role, grade_id, display_name, phone, email, address, employment_status, employment_type, access_level, is_solo_owner, status, joined_at, left_at, commission_type, commission_rate, commission_tiers, base_salary, cash_pay_enabled, cash_pay_won, commission_bonuses, birth"
     )
     .eq("id", memberId)
     .eq("center_id", ctx.centerId)
@@ -53,10 +52,7 @@ export async function GET(
     return NextResponse.json({ error: "직원을 찾을 수 없습니다" }, { status: 404 });
   }
 
-  // 주민번호 해시는 절대 노출 금지 → 등록 여부(has_resident)만 전달
-  const m = member as typeof member & { resident_hash?: string | null };
-  const safeMember = { ...m, has_resident: !!m.resident_hash };
-  delete (safeMember as { resident_hash?: unknown }).resident_hash;
+  const safeMember = member;
 
   const { data: perms } = await supabase
     .from("crm_trainer_permissions")
@@ -74,7 +70,7 @@ export async function GET(
  *
  * 접근:
  *  - owner/admin/manager: 모든 직원 수정
- *  - trainer(본인): display_name/phone/email/address/birth/resident_no 만 수정 허용
+ *  - trainer(본인): display_name/phone/email/address/birth 만 수정 허용
  *
  * 본인(센터의 마지막 owner) 등급을 trainer 로 내려서 센터가 owner 없는 상태가 되는 것 방지.
  */
@@ -120,7 +116,6 @@ export async function PATCH(
       bonus_percent?: number;
     }[];
     birth?: string | null;
-    resident_no?: string; // 주민번호 원문 → 해시로만 저장
   };
   try {
     body = await request.json();
@@ -165,28 +160,10 @@ export async function PATCH(
 
   const patch: Record<string, unknown> = {};
 
-  // 본인 확인 정보(생년월일·주민번호) — 센터 탈퇴/양도 방지용
+  // 본인 확인 정보(생년월일) — 센터 탈퇴/양도 방지용.
+  // 개인정보 최소화: 주민번호는 수집·저장하지 않고 생년월일(birth)만 본인확인 인자로 사용.
   if (body.birth !== undefined) {
     patch.birth = body.birth?.trim() || null;
-  }
-  if (body.resident_no !== undefined) {
-    const trimmed = body.resident_no.trim();
-    const hash = residentHash(trimmed);
-    if (trimmed && !hash) {
-      return NextResponse.json({ error: "주민번호 13자리를 정확히 입력해 주세요" }, { status: 400 });
-    }
-    patch.resident_hash = hash;
-    // H4: 주민번호 원문은 AES-256-GCM 암호화해서 저장(평문 저장 금지, 개인정보보호법).
-    //   - RESIDENT_ENC_KEY(Vercel env) 설정 시 암호문(hex) 저장.
-    //   - 키 미설정이면 원문을 저장하지 않음(null) — 평문은 절대 남기지 않는다. (해시는 유지)
-    patch.resident_encrypted = trimmed ? residentEncrypt(trimmed) : null;
-    // 생년월일 미입력 시 주민번호 앞 6자리로 자동 채움
-    const yymmdd = residentBirth(trimmed);
-    if (yymmdd && body.birth === undefined) {
-      const yy = Number(yymmdd.slice(0, 2));
-      const yyyy = yy <= 30 ? 2000 + yy : 1900 + yy;
-      patch.birth = `${yyyy}-${yymmdd.slice(2, 4)}-${yymmdd.slice(4, 6)}`;
-    }
   }
 
   // 수업료(정산) 설정은 sales.commission_edit 권한 필요

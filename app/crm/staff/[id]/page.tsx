@@ -192,13 +192,11 @@ export default function CrmStaffDetailPage() {
       </header>
 
       <ContactSection
-        memberId={member.id}
         name={member.display_name}
         birth={member.birth ?? null}
         phone={member.phone}
         email={member.email}
         address={member.address}
-        hasResident={!!member.has_resident}
         saving={saving}
         onSave={(p) => patchMember(p)}
       />
@@ -865,27 +863,22 @@ function DisplayNameSection({
 }
 
 function ContactSection({
-  memberId,
   name,
   birth,
   phone,
   email,
   address,
-  hasResident,
   saving,
   onSave,
 }: {
-  memberId: number;
   name: string;
   birth: string | null;
   phone: string | null;
   email: string | null;
   address: string | null;
-  hasResident: boolean;
   saving: boolean;
-  onSave: (patch: { display_name?: string; birth?: string | null; phone?: string | null; email?: string | null; address?: string | null; resident_no?: string }) => void;
+  onSave: (patch: { display_name?: string; birth?: string | null; phone?: string | null; email?: string | null; address?: string | null }) => void;
 }) {
-  const { getIdToken } = useAuth();
   const [n, setN] = useState(name ?? "");
   const [b, setB] = useState(birth ?? "");
   const bMonthRef = useRef<HTMLInputElement>(null);
@@ -893,13 +886,6 @@ function ContactSection({
   const [p, setP] = useState(formatPhone(phone ?? ""));
   const [e, setE] = useState(email ?? "");
   const [a, setA] = useState(address ?? "");
-  const [residentFront, setResidentFront] = useState(""); // 앞 6자리
-  const [residentBack, setResidentBack] = useState(""); // 뒤 7자리
-  const [editingResident, setEditingResident] = useState(false);
-  const residentBackRef = useRef<HTMLInputElement | null>(null);
-  const [revealed, setRevealed] = useState<string | null>(null); // 눈 아이콘 클릭 시 원본
-  const [revealLoading, setRevealLoading] = useState(false);
-  const [revealError, setRevealError] = useState("");
 
   useEffect(() => {
     setN(name ?? "");
@@ -925,61 +911,6 @@ function ContactSection({
     if (dirtyEmail) patch.email = e.trim() || null;
     if (dirtyAddress) patch.address = a.trim() || null;
     onSave(patch);
-  };
-
-  // 주민번호 별도 저장 (해시 저장이라 다른 필드와 함께 patch 안 함)
-  const residentFrontDigits = residentFront.replace(/[^0-9]/g, "");
-  const residentBackDigits = residentBack.replace(/[^0-9]/g, "");
-  const residentReady = residentFrontDigits.length === 6 && residentBackDigits.length === 7;
-  const saveResident = () => {
-    if (!residentReady) return;
-    onSave({ resident_no: residentFrontDigits + residentBackDigits });
-    setResidentFront("");
-    setResidentBack("");
-    setEditingResident(false);
-  };
-
-  // 등록된 주민번호 마스킹 표시: 생년월일(YYMMDD)-*******
-  const maskedResident = (() => {
-    if (!hasResident) return null;
-    const d = (birth ?? "").replace(/[^0-9]/g, "");
-    const yymmdd = d.length >= 8 ? d.slice(2, 8) : d.slice(0, 6);
-    return `${yymmdd || "******"}-*******`;
-  })();
-
-  // birth 또는 hasResident 바뀌면 노출 상태 초기화 (다른 직원 페이지로 이동 등)
-  useEffect(() => {
-    setRevealed(null);
-    setRevealError("");
-  }, [memberId, hasResident]);
-
-  // 눈 아이콘 클릭 → 서버에 복호화 요청 → 원본 표시
-  // 원본이 저장 안 돼 있으면(404) 자동으로 편집 모드로 전환
-  const revealResident = async () => {
-    if (revealed) {
-      setRevealed(null);
-      setRevealError("");
-      return;
-    }
-    setRevealLoading(true);
-    setRevealError("");
-    try {
-      const token = await getIdToken();
-      if (!token) throw new Error("로그인 정보를 확인할 수 없어요");
-      const res = await fetch(`/api/crm/staff/${memberId}/resident`, {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "조회 실패");
-      const digits = String(data.resident_no || "").replace(/[^0-9]/g, "");
-      if (digits.length !== 13) throw new Error("응답 형식 오류");
-      setRevealed(`${digits.slice(0, 6)}-${digits.slice(6)}`);
-    } catch (err) {
-      setRevealError(err instanceof Error ? err.message : "조회 실패");
-    } finally {
-      setRevealLoading(false);
-    }
   };
 
   return (
@@ -1063,105 +994,6 @@ function ContactSection({
           />
         </div>
 
-        <div>
-          <div className="text-[12.5px] text-[#A89B80] mb-1.5">
-            주민등록번호 <span className="text-[#A89B80]">(선택 · 본인 확인용)</span>
-          </div>
-            {maskedResident && !editingResident ? (
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 text-[14px] font-medium text-[#3A342A] dark:text-zinc-200 tabular-nums">
-                    {revealed ?? maskedResident}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={revealResident}
-                    disabled={revealLoading}
-                    title={revealed ? "숨기기" : "주민번호 원본 보기 (본인·대표자만 · 조회 기록 남습니다)"}
-                    aria-label={revealed ? "주민번호 숨기기" : "주민번호 보기"}
-                    className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-60"
-                  >
-                    {revealLoading ? (
-                      <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden />
-                    ) : revealed ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4.5 h-4.5" aria-hidden>
-                        <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.06 20.06 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.13 20.13 0 0 1-3.17 4.19M1 1l22 22" />
-                        <path d="M9.53 9.53a3 3 0 0 0 4.24 4.24" />
-                      </svg>
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4.5 h-4.5" aria-hidden>
-                        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingResident(true)}
-                    className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
-                  >
-                    변경
-                  </button>
-                </div>
-                {revealError && (
-                  <div className="text-[11.5px] text-red-600">{revealError}</div>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 flex-wrap">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  className="w-[120px] px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 tracking-wider tabular-nums focus:outline-none focus:border-[#6B7B3A]"
-                  value={residentFront}
-                  onChange={(ev) => {
-                    const v = ev.target.value.replace(/[^0-9]/g, "").slice(0, 6);
-                    setResidentFront(v);
-                    if (v.length === 6) residentBackRef.current?.focus();
-                  }}
-                  placeholder="YYMMDD"
-                  maxLength={6}
-                  aria-label="주민번호 앞 6자리"
-                />
-                <span className="text-[16px] font-semibold text-[#A89B80]">-</span>
-                <input
-                  ref={residentBackRef}
-                  type="text"
-                  inputMode="numeric"
-                  className="w-[130px] px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 tracking-wider tabular-nums focus:outline-none focus:border-[#6B7B3A]"
-                  value={residentBack}
-                  onChange={(ev) => setResidentBack(ev.target.value.replace(/[^0-9]/g, "").slice(0, 7))}
-                  placeholder="0000000"
-                  maxLength={7}
-                  aria-label="주민번호 뒤 7자리"
-                />
-                <button
-                  type="button"
-                  onClick={saveResident}
-                  disabled={saving || !residentReady}
-                  className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
-                >
-                  저장
-                </button>
-                {maskedResident && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingResident(false);
-                      setResidentFront("");
-                      setResidentBack("");
-                    }}
-                    className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] text-[#6B5D47] dark:text-zinc-300"
-                  >
-                    취소
-                  </button>
-                )}
-              </div>
-            )}
-          <p className="mt-1.5 text-[11px] text-[#A89B80]">
-            저장된 값은 마스킹되어 표시되고, 눈 아이콘을 눌러 원본을 확인할 수 있어요. 조회는 본인·대표자만 가능하며 감사 로그에 기록됩니다.
-          </p>
-        </div>
         <div>
           <div className="text-[12.5px] text-[#A89B80] mb-1.5">
             연락처 <span className="text-red-500">*</span>
