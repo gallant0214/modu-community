@@ -14,6 +14,7 @@ import CrmStaffPage from "../staff/page";
 import CrmContractsPage from "../contracts/page";
 import { useCrmTheme } from "../_components/crm-theme";
 import { useCrmToast } from "../_components/crm-toast";
+import { speakMessages, primeSpeech } from "../touch-attendance/_speak";
 
 interface Settings {
   center_id: number;
@@ -1261,10 +1262,10 @@ function AttendanceVoicePanel({ role }: { role: "owner" | "admin" | "manager" | 
     }
     const text = msg.replace(/\{name\}/g, sampleName);
     if (!text.trim()) return;
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = "ko-KR";
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utter);
+    // 터치출석과 동일한 견고한 재생 로직 재사용
+    // (utterance 참조 유지·음성목록 로드 대기·cancel 후 지연재생·paused resume)
+    primeSpeech(); // 클릭 제스처에서 음성 잠금 해제
+    speakMessages([text]);
   };
 
   return (
