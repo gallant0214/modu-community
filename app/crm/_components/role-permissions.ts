@@ -129,7 +129,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     label: "스케줄 · 예약 · 출석",
     items: [
       { key: "schedule.reserve", label: "예약 생성·취소·변경",   defaults: D_STAFF_NO_ALBA },
-      { key: "schedule.attend",  label: "출석 확정·취소(예약)",  defaults: D_STAFF_NO_ALBA },
+      { key: "schedule.attend",  label: "수업 출석·노쇼 처리",  defaults: D_STAFF_NO_ALBA },
       { key: "attendance.manage", label: "출석 체크인·출석 삭제", defaults: D_STAFF_NO_ALBA },
       {
         key: "schedule.view_others",
