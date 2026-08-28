@@ -8,6 +8,7 @@ interface MsgLog {
   channel: "sms" | "push";
   title: string | null;
   content: string;
+  recipient_label: string;
   receiver_cnt: number;
   msg_type: string | null;
   testmode: boolean;
@@ -34,39 +35,53 @@ export function SmsLogsTab() {
   const { getIdToken } = useAuth();
   const [logs, setLogs] = useState<MsgLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const token = await getIdToken();
-      if (!token) return;
-      const res = await fetch("/api/crm/sms/logs?limit=100", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setLogs(data.logs ?? []);
+  // reset=true: 처음부터 새로 조회 / false: nextCursor 이전 것 이어붙이기(더 보기)
+  const load = useCallback(
+    async (reset: boolean) => {
+      if (reset) setLoading(true);
+      else setLoadingMore(true);
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const cursor = reset ? null : nextCursor;
+        const qs = cursor ? `?before=${encodeURIComponent(cursor)}` : "";
+        const res = await fetch(`/api/crm/sms/logs${qs}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const newLogs: MsgLog[] = data.logs ?? [];
+          setLogs((prev) => (reset ? newLogs : [...prev, ...newLogs]));
+          setNextCursor(data.next_cursor ?? null);
+        }
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }, [getIdToken]);
+    },
+    [getIdToken, nextCursor]
+  );
 
   useEffect(() => {
-    load();
-  }, [load]);
+    load(true);
+    // 최초 1회만
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getIdToken]);
 
   return (
     <div className="max-w-2xl">
       <div className="flex items-center justify-between mb-3">
         <p className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-          문자·앱푸시 등 모든 메세지 전송 기록을 확인해요. (최근 100건)
+          문자·앱푸시 등 모든 메세지 전송 기록을 확인해요. (누적 · 받는 사람·발송 직원 표시)
         </p>
         <button
           type="button"
-          onClick={load}
+          onClick={() => load(true)}
           className="px-2.5 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#FBF7EB] dark:hover:bg-zinc-800"
         >
           새로고침
@@ -143,6 +158,15 @@ export function SmsLogsTab() {
                       <span className="text-[#A89B80]">{formatDateTime(l.created_at)}</span>
                     </div>
                   </div>
+                  {/* 받는 사람 · 발송 직원 요약 줄 */}
+                  <div className="mt-1 flex items-center gap-3 flex-wrap text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+                    <span>
+                      받는 사람: <span className="text-[#6B5D47] dark:text-zinc-300 font-medium">{l.recipient_label}</span>
+                    </span>
+                    <span>
+                      발송: <span className="text-[#6B5D47] dark:text-zinc-300 font-medium">{l.sent_by_name || "—"}</span>
+                    </span>
+                  </div>
                   <div className="mt-1.5 text-[12.5px] text-[#3A342A] dark:text-zinc-300 line-clamp-2 whitespace-pre-wrap">
                     {l.title ? <strong>[{l.title}] </strong> : null}
                     {l.content}
@@ -173,6 +197,19 @@ export function SmsLogsTab() {
             );
           })}
         </ul>
+      )}
+
+      {!loading && nextCursor && (
+        <div className="mt-3 text-center">
+          <button
+            type="button"
+            onClick={() => load(false)}
+            disabled={loadingMore}
+            className="px-4 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#FBF7EB] dark:hover:bg-zinc-800 disabled:opacity-50"
+          >
+            {loadingMore ? "불러오는 중…" : "더 보기"}
+          </button>
+        </div>
       )}
     </div>
   );

@@ -40,12 +40,13 @@ export async function POST(
   // 대상 회원이 이 센터 소속인지 확인 (데이터 격리) + 앱 연동/센터명
   const { data: member } = await supabase
     .from("crm_members")
-    .select("id, linked_firebase_uid")
+    .select("id, name, linked_firebase_uid")
     .eq("id", memberId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
   if (!member) return NextResponse.json({ error: "회원을 찾을 수 없습니다" }, { status: 404 });
-  const linked = (member as { linked_firebase_uid?: string | null }).linked_firebase_uid;
+  const m = member as { name?: string | null; linked_firebase_uid?: string | null };
+  const linked = m.linked_firebase_uid;
 
   const { data: center } = await supabase
     .from("crm_centers")
@@ -55,6 +56,27 @@ export async function POST(
   const title = (center as { name?: string } | null)?.name || "센터 메세지";
 
   const sent = await sendPushToMember(memberId, "center_message", title, text);
+
+  // 메세지 전송 로그(사이드바)에 개별 발송 기록 — 수신자(회원명)·발송 직원 함께 남김
+  try {
+    const { data: staff } = await supabase
+      .from("crm_center_members")
+      .select("display_name")
+      .eq("id", ctx.centerMemberId ?? -1)
+      .maybeSingle();
+    await supabase.from("crm_message_broadcasts").insert({
+      center_id: ctx.centerId,
+      title,
+      body: text,
+      audience_kind: "individual",
+      audience_filter: { member_id: memberId, member_name: m.name ?? null } as never,
+      recipient_count: 1,
+      sent_by_uid: ctx.uid,
+      sent_by_name: (staff as { display_name?: string } | null)?.display_name ?? null,
+    } as never);
+  } catch {
+    /* 로그 실패는 전송 성공에 영향 없음 */
+  }
 
   return NextResponse.json({
     ok: true,
