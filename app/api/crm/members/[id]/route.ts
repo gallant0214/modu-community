@@ -111,19 +111,47 @@ export async function GET(
   const isUnlimited = (d?: string | null) =>
     !!d && (d.startsWith("9999") || d.startsWith("2999"));
 
-  // 최근 구매일 · 누적 결제금액 = crm_payments 실측 (컬럼값은 자동 갱신되지 않아 신뢰 X)
+  // 최근 구매일 = crm_payments 최신 paid_at.
+  // 누적 결제 = crm_sales 원장 순액(판매−환불) + 원장 컷오프 이후 crm_payments
+  //   (목록 API 와 동일한 either/or 규칙 — 이중집계 방지. 스냅샷 컬럼은 자동 갱신 안 돼 신뢰 X)
   const { data: pays } = await supabase
     .from("crm_payments")
     .select("paid_at, amount_won, status")
     .eq("center_id", targetCenterId)
     .eq("member_id", memberId);
-  let lastPaidRaw: string | null = null;
-  let totalPaid = 0;
-  for (const p of (pays ?? []) as { paid_at: string | null; amount_won: number | null; status: string | null }[]) {
-    if (p.status === "cancelled") continue; // 환불/취소는 합계에서 제외
-    if (typeof p.amount_won === "number") totalPaid += p.amount_won;
-    if (p.paid_at && (!lastPaidRaw || p.paid_at > lastPaidRaw)) lastPaidRaw = p.paid_at;
+  // 원장 컷오프(마지막 거래일, KST)
+  const { data: maxTxRow } = await supabase
+    .from("crm_sales")
+    .select("tx_at")
+    .eq("center_id", targetCenterId)
+    .order("tx_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const salesCutoffYmd = (maxTxRow as { tx_at?: string } | null)?.tx_at
+    ? new Date(new Date((maxTxRow as { tx_at: string }).tx_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+    : null;
+  // 원장 순액(판매/미수금결제 +, 환불 −)
+  const { data: salesRows } = await supabase
+    .from("crm_sales")
+    .select("amount_won, tx_type")
+    .eq("center_id", targetCenterId)
+    .eq("member_id", memberId);
+  let salesNet = 0;
+  for (const s of (salesRows ?? []) as { amount_won: number | null; tx_type: string | null }[]) {
+    salesNet += s.tx_type === "환불" ? -(s.amount_won ?? 0) : s.amount_won ?? 0;
   }
+  let lastPaidRaw: string | null = null;
+  let payAfterCutoff = 0;
+  for (const p of (pays ?? []) as { paid_at: string | null; amount_won: number | null; status: string | null }[]) {
+    if (p.paid_at && (!lastPaidRaw || p.paid_at > lastPaidRaw)) lastPaidRaw = p.paid_at;
+    if (p.status !== "completed") continue;
+    if (salesCutoffYmd) {
+      const ymd = p.paid_at ? new Date(new Date(p.paid_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10) : null;
+      if (!ymd || ymd <= salesCutoffYmd) continue; // 컷오프 이전은 원장에 이미 포함
+    }
+    payAfterCutoff += p.amount_won ?? 0;
+  }
+  const totalPaid = salesNet + payAfterCutoff;
   const lastPaid = lastPaidRaw
     ? new Date(new Date(lastPaidRaw).getTime() + 9 * 3600 * 1000)
         .toISOString()
@@ -197,8 +225,8 @@ export async function GET(
 
   const memberOut = {
     ...member,
-    // 결제 실측 우선(자동 갱신되지 않는 stored 값 대체). 결제 이력 없을 때만 stored 유지.
-    total_paid_won: (pays && pays.length > 0) ? totalPaid : (member.total_paid_won ?? 0),
+    // 결제 실측(원장+컷오프후 결제) 우선. 계산이 0 이하면 stored 스냅샷 폴백.
+    total_paid_won: totalPaid > 0 ? totalPaid : (member.total_paid_won ?? 0),
     last_purchase_at: lastPaid ?? member.last_purchase_at,
     final_expire_at: finalExp ?? member.final_expire_at,
   };
