@@ -19,6 +19,8 @@ export interface TriggerSetting {
   send_basis: string;
   send_days: number | null;
   send_count: number | null;
+  /** 기준일 방향(생일 등): 기준일 전(before, 기본) / 후(after) */
+  send_days_dir?: "before" | "after";
 }
 
 /** 스캔(데이터 기반)으로 대상 산출이 가능한 트리거 */
@@ -133,10 +135,11 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
   const today = kstYmd();
   const members = await loadMembers(centerId);
 
-  // 생일
+  // 생일 (기준일 전=생일 N일 전 발송 / 후=생일 N일 후 발송)
   if (key === "birthday") {
     const days = setting.send_basis === "schedule" ? setting.send_days ?? 0 : 0;
-    const target = mmdd(addDays(today, days));
+    const dir = setting.send_days_dir === "after" ? -1 : 1; // 전=미래 생일 매칭(+), 후=지난 생일 매칭(-)
+    const target = mmdd(addDays(today, dir * days));
     const out: Match[] = [];
     for (const m of members.values()) {
       if (m.birth && mmdd(m.birth) === target) out.push({ member_id: m.id, name: m.name });

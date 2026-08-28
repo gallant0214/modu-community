@@ -20,11 +20,13 @@ export async function GET(request: Request) {
 
   const { data: settings } = await supabase
     .from("crm_auto_message_settings")
-    .select("trigger_key, send_basis, send_days, send_count")
+    .select("trigger_key, send_basis, send_days, send_count, config")
     .eq("center_id", ctx.centerId);
 
   const byKey = new Map<string, TriggerSetting>();
-  for (const s of (settings ?? []) as TriggerSetting[]) byKey.set(s.trigger_key, s);
+  for (const s of (settings ?? []) as (TriggerSetting & { config?: { send_days_dir?: "before" | "after" } | null })[]) {
+    byKey.set(s.trigger_key, { ...s, send_days_dir: s.config?.send_days_dir });
+  }
 
   const counts: Record<string, number> = {};
   for (const key of SCAN_TRIGGERS) {

@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
   const { data: settings } = await supabase
     .from("crm_auto_message_settings")
-    .select("trigger_key, send_basis, send_days, send_count, enabled, message_body, methods")
+    .select("trigger_key, send_basis, send_days, send_count, enabled, message_body, methods, config")
     .eq("center_id", ctx.centerId)
     .eq("enabled", true);
 
@@ -43,11 +43,11 @@ export async function POST(request: Request) {
   const byTrigger: Record<string, number> = {};
   let total = 0;
 
-  for (const s of (settings ?? []) as FullSetting[]) {
+  for (const s of (settings ?? []) as (FullSetting & { config?: { send_days_dir?: "before" | "after" } | null })[]) {
     if (!SCAN_TRIGGERS.has(s.trigger_key)) continue;
     let matches;
     try {
-      matches = await computeMatches(ctx.centerId, s);
+      matches = await computeMatches(ctx.centerId, { ...s, send_days_dir: s.config?.send_days_dir });
     } catch {
       continue;
     }

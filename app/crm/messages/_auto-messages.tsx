@@ -20,6 +20,8 @@ interface CouponAttach {
 interface SettingConfig {
   attachments?: string[];
   coupon?: CouponAttach | null;
+  /** 기준일 방향: 기준(만료·생일)일 전(before) 또는 후(after). 기본 before */
+  send_days_dir?: "before" | "after";
 }
 interface SettingRow {
   trigger_key: string;
@@ -347,6 +349,9 @@ function AutoMessageEditor({
   const [enabled, setEnabled] = useState(base.enabled);
   const [sendBasis, setSendBasis] = useState<SendBasis>((base.send_basis as SendBasis) || "immediate");
   const [sendDays, setSendDays] = useState<number>(base.send_days ?? 3);
+  const [sendDaysDir, setSendDaysDir] = useState<"before" | "after">(
+    base.config?.send_days_dir === "after" ? "after" : "before"
+  );
   const [sendCount, setSendCount] = useState<number>(base.send_count ?? 10);
   const [methods, setMethods] = useState<string[]>(base.methods ?? []);
   const [audience, setAudience] = useState<string[]>(base.audience ?? []);
@@ -434,6 +439,7 @@ function AutoMessageEditor({
         config: {
           attachments,
           coupon: couponName.trim() ? { name: couponName.trim(), link: couponLink.trim() } : null,
+          send_days_dir: sendDaysDir,
         },
       });
     } finally {
@@ -453,6 +459,7 @@ function AutoMessageEditor({
       couponLink={couponLink}
       sendBasis={sendBasis}
       sendDays={sendDays}
+      sendDaysDir={sendDaysDir}
       sendCount={sendCount}
       audience={audience}
     />
@@ -534,7 +541,7 @@ function AutoMessageEditor({
                 })}
               </div>
               {sendBasis === "schedule" && (
-                <div className="mt-2.5 flex items-center gap-2 text-[13px] text-[#3A342A] dark:text-zinc-200">
+                <div className="mt-2.5 flex items-center gap-2 flex-wrap text-[13px] text-[#3A342A] dark:text-zinc-200">
                   <span>기준일</span>
                   <input
                     type="number"
@@ -544,7 +551,27 @@ function AutoMessageEditor({
                     onChange={(e) => setSendDays(Math.max(0, Math.min(365, Number(e.target.value) || 0)))}
                     className="w-20 px-2 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
                   />
-                  <span>일 (만료·생일 등 기준 전/후)</span>
+                  <span>일</span>
+                  {/* 기준(만료·생일)일 전/후 선택 */}
+                  <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
+                    {(["before", "after"] as const).map((dir) => (
+                      <button
+                        key={dir}
+                        type="button"
+                        onClick={() => setSendDaysDir(dir)}
+                        className={`px-3 py-1 text-[12.5px] font-semibold ${
+                          sendDaysDir === dir
+                            ? "bg-[#6B7B3A] text-white"
+                            : "bg-white dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-300"
+                        }`}
+                      >
+                        {dir === "before" ? "전" : "후"}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-[12px] text-[#8C8270] dark:text-zinc-500">
+                    (만료·생일 등 기준일 {sendDaysDir === "before" ? "전" : "후"})
+                  </span>
                 </div>
               )}
               {sendBasis === "count" && (
@@ -741,6 +768,7 @@ function MessagePreview({
   couponLink,
   sendBasis,
   sendDays,
+  sendDaysDir,
   sendCount,
   audience,
 }: {
@@ -754,11 +782,16 @@ function MessagePreview({
   couponLink: string;
   sendBasis: SendBasis;
   sendDays: number;
+  sendDaysDir: "before" | "after";
   sendCount: number;
   audience: string[];
 }) {
   const basisText =
-    sendBasis === "schedule" ? `일정 기준 ${sendDays}일` : sendBasis === "count" ? `횟수 기준 ${sendCount}회` : "즉시";
+    sendBasis === "schedule"
+      ? `일정 기준 ${sendDays}일 ${sendDaysDir === "before" ? "전" : "후"}`
+      : sendBasis === "count"
+        ? `횟수 기준 ${sendCount}회`
+        : "즉시";
   return (
     <div className="p-4">
       <div className="text-[12px] font-bold text-[#2A251D] dark:text-zinc-100 mb-2">미리 보기</div>
