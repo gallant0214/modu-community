@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { ROLE_LABEL, formatWon, parseWon } from "../_components/crm-labels";
-import { TrainerSessionsChart } from "./_components/trainer-sessions-chart";
+import { TrainerSessionsChart, TrainerRevenueChart } from "./_components/trainer-sessions-chart";
 import { PayrollList } from "../payroll/_payroll-list";
 
 interface MonthlyResp {
@@ -395,6 +395,8 @@ function TrainerTab({ data }: { data: MonthlyResp | null }) {
 
       {/* 강사별 월별 수업 진행 수 (12개월, 강사 선택) */}
       <TrainerSessionsChart />
+      {/* 강사별 월별 매출 (12개월, 강사 선택) */}
+      <TrainerRevenueChart />
     </>
   );
 }
