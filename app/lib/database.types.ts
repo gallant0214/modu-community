@@ -3976,6 +3976,30 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_message_phrases: {
+        Row: {
+          id: number
+          center_id: number
+          text: string
+          created_by_uid: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          text: string
+          created_by_uid?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          text?: string
+          created_by_uid?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       crm_audit_logs: {
         Row: {
           id: number

@@ -413,6 +413,12 @@ export default function CrmMemberDetailPage() {
                   centerId={foreignCenter ? Number(foreignCenter) : undefined}
                   onDone={load}
                 />
+                <MemberMessageButton
+                  memberId={member.id}
+                  memberName={member.name}
+                  memberPhone={member.phone}
+                  linked={!!member.linked_firebase_uid}
+                />
                 {member.linked_firebase_uid && (
                   <UnlinkAppButton memberId={member.id} canEdit={canEditBasic} onDone={load} />
                 )}
@@ -1078,6 +1084,298 @@ function CheckInButton({
           {msg.text}
         </span>
       )}
+    </div>
+  );
+}
+
+/* 회원 상세 헤더 — 메세지 전송 (앱 푸시 / SMS 선택 + 자주 쓰는 문구) */
+function smsByteLen(s: string): number {
+  // 한글 등 비ASCII 2byte, 그 외 1byte (SMS 90byte 기준 근사)
+  let n = 0;
+  for (const ch of s) n += ch.charCodeAt(0) > 0x7f ? 2 : 1;
+  return n;
+}
+function MemberMessageButton({
+  memberId,
+  memberName,
+  memberPhone,
+  linked,
+}: {
+  memberId: number;
+  memberName: string;
+  memberPhone: string | null;
+  linked: boolean;
+}) {
+  const { getIdToken } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [channel, setChannel] = useState<"push" | "sms">(linked ? "push" : "sms");
+  const [text, setText] = useState("");
+  const [phrases, setPhrases] = useState<{ id: number; text: string }[]>([]);
+  const [centerId, setCenterId] = useState<number | null>(null);
+  const [sending, setSending] = useState(false);
+  const [savingPhrase, setSavingPhrase] = useState(false);
+  const [result, setResult] = useState<{ text: string; tone: "ok" | "warn" } | null>(null);
+
+  const smsLocked = centerId !== null && centerId !== 1;
+  const smsAvailable = !smsLocked && !!memberPhone;
+
+  const loadPhrases = useCallback(async () => {
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/message-phrases", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) setPhrases((await res.json()).phrases ?? []);
+    } catch {
+      /* ignore */
+    }
+  }, [getIdToken]);
+
+  useEffect(() => {
+    if (!open) return;
+    setResult(null);
+    loadPhrases();
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/bootstrap", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const d = await res.json();
+          setCenterId(typeof d?.centerId === "number" ? d.centerId : null);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [open, getIdToken, loadPhrases]);
+
+  const savePhrase = async () => {
+    const t = text.trim();
+    if (!t || savingPhrase) return;
+    setSavingPhrase(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/message-phrases", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ text: t }),
+      });
+      if (res.ok) await loadPhrases();
+    } catch {
+      /* ignore */
+    } finally {
+      setSavingPhrase(false);
+    }
+  };
+
+  const deletePhrase = async (id: number) => {
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/message-phrases/${id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setPhrases((prev) => prev.filter((p) => p.id !== id));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const send = async () => {
+    const t = text.trim();
+    if (!t || sending) return;
+    setSending(true);
+    setResult(null);
+    try {
+      const token = await getIdToken();
+      if (channel === "push") {
+        const res = await fetch(`/api/crm/members/${memberId}/notify`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ text: t }),
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d?.error || "전송 실패");
+        setResult({ text: d.message || "앱으로 전송했어요.", tone: d.linked ? "ok" : "warn" });
+      } else {
+        const res = await fetch("/api/crm/sms/send", {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ receivers: [memberPhone], msg: t, testmode: false }),
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d?.error || "전송 실패");
+        setResult({ text: `문자를 발송했어요. (${d.msg_type ?? "SMS"})`, tone: "ok" });
+      }
+      setText("");
+    } catch (e) {
+      setResult({ text: e instanceof Error ? e.message : "네트워크 오류", tone: "warn" });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const bytes = smsByteLen(text);
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/8"
+      >
+        ✉️ 메세지 전송
+      </button>
+
+      <CrmModal open={open} onClose={() => setOpen(false)} title={`메세지 전송 · ${memberName}`} size="lg">
+        <div className="space-y-4">
+          {/* 전송 방법 선택 */}
+          <div>
+            <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-300 mb-1.5">전송 방법</div>
+            <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => linked && setChannel("push")}
+                disabled={!linked}
+                className={`px-4 py-2 text-[13px] font-medium ${
+                  channel === "push"
+                    ? "bg-[#6B7B3A] text-white"
+                    : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                } disabled:opacity-40`}
+                title={linked ? undefined : "앱 미연동 회원"}
+              >
+                앱 푸시알림
+              </button>
+              <button
+                type="button"
+                onClick={() => smsAvailable && setChannel("sms")}
+                disabled={!smsAvailable}
+                className={`px-4 py-2 text-[13px] font-medium border-l border-[#E8E0D0] dark:border-zinc-700 ${
+                  channel === "sms"
+                    ? "bg-[#6B7B3A] text-white"
+                    : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                } disabled:opacity-40`}
+                title={smsLocked ? "문자 발송은 현재 스페셜바디(범어점) 전용" : !memberPhone ? "연락처 없음" : undefined}
+              >
+                문자(SMS)
+              </button>
+            </div>
+            <div className="mt-1 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+              {channel === "push"
+                ? linked
+                  ? "회원 앱으로 푸시알림 + 앱 알림함에 저장됩니다."
+                  : "이 회원은 앱 미연동이라 푸시가 전송되지 않아요."
+                : smsLocked
+                ? "문자 발송은 현재 스페셜바디(범어점) 전용입니다."
+                : !memberPhone
+                ? "등록된 연락처가 없어 문자 발송이 불가해요."
+                : `수신: ${formatPhone(memberPhone)}`}
+            </div>
+          </div>
+
+          {/* 자주 쓰는 문구 */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-300">자주 쓰는 문구</div>
+              <button
+                type="button"
+                onClick={savePhrase}
+                disabled={!text.trim() || savingPhrase}
+                className="text-[11.5px] px-2 py-1 rounded border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-40"
+              >
+                {savingPhrase ? "저장 중…" : "+ 현재 문구 저장"}
+              </button>
+            </div>
+            {phrases.length === 0 ? (
+              <div className="text-[11.5px] text-[#A89B80]">저장된 문구가 없어요. 아래에 문구를 입력하고 &lsquo;현재 문구 저장&rsquo;을 눌러보세요.</div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {phrases.map((p) => (
+                  <span
+                    key={p.id}
+                    className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 text-[12px] text-[#3A342A] dark:text-zinc-200"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setText(p.text)}
+                      className="max-w-[220px] truncate hover:text-[#6B7B3A]"
+                      title={p.text}
+                    >
+                      {p.text}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deletePhrase(p.id)}
+                      className="w-4 h-4 rounded-full text-[#A89B80] hover:text-red-600 hover:bg-white/60 dark:hover:bg-zinc-700 flex items-center justify-center"
+                      title="삭제"
+                      aria-label="문구 삭제"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 메세지 입력 */}
+          <div>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={5}
+              placeholder="보낼 메세지를 입력하세요"
+              className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A] resize-none"
+            />
+            {channel === "sms" && (
+              <div className="mt-1 text-[11.5px] text-[#8C8270] dark:text-zinc-500 text-right">
+                {bytes} byte · {bytes <= 90 ? "SMS" : "LMS(장문)"}
+              </div>
+            )}
+          </div>
+
+          {result && (
+            <div
+              className={`px-3 py-2 rounded-lg text-[13px] ${
+                result.tone === "ok"
+                  ? "bg-[#6B7B3A]/10 text-[#4d5a29] dark:text-[#A8B87A]"
+                  : "bg-amber-50 dark:bg-amber-950/30 text-[#B47B2A] dark:text-amber-300"
+              }`}
+            >
+              {result.text}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+            >
+              닫기
+            </button>
+            <button
+              type="button"
+              onClick={send}
+              disabled={
+                sending ||
+                !text.trim() ||
+                (channel === "push" && !linked) ||
+                (channel === "sms" && !smsAvailable)
+              }
+              className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
+            >
+              {sending ? "전송 중…" : channel === "push" ? "앱으로 전송" : "문자 전송"}
+            </button>
+          </div>
+        </div>
+      </CrmModal>
     </div>
   );
 }
