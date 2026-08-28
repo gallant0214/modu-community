@@ -119,7 +119,9 @@ export function CrmLessonsList() {
         !mq ||
         r.member_name.toLowerCase().includes(mq) ||
         (mqDigits.length > 0 && (r.member_phone ?? "").replace(/\D/g, "").includes(mqDigits))
-    );
+    )
+    // 수업 일시 최신순(내림차순) 정렬
+    .sort((a, b) => (a.starts_at < b.starts_at ? 1 : a.starts_at > b.starts_at ? -1 : 0));
 
   return (
     <div className="space-y-4">
