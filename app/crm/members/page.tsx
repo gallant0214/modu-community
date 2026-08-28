@@ -1113,14 +1113,23 @@ export default function CrmMembersPage() {
         <StatCard label={`수강권 임박 (${EXPIRING_DAYS}일)`} value={totals.expiringPass} tone="warn" active={fStatus === "expiring_pass"} onClick={() => setFStatus("expiring_pass")} />
       </div>
 
-      {/* 검색 */}
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="이름 및 연락처로 검색"
-        className={`${crmInputClass} mb-3`}
-      />
+      {/* 검색 + 엑셀 다운로드 (양쪽 끝으로 분리) */}
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="이름 및 연락처로 검색"
+          className={`${crmInputClass} flex-1 max-w-[440px]`}
+        />
+        <button
+          onClick={() => downloadExcel()}
+          disabled={filtered.length === 0}
+          className="shrink-0 px-3.5 py-2 rounded-lg border border-[#6B7B3A] text-[12.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/5 disabled:opacity-50 whitespace-nowrap"
+        >
+          엑셀로 다운로드
+        </button>
+      </div>
 
       {/* 필터 */}
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -1295,17 +1304,9 @@ export default function CrmMembersPage() {
         />
       )}
 
-      {/* 하단 액션 + 페이지네이션 */}
+      {/* 하단 페이지네이션 */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <Pagination page={page} totalPages={totalPages} onChange={setPage} />
-
-        <button
-          onClick={() => downloadExcel()}
-          disabled={filtered.length === 0}
-          className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12.5px] font-medium text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-900 disabled:opacity-50"
-        >
-          엑셀 다운로드
-        </button>
       </div>
 
       <RegisterModal
