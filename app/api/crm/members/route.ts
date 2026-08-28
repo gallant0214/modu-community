@@ -323,10 +323,10 @@ export async function GET(request: Request) {
 
   // 최근 구매일 = 결제(crm_payments) 최신 paid_at(KST 날짜). 발급 시 자동 갱신이 없던
   // last_purchase_at 컬럼 대신 실제 결제 기록으로 계산(없으면 기존 컬럼값 유지).
-  const paymentsData = await gather<{ member_id: number; paid_at: string }>((c) =>
+  const paymentsData = await gather<{ member_id: number; paid_at: string; amount_won: number; status: string }>((c) =>
     supabase
       .from("crm_payments")
-      .select("member_id, paid_at")
+      .select("member_id, paid_at, amount_won, status")
       .in("center_id", centerIds)
       .in("member_id", c)
   );
@@ -336,6 +336,41 @@ export async function GET(request: Request) {
     const ymd = new Date(new Date(p.paid_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
     const prev = lastPurchaseMap.get(p.member_id);
     if (!prev || ymd > prev) lastPurchaseMap.set(p.member_id, ymd);
+  }
+
+  // 누적 결제 = crm_sales 원장(BROJ 임포트) + 원장 컷오프 이후 crm_payments.
+  //   total_paid_won 스냅샷 컬럼이 대부분 0(미갱신)이라, center-revenue 와 동일한
+  //   either/or 규칙으로 실제 결제 기록에서 계산해 표시(이중집계 방지).
+  //   컷오프 = crm_sales 마지막 거래일(KST). 원장 없으면 crm_payments 전체 합산.
+  const { data: maxTxRow } = await supabase
+    .from("crm_sales")
+    .select("tx_at")
+    .in("center_id", centerIds)
+    .order("tx_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const salesCutoffYmd = (maxTxRow as { tx_at?: string } | null)?.tx_at
+    ? new Date(new Date((maxTxRow as { tx_at: string }).tx_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+    : null;
+  // crm_sales 회원별 순액(판매/미수금결제 +, 환불 −)
+  const salesData = await gather<{ member_id: number; amount_won: number; tx_type: string }>((c) =>
+    supabase.from("crm_sales").select("member_id, amount_won, tx_type").in("center_id", centerIds).in("member_id", c)
+  );
+  const salesNetMap = new Map<number, number>();
+  for (const s of salesData) {
+    if (!s.member_id) continue;
+    const signed = s.tx_type === "환불" ? -(s.amount_won ?? 0) : s.amount_won ?? 0;
+    salesNetMap.set(s.member_id, (salesNetMap.get(s.member_id) ?? 0) + signed);
+  }
+  // crm_payments 중 컷오프 이후(원장 없으면 전체) 완료 결제 합
+  const paidAfterCutoffMap = new Map<number, number>();
+  for (const p of paymentsData) {
+    if (!p.member_id || p.status !== "completed") continue;
+    if (salesCutoffYmd) {
+      const ymd = p.paid_at ? new Date(new Date(p.paid_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10) : null;
+      if (!ymd || ymd <= salesCutoffYmd) continue; // 컷오프 이전은 원장에 이미 포함
+    }
+    paidAfterCutoffMap.set(p.member_id, (paidAfterCutoffMap.get(p.member_id) ?? 0) + (p.amount_won ?? 0));
   }
 
   const enriched = members.map((m) => {
@@ -351,6 +386,11 @@ export async function GET(request: Request) {
       last_visit_at: lastVisitMap.get(m.id) ?? null,
       // 결제 기록 기반 최근 구매일(없으면 기존 컬럼값)
       last_purchase_at: lastPurchaseMap.get(m.id) ?? m.last_purchase_at,
+      // 누적 결제: 원장 순액 + 컷오프 이후 결제(계산값). 계산이 0 이하이면 스냅샷 컬럼 폴백.
+      total_paid_won: (() => {
+        const computed = (salesNetMap.get(m.id) ?? 0) + (paidAfterCutoffMap.get(m.id) ?? 0);
+        return computed > 0 ? computed : m.total_paid_won ?? 0;
+      })(),
       max_expires_at: maxExpires,
       on_hold: holdSet.has(m.id),
       outstanding_won: outstandingMap.get(m.id) ?? 0,
