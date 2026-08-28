@@ -1878,8 +1878,29 @@ export default function AdminPage() {
 
                 {/* 30일 성장 그래프 */}
                 <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
-                  <div className="text-[12.5px] font-bold text-zinc-800 dark:text-zinc-100 mb-3">
-                    📈 최근 30일 일별 신규 유입 {crmStats.scope === "center" && <span className="text-lime-700 dark:text-lime-300">({crmStats.selected_center?.name})</span>}
+                  <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                    <div className="text-[12.5px] font-bold text-zinc-800 dark:text-zinc-100">
+                      📈 최근 30일 일별 신규 유입 {crmStats.scope === "center" && <span className="text-lime-700 dark:text-lime-300">({crmStats.selected_center?.name})</span>}
+                    </div>
+                    {/* 이 그래프용 센터 선택 (전체 통합 ↔ 특정 센터) */}
+                    <select
+                      value={crmCenterId ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value ? Number(e.target.value) : null;
+                        setCrmCenterId(v);
+                        loadCrmStats(crmRange, undefined, undefined, v);
+                      }}
+                      className="h-7 px-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[11.5px] font-semibold text-zinc-700 dark:text-zinc-300 max-w-[220px]"
+                      title="센터를 선택하면 이 그래프가 해당 센터만 표시됩니다"
+                    >
+                      <option value="">🌐 전체 센터 통합</option>
+                      {((crmStats.centers_list ?? []) as { id: number; name: string; kind: string }[]).map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                          {c.kind === "solo" ? " (1인)" : ""}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <GrowthTable rows={crmStats.growth_daily_30d} hideCenters={crmStats.scope === "center"} />
                 </div>
