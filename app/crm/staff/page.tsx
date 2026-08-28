@@ -15,6 +15,7 @@ interface StaffRow {
   id: number;
   firebase_uid: string;
   role: string;
+  grade_id: number | null;
   grade_label: string | null;
   display_name: string;
   phone: string | null;
@@ -47,6 +48,24 @@ export default function CrmStaffPage() {
   const [error, setError] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [actingId, setActingId] = useState<number | null>(null);
+  const [grades, setGrades] = useState<{ id: number; base_role: string; label: string }[]>([]);
+
+  // 등급 목록 로드 (인라인 등급 드롭다운용)
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/grades", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) setGrades((await res.json()).grades ?? []);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [getIdToken]);
 
   const load = useCallback(async () => {
     setError("");
@@ -148,7 +167,14 @@ export default function CrmStaffPage() {
               onReject={(id) => handleRequest(id, "reject")}
             />
           )}
-          <StaffTable rows={active} label="재직 중" />
+          <StaffTable
+            rows={active}
+            label="재직 중"
+            editable
+            grades={grades}
+            getIdToken={getIdToken}
+            onSaved={load}
+          />
           {inactive.length > 0 && (
             <div className="mt-8">
               <StaffTable rows={inactive} label="퇴사" muted />
@@ -636,7 +662,100 @@ function JoinRequests({
   );
 }
 
-function StaffTable({ rows, label, muted }: { rows: StaffRow[]; label: string; muted?: boolean }) {
+const EMP_TYPE_OPTIONS = ["regular", "freelance", "part_time"] as const;
+
+function StaffTable({
+  rows,
+  label,
+  muted,
+  editable,
+  grades,
+  getIdToken,
+  onSaved,
+}: {
+  rows: StaffRow[];
+  label: string;
+  muted?: boolean;
+  editable?: boolean;
+  grades?: { id: number; base_role: string; label: string }[];
+  getIdToken?: () => Promise<string | null>;
+  onSaved?: () => Promise<void> | void;
+}) {
+  // 인라인 편집값: { [staffId]: { grade_id?, employment_type? } } — 원본과 다른 값만 담김
+  const [edits, setEdits] = useState<
+    Record<number, { grade_id?: number | null; employment_type?: string | null }>
+  >({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  // rows 가 갱신(저장 후 재로드)되면 편집 상태 초기화
+  useEffect(() => {
+    setEdits({});
+    setSaved(false);
+  }, [rows]);
+
+  const gradeValue = (s: StaffRow) =>
+    edits[s.id]?.grade_id !== undefined ? edits[s.id].grade_id : s.grade_id;
+  const empValue = (s: StaffRow) =>
+    edits[s.id]?.employment_type !== undefined ? edits[s.id].employment_type : s.employment_type;
+
+  const setGrade = (s: StaffRow, v: number | null) => {
+    setSaved(false);
+    setEdits((prev) => {
+      const next = { ...prev };
+      const row = { ...next[s.id] };
+      if (v === s.grade_id) delete row.grade_id;
+      else row.grade_id = v;
+      if (Object.keys(row).length === 0) delete next[s.id];
+      else next[s.id] = row;
+      return next;
+    });
+  };
+  const setEmp = (s: StaffRow, v: string | null) => {
+    setSaved(false);
+    setEdits((prev) => {
+      const next = { ...prev };
+      const row = { ...next[s.id] };
+      if ((v || null) === (s.employment_type || null)) delete row.employment_type;
+      else row.employment_type = v || null;
+      if (Object.keys(row).length === 0) delete next[s.id];
+      else next[s.id] = row;
+      return next;
+    });
+  };
+
+  const dirtyIds = Object.keys(edits).map(Number);
+
+  const save = async () => {
+    if (!getIdToken || dirtyIds.length === 0) return;
+    setSaving(true);
+    setSaveError("");
+    setSaved(false);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      for (const id of dirtyIds) {
+        const body = edits[id];
+        const res = await fetch(`/api/crm/staff/${id}`, {
+          method: "PATCH",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d?.error || "저장 실패");
+        }
+      }
+      setSaved(true);
+      await onSaved?.();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "저장 중 오류가 발생했어요");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (rows.length === 0) {
     return <ListMessage>{label}인 직원이 없습니다.</ListMessage>;
   }
@@ -675,7 +794,22 @@ function StaffTable({ rows, label, muted }: { rows: StaffRow[]; label: string; m
                   )}
                 </Td>
                 <Td className="font-medium text-[#3A342A] dark:text-zinc-300">
-                  {s.grade_label ?? ROLE_LABEL[s.role] ?? s.role}
+                  {editable && grades && grades.length > 0 ? (
+                    <select
+                      value={gradeValue(s) ?? ""}
+                      onChange={(e) => setGrade(s, e.target.value ? Number(e.target.value) : null)}
+                      className="px-2 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A]"
+                    >
+                      {gradeValue(s) == null && <option value="">미지정</option>}
+                      {grades.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    s.grade_label ?? ROLE_LABEL[s.role] ?? s.role
+                  )}
                 </Td>
                 <Td className="text-[#6B5D47] dark:text-zinc-400">{s.phone ? formatPhone(s.phone) : "—"}</Td>
                 <Td className="text-[#6B5D47] dark:text-zinc-400">
@@ -687,7 +821,24 @@ function StaffTable({ rows, label, muted }: { rows: StaffRow[]; label: string; m
                   <EmploymentStatusChip status={s.employment_status} />
                 </Td>
                 <Td className="text-[#6B5D47] dark:text-zinc-400">
-                  {s.employment_type ? EMPLOYMENT_TYPE_LABEL[s.employment_type] ?? s.employment_type : "—"}
+                  {editable ? (
+                    <select
+                      value={empValue(s) ?? ""}
+                      onChange={(e) => setEmp(s, e.target.value || null)}
+                      className="px-2 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A]"
+                    >
+                      <option value="">미설정</option>
+                      {EMP_TYPE_OPTIONS.map((t) => (
+                        <option key={t} value={t}>
+                          {EMPLOYMENT_TYPE_LABEL[t]}
+                        </option>
+                      ))}
+                    </select>
+                  ) : s.employment_type ? (
+                    EMPLOYMENT_TYPE_LABEL[s.employment_type] ?? s.employment_type
+                  ) : (
+                    "—"
+                  )}
                 </Td>
                 <Td className="text-[#8C8270] dark:text-zinc-500">{s.email || "—"}</Td>
                 <Td className="text-[#8C8270] dark:text-zinc-500">{formatDate(s.joined_at)}</Td>
@@ -704,6 +855,25 @@ function StaffTable({ rows, label, muted }: { rows: StaffRow[]; label: string; m
           </tbody>
         </table>
       </div>
+
+      {editable && (
+        <div className="mt-3 flex items-center justify-end gap-3">
+          {saveError && (
+            <span className="text-[12.5px] text-red-600 dark:text-red-400">{saveError}</span>
+          )}
+          {saved && dirtyIds.length === 0 && (
+            <span className="text-[12.5px] text-[#6B7B3A] dark:text-[#A8B87A]">저장됐어요 ✓</span>
+          )}
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving || dirtyIds.length === 0}
+            className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-50 transition-colors"
+          >
+            {saving ? "저장 중…" : dirtyIds.length > 0 ? `저장 (${dirtyIds.length}명 변경)` : "저장"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
