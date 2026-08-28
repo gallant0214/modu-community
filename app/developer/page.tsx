@@ -32,6 +32,18 @@ export default function AdminPage() {
   const [crmCenterId, setCrmCenterId] = useState<number | null>(null);
   const [crmCenterQuery, setCrmCenterQuery] = useState("");
   const [crmCenterPickerOpen, setCrmCenterPickerOpen] = useState(false);
+  // 📈 신규 유입 그래프 전용 기간 (KST). offset 0=이번달, -1=저번달.
+  const monthBounds = (offset: number): { from: string; to: string } => {
+    const kn = new Date(Date.now() + 9 * 3600 * 1000);
+    const y = kn.getUTCFullYear();
+    const m = kn.getUTCMonth();
+    const from = new Date(Date.UTC(y, m + offset, 1)).toISOString().slice(0, 10);
+    const to = (offset === 0 ? kn : new Date(Date.UTC(y, m + offset + 1, 0))).toISOString().slice(0, 10);
+    return { from, to };
+  };
+  const [growthMode, setGrowthMode] = useState<"this" | "last" | "custom">("this");
+  const [growthFrom, setGrowthFrom] = useState<string>(() => monthBounds(0).from);
+  const [growthTo, setGrowthTo] = useState<string>(() => monthBounds(0).to);
 
   // USER 탭 — 닉네임 조회 상태
   const [userQuery, setUserQuery] = useState("");
@@ -405,7 +417,9 @@ export default function AdminPage() {
       mode: typeof crmRange,
       customFrom?: string,
       customTo?: string,
-      centerIdOverride?: number | null
+      centerIdOverride?: number | null,
+      growthFromOverride?: string,
+      growthToOverride?: string
     ) => {
       if (!storedPassword) return;
       try {
@@ -421,6 +435,8 @@ export default function AdminPage() {
             from: r?.from ?? undefined,
             to: r?.to ?? undefined,
             center_id: cid ?? undefined,
+            growth_from: growthFromOverride ?? growthFrom,
+            growth_to: growthToOverride ?? growthTo,
           }),
         });
         const json = await res.json();
@@ -432,7 +448,7 @@ export default function AdminPage() {
         setCrmLoading(false);
       }
     },
-    [storedPassword, crmFrom, crmTo, crmCenterId]
+    [storedPassword, crmFrom, crmTo, crmCenterId, growthFrom, growthTo]
   );
 
   useEffect(() => {
@@ -1876,11 +1892,12 @@ export default function AdminPage() {
                   </div>
                 )}
 
-                {/* 30일 성장 그래프 */}
+                {/* 일별 신규 유입 그래프 (기간·센터 선택) */}
                 <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
-                  <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                  <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
                     <div className="text-[12.5px] font-bold text-zinc-800 dark:text-zinc-100">
-                      📈 최근 30일 일별 신규 유입 {crmStats.scope === "center" && <span className="text-lime-700 dark:text-lime-300">({crmStats.selected_center?.name})</span>}
+                      📈 일별 신규 유입 {crmStats.scope === "center" && <span className="text-lime-700 dark:text-lime-300">({crmStats.selected_center?.name})</span>}
+                      <span className="ml-1.5 font-medium text-zinc-500 dark:text-zinc-400">· {growthFrom} ~ {growthTo}</span>
                     </div>
                     {/* 이 그래프용 센터 선택 (전체 통합 ↔ 특정 센터) */}
                     <select
@@ -1901,6 +1918,60 @@ export default function AdminPage() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                  {/* 기간 선택: 이번달 / 저번달 / 기간 설정 */}
+                  <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                    {([
+                      { v: "this", l: "이번달" },
+                      { v: "last", l: "저번달" },
+                      { v: "custom", l: "기간 설정" },
+                    ] as const).map((b) => (
+                      <button
+                        key={b.v}
+                        type="button"
+                        onClick={() => {
+                          if (b.v === "custom") { setGrowthMode("custom"); return; }
+                          const r = monthBounds(b.v === "this" ? 0 : -1);
+                          setGrowthMode(b.v);
+                          setGrowthFrom(r.from);
+                          setGrowthTo(r.to);
+                          loadCrmStats(crmRange, undefined, undefined, undefined, r.from, r.to);
+                        }}
+                        className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold border transition-colors ${
+                          growthMode === b.v
+                            ? "border-lime-500 bg-lime-500 text-white"
+                            : "border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300"
+                        }`}
+                      >
+                        {b.l}
+                      </button>
+                    ))}
+                    {growthMode === "custom" && (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="date"
+                          value={growthFrom}
+                          max={growthTo}
+                          onChange={(e) => setGrowthFrom(e.target.value)}
+                          className="h-7 px-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[12px]"
+                        />
+                        <span className="text-[11px] text-zinc-500">~</span>
+                        <input
+                          type="date"
+                          value={growthTo}
+                          min={growthFrom}
+                          onChange={(e) => setGrowthTo(e.target.value)}
+                          className="h-7 px-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[12px]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => loadCrmStats(crmRange, undefined, undefined, undefined, growthFrom, growthTo)}
+                          className="px-2.5 py-1 rounded-md bg-lime-500 text-white text-[11.5px] font-semibold hover:bg-lime-600"
+                        >
+                          검색
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <GrowthTable rows={crmStats.growth_daily_30d} hideCenters={crmStats.scope === "center"} />
                 </div>

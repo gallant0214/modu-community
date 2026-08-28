@@ -28,7 +28,9 @@ export async function POST(request: Request) {
     from,
     to,
     center_id,
-  } = body as { password?: string; from?: string; to?: string; center_id?: number };
+    growth_from,
+    growth_to,
+  } = body as { password?: string; from?: string; to?: string; center_id?: number; growth_from?: string; growth_to?: string };
   if (!(await verifyAdminPassword(password ?? ""))) {
     return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
   }
@@ -135,8 +137,10 @@ export async function POST(request: Request) {
     };
   }
 
-  // 최근 30일 일별 성장 (센터 필터 시 센터 신규 유입 열은 제외)
-  const growth = await growthDaily(30, centerId);
+  // 일별 성장 (기간 지정 가능, 기본 최근 30일. 센터 필터 시 센터 신규 유입 열은 제외)
+  const gFrom = typeof growth_from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(growth_from) ? growth_from : null;
+  const gTo = typeof growth_to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(growth_to) ? growth_to : null;
+  const growth = await growthDaily(centerId, gFrom, gTo);
 
   const centersList = [...centerNames.entries()].map(([id, v]) => ({
     id,
@@ -438,18 +442,27 @@ function joinCenterNames(
 }
 
 async function growthDaily(
-  days: number,
-  centerId: number | null
+  centerId: number | null,
+  fromYmd?: string | null,
+  toYmd?: string | null
 ): Promise<{ date: string; centers: number; members: number; consultations: number; passes: number; attendances: number; sales_amount: number }[]> {
-  const now = new Date();
-  const startUtc = new Date(
-    new Date(now.getTime() + 9 * 3600 * 1000).setUTCHours(0, 0, 0, 0) - (days - 1) * 86400000 - 9 * 3600 * 1000
-  );
-  const startIso = startUtc.toISOString();
-
   const dateKey = (iso: string): string => {
     return new Date(new Date(iso).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   };
+  const addDays = (ymd: string, n: number): string =>
+    new Date(new Date(`${ymd}T00:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
+
+  // 기간 결정 (KST). 미지정 시 최근 30일. from>to 면 스왑, 최대 400일 제한.
+  const kstToday = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  let to = /^\d{4}-\d{2}-\d{2}$/.test(toYmd ?? "") ? (toYmd as string) : kstToday;
+  let from = /^\d{4}-\d{2}-\d{2}$/.test(fromYmd ?? "") ? (fromYmd as string) : addDays(to, -29);
+  if (from > to) [from, to] = [to, from];
+  // 날짜 리스트 (최대 400일)
+  const dayList: string[] = [];
+  for (let cur = from, i = 0; cur <= to && i < 400; cur = addDays(cur, 1), i++) dayList.push(cur);
+  const lastDay = dayList[dayList.length - 1] ?? to;
+  const startIso = new Date(`${from}T00:00:00+09:00`).toISOString();
+  const endIso = new Date(`${addDays(lastDay, 1)}T00:00:00+09:00`).toISOString(); // 배타적 상한
 
   const collect = async (
     table: string,
@@ -463,7 +476,8 @@ async function growthDaily(
       let q = (supabase as any)
         .from(table)
         .select(valueCol ? `${dateCol}, ${valueCol}` : dateCol)
-        .gte(dateCol, startIso);
+        .gte(dateCol, startIso)
+        .lt(dateCol, endIso);
       if (applyScope && centerId) q = q.eq("center_id", centerId);
       const { data } = await q.range(p * PAGE, p * PAGE + PAGE - 1);
       if (!data || data.length === 0) break;
@@ -488,11 +502,7 @@ async function growthDaily(
   ]);
 
   const out: { date: string; centers: number; members: number; consultations: number; passes: number; attendances: number; sales_amount: number }[] = [];
-  for (let i = 0; i < days; i++) {
-    const d = new Date(
-      new Date(now.getTime() + 9 * 3600 * 1000).setUTCHours(0, 0, 0, 0) - (days - 1 - i) * 86400000 - 9 * 3600 * 1000
-    );
-    const key = dateKey(d.toISOString());
+  for (const key of dayList) {
     out.push({
       date: key,
       centers: centersMap.get(key) ?? 0,
