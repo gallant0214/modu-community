@@ -118,6 +118,8 @@ export default function CrmMemberDetailPage() {
     { id: number; zone_name: string; number: number; start_date: string | null; expires_at: string | null; password?: string | null }[]
   >([]);
   const [bodyOpen, setBodyOpen] = useState(false);
+  const [bodyChooserOpen, setBodyChooserOpen] = useState(false); // +측정기록 → 직접입력/사진등록 선택
+  const [bodyPhotoMode, setBodyPhotoMode] = useState(false); // 측정 모달을 인바디 사진 등록 모드로
   const [bodyReload, setBodyReload] = useState(0);
   // 탭: 정보 / 예약내역 / 출석내역 / 결제내역 / 로그
   const [tab, setTab] = useState<
@@ -823,13 +825,36 @@ export default function CrmMemberDetailPage() {
 
       <SignedContractsSection memberId={member.id} />
 
-      <BodyMeasurementSection memberId={member.id} onOpen={() => setBodyOpen(true)} reloadKey={bodyReload} />
+      <BodyMeasurementSection memberId={member.id} onOpen={() => setBodyChooserOpen(true)} reloadKey={bodyReload} />
       </>
       )}
+
+      {/* +측정기록 → 직접 입력 / 인바디 사진 등록 선택 */}
+      <CrmModal open={bodyChooserOpen} onClose={() => setBodyChooserOpen(false)} title="측정 기록 추가" size="sm">
+        <div className="space-y-2.5">
+          <button
+            type="button"
+            onClick={() => { setBodyPhotoMode(false); setBodyChooserOpen(false); setBodyOpen(true); }}
+            className="w-full px-4 py-3.5 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 text-left hover:border-[#6B7B3A]/50 hover:bg-[#F5F0E5]/40 dark:hover:bg-zinc-900"
+          >
+            <div className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">✏️ 직접 입력</div>
+            <div className="text-[12px] text-[#8C8270] mt-0.5">체중·골격근·체지방 등을 직접 입력합니다.</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => { setBodyPhotoMode(true); setBodyChooserOpen(false); setBodyOpen(true); }}
+            className="w-full px-4 py-3.5 rounded-xl border border-[#6B7B3A] text-left hover:bg-[#6B7B3A]/5"
+          >
+            <div className="text-[14px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">📷 인바디 사진 등록</div>
+            <div className="text-[12px] text-[#8C8270] mt-0.5">인바디 결과지 사진을 첨부하면 자동으로 값을 읽어 채웁니다.</div>
+          </button>
+        </div>
+      </CrmModal>
 
       <BodyMeasurementModal
         memberId={member.id}
         open={bodyOpen}
+        photoMode={bodyPhotoMode}
         onClose={() => setBodyOpen(false)}
         onDone={() => {
           setBodyOpen(false);
@@ -9127,14 +9152,42 @@ function Td({ children, className, title }: { children: React.ReactNode; classNa
   return <td className={`px-3 py-2 whitespace-nowrap ${className || ""}`} title={title}>{children}</td>;
 }
 
+// 인바디 사진을 캔버스로 축소 → base64(JPEG) 로 변환 (업로드 용량·OCR 최적화)
+async function downscaleImage(file: File, maxSide = 1600, quality = 0.85): Promise<{ dataUrl: string; mediaType: string }> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = reject;
+    im.src = dataUrl;
+  });
+  const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+  const w = Math.round(img.width * scale);
+  const h = Math.round(img.height * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const cctx = canvas.getContext("2d");
+  if (!cctx) return { dataUrl, mediaType: file.type || "image/jpeg" };
+  cctx.drawImage(img, 0, 0, w, h);
+  return { dataUrl: canvas.toDataURL("image/jpeg", quality), mediaType: "image/jpeg" };
+}
+
 function BodyMeasurementModal({
   memberId,
   open,
+  photoMode = false,
   onClose,
   onDone,
 }: {
   memberId: number;
   open: boolean;
+  photoMode?: boolean;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -9146,9 +9199,15 @@ function BodyMeasurementModal({
   const [fatPct, setFatPct] = useState("");
   const [bmi, setBmi] = useState("");
   const [height, setHeight] = useState("");
+  const [visceral, setVisceral] = useState("");
+  const [basal, setBasal] = useState("");
   const [memo, setMemo] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // 인바디 사진 분석
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeMsg, setAnalyzeMsg] = useState("");
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -9159,10 +9218,51 @@ function BodyMeasurementModal({
       setFatPct("");
       setBmi("");
       setHeight("");
+      setVisceral("");
+      setBasal("");
       setMemo("");
       setError("");
+      setAnalyzing(false);
+      setAnalyzeMsg("");
     }
   }, [open]);
+
+  const onPickPhoto = async (file: File | undefined) => {
+    if (!file) return;
+    setError("");
+    setAnalyzeMsg("");
+    setAnalyzing(true);
+    try {
+      const { dataUrl, mediaType } = await downscaleImage(file);
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members/${memberId}/measurements/analyze`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ image_base64: dataUrl, media_type: mediaType }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "분석 실패");
+      const x = data.extracted ?? {};
+      const set = (v: unknown, setter: (s: string) => void) => {
+        if (v !== null && v !== undefined && v !== "") setter(String(v));
+      };
+      if (x.measured_at) setMeasuredAt(String(x.measured_at));
+      set(x.weight_kg, setWeight);
+      set(x.muscle_kg, setMuscle);
+      set(x.body_fat_kg, setFatKg);
+      set(x.body_fat_pct, setFatPct);
+      set(x.bmi, setBmi);
+      set(x.height_cm, setHeight);
+      set(x.visceral_fat, setVisceral);
+      set(x.basal_metabolism, setBasal);
+      setAnalyzeMsg("사진에서 값을 불러왔어요. 확인 후 저장해 주세요.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "사진 분석 중 오류");
+    } finally {
+      setAnalyzing(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
 
   const submit = async () => {
     setError("");
@@ -9181,6 +9281,8 @@ function BodyMeasurementModal({
           body_fat_pct: fatPct ? Number(fatPct) : undefined,
           bmi: bmi ? Number(bmi) : undefined,
           height_cm: height ? Number(height) : undefined,
+          visceral_fat: visceral ? Number(visceral) : undefined,
+          basal_metabolism: basal ? Number(basal) : undefined,
           memo: memo || undefined,
         }),
       });
@@ -9195,8 +9297,31 @@ function BodyMeasurementModal({
   };
 
   return (
-    <CrmModal open={open} onClose={onClose} title="신체 측정 기록" size="lg">
+    <CrmModal open={open} onClose={onClose} title={photoMode ? "인바디 사진 등록" : "신체 측정 기록"} size="lg">
       <div className="space-y-3">
+        {photoMode && (
+          <div className="rounded-xl border border-dashed border-[#6B7B3A]/50 bg-[#F5F0E5]/40 dark:bg-zinc-900/50 p-3.5 text-center">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => onPickPhoto(e.target.files?.[0])}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={analyzing}
+              className="px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+            >
+              {analyzing ? "사진 분석 중…" : "📷 인바디 결과지 사진 첨부"}
+            </button>
+            <p className="mt-2 text-[11.5px] text-[#8C8270]">
+              결과지 사진을 올리면 측정일·체중·골격근·체지방·내장지방 등을 자동으로 읽어 채워요. (사진은 저장되지 않습니다)
+            </p>
+            {analyzeMsg && <p className="mt-1.5 text-[12px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">{analyzeMsg}</p>}
+          </div>
+        )}
         <CrmField label="측정일" required>
           <input
             type="date"
@@ -9223,6 +9348,12 @@ function BodyMeasurementModal({
           </CrmField>
           <CrmField label="키 (cm)">
             <input className={crmInputClass} inputMode="decimal" value={height} onChange={(e) => setHeight(e.target.value)} />
+          </CrmField>
+          <CrmField label="내장지방 레벨">
+            <input className={crmInputClass} inputMode="decimal" value={visceral} onChange={(e) => setVisceral(e.target.value)} />
+          </CrmField>
+          <CrmField label="기초대사량 (kcal)">
+            <input className={crmInputClass} inputMode="decimal" value={basal} onChange={(e) => setBasal(e.target.value)} />
           </CrmField>
         </div>
         <CrmField label="메모">
