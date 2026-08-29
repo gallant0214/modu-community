@@ -5,6 +5,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
 import FaceAttendance from "./face-attendance";
 import FaceEnroll from "./face-enroll";
+import QrScanner from "./qr-scanner";
 import { speakMessages, playWarningBeep, primeSpeech } from "./_speak";
 
 interface MemberLite {
@@ -73,7 +74,9 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   const [busy, setBusy] = useState(false);
   const [centerName, setCenterName] = useState("");
   const [mode, setMode] = useState<"portrait" | "landscape">("portrait");
-  const [recogMode, setRecogMode] = useState<"number" | "face" | "both">("number");
+  const [recogMode, setRecogMode] = useState<
+    "number" | "face" | "both" | "qr" | "qr_number"
+  >("number");
   // 얼굴 미등록 회원 체크인 시 '사진 촬영 권유' 여부 (터치출석 설정 photo_suggest_enabled)
   const [photoSuggest, setPhotoSuggest] = useState(true);
 
@@ -155,6 +158,76 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
     setCandidates(null);
     setEnrollTarget(null);
     setResult(null);
+  };
+
+  // QR 값에서 회원 토큰 추출 (raw 토큰 / URL(token·t 쿼리 or 마지막 경로) 모두 허용)
+  const extractToken = (raw: string): string => {
+    const s = (raw || "").trim();
+    if (/^https?:\/\//i.test(s)) {
+      try {
+        const u = new URL(s);
+        return (
+          u.searchParams.get("token") ||
+          u.searchParams.get("t") ||
+          u.pathname.split("/").filter(Boolean).pop() ||
+          ""
+        ).trim();
+      } catch {
+        /* URL 파싱 실패 → 원문 사용 */
+      }
+    }
+    // "moducm:xxxx" 같은 접두사 제거
+    const colon = s.lastIndexOf(":");
+    if (colon > 0 && colon < 12) return s.slice(colon + 1).trim();
+    return s;
+  };
+
+  // QR 스캔 → 토큰으로 출석 처리
+  const checkinByToken = async (rawValue: string) => {
+    if (busy) return;
+    const memberToken = extractToken(rawValue);
+    if (!memberToken) return;
+    primeSpeech();
+    setBusy(true);
+    setResult(null);
+    try {
+      const res = kiosk
+        ? await fetch(`/api/touch/${kioskToken}/check-in`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ member_token: memberToken, source: "touch_qr" }),
+          })
+        : await fetch("/api/crm/attendances/check-in", {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${await getIdToken()}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({ token: memberToken, source: "touch_qr" }),
+          });
+      const data = await res.json();
+      if (!res.ok) {
+        setResult({ kind: "error", message: data?.error || "출석 실패" });
+      } else {
+        setResult({
+          kind: "success",
+          name: data.member?.name ?? "회원",
+          birth: data.member?.birth ?? null,
+          phone: data.member?.phone ?? null,
+          duplicate: data.duplicate,
+          mileageAwarded: data.mileage_awarded ?? 0,
+          summary: data.summary as CheckinSummary | undefined,
+        });
+        if (!data.duplicate && data.summary && data.summary.can_enter === false) {
+          playWarningBeep();
+        }
+        speakMessages(Array.isArray(data.voice_messages) ? data.voice_messages : []);
+      }
+    } catch (e) {
+      setResult({ kind: "error", message: e instanceof Error ? e.message : "네트워크 오류" });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const checkin = async (member: MemberLite) => {
@@ -337,17 +410,23 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
             ? "출석번호를 누르고 출석하기를 눌러 주세요."
             : recogMode === "face"
               ? "얼굴을 카메라에 비추면 자동으로 출석돼요."
-              : "출석번호를 눌러 출석하거나 얼굴을 카메라에 비추면 자동으로 출석돼요."}
+              : recogMode === "qr"
+                ? "회원 앱의 QR을 카메라에 비추면 자동으로 출석돼요."
+                : recogMode === "qr_number"
+                  ? "QR을 비추거나 출석번호를 눌러 출석해 주세요."
+                  : "출석번호를 눌러 출석하거나 얼굴을 카메라에 비추면 자동으로 출석돼요."}
         </p>
       </header>
 
-      {/* 번호 / 얼굴 / 번호+얼굴 인식 방식 전환 (공개 링크에서도 3개 모두 사용) */}
-      <div className="mb-6 inline-flex rounded-xl border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden bg-white dark:bg-zinc-900">
+      {/* 인식 방식 전환 (공개 링크에서도 모두 사용) */}
+      <div className="mb-6 inline-flex flex-wrap justify-center rounded-xl border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden bg-white dark:bg-zinc-900">
         {(
           [
             { k: "number", label: "번호 출석" },
             { k: "face", label: "얼굴 출석" },
             { k: "both", label: "번호+얼굴" },
+            { k: "qr", label: "QR 출석" },
+            { k: "qr_number", label: "QR/번호" },
           ] as const
         ).map(({ k, label }) => (
           <button
@@ -431,6 +510,36 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
             취소
           </button>
         </div>
+      ) : recogMode === "qr" ? (
+        /* QR 출석: 회원 앱 QR 스캔 → 자동 출석 */
+        <div className="w-full flex items-center justify-center">
+          <QrScanner onDetect={checkinByToken} paused={busy || !!result} />
+        </div>
+      ) : recogMode === "qr_number" ? (
+        /* QR/번호: QR 스캐너 + 키패드 동시 노출 */
+        landscape ? (
+          <div className="w-full max-w-[98vw] flex flex-row items-stretch gap-[clamp(12px,2.5vmin,32px)]">
+            <div className="flex-1 min-w-0 flex items-center justify-center">
+              <QrScanner onDetect={checkinByToken} paused={busy || !!result} fill />
+            </div>
+            <div className="flex-1 min-w-0 flex flex-col justify-center gap-[clamp(12px,2.5vmin,28px)]">
+              {display}
+              {keypad}
+              {submitBtn}
+            </div>
+          </div>
+        ) : (
+          <div className="w-full max-w-[96vw] space-y-6 flex flex-col items-center">
+            <div className="w-full max-w-[440px] flex items-center justify-center">
+              <QrScanner onDetect={checkinByToken} paused={busy || !!result} fill />
+            </div>
+            <div className="w-full pt-2 border-t border-[#E8E0D0] dark:border-zinc-700">
+              <div className="mb-[clamp(12px,2vmin,24px)] mt-4">{display}</div>
+              {keypad}
+              <div className="mt-[clamp(10px,1.8vmin,22px)]">{submitBtn}</div>
+            </div>
+          </div>
+        )
       ) : recogMode === "both" ? (
         /* 번호+얼굴 모드: 얼굴 카메라 + 키패드 동시 노출 (어느 쪽이든 먼저 완료되는 방식으로 출석) */
         landscape ? (

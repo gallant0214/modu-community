@@ -74,6 +74,8 @@ export async function POST(request: Request) {
         return "touch_face";
       case "touch_number":
         return "touch_number";
+      case "touch_qr":
+        return "touch_qr";
       case "touch":
         return "touch";
       default:
