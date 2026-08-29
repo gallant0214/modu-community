@@ -5,7 +5,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
 import FaceAttendance from "./face-attendance";
 import FaceEnroll from "./face-enroll";
-import QrScanner from "./qr-scanner";
+import QrDisplay from "./qr-display";
 import { speakMessages, playWarningBeep, primeSpeech } from "./_speak";
 
 interface MemberLite {
@@ -77,6 +77,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   const [recogMode, setRecogMode] = useState<
     "number" | "face" | "both" | "qr" | "qr_number"
   >("number");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // 얼굴 미등록 회원 체크인 시 '사진 촬영 권유' 여부 (터치출석 설정 photo_suggest_enabled)
   const [photoSuggest, setPhotoSuggest] = useState(true);
 
@@ -158,76 +159,6 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
     setCandidates(null);
     setEnrollTarget(null);
     setResult(null);
-  };
-
-  // QR 값에서 회원 토큰 추출 (raw 토큰 / URL(token·t 쿼리 or 마지막 경로) 모두 허용)
-  const extractToken = (raw: string): string => {
-    const s = (raw || "").trim();
-    if (/^https?:\/\//i.test(s)) {
-      try {
-        const u = new URL(s);
-        return (
-          u.searchParams.get("token") ||
-          u.searchParams.get("t") ||
-          u.pathname.split("/").filter(Boolean).pop() ||
-          ""
-        ).trim();
-      } catch {
-        /* URL 파싱 실패 → 원문 사용 */
-      }
-    }
-    // "moducm:xxxx" 같은 접두사 제거
-    const colon = s.lastIndexOf(":");
-    if (colon > 0 && colon < 12) return s.slice(colon + 1).trim();
-    return s;
-  };
-
-  // QR 스캔 → 토큰으로 출석 처리
-  const checkinByToken = async (rawValue: string) => {
-    if (busy) return;
-    const memberToken = extractToken(rawValue);
-    if (!memberToken) return;
-    primeSpeech();
-    setBusy(true);
-    setResult(null);
-    try {
-      const res = kiosk
-        ? await fetch(`/api/touch/${kioskToken}/check-in`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ member_token: memberToken, source: "touch_qr" }),
-          })
-        : await fetch("/api/crm/attendances/check-in", {
-            method: "POST",
-            headers: {
-              authorization: `Bearer ${await getIdToken()}`,
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({ token: memberToken, source: "touch_qr" }),
-          });
-      const data = await res.json();
-      if (!res.ok) {
-        setResult({ kind: "error", message: data?.error || "출석 실패" });
-      } else {
-        setResult({
-          kind: "success",
-          name: data.member?.name ?? "회원",
-          birth: data.member?.birth ?? null,
-          phone: data.member?.phone ?? null,
-          duplicate: data.duplicate,
-          mileageAwarded: data.mileage_awarded ?? 0,
-          summary: data.summary as CheckinSummary | undefined,
-        });
-        if (!data.duplicate && data.summary && data.summary.can_enter === false) {
-          playWarningBeep();
-        }
-        speakMessages(Array.isArray(data.voice_messages) ? data.voice_messages : []);
-      }
-    } catch (e) {
-      setResult({ kind: "error", message: e instanceof Error ? e.message : "네트워크 오류" });
-    } finally {
-      setBusy(false);
-    }
   };
 
   const checkin = async (member: MemberLite) => {
@@ -393,11 +324,19 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         </span>
         <button
           onClick={toggleMode}
-          className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[12.5px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:border-[#6B7B3A]/50"
+          className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[12.5px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:border-[#6B7B3A]/50"
           title="가로형 / 세로형 전환"
         >
           <OrientationIcon landscape={landscape} />
           {landscape ? "세로형" : "가로형"}
+        </button>
+        <button
+          onClick={() => setSettingsOpen(true)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-10 h-10 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[#6B5D47] dark:text-zinc-300 hover:border-[#6B7B3A]/50"
+          title="출석 모드 설정"
+          aria-label="출석 모드 설정"
+        >
+          <GearIcon />
         </button>
       </div>
 
@@ -417,31 +356,6 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
                   : "출석번호를 눌러 출석하거나 얼굴을 카메라에 비추면 자동으로 출석돼요."}
         </p>
       </header>
-
-      {/* 인식 방식 전환 (공개 링크에서도 모두 사용) */}
-      <div className="mb-6 inline-flex flex-wrap justify-center rounded-xl border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden bg-white dark:bg-zinc-900">
-        {(
-          [
-            { k: "number", label: "번호 출석" },
-            { k: "face", label: "얼굴 출석" },
-            { k: "both", label: "번호+얼굴" },
-            { k: "qr", label: "QR 출석" },
-            { k: "qr_number", label: "QR/번호" },
-          ] as const
-        ).map(({ k, label }) => (
-          <button
-            key={k}
-            onClick={() => { primeSpeech(); setRecogMode(k); }}
-            className={`px-5 py-2.5 text-[14px] font-semibold ${
-              recogMode === k
-                ? "bg-[#6B7B3A] text-white"
-                : "text-[#6B5D47] dark:text-zinc-300"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
 
       {recogMode === "face" ? (
         <FaceAttendance kioskToken={kioskToken} />
@@ -511,16 +425,16 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           </button>
         </div>
       ) : recogMode === "qr" ? (
-        /* QR 출석: 회원 앱 QR 스캔 → 자동 출석 */
+        /* QR 출석: 키오스크가 QR 표시 → 회원 앱으로 스캔해 출석 */
         <div className="w-full flex items-center justify-center">
-          <QrScanner onDetect={checkinByToken} paused={busy || !!result} />
+          <QrDisplay kioskToken={kioskToken} />
         </div>
       ) : recogMode === "qr_number" ? (
-        /* QR/번호: QR 스캐너 + 키패드 동시 노출 */
+        /* QR/번호: QR 표시 + 키패드 동시 노출 */
         landscape ? (
           <div className="w-full max-w-[98vw] flex flex-row items-stretch gap-[clamp(12px,2.5vmin,32px)]">
             <div className="flex-1 min-w-0 flex items-center justify-center">
-              <QrScanner onDetect={checkinByToken} paused={busy || !!result} fill />
+              <QrDisplay kioskToken={kioskToken} />
             </div>
             <div className="flex-1 min-w-0 flex flex-col justify-center gap-[clamp(12px,2.5vmin,28px)]">
               {display}
@@ -530,8 +444,8 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           </div>
         ) : (
           <div className="w-full max-w-[96vw] space-y-6 flex flex-col items-center">
-            <div className="w-full max-w-[440px] flex items-center justify-center">
-              <QrScanner onDetect={checkinByToken} paused={busy || !!result} fill />
+            <div className="w-full flex items-center justify-center">
+              <QrDisplay kioskToken={kioskToken} />
             </div>
             <div className="w-full pt-2 border-t border-[#E8E0D0] dark:border-zinc-700">
               <div className="mb-[clamp(12px,2vmin,24px)] mt-4">{display}</div>
@@ -584,7 +498,77 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
       )}
         </>
       )}
+
+      {/* 설정: 출석 모드 선택 */}
+      {settingsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-5"
+          onClick={() => setSettingsOpen(false)}
+        >
+          <div
+            className="w-full max-w-[420px] rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-xl p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[16px] font-bold text-[#2A251D] dark:text-zinc-100">출석 모드 설정</h2>
+              <button
+                onClick={() => setSettingsOpen(false)}
+                className="w-8 h-8 rounded-lg text-[#8C8270] hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 flex items-center justify-center"
+                aria-label="닫기"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="text-[12.5px] text-[#8C8270] dark:text-zinc-500 mb-2">출석 방식</div>
+            <div className="grid grid-cols-1 gap-2">
+              {(
+                [
+                  { k: "number", label: "번호 출석", desc: "출석번호를 눌러 출석" },
+                  { k: "face", label: "얼굴 출석", desc: "얼굴 인식으로 자동 출석" },
+                  { k: "both", label: "번호 + 얼굴", desc: "번호·얼굴 둘 다 사용" },
+                  { k: "qr", label: "QR 출석", desc: "화면 QR을 회원 앱으로 스캔" },
+                  { k: "qr_number", label: "QR + 번호", desc: "QR 표시 + 번호 키패드" },
+                ] as const
+              ).map(({ k, label, desc }) => {
+                const active = recogMode === k;
+                return (
+                  <button
+                    key={k}
+                    onClick={() => {
+                      primeSpeech();
+                      setRecogMode(k);
+                      setSettingsOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
+                      active
+                        ? "border-[#6B7B3A] bg-[#6B7B3A]/8 dark:bg-[#6B7B3A]/20"
+                        : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[15px] font-semibold ${active ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#2A251D] dark:text-zinc-100"}`}>
+                        {label}
+                      </span>
+                      {active && <span className="text-[#6B7B3A] dark:text-[#A8B87A] text-[15px]">✓</span>}
+                    </div>
+                    <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500">{desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
   );
 }
 
