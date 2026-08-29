@@ -76,7 +76,19 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   const [mode, setMode] = useState<"portrait" | "landscape">("portrait");
   const [recogMode, setRecogMode] = useState<
     "number" | "face" | "both" | "qr" | "qr_number"
-  >("number");
+  >(() => {
+    if (typeof window === "undefined") return "number";
+    const v = localStorage.getItem("crm_touch_recog_mode");
+    return v === "face" || v === "both" || v === "qr" || v === "qr_number" ? v : "number";
+  });
+  // 선택한 출석 모드 유지 (새로고침해도 초기화되지 않도록)
+  useEffect(() => {
+    try {
+      localStorage.setItem("crm_touch_recog_mode", recogMode);
+    } catch {
+      /* ignore */
+    }
+  }, [recogMode]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 얼굴 미등록 회원 체크인 시 '사진 촬영 권유' 여부 (터치출석 설정 photo_suggest_enabled)
   const [photoSuggest, setPhotoSuggest] = useState(true);
@@ -310,13 +322,13 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
 
   return (
     <div
-      className="min-h-dvh flex flex-col items-center px-5 pb-8 bg-[#FEFCF7] dark:bg-zinc-950"
+      className="h-[100dvh] overflow-hidden flex flex-col items-center px-5 bg-[#FEFCF7] dark:bg-zinc-950"
       // 루트 레이아웃 body 의 상단 NavBar 여백(56px) 상쇄 - 상단부터 센터명만 표시
       style={{ marginTop: "calc(-1 * (env(safe-area-inset-top, 0px) + 56px))" }}
     >
       {/* 센터명 상단바 + 가로/세로 전환 */}
       <div
-        className="relative w-full border-b border-[#E8E0D0] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 text-center py-3 mb-6"
+        className="shrink-0 relative w-full border-b border-[#E8E0D0] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 text-center py-3 mb-3"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
       >
         <span className="text-[16px] font-bold text-[#2A251D] dark:text-zinc-100">
@@ -340,23 +352,28 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         </button>
       </div>
 
-      <header className="mb-4 text-center">
-        <h1 className="text-[26px] md:text-[30px] font-bold text-[#2A251D] dark:text-zinc-100">
+      <header className="shrink-0 mb-2 text-center">
+        <h1 className="text-[clamp(20px,3.4vmin,30px)] font-bold text-[#2A251D] dark:text-zinc-100 leading-tight">
           터치 출석
         </h1>
-        <p className="mt-1.5 text-[14px] text-[#6B5D47] dark:text-zinc-400">
-          {recogMode === "number"
-            ? "출석번호를 누르고 출석하기를 눌러 주세요."
-            : recogMode === "face"
-              ? "얼굴을 카메라에 비추면 자동으로 출석돼요."
-              : recogMode === "qr"
-                ? "회원 앱의 QR을 카메라에 비추면 자동으로 출석돼요."
-                : recogMode === "qr_number"
-                  ? "QR을 비추거나 출석번호를 눌러 출석해 주세요."
-                  : "출석번호를 눌러 출석하거나 얼굴을 카메라에 비추면 자동으로 출석돼요."}
-        </p>
+        {/* 세로형에서만 안내문 표시(가로형은 공간 절약) */}
+        {!landscape && (
+          <p className="mt-1 text-[14px] text-[#6B5D47] dark:text-zinc-400">
+            {recogMode === "number"
+              ? "출석번호를 누르고 출석하기를 눌러 주세요."
+              : recogMode === "face"
+                ? "얼굴을 카메라에 비추면 자동으로 출석돼요."
+                : recogMode === "qr"
+                  ? "회원 앱으로 화면의 QR을 스캔하면 출석돼요."
+                  : recogMode === "qr_number"
+                    ? "QR을 앱으로 스캔하거나 출석번호를 눌러 출석해 주세요."
+                    : "출석번호를 눌러 출석하거나 얼굴을 카메라에 비추면 자동으로 출석돼요."}
+          </p>
+        )}
       </header>
 
+      {/* 콘텐츠 영역: 남은 화면을 꽉 채우고 창 크기에 맞춰 자동 정렬(가로/세로) */}
+      <div className="flex-1 min-h-0 w-full flex flex-col items-center justify-center overflow-y-auto pb-3">
       {recogMode === "face" ? (
         <FaceAttendance kioskToken={kioskToken} />
       ) : (
@@ -498,6 +515,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
       )}
         </>
       )}
+      </div>
 
       {/* 설정: 출석 모드 선택 */}
       {settingsOpen && (
