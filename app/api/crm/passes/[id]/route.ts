@@ -113,6 +113,15 @@ export async function PATCH(
   const passId = Number(id);
   if (!passId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
+  // 현재 값 로드 (센터 격리 검증 + status 재계산용)
+  const { data: current } = await supabase
+    .from("crm_passes")
+    .select("status, expires_at, remaining_sessions, total_sessions")
+    .eq("id", passId)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+  if (!current) return NextResponse.json({ error: "수강권을 찾을 수 없습니다" }, { status: 404 });
+
   let body: {
     memo?: string;
     expires_at?: string;
@@ -202,6 +211,24 @@ export async function PATCH(
       0,
       Math.floor(Number(body.attendance_mileage_earn) || 0)
     );
+  }
+
+  // 유효기간·잔여·총횟수 변경 시 status 재계산 (환불 상태는 유지).
+  // → 무기한(9999-12-31)/기간 연장·잔여 추가 시 자동으로 '유효'로 전환.
+  const c = current as { status: string; expires_at: string | null; remaining_sessions: number | null; total_sessions: number | null };
+  if (
+    c.status !== "refunded" &&
+    (patch.expires_at !== undefined ||
+      patch.remaining_sessions !== undefined ||
+      patch.total_sessions !== undefined)
+  ) {
+    const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const effExpires = (patch.expires_at as string | undefined) ?? c.expires_at;
+    const effRemaining = Number((patch.remaining_sessions as number | undefined) ?? c.remaining_sessions ?? 0);
+    const effTotal = Number((patch.total_sessions as number | undefined) ?? c.total_sessions ?? 0);
+    const dateOk = !effExpires || String(effExpires).slice(0, 10) >= today; // 9999-12-31 → 유효
+    const sessionsOk = effTotal <= 0 || effRemaining > 0; // 기간제(총횟수 0)면 세션 무관
+    patch.status = dateOk && sessionsOk ? "valid" : "expired";
   }
 
   if (Object.keys(patch).length === 0) {
