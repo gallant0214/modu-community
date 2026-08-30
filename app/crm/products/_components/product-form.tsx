@@ -633,32 +633,32 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
             ))}
           </div>
 
-          {/* 클래스 전용: 수업 취소 가능 시간 (30분 단위) */}
-          {type === "class" && (
-            <div className="mt-4">
-              <FieldLabel>수업 취소 가능 시간</FieldLabel>
-              <div className="relative">
-                <select
-                  value={classCancelBeforeMin}
-                  onChange={(e) => setClassCancelBeforeMin(Number(e.target.value))}
-                  className={crmInputClass}
-                >
-                  {Array.from({ length: 49 }, (_, i) => i * 30).map((m) => (
-                    <option key={m} value={m}>
-                      {m === 0
-                        ? "수업 시작 직전까지 취소 가능"
-                        : m % 60 === 0
-                          ? `수업 ${m / 60}시간 전까지`
-                          : `수업 ${Math.floor(m / 60) > 0 ? `${Math.floor(m / 60)}시간 ` : ""}${m % 60}분 전까지`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
-                이 시간 전까지 취소하면 횟수가 차감되지 않아요. 이후 취소·노쇼는 차감됩니다.
-              </p>
-            </div>
-          )}
+        </Section>
+      )}
+
+      {/* 클래스수업 전용: 수업 취소 설정 (30분 단위) */}
+      {type === "class" && (
+        <Section title="수업 취소 설정">
+          <FieldLabel>수업 취소 가능 시간</FieldLabel>
+          <select
+            value={classCancelBeforeMin}
+            onChange={(e) => setClassCancelBeforeMin(Number(e.target.value))}
+            className={crmInputClass}
+          >
+            {Array.from({ length: 49 }, (_, i) => i * 30).map((m) => (
+              <option key={m} value={m}>
+                {m === 0
+                  ? "수업 시작 직전까지 취소 가능"
+                  : m % 60 === 0
+                    ? `수업 ${m / 60}시간 전까지 취소 가능`
+                    : `수업 ${Math.floor(m / 60) > 0 ? `${Math.floor(m / 60)}시간 ` : ""}${m % 60}분 전까지 취소 가능`}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
+            회원이 이 시간 전까지 취소하면 횟수가 차감되지 않아요. 이후 취소·노쇼는 차감됩니다.
+            (30분 단위)
+          </p>
         </Section>
       )}
 
