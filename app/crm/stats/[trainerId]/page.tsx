@@ -478,7 +478,8 @@ function MembersTab() {
             <tr>
               <Th>번호</Th>
               <Th>이름</Th>
-              <Th>PT 여부</Th>
+              <Th>상태</Th>
+              <Th>종류</Th>
               <Th>앱 사용</Th>
               <Th>개인 레슨 경험</Th>
               <Th>나이</Th>
@@ -493,7 +494,7 @@ function MembersTab() {
           </thead>
           <tbody>
             <tr>
-              <td colSpan={13} className="px-3 py-12 text-center">
+              <td colSpan={14} className="px-3 py-12 text-center">
                 <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">
                   데이터가 없어요
                 </div>

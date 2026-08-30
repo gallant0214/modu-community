@@ -425,7 +425,8 @@ interface MemberRow {
   registered_at: string | null;
   final_expire_at: string | null;
   current_pass: string | null;
-  has_pt: boolean;
+  lesson_type: string;
+  status: string; // 유효 / 만료
   lesson_experience: boolean;
   total_paid_won: number;
   outstanding_total: number;
@@ -512,7 +513,8 @@ function MembersTab({ memberId }: { memberId: number }) {
             <tr>
               <Th>번호</Th>
               <Th>이름</Th>
-              <Th>PT 여부</Th>
+              <Th>상태</Th>
+              <Th>종류</Th>
               <Th>앱 사용</Th>
               <Th>개인 레슨 경험</Th>
               <Th>나이</Th>
@@ -528,13 +530,13 @@ function MembersTab({ memberId }: { memberId: number }) {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={13} className="px-3 py-12 text-center text-[13px] text-[#8C8270]">
+                <td colSpan={14} className="px-3 py-12 text-center text-[13px] text-[#8C8270]">
                   불러오는 중…
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={13} className="px-3 py-12 text-center">
+                <td colSpan={14} className="px-3 py-12 text-center">
                   <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">데이터가 없어요</div>
                   <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
                     {rows.length === 0 ? "아직 담당 회원이 없어요." : "조건에 맞는 회원이 없어요."}
@@ -551,7 +553,18 @@ function MembersTab({ memberId }: { memberId: number }) {
                   <td className="px-3 py-2.5 whitespace-nowrap font-medium">
                     <a href={`/crm/members/${r.id}`} className="hover:underline">{r.name}</a>
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">{r.has_pt ? "PT" : "—"}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[11.5px] font-semibold ${
+                        r.status === "유효"
+                          ? "bg-[#6B7B3A]/12 text-[#6B7B3A] dark:text-[#A8B87A]"
+                          : "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500"
+                      }`}
+                    >
+                      {r.status}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">{r.lesson_type}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap">{r.linked ? "사용" : "—"}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap">{r.lesson_experience ? "있음" : "없음"}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap">{ageFromBirth(r.birth)}</td>
