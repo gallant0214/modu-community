@@ -434,7 +434,10 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
         price_won: priceWon,
         vat_included: vatIncluded,
         capacity: type === "group" || type === "class" ? capacity ?? 0 : 0,
-        class_cancel_before_min: type === "class" ? Math.max(0, classCancelBeforeMin) : 60,
+        class_cancel_before_min:
+          type === "class" || type === "personal" || type === "group"
+            ? Math.max(0, classCancelBeforeMin)
+            : 60,
         session_minutes:
           type === "personal" || type === "group" || type === "class" ? sessionMinutes ?? 0 : 0,
         daily_check_in_limit: effectiveDaily,
@@ -636,8 +639,8 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
         </Section>
       )}
 
-      {/* 클래스수업 전용: 수업 취소 설정 (30분 단위) */}
-      {type === "class" && (
+      {/* 수업(개인레슨·그룹수업·클래스) 취소 설정 */}
+      {(type === "personal" || type === "group" || type === "class") && (
         <Section title="수업 취소 설정">
           <FieldLabel>수업 취소 가능 시간</FieldLabel>
           <div className="flex items-center gap-2 flex-wrap">

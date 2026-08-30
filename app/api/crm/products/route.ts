@@ -209,7 +209,9 @@ export async function POST(request: Request) {
           ? Math.max(0, Number(body.capacity) || 0)
           : 0,
       class_cancel_before_min:
-        body.type === "class" ? Math.max(0, Number(body.class_cancel_before_min) || 0) : 60,
+        body.type === "class" || body.type === "personal" || body.type === "group"
+          ? Math.max(0, Number(body.class_cancel_before_min) || 0)
+          : 60,
       session_minutes:
         body.type === "personal" || body.type === "group" || body.type === "class"
           ? Math.max(0, Number(body.session_minutes) || 0)

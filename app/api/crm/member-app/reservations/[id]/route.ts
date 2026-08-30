@@ -25,7 +25,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const [{ data: pass }, { data: trainer }, { data: settings }] = await Promise.all([
     res.pass_id
-      ? supabase.from("crm_passes").select("lesson_kind, session_minutes").eq("id", res.pass_id).maybeSingle()
+      ? supabase.from("crm_passes").select("lesson_kind, session_minutes, product_id").eq("id", res.pass_id).maybeSingle()
       : Promise.resolve({ data: null }),
     supabase.from("crm_center_members").select("display_name").eq("id", res.trainer_member_id).maybeSingle(),
     supabase
@@ -34,6 +34,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       .eq("center_id", ctx.centerId)
       .maybeSingle(),
   ]);
+
+  // 취소 마감(분): 상품에 설정돼 있으면 그 값, 없으면 센터 기본(cancel_hours)
+  let cancelMin = (settings?.cancel_hours ?? 6) * 60;
+  const productId = (pass as { product_id?: number | null } | null)?.product_id;
+  if (productId) {
+    const { data: product } = await supabase
+      .from("crm_products")
+      .select("class_cancel_before_min")
+      .eq("id", productId)
+      .maybeSingle();
+    const v = (product as { class_cancel_before_min?: number } | null)?.class_cancel_before_min;
+    if (typeof v === "number") cancelMin = v;
+  }
 
   return NextResponse.json({
     reservation: {
@@ -52,6 +65,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       rescheduleHistory: res.reschedule_history ?? [],
       cancelEnabled: settings?.cancel_enabled ?? true,
       cancelHours: settings?.cancel_hours ?? 6,
+      cancelMin, // 상품별 취소 마감(분). 앱은 이 값 사용 권장.
     },
   });
 }

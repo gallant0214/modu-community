@@ -28,7 +28,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const { data: res } = await supabase
     .from("crm_reservations")
-    .select("id, status, starts_at, trainer_member_id")
+    .select("id, status, starts_at, trainer_member_id, pass_id")
     .eq("id", Number(id))
     .eq("center_id", ctx.centerId)
     .eq("member_id", ctx.memberId)
@@ -48,10 +48,32 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (settings && settings.cancel_enabled === false) {
       return NextResponse.json({ error: "앱에서 취소가 불가능해요. 센터에 문의해주세요." }, { status: 403 });
     }
-    const cancelHours = settings?.cancel_hours ?? 6;
-    const deadline = new Date(res.starts_at).getTime() - cancelHours * 3600 * 1000;
+    // 취소 마감: 예약의 수강권 상품에 취소시간이 설정돼 있으면 그 값(분)을, 없으면 센터 기본(cancel_hours) 사용
+    let cancelMin = (settings?.cancel_hours ?? 6) * 60;
+    if (res.pass_id) {
+      const { data: pass } = await supabase
+        .from("crm_passes")
+        .select("product_id")
+        .eq("id", res.pass_id)
+        .maybeSingle();
+      const productId = (pass as { product_id?: number | null } | null)?.product_id;
+      if (productId) {
+        const { data: product } = await supabase
+          .from("crm_products")
+          .select("class_cancel_before_min")
+          .eq("id", productId)
+          .maybeSingle();
+        const v = (product as { class_cancel_before_min?: number } | null)?.class_cancel_before_min;
+        if (typeof v === "number") cancelMin = v;
+      }
+    }
+    const deadline = new Date(res.starts_at).getTime() - cancelMin * 60000;
     if (Date.now() > deadline) {
-      return NextResponse.json({ error: `수업 ${cancelHours}시간 전까지만 취소할 수 있어요` }, { status: 403 });
+      const label =
+        cancelMin % 60 === 0
+          ? `${cancelMin / 60}시간`
+          : `${Math.floor(cancelMin / 60) > 0 ? `${Math.floor(cancelMin / 60)}시간 ` : ""}${cancelMin % 60}분`;
+      return NextResponse.json({ error: `수업 ${label} 전까지만 취소할 수 있어요` }, { status: 403 });
     }
   }
 
