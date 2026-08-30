@@ -79,7 +79,7 @@ const BUILT_IN_TYPES: TypeOption[] = [
   { value: "membership", label: "회원권" },
   { value: "personal", label: "개인 레슨" },
   { value: "group", label: "그룹 수업" },
-  { value: "class", label: "클래스" },
+  { value: "class", label: "클래스수업" },
   { value: "apparel", label: "운동복" },
   { value: "locker", label: "락커" },
 ];

@@ -14,7 +14,7 @@ const BUILT_IN_TYPE_LABEL: Record<string, string> = {
   personal: "개인 레슨",
   locker: "락커",
   apparel: "운동복",
-  class: "클래스",
+  class: "클래스수업",
   goods: "운동 용품", // legacy(기본 아님) — 배지 라벨 폴백용
 };
 
