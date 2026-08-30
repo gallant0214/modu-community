@@ -10,6 +10,7 @@ import {
 } from "../_components/crm-labels";
 import BookingRequestsPanel from "../_components/booking-requests-panel";
 import { CrmLessonsList } from "../_components/crm-lessons-list";
+import ClassSessionsPanel from "../_components/class-sessions-panel";
 
 interface Reservation {
   id: number;
@@ -120,7 +121,7 @@ export default function CrmSchedulePage() {
   const { getIdToken } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   // 화면 모드: 캘린더 / 수업 예약 내역(리스트)
-  const [panelMode, setPanelMode] = useState<"calendar" | "list">("calendar");
+  const [panelMode, setPanelMode] = useState<"calendar" | "list" | "class">("calendar");
   const [anchor, setAnchor] = useState(() => new Date().toISOString().slice(0, 10));
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -375,9 +376,9 @@ export default function CrmSchedulePage() {
             </select>
           </>
         )}
-        {/* 캘린더 / 수업 예약 내역 탭 */}
+        {/* 캘린더 / 수업진행목록 / 클래스 수업 탭 */}
         <div className="inline-flex border border-[#E8E0D0] dark:border-zinc-700 rounded-lg overflow-hidden">
-          {(["calendar", "list"] as const).map((m) => (
+          {(["calendar", "list", "class"] as const).map((m) => (
             <button
               key={m}
               onClick={() => setPanelMode(m)}
@@ -387,7 +388,7 @@ export default function CrmSchedulePage() {
                   : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
                 }`}
             >
-              {m === "calendar" ? "캘린더" : "수업진행목록"}
+              {m === "calendar" ? "캘린더" : m === "list" ? "수업진행목록" : "클래스 수업"}
             </button>
           ))}
         </div>
@@ -418,6 +419,8 @@ export default function CrmSchedulePage() {
 
       {loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : panelMode === "class" ? (
+        <ClassSessionsPanel />
       ) : panelMode === "list" ? (
         <CrmLessonsList />
       ) : viewMode === "day" ? (
