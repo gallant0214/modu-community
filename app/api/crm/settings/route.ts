@@ -66,6 +66,7 @@ export async function PATCH(request: Request) {
     "cancel_enabled",
     "cancel_hours",
     "booking_enabled",
+    "class_booking_enabled",
     "booking_unit_min",
     "booking_horizon_days",
     "notify_cancel",

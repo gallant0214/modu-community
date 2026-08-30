@@ -379,9 +379,9 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
       return setError("기간을 0 이상으로 입력해 주세요");
     if (billingMode === "count" && totalSessions !== null && totalSessions <= 0)
       return setError("총 횟수를 1 이상으로 입력해 주세요");
-    if (type === "group" && capacity !== null && capacity <= 0)
-      return setError("그룹 수업 정원을 1명 이상으로 입력해 주세요");
-    if ((type === "personal" || type === "group") && sessionMinutes !== null && sessionMinutes <= 0)
+    if ((type === "group" || type === "class") && capacity !== null && capacity <= 0)
+      return setError(type === "class" ? "클래스 참가 인원수를 1명 이상으로 입력해 주세요" : "그룹 수업 정원을 1명 이상으로 입력해 주세요");
+    if ((type === "personal" || type === "group" || type === "class") && sessionMinutes !== null && sessionMinutes <= 0)
       return setError("수업 시간을 1분 이상으로 입력해 주세요");
     if (type === "membership" && accessMode === "custom" && operatingDays.length === 0)
       return setError("입장 가능 요일을 하나 이상 선택해 주세요");
@@ -427,9 +427,9 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
         attendance_mileage_earn: attendanceMileageEnabled ? attendanceMileageEarn ?? 0 : 0,
         price_won: priceWon,
         vat_included: vatIncluded,
-        capacity: type === "group" ? capacity ?? 0 : 0,
+        capacity: type === "group" || type === "class" ? capacity ?? 0 : 0,
         session_minutes:
-          type === "personal" || type === "group" ? sessionMinutes ?? 0 : 0,
+          type === "personal" || type === "group" || type === "class" ? sessionMinutes ?? 0 : 0,
         daily_check_in_limit: effectiveDaily,
         daily_time_limit_enabled: dailyTimeLimitEnabled,
         components: components.map((c) => ({
@@ -591,10 +591,12 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
         </div>
       </Section>
 
-      {/* 그룹 수업 정원 */}
-      {type === "group" && (
-        <Section title="그룹 정원" required>
-          <FieldLabel>한 클래스 최대 인원</FieldLabel>
+      {/* 그룹/클래스 수업 정원 */}
+      {(type === "group" || type === "class") && (
+        <Section title={type === "class" ? "클래스 정원" : "그룹 정원"} required>
+          <FieldLabel>
+            {type === "class" ? "이 수업에 참가할 수 있는 인원수" : "한 클래스 최대 인원"}
+          </FieldLabel>
           <div className="relative">
             <input
               type="number"
@@ -749,7 +751,7 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
           </div>
         )}
 
-        {(type === "personal" || type === "group") && (
+        {(type === "personal" || type === "group" || type === "class") && (
           <div className="mt-3">
             <FieldLabel>수업 시간 (분)</FieldLabel>
             <div className="relative">

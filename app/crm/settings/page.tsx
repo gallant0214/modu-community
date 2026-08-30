@@ -21,6 +21,7 @@ interface Settings {
   cancel_enabled: boolean;
   cancel_hours: number;
   booking_enabled: boolean;
+  class_booking_enabled: boolean;
   booking_unit_min: number;
   booking_horizon_days: number;
   notify_cancel: boolean;
@@ -466,6 +467,18 @@ export default function CrmSettingsPage() {
                 <span className="ml-2 text-[12.5px] text-[#A89B80]">일</span>
               </Field>
             </div>
+          </Card>
+
+          <Card title="클래스 수업 예약">
+            <Toggle
+              label="클래스 수업 예약 기능 사용"
+              on={settings.class_booking_enabled}
+              onChange={(v) => save({ class_booking_enabled: v })}
+            />
+            <p className="mt-1 text-[11.5px] text-[#A89B80] leading-relaxed">
+              끄면 회원 앱에서 클래스 수업을 예약할 수 없어요. (개인레슨·그룹 수업 예약과 별개로 동작)
+              클래스 수업 상품을 구매한 회원만, 강사가 등록한 클래스 수업을 선착순으로 예약할 수 있습니다.
+            </p>
           </Card>
 
           <Card title="스케줄 표시">
