@@ -2032,6 +2032,7 @@ function RegisterModal({
   const [mileage, setMileage] = useState("0");
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [registeredAt, setRegisteredAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [registrationType, setRegistrationType] = useState<"신규" | "재등록">("신규");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -2077,6 +2078,7 @@ function RegisterModal({
       setMileage("0");
       setMarketingConsent(false);
       setRegisteredAt(new Date().toISOString().slice(0, 10));
+      setRegistrationType("신규");
       setError("");
     }
   }, [open]);
@@ -2173,6 +2175,7 @@ function RegisterModal({
           mileage: Number(mileage) || 0,
           marketing_consent: marketingConsent,
           registered_at: registeredAt || undefined,
+          registration_type: registrationType,
         }),
       });
       const data = await res.json();
@@ -2296,6 +2299,24 @@ function RegisterModal({
             />
           </CrmField>
         </div>
+        <CrmField label="가입 구분">
+          <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
+            {(["신규", "재등록"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setRegistrationType(t)}
+                className={`px-4 py-2 text-[13px] font-medium ${
+                  registrationType === t
+                    ? "bg-[#6B7B3A] text-white"
+                    : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </CrmField>
         <CrmField label="최근 등록일">
           <input
             type="date"
