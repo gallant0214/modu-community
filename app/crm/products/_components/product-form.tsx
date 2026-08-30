@@ -657,15 +657,18 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
             <input
               type="number"
               min={0}
-              max={59}
+              max={50}
+              step={10}
               value={classCancelBeforeMin % 60}
               onChange={(e) => {
-                const m = Math.max(0, Math.min(59, Number(e.target.value) || 0));
+                // 10분 단위로 반올림(0~50)
+                const raw = Math.max(0, Math.min(59, Number(e.target.value) || 0));
+                const m = Math.min(50, Math.round(raw / 10) * 10);
                 setClassCancelBeforeMin(Math.floor(classCancelBeforeMin / 60) * 60 + m);
               }}
               className={`${crmInputClass} max-w-[90px] text-center`}
             />
-            <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">분 전까지 취소 가능</span>
+            <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">분 전까지 취소 가능 (10분 단위)</span>
           </div>
           <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
             회원이 이 시간 전까지 취소하면 횟수가 차감되지 않아요. 이후 취소·노쇼는 차감됩니다.
