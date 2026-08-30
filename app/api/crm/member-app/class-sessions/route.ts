@@ -30,14 +30,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ enabled: false, sessions: [] });
   }
 
-  // 내 유효 클래스 수강권 → 예약 가능 상품 목록
+  // 내 유효 수강권(만료 전) — 잔여는 상품 모드(횟수제/기간제)별로 판단
   const { data: passes } = await supabase
     .from("crm_passes")
     .select("id, product_id, remaining_sessions, expires_at, status")
     .eq("center_id", centerId)
     .eq("member_id", ctx.memberId)
-    .eq("status", "valid")
-    .gt("remaining_sessions", 0);
+    .eq("status", "valid");
   const passList = (passes ?? []).filter(
     (p) => p.product_id && (!p.expires_at || p.expires_at >= todayKst)
   );
@@ -45,13 +44,20 @@ export async function GET(request: Request) {
   if (productIds.length === 0) {
     return NextResponse.json({ enabled: true, sessions: [] });
   }
-  // 클래스 상품만 (취소마감 분 포함)
+  // 클래스 상품만 (이용방식·취소마감 포함)
   const { data: products } = await supabase
     .from("crm_products")
-    .select("id, name, type, class_cancel_before_min")
+    .select("id, name, type, billing_mode, class_cancel_before_min")
     .in("id", productIds)
     .eq("type", "class");
-  const classProductIds = new Set((products ?? []).map((p) => p.id));
+  // 상품별 예약 자격: 기간제=유효 수강권 있으면 OK / 횟수제=잔여>0 수강권 있어야 OK
+  const classProductIds = new Set<number>();
+  for (const p of products ?? []) {
+    const mine = passList.filter((x) => x.product_id === p.id);
+    const period = (p as { billing_mode?: string }).billing_mode === "period";
+    const ok = period ? mine.length > 0 : mine.some((x) => (x.remaining_sessions ?? 0) > 0);
+    if (ok) classProductIds.add(p.id);
+  }
   const cancelMinByProduct = new Map(
     (products ?? []).map((p) => [p.id, (p as { class_cancel_before_min?: number }).class_cancel_before_min ?? 60])
   );

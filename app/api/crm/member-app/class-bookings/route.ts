@@ -70,23 +70,33 @@ export async function POST(request: Request) {
   }
 
   // 유효 클래스 수강권(그 상품) — 만료 임박 순으로 1개 선택해 차감
+  // 상품 이용 방식: 기간제=무제한(차감X) / 횟수제=1회 차감
+  const { data: product } = await supabase
+    .from("crm_products")
+    .select("billing_mode")
+    .eq("id", session.product_id)
+    .maybeSingle();
+  const isPeriod = (product as { billing_mode?: string } | null)?.billing_mode === "period";
+
+  // 유효 수강권(그 상품). 횟수제는 잔여>0 필요, 기간제는 유효(만료 전)면 OK.
   const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-  const { data: passes } = await supabase
+  let passQuery = supabase
     .from("crm_passes")
     .select("id, remaining_sessions, expires_at")
     .eq("center_id", centerId)
     .eq("member_id", ctx.memberId)
     .eq("product_id", session.product_id)
     .eq("status", "valid")
-    .gt("remaining_sessions", 0)
     .order("expires_at", { ascending: true });
+  if (!isPeriod) passQuery = passQuery.gt("remaining_sessions", 0);
+  const { data: passes } = await passQuery;
   const usable = (passes ?? []).filter((p) => !p.expires_at || p.expires_at >= todayKst);
   const pass = usable[0];
   if (!pass) {
     return NextResponse.json({ error: "이 수업을 예약할 수 있는 수강권이 없어요.", noPass: true }, { status: 403 });
   }
 
-  // 예약 생성(차감) — 활성 유니크 인덱스가 동시 중복예약 방지
+  // 예약 생성 — 기간제는 consumed=false(차감 없음). 활성 유니크로 동시 중복예약 방지.
   const { data: created, error: insErr } = await supabase
     .from("crm_class_bookings")
     .insert({
@@ -95,7 +105,7 @@ export async function POST(request: Request) {
       member_id: ctx.memberId,
       pass_id: pass.id,
       status: "booked",
-      consumed: true,
+      consumed: !isPeriod,
     } as never)
     .select("id")
     .single();
@@ -103,13 +113,15 @@ export async function POST(request: Request) {
     // 유니크 충돌(동시 중복예약) 등
     return NextResponse.json({ error: "예약에 실패했어요. 다시 시도해 주세요." }, { status: 409 });
   }
-  // 잔여 세션 1회 차감
-  await supabase
-    .from("crm_passes")
-    .update({ remaining_sessions: Math.max(0, (pass.remaining_sessions ?? 1) - 1) } as never)
-    .eq("id", pass.id);
+  // 횟수제만 잔여 1회 차감
+  if (!isPeriod) {
+    await supabase
+      .from("crm_passes")
+      .update({ remaining_sessions: Math.max(0, (pass.remaining_sessions ?? 1) - 1) } as never)
+      .eq("id", pass.id);
+  }
 
-  return NextResponse.json({ ok: true, booking_id: (created as { id: number }).id });
+  return NextResponse.json({ ok: true, booking_id: (created as { id: number }).id, unlimited: isPeriod });
 }
 
 /**
