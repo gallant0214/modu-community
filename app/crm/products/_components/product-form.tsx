@@ -640,24 +640,36 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
       {type === "class" && (
         <Section title="수업 취소 설정">
           <FieldLabel>수업 취소 가능 시간</FieldLabel>
-          <select
-            value={classCancelBeforeMin}
-            onChange={(e) => setClassCancelBeforeMin(Number(e.target.value))}
-            className={crmInputClass}
-          >
-            {Array.from({ length: 49 }, (_, i) => i * 30).map((m) => (
-              <option key={m} value={m}>
-                {m === 0
-                  ? "수업 시작 직전까지 취소 가능"
-                  : m % 60 === 0
-                    ? `수업 ${m / 60}시간 전까지 취소 가능`
-                    : `수업 ${Math.floor(m / 60) > 0 ? `${Math.floor(m / 60)}시간 ` : ""}${m % 60}분 전까지 취소 가능`}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">수업 시작</span>
+            <input
+              type="number"
+              min={0}
+              max={168}
+              value={Math.floor(classCancelBeforeMin / 60)}
+              onChange={(e) => {
+                const h = Math.max(0, Math.min(168, Number(e.target.value) || 0));
+                setClassCancelBeforeMin(h * 60 + (classCancelBeforeMin % 60));
+              }}
+              className={`${crmInputClass} max-w-[90px] text-center`}
+            />
+            <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">시간</span>
+            <input
+              type="number"
+              min={0}
+              max={59}
+              value={classCancelBeforeMin % 60}
+              onChange={(e) => {
+                const m = Math.max(0, Math.min(59, Number(e.target.value) || 0));
+                setClassCancelBeforeMin(Math.floor(classCancelBeforeMin / 60) * 60 + m);
+              }}
+              className={`${crmInputClass} max-w-[90px] text-center`}
+            />
+            <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">분 전까지 취소 가능</span>
+          </div>
           <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
             회원이 이 시간 전까지 취소하면 횟수가 차감되지 않아요. 이후 취소·노쇼는 차감됩니다.
-            (30분 단위)
+            {classCancelBeforeMin === 0 && " (0시간 0분 = 수업 시작 직전까지 취소 가능)"}
           </p>
         </Section>
       )}
