@@ -5,7 +5,7 @@ import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
-const TYPES = ["membership", "group", "personal", "locker", "apparel", "goods"] as const;
+const TYPES = ["membership", "group", "personal", "class", "locker", "apparel", "goods"] as const;
 const BILLING = ["period", "count"] as const;
 const UNITS = ["day", "month", "year"] as const;
 
@@ -63,7 +63,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_products")
     .select(
-      "id, type, billing_mode, category, name, description, open_time, close_time, operating_days, duration_value, duration_unit, service_days, total_sessions, pause_enabled, pause_days, pause_count, price_won, vat_included, mileage_earn, mileage_usable, attendance_mileage_earn, capacity, session_minutes, daily_check_in_limit, daily_time_limit_enabled, components, trainer_member_id, status, created_at, updated_at"
+      "id, type, billing_mode, category, name, description, open_time, close_time, operating_days, duration_value, duration_unit, service_days, total_sessions, pause_enabled, pause_days, pause_count, price_won, vat_included, mileage_earn, mileage_usable, attendance_mileage_earn, capacity, class_cancel_before_min, session_minutes, daily_check_in_limit, daily_time_limit_enabled, components, trainer_member_id, status, created_at, updated_at"
     )
     .eq("center_id", ctx.centerId)
     .eq("status", "active")
@@ -119,6 +119,7 @@ export async function POST(request: Request) {
     mileage_usable?: boolean;
     attendance_mileage_earn?: number;
     capacity?: number;
+    class_cancel_before_min?: number;
     session_minutes?: number;
     daily_check_in_limit?: number;
     daily_time_limit_enabled?: boolean;
@@ -203,9 +204,14 @@ export async function POST(request: Request) {
       mileage_earn: Math.max(0, Number(body.mileage_earn) || 0),
       mileage_usable: body.mileage_usable !== false,
       attendance_mileage_earn: Math.max(0, Number(body.attendance_mileage_earn) || 0),
-      capacity: body.type === "group" ? Math.max(0, Number(body.capacity) || 0) : 0,
+      capacity:
+        body.type === "group" || body.type === "class"
+          ? Math.max(0, Number(body.capacity) || 0)
+          : 0,
+      class_cancel_before_min:
+        body.type === "class" ? Math.max(0, Number(body.class_cancel_before_min) || 0) : 60,
       session_minutes:
-        body.type === "personal" || body.type === "group"
+        body.type === "personal" || body.type === "group" || body.type === "class"
           ? Math.max(0, Number(body.session_minutes) || 0)
           : 0,
       // 0 = 무제한 sentinel (회원권 UI에서 '무제한' 체크 시). 그 외엔 ≥1 강제.

@@ -1582,6 +1582,7 @@ export type Database = {
           pause_count: number
           vat_included: boolean
           capacity: number
+          class_cancel_before_min: number
           session_minutes: number
           daily_check_in_limit: number
           daily_time_limit_enabled: boolean
@@ -1615,6 +1616,7 @@ export type Database = {
           pause_count?: number
           vat_included?: boolean
           capacity?: number
+          class_cancel_before_min?: number
           session_minutes?: number
           daily_check_in_limit?: number
           daily_time_limit_enabled?: boolean
@@ -1648,6 +1650,7 @@ export type Database = {
           pause_count?: number
           vat_included?: boolean
           capacity?: number
+          class_cancel_before_min?: number
           session_minutes?: number
           daily_check_in_limit?: number
           daily_time_limit_enabled?: boolean
@@ -4000,6 +4003,90 @@ export type Database = {
           text?: string
           created_by_uid?: string | null
           created_at?: string
+        }
+        Relationships: []
+      }
+      crm_class_sessions: {
+        Row: {
+          id: number
+          center_id: number
+          product_id: number
+          trainer_member_id: number | null
+          title: string | null
+          starts_at: string
+          ends_at: string
+          capacity: number
+          status: string
+          created_by_uid: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          product_id: number
+          trainer_member_id?: number | null
+          title?: string | null
+          starts_at: string
+          ends_at: string
+          capacity?: number
+          status?: string
+          created_by_uid?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          product_id?: number
+          trainer_member_id?: number | null
+          title?: string | null
+          starts_at?: string
+          ends_at?: string
+          capacity?: number
+          status?: string
+          created_by_uid?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_class_bookings: {
+        Row: {
+          id: number
+          center_id: number
+          session_id: number
+          member_id: number
+          pass_id: number | null
+          status: string
+          consumed: boolean
+          booked_at: string
+          cancelled_at: string | null
+          attended_at: string | null
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          session_id: number
+          member_id: number
+          pass_id?: number | null
+          status?: string
+          consumed?: boolean
+          booked_at?: string
+          cancelled_at?: string | null
+          attended_at?: string | null
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          session_id?: number
+          member_id?: number
+          pass_id?: number | null
+          status?: string
+          consumed?: boolean
+          booked_at?: string
+          cancelled_at?: string | null
+          attended_at?: string | null
         }
         Relationships: []
       }

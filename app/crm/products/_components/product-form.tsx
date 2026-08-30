@@ -31,6 +31,7 @@ export interface ProductInitial {
   mileage_usable?: boolean;
   attendance_mileage_earn?: number;
   capacity?: number;
+  class_cancel_before_min?: number | null;
   session_minutes?: number;
   daily_check_in_limit?: number;
   daily_time_limit_enabled?: boolean;
@@ -64,6 +65,7 @@ interface ExistingProduct {
   total_sessions: number | null;
   session_minutes: number | null;
   capacity: number | null;
+  class_cancel_before_min?: number | null;
 }
 
 interface TypeOption {
@@ -260,6 +262,10 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
   const [vatIncluded, setVatIncluded] = useState<boolean>(initial?.vat_included ?? false);
   const [capacity, setCapacity] = useState(initial?.capacity ?? 2);
   const [sessionMinutes, setSessionMinutes] = useState(initial?.session_minutes ?? 50);
+  // 클래스 수업 취소 가능 시간(분, 30분 단위): 수업 시작 N분 전까지 취소하면 차감 안 함
+  const [classCancelBeforeMin, setClassCancelBeforeMin] = useState(
+    initial?.class_cancel_before_min ?? 60
+  );
 
   // 회원권 전용: 일일 입장 가능 횟수 (0 = 무제한 sentinel)
   const [dailyCheckInLimit, setDailyCheckInLimit] = useState<number>(
@@ -428,6 +434,7 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
         price_won: priceWon,
         vat_included: vatIncluded,
         capacity: type === "group" || type === "class" ? capacity ?? 0 : 0,
+        class_cancel_before_min: type === "class" ? Math.max(0, classCancelBeforeMin) : 60,
         session_minutes:
           type === "personal" || type === "group" || type === "class" ? sessionMinutes ?? 0 : 0,
         daily_check_in_limit: effectiveDaily,
@@ -625,6 +632,33 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
               </button>
             ))}
           </div>
+
+          {/* 클래스 전용: 수업 취소 가능 시간 (30분 단위) */}
+          {type === "class" && (
+            <div className="mt-4">
+              <FieldLabel>수업 취소 가능 시간</FieldLabel>
+              <div className="relative">
+                <select
+                  value={classCancelBeforeMin}
+                  onChange={(e) => setClassCancelBeforeMin(Number(e.target.value))}
+                  className={crmInputClass}
+                >
+                  {Array.from({ length: 49 }, (_, i) => i * 30).map((m) => (
+                    <option key={m} value={m}>
+                      {m === 0
+                        ? "수업 시작 직전까지 취소 가능"
+                        : m % 60 === 0
+                          ? `수업 ${m / 60}시간 전까지`
+                          : `수업 ${Math.floor(m / 60) > 0 ? `${Math.floor(m / 60)}시간 ` : ""}${m % 60}분 전까지`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
+                이 시간 전까지 취소하면 횟수가 차감되지 않아요. 이후 취소·노쇼는 차감됩니다.
+              </p>
+            </div>
+          )}
         </Section>
       )}
 
