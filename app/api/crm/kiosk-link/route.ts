@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
+import { makeWeeklyQrToken, nextBucketBoundaryMs } from "@/app/lib/kiosk-auth";
 import crypto from "node:crypto";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,14 @@ export async function GET(request: Request) {
     .select("kiosk_token")
     .eq("id", ctx.centerId)
     .maybeSingle();
-  return NextResponse.json({ token: (data as { kiosk_token: string | null } | null)?.kiosk_token ?? null });
+  const kioskToken = (data as { kiosk_token: string | null } | null)?.kiosk_token ?? null;
+  // QR 은 정적 토큰이 아니라 '주간 회전 토큰' 을 사용 → 매주 자동 변경(스크린샷 무효화).
+  const qr = kioskToken ? makeWeeklyQrToken(ctx.centerId, kioskToken) : null;
+  return NextResponse.json({
+    token: kioskToken,
+    qr,
+    next_rotate_at: kioskToken ? new Date(nextBucketBoundaryMs()).toISOString() : null,
+  });
 }
 
 export async function POST(request: Request) {
