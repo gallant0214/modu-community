@@ -61,6 +61,31 @@ export async function GET(request: Request) {
     for (const z of zones ?? []) zoneMap.set(z.id, z.name);
   }
 
+  // 락커 상품은 crm_rentals(과금 항목)과 crm_lockers(실물 배정)에 쌍으로 생성된다.
+  // → 회원 화면에 락커가 2번 뜨는 것을 막기 위해, 실물 락커에 락커성 rental을 1:1 매칭해
+  //   상품명을 락커 카드 제목으로 흡수하고, 매칭된 rental 은 목록에서 제거한다.
+  //   (실물 락커가 없으면 rental 을 그대로 노출 = 폴백)
+  const isLockerRental = (name: string | null) =>
+    !!name && name.includes("락커") && !name.includes("운동복");
+  const rentalList = [...(rentals ?? [])];
+  const usedRentalIds = new Set<number>();
+  const lockerNameById = new Map<number, string>();
+  for (const l of lockers ?? []) {
+    // 만료일이 같은 락커성 rental 우선, 없으면 아무 락커성 rental
+    const idx =
+      rentalList.findIndex(
+        (r) => !usedRentalIds.has(r.id) && isLockerRental(r.item_name) && r.expires_at === l.expires_at
+      );
+    const useIdx =
+      idx >= 0
+        ? idx
+        : rentalList.findIndex((r) => !usedRentalIds.has(r.id) && isLockerRental(r.item_name));
+    if (useIdx >= 0) {
+      usedRentalIds.add(rentalList[useIdx].id);
+      lockerNameById.set(l.id, rentalList[useIdx].item_name);
+    }
+  }
+
   return NextResponse.json({
     memberships: (memberships ?? []).map((m) => ({
       id: m.id,
@@ -80,7 +105,7 @@ export async function GET(request: Request) {
       const assignmentLabel = assigned && zoneName ? `${zoneName} - ${l.number}번` : "미배정";
       return {
         id: l.id,
-        label: "락커",
+        label: lockerNameById.get(l.id) ?? "락커",
         assignmentLabel,
         assigned,
         startDate: l.start_date,
@@ -90,14 +115,16 @@ export async function GET(request: Request) {
         dday: dday(l.expires_at),
       };
     }),
-    rentals: (rentals ?? []).map((r) => ({
-      id: r.id,
-      itemName: r.item_name,
-      startDate: r.start_date,
-      expiresAt: r.expires_at,
-      purchasedAt: (r.created_at ?? "").slice(0, 10) || r.start_date,
-      priceWon: r.price_won ?? null,
-      dday: dday(r.expires_at),
-    })),
+    rentals: rentalList
+      .filter((r) => !usedRentalIds.has(r.id))
+      .map((r) => ({
+        id: r.id,
+        itemName: r.item_name,
+        startDate: r.start_date,
+        expiresAt: r.expires_at,
+        purchasedAt: (r.created_at ?? "").slice(0, 10) || r.start_date,
+        priceWon: r.price_won ?? null,
+        dday: dday(r.expires_at),
+      })),
   });
 }
