@@ -153,9 +153,14 @@ export async function GET(
         outstanding_total: (a?.pass_outstanding ?? 0) + (mbOutstanding.get(m.id) ?? 0),
       };
     })
-    // 유효 회원 먼저, 그 안에서 최근 구매 순(담당 수강권 최신 발급) 정렬
+    // 유효 회원 먼저(최근 발급 순). 그 아래 만료 회원은 '최신 만료(만기일 늦은)' 순.
     .sort((x, y) => {
       if (x.status !== y.status) return x.status === "유효" ? -1 : 1;
+      if (x.status === "만료") {
+        const ex = x.final_expire_at ?? "";
+        const ey = y.final_expire_at ?? "";
+        return ex < ey ? 1 : ex > ey ? -1 : 0;
+      }
       const ax = agg.get(x.id)?.latest_issued ?? "";
       const ay = agg.get(y.id)?.latest_issued ?? "";
       return ax < ay ? 1 : ax > ay ? -1 : 0;
