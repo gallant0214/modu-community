@@ -8455,7 +8455,7 @@ function PassDetailModal({
     setEditService(p.service_sessions ?? 0);
     setEditIssuedAt(p.issued_at ?? "");
     setEditStartDate((p as Pass & { start_date?: string | null }).start_date ?? "");
-    setEditExpires(p.expires_at === "9999-12-31" ? "" : (p.expires_at ?? ""));
+    setEditExpires(p.expires_at ?? ""); // 9999-12-31(무기한)도 그대로 유지 → 체크박스로 표시
     setEditPriceWon(p.price_won ?? 0);
     setEditVatIncluded(!!p.vat_included);
     setEditPaymentMethod(p.payment_method || "card");
@@ -8715,12 +8715,24 @@ function PassDetailModal({
                   />
                 </CrmField>
                 <CrmField label="만료일">
-                  <input
-                    type="date"
-                    value={editExpires}
-                    onChange={(e) => setEditExpires(e.target.value)}
-                    className={crmInputClass}
-                  />
+                  <div className="space-y-1.5">
+                    <input
+                      type="date"
+                      value={editExpires === "9999-12-31" ? "" : editExpires}
+                      disabled={editExpires === "9999-12-31"}
+                      onChange={(e) => setEditExpires(e.target.value)}
+                      className={`${crmInputClass} disabled:opacity-50`}
+                    />
+                    <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={editExpires === "9999-12-31"}
+                        onChange={(e) => setEditExpires(e.target.checked ? "9999-12-31" : "")}
+                        className="w-4 h-4 accent-[#6B7B3A]"
+                      />
+                      <span className="text-[12.5px] text-[#3A342A] dark:text-zinc-300">무기한</span>
+                    </label>
+                  </div>
                 </CrmField>
                 <CrmField label="결제 금액(원)">
                   <input
