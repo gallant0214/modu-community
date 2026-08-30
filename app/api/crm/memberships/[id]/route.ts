@@ -22,6 +22,15 @@ export async function PATCH(
   const mid = Number(id);
   if (!mid) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
+  // 현재 값 로드 (센터 격리 + status 재계산용)
+  const { data: current } = await supabase
+    .from("crm_memberships")
+    .select("status, expires_at")
+    .eq("id", mid)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+  if (!current) return NextResponse.json({ error: "회원권을 찾을 수 없습니다" }, { status: 404 });
+
   let body: {
     expires_at?: string;
     start_date?: string;
@@ -84,6 +93,15 @@ export async function PATCH(
       Math.floor(Number(body.attendance_mileage_earn) || 0)
     );
   }
+  // 유효기간 변경 시 status 재계산 (기간제: 만료일 기준. 환불은 유지).
+  // → 무기한(9999)/기간 연장 시 자동으로 '유효'로 전환.
+  const cm = current as { status: string; expires_at: string | null };
+  if (cm.status !== "refunded" && patch.expires_at !== undefined) {
+    const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const eff = patch.expires_at as string;
+    patch.status = !eff || String(eff).slice(0, 10) >= today ? "valid" : "expired";
+  }
+
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
   }
