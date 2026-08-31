@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
 import FaceAttendance from "./face-attendance";
 import FaceEnroll from "./face-enroll";
 import QrDisplay from "./qr-display";
-import { speakMessages, playWarningBeep, primeSpeech } from "./_speak";
+import { speakMessages, playWarningBeep, playCheckinChime, primeSpeech, primeAudio } from "./_speak";
 
 interface MemberLite {
   id: number;
@@ -171,6 +171,68 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
     }, 3500);
     return () => clearTimeout(t);
   }, [result, reset]);
+
+  // QR 출석 감지 폴링: 회원앱으로 QR을 스캔해 출석하면(source='app') 태블릿엔 결과창이
+  // 안 뜬다. QR 표시 모드일 때 새 QR 출석을 폴링해, 번호출석과 '동일한' 결과창을 띄운다.
+  const qrPollCursor = useRef<number | null>(null);
+  useEffect(() => {
+    const active = recogMode === "qr" || recogMode === "qr_number";
+    if (!active) {
+      qrPollCursor.current = null;
+      return;
+    }
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const poll = async () => {
+      try {
+        const cursor = qrPollCursor.current;
+        const qs = cursor != null ? `?since=${cursor}` : "";
+        let res: Response;
+        if (kiosk) {
+          res = await fetch(`/api/touch/${kioskToken}/recent-checkin${qs}`, { cache: "no-store" });
+        } else {
+          const t = await getIdToken();
+          if (!t) throw new Error("no-auth");
+          res = await fetch(`/api/crm/kiosk-recent-checkin${qs}`, {
+            headers: { authorization: `Bearer ${t}` },
+            cache: "no-store",
+          });
+        }
+        const d = await res.json();
+        if (stopped) return;
+        if (qrPollCursor.current == null) {
+          // 최초 응답 = baseline. 기존 출석은 표시하지 않고 커서만 잡는다.
+          qrPollCursor.current = typeof d.latestId === "number" ? d.latestId : 0;
+        } else if (d.checkin && d.checkin.attendance_id > qrPollCursor.current) {
+          qrPollCursor.current = d.checkin.attendance_id;
+          const c = d.checkin;
+          setResult({
+            kind: "success",
+            name: c.member?.name ?? "",
+            birth: c.member?.birth ?? null,
+            phone: c.member?.phone ?? null,
+            duplicate: !!c.duplicate,
+            mileageAwarded: c.mileage_awarded ?? 0,
+            summary: c.summary as CheckinSummary | undefined,
+          });
+          if (c.summary && c.summary.can_enter === false) playWarningBeep();
+          speakMessages(Array.isArray(c.voice_messages) ? c.voice_messages : []);
+        } else if (typeof d.latestId === "number" && d.latestId > qrPollCursor.current) {
+          // 회원 조회 실패 등으로 결과 미구성 → 커서만 전진(재표시 방지)
+          qrPollCursor.current = d.latestId;
+        }
+      } catch {
+        /* 네트워크 오류 무시 — 다음 폴링에서 재시도 */
+      } finally {
+        if (!stopped) timer = setTimeout(poll, 2000);
+      }
+    };
+    poll();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [recogMode, kiosk, kioskToken, getIdToken]);
 
   const press = (d: string) => {
     if (busy || candidates || enrollTarget) return;

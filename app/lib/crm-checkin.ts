@@ -291,3 +291,60 @@ export async function awardAttendanceMileage(
 
   return amount;
 }
+
+/**
+ * 키오스크(터치출석) 화면이 폴링해서 'QR(회원앱) 출석'을 감지하기 위한 헬퍼.
+ * 회원이 QR을 스캔하면 source='app' 출석 레코드가 생성되는데, 이 출석은 태블릿이 아닌
+ * 회원 폰에서 일어나므로 태블릿엔 결과창이 안 뜬다. 태블릿이 이 함수를 폴링해
+ * 새 QR 출석(id > since)이 있으면 번호출석과 동일한 결과(summary/voice/member)를 구성해 돌려준다.
+ *
+ * @param sinceId 클라이언트가 마지막으로 본 출석 id. 이보다 큰 새 출석만 결과 구성.
+ *   null/undefined 면 baseline 모드 — latestId 만 반환(결과 미구성).
+ */
+export async function getLatestQrCheckin(centerId: number, sinceId: number | null) {
+  const { data: rows } = await supabase
+    .from("crm_attendances")
+    .select("id, member_id, checked_in_at, attendance_mileage_awarded")
+    .eq("center_id", centerId)
+    .eq("source", "app")
+    .order("id", { ascending: false })
+    .limit(1);
+  const row = rows?.[0] as
+    | { id: number; member_id: number; checked_in_at: string; attendance_mileage_awarded: number | null }
+    | undefined;
+  const latestId = row?.id ?? 0;
+
+  // baseline 요청이거나 새 출석 없음 → 결과 미구성
+  if (sinceId == null || !row || latestId <= sinceId) {
+    return { latestId, checkin: null as null };
+  }
+
+  const { data: member } = await supabase
+    .from("crm_members")
+    .select("id, name, phone, birth")
+    .eq("id", row.member_id)
+    .eq("center_id", centerId)
+    .maybeSingle();
+  if (!member) return { latestId, checkin: null as null };
+
+  const summary = await buildCheckinSummary(centerId, member.id);
+  let voice_messages: string[] = [];
+  try {
+    voice_messages = await buildAttendanceVoiceMessages(centerId, member as CheckinMember);
+  } catch {
+    voice_messages = [];
+  }
+
+  return {
+    latestId,
+    checkin: {
+      attendance_id: row.id,
+      checked_at: row.checked_in_at,
+      member: { name: member.name, birth: member.birth, phone: member.phone },
+      duplicate: false,
+      mileage_awarded: Number(row.attendance_mileage_awarded) || 0,
+      voice_messages,
+      summary,
+    },
+  };
+}
