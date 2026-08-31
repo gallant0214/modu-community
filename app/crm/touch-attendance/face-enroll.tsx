@@ -61,7 +61,7 @@ export default function FaceEnroll({
     await startCamera();
   };
 
-  // 현재 프레임을 중앙 정사각 crop → 300x300 / 썸네일 96x96
+  // C등급: 800x800 q82 (~150KB) — 얼굴 인식률 우선 / 썸네일 120x120 q60
   const capture = () => {
     const video = videoRef.current;
     if (!video || video.readyState < 2) return;
@@ -72,13 +72,14 @@ export default function FaceEnroll({
     const sy = (vh - side) / 2;
 
     const c = document.createElement("canvas");
-    c.width = 300;
-    c.height = 300;
+    c.width = 800;
+    c.height = 800;
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    // 자연스러운(좌우반전 없는) 이미지로 저장
-    ctx.drawImage(video, sx, sy, side, side, 0, 0, 300, 300);
-    setCaptured(c.toDataURL("image/jpeg", 0.75));
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(video, sx, sy, side, side, 0, 0, 800, 800);
+    setCaptured(c.toDataURL("image/jpeg", 0.82));
   };
 
   const makeThumb = (dataUrl: string): Promise<string> =>
@@ -86,12 +87,14 @@ export default function FaceEnroll({
       const img = new Image();
       img.onload = () => {
         const c = document.createElement("canvas");
-        c.width = 96;
-        c.height = 96;
+        c.width = 120;
+        c.height = 120;
         const ctx = c.getContext("2d");
         if (!ctx) return resolve(dataUrl);
-        ctx.drawImage(img, 0, 0, 96, 96);
-        resolve(c.toDataURL("image/jpeg", 0.7));
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, 0, 0, 120, 120);
+        resolve(c.toDataURL("image/jpeg", 0.6));
       };
       img.onerror = () => resolve(dataUrl);
       img.src = dataUrl;

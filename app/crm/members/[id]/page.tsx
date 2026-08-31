@@ -1662,8 +1662,8 @@ function FacePhotoUpload({
     try {
       // 표시용 사진은 예전과 동일한 정도(420x420, q=0.85 ≈ 40KB) + 목록 썸네일(144x144).
       const [compressed, thumb] = await Promise.all([
-        compressToDataUrl(file, 420, 0.85),
-        compressToDataUrl(file, 144, 0.9),
+        compressToDataUrl(file, 800, 0.82),  // C등급: 800x800 q82 (~150KB) — 얼굴 인식률 우선
+        compressToDataUrl(file, 120, 0.6),
       ]);
       // 얼굴 인식용 디스크립터는 "원본 고해상도"에서 계산 → 정확도↑ (표시 화질과 분리).
       // 실패(모델 로드/얼굴 미검출)해도 사진은 저장하고, 매칭은 얼굴출석에서 사진으로 폴백 처리됨.
@@ -2140,7 +2140,7 @@ function FaceZoomModal({ src, onClose }: { src: string; onClose: () => void }) {
 
 /**
  * 이미지 파일 → 정사각형 캔버스에 축소 → JPEG base64 반환.
- * 얼굴 알아볼 정도의 크기(기본 300x300) · 품질 0.75 → 대략 20~35KB.
+ * C등급 800x800 q82 → 약 150KB. face-api.js 인식 우수.
  * center-crop 으로 얼굴이 중앙에 크게 담기도록.
  */
 async function compressToDataUrl(file: File, size: number, quality: number): Promise<string> {
