@@ -383,69 +383,89 @@ export default function FaceAttendance({
   const loadingPct =
     progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
-  return (
-    <div
-      className={`w-full flex flex-col items-center ${
-        fill ? "" : "max-w-[min(94vw,720px)]"
-      }`}
-    >
-      <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden border-2 border-[#E8E0D0] dark:border-zinc-700 bg-black">
-        <video
-          ref={videoRef}
-          muted
-          playsInline
-          className="w-full h-full object-cover scale-x-[-1]"
-        />
-        {!camError && stage !== "ready" && stage !== "error" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white text-center px-6">
-            <div className="text-[15px] font-semibold mb-2">{status}</div>
-            {stage === "faces" && progress.total > 0 && (
-              <>
-                <div className="w-[70%] max-w-[280px] h-2 rounded-full bg-white/20 overflow-hidden">
-                  <div className="h-full bg-[#8Fb54A]" style={{ width: `${loadingPct}%` }} />
-                </div>
-                <div className="mt-2 text-[12.5px] text-white/80">
-                  얼굴 학습 {progress.done}/{progress.total}
-                  {progress.skipped > 0 && ` · 인식불가 ${progress.skipped}`}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-        {camError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 text-center px-6 gap-3">
-            <div className="text-[14px] font-semibold text-red-300 leading-relaxed">{camError}</div>
-            <button
-              onClick={() => startCamera()}
-              className="px-5 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[14px] font-bold hover:bg-[#5a6932]"
-            >
-              카메라 다시 시도
-            </button>
-          </div>
-        )}
-        {!camError && stage === "error" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-center px-6">
-            <div className="text-[14px] font-semibold text-red-300">{error}</div>
-          </div>
-        )}
-        {/* 인식 성공 배너 */}
-        {lastHit && (
-          <div className="absolute inset-x-0 bottom-0 py-3 bg-[#6B7B3A]/90 text-white text-center">
-            <div className="text-[13px]">출석 완료</div>
-            <div className="text-[22px] font-bold">{lastHit.name}</div>
-          </div>
-        )}
-      </div>
-
-      {stage === "ready" && (
-        <div className="mt-3 w-full text-center">
-          <div className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{status}</div>
-          <div className="mt-0.5 text-[12px] text-[#A89B80]">
-            등록 얼굴 {progress.total - progress.skipped}명 학습됨
-            {progress.skipped > 0 && ` · 사진 인식불가 ${progress.skipped}명`}
-          </div>
+  const boxClass =
+    "rounded-2xl overflow-hidden border-2 border-[#E8E0D0] dark:border-zinc-700 bg-black";
+  // 카메라 박스 내부(영상 + 오버레이) — 두 레이아웃 공용.
+  const boxInner = (
+    <>
+      <video
+        ref={videoRef}
+        muted
+        playsInline
+        className="w-full h-full object-cover scale-x-[-1]"
+      />
+      {!camError && stage !== "ready" && stage !== "error" && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white text-center px-6">
+          <div className="text-[15px] font-semibold mb-2">{status}</div>
+          {stage === "faces" && progress.total > 0 && (
+            <>
+              <div className="w-[70%] max-w-[280px] h-2 rounded-full bg-white/20 overflow-hidden">
+                <div className="h-full bg-[#8Fb54A]" style={{ width: `${loadingPct}%` }} />
+              </div>
+              <div className="mt-2 text-[12.5px] text-white/80">
+                얼굴 학습 {progress.done}/{progress.total}
+                {progress.skipped > 0 && ` · 인식불가 ${progress.skipped}`}
+              </div>
+            </>
+          )}
         </div>
       )}
+      {camError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 text-center px-6 gap-3">
+          <div className="text-[14px] font-semibold text-red-300 leading-relaxed">{camError}</div>
+          <button
+            onClick={() => startCamera()}
+            className="px-5 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[14px] font-bold hover:bg-[#5a6932]"
+          >
+            카메라 다시 시도
+          </button>
+        </div>
+      )}
+      {!camError && stage === "error" && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-center px-6">
+          <div className="text-[14px] font-semibold text-red-300">{error}</div>
+        </div>
+      )}
+      {/* 인식 성공 배너 */}
+      {lastHit && (
+        <div className="absolute inset-x-0 bottom-0 py-3 bg-[#6B7B3A]/90 text-white text-center">
+          <div className="text-[13px]">출석 완료</div>
+          <div className="text-[22px] font-bold">{lastHit.name}</div>
+        </div>
+      )}
+    </>
+  );
+
+  const statusFooter = stage === "ready" && (
+    <div className={`w-full text-center ${fill ? "shrink-0 mt-2" : "mt-3"}`}>
+      <div className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{status}</div>
+      <div className="mt-0.5 text-[12px] text-[#A89B80]">
+        등록 얼굴 {progress.total - progress.skipped}명 학습됨
+        {progress.skipped > 0 && ` · 사진 인식불가 ${progress.skipped}명`}
+      </div>
+    </div>
+  );
+
+  // fill: 부모가 준 높이/너비 안에서 '가장 큰 4:3 박스'로 꽉 채워 위아래 잘림 방지.
+  if (fill) {
+    return (
+      <div className="w-full h-full min-h-0 flex flex-col items-center">
+        <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+          <div className="relative h-full w-full">
+            <div className={`absolute inset-0 m-auto aspect-[4/3] max-h-full max-w-full ${boxClass}`}>
+              {boxInner}
+            </div>
+          </div>
+        </div>
+        {statusFooter}
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full flex flex-col items-center max-w-[min(94vw,720px)]">
+      <div className={`relative w-full aspect-[4/3] ${boxClass}`}>{boxInner}</div>
+      {statusFooter}
     </div>
   );
 }
