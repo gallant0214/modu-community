@@ -384,6 +384,14 @@ export async function GET(request: Request) {
       items,
       locker_label: lockerMap.get(m.id) ?? null,
       last_visit_at: lastVisitMap.get(m.id) ?? null,
+      // 마지막 출석일 = 실제 출석기록(crm_attendances) 최신일(KST). 스냅샷 컬럼은 자동
+      // 갱신이 안 돼 비어 있으므로, 실측을 우선하고 없으면 기존 컬럼값 유지.
+      last_attended_at: (() => {
+        const lv = lastVisitMap.get(m.id);
+        return lv
+          ? new Date(new Date(lv).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+          : m.last_attended_at ?? null;
+      })(),
       // 결제 기록 기반 최근 구매일(없으면 기존 컬럼값)
       last_purchase_at: lastPurchaseMap.get(m.id) ?? m.last_purchase_at,
       // 누적 결제: 원장 순액 + 컷오프 이후 결제(계산값). 계산이 0 이하이면 스냅샷 컬럼 폴백.
