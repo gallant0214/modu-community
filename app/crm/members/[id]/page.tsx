@@ -8902,9 +8902,24 @@ function PassDetailModal({
           )}
 
           <section>
-            <h3 className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
-              수업 내역 ({detail.reservations.length})
-            </h3>
+            <div className="mb-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px]">
+              <h3 className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                예약 전체 내역 ({detail.reservations.length})
+              </h3>
+              <span className="text-[#D8CDB6] dark:text-zinc-600">|</span>
+              <span className="font-medium text-[#487596] dark:text-[#8FB7D4]">
+                예약중 ({detail.reservations.filter((r) => r.status === "booked").length})
+              </span>
+              <span className="font-medium text-[#6B7B3A] dark:text-[#A8B87A]">
+                수업 완료 ({detail.reservations.filter((r) => r.status === "attended").length})
+              </span>
+              <span className="font-medium text-red-600 dark:text-red-400">
+                노쇼 ({detail.reservations.filter((r) => r.status === "noshow").length})
+              </span>
+              <span className="font-medium text-[#A89B80] dark:text-zinc-500">
+                예약 취소 ({detail.reservations.filter((r) => r.status === "cancelled").length})
+              </span>
+            </div>
             {detail.reservations.length === 0 ? (
               <div className="px-4 py-6 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-lg">
                 아직 예약·수업 기록이 없습니다.
