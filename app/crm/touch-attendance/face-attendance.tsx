@@ -13,7 +13,7 @@ const DEFAULT_THRESHOLD = 0.45;
 // 1등이 2등(다른 사람)보다 이만큼 더 가까워야 인정 — 애매하면 거부(오인식 방지)
 const MARGIN = 0.05;
 // 연속 N프레임 동일 인물로 확인돼야 출석 처리 — 순간 오인식 차단
-const REQUIRED_FRAMES = 3;
+const REQUIRED_FRAMES = 2;
 // 얼굴 박스 최소 너비(px). 너무 작으면(멀면) 디스크립터 품질 낮아 스킵
 const MIN_FACE_PX = 110;
 // 같은 회원 재인식 무시 시간(ms)
@@ -213,7 +213,7 @@ export default function FaceAttendance({
             busyRef.current = false;
           }
         }
-        if (runningRef.current) setTimeout(tick, 400);
+        if (runningRef.current) setTimeout(tick, 200);
       };
       tick();
     },
@@ -300,7 +300,7 @@ export default function FaceAttendance({
 
         // 등록 사진은 inputSize 크게(정확도 우선), 실시간 루프는 별도 opt(속도 우선)
         const enrollOpt = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 });
-        const opt = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 });
+        const opt = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
         optRef.current = opt;
         const built: { id: number; descriptor: Float32Array }[] = [];
         let skipped = 0;
