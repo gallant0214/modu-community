@@ -50,10 +50,11 @@ const MSG_FIELDS: {
   placeholder: string;
   hint?: string;
   daysKey?: keyof Settings;
+  daysBefore?: boolean; // true=만료 N일 전부터(임박), false=만료 후 N일까지
 }[] = [
   { key: "msg_active_entry", enabledKey: "msg_active_entry_enabled", label: "활성 회원 입장 시 안내 멘트", placeholder: "예: 출석 포인트가 적립되었습니다" },
   { key: "msg_birthday_entry", enabledKey: "msg_birthday_entry_enabled", label: "생일자 회원 입장 시 안내 멘트", placeholder: "예: 생일 축하드립니다" },
-  { key: "msg_expiring_membership", enabledKey: "msg_expiring_membership_enabled", label: "만료 임박 [멤버십] 회원 입장 시 안내 멘트", placeholder: "예: 회원권이 곧 만료 예정입니다", hint: "만료 임박 기준일 이내 회원이 체크인 할 때 매번 재생" },
+  { key: "msg_expiring_membership", enabledKey: "msg_expiring_membership_enabled", daysKey: "expiring_threshold_days", daysBefore: true, label: "만료 임박 [멤버십] 회원 입장 시 안내 멘트", placeholder: "예: 회원권이 곧 만료 예정입니다", hint: "만료일이 가까운 회원이 체크인 할 때 매번 재생. 아래에서 만료 며칠 전부터 안내할지 설정하세요." },
   { key: "msg_exit", enabledKey: "msg_exit_enabled", label: "퇴장 멘트", placeholder: "예: 퇴실 포인트가 적립되었습니다" },
   { key: "msg_outstanding", enabledKey: "msg_outstanding_enabled", label: "미수금 멘트", placeholder: "멘트를 입력해주세요." },
   { key: "msg_expired_membership", enabledKey: "msg_expired_membership_enabled", label: "만료 회원 입장 시 안내 멘트", placeholder: "예: 회원권이 만료되었습니다. 카운터에 문의주세요!", hint: "회원권이 유효기간을 지난 회원이 체크인할 때마다 재생" },
@@ -253,7 +254,9 @@ export default function TouchAttendanceSettingsPage() {
                 </div>
                 {f.daysKey && (
                   <div className={`mt-2 flex items-center gap-2 ${on ? "" : "opacity-60"}`}>
-                    <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">만료 후</span>
+                    <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+                      {f.daysBefore ? "만료" : "만료 후"}
+                    </span>
                     <input
                       type="number"
                       min={0}
@@ -263,8 +266,10 @@ export default function TouchAttendanceSettingsPage() {
                       onChange={(e) => patch(f.daysKey!, Math.max(0, Math.min(365, Number(e.target.value) || 0)) as never)}
                       className="w-20 px-2.5 py-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-right tabular-nums disabled:opacity-60"
                     />
-                    <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">일까지 안내</span>
-                    <span className="text-[11px] text-[#A89B80]">(0 = 만료 후 계속)</span>
+                    <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+                      {f.daysBefore ? "일 전부터 안내" : "일까지 안내"}
+                    </span>
+                    {!f.daysBefore && <span className="text-[11px] text-[#A89B80]">(0 = 만료 후 계속)</span>}
                   </div>
                 )}
                 {f.hint && (
@@ -378,26 +383,7 @@ export default function TouchAttendanceSettingsPage() {
           on={s.lesson_reentry_until_end}
           onChange={(v) => patch("lesson_reentry_until_end", v)}
         />
-        {/* 출석 마일리지 적립은 상품(회원권·수강권)별 설정으로 대체됨 — 이 전역 필드는 미사용이라 제거 */}
-        <div>
-          <div className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 mb-1.5">
-            이용권 &lsquo;만료 임박&rsquo; 기준
-          </div>
-          <div className="relative max-w-[160px]">
-            <input
-              type="number"
-              min={0}
-              value={s.expiring_threshold_days}
-              onChange={(e) =>
-                patch("expiring_threshold_days", Math.max(0, Number(e.target.value) || 0))
-              }
-              className={`${crmInputClass} pr-16`}
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-              일 전
-            </span>
-          </div>
-        </div>
+        {/* '만료 임박' 기준일(며칠 전부터) 은 위 '만료 임박 [멤버십]' 멘트 아래 입력으로 이동함 */}
       </Section>
 
       <div className="flex justify-end">
