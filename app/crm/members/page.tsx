@@ -2049,7 +2049,12 @@ function RegisterModal({
         });
         if (res.ok) {
           const data = await res.json();
-          setStaffList(data.staff ?? []);
+          // 상담 담당자는 현재 근무 직원만 (퇴사=status inactive/employment_status resigned 제외)
+          setStaffList(
+            ((data.staff ?? []) as { id: number; display_name: string; status?: string; employment_status?: string }[])
+              .filter((s) => s.status === "active" && s.employment_status !== "resigned")
+              .map((s) => ({ id: s.id, display_name: s.display_name }))
+          );
         }
       } catch {
         /* ignore */
