@@ -12,7 +12,14 @@ import { useAuth } from "@/app/components/auth-provider";
  * - 공개 링크 모드: kioskToken(정적 URL 토큰)으로 /api/touch/[token]/qr 조회
  * - CRM 로그인 모드: /api/crm/kiosk-link 조회
  */
-export default function QrDisplay({ kioskToken }: { kioskToken?: string }) {
+export default function QrDisplay({
+  kioskToken,
+  fit,
+}: {
+  kioskToken?: string;
+  /** true면 부모 높이에 꽉 차는 정사각형으로 표시(QR+번호 등 합성 모드에서 위아래 자동 맞춤) */
+  fit?: boolean;
+}) {
   const { getIdToken } = useAuth();
   const [qr, setQr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,6 +73,35 @@ export default function QrDisplay({ kioskToken }: { kioskToken?: string }) {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [loadQr]);
+
+  // 합성 모드(QR+번호 등): 부모가 준 높이/너비 안에서 '가장 큰 정사각형'으로 꽉 채워
+  // 위아래가 잘리지 않도록 자동 맞춤. (absolute+m-auto = 박스에 내접하는 최대 정사각형)
+  if (fit) {
+    return (
+      <div className="w-full h-full min-h-0 flex flex-col items-center gap-[clamp(6px,1.4vmin,14px)]">
+        <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+          <div className="relative h-full w-full">
+            <div className="absolute inset-0 m-auto aspect-square max-h-full max-w-full rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white p-[clamp(8px,1.8vmin,24px)] shadow-sm">
+              {loading ? (
+                <div className="w-full h-full flex items-center justify-center text-[#8C8270]">
+                  불러오는 중…
+                </div>
+              ) : qr ? (
+                <QRCodeSVG value={qr} level="M" className="w-full h-full" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-center text-[13px] text-[#8C8270] p-4">
+                  {err || "QR을 표시할 수 없어요."}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        <p className="shrink-0 text-[clamp(12px,1.6vmin,17px)] font-medium text-[#3A342A] dark:text-zinc-200 text-center leading-tight">
+          회원 앱으로 이 QR을 스캔하면 출석돼요.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center gap-[clamp(12px,2.5vmin,24px)]">

@@ -447,27 +447,28 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           <QrDisplay kioskToken={kioskToken} />
         </div>
       ) : recogMode === "qr_number" ? (
-        /* QR/번호: QR 표시 + 키패드 동시 노출 */
+        /* QR/번호: QR 표시 + 키패드 동시 노출. QR은 남는 높이를 채우고 키패드는
+           항상 보이도록 고정 → 위아래 잘림 없이 창 높이에 자동 맞춤. */
         landscape ? (
-          <div className="w-full max-w-[98vw] flex flex-row items-stretch gap-[clamp(12px,2.5vmin,32px)]">
-            <div className="flex-1 min-w-0 flex items-center justify-center">
-              <QrDisplay kioskToken={kioskToken} />
+          <div className="w-full h-full min-h-0 max-w-[98vw] flex flex-row items-stretch gap-[clamp(12px,2.5vmin,32px)]">
+            <div className="flex-1 min-w-0 min-h-0">
+              <QrDisplay kioskToken={kioskToken} fit />
             </div>
-            <div className="flex-1 min-w-0 flex flex-col justify-center gap-[clamp(12px,2.5vmin,28px)]">
+            <div className="flex-1 min-w-0 flex flex-col justify-center gap-[clamp(10px,2vmin,24px)]">
               {display}
               {keypad}
               {submitBtn}
             </div>
           </div>
         ) : (
-          <div className="w-full max-w-[96vw] space-y-6 flex flex-col items-center">
-            <div className="w-full flex items-center justify-center">
-              <QrDisplay kioskToken={kioskToken} />
+          <div className="w-full h-full min-h-0 max-w-[96vw] flex flex-col gap-[clamp(8px,1.6vmin,18px)]">
+            <div className="flex-1 min-h-0 w-full">
+              <QrDisplay kioskToken={kioskToken} fit />
             </div>
-            <div className="w-full pt-2 border-t border-[#E8E0D0] dark:border-zinc-700">
-              <div className="mb-[clamp(12px,2vmin,24px)] mt-4">{display}</div>
+            <div className="shrink-0 w-full pt-[clamp(8px,1.5vmin,16px)] border-t border-[#E8E0D0] dark:border-zinc-700">
+              <div className="mb-[clamp(8px,1.5vmin,16px)]">{display}</div>
               {keypad}
-              <div className="mt-[clamp(10px,1.8vmin,22px)]">{submitBtn}</div>
+              <div className="mt-[clamp(8px,1.5vmin,16px)]">{submitBtn}</div>
             </div>
           </div>
         )
