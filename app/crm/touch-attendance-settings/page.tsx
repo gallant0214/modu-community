@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../_components/crm-modal";
-import { speakMessages, primeSpeech } from "../touch-attendance/_speak";
+import { previewSpeak } from "../touch-attendance/_speak";
 
 interface Settings {
   center_id: number;
@@ -70,6 +70,8 @@ export default function TouchAttendanceSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [savedMsg, setSavedMsg] = useState("");
+  // 미리듣기 진단 안내(미지원/한국어 음성 없음 등)
+  const [voiceNote, setVoiceNote] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -165,6 +167,19 @@ export default function TouchAttendanceSettingsPage() {
         <p className="mb-3 text-[11.5px] text-[#A89B80]">
           각 상황에 맞춰 재생될 안내 문구예요. 빈 값이면 그 상황에는 재생하지 않습니다.
         </p>
+        {voiceNote && (
+          <div className="mb-3 flex items-start justify-between gap-3 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
+            <span>{voiceNote}</span>
+            <button
+              type="button"
+              onClick={() => setVoiceNote("")}
+              className="shrink-0 text-amber-500 hover:text-amber-700"
+              aria-label="닫기"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         <div className="space-y-4">
           {MSG_FIELDS.map((f) => {
             const on = Boolean(s[f.enabledKey] as boolean);
@@ -210,11 +225,24 @@ export default function TouchAttendanceSettingsPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      primeSpeech(); // 클릭 제스처에서 음성 잠금 해제(이후 지연 재생 허용)
                       const text =
                         String(s[f.key] ?? "").trim() ||
                         f.placeholder.replace(/^예:\s*/, "");
-                      speakMessages([text]);
+                      const r = previewSpeak(text);
+                      if (r.status === "unsupported") {
+                        setVoiceNote(
+                          "이 브라우저는 음성 재생을 지원하지 않아요. 크롬 또는 엣지에서 열어 주세요."
+                        );
+                      } else if (r.status === "no-voice-fallback") {
+                        setVoiceNote(
+                          "이 PC에 한국어 음성이 설치돼 있지 않아 기본 음성으로 재생됩니다. " +
+                            "Windows: 설정 → 시간 및 언어 → 언어 및 지역 → 한국어 → 옵션 → 음성 추가 / " +
+                            "Mac: 시스템 설정 → 손쉬운 사용 → 말하기(음성 콘텐츠)에서 한국어 음성 다운로드. " +
+                            "실제 출석 태블릿에 한국어 음성이 있으면 정상 재생됩니다."
+                        );
+                      } else {
+                        setVoiceNote("");
+                      }
                     }}
                     disabled={!on}
                     title="입력한 멘트를 음성으로 미리 들어보기"

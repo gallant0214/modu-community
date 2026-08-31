@@ -86,6 +86,75 @@ export function speakMessages(messages: string[]) {
   }
 }
 
+export type PreviewResult =
+  | { status: "ok" }
+  | { status: "unsupported" }
+  | { status: "no-voice-fallback"; voiceName?: string };
+
+/**
+ * 설정 화면 '미리듣기' 전용 — 사용자 클릭 제스처 안에서 '동기적으로' 즉시 재생.
+ * check-in 흐름(await 뒤 지연 재생)과 달리 setTimeout/prime 없이 바로 speak() 하므로
+ * PC 크롬에서 자동재생 차단·큐 드롭 없이 확실히 소리가 난다.
+ * 반환값으로 원인 진단(미지원/한국어 음성 없음)을 UI 에 노출할 수 있다.
+ */
+export function previewSpeak(text: string): PreviewResult {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    return { status: "unsupported" };
+  }
+  const synth = window.speechSynthesis;
+  const clean = (text || "").trim();
+  if (!clean) return { status: "ok" };
+
+  let result: PreviewResult = { status: "ok" };
+  const speakNow = () => {
+    try {
+      synth.cancel();
+      if (synth.paused) synth.resume(); // Chrome paused 상태 복구
+    } catch {
+      /* 무시 */
+    }
+    const voices = synth.getVoices();
+    const ko = voices.find((v) => (v.lang || "").toLowerCase().startsWith("ko"));
+    const utter = new SpeechSynthesisUtterance(clean);
+    if (ko) {
+      utter.voice = ko;
+      utter.lang = ko.lang || "ko-KR";
+    } else {
+      // 한국어 음성이 설치돼 있지 않으면 기본 음성으로라도 재생 (원인은 호출부에서 안내)
+      utter.lang = "ko-KR";
+      result = { status: "no-voice-fallback", voiceName: voices[0]?.name };
+    }
+    utter.rate = 1.0;
+    utter.pitch = 1.0;
+    utter.volume = 1.0;
+    _utterRefs = [utter]; // GC 방지
+    try {
+      synth.speak(utter);
+    } catch {
+      /* 무시 */
+    }
+  };
+
+  // 음성 목록이 아직 로드 전이면(최초 클릭) 로드 후 재생 — 이때는 진단 불가라 ok 로 반환.
+  if (synth.getVoices().length === 0) {
+    let fired = false;
+    const run = () => {
+      if (fired) return;
+      fired = true;
+      speakNow();
+    };
+    try {
+      synth.addEventListener("voiceschanged", run, { once: true });
+    } catch {
+      /* 미지원 */
+    }
+    setTimeout(run, 250);
+    return { status: "ok" };
+  }
+  speakNow();
+  return result;
+}
+
 /**
  * 경고음(비프) 재생 — 회원권 만료/입장 권한 없는 회원 출석 시.
  * 별도 오디오 파일 없이 Web Audio 로 짧은 비프 3회. 지원 안 하면 no-op.
