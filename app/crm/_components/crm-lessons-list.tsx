@@ -192,18 +192,43 @@ export function CrmLessonsList() {
 
       {summary && (
         <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
-          <span className="px-2.5 py-1 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 text-[#3A342A] dark:text-zinc-300 font-semibold">
+          {/* 칩 클릭 = 상태 필터. 선택된 칩은 링 강조, 나머지는 흐리게. */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter("all")}
+            className={`px-2.5 py-1 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 text-[#3A342A] dark:text-zinc-300 font-semibold transition ${
+              statusFilter === "all" ? "ring-2 ring-[#8C8270] dark:ring-zinc-400" : "opacity-60 hover:opacity-100"
+            }`}
+          >
             총 {summary.total}건
-          </span>
-          <span className="px-2.5 py-1 rounded-full bg-[#5A8BB0]/12 text-[#487596] dark:bg-[#5A8BB0]/20 dark:text-[#8FB7D4] font-semibold">
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === "booked" ? "all" : "booked")}
+            className={`px-2.5 py-1 rounded-full bg-[#5A8BB0]/12 text-[#487596] dark:bg-[#5A8BB0]/20 dark:text-[#8FB7D4] font-semibold transition ${
+              statusFilter === "booked" ? "ring-2 ring-[#487596] dark:ring-[#8FB7D4]" : "opacity-60 hover:opacity-100"
+            }`}
+          >
             예약 {summary.booked}
-          </span>
-          <span className="px-2.5 py-1 rounded-full bg-[#EFE7D5] text-[#6B7B3A] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A] font-semibold">
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === "attended" ? "all" : "attended")}
+            className={`px-2.5 py-1 rounded-full bg-[#EFE7D5] text-[#6B7B3A] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A] font-semibold transition ${
+              statusFilter === "attended" ? "ring-2 ring-[#6B7B3A] dark:ring-[#A8B87A]" : "opacity-60 hover:opacity-100"
+            }`}
+          >
             출석 {summary.attended}
-          </span>
-          <span className="px-2.5 py-1 rounded-full bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 font-semibold">
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === "noshow" ? "all" : "noshow")}
+            className={`px-2.5 py-1 rounded-full bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 font-semibold transition ${
+              statusFilter === "noshow" ? "ring-2 ring-red-500" : "opacity-60 hover:opacity-100"
+            }`}
+          >
             노쇼 {summary.noshow}
-          </span>
+          </button>
         </div>
       )}
 
