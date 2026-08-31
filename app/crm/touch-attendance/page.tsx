@@ -107,6 +107,23 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   };
   const landscape = mode === "landscape";
 
+  // 실제 '보이는' 높이에 정확히 맞춤. 태블릿 크롬 앱은 주소창 때문에 100dvh 가
+  // 실제 표시 영역보다 커져 하단(QR·출석 버튼)이 잘리므로, visualViewport 로 측정.
+  const [vpH, setVpH] = useState<number | null>(null);
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    const update = () => setVpH(vv?.height ?? window.innerHeight);
+    update();
+    vv?.addEventListener("resize", update);
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      vv?.removeEventListener("resize", update);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
+  }, []);
+
   // 센터명 로드 (상단 표시용)
   useEffect(() => {
     (async () => {
@@ -323,8 +340,12 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   return (
     <div
       className="h-[100dvh] overflow-hidden flex flex-col items-center px-5 bg-[#FEFCF7] dark:bg-zinc-950"
-      // 루트 레이아웃 body 의 상단 NavBar 여백(56px) 상쇄 - 상단부터 센터명만 표시
-      style={{ marginTop: "calc(-1 * (env(safe-area-inset-top, 0px) + 56px))" }}
+      // 루트 레이아웃 body 의 상단 NavBar 여백(56px) 상쇄 - 상단부터 센터명만 표시.
+      // height 는 측정된 visualViewport 높이로 덮어써 실제 표시 영역에 정확히 맞춤(100dvh 폴백).
+      style={{
+        marginTop: "calc(-1 * (env(safe-area-inset-top, 0px) + 56px))",
+        ...(vpH ? { height: `${vpH}px` } : null),
+      }}
     >
       {/* 센터명 상단바 + 가로/세로 전환 */}
       <div
