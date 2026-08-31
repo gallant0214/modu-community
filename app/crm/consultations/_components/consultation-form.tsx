@@ -78,7 +78,72 @@ function birthToIso(display: string): string | null {
   return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}`;
 }
 
-export function ConsultationForm({ mode, initial, templateId, templateDefinition }: Props) {
+/** 작성 중 자동 임시저장 draft 의 localStorage 키. 신규는 템플릿별, 수정은 상담지 ID별. */
+function draftKeyFor(mode: "create" | "edit", initial?: ConsultationInitial, templateId?: number | null): string {
+  if (mode === "edit") return `crm_consult_draft:edit:${(initial?.id as number | undefined) ?? "x"}`;
+  return `crm_consult_draft:new:${templateId ?? "none"}`;
+}
+
+/**
+ * 상담지 폼 래퍼. 마운트 시 localStorage 에 저장된 작성중 draft 가 있으면 복구해
+ * initial 로 주입한다(자리를 비워 새로고침/탭 종료돼도 작성 내용 유지).
+ * SSR/hydration 불일치 방지를 위해 draft 조회는 마운트 후 effect 에서만 수행.
+ */
+export function ConsultationForm(props: Props) {
+  const { mode, initial, templateId } = props;
+  const draftKey = draftKeyFor(mode, initial, templateId);
+  const [resolved, setResolved] = useState<{
+    initial?: ConsultationInitial;
+    fromDraft: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    let init = initial;
+    let fromDraft = false;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const d = JSON.parse(raw) as Record<string, unknown> | null;
+        if (d && typeof d === "object" && Object.keys(d).length > 0) {
+          // 원본 메타(id, template_id 등)는 유지하고 draft 값으로 덮어씀
+          init = { ...(initial ?? {}), ...d } as ConsultationInitial;
+          fromDraft = true;
+        }
+      }
+    } catch {
+      /* 손상된 draft 무시 */
+    }
+    setResolved({ initial: init, fromDraft });
+    // draftKey 는 props 로부터 안정적 — 최초 1회만 복구
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
+  if (!resolved) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 md:px-6 py-10 text-center text-[13px] text-[#8C8270] dark:text-zinc-500">
+        불러오는 중…
+      </div>
+    );
+  }
+
+  return (
+    <ConsultationFormInner
+      {...props}
+      initial={resolved.initial}
+      draftKey={draftKey}
+      restoredFromDraft={resolved.fromDraft}
+    />
+  );
+}
+
+function ConsultationFormInner({
+  mode,
+  initial,
+  templateId,
+  templateDefinition,
+  draftKey,
+  restoredFromDraft,
+}: Props & { draftKey: string; restoredFromDraft: boolean }) {
   const def = useMemo(() => normalizeDefinition(templateDefinition), [templateDefinition]);
   const includeStandard = def.include_standard !== false;
   const customSections: CustomSection[] = def.custom_sections ?? [];
@@ -380,133 +445,6 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const payload = {
-        member_id: memberId,
-        template_id:
-          mode === "edit"
-            ? (initial?.template_id as number | null | undefined) ?? null
-            : templateId ?? null,
-        name: name.trim(),
-        gender: gender || null,
-        birth: birthToIso(birth),
-        phone: phone.trim() || null,
-        address_dong: addressDong.trim() || null,
-        trainer_member_id: trainerMode === "select" ? trainerId || null : null,
-        trainer_name_custom: trainerMode === "custom" ? trainerNameCustom.trim() || null : null,
-        consulted_at: consultedAt,
-        recent_year_history: recentYearHistory,
-        past_sports: pastSports,
-        past_sports_etc: pastSportsEtc,
-        experience_length: experienceLength,
-        motivation,
-        goals,
-        goals_etc: goalsEtc,
-        goal_details: {
-          primary_goal: primaryGoal,
-          deadline: goalDeadline,
-          current_metric: currentMetric,
-          target_metric: targetMetric,
-          success_criteria: successCriteria,
-          importance: goalImportance === "" ? null : goalImportance,
-          confidence: goalConfidence === "" ? null : goalConfidence,
-        },
-        workout_method: workoutMethod,
-        preferred_trainer: preferredTrainer,
-        referral_source: referralSource,
-        meal_morning_time: mealMorningTime,
-        meal_morning_menu: mealMorningMenu,
-        meal_lunch_time: mealLunchTime,
-        meal_lunch_menu: mealLunchMenu,
-        meal_dinner_time: mealDinnerTime,
-        meal_dinner_menu: mealDinnerMenu,
-        meal_habits: mealHabits,
-        preferred_foods: preferredFoods,
-        preferred_foods_etc: preferredFoodsEtc,
-        water_liters_per_day: waterLiters === "" ? null : waterLiters,
-        caffeine_cups_per_day: caffeineCups === "" ? null : caffeineCups,
-        alcohol_period: alcoholPeriod || null,
-        alcohol_count: alcoholCount === "" ? null : alcoholCount,
-        smoking,
-        cigarettes_per_day: cigarettesPerDay === "" ? null : cigarettesPerDay,
-        supplements,
-        diet_experience: dietExperience,
-        diet_experience_detail: dietExperienceDetail,
-        job,
-        work_hours_start: workStart,
-        work_hours_end: workEnd,
-        commute: commute || null,
-        job_traits: jobTraits,
-        work_notes: workNotes,
-        wake_hour: wakeHour === "" ? null : wakeHour,
-        wake_minute: wakeMinute === "" ? null : wakeMinute,
-        sleep_hour: sleepHour === "" ? null : sleepHour,
-        sleep_minute: sleepMinute === "" ? null : sleepMinute,
-        sleep_satisfaction: sleepSatisfaction || null,
-        condition_score: conditionScore || null,
-        fatigue_when: fatigueWhen,
-        fatigue_reason: fatigueReason,
-        condition_notes: conditionNotes,
-        injury_history: injuryHistory,
-        pain_parts: painParts,
-        pain_parts_etc: painPartsEtc,
-        pain_details: {
-          intensity: painIntensity === "" ? null : painIntensity,
-          side: painSide,
-          onset: painOnset,
-          trigger: painTrigger,
-          avoid: painAvoid,
-          diagnosis: painDiagnosis,
-          treatment: painTreatment,
-        },
-        conditions,
-        medications,
-        current_state: currentState,
-        safety_screening: {
-          flags: safetyFlags,
-          other: safetyOther,
-          clearance_status: clearanceStatus,
-          clearance_date: clearanceDate,
-          precautions: medicalPrecautions,
-        },
-        weekly_freq: weeklyFreq === "" ? null : weeklyFreq,
-        planned_days: plannedDays,
-        planned_days_etc: plannedDaysEtc,
-        planned_time: plannedTime,
-        adherence_details: {
-          barriers,
-          barriers_other: barriersOther,
-          dropout_reason: dropoutReason,
-          support_needed: adherenceSupport,
-        },
-        coaching_preferences: {
-          styles: coachingStyles,
-          styles_other: coachingStylesOther,
-          touch_consent: touchConsent,
-          media_consent: mediaConsent,
-        },
-        follow_up_details: {
-          desired_start_date: desiredStartDate,
-          interested_sessions: interestedSessions,
-          preferred_contact: preferredContact,
-          preferred_contact_other: preferredContactOther,
-          contact_time: contactTime,
-          follow_up_date: followUpDate,
-          follow_up_note: followUpNote,
-          hesitation_reason: hesitationReason,
-          lead_temperature: leadTemperature,
-        },
-        selection_other_details: {
-          experience_length: experienceLengthOther,
-          meal_habits: mealHabitsOther,
-          commute: commuteOther,
-          job_traits: jobTraitsOther,
-          fatigue_when: fatigueWhenOther,
-          conditions: conditionsOther,
-        },
-        request_note: requestNote,
-        memo,
-        custom_data: customData,
-      };
       const url =
         mode === "edit" && initial?.id
           ? `/api/crm/consultations/${initial.id}`
@@ -521,12 +459,198 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
       if (!res.ok) throw new Error(data?.error || "저장 실패");
       const newId = mode === "edit" ? initial?.id : data.id;
       setDirty(false);
+      try {
+        localStorage.removeItem(draftKey);
+      } catch {
+        /* 무시 */
+      }
       router.push(`/crm/consultations/${newId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
       setSaving(false);
     }
+  };
+
+  // 폼 전체 스냅샷 — 저장(save)과 자동 임시저장(draft) 공용.
+  // 키 구조는 initial 로 그대로 재주입 가능(복구 시 라운드트립)하도록 유지.
+  const payload = {
+    member_id: memberId,
+    template_id:
+      mode === "edit"
+        ? (initial?.template_id as number | null | undefined) ?? null
+        : templateId ?? null,
+    name: name.trim(),
+    gender: gender || null,
+    birth: birthToIso(birth),
+    phone: phone.trim() || null,
+    address_dong: addressDong.trim() || null,
+    trainer_member_id: trainerMode === "select" ? trainerId || null : null,
+    trainer_name_custom: trainerMode === "custom" ? trainerNameCustom.trim() || null : null,
+    consulted_at: consultedAt,
+    recent_year_history: recentYearHistory,
+    past_sports: pastSports,
+    past_sports_etc: pastSportsEtc,
+    experience_length: experienceLength,
+    motivation,
+    goals,
+    goals_etc: goalsEtc,
+    goal_details: {
+      primary_goal: primaryGoal,
+      deadline: goalDeadline,
+      current_metric: currentMetric,
+      target_metric: targetMetric,
+      success_criteria: successCriteria,
+      importance: goalImportance === "" ? null : goalImportance,
+      confidence: goalConfidence === "" ? null : goalConfidence,
+    },
+    workout_method: workoutMethod,
+    preferred_trainer: preferredTrainer,
+    referral_source: referralSource,
+    meal_morning_time: mealMorningTime,
+    meal_morning_menu: mealMorningMenu,
+    meal_lunch_time: mealLunchTime,
+    meal_lunch_menu: mealLunchMenu,
+    meal_dinner_time: mealDinnerTime,
+    meal_dinner_menu: mealDinnerMenu,
+    meal_habits: mealHabits,
+    preferred_foods: preferredFoods,
+    preferred_foods_etc: preferredFoodsEtc,
+    water_liters_per_day: waterLiters === "" ? null : waterLiters,
+    caffeine_cups_per_day: caffeineCups === "" ? null : caffeineCups,
+    alcohol_period: alcoholPeriod || null,
+    alcohol_count: alcoholCount === "" ? null : alcoholCount,
+    smoking,
+    cigarettes_per_day: cigarettesPerDay === "" ? null : cigarettesPerDay,
+    supplements,
+    diet_experience: dietExperience,
+    diet_experience_detail: dietExperienceDetail,
+    job,
+    work_hours_start: workStart,
+    work_hours_end: workEnd,
+    commute: commute || null,
+    job_traits: jobTraits,
+    work_notes: workNotes,
+    wake_hour: wakeHour === "" ? null : wakeHour,
+    wake_minute: wakeMinute === "" ? null : wakeMinute,
+    sleep_hour: sleepHour === "" ? null : sleepHour,
+    sleep_minute: sleepMinute === "" ? null : sleepMinute,
+    sleep_satisfaction: sleepSatisfaction || null,
+    condition_score: conditionScore || null,
+    fatigue_when: fatigueWhen,
+    fatigue_reason: fatigueReason,
+    condition_notes: conditionNotes,
+    injury_history: injuryHistory,
+    pain_parts: painParts,
+    pain_parts_etc: painPartsEtc,
+    pain_details: {
+      intensity: painIntensity === "" ? null : painIntensity,
+      side: painSide,
+      onset: painOnset,
+      trigger: painTrigger,
+      avoid: painAvoid,
+      diagnosis: painDiagnosis,
+      treatment: painTreatment,
+    },
+    conditions,
+    medications,
+    current_state: currentState,
+    safety_screening: {
+      flags: safetyFlags,
+      other: safetyOther,
+      clearance_status: clearanceStatus,
+      clearance_date: clearanceDate,
+      precautions: medicalPrecautions,
+    },
+    weekly_freq: weeklyFreq === "" ? null : weeklyFreq,
+    planned_days: plannedDays,
+    planned_days_etc: plannedDaysEtc,
+    planned_time: plannedTime,
+    adherence_details: {
+      barriers,
+      barriers_other: barriersOther,
+      dropout_reason: dropoutReason,
+      support_needed: adherenceSupport,
+    },
+    coaching_preferences: {
+      styles: coachingStyles,
+      styles_other: coachingStylesOther,
+      touch_consent: touchConsent,
+      media_consent: mediaConsent,
+    },
+    follow_up_details: {
+      desired_start_date: desiredStartDate,
+      interested_sessions: interestedSessions,
+      preferred_contact: preferredContact,
+      preferred_contact_other: preferredContactOther,
+      contact_time: contactTime,
+      follow_up_date: followUpDate,
+      follow_up_note: followUpNote,
+      hesitation_reason: hesitationReason,
+      lead_temperature: leadTemperature,
+    },
+    selection_other_details: {
+      experience_length: experienceLengthOther,
+      meal_habits: mealHabitsOther,
+      commute: commuteOther,
+      job_traits: jobTraitsOther,
+      fatigue_when: fatigueWhenOther,
+      conditions: conditionsOther,
+    },
+    request_note: requestNote,
+    memo,
+    custom_data: customData,
+  };
+
+  // 작성 중 자동 임시저장: 사용자가 입력한 뒤(dirty) 400ms 디바운스로 localStorage 저장.
+  // 자리를 비워 탭이 새로고침/폐기돼도 다음 진입 시 복구된다.
+  const payloadJson = JSON.stringify(payload);
+  useEffect(() => {
+    if (!dirty) return;
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(draftKey, payloadJson);
+      } catch {
+        /* 용량 초과 등 무시 */
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [payloadJson, dirty, draftKey]);
+
+  // 자리를 비우거나 탭이 백그라운드/종료될 때 즉시 최신 내용을 flush (디바운스 대기 없이).
+  const payloadJsonRef = useRef(payloadJson);
+  payloadJsonRef.current = payloadJson;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  useEffect(() => {
+    const flush = () => {
+      if (!dirtyRef.current) return;
+      try {
+        localStorage.setItem(draftKey, payloadJsonRef.current);
+      } catch {
+        /* 무시 */
+      }
+    };
+    const onVis = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [draftKey]);
+
+  // 복구된 draft 를 버리고 처음부터 새로 작성.
+  const discardDraft = () => {
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {
+      /* 무시 */
+    }
+    setDirty(false);
+    if (typeof window !== "undefined") window.location.reload();
   };
 
   const activeTrainers = useMemo(
@@ -546,6 +670,19 @@ export function ConsultationForm({ mode, initial, templateId, templateDefinition
       {error && (
         <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
           {error}
+        </div>
+      )}
+
+      {restoredFromDraft && (
+        <div className="mb-3 flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-[12.5px] text-amber-800 dark:text-amber-300">
+          <span>작성 중이던 내용을 불러왔어요. 이어서 작성하거나 처음부터 새로 시작할 수 있어요.</span>
+          <button
+            type="button"
+            onClick={discardDraft}
+            className="shrink-0 px-2.5 py-1 rounded-md bg-white dark:bg-zinc-900 border border-amber-300 dark:border-amber-800 font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40"
+          >
+            새로 시작
+          </button>
         </div>
       )}
 
