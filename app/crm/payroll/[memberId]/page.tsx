@@ -557,7 +557,7 @@ function MembersTab({ memberId }: { memberId: number }) {
                     <span
                       className={`px-1.5 py-0.5 rounded text-[11.5px] font-semibold ${
                         r.status === "유효"
-                          ? "bg-[#6B7B3A]/12 text-[#6B7B3A] dark:text-[#A8B87A]"
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/25 dark:text-emerald-300"
                           : "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500"
                       }`}
                     >
