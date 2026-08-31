@@ -3,6 +3,62 @@
 let _utterRefs: SpeechSynthesisUtterance[] = [];
 let _primed = false;
 
+// ─── Web Audio (TTS 와 무관하게 확실히 나는 확인음) ───
+// 맥/크롬은 await(네트워크) 뒤 새로 만든 AudioContext 가 자동재생 정책으로 suspended 되어
+// 소리가 안 난다. 사용자 제스처(키패드 탭 등)에서 primeAudio() 로 미리 만들고 resume 해두면
+// 이후 체크인 성공(비동기) 시점에도 확실히 소리가 난다. (한국어 음성 불필요)
+let _audioCtx: AudioContext | null = null;
+function getAudioCtx(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  const AC =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AC) return null;
+  try {
+    if (!_audioCtx) _audioCtx = new AC();
+    if (_audioCtx.state === "suspended") _audioCtx.resume().catch(() => {});
+  } catch {
+    return null;
+  }
+  return _audioCtx;
+}
+
+/** 사용자 제스처에서 오디오 잠금 해제(AudioContext 생성/resume). 키패드 탭 등에서 호출. */
+export function primeAudio() {
+  getAudioCtx();
+}
+
+function playTones(notes: { f: number; t: number; d: number; type?: OscillatorType }[]) {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  for (const n of notes) {
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = n.type ?? "sine";
+      osc.frequency.value = n.f;
+      gain.gain.setValueAtTime(0.0001, now + n.t);
+      gain.gain.exponentialRampToValueAtTime(0.35, now + n.t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + n.t + n.d);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + n.t);
+      osc.stop(now + n.t + n.d + 0.03);
+    } catch {
+      /* no-op */
+    }
+  }
+}
+
+/** 출석 성공 확인음 — 밝은 2음 '띠링'. TTS 안 되는 기기에서도 확실히 소리가 난다. */
+export function playCheckinChime() {
+  playTones([
+    { f: 784, t: 0, d: 0.16 }, // G5
+    { f: 1047, t: 0.13, d: 0.22 }, // C6
+  ]);
+}
+
 /**
  * 사용자 제스처(탭/클릭) 시점에 SpeechSynthesis 를 "잠금 해제".
  * 브라우저 자동재생 정책상, speak() 가 사용자 제스처에서 한 번 호출된 적이 없으면
@@ -160,30 +216,10 @@ export function previewSpeak(text: string): PreviewResult {
  * 별도 오디오 파일 없이 Web Audio 로 짧은 비프 3회. 지원 안 하면 no-op.
  */
 export function playWarningBeep() {
-  if (typeof window === "undefined") return;
-  try {
-    const AC =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
-    const now = ctx.currentTime;
-    const beeps = [0, 0.22, 0.44]; // 비프 3회
-    for (const t of beeps) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "square";
-      osc.frequency.value = 880; // 경고 톤
-      gain.gain.setValueAtTime(0.0001, now + t);
-      gain.gain.exponentialRampToValueAtTime(0.35, now + t + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.16);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now + t);
-      osc.stop(now + t + 0.17);
-    }
-    setTimeout(() => ctx.close().catch(() => {}), 900);
-  } catch {
-    // 자동재생 정책 등으로 실패할 수 있음. 조용히 무시.
-  }
+  // 제스처에서 미리 활성화된 공용 AudioContext 사용(맥/크롬 await 후 새 컨텍스트 차단 회피).
+  playTones([
+    { f: 880, t: 0, d: 0.16, type: "square" },
+    { f: 880, t: 0.22, d: 0.16, type: "square" },
+    { f: 880, t: 0.44, d: 0.16, type: "square" },
+  ]);
 }

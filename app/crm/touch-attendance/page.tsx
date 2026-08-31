@@ -215,7 +215,10 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
             mileageAwarded: c.mileage_awarded ?? 0,
             summary: c.summary as CheckinSummary | undefined,
           });
-          if (c.summary && c.summary.can_enter === false) playWarningBeep();
+          if (!c.duplicate) {
+            if (c.summary && c.summary.can_enter === false) playWarningBeep();
+            else playCheckinChime();
+          }
           speakMessages(Array.isArray(c.voice_messages) ? c.voice_messages : []);
         } else if (typeof d.latestId === "number" && d.latestId > qrPollCursor.current) {
           // 회원 조회 실패 등으로 결과 미구성 → 커서만 전진(재표시 방지)
@@ -237,6 +240,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   const press = (d: string) => {
     if (busy || candidates || enrollTarget) return;
     primeSpeech(); // 사용자 제스처에서 음성 잠금 해제 (이후 await 뒤 재생 보장)
+    primeAudio(); // 확인음/경고음 오디오도 제스처에서 잠금 해제 (맥/크롬 필수)
     setResult(null);
     setNum((v) => (v.length >= 10 ? v : v + d));
   };
@@ -255,6 +259,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   const checkin = async (member: MemberLite) => {
     if (busy) return;
     primeSpeech(); // 출석 실행 탭(제스처) 시점에 음성 잠금 해제
+    primeAudio();
     setBusy(true);
     setResult(null);
     try {
@@ -285,11 +290,12 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           mileageAwarded: data.mileage_awarded ?? 0,
           summary: data.summary as CheckinSummary | undefined,
         });
-        // 회원권 만료/입장 권한 없음(유효 이용권 없음) → 경고음
-        if (!data.duplicate && data.summary && data.summary.can_enter === false) {
-          playWarningBeep();
+        // 출석 성공 소리: 입장 불가(유효 이용권 없음)=경고음, 정상=확인음. (TTS 무관하게 항상 소리)
+        if (!data.duplicate) {
+          if (data.summary && data.summary.can_enter === false) playWarningBeep();
+          else playCheckinChime();
         }
-        // 서버에서 매칭된 음성 안내(예: 회원권 만료 임박) 재생
+        // 서버에서 매칭된 음성 안내(예: 회원권 만료 임박) 재생 (TTS 되는 기기)
         speakMessages(Array.isArray(data.voice_messages) ? data.voice_messages : []);
       }
     } catch (e) {
@@ -639,6 +645,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
                     key={k}
                     onClick={() => {
                       primeSpeech();
+                      primeAudio();
                       setRecogMode(k);
                       setSettingsOpen(false);
                     }}
