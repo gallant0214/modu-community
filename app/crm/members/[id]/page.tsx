@@ -8621,6 +8621,20 @@ function PassDetailModal({
               잔여 <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{pass.remaining_sessions}</strong>/{pass.total_sessions}회 ·{" "}
               {pass.session_minutes}분 수업
             </div>
+            {(() => {
+              // 예약가능 = 잔여(출석·노쇼로 차감된 것 제외) − 예약대기(booked/requested)
+              const upcoming = (detail.reservations ?? []).filter(
+                (r) => r.status === "booked" || r.status === "requested"
+              ).length;
+              if (upcoming <= 0) return null;
+              const available = Math.max(0, (pass.remaining_sessions ?? 0) - upcoming);
+              return (
+                <div className="mt-0.5 text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                  예약 대기 <strong>{upcoming}</strong>건 · 예약 가능{" "}
+                  <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{available}</strong>회
+                </div>
+              );
+            })()}
           </div>
 
           <DetailGrid
