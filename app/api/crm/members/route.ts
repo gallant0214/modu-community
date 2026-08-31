@@ -505,7 +505,8 @@ export async function POST(request: Request) {
     })(),
     marketing_consent: !!body.marketing_consent,
     registered_at: body.registered_at || null,
-    registration_type: body.registration_type?.trim() || null,
+    // 신규 회원 기본값 = '신규' (미지정 시 목록에 신규/재등록 칩이 안 떠서 기본값 부여)
+    registration_type: body.registration_type?.trim() || "신규",
     first_use_at: body.first_use_at || null,
     total_paid_won: (() => {
       const n = Math.trunc(Number(body.total_paid_won ?? 0));

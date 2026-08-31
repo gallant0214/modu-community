@@ -125,6 +125,9 @@ export async function POST(request: Request) {
       privacy_agreed_at: nowIso,
       status: "active",
       attendance_no: last4,
+      // 커뮤니티 앱 자체 가입 = 신규. registration_type 미설정 시 목록에 '신규' 칩이 안 떠서 명시.
+      registration_type: "신규",
+      registered_at: new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10),
     } as never)
     .select("id")
     .single();
