@@ -2212,26 +2212,66 @@ function MemberReservationsSection({ memberId }: { memberId: number }) {
     return `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}`;
   });
   const [selectedPassId, setSelectedPassId] = useState<number | null>(null);
+  // 예약중(booked) 건 선택 → 일괄 취소
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [cancelling, setCancelling] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch(`/api/crm/members/${memberId}/reservations`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "조회 실패");
+      setRows(data.reservations ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [memberId, getIdToken]);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const token = await getIdToken();
-        if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-        const res = await fetch(`/api/crm/members/${memberId}/reservations`, {
-          headers: { authorization: `Bearer ${token}` },
-          cache: "no-store",
+    load();
+  }, [load]);
+
+  const toggleSel = (id: number) =>
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
+  const cancelSelected = async () => {
+    if (selected.size === 0 || cancelling) return;
+    if (!window.confirm(`선택한 예약 ${selected.size}건을 취소할까요?`)) return;
+    setCancelling(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      for (const id of Array.from(selected)) {
+        const res = await fetch(`/api/crm/reservations/${id}`, {
+          method: "PATCH",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ status: "cancelled", reason: "회원 상세에서 취소" }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "조회 실패");
-        setRows(data.reservations ?? []);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "네트워크 오류");
-      } finally {
-        setLoading(false);
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d?.error || "취소 실패");
+        }
       }
-    })();
-  }, [memberId, getIdToken]);
+      setSelected(new Set());
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "취소 중 오류");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   // KST 기준 상태별 집계 + 월별 예약 카운트
   const kstDate = (iso: string) => {
@@ -2361,6 +2401,16 @@ function MemberReservationsSection({ memberId }: { memberId: number }) {
           <div className="text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
             예약 이력 ({filteredRows.length}건, 최신순)
           </div>
+          {selected.size > 0 && (
+            <button
+              type="button"
+              onClick={cancelSelected}
+              disabled={cancelling}
+              className="ml-auto px-3 py-1.5 rounded-lg bg-red-600 text-white text-[12px] font-semibold hover:bg-red-700 disabled:opacity-50"
+            >
+              {cancelling ? "취소 중…" : `선택 예약 취소 (${selected.size})`}
+            </button>
+          )}
         </div>
         {filteredRows.length === 0 ? (
           <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
@@ -2380,6 +2430,17 @@ function MemberReservationsSection({ memberId }: { memberId: number }) {
                 <li key={r.id} className="px-4 py-2.5">
                   <div className="flex items-baseline justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 min-w-0">
+                      {r.status === "booked" ? (
+                        <input
+                          type="checkbox"
+                          checked={selected.has(r.id)}
+                          onChange={() => toggleSel(r.id)}
+                          className="w-4 h-4 shrink-0 accent-[#6B7B3A] cursor-pointer self-center"
+                          title="예약 취소 선택"
+                        />
+                      ) : (
+                        <span className="w-4 h-4 shrink-0" aria-hidden />
+                      )}
                       <span className="shrink-0 font-bold text-[#6B7B3A] dark:text-[#A8B87A] text-[12.5px] tabular-nums">
                         [{i + 1}]
                       </span>
