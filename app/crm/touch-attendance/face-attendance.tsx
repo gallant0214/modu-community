@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
-import { speakMessages, playWarningBeep, playCheckinChime } from "./_speak";
+import { speakMessages, playWarningBeep, playCheckinChime, primeSpeech, primeAudio } from "./_speak";
 
 // face-api.js (@vladmandic/face-api) CDN — 런타임 로드(번들 미포함)
 const FACEAPI_SRC = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js";
@@ -258,6 +258,10 @@ export default function FaceAttendance({
 
   // 초기화: 카메라 먼저 → 모델 → 등록 얼굴 디스크립터
   useEffect(() => {
+    // 부모(터치출석) 얼굴 모드 선택 = 사용자 제스처 → 그 순간 audio/tts unlock 상태.
+    // 컴포넌트 마운트 시점에 재프라임해서 이후 자동 인식·checkin 응답의 speakMessages 도 재생 보장.
+    primeSpeech();
+    primeAudio();
     let cancelled = false;
     (async () => {
       // 1) 카메라 먼저 켜서 즉시 프리뷰 + 권한 요청
@@ -415,7 +419,7 @@ export default function FaceAttendance({
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 text-center px-6 gap-3">
           <div className="text-[14px] font-semibold text-red-300 leading-relaxed">{camError}</div>
           <button
-            onClick={() => startCamera()}
+            onClick={() => { primeSpeech(); primeAudio(); startCamera(); }}
             className="px-5 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[14px] font-bold hover:bg-[#5a6932]"
           >
             카메라 다시 시도
