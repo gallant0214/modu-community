@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../../_components/crm-labels";
@@ -125,13 +125,15 @@ interface Consultation {
 export default function ConsultationDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const id = Number(params.id);
   const { getIdToken } = useAuth();
 
   const [c, setC] = useState<Consultation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [editing, setEditing] = useState(false);
+  // ?edit=1 (임시저장 목록에서 '이어쓰기' 진입) 이면 바로 편집 모드로 시작.
+  const [editing, setEditing] = useState(searchParams.get("edit") === "1");
   const [statusModal, setStatusModal] = useState<"" | "converted" | "lost">("");
 
   const load = useCallback(async () => {
@@ -211,14 +213,18 @@ export default function ConsultationDetailPage() {
       <div className="px-5 md:px-8 pt-3 pb-8">
         <header className="max-w-4xl mx-auto px-4 md:px-6 mb-4 flex items-baseline justify-between">
           <h1 className="text-[20px] font-bold text-[#2A251D] dark:text-zinc-100">
-            PT 상담 수정
+            {c.status === "draft" ? "PT 상담지 이어 작성" : "PT 상담 수정"}
           </h1>
           <button
             type="button"
-            onClick={() => setEditing(false)}
+            onClick={() =>
+              c.status === "draft"
+                ? router.push("/crm/consultations?tab=list")
+                : setEditing(false)
+            }
             className="text-[12px] text-[#6B5D47] hover:underline"
           >
-            수정 취소
+            {c.status === "draft" ? "목록으로" : "수정 취소"}
           </button>
         </header>
         <ConsultationForm

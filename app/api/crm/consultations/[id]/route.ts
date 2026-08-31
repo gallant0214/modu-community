@@ -5,7 +5,7 @@ import { buildConsultationPayload } from "@/app/lib/crm-consultation";
 
 export const dynamic = "force-dynamic";
 
-const STATUSES = ["open", "converted", "lost"] as const;
+const STATUSES = ["draft", "open", "converted", "lost"] as const;
 
 /** 상담 상세 조회 */
 export async function GET(

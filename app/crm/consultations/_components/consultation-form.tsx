@@ -323,8 +323,17 @@ function ConsultationFormInner({
 
   // 저장 상태
   const [saving, setSaving] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [draftSavedMsg, setDraftSavedMsg] = useState("");
+  // 임시저장(draft) 대상 레코드 추적 — 반복 임시저장 시 중복 생성 방지
+  const [savedId, setSavedId] = useState<number | null>(
+    (initial?.id as number | undefined) ?? null
+  );
+  const [recordStatus, setRecordStatus] = useState<string | null>(
+    (initial?.status as string | undefined) ?? null
+  );
 
   useEffect(() => {
     if (!dirty) return;
@@ -435,40 +444,65 @@ function ConsultationFormInner({
     else setter([...arr, v]);
   };
 
-  const save = async () => {
+  /**
+   * 저장. asDraft=true 면 '임시저장'(status=draft) — 이름 미입력도 허용하고, 저장 후
+   * 폼에 머물러 이어서 작성할 수 있다. asDraft=false 면 정식 저장 후 상세로 이동하며,
+   * 임시저장본을 정식 저장하면 status 를 draft→open 으로 승격한다.
+   */
+  const save = async (asDraft = false) => {
     setError("");
-    if (!name.trim()) {
+    setDraftSavedMsg("");
+    if (!asDraft && !name.trim()) {
       setError("상담자 이름을 입력해 주세요");
       return;
     }
-    setSaving(true);
+    if (asDraft) setSavingDraft(true);
+    else setSaving(true);
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const url =
-        mode === "edit" && initial?.id
-          ? `/api/crm/consultations/${initial.id}`
-          : `/api/crm/consultations`;
-      const method = mode === "edit" ? "PATCH" : "POST";
+      const effId = savedId ?? ((initial?.id as number | undefined) ?? null);
+      const usePatch = effId != null;
+      const url = usePatch
+        ? `/api/crm/consultations/${effId}`
+        : `/api/crm/consultations`;
+      const method = usePatch ? "PATCH" : "POST";
+      // 임시저장=draft. 정식 저장 시 신규이거나 기존이 임시저장본이면 open 으로 승격,
+      // 그 외(이미 open/converted/lost)는 status 를 건드리지 않음(undefined).
+      const bodyStatus = asDraft
+        ? "draft"
+        : mode === "create" || recordStatus === "draft"
+          ? "open"
+          : undefined;
       const res = await fetch(url, {
         method,
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(bodyStatus ? { ...payload, status: bodyStatus } : payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "저장 실패");
-      const newId = mode === "edit" ? initial?.id : data.id;
+      const newId = usePatch ? effId : data.id;
       setDirty(false);
       try {
         localStorage.removeItem(draftKey);
       } catch {
         /* 무시 */
       }
-      router.push(`/crm/consultations/${newId}`);
+      if (asDraft) {
+        // 다음 임시/정식 저장이 같은 레코드를 갱신하도록 id·상태 기억, 폼 유지.
+        setSavedId(newId ?? null);
+        setRecordStatus("draft");
+        setDraftSavedMsg(
+          "임시저장되었습니다. ‘PT 상담 리스트 → 임시저장’에서 언제든 이어서 작성할 수 있어요."
+        );
+      } else {
+        router.push(`/crm/consultations/${newId}`);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
-      setSaving(false);
+      if (asDraft) setSavingDraft(false);
+      else setSaving(false);
     }
   };
 
@@ -683,6 +717,12 @@ function ConsultationFormInner({
           >
             새로 시작
           </button>
+        </div>
+      )}
+
+      {draftSavedMsg && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-[12.5px] text-emerald-700 dark:text-emerald-300">
+          {draftSavedMsg}
         </div>
       )}
 
@@ -1593,8 +1633,16 @@ function ConsultationFormInner({
         </button>
         <button
           type="button"
-          onClick={save}
-          disabled={saving}
+          onClick={() => save(true)}
+          disabled={saving || savingDraft}
+          className="px-4 py-2.5 rounded-xl border border-[#6B7B3A] text-[14px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#F3F7EA] dark:hover:bg-[#6B7B3A]/15 disabled:opacity-60"
+        >
+          {savingDraft ? "임시저장 중…" : "임시저장"}
+        </button>
+        <button
+          type="button"
+          onClick={() => save(false)}
+          disabled={saving || savingDraft}
           className="min-w-[112px] px-5 py-2.5 rounded-xl bg-[#6B7B3A] text-white text-[14px] font-bold shadow-sm hover:bg-[#5a6932] disabled:opacity-60"
         >
           {saving ? "저장 중…" : mode === "edit" ? "수정 저장" : "상담 저장"}

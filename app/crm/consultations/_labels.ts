@@ -153,12 +153,14 @@ export const CONTACT_METHODS = [
 ] as const;
 
 export const CONSULT_STATUS_LABEL: Record<string, string> = {
+  draft: "임시저장",
   open: "진행중",
   converted: "PT 등록",
   lost: "미등록",
 };
 
 export const CONSULT_STATUS_COLOR: Record<string, string> = {
+  draft: "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
   open: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
   converted: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
   lost: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400",

@@ -239,6 +239,7 @@ function ListTab() {
           {(
             [
               { v: "", l: "전체" },
+              { v: "draft", l: "임시저장" },
               { v: "open", l: "진행중" },
               { v: "converted", l: "PT 등록" },
               { v: "lost", l: "미등록" },
@@ -591,6 +592,13 @@ function ManageTab() {
   );
 }
 
+// 임시저장 상담은 클릭 시 바로 편집(이어쓰기) 화면으로, 그 외는 상세로.
+function consultationHref(r: Row) {
+  return r.status === "draft"
+    ? `/crm/consultations/${r.id}?edit=1`
+    : `/crm/consultations/${r.id}`;
+}
+
 function ConsultationList({ rows }: { rows: Row[] }) {
   return (
     <>
@@ -603,7 +611,7 @@ function ConsultationList({ rows }: { rows: Row[] }) {
           return (
             <Link
               key={r.id}
-              href={`/crm/consultations/${r.id}`}
+              href={consultationHref(r)}
               className="block rounded-xl border border-[#E8E0D0] bg-white p-3.5 transition-colors hover:border-[#C8D3AA] hover:bg-[#FBFDF6] dark:border-zinc-800 dark:bg-zinc-950"
             >
               <div className="flex items-start justify-between gap-3">
@@ -659,7 +667,7 @@ function ConsultationList({ rows }: { rows: Row[] }) {
             >
               <td className="py-2 pr-2 tabular-nums text-[#6B5D47]">{r.consulted_at}</td>
               <td className="py-2.5 pr-2 text-[#2A251D] dark:text-zinc-100">
-                <Link href={`/crm/consultations/${r.id}`} className="hover:underline">
+                <Link href={consultationHref(r)} className="hover:underline">
                   <span className="font-semibold">{r.name}</span>
                   <span className="mt-0.5 block max-w-[180px] truncate text-[11.5px] font-normal text-[#7B8752]">
                     {consultationGoalText(r.goals) || "목표 미입력"}

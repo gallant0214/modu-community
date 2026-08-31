@@ -20,7 +20,8 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_pt_consultations")
     .select("trainer_member_id, trainer_name_custom, status")
-    .eq("center_id", ctx.centerId);
+    .eq("center_id", ctx.centerId)
+    .neq("status", "draft"); // 임시저장(미완성)은 전환율 통계에서 제외
   if (from) query = query.gte("consulted_at", from);
   if (to) query = query.lte("consulted_at", to);
 

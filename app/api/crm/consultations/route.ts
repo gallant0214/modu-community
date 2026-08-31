@@ -92,8 +92,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 
+  const isDraft = body.status === "draft";
   const name = String(body.name ?? "").trim();
-  if (!name) return NextResponse.json({ error: "상담자 이름을 입력해 주세요" }, { status: 400 });
+  // 임시저장(draft)은 이름 미입력도 허용 — 기본 이름으로 저장해 리스트에서 이어쓰기 가능.
+  if (!name && !isDraft) {
+    return NextResponse.json({ error: "상담자 이름을 입력해 주세요" }, { status: 400 });
+  }
 
   const payload = buildConsultationPayload(body, ctx.centerMemberId);
   const insert = {
@@ -101,7 +105,8 @@ export async function POST(request: Request) {
     created_by_uid: ctx.uid,
     consulted_at: (body.consulted_at as string) || undefined,
     ...payload,
-    name,
+    name: name || "무제 상담",
+    ...(isDraft ? { status: "draft" } : {}),
   };
 
   const { data: created, error } = await supabase
