@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../_components/crm-modal";
-import { speakMessages } from "../touch-attendance/_speak";
+import { speakMessages, primeSpeech } from "../touch-attendance/_speak";
 
 interface Settings {
   center_id: number;
@@ -210,6 +210,7 @@ export default function TouchAttendanceSettingsPage() {
                   <button
                     type="button"
                     onClick={() => {
+                      primeSpeech(); // 클릭 제스처에서 음성 잠금 해제(이후 지연 재생 허용)
                       const text =
                         String(s[f.key] ?? "").trim() ||
                         f.placeholder.replace(/^예:\s*/, "");
