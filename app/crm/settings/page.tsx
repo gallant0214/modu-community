@@ -211,6 +211,58 @@ const SETTINGS_TABS: {
   { key: "inquiries", label: "문의하기", desc: "관리자에게 문의", icon: "inquiry" },
 ];
 
+/** 퇴실 시 적립 마일리지 입력 — 숫자 수정 후 [저장] 버튼을 눌러야 저장. */
+function CheckoutMileageField({
+  value,
+  saving,
+  onSave,
+}: {
+  value: number;
+  saving: boolean;
+  onSave: (v: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value ?? 0));
+  // 서버 값이 바뀌면(저장 완료 등) 입력값 동기화
+  useEffect(() => {
+    setDraft(String(value ?? 0));
+  }, [value]);
+  const parsed = Math.max(0, Math.floor(Number(draft) || 0));
+  const dirty = parsed !== (value ?? 0);
+
+  return (
+    <div>
+      <label className="block text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+        퇴실 시 적립 마일리지 (P)
+      </label>
+      <div className="flex items-center gap-2">
+        <div className="relative max-w-[200px] flex-1">
+          <input
+            type="number"
+            min={0}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className={`${crmInputClass} pr-9`}
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+            P
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => onSave(parsed)}
+          disabled={saving || !dirty}
+          className="shrink-0 px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
+        >
+          {saving ? "저장 중…" : "저장"}
+        </button>
+      </div>
+      <p className="mt-1.5 text-[11.5px] text-[#A89B80] dark:text-zinc-500">
+        숫자를 입력하고 [저장]을 눌러야 저장돼요. 1P = 1원 기준으로 회원 마일리지에 적립됩니다.
+      </p>
+    </div>
+  );
+}
+
 export default function CrmSettingsPage() {
   const { getIdToken } = useAuth();
   const [tab, setTab] = useState<SettingsTab>(() => {
@@ -577,30 +629,11 @@ export default function CrmSettingsPage() {
             </label>
 
             {settings.checkout_mileage_enabled && (
-              <div>
-                <label className="block text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
-                  퇴실 시 적립 마일리지 (P)
-                </label>
-                <div className="relative max-w-[200px]">
-                  <input
-                    type="number"
-                    min={0}
-                    defaultValue={settings.checkout_mileage_earn ?? 0}
-                    key={`cm-${settings.checkout_mileage_earn}`}
-                    onBlur={(e) => {
-                      const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
-                      if (v !== settings.checkout_mileage_earn) save({ checkout_mileage_earn: v });
-                    }}
-                    className={`${crmInputClass} pr-9`}
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-                    P
-                  </span>
-                </div>
-                <p className="mt-1.5 text-[11.5px] text-[#A89B80] dark:text-zinc-500">
-                  입력 후 다른 곳을 클릭하면 저장돼요. 1P = 1원 기준으로 회원 마일리지에 적립됩니다.
-                </p>
-              </div>
+              <CheckoutMileageField
+                value={settings.checkout_mileage_earn ?? 0}
+                saving={saving}
+                onSave={(v) => save({ checkout_mileage_earn: v })}
+              />
             )}
           </section>
         </div>
