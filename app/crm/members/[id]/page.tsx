@@ -1058,6 +1058,33 @@ function CheckInButton({
   const { getIdToken } = useAuth();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; tone: "ok" | "warn" } | null>(null);
+  // 오늘 출석 여부 — 출석했으면 [출석취소], 안 했으면 [출석 처리]로 토글.
+  const [todayAttId, setTodayAttId] = useState<number | null>(null);
+  const [checking, setChecking] = useState(true);
+
+  const loadToday = useCallback(async () => {
+    try {
+      const token = await getIdToken();
+      const t = todayDate();
+      const res = await fetch(
+        `/api/crm/members/${memberId}/attendances?from=${t}&to=${t}`,
+        { headers: { authorization: `Bearer ${token}` }, cache: "no-store" }
+      );
+      if (res.ok) {
+        const d = await res.json();
+        const rows = (d.attendances ?? []) as { id: number }[];
+        setTodayAttId(rows.length ? rows[0].id : null);
+      }
+    } catch {
+      /* 조회 실패 시 기본(출석 처리) 유지 */
+    } finally {
+      setChecking(false);
+    }
+  }, [getIdToken, memberId]);
+
+  useEffect(() => {
+    loadToday();
+  }, [loadToday]);
 
   const run = async () => {
     if (busy) return;
@@ -1074,12 +1101,15 @@ function CheckInButton({
       if (!res.ok) throw new Error(data?.error || "출석 처리 실패");
       if (data.duplicate) {
         setMsg({ text: data.message || "이미 최근에 출석 처리됐어요.", tone: "warn" });
+        loadToday(); // 이미 출석 상태 반영 → 버튼을 출석취소로
       } else {
         const awarded = Number(data.mileage_awarded) || 0;
         setMsg({
           text: awarded > 0 ? `출석 처리했어요. (+${awarded.toLocaleString()}P 적립)` : "출석 처리했어요.",
           tone: "ok",
         });
+        setTodayAttId(data.attendance?.id ?? null);
+        if (!data.attendance?.id) loadToday();
         onDone();
       }
     } catch (e) {
@@ -1090,15 +1120,51 @@ function CheckInButton({
     }
   };
 
+  const cancel = async () => {
+    if (busy || todayAttId == null) return;
+    if (!window.confirm("오늘 출석을 취소할까요?")) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/attendances/${todayAttId}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "출석 취소 실패");
+      const reversed = Number(data.mileage_reversed) || 0;
+      setMsg({
+        text: reversed > 0 ? `출석을 취소했어요. (−${reversed.toLocaleString()}P 회수)` : "출석을 취소했어요.",
+        tone: "ok",
+      });
+      setTodayAttId(null);
+      // 오늘 출석이 더 있으면(재입장 등) 다시 취소 상태로 반영
+      loadToday();
+      onDone();
+    } catch (e) {
+      setMsg({ text: e instanceof Error ? e.message : "네트워크 오류", tone: "warn" });
+    } finally {
+      setBusy(false);
+      setTimeout(() => setMsg(null), 4000);
+    }
+  };
+
+  const attended = todayAttId != null;
+
   return (
     <div className="mt-2 flex items-center gap-2 flex-wrap">
       <button
         type="button"
-        onClick={run}
-        disabled={busy}
-        className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+        onClick={attended ? cancel : run}
+        disabled={busy || checking}
+        className={`inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg text-white text-[12.5px] font-semibold disabled:opacity-60 ${
+          attended
+            ? "bg-[#C0392B] hover:bg-[#a93226]"
+            : "bg-[#6B7B3A] hover:bg-[#5a6932]"
+        }`}
       >
-        {busy ? "처리 중…" : "출석 처리"}
+        {busy ? "처리 중…" : checking ? "확인 중…" : attended ? "출석취소" : "출석 처리"}
       </button>
       {msg && (
         <span
