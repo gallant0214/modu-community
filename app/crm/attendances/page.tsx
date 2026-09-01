@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
@@ -555,9 +556,18 @@ export default function CrmAttendancesPage() {
                         </div>
                       )}
                       <div className="min-w-0">
-                        <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
-                          {a.member?.name ?? "—"}
-                        </div>
+                        {a.member?.id ? (
+                          <Link
+                            href={`/crm/members/${a.member.id}`}
+                            className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate hover:text-[#6B7B3A] dark:hover:text-[#A8B87A] hover:underline underline-offset-2 block"
+                          >
+                            {a.member.name}
+                          </Link>
+                        ) : (
+                          <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
+                            {a.member?.name ?? "—"}
+                          </div>
+                        )}
                         <div className="text-[11.5px] text-[#8C8270] dark:text-zinc-500">
                           {a.member?.phone ? formatPhone(a.member.phone) : "—"}
                         </div>
