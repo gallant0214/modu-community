@@ -57,7 +57,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     label: "회원 관리",
     items: [
       { key: "members.view",       label: "회원 목록·정보 보기",       defaults: D_ALL },
-      { key: "members.app_view_all", label: "센터 전체 회원 보기 — 끄면 담당 회원만 (웹·앱 공통)", defaults: D_ADMIN },
+      { key: "members.app_view_all", label: "센터 전체 회원 보기 (웹+강사앱) — 끄면 담당 회원만", defaults: D_ADMIN },
       { key: "members.excel",      label: "회원 목록 엑셀 내보내기",       defaults: D_MGR },
       { key: "members.create",     label: "회원 등록(추가)",             defaults: D_MGR_FC },
       { key: "members.edit_basic", label: "회원 기본정보 수정 — 이름·연락처·메모 등",   defaults: D_MGR_FC },
