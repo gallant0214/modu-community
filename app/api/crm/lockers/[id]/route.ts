@@ -271,6 +271,51 @@ export async function PATCH(
     return NextResponse.json({ error: "저장 실패", detail: upErr.message }, { status: 500 });
   }
 
+  // 배정된 락커의 시작/만료일이 바뀐 경우 매칭 대여권(crm_rentals)도 자동 동기화.
+  // 락커관리에서 만료일만 바꿔도 회원 상세 결제내역/대여권 카드가 어긋나지 않게 원천 차단.
+  if (
+    action === "update" &&
+    locker.state === "assigned" &&
+    locker.assigned_member_id &&
+    (updates.expires_at !== undefined || updates.start_date !== undefined)
+  ) {
+    const { data: zoneRow } = await supabase
+      .from("crm_locker_zones")
+      .select("name")
+      .eq("id", locker.zone_id)
+      .maybeSingle();
+    const zoneName = (zoneRow as { name: string } | null)?.name ?? "";
+    const label = `${zoneName} ${locker.number}번`;
+    const { data: rentals } = await supabase
+      .from("crm_rentals")
+      .select("id")
+      .eq("center_id", ctx.centerId)
+      .eq("member_id", locker.assigned_member_id)
+      .eq("status", "valid")
+      .ilike("memo", `%${label}%`);
+    const targets = (rentals ?? []) as { id: number }[];
+    if (targets.length > 0) {
+      const rPatch: Record<string, unknown> = {};
+      if (updates.start_date !== undefined) rPatch.start_date = updates.start_date;
+      if (updates.expires_at !== undefined) {
+        rPatch.expires_at = updates.expires_at;
+        // 만료일 지났으면 expired 로 재계산.
+        const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+        const eff = String(updates.expires_at ?? "").slice(0, 10);
+        rPatch.status = !eff || eff >= today ? "valid" : "expired";
+      }
+      if (Object.keys(rPatch).length > 0) {
+        for (const t of targets) {
+          await supabase
+            .from("crm_rentals")
+            .update(rPatch as never)
+            .eq("id", t.id)
+            .eq("center_id", ctx.centerId);
+        }
+      }
+    }
+  }
+
   await supabase.from("crm_locker_history").insert(history as never);
 
   return NextResponse.json({ ok: true });
