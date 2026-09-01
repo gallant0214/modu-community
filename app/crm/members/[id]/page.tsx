@@ -5328,6 +5328,21 @@ function HoldingDetailModal({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "수정 실패");
+
+      // 락커 대여권을 편집하는 경우: 물리 락커(crm_lockers)의 시작/만료일도 동기화.
+      // 대여권 만료일만 바뀌면 회원 상세 '현재 보유' 카드가 락커 배정일을 그대로 보여 어긋난다.
+      if (detail.kind === "rental" && detail.lockerAssignId) {
+        const lockerBody: Record<string, unknown> = { action: "update" };
+        if (eStart) lockerBody.start_date = eStart;
+        if (eExpires) lockerBody.expires_at = eExpires;
+        if (Object.keys(lockerBody).length > 1) {
+          await fetch(`/api/crm/lockers/${detail.lockerAssignId}`, {
+            method: "PATCH",
+            headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+            body: JSON.stringify(lockerBody),
+          });
+        }
+      }
       setEditing(false);
       onSaved();
       onClose();
