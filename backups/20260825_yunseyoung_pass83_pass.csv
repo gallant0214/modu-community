@@ -1,0 +1,2 @@
+id,center_id,member_id,trainer_member_id,seller_member_id,issue_type,lesson_kind,total_sessions,remaining_sessions,session_minutes,price_won,vat_included,payment_method,payment_method_custom,issued_at,expires_at,status,memo,created_at,updated_at,outstanding_won,payment_status,is_paused,start_date,co_trainer_ids,service_sessions,product_id,group_capacity,attendance_mileage_earn,discount_won
+83,1,83,2,2,new,20회(신규)(20회),20,15,50,1298000,t,card,,2026-08-05,2026-10-25,valid,,2026-08-21 01:50:16.099254+00,2026-08-21 03:47:54.020805+00,0,paid,f,2026-08-06,{},0,35,1,0,0

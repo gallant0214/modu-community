@@ -1,0 +1,7 @@
+id,center_id,member_id,trainer_member_id,seller_member_id,issue_type,lesson_kind,total_sessions,remaining_sessions,session_minutes,price_won,vat_included,payment_method,payment_method_custom,issued_at,expires_at,status,memo,created_at,updated_at,outstanding_won,payment_status,is_paused,start_date,co_trainer_ids,service_sessions,product_id,group_capacity,attendance_mileage_earn,discount_won
+183,1,288,1,1,new,시니어 세미 PT 10회,10,0,50,550000,f,etc,,2026-01-17,2026-04-04,expired,,2026-08-24 12:07:15.367096+00,2026-08-24 12:07:15.367096+00,0,paid,f,2026-01-17,{},0,,1,0,0
+184,1,288,1,1,new,시니어 세미 PT 10회,10,0,50,550000,f,etc,,2025-10-22,2026-03-31,expired,,2026-08-24 12:07:15.431666+00,2026-08-24 12:07:15.431666+00,0,paid,f,2025-10-22,{},0,,1,0,0
+185,1,288,1,1,new,시니어 세미 PT 10회,10,0,50,550000,f,etc,,2025-08-09,2025-11-30,expired,,2026-08-24 12:07:15.497612+00,2026-08-24 12:07:15.497612+00,0,paid,f,2025-08-09,{},0,,1,0,0
+186,1,288,1,1,new,시니어 세미 PT 10회,10,0,50,550000,f,etc,,2025-06-03,2025-08-31,expired,,2026-08-24 12:07:15.56643+00,2026-08-24 12:07:15.56643+00,0,paid,f,2025-06-03,{},0,,1,0,0
+96,1,288,1,1,renewal,대표 세미 10회(10회),10,10,30,550000,t,card,,2026-08-10,9999-12-31,valid,,2026-08-21 03:38:30.420201+00,2026-08-21 03:38:30.420201+00,0,paid,f,2026-08-10,{},0,56,1,0,0
+103,1,288,1,1,renewal,대표 세미 10회(10회),10,1,30,550000,t,card,,2026-04-01,9999-12-31,valid,,2026-08-21 04:11:14.816249+00,2026-08-22 04:04:08.243485+00,0,paid,f,2026-04-01,{},0,56,1,0,0

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { digitsOnly } from "@/app/lib/crm-identity";
+import { getClientIp, checkRateLimit } from "@/app/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,9 @@ export const dynamic = "force-dynamic";
  * - 이미 다른 계정에 연동된 레코드는 후보에서 제외.
  */
 export async function POST(request: Request) {
+  const rl = checkRateLimit(getClientIp(request), "auth");
+  if (rl) return rl;
+
   const user = await verifyAuth(request);
   if (!user) return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
 

@@ -1,0 +1,2 @@
+id,center_id,member_id,trainer_member_id,seller_member_id,issue_type,lesson_kind,total_sessions,remaining_sessions,session_minutes,price_won,vat_included,payment_method,payment_method_custom,issued_at,expires_at,status,memo,created_at,updated_at,outstanding_won,payment_status,is_paused,start_date,co_trainer_ids,service_sessions,product_id,group_capacity,attendance_mileage_earn,discount_won
+74,1,1623,1,1,new,vividJ 30회(30회),30,15,50,1350000,t,cash,,2026-07-14,9999-12-31,valid,,2026-08-20 11:45:21.985367+00,2026-08-20 11:46:59.58236+00,0,paid,f,2026-07-14,{2},0,159,1,0,0

@@ -1,0 +1,2 @@
+id,center_id,member_id,trainer_member_id,seller_member_id,issue_type,lesson_kind,total_sessions,remaining_sessions,session_minutes,price_won,vat_included,payment_method,payment_method_custom,issued_at,expires_at,status,memo,created_at,updated_at,outstanding_won,payment_status,is_paused,start_date,co_trainer_ids,service_sessions,product_id,group_capacity,attendance_mileage_earn,discount_won
+82,1,1666,1,1,renewal,대표 30회(30회),30,15,50,1650000,f,transfer,,2026-08-03,9999-12-31,valid,,2026-08-21 01:50:00.761713+00,2026-08-21 01:56:44.2125+00,0,paid,f,2026-08-03,{},0,55,1,0,990000

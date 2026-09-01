@@ -4542,6 +4542,7 @@ interface MembershipRow {
   payment_status: string;
   is_paused?: boolean;
   attendance_mileage_earn?: number;
+  purchased_at?: string | null;
   created_at: string;
 }
 interface RentalRow {
@@ -4560,6 +4561,7 @@ interface RentalRow {
   status: string;
   memo: string | null;
   is_paused?: boolean;
+  purchased_at?: string | null;
   created_at: string;
 }
 
@@ -4626,7 +4628,7 @@ function membershipToDetail(
     mileageUsed: m.mileage_used,
     attendanceMileageEarn: m.attendance_mileage_earn ?? 0,
     sellerName: sellerName(m.seller_member_id),
-    paidAt: m.created_at,
+    paidAt: m.purchased_at ?? m.created_at,
     memo: m.memo,
   };
 }
@@ -4655,7 +4657,7 @@ function rentalToDetail(
     mileageEarned: r.mileage_earned,
     mileageUsed: r.mileage_used,
     sellerName: sellerName(r.seller_member_id),
-    paidAt: r.created_at,
+    paidAt: r.purchased_at ?? r.created_at,
     memo: r.memo,
   };
 }
