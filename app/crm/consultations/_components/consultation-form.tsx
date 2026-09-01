@@ -480,7 +480,7 @@ function ConsultationFormInner({
         body: JSON.stringify(bodyStatus ? { ...payload, status: bodyStatus } : payload),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "저장 실패");
+      if (!res.ok) throw new Error([data?.error || "저장 실패", data?.detail].filter(Boolean).join(" · "));
       const newId = usePatch ? effId : data.id;
       setDirty(false);
       try {
@@ -1061,6 +1061,7 @@ function ConsultationFormInner({
               <div className="text-[12.5px] font-semibold text-[#6B5D47]">{r.label}</div>
               <input
                 type="time"
+                step={600}
                 value={r.timeKey}
                 onChange={(e) => r.setTime(e.target.value)}
                 className={crmInputClass}

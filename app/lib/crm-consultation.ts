@@ -8,6 +8,14 @@ export function buildConsultationPayload(
   fallbackTrainerId: number
 ) {
   const asStr = (v: unknown) => (typeof v === "string" ? v.trim() || null : null);
+  // 유효한 YYYY-MM-DD 만 통과(존재하지 않는 날짜·형식오류는 null → DATE 컬럼 오류 방지)
+  const asDate = (v: unknown): string | null => {
+    if (typeof v !== "string") return null;
+    const s = v.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+    const d = new Date(`${s}T00:00:00Z`);
+    return isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s ? null : s;
+  };
   const asBool = (v: unknown) => v === true;
   const asNum = (v: unknown) => {
     const n = Number(v);
@@ -38,7 +46,7 @@ export function buildConsultationPayload(
     member_id: asInt(body.member_id) ?? null,
     template_id: asInt(body.template_id) ?? null,
     gender: asStr(body.gender),
-    birth: asStr(body.birth),
+    birth: asDate(body.birth),
     phone: asStr(body.phone),
     address_dong: asStr(body.address_dong),
     trainer_member_id: trainerMemberId,

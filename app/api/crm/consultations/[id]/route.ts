@@ -111,7 +111,10 @@ export async function PATCH(
 
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (name) patch.name = name;
-  if (typeof body.consulted_at === "string") patch.consulted_at = body.consulted_at;
+  // 유효한 YYYY-MM-DD 만 반영(빈값/형식오류는 건드리지 않음 → DATE 오류 방지)
+  if (typeof body.consulted_at === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.consulted_at.trim())) {
+    patch.consulted_at = body.consulted_at.trim();
+  }
 
   // 상태 변경
   if (typeof body.status === "string") {

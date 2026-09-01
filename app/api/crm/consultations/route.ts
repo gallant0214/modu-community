@@ -100,10 +100,15 @@ export async function POST(request: Request) {
   }
 
   const payload = buildConsultationPayload(body, ctx.centerMemberId);
+  // consulted_at 은 유효한 YYYY-MM-DD 만 저장(형식오류/빈값은 DB 기본값 사용 → DATE 오류 방지)
+  const consultedAtValid =
+    typeof body.consulted_at === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.consulted_at.trim())
+      ? body.consulted_at.trim()
+      : undefined;
   const insert = {
     center_id: ctx.centerId,
     created_by_uid: ctx.uid,
-    consulted_at: (body.consulted_at as string) || undefined,
+    consulted_at: consultedAtValid,
     ...payload,
     name: name || "무제 상담",
     ...(isDraft ? { status: "draft" } : {}),
