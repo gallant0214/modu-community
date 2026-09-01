@@ -910,28 +910,15 @@ function CheckinResultScreen({
                 </div>
               </div>
             </div>
-            <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between text-[13.5px]">
-              <div className="flex items-center gap-2">
-                <span className="text-white/60">마일리지</span>
-                <span className="font-bold text-white tabular-nums">
-                  {(s?.mileage ?? 0).toLocaleString()}
-                </span>
-                <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
-                  M
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-white/60">쿠폰</span>
-                <span className="font-bold text-white tabular-nums">
-                  {s?.coupon_count ?? 0}장
-                </span>
-              </div>
+            <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-2.5">
+              <span className="text-white/60 text-[15px]">누적 마일리지</span>
+              <span className="text-[24px] font-bold text-white tabular-nums leading-none">
+                {(s?.mileage ?? 0).toLocaleString()}
+              </span>
+              <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
+                M
+              </span>
             </div>
-            {!!data.mileageAwarded && data.mileageAwarded > 0 && (
-              <div className="mt-2 text-center text-[12px] text-emerald-300">
-                오늘 출석 마일리지 +{data.mileageAwarded.toLocaleString()}P 적립
-              </div>
-            )}
           </div>
 
           {/* 이번 주 출석 */}
