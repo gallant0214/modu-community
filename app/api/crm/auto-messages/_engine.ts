@@ -31,9 +31,32 @@ export const SCAN_TRIGGERS = new Set<string>([
   "membership_expired",
   "pass_expiring",
   "pass_expired",
+  "class_expiring",
+  "class_expired",
+  "locker_expiring",
+  "locker_expired",
+  "sportswear_expiring",
+  "sportswear_expired",
   "long_absence",
   "membership_new",
   "membership_renew",
+]);
+
+/** 만료 임박(#전송기준# 잔여일 계산) 트리거 */
+const EXPIRING_TRIGGERS = new Set<string>([
+  "membership_expiring",
+  "pass_expiring",
+  "class_expiring",
+  "locker_expiring",
+  "sportswear_expiring",
+]);
+/** 만료 당일/후 트리거 */
+const EXPIRED_TRIGGERS = new Set<string>([
+  "membership_expired",
+  "pass_expired",
+  "class_expired",
+  "locker_expired",
+  "sportswear_expired",
 ]);
 
 /* ─── KST 날짜 헬퍼 ─────────────────────────────── */
@@ -131,6 +154,104 @@ function latestByMember(rows: DatedRow[]): Map<number, DatedRow> {
   return m;
 }
 
+/** 수강권 로드 (상품 type 분류 위해 product_id 포함) */
+async function loadPasses(centerId: number): Promise<(DatedRow & { productId: number | null })[]> {
+  return paginateAll<DatedRow & { productId: number | null }>(async (f, t) => {
+    const r = await supabase
+      .from("crm_passes")
+      .select("member_id, expires_at, created_at, price_won, lesson_kind, product_id")
+      .eq("center_id", centerId)
+      .range(f, t);
+    const data = (r.data as Record<string, unknown>[] | null)?.map((x) => ({
+      member_id: Number(x.member_id),
+      expires_at: String(x.expires_at ?? ""),
+      created_at: String(x.created_at ?? ""),
+      label: String(x.lesson_kind ?? ""),
+      price: x.price_won != null ? Number(x.price_won) : undefined,
+      productId: x.product_id != null ? Number(x.product_id) : null,
+    })) as (DatedRow & { productId: number | null })[] | null;
+    return { data, error: r.error };
+  });
+}
+
+/** 대여권(운동복 등) 로드 */
+async function loadRentals(centerId: number): Promise<DatedRow[]> {
+  return paginateAll<DatedRow>(async (f, t) => {
+    const r = await supabase
+      .from("crm_rentals")
+      .select("member_id, expires_at, created_at, price_won, item_name")
+      .eq("center_id", centerId)
+      .range(f, t);
+    const data = (r.data as Record<string, unknown>[] | null)?.map((x) => ({
+      member_id: Number(x.member_id),
+      expires_at: String(x.expires_at ?? ""),
+      created_at: String(x.created_at ?? ""),
+      label: String(x.item_name ?? ""),
+      price: x.price_won != null ? Number(x.price_won) : undefined,
+    })) as DatedRow[] | null;
+    return { data, error: r.error };
+  });
+}
+
+/** 물리 락커(배정된 것) 로드 */
+async function loadLockersDated(centerId: number): Promise<DatedRow[]> {
+  return paginateAll<DatedRow>(async (f, t) => {
+    const r = await supabase
+      .from("crm_lockers")
+      .select("assigned_member_id, expires_at, number, state")
+      .eq("center_id", centerId)
+      .eq("state", "assigned")
+      .range(f, t);
+    const data = (r.data as Record<string, unknown>[] | null)
+      ?.filter((x) => x.assigned_member_id)
+      .map((x) => ({
+        member_id: Number(x.assigned_member_id),
+        expires_at: String(x.expires_at ?? ""),
+        created_at: "",
+        label: `${x.number}번 락커`,
+        price: undefined,
+      })) as DatedRow[] | null;
+    return { data, error: r.error };
+  });
+}
+
+/** 상품 id → type 맵 (수강권/클래스 분류용) */
+async function loadProductTypes(centerId: number): Promise<Map<number, string>> {
+  const { data } = await supabase.from("crm_products").select("id, type").eq("center_id", centerId);
+  return new Map(((data ?? []) as { id: number; type: string }[]).map((p) => [Number(p.id), String(p.type)]));
+}
+
+/** 상품관리에서 특정 type 으로 등록된 상품명 집합 (product_id 없는 대여권 분류용) */
+async function loadProductNamesByType(centerId: number, type: string): Promise<Set<string>> {
+  const { data } = await supabase
+    .from("crm_products")
+    .select("name, type")
+    .eq("center_id", centerId)
+    .eq("type", type);
+  return new Set(((data ?? []) as { name: string }[]).map((p) => String(p.name)));
+}
+
+/** 만료 트리거 공통: 발송 대상 만료일(정확히 그 날). 일정=N일 전(before)/후(after), 즉시=당일 */
+function targetExpiry(setting: TriggerSetting, today: string): string {
+  const days = Math.max(0, setting.send_days ?? 0);
+  const before = setting.send_days_dir !== "after";
+  return setting.send_basis === "schedule" ? (before ? addDays(today, days) : addDays(today, -days)) : today;
+}
+
+/** 만료 트리거 공통: 회원별 최신 만료행 중 target 당일인 회원만 매칭 */
+function matchExpiry(rows: DatedRow[], members: Map<number, MemberLite>, target: string): Match[] {
+  const latest = latestByMember(rows);
+  const out: Match[] = [];
+  for (const [memberId, r] of latest) {
+    const m = members.get(memberId);
+    if (!m) continue;
+    if (r.expires_at === target) {
+      out.push({ member_id: memberId, name: m.name, product: r.label, expiry: r.expires_at, price: r.price });
+    }
+  }
+  return out;
+}
+
 /* ─── 트리거 매칭 ───────────────────────────────── */
 export async function computeMatches(centerId: number, setting: TriggerSetting): Promise<Match[]> {
   const key = setting.trigger_key;
@@ -162,29 +283,36 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
     return out;
   }
 
-  // 회원권/수강권 만료 — 정확히 '그 날' 한 번만 매칭(범위 X → 자동발송 중복 방지).
-  // 기준=만료일. 일정기준: 만료 N일 전(before)/후(after). 즉시(만료 시): 만료 당일.
-  if (key === "membership_expiring" || key === "membership_expired" || key === "pass_expiring" || key === "pass_expired") {
-    const isPass = key.startsWith("pass");
-    const rows = await loadDated(centerId, isPass ? "crm_passes" : "crm_memberships", isPass ? "lesson_kind" : "plan_name");
-    const latest = latestByMember(rows);
-    const days = Math.max(0, setting.send_days ?? 0);
-    const before = setting.send_days_dir !== "after";
-    const target =
-      setting.send_basis === "schedule"
-        ? before
-          ? addDays(today, days)
-          : addDays(today, -days)
-        : today;
-    const out: Match[] = [];
-    for (const [memberId, r] of latest) {
-      const m = members.get(memberId);
-      if (!m) continue;
-      if (r.expires_at === target) {
-        out.push({ member_id: memberId, name: m.name, product: r.label, expiry: r.expires_at, price: r.price });
-      }
+  // 상품유형별 만료(회원권/수강권/클래스/락커/운동복) — 정확히 '그 날' 1회 매칭(자동발송 중복 방지).
+  // 상품 구분은 상품관리(crm_products)의 type 기준. 기준=만료일(일정: N일 전/후, 즉시: 당일).
+  if (EXPIRING_TRIGGERS.has(key) || EXPIRED_TRIGGERS.has(key)) {
+    const target = targetExpiry(setting, today);
+
+    // 회원권 → crm_memberships (전체)
+    if (key.startsWith("membership_")) {
+      return matchExpiry(await loadDated(centerId, "crm_memberships", "plan_name"), members, target);
     }
-    return out;
+    // 수강권/클래스 → crm_passes. 상품 type=class 여부로 분리(수강권=class 제외, 상품 미연결 포함).
+    if (key.startsWith("pass_") || key.startsWith("class_")) {
+      const [passes, typeMap] = await Promise.all([loadPasses(centerId), loadProductTypes(centerId)]);
+      const wantClass = key.startsWith("class_");
+      const filtered = passes.filter((p) => {
+        const t = p.productId != null ? typeMap.get(p.productId) : undefined;
+        const isClass = t === "class";
+        return wantClass ? isClass : !isClass;
+      });
+      return matchExpiry(filtered, members, target);
+    }
+    // 락커 → crm_lockers (배정된 물리 락커)
+    if (key.startsWith("locker_")) {
+      return matchExpiry(await loadLockersDated(centerId), members, target);
+    }
+    // 운동복 → crm_rentals 중 상품관리 apparel 상품명과 일치하는 것만
+    if (key.startsWith("sportswear_")) {
+      const apparelNames = await loadProductNamesByType(centerId, "apparel");
+      const rentals = (await loadRentals(centerId)).filter((r) => apparelNames.has(r.label));
+      return matchExpiry(rentals, members, target);
+    }
   }
 
   // 신규/재등록 (오늘 생성된 회원권 기준)
@@ -248,10 +376,10 @@ export function basisText(
   today: string,
   expiry?: string
 ): string {
-  if ((triggerKey === "membership_expiring" || triggerKey === "pass_expiring") && expiry) {
+  if (EXPIRING_TRIGGERS.has(triggerKey) && expiry) {
     return `${Math.max(0, daysBetween(today, expiry))}일`;
   }
-  if (triggerKey === "membership_expired" || triggerKey === "pass_expired") return "0일";
+  if (EXPIRED_TRIGGERS.has(triggerKey)) return "0일";
   if (setting.send_basis === "schedule" && setting.send_days != null) return `${setting.send_days}일`;
   if (setting.send_basis === "count" && setting.send_count != null) return `${setting.send_count}회`;
   return "";
