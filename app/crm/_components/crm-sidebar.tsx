@@ -34,7 +34,7 @@ const MENU: MenuItem[] = [
   { href: "/crm/messages",    label: "메세지 전송",   group: "engage", perm: "messages.send", icon: IconMessage },
   { href: "/crm/stats",       label: "통계",          group: "admin", perm: "stats.view", icon: IconStats },
   { href: "/crm/settings",    label: "센터설정",       group: "admin", staffOnly: true, icon: IconSettings },
-  { href: "/crm/touch-attendance", label: "터치출석", group: "tools", staffOnly: true, newWindow: true, icon: IconTouch },
+  { href: "/crm/touch-attendance", label: "터치출석", group: "tools", perm: "attendance.manage", newWindow: true, icon: IconTouch },
   { href: "/crm/touch-attendance-settings", label: "터치출석 설정", group: "tools", staffOnly: true, icon: IconSettings },
 ];
 
@@ -61,9 +61,17 @@ function isSpecialBodyCenter(centerName: string): boolean {
 
 function buildSoloMenu(
   myMemberId: number | null,
-  opts: { includeCenterInfo: boolean }
+  opts: { includeCenterInfo: boolean; includeAttendanceTools?: boolean }
 ): MenuItem[] {
   const base = MENU.filter((m) => SOLO_MENU_HREFS.includes(m.href));
+  // 센터 소속 강사(개인 센터 아님): 프런트 운영을 위해 출석 현황 + 터치출석도 노출.
+  if (opts.includeAttendanceTools) {
+    base.push(
+      ...MENU.filter(
+        (m) => m.href === "/crm/attendances" || m.href === "/crm/touch-attendance"
+      )
+    );
+  }
   base.push({
     href: "/crm/products/personal",
     label: "개인 상품 관리",
@@ -150,10 +158,15 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
   //  - centerKind='solo' (개인 강사 본인 센터)
   //  - role='trainer' (센터 소속 강사) — 락커/메세지/통계 등 관리 도구 대신 본인 스코프 위주로 표시
   const isSoloMode = centerKind === "solo" || role === "trainer";
+  // 센터 소속 강사(개인 센터가 아닌 실제 센터의 trainer): 출석 현황·터치출석 추가 노출.
+  const isCenterTrainer = role === "trainer" && centerKind !== "solo";
   const specialBody = isSpecialBodyCenter(centerName);
   const visible = (
     isSoloMode
-      ? buildSoloMenu(centerMemberId ?? null, { includeCenterInfo: centerKind === "solo" })
+      ? buildSoloMenu(centerMemberId ?? null, {
+          includeCenterInfo: centerKind === "solo",
+          includeAttendanceTools: isCenterTrainer,
+        })
       : MENU.filter((m) => !m.staffOnly || isStaffLevel)
   )
     .filter((m) => (SPECIAL_BODY_ONLY_HREFS.has(m.href) ? specialBody : true))
