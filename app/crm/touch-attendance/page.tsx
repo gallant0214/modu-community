@@ -855,11 +855,11 @@ function CheckinResultScreen({
                 {p.lesson_kind}
                 {p.is_paused && <span className="ml-2 text-[11px] text-amber-300">홀딩중</span>}
               </div>
-              <div className="mt-1 flex items-baseline gap-2 flex-wrap">
+              <div className="mt-1 flex items-baseline gap-2.5 flex-wrap">
                 <span className="text-[22px] font-extrabold text-emerald-300 leading-none tabular-nums">
                   {ddayLabel(p.expires_at)}
                 </span>
-                <span className="text-[12.5px] text-white/60">
+                <span className="text-[20px] font-bold text-white leading-none tabular-nums">
                   잔여 {p.remaining_sessions}/{p.total_sessions}회
                 </span>
               </div>
