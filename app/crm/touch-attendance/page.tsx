@@ -1014,20 +1014,22 @@ function CheckinResultScreen({
               title="대여권"
               value={
                 s && s.rentals.length > 0
-                  ? `${s.rentals.length}건`
+                  ? ddayLabel(s.rentals.reduce((a, x) => (x.expires_at > a ? x.expires_at : a), ""))
                   : "사용 안 함"
               }
               muted={!s || s.rentals.length === 0}
+              strong={!!s && s.rentals.length > 0}
             />
             <SummaryCard
               icon="🔒"
               title="락커"
               value={
                 s && s.lockers.length > 0
-                  ? s.lockers.map((l) => `${l.zone_name} ${l.number}번`).join(", ")
+                  ? ddayLabel(s.lockers.reduce((a, x) => (x.expires_at > a ? x.expires_at : a), ""))
                   : "사용 안 함"
               }
               muted={!s || s.lockers.length === 0}
+              strong={!!s && s.lockers.length > 0}
             />
           </div>
 
@@ -1056,11 +1058,13 @@ function SummaryCard({
   title,
   value,
   muted,
+  strong,
 }: {
   icon: string;
   title: string;
   value: string;
   muted?: boolean;
+  strong?: boolean; // true 면 이용권 D-day 와 동일 스타일(22px, emerald, extrabold)
 }) {
   return (
     <div className="rounded-2xl bg-[#1E2024] px-4 py-4 md:px-5 md:py-5 min-h-[104px]">
@@ -1069,8 +1073,12 @@ function SummaryCard({
         <span className="font-semibold">{title}</span>
       </div>
       <div
-        className={`mt-2 text-[18px] md:text-[20px] font-bold truncate ${
-          muted ? "text-white/50" : "text-white"
+        className={`mt-2 truncate ${
+          muted
+            ? "text-[18px] md:text-[20px] font-bold text-white/50"
+            : strong
+              ? "text-[22px] font-extrabold text-emerald-300 tabular-nums"
+              : "text-[18px] md:text-[20px] font-bold text-white"
         }`}
       >
         {value}
