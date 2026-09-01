@@ -22,6 +22,8 @@ interface SettingConfig {
   coupon?: CouponAttach | null;
   /** 기준일 방향: 기준(만료·생일)일 전(before) 또는 후(after). 기본 before */
   send_days_dir?: "before" | "after";
+  /** 발송 시각(KST 0~23시). 전송 기준(즉시/일정/횟수) 공통. 기본 10시 */
+  send_hour?: number | null;
 }
 interface SettingRow {
   trigger_key: string;
@@ -352,6 +354,9 @@ function AutoMessageEditor({
   const [sendDaysDir, setSendDaysDir] = useState<"before" | "after">(
     base.config?.send_days_dir === "after" ? "after" : "before"
   );
+  const [sendHour, setSendHour] = useState<number>(
+    typeof base.config?.send_hour === "number" ? base.config.send_hour : 10
+  );
   const [sendCount, setSendCount] = useState<number>(base.send_count ?? 10);
   const [methods, setMethods] = useState<string[]>(base.methods ?? []);
   const [audience, setAudience] = useState<string[]>(base.audience ?? []);
@@ -440,6 +445,7 @@ function AutoMessageEditor({
           attachments,
           coupon: couponName.trim() ? { name: couponName.trim(), link: couponLink.trim() } : null,
           send_days_dir: sendDaysDir,
+          send_hour: sendHour,
         },
       });
     } finally {
@@ -461,6 +467,7 @@ function AutoMessageEditor({
       sendDays={sendDays}
       sendDaysDir={sendDaysDir}
       sendCount={sendCount}
+      sendHour={sendHour}
       audience={audience}
     />
   );
@@ -588,6 +595,24 @@ function AutoMessageEditor({
                   <span>회 (미출석 등)</span>
                 </div>
               )}
+              {/* 발송 시각 — 즉시/일정/횟수 공통, 시 단위 */}
+              <div className="mt-3 flex items-center gap-2 flex-wrap text-[13px] text-[#3A342A] dark:text-zinc-200">
+                <span>발송 시각</span>
+                <select
+                  value={sendHour}
+                  onChange={(e) => setSendHour(Number(e.target.value))}
+                  className="px-2 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
+                >
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <option key={h} value={h}>
+                      {String(h).padStart(2, "0")}시
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[12px] text-[#8C8270] dark:text-zinc-500">
+                  (해당 시각에 발송 · KST 기준)
+                </span>
+              </div>
             </NumberedField>
 
             {/* 04 전송 방법 */}
@@ -770,6 +795,7 @@ function MessagePreview({
   sendDays,
   sendDaysDir,
   sendCount,
+  sendHour,
   audience,
 }: {
   name: string;
@@ -784,14 +810,15 @@ function MessagePreview({
   sendDays: number;
   sendDaysDir: "before" | "after";
   sendCount: number;
+  sendHour: number;
   audience: string[];
 }) {
   const basisText =
-    sendBasis === "schedule"
+    (sendBasis === "schedule"
       ? `일정 기준 ${sendDays}일 ${sendDaysDir === "before" ? "전" : "후"}`
       : sendBasis === "count"
         ? `횟수 기준 ${sendCount}회`
-        : "즉시";
+        : "즉시") + ` · ${String(sendHour).padStart(2, "0")}시 발송`;
   return (
     <div className="p-4">
       <div className="text-[12px] font-bold text-[#2A251D] dark:text-zinc-100 mb-2">미리 보기</div>

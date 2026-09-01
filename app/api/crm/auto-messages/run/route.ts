@@ -6,7 +6,10 @@ import {
   SCAN_TRIGGERS,
   computeMatches,
   renderMessage,
+  paymentText,
+  basisText,
   loadCenterName,
+  loadJoinLink,
   kstYmd,
   type TriggerSetting,
 } from "../_engine";
@@ -39,6 +42,7 @@ export async function POST(request: Request) {
     .eq("enabled", true);
 
   const center = await loadCenterName(ctx.centerId);
+  const appLink = await loadJoinLink(ctx.centerId);
   const today = kstYmd();
   const byTrigger: Record<string, number> = {};
   let total = 0;
@@ -59,7 +63,15 @@ export async function POST(request: Request) {
       center_id: ctx.centerId,
       trigger_key: s.trigger_key,
       member_id: m.member_id,
-      message: renderMessage(s.message_body, { center, name: m.name, product: m.product, expiry: m.expiry }),
+      message: renderMessage(s.message_body, {
+        center,
+        name: m.name,
+        product: m.product,
+        expiry: m.expiry,
+        payment: paymentText(m.product, m.price),
+        appLink,
+        basis: basisText(s.trigger_key, s, today, m.expiry),
+      }),
       methods: (Array.isArray(s.methods) ? s.methods : []) as never,
       status: "pending",
       dedupe_key: `${s.trigger_key}:${m.member_id}:${today}`,

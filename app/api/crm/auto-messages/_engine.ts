@@ -12,6 +12,7 @@ export interface Match {
   name: string;
   product?: string;
   expiry?: string;
+  price?: number;
 }
 
 export interface TriggerSetting {
@@ -81,6 +82,7 @@ interface DatedRow {
   expires_at: string;
   label: string;
   created_at: string;
+  price?: number;
 }
 
 async function loadMembers(centerId: number): Promise<Map<number, MemberLite>> {
@@ -104,7 +106,7 @@ async function loadDated(
   return paginateAll<DatedRow>(async (f, t) => {
     const r = await supabase
       .from(table)
-      .select(`member_id, expires_at, created_at, ${labelCol}`)
+      .select(`member_id, expires_at, created_at, price_won, ${labelCol}`)
       .eq("center_id", centerId)
       .range(f, t);
     const data = (r.data as Record<string, unknown>[] | null)?.map((x) => ({
@@ -112,6 +114,7 @@ async function loadDated(
       expires_at: String(x.expires_at ?? ""),
       created_at: String(x.created_at ?? ""),
       label: String(x[labelCol] ?? ""),
+      price: x.price_won != null ? Number(x.price_won) : undefined,
     })) as DatedRow[] | null;
     return { data, error: r.error };
   });
@@ -172,7 +175,7 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
       const m = members.get(memberId);
       if (!m) continue;
       const ok = expiring ? r.expires_at >= today && r.expires_at <= to : r.expires_at === today;
-      if (ok) out.push({ member_id: memberId, name: m.name, product: r.label, expiry: r.expires_at });
+      if (ok) out.push({ member_id: memberId, name: m.name, product: r.label, expiry: r.expires_at, price: r.price });
     }
     return out;
   }
@@ -190,7 +193,7 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
       const isRenew = total > 1;
       if (isRenew !== wantRenew) continue;
       const m = members.get(r.member_id);
-      if (m) out.push({ member_id: r.member_id, name: m.name, product: r.label, expiry: r.expires_at });
+      if (m) out.push({ member_id: r.member_id, name: m.name, product: r.label, expiry: r.expires_at, price: r.price });
     }
     return out;
   }
@@ -201,18 +204,72 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
 /** 메세지 템플릿 치환 */
 export function renderMessage(
   template: string,
-  vars: { center: string; name: string; product?: string; expiry?: string }
+  vars: {
+    center: string;
+    name: string;
+    product?: string;
+    expiry?: string;
+    payment?: string;
+    appLink?: string;
+    basis?: string;
+  }
 ): string {
   return (template || "")
     .replaceAll("#센터명#", vars.center)
     .replaceAll("#회원명#", vars.name)
     .replaceAll("#상품명#", vars.product ?? "")
     .replaceAll("#만료일#", vars.expiry ?? "")
-    .replaceAll("#결제내역#", "")
-    .replaceAll("#앱설치링크#", "");
+    .replaceAll("#결제내역#", vars.payment ?? "")
+    .replaceAll("#앱설치링크#", vars.appLink ?? "")
+    .replaceAll("#전송기준#", vars.basis ?? "");
+}
+
+/** 두 YYYY-MM-DD 사이 일수(b-a). */
+export function daysBetween(a: string, b: string): number {
+  const t1 = new Date(`${a}T00:00:00Z`).getTime();
+  const t2 = new Date(`${b}T00:00:00Z`).getTime();
+  return Math.round((t2 - t1) / (24 * 3600 * 1000));
+}
+
+/**
+ * #전송기준# 값 — 만료 임박 트리거는 회원별 실제 잔여일("10일"),
+ * 그 외 스케줄/횟수 기준은 설정값("N일"/"N회"), 즉시는 빈 문자열.
+ */
+export function basisText(
+  triggerKey: string,
+  setting: { send_basis: string; send_days: number | null; send_count: number | null },
+  today: string,
+  expiry?: string
+): string {
+  if ((triggerKey === "membership_expiring" || triggerKey === "pass_expiring") && expiry) {
+    return `${Math.max(0, daysBetween(today, expiry))}일`;
+  }
+  if (triggerKey === "membership_expired" || triggerKey === "pass_expired") return "0일";
+  if (setting.send_basis === "schedule" && setting.send_days != null) return `${setting.send_days}일`;
+  if (setting.send_basis === "count" && setting.send_count != null) return `${setting.send_count}회`;
+  return "";
+}
+
+/** #결제내역# 용 문자열: "상품명 300,000원" (가격 없으면 상품명만) */
+export function paymentText(product?: string, price?: number): string {
+  const amount = price != null && Number.isFinite(price) ? `${price.toLocaleString()}원` : "";
+  return [product, amount].filter(Boolean).join(" ");
 }
 
 export async function loadCenterName(centerId: number): Promise<string> {
   const { data } = await supabase.from("crm_centers").select("name").eq("id", centerId).maybeSingle();
   return (data as { name?: string } | null)?.name ?? "";
+}
+
+const APP_ORIGIN = process.env.NEXT_PUBLIC_APP_ORIGIN || "https://moducm.com";
+
+/** #앱설치링크# 용: 센터 회원가입 링크(회원앱 설치 + 해당 센터 연결). 없으면 빈 문자열. */
+export async function loadJoinLink(centerId: number): Promise<string> {
+  const { data } = await supabase
+    .from("crm_center_join_links")
+    .select("token")
+    .eq("center_id", centerId)
+    .maybeSingle();
+  const token = (data as { token?: string } | null)?.token;
+  return token ? `${APP_ORIGIN}/join/${token}` : "";
 }
