@@ -828,6 +828,48 @@ function CheckinResultScreen({
   const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
   const todayDow = nowKst.getUTCDay();
 
+  // 보유 이용권 카드 — 만료일 대신 D-day 를 크게 표시. 세로/가로 배치에 재사용.
+  const holdingsCard = (
+    <div className="rounded-2xl bg-[#1E2024] p-5 md:p-7 min-h-[180px] flex flex-col">
+      <div className="text-[13px] text-white/60 mb-3 font-semibold">보유 이용권</div>
+      {!s || (s.memberships.length === 0 && s.passes.length === 0) ? (
+        <div className="flex-1 flex items-center justify-center text-white/50 text-[14.5px]">
+          보유하신 이용권이 없습니다
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {s.memberships.map((m) => (
+            <li key={`m${m.id}`} className="px-3.5 py-3 rounded-lg bg-white/[0.04] border border-white/10">
+              <div className="text-[16px] font-bold truncate">
+                {m.plan_name}
+                {m.is_paused && <span className="ml-2 text-[11px] text-amber-300">홀딩중</span>}
+              </div>
+              <div className="mt-1 text-[22px] font-extrabold text-emerald-300 leading-none tabular-nums">
+                {ddayLabel(m.expires_at)}
+              </div>
+            </li>
+          ))}
+          {s.passes.map((p) => (
+            <li key={`p${p.id}`} className="px-3.5 py-3 rounded-lg bg-white/[0.04] border border-white/10">
+              <div className="text-[16px] font-bold truncate">
+                {p.lesson_kind}
+                {p.is_paused && <span className="ml-2 text-[11px] text-amber-300">홀딩중</span>}
+              </div>
+              <div className="mt-1 flex items-baseline gap-2 flex-wrap">
+                <span className="text-[22px] font-extrabold text-emerald-300 leading-none tabular-nums">
+                  {ddayLabel(p.expires_at)}
+                </span>
+                <span className="text-[12.5px] text-white/60">
+                  잔여 {p.remaining_sessions}/{p.total_sessions}회
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 z-40 bg-[#111214] text-white flex items-center justify-center px-4 py-6 overflow-y-auto">
       <button
@@ -959,6 +1001,9 @@ function CheckinResultScreen({
               (주간) 매주 월요일 · (월간) 매월 1일 초기화
             </div>
           </div>
+
+          {/* 세로 화면: 보유 이용권을 '출석 현황' 바로 아래에 표시 (가로에서는 우측에 표시) */}
+          <div className="md:hidden">{holdingsCard}</div>
         </div>
 
         {/* 우측: 이용권/락커/대여권 */}
@@ -986,53 +1031,8 @@ function CheckinResultScreen({
             />
           </div>
 
-          <div className="rounded-2xl bg-[#1E2024] p-5 md:p-7 min-h-[220px] flex flex-col">
-            <div className="text-[13px] text-white/60 mb-3 font-semibold">보유 이용권</div>
-            {!s ||
-            (s.memberships.length === 0 && s.passes.length === 0) ? (
-              <div className="flex-1 flex items-center justify-center text-white/50 text-[14.5px]">
-                보유하신 이용권이 없습니다
-              </div>
-            ) : (
-              <ul className="space-y-2">
-                {s.memberships.map((m) => (
-                  <li
-                    key={`m${m.id}`}
-                    className="px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-between"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-[13.5px] font-semibold truncate">
-                        {m.plan_name}
-                        {m.is_paused && (
-                          <span className="ml-2 text-[10.5px] text-amber-300">홀딩중</span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-white/50">회원권 · 만료 {formatExpiry(m.expires_at)}</div>
-                    </div>
-                  </li>
-                ))}
-                {s.passes.map((p) => (
-                  <li
-                    key={`p${p.id}`}
-                    className="px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-between"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-[13.5px] font-semibold truncate">
-                        {p.lesson_kind}
-                        {p.is_paused && (
-                          <span className="ml-2 text-[10.5px] text-amber-300">홀딩중</span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-white/50">
-                        수강권 · 잔여 {p.remaining_sessions}/{p.total_sessions}회 · 만료{" "}
-                        {formatExpiry(p.expires_at)}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          {/* 가로(태블릿)에서만 우측에 표시 — 세로에서는 '출석 현황' 아래로 이동 */}
+          <div className="hidden md:block">{holdingsCard}</div>
 
           {/* 카운트다운 처음으로 */}
           <button
@@ -1079,8 +1079,15 @@ function SummaryCard({
   );
 }
 
-function formatExpiry(ymd: string): string {
+/** 만료일 → D-day 라벨 (KST). 무기한/만료/오늘/D-N. */
+function ddayLabel(ymd: string): string {
   if (!ymd) return "-";
-  if (ymd.startsWith("9999")) return "무기한";
-  return ymd;
+  if (ymd.startsWith("9999") || ymd.startsWith("2999")) return "무기한";
+  const nowYmd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const t = new Date(`${ymd.slice(0, 10)}T00:00:00+09:00`).getTime();
+  const n = new Date(`${nowYmd}T00:00:00+09:00`).getTime();
+  const d = Math.round((t - n) / 86400000);
+  if (d < 0) return "만료됨";
+  if (d === 0) return "오늘 만료";
+  return `D-${d}일 남음`;
 }
