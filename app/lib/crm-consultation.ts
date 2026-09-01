@@ -17,11 +17,15 @@ export function buildConsultationPayload(
     return isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s ? null : s;
   };
   const asBool = (v: unknown) => v === true;
+  // 빈값/null/undefined 는 반드시 null (Number(null)===0, Number("")===0 로 0 이 되는 것 방지).
+  // member_id/template_id 등 FK 컬럼에 0 이 들어가면 외래키 위반으로 저장 실패한다.
   const asNum = (v: unknown) => {
+    if (v === null || v === undefined || v === "") return null;
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
   };
   const asInt = (v: unknown) => {
+    if (v === null || v === undefined || v === "") return null;
     const n = Math.floor(Number(v));
     return Number.isFinite(n) ? n : null;
   };
