@@ -37,12 +37,20 @@ interface CheckinSummary {
   week_start_ymd: string;
 }
 
+// 미리보기용 샘플 얼굴 사진(SVG data URI) — 실제 회원 사진 대신 레이아웃 확인용.
+const PREVIEW_SAMPLE_PHOTO =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><rect width='160' height='160' fill='#6B7B3A'/><circle cx='80' cy='62' r='32' fill='#EDE7D6'/><rect x='34' y='104' width='92' height='72' rx='36' fill='#EDE7D6'/></svg>"
+  );
+
 type Result =
   | {
       kind: "success";
       name: string;
       birth: string | null;
       phone: string | null;
+      photo?: string | null; // 회원 얼굴 썸네일(있으면 확인창에 표시)
       duplicate?: boolean;
       mileageAwarded?: number;
       summary?: CheckinSummary;
@@ -71,6 +79,34 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   const [candidates, setCandidates] = useState<MemberLite[] | null>(null);
   const [enrollTarget, setEnrollTarget] = useState<MemberLite | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  // 디자인 미리보기: /crm/touch-attendance?preview=1 → 출석 확인창을 가짜 데이터로 바로 표시(자동 닫힘 없음)
+  const [previewMode, setPreviewMode] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!new URLSearchParams(window.location.search).get("preview")) return;
+    setPreviewMode(true);
+    setResult({
+      kind: "success",
+      name: "홍길동",
+      birth: "1990-03-15",
+      phone: "010-1234-5678",
+      photo: PREVIEW_SAMPLE_PHOTO,
+      duplicate: false,
+      mileageAwarded: 150,
+      summary: {
+        mileage: 3200,
+        coupon_count: 1,
+        can_enter: true,
+        not_started: false,
+        memberships: [{ id: 1, plan_name: "6개월 헬스", expires_at: "2027-01-31", is_paused: false }],
+        passes: [{ id: 1, lesson_kind: "PT 10회", remaining_sessions: 7, total_sessions: 10, expires_at: "2026-12-31", is_paused: false }],
+        rentals: [{ id: 1, item_name: "운동복", expires_at: "2027-01-31" }],
+        lockers: [{ id: 1, number: 12, expires_at: "2027-01-31", zone_name: "남자탈의실" }],
+        week_present: [false, true, false, true, false, true, false],
+        week_start_ymd: "2026-08-31",
+      },
+    });
+  }, []);
   const [busy, setBusy] = useState(false);
   const [centerName, setCenterName] = useState("");
   const [mode, setMode] = useState<"portrait" | "landscape">("portrait");
@@ -211,6 +247,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
             name: c.member?.name ?? "",
             birth: c.member?.birth ?? null,
             phone: c.member?.phone ?? null,
+            photo: c.member?.face_thumb ?? null,
             duplicate: !!c.duplicate,
             mileageAwarded: c.mileage_awarded ?? 0,
             summary: c.summary as CheckinSummary | undefined,
@@ -286,6 +323,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           name: data.member?.name ?? member.name,
           birth: data.member?.birth ?? null,
           phone: data.member?.phone ?? member.phone ?? null,
+          photo: data.member?.face_thumb ?? member.face_thumb ?? null,
           duplicate: data.duplicate,
           mileageAwarded: data.mileage_awarded ?? 0,
           summary: data.summary as CheckinSummary | undefined,
@@ -480,6 +518,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
       {result && result.kind === "success" && (
         <CheckinResultScreen
           data={result}
+          preview={previewMode}
           onClose={() => {
             setResult(null);
             reset();
@@ -757,27 +796,31 @@ const DOW_KOR = ["일", "월", "화", "수", "목", "금", "토"];
 function CheckinResultScreen({
   data,
   onClose,
+  preview,
 }: {
   data: {
     kind: "success";
     name: string;
     birth: string | null;
     phone: string | null;
+    photo?: string | null;
     duplicate?: boolean;
     mileageAwarded?: number;
     summary?: CheckinSummary;
   };
   onClose: () => void;
+  preview?: boolean; // true 면 자동 닫힘 없이 화면 유지(디자인 미리보기용)
 }) {
   const [remain, setRemain] = useState(3);
   useEffect(() => {
+    if (preview) return; // 미리보기 모드에서는 카운트다운/자동닫힘 안 함
     if (remain <= 0) {
       onClose();
       return;
     }
     const t = setTimeout(() => setRemain((n) => n - 1), 1000);
     return () => clearTimeout(t);
-  }, [remain, onClose]);
+  }, [remain, onClose, preview]);
 
   const s = data.summary;
   // 입장 가능 판정: summary 없으면 성공 자체를 가능으로 간주 (하위 호환)
@@ -843,10 +886,15 @@ function CheckinResultScreen({
           {/* 회원 카드 */}
           <div className="rounded-xl bg-white/[0.03] border border-white/10 p-4">
             <div className="flex items-start gap-4">
-              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-2xl text-white/50">
-                <svg className="w-9 h-9" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
+              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-2xl text-white/50 overflow-hidden shrink-0 border border-white/15">
+                {data.photo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={data.photo} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <svg className="w-9 h-9" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                )}
               </div>
               <div className="flex-1 min-w-0 space-y-1">
                 <div className="text-[24px] font-bold">{maskName(data.name)}</div>
