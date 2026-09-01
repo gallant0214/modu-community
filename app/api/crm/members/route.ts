@@ -60,10 +60,16 @@ export async function GET(request: Request) {
     return Array.from(new Set((passes ?? []).map((p) => p.member_id)));
   };
 
+  // '센터 전체 회원 보기'(members.app_view_all) 권한이 있으면 trainer/manager 도 전체 조회.
+  // 직급 권한에서 이 항목을 켜면 담당 회원만 → 센터 전체로 확장된다. [[feedback-crm-data-isolation]]
+  const ctxPerms = await loadPermissionsForContext(ctx);
+  const ctxCanViewAll = ctxPerms["members.app_view_all"] === true;
+
   const scopes: CenterScope[] = [];
   {
-    // 현재 컨텍스트 센터. solo owner/owner/admin = 전체, trainer/manager = 담당만.
-    const restricted = (ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner;
+    // 현재 컨텍스트 센터. solo owner/owner/admin/전체보기권한 = 전체, 그 외 trainer/manager = 담당만.
+    const restricted =
+      (ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner && !ctxCanViewAll;
     const allowedIds = restricted ? await teachingScopeIds(ctx.centerId, ctx.centerMemberId) : null;
     scopes.push({ centerId: ctx.centerId, centerName: ctx.centerName, foreign: false, allowedIds });
   }

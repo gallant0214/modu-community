@@ -70,9 +70,12 @@ export async function GET(
     .order("issued_at", { ascending: false });
 
   // 1인 강사(solo owner)는 본인 센터 전체 접근 → 격리 미적용.
+  // '센터 전체 회원 보기'(members.app_view_all) 권한이 있으면 본인 센터 전체 접근(목록과 일치).
   // 다른 센터 조회(readOnly)일 땐 그 센터에서 내가 담당한 수강권만.
+  const canViewAll = (await loadPermissionsForContext(ctx))["members.app_view_all"] === true;
   const restricted =
-    readOnly || ((ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner);
+    readOnly ||
+    ((ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner && !canViewAll);
   if (restricted) {
     // 주강사 또는 추가강사(co_trainer_ids)로 배정된 수강권만
     passQuery = passQuery.or(
