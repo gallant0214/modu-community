@@ -73,13 +73,18 @@ export async function buildAttendanceVoiceMessages(
   };
 
   const messages: string[] = [];
+  // 환영(welcome) 인사는 '입장 가능한' 회원에게만 재생. 만료 안내가 나가는 회원에겐
+  // 붙이지 않는다(만료되었습니다 뒤에 '환영합니다'가 따라오는 문제 방지).
+  // 만료 판정은 아래 터치설정 블록에서 이뤄지므로, 여기선 후보만 모아두고 마지막에 결정.
+  const pendingWelcome: string[] = [];
+  let expiredAnnounced = false;
 
   const substitute = (raw: string) => raw.replace(/\{name\}/g, member.name).trim();
 
   for (const rule of typedRules) {
     switch (rule.trigger_type) {
       case "welcome": {
-        messages.push(substitute(rule.message));
+        pendingWelcome.push(substitute(rule.message));
         break;
       }
       case "birthday": {
@@ -269,6 +274,7 @@ export async function buildAttendanceVoiceMessages(
         // 회원권 없음/만료(활성·예정·홀딩 전무) → 최우선 안내.
         // hasExpired(만료 기록) 여부와 무관하게, 유효 회원권이 없으면 무조건 안내.
         messages.unshift(txt("msg_expired_membership"));
+        expiredAnnounced = true; // 이 회원에겐 환영 인사를 붙이지 않음
       }
       // 만료 임박(활성 회원 대상 추가 안내)
       if (on("msg_expiring_membership") && hasExpiringSoon) {
@@ -297,6 +303,12 @@ export async function buildAttendanceVoiceMessages(
     }
   } catch {
     /* 설정 없거나 조회 실패 — 터치설정 안내 스킵 */
+  }
+
+  // 환영 인사 최종 결정: 만료 안내가 나간 회원(입장 불가)에겐 재생하지 않고,
+  // 그 외에는 맨 앞에 붙인다(기존처럼 인사말 우선).
+  if (pendingWelcome.length > 0 && !expiredAnnounced) {
+    messages.unshift(...pendingWelcome);
   }
 
   return messages;
