@@ -15,6 +15,7 @@ interface Attendance {
     name: string;
     phone: string | null;
     face_thumb: string | null;
+    app_linked: boolean;
     status: "active" | "expired";
     membership: { plan_name: string; expires_at: string; days_left: number } | null;
     expired_items: { type: "rental" | "locker"; name: string; expires_at: string }[];
@@ -513,6 +514,7 @@ export default function CrmAttendancesPage() {
                 <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">시간</th>
                 <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">상태</th>
                 <th className="px-4 py-2.5 text-left font-semibold">회원</th>
+                <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">앱연동</th>
                 <th className="px-4 py-2.5 text-left font-semibold">회원권</th>
                 <th className="px-4 py-2.5 text-left font-semibold">만료 이용권</th>
                 <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">경로</th>
@@ -561,6 +563,17 @@ export default function CrmAttendancesPage() {
                         </div>
                       </div>
                     </div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {a.member?.app_linked ? (
+                      <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60">
+                        연동
+                      </span>
+                    ) : (
+                      <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-medium text-zinc-500 border border-zinc-200 dark:border-zinc-700 dark:text-zinc-400">
+                        미연동
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {a.member?.membership ? (
