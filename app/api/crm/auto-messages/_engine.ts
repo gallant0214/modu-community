@@ -150,32 +150,39 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
     return out;
   }
 
-  // 장기 미출석
+  // 장기 미출석 — 정확히 N일째 미출석인 '그 날' 한 번만 (범위(<=)면 매일 중복 발송되므로 == 한정)
   if (key === "long_absence") {
-    const days = setting.send_days ?? setting.send_count ?? 14;
-    const cutoff = addDays(today, -Math.max(1, days));
+    const days = Math.max(1, setting.send_days ?? setting.send_count ?? 14);
+    const cutoff = addDays(today, -days);
     const out: Match[] = [];
     for (const m of members.values()) {
       const last = m.last_attended_at ? ymdOf(new Date(m.last_attended_at)) : null;
-      if (last && last <= cutoff) out.push({ member_id: m.id, name: m.name, expiry: last });
+      if (last && last === cutoff) out.push({ member_id: m.id, name: m.name, expiry: last });
     }
     return out;
   }
 
-  // 회원권/수강권 만료(전/당일)
+  // 회원권/수강권 만료 — 정확히 '그 날' 한 번만 매칭(범위 X → 자동발송 중복 방지).
+  // 기준=만료일. 일정기준: 만료 N일 전(before)/후(after). 즉시(만료 시): 만료 당일.
   if (key === "membership_expiring" || key === "membership_expired" || key === "pass_expiring" || key === "pass_expired") {
     const isPass = key.startsWith("pass");
     const rows = await loadDated(centerId, isPass ? "crm_passes" : "crm_memberships", isPass ? "lesson_kind" : "plan_name");
     const latest = latestByMember(rows);
-    const expiring = key.endsWith("expiring");
-    const days = expiring ? Math.max(1, setting.send_days ?? 7) : 0;
-    const to = addDays(today, days);
+    const days = Math.max(0, setting.send_days ?? 0);
+    const before = setting.send_days_dir !== "after";
+    const target =
+      setting.send_basis === "schedule"
+        ? before
+          ? addDays(today, days)
+          : addDays(today, -days)
+        : today;
     const out: Match[] = [];
     for (const [memberId, r] of latest) {
       const m = members.get(memberId);
       if (!m) continue;
-      const ok = expiring ? r.expires_at >= today && r.expires_at <= to : r.expires_at === today;
-      if (ok) out.push({ member_id: memberId, name: m.name, product: r.label, expiry: r.expires_at, price: r.price });
+      if (r.expires_at === target) {
+        out.push({ member_id: memberId, name: m.name, product: r.label, expiry: r.expires_at, price: r.price });
+      }
     }
     return out;
   }

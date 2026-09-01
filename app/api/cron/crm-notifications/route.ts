@@ -10,9 +10,10 @@ export const dynamic = "force-dynamic";
  * 매일 KST 오전 9시 실행 권장. vercel.json 에 등록.
  *
  * 발송 종류:
- *  1) 회원권 만료 D-7: 7일 후 만료되는 crm_memberships(valid) → linked_firebase_uid 가 있는 회원에게 푸시
- *  2) 수강권 유효기간 안내: 총 회차별 리드타임(30↑:30일 / 20:20일 / 10:10일 전). 무제한·10미만 제외
- *  3) 예약 D-1: 내일 예약된 crm_reservations(booked)
+ *  - 예약 D-1: 내일 예약된 crm_reservations(booked)
+ *
+ * ※ 회원권 만료(D-7/당일)·수강권 만료 안내는 [자동 메세지] 설정 UI + /api/cron/crm-auto-messages
+ *   로 일원화되었다(센터가 on/off·발송시각·문구·채널을 직접 제어). 중복 발송 방지 위해 여기서 제거.
  *
  * 응답: 발송 통계
  */
@@ -26,8 +27,6 @@ export async function GET(request: Request) {
 
   const today = new Date();
   const todayStr = toKstYMD(today);
-  const d7 = addDays(today, 7);
-  const d7Str = toKstYMD(d7);
   const d1 = addDays(today, 1);
   const d1Start = new Date(`${toKstYMD(d1)}T00:00:00+09:00`);
   const d1End = new Date(d1Start.getTime() + 24 * 3600 * 1000);
@@ -35,99 +34,7 @@ export async function GET(request: Request) {
   let sent = 0;
   const errors: string[] = [];
 
-  // 1) 회원권 만료 D-7
-  const { data: memberships } = await supabase
-    .from("crm_memberships")
-    .select("id, member_id, plan_name, expires_at, center_id")
-    .eq("status", "valid")
-    .eq("expires_at", d7Str);
-  for (const m of memberships ?? []) {
-    try {
-      const { data: member } = await supabase
-        .from("crm_members")
-        .select("name, linked_firebase_uid")
-        .eq("id", m.member_id)
-        .maybeSingle();
-      if (!member?.linked_firebase_uid) continue;
-      await sendLocalizedPushToMember(
-        m.member_id,
-        "membership_expire",
-        "membershipExpiring",
-        { name: member.name, plan: m.plan_name },
-        { kind: "membership_expire", id: String(m.id) }
-      );
-      sent += 1;
-    } catch (e) {
-      errors.push(`membership#${m.id}: ${e instanceof Error ? e.message : "error"}`);
-    }
-  }
-
-  // 1-b) 회원권 종료일 당일(D-0)
-  const { data: membershipsToday } = await supabase
-    .from("crm_memberships")
-    .select("id, member_id, plan_name, expires_at, center_id")
-    .eq("status", "valid")
-    .eq("expires_at", todayStr);
-  for (const m of membershipsToday ?? []) {
-    try {
-      const { data: member } = await supabase
-        .from("crm_members")
-        .select("name, linked_firebase_uid")
-        .eq("id", m.member_id)
-        .maybeSingle();
-      if (!member?.linked_firebase_uid) continue;
-      await sendLocalizedPushToMember(
-        m.member_id,
-        "membership_expired",
-        "membershipExpired",
-        { name: member.name, plan: m.plan_name },
-        { kind: "membership_expired", id: String(m.id) }
-      );
-      sent += 1;
-    } catch (e) {
-      errors.push(`membership_today#${m.id}: ${e instanceof Error ? e.message : "error"}`);
-    }
-  }
-
-  // 2) 수강권 유효기간 안내 — 회차별 리드타임(총 30회↑:30일전 / 20회대:20일전 / 10회대:10일전).
-  //    무제한 만료(sentinel 9999 등)는 today+30 범위 밖이라 자동 제외, 총 10회 미만도 제외.
-  const in30Str = toKstYMD(addDays(today, 30));
-  const { data: passes } = await supabase
-    .from("crm_passes")
-    .select("id, member_id, lesson_kind, total_sessions, expires_at")
-    .eq("status", "valid")
-    .gte("expires_at", todayStr)
-    .lte("expires_at", in30Str);
-  for (const p of passes ?? []) {
-    try {
-      const total = p.total_sessions ?? 0;
-      const lead = total >= 30 ? 30 : total >= 20 ? 20 : total >= 10 ? 10 : null;
-      if (lead == null) continue;
-      const exp = String(p.expires_at).slice(0, 10);
-      const daysLeft = Math.round(
-        (Date.parse(`${exp}T00:00:00Z`) - Date.parse(`${todayStr}T00:00:00Z`)) / 86400000
-      );
-      if (daysLeft !== lead) continue;
-      const { data: member } = await supabase
-        .from("crm_members")
-        .select("name, linked_firebase_uid")
-        .eq("id", p.member_id)
-        .maybeSingle();
-      if (!member?.linked_firebase_uid) continue;
-      await sendLocalizedPushToMember(
-        p.member_id,
-        "pass_expire",
-        "passExpiring",
-        { lesson: p.lesson_kind, days: daysLeft },
-        { kind: "pass_expire", id: String(p.id) }
-      );
-      sent += 1;
-    } catch (e) {
-      errors.push(`pass#${p.id}: ${e instanceof Error ? e.message : "error"}`);
-    }
-  }
-
-  // 3) 예약 D-1
+  // 예약 D-1
   const { data: reservations } = await supabase
     .from("crm_reservations")
     .select("id, member_id, starts_at, ends_at, trainer_member_id")
@@ -161,9 +68,6 @@ export async function GET(request: Request) {
     today: todayStr,
     sent,
     counts: {
-      memberships: memberships?.length ?? 0,
-      membershipsToday: membershipsToday?.length ?? 0,
-      passes: passes?.length ?? 0,
       reservations: reservations?.length ?? 0,
     },
     errors: errors.slice(0, 20),
