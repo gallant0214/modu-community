@@ -1552,7 +1552,7 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
     render: (m) =>
       m.linked_firebase_uid ? (
         <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60">
-          연동 회원
+          연동
         </span>
       ) : (
         <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-medium text-zinc-500 border border-zinc-200 dark:border-zinc-700 dark:text-zinc-400">
