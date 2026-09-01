@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
-import { MEMBER_TYPE_LABEL, GENDER_LABEL, formatPhone } from "../_components/crm-labels";
+import { GENDER_LABEL, formatPhone } from "../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 import { SortIndicator } from "../_components/use-column-widths";
 import { BulkActionBar } from "./_components/bulk-actions";
@@ -97,7 +97,6 @@ type SortKey =
   | "attendance_no"
   | "created_at"
   | "status"
-  | "member_type"
   | "last_visit_at"
   | "last_attended_at"
   | "max_expires_at";
@@ -114,7 +113,6 @@ type ColKey =
   | "first_use_at"
   | "created_at"
   | "status"
-  | "member_type"
   | "items"
   | "max_expires_at"
   | "days_remaining"
@@ -134,7 +132,6 @@ const DEFAULT_COL_ORDER: ColKey[] = [
   "last_purchase_at",
   "last_attended_at",
   "status",
-  "member_type",
   "items",
   "max_expires_at",
   "days_remaining",
@@ -158,7 +155,6 @@ const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
   first_use_at: 108,
   created_at: 108,
   status: 78,
-  member_type: 92,
   items: 240,
   max_expires_at: 112,
   days_remaining: 96,
@@ -770,8 +766,6 @@ export default function CrmMembersPage() {
           return m.created_at || "";
         case "status":
           return statusRank(m);
-        case "member_type":
-          return MEMBER_TYPE_LABEL[m.member_type] ?? m.member_type;
         case "last_visit_at":
           return m.last_visit_at || m.last_attended_at || "";
         case "last_attended_at":
@@ -959,7 +953,6 @@ export default function CrmMembersPage() {
       "이용 시작일",
       "가입일",
       "상태",
-      "회원 유형",
       "이용 가능 상품",
       "최종 만료일",
       "남은 일수",
@@ -1012,7 +1005,6 @@ export default function CrmMembersPage() {
         m.first_use_at ?? "",
         formatDate(m.created_at),
         eff && eff >= todayStr ? "유효" : hasHoldings(m) ? "만료" : "미보유",
-        MEMBER_TYPE_LABEL[m.member_type] ?? m.member_type,
         holdings,
         unlimited ? "무기한" : eff ?? "",
         unlimited ? "무기한" : daysLeft === null ? "" : daysLeft >= 0 ? `${daysLeft}일 남음` : `${-daysLeft}일 지남`,
@@ -1594,16 +1586,6 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
       const eff = effExpiry(m);
       return <StatusBadge isValid={!!eff && eff >= todayStr} hasAny={hasHoldings(m)} />;
     },
-  },
-  member_type: {
-    key: "member_type",
-    label: "회원 유형",
-    sortKey: "member_type",
-    render: (m) => (
-      <span className="text-[#6B5D47] dark:text-zinc-400">
-        {MEMBER_TYPE_LABEL[m.member_type] ?? m.member_type}
-      </span>
-    ),
   },
   registration_type: {
     key: "registration_type",
