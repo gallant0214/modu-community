@@ -13,6 +13,10 @@ export interface AutoMsgTrigger {
   bases: SendBasis[];
   /** 메세지 입력 기본 문구 */
   defaultBody?: string;
+  /** 이 알림이 자동 발송되는 대상 설명 (수신 대상은 트리거가 결정) */
+  recipient: string;
+  /** 일정 기준(schedule)의 기준일 명칭. 예: "만료일", "생일". immediate 전용이면 생략 */
+  basisNoun?: string;
 }
 
 export interface AutoMsgCategory {
@@ -26,38 +30,38 @@ export const AUTO_MESSAGE_CATEGORIES: AutoMsgCategory[] = [
     key: "customer",
     label: "고객 관련",
     triggers: [
-      { key: "contract_completed", label: "계약 완료 시", bases: ["immediate"] },
-      { key: "rental_purchased", label: "대여권 구매 시", bases: ["immediate"] },
-      { key: "birthday", label: "생일자 고객", bases: ["schedule"] },
-      { key: "membership_new", label: "이용권 신규 등록 시", bases: ["immediate"] },
-      { key: "membership_renew", label: "이용권 재등록 시", bases: ["immediate"] },
-      { key: "long_absence", label: "장기 미출석 시", bases: ["schedule", "count"] },
-      { key: "coupon_expired", label: "쿠폰 만료", bases: ["immediate", "schedule"] },
+      { key: "contract_completed", label: "계약 완료 시", bases: ["immediate"], recipient: "계약을 완료한 회원" },
+      { key: "rental_purchased", label: "대여권 구매 시", bases: ["immediate"], recipient: "대여권을 구매한 회원" },
+      { key: "birthday", label: "생일자 고객", bases: ["schedule"], recipient: "생일이 다가온 회원", basisNoun: "생일" },
+      { key: "membership_new", label: "이용권 신규 등록 시", bases: ["immediate"], recipient: "이용권을 신규 등록한 회원" },
+      { key: "membership_renew", label: "이용권 재등록 시", bases: ["immediate"], recipient: "이용권을 재등록한 회원" },
+      { key: "long_absence", label: "장기 미출석 시", bases: ["schedule", "count"], recipient: "장기 미출석(휴면) 회원", basisNoun: "마지막 출석일" },
+      { key: "coupon_expired", label: "쿠폰 만료", bases: ["immediate", "schedule"], recipient: "쿠폰이 만료된 회원", basisNoun: "쿠폰 만료일" },
     ],
   },
   {
     key: "product",
     label: "상품 관련",
     triggers: [
-      { key: "locker_expired", label: "락커 만료", bases: ["immediate", "schedule"] },
-      { key: "product_hold", label: "상품 홀딩", bases: ["immediate"] },
-      { key: "pass_expired", label: "수강권 만료 시", bases: ["immediate", "schedule"] },
-      { key: "pass_expiring", label: "수강권 만료 전", bases: ["schedule"] },
-      { key: "sportswear_expired", label: "운동복 만료", bases: ["immediate", "schedule"] },
-      { key: "hold_ending_soon", label: "홀딩 종료 임박", bases: ["schedule"] },
-      { key: "membership_expired", label: "회원권 만료 시", bases: ["immediate", "schedule"] },
-      { key: "membership_expiring", label: "회원권 만료 전", bases: ["schedule"] },
+      { key: "locker_expired", label: "락커 만료", bases: ["immediate", "schedule"], recipient: "락커가 만료된 회원", basisNoun: "락커 만료일" },
+      { key: "product_hold", label: "상품 홀딩", bases: ["immediate"], recipient: "상품을 홀딩한 회원" },
+      { key: "pass_expired", label: "수강권 만료 시", bases: ["immediate", "schedule"], recipient: "수강권이 만료된 회원", basisNoun: "수강권 만료일" },
+      { key: "pass_expiring", label: "수강권 만료 전", bases: ["schedule"], recipient: "수강권 만료가 임박한 회원", basisNoun: "수강권 만료일" },
+      { key: "sportswear_expired", label: "운동복 만료", bases: ["immediate", "schedule"], recipient: "운동복이 만료된 회원", basisNoun: "운동복 만료일" },
+      { key: "hold_ending_soon", label: "홀딩 종료 임박", bases: ["schedule"], recipient: "홀딩 종료가 임박한 회원", basisNoun: "홀딩 종료일" },
+      { key: "membership_expired", label: "회원권 만료 시", bases: ["immediate", "schedule"], recipient: "회원권이 만료된 회원", basisNoun: "회원권 만료일" },
+      { key: "membership_expiring", label: "회원권 만료 전", bases: ["schedule"], recipient: "회원권 만료가 임박한 회원", basisNoun: "회원권 만료일" },
     ],
   },
   {
     key: "reservation",
     label: "예약 관련",
     triggers: [
-      { key: "class_booked", label: "수업 예약 시", bases: ["immediate"] },
-      { key: "class_cancelled", label: "수업 예약 취소 시", bases: ["immediate"] },
-      { key: "facility_changed", label: "시설 예약 변경 시", bases: ["immediate"] },
-      { key: "facility_booked", label: "시설 예약 시", bases: ["immediate"] },
-      { key: "facility_cancelled", label: "시설 예약 취소 시", bases: ["immediate"] },
+      { key: "class_booked", label: "수업 예약 시", bases: ["immediate"], recipient: "수업을 예약한 회원" },
+      { key: "class_cancelled", label: "수업 예약 취소 시", bases: ["immediate"], recipient: "수업 예약을 취소한 회원" },
+      { key: "facility_changed", label: "시설 예약 변경 시", bases: ["immediate"], recipient: "시설 예약을 변경한 회원" },
+      { key: "facility_booked", label: "시설 예약 시", bases: ["immediate"], recipient: "시설을 예약한 회원" },
+      { key: "facility_cancelled", label: "시설 예약 취소 시", bases: ["immediate"], recipient: "시설 예약을 취소한 회원" },
     ],
   },
 ];

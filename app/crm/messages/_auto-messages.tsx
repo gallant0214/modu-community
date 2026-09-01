@@ -7,7 +7,6 @@ import {
   TRIGGER_BY_KEY,
   SEND_BASIS_LABEL,
   MESSAGE_VARIABLES,
-  SEGMENT_OPTIONS,
   smsByteLength,
   smsKind,
   type SendBasis,
@@ -81,7 +80,6 @@ const METHOD_OPTIONS: { key: string; label: string }[] = [
   { key: "alimtalk", label: "알림톡" },
 ];
 const METHOD_LABEL: Record<string, string> = Object.fromEntries(METHOD_OPTIONS.map((m) => [m.key, m.label]));
-const SEGMENT_LABEL: Record<string, string> = Object.fromEntries(SEGMENT_OPTIONS.map((s) => [s.key, s.label]));
 
 export function AutoMessagesTab() {
   const { getIdToken } = useAuth();
@@ -359,7 +357,6 @@ function AutoMessageEditor({
   );
   const [sendCount, setSendCount] = useState<number>(base.send_count ?? 10);
   const [methods, setMethods] = useState<string[]>(base.methods ?? []);
-  const [audience, setAudience] = useState<string[]>(base.audience ?? []);
   const [attachments, setAttachments] = useState<string[]>(base.config?.attachments ?? []);
   const [couponName, setCouponName] = useState(base.config?.coupon?.name ?? "");
   const [couponLink, setCouponLink] = useState(base.config?.coupon?.link ?? "");
@@ -400,11 +397,6 @@ function AutoMessageEditor({
   const toggleMethod = (key: string) =>
     setMethods((prev) => (prev.includes(key) ? prev.filter((m) => m !== key) : [...prev, key]));
 
-  const toggleSeg = (key: string) =>
-    setAudience((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : prev.length >= 3 ? prev : [...prev, key]
-    );
-
   const onPickFiles = async (files: FileList | null) => {
     if (!files || !files.length) return;
     setUploading(true);
@@ -439,7 +431,7 @@ function AutoMessageEditor({
         send_days: sendBasis === "schedule" ? sendDays : null,
         send_count: sendBasis === "count" ? sendCount : null,
         methods,
-        audience,
+        audience: [], // 수신 대상은 트리거 조건이 자동 결정 (수동 세그먼트 미사용)
         message_body: body,
         config: {
           attachments,
@@ -468,7 +460,7 @@ function AutoMessageEditor({
       sendDaysDir={sendDaysDir}
       sendCount={sendCount}
       sendHour={sendHour}
-      audience={audience}
+      recipient={trigger.recipient}
     />
   );
 
@@ -501,28 +493,14 @@ function AutoMessageEditor({
               </div>
             </NumberedField>
 
-            {/* 02 수신 대상 */}
-            <NumberedField no="02" title="수신 대상" hint="미선택 시 조건에 해당하는 전체 고객에게 발송됩니다. 최대 3개.">
-              <div className="flex flex-wrap gap-2">
-                {SEGMENT_OPTIONS.map((s) => {
-                  const active = audience.includes(s.key);
-                  const disabled = !active && audience.length >= 3;
-                  return (
-                    <button
-                      key={s.key}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => toggleSeg(s.key)}
-                      className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors disabled:opacity-30 ${
-                        active
-                          ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#4d5a29] dark:text-[#A8B87A]"
-                          : "border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-white dark:bg-zinc-900"
-                      }`}
-                    >
-                      {active ? "✓ " : ""}{s.label}
-                    </button>
-                  );
-                })}
+            {/* 02 수신 대상 — 트리거 조건이 대상을 자동 결정 (수동 선택 불필요) */}
+            <NumberedField no="02" title="수신 대상" hint="수신 대상은 이 알림의 조건에 따라 자동으로 정해집니다. 별도 선택이 필요 없어요.">
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg border border-[#6B7B3A]/30 bg-[#6B7B3A]/[0.06] dark:bg-[#6B7B3A]/10">
+                <span className="mt-0.5 text-[#6B7B3A] dark:text-[#A8B87A]">👥</span>
+                <div className="text-[13px] text-[#3A342A] dark:text-zinc-200 leading-relaxed">
+                  <span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">{trigger.recipient}</span>
+                  에게 자동 발송됩니다.
+                </div>
               </div>
             </NumberedField>
 
@@ -547,9 +525,18 @@ function AutoMessageEditor({
                   );
                 })}
               </div>
+              {/* 이 트리거가 언제 발송되는지 요약 (기준: 만료일/생일/마지막 출석일 등) */}
+              <p className="mt-2 text-[12px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
+                📌{" "}
+                {sendBasis === "immediate"
+                  ? <>이벤트 발생 <span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">즉시</span> 발송</>
+                  : sendBasis === "schedule"
+                    ? <><span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">{trigger.basisNoun ?? "기준일"}</span> 기준 {sendDays}일 {sendDaysDir === "before" ? "전" : "후"} 발송</>
+                    : <>조건 <span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">{sendCount}회</span> 도달 시 발송</>}
+              </p>
               {sendBasis === "schedule" && (
                 <div className="mt-2.5 flex items-center gap-2 flex-wrap text-[13px] text-[#3A342A] dark:text-zinc-200">
-                  <span>기준일</span>
+                  <span>{trigger.basisNoun ?? "기준일"}</span>
                   <input
                     type="number"
                     min={0}
@@ -559,7 +546,7 @@ function AutoMessageEditor({
                     className="w-20 px-2 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
                   />
                   <span>일</span>
-                  {/* 기준(만료·생일)일 전/후 선택 */}
+                  {/* 기준일 전/후 선택 */}
                   <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
                     {(["before", "after"] as const).map((dir) => (
                       <button
@@ -577,7 +564,7 @@ function AutoMessageEditor({
                     ))}
                   </div>
                   <span className="text-[12px] text-[#8C8270] dark:text-zinc-500">
-                    (만료·생일 등 기준일 {sendDaysDir === "before" ? "전" : "후"})
+                    ({trigger.basisNoun ?? "기준일"} {sendDaysDir === "before" ? "전" : "후"})
                   </span>
                 </div>
               )}
@@ -796,7 +783,7 @@ function MessagePreview({
   sendDaysDir,
   sendCount,
   sendHour,
-  audience,
+  recipient,
 }: {
   name: string;
   body: string;
@@ -811,7 +798,7 @@ function MessagePreview({
   sendDaysDir: "before" | "after";
   sendCount: number;
   sendHour: number;
-  audience: string[];
+  recipient: string;
 }) {
   const basisText =
     (sendBasis === "schedule"
@@ -858,8 +845,7 @@ function MessagePreview({
           {methods.length ? methods.map((m) => METHOD_LABEL[m]).join(", ") : <span className="text-[#A89B80]">미선택</span>}
         </div>
         <div>
-          수신 대상:{" "}
-          {audience.length ? audience.map((a) => SEGMENT_LABEL[a]).join(", ") : <span className="text-[#A89B80]">전체(조건 해당)</span>}
+          수신 대상: <span className="text-[#4d5a29] dark:text-[#A8B87A] font-medium">{recipient}</span>
         </div>
       </div>
     </div>
