@@ -1004,7 +1004,7 @@ export default function CrmMembersPage() {
         m.registered_at ?? "",
         m.first_use_at ?? "",
         formatDate(m.created_at),
-        eff && eff >= todayStr ? "유효" : hasHoldings(m) ? "만료" : "미보유",
+        eff && eff >= todayStr ? "유효" : "만료",
         holdings,
         unlimited ? "무기한" : eff ?? "",
         unlimited ? "무기한" : daysLeft === null ? "" : daysLeft >= 0 ? `${daysLeft}일 남음` : `${-daysLeft}일 지남`,
@@ -1897,7 +1897,7 @@ function StatusBadge({ isValid, hasAny }: { isValid: boolean; hasAny: boolean })
   if (!hasAny) {
     return (
       <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#F5F0E5] dark:bg-zinc-800 text-[#A89B80]">
-        미보유
+        만료
       </span>
     );
   }
