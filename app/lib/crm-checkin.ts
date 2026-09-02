@@ -75,6 +75,18 @@ export async function runCheckIn(
     return { error: "출석 실패", detail: error?.message, status: 500 as const };
   }
 
+  // 마지막 출석일 스냅샷 갱신(KST). 대시보드·자동알림 등 이 컬럼을 읽는 곳이 최신값을 쓰도록.
+  try {
+    const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    await supabase
+      .from("crm_members")
+      .update({ last_attended_at: todayKst } as never)
+      .eq("id", member.id)
+      .eq("center_id", centerId);
+  } catch {
+    /* 스냅샷 갱신 실패해도 체크인 자체는 성공 처리 */
+  }
+
   const mileageAwarded = MILEAGE_AWARD_SOURCES.has(source)
     ? await awardAttendanceMileage(centerId, member.id, created.id)
     : 0;

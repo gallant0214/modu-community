@@ -226,12 +226,27 @@ export async function GET(
   if (hasActiveUnlimited) finalExp = "9999-12-31";
   else if (expCandidates.length) finalExp = expCandidates.reduce((a, b) => (a > b ? a : b));
 
+  // 마지막 출석일 = crm_attendances 최신 기록(KST). 스냅샷 컬럼은 자동 갱신이 안 돼
+  // 비어 있을 수 있으므로 실측을 우선하고, 없으면 기존 컬럼값 유지. (목록 API 와 동일 규칙)
+  const { data: lastAtt } = await supabase
+    .from("crm_attendances")
+    .select("checked_in_at")
+    .eq("center_id", targetCenterId)
+    .eq("member_id", memberId)
+    .order("checked_in_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const lastAttendedYmd = (lastAtt as { checked_in_at?: string } | null)?.checked_in_at
+    ? kstYmd((lastAtt as { checked_in_at: string }).checked_in_at)
+    : null;
+
   const memberOut = {
     ...member,
     // 결제 실측(원장+컷오프후 결제) 우선. 계산이 0 이하면 stored 스냅샷 폴백.
     total_paid_won: totalPaid > 0 ? totalPaid : (member.total_paid_won ?? 0),
     last_purchase_at: lastPaid ?? member.last_purchase_at,
     final_expire_at: finalExp ?? member.final_expire_at,
+    last_attended_at: lastAttendedYmd ?? member.last_attended_at,
   };
 
   return NextResponse.json({ member: memberOut, passes: passesOut, read_only: readOnly });
