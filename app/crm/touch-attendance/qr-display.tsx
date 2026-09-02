@@ -54,11 +54,11 @@ export default function QrDisplay({
             : "공개 터치출석 링크를 먼저 만들어 주세요. (설정 → 터치출석)"
         );
       }
-      // 다음 주 경계에 자동 갱신 예약 (탭 절전·시계 오차 대비 최대 6시간마다 재확인)
+      // 다음 주 경계에 자동 갱신 예약 (탭 절전·시계 오차 대비 최대 1시간마다 재확인)
       if (timerRef.current) clearTimeout(timerRef.current);
       const nextAt = data.next_rotate_at ? new Date(data.next_rotate_at).getTime() : 0;
       const untilBoundary = nextAt ? nextAt - Date.now() + 5_000 : Number.POSITIVE_INFINITY;
-      const delay = Math.min(Math.max(60_000, untilBoundary), 6 * 3600_000);
+      const delay = Math.min(Math.max(60_000, untilBoundary), 3600_000);
       timerRef.current = setTimeout(loadQr, delay);
     } catch {
       setErr("QR을 불러오지 못했어요.");
@@ -71,6 +71,27 @@ export default function QrDisplay({
     loadQr();
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [loadQr]);
+
+  // 태블릿이 절전/백그라운드에서 깨어나면 setTimeout 이 얼어붙어 QR 이 '지난 주 토큰'으로
+  // 남아 회원이 스캔할 때 "유효하지 않은 QR" 오류가 날 수 있다. 화면이 다시 보이거나
+  // 포커스를 얻거나 네트워크가 복구되면 즉시 최신 QR 로 갱신한다.
+  useEffect(() => {
+    const refresh = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      loadQr();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") loadQr();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
     };
   }, [loadQr]);
 
