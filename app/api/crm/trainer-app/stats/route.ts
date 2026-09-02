@@ -30,7 +30,9 @@ export async function GET(request: Request) {
 
   const today = kstYmd();
   const todayExcl = shiftYmd(today, 1);
-  const monthStart = firstOfMonth(today);
+  // 월 선택(YYYY-MM). 미지정이면 이번달. 월간 수업 실적에만 적용(주간·담당현황은 현재 기준).
+  const monthParam = new URL(request.url).searchParams.get("month");
+  const monthStart = /^\d{4}-\d{2}$/.test(monthParam || "") ? `${monthParam}-01` : firstOfMonth(today);
   const nextMonthStart = firstOfMonth(shiftYmd(monthStart, 32));
   const dow = (new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7; // 0=월
   const weekStart = shiftYmd(today, -dow);
