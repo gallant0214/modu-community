@@ -31,6 +31,7 @@ interface MemberDetail {
   current_pass: string | null;
   current_rental: string | null;
   current_locker: string | null;
+  face_image_thumb: string | null;
 }
 
 interface Props {
@@ -96,6 +97,29 @@ export function MemberQuickModal({ memberId, onClose }: Props) {
         </div>
       ) : data ? (
         <div className="space-y-3">
+          {/* 얼굴 + 이름 (누군지 바로 알아보기 위함 — 얼굴을 이름보다 크게) */}
+          <div className="flex items-center gap-3.5">
+            <div className="shrink-0 w-20 h-20 rounded-2xl overflow-hidden border border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
+              {data.face_image_thumb ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={data.face_image_thumb} alt={`${data.name} 얼굴`} className="w-full h-full object-cover" />
+              ) : (
+                <svg className="w-10 h-10 text-[#C9BEA6] dark:text-zinc-600" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="text-[18px] font-bold text-[#2A251D] dark:text-zinc-100 truncate">
+                {data.name} 님
+              </div>
+              <div className="mt-0.5 text-[12.5px] text-[#8C8270] dark:text-zinc-400">
+                {data.gender === "M" ? "남성" : data.gender === "F" ? "여성" : ""}
+                {data.birth ? `${data.gender ? " · " : ""}${data.birth}` : ""}
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <Field label="연락처">{data.phone ? formatPhone(data.phone) : "—"}</Field>
             <Field label="성별">
