@@ -61,6 +61,30 @@ export async function DELETE(
     return NextResponse.json({ error: "취소 실패", detail: error.message }, { status: 500 });
   }
 
+  // 마지막 출석일 스냅샷 재계산 — 남은 출석기록의 최신일(KST), 없으면 null.
+  try {
+    const { data: rest } = await supabase
+      .from("crm_attendances")
+      .select("checked_in_at")
+      .eq("center_id", ctx.centerId)
+      .eq("member_id", att.member_id)
+      .order("checked_in_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const lastYmd = (rest as { checked_in_at?: string } | null)?.checked_in_at
+      ? new Date(new Date((rest as { checked_in_at: string }).checked_in_at).getTime() + 9 * 3600 * 1000)
+          .toISOString()
+          .slice(0, 10)
+      : null;
+    await supabase
+      .from("crm_members")
+      .update({ last_attended_at: lastYmd } as never)
+      .eq("id", att.member_id)
+      .eq("center_id", ctx.centerId);
+  } catch {
+    /* 스냅샷 재계산 실패해도 취소 자체는 성공 */
+  }
+
   await supabase.from("crm_audit_logs").insert({
     center_id: ctx.centerId,
     actor_uid: ctx.uid,
