@@ -121,9 +121,9 @@ export default function CrmMemberDetailPage() {
   const [bodyChooserOpen, setBodyChooserOpen] = useState(false); // +측정기록 → 직접입력/사진등록 선택
   const [bodyPhotoMode, setBodyPhotoMode] = useState(false); // 측정 모달을 인바디 사진 등록 모드로
   const [bodyReload, setBodyReload] = useState(0);
-  // 탭: 정보 / 예약내역 / 출석내역 / 결제내역 / 로그
+  // 탭: 정보 / 예약내역 / 출석내역 / 결제내역 / 강사기록 / 회원공유기록 / 로그
   const [tab, setTab] = useState<
-    "info" | "reservations" | "attendance" | "payments" | "workout" | "logs"
+    "info" | "reservations" | "attendance" | "payments" | "workout" | "shared" | "logs"
   >("info");
   // 현재 유저 권한 (members.edit_basic / members.edit_usage / members.delete)
   const [perms, setPerms] = useState<Record<string, boolean>>({});
@@ -450,14 +450,14 @@ export default function CrmMemberDetailPage() {
         </div>
       </header>
 
-      {/* 탭: 정보 / 예약내역 / 출석내역 / 결제내역 / 운동기록 / 로그 */}
-      <div className="mb-4 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800">
-        {(["info", "reservations", "attendance", "payments", "workout", "logs"] as const).map((t) => (
+      {/* 탭: 정보 / 예약내역 / 출석내역 / 결제내역 / 강사기록 / 회원공유기록 / 로그 */}
+      <div className="mb-4 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800 overflow-x-auto">
+        {(["info", "reservations", "attendance", "payments", "workout", "shared", "logs"] as const).map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`px-4 py-2 -mb-px text-[13px] font-medium border-b-2 transition-colors
+            className={`px-4 py-2 -mb-px text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap
               ${tab === t
                 ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A]"
                 : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
@@ -472,8 +472,10 @@ export default function CrmMemberDetailPage() {
                   : t === "payments"
                     ? "결제내역"
                     : t === "workout"
-                      ? "운동기록"
-                      : "로그"}
+                      ? "강사기록"
+                      : t === "shared"
+                        ? "회원공유기록"
+                        : "로그"}
           </button>
         ))}
       </div>
@@ -505,7 +507,9 @@ export default function CrmMemberDetailPage() {
       ) : tab === "attendance" ? (
         <MemberAttendanceSection memberId={member.id} />
       ) : tab === "workout" ? (
-        <MemberWorkoutLogsSection memberId={member.id} canEdit={canEditUsage} />
+        <MemberWorkoutLogsSection memberId={member.id} canEdit={canEditUsage} kind="trainer" />
+      ) : tab === "shared" ? (
+        <MemberWorkoutLogsSection memberId={member.id} canEdit={canEditUsage} kind="shared" />
       ) : (
       <>
       {(hasHoldings || !readOnly) && (
@@ -3006,7 +3010,17 @@ interface WorkoutLog {
   created_at: string;
   updated_at: string;
 }
-function MemberWorkoutLogsSection({ memberId, canEdit }: { memberId: number; canEdit: boolean }) {
+function MemberWorkoutLogsSection({
+  memberId,
+  canEdit,
+  kind = "trainer",
+}: {
+  memberId: number;
+  canEdit: boolean;
+  /** trainer=강사기록 / shared=회원공유기록 (같은 UI, 별도 기록) */
+  kind?: "trainer" | "shared";
+}) {
+  const noun = kind === "shared" ? "회원 공유 기록" : "강사 기록";
   const { getIdToken } = useAuth();
   const [logs, setLogs] = useState<WorkoutLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -3029,7 +3043,7 @@ function MemberWorkoutLogsSection({ memberId, canEdit }: { memberId: number; can
       setError("");
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch(`/api/crm/members/${memberId}/workout-logs`, {
+      const res = await fetch(`/api/crm/members/${memberId}/workout-logs?type=${kind}`, {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
@@ -3041,7 +3055,7 @@ function MemberWorkoutLogsSection({ memberId, canEdit }: { memberId: number; can
     } finally {
       setLoading(false);
     }
-  }, [getIdToken, memberId]);
+  }, [getIdToken, memberId, kind]);
 
   useEffect(() => {
     load();
@@ -3049,7 +3063,7 @@ function MemberWorkoutLogsSection({ memberId, canEdit }: { memberId: number; can
 
   const submit = async () => {
     if (!memo.trim()) {
-      setError("운동 내용을 입력해 주세요");
+      setError("내용을 입력해 주세요");
       return;
     }
     setSaving(true);
@@ -3059,7 +3073,7 @@ function MemberWorkoutLogsSection({ memberId, canEdit }: { memberId: number; can
       const res = await fetch(`/api/crm/members/${memberId}/workout-logs`, {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ log_date: logDate, memo: memo.trim() }),
+        body: JSON.stringify({ log_date: logDate, memo: memo.trim(), log_type: kind }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "저장 실패");
@@ -3103,7 +3117,7 @@ function MemberWorkoutLogsSection({ memberId, canEdit }: { memberId: number; can
     }
   };
   const remove = async (id: number) => {
-    if (!window.confirm("이 운동 기록을 삭제할까요?")) return;
+    if (!window.confirm(`이 ${noun}을 삭제할까요?`)) return;
     try {
       const token = await getIdToken();
       const res = await fetch(`/api/crm/members/${memberId}/workout-logs/${id}`, {
@@ -3138,10 +3152,12 @@ function MemberWorkoutLogsSection({ memberId, canEdit }: { memberId: number; can
             </span>
             <div className="min-w-0 text-left">
               <div className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100">
-                운동 기록 입력하기
+                {noun} 입력하기
               </div>
               <div className="mt-0.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400 truncate">
-                날짜 선택 + 자유 메모로 회원의 운동 세션을 기록해요.
+                {kind === "shared"
+                  ? "날짜 선택 + 자유 메모로 회원과 공유할 기록을 남겨요."
+                  : "날짜 선택 + 자유 메모로 회원의 운동 세션을 기록해요."}
               </div>
             </div>
           </div>
@@ -3195,7 +3211,7 @@ function MemberWorkoutLogsSection({ memberId, canEdit }: { memberId: number; can
               disabled={saving}
               className="px-3.5 py-2 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
             >
-              {saving ? "저장 중…" : "운동 기록 저장"}
+              {saving ? "저장 중…" : `${noun} 저장`}
             </button>
           </div>
         </div>
@@ -3206,7 +3222,7 @@ function MemberWorkoutLogsSection({ memberId, canEdit }: { memberId: number; can
         <div className="text-center py-8 text-[12.5px] text-[#8C8270]">불러오는 중…</div>
       ) : logs.length === 0 ? (
         <div className="text-center py-8 text-[12.5px] text-[#A89B80]">
-          아직 저장된 운동 기록이 없어요.
+          아직 저장된 {noun}이 없어요.
         </div>
       ) : (
         <ul className="space-y-2">

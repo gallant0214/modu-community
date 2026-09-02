@@ -3304,6 +3304,7 @@ export type Database = {
           member_id: number
           log_date: string
           memo: string
+          log_type: string
           created_by_uid: string | null
           created_at: string
           updated_at: string
@@ -3314,6 +3315,7 @@ export type Database = {
           member_id: number
           log_date?: string
           memo: string
+          log_type?: string
           created_by_uid?: string | null
           created_at?: string
           updated_at?: string
@@ -3324,6 +3326,7 @@ export type Database = {
           member_id?: number
           log_date?: string
           memo?: string
+          log_type?: string
           created_by_uid?: string | null
           created_at?: string
           updated_at?: string

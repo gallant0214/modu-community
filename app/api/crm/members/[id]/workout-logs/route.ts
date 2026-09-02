@@ -19,11 +19,15 @@ export async function GET(
   const memberId = Number(id);
   if (!memberId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
+  // log_type: trainer(강사기록, 기본) / shared(회원공유기록)
+  const logType = new URL(request.url).searchParams.get("type") === "shared" ? "shared" : "trainer";
+
   const { data, error } = await supabase
     .from("crm_member_workout_logs")
     .select("id, log_date, memo, created_by_uid, created_at, updated_at")
     .eq("center_id", ctx.centerId)
     .eq("member_id", memberId)
+    .eq("log_type", logType)
     .order("log_date", { ascending: false })
     .order("id", { ascending: false })
     .limit(100);
@@ -50,14 +54,15 @@ export async function POST(
   const memberId = Number(id);
   if (!memberId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
-  let body: { log_date?: string; memo?: string };
+  let body: { log_date?: string; memo?: string; log_type?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
   const memo = (body.memo ?? "").trim();
-  if (!memo) return NextResponse.json({ error: "운동 내용을 입력해 주세요" }, { status: 400 });
+  if (!memo) return NextResponse.json({ error: "내용을 입력해 주세요" }, { status: 400 });
+  const logType = body.log_type === "shared" ? "shared" : "trainer";
 
   const logDate = /^\d{4}-\d{2}-\d{2}$/.test(body.log_date ?? "")
     ? (body.log_date as string)
@@ -79,6 +84,7 @@ export async function POST(
       member_id: memberId,
       log_date: logDate,
       memo: memo.slice(0, 5000),
+      log_type: logType,
       created_by_uid: ctx.uid,
     })
     .select("id, log_date, memo, created_by_uid, created_at, updated_at")
