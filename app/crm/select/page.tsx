@@ -12,6 +12,7 @@ interface CenterCtx {
   centerKind: "solo" | "center";
   region: string | null;
   role: "owner" | "admin" | "manager" | "trainer";
+  gradeLabel: string | null;
   isSoloOwner: boolean;
   status: "active" | "pending";
   accessAllowed: boolean;
@@ -148,7 +149,7 @@ export default function CrmSelectPage() {
                     <ContextCard
                       key={c.centerMemberId}
                       title={c.centerName || "센터"}
-                      badge={ROLE_LABEL[c.role] ?? c.role}
+                      badge={c.gradeLabel || ROLE_LABEL[c.role] || c.role}
                       sub={c.region ?? undefined}
                       disabled={!!blocked}
                       disabledLabel={blocked ?? undefined}
