@@ -14,6 +14,7 @@ const MILEAGE_AWARD_SOURCES = new Set([
   "touch_number",
   "touch",
   "kiosk",
+  "app", // 회원앱 QR 출석도 출석 마일리지 적립 대상
 ]);
 
 /**
