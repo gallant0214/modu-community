@@ -94,6 +94,7 @@ export async function PATCH(
     "attendance_mileage_earn",
     "capacity",
     "class_cancel_before_min",
+    "class_book_before_min",
     "session_minutes",
     "daily_check_in_limit",
     "daily_time_limit_enabled",

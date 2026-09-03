@@ -1583,6 +1583,7 @@ export type Database = {
           vat_included: boolean
           capacity: number
           class_cancel_before_min: number
+          class_book_before_min: number
           session_minutes: number
           daily_check_in_limit: number
           daily_time_limit_enabled: boolean
@@ -1617,6 +1618,7 @@ export type Database = {
           vat_included?: boolean
           capacity?: number
           class_cancel_before_min?: number
+          class_book_before_min?: number
           session_minutes?: number
           daily_check_in_limit?: number
           daily_time_limit_enabled?: boolean
@@ -1651,6 +1653,7 @@ export type Database = {
           vat_included?: boolean
           capacity?: number
           class_cancel_before_min?: number
+          class_book_before_min?: number
           session_minutes?: number
           daily_check_in_limit?: number
           daily_time_limit_enabled?: boolean

@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
  * 규칙:
  *  - 구매한 그 상품의 세션만 예약 가능(유효 수강권·잔여>0·미만료)
  *  - 정원 초과 시 마감(선착순)
+ *  - 예약 마감 시간(상품별 class_book_before_min): 수업 시작 N분 전이 지나면 예약 불가
  *  - 취소 마감 시간(상품별) 전 취소 시 차감 원복, 이후·노쇼는 차감 유지
  */
 export async function POST(request: Request) {
@@ -73,10 +74,26 @@ export async function POST(request: Request) {
   // 상품 이용 방식: 기간제=무제한(차감X) / 횟수제=1회 차감
   const { data: product } = await supabase
     .from("crm_products")
-    .select("billing_mode")
+    .select("billing_mode, class_book_before_min")
     .eq("id", session.product_id)
     .maybeSingle();
   const isPeriod = (product as { billing_mode?: string } | null)?.billing_mode === "period";
+
+  // 예약 마감 시간 체크 — 수업 시작 N분 전이 지나면 예약 불가
+  const bookBeforeMin =
+    (product as { class_book_before_min?: number } | null)?.class_book_before_min ?? 0;
+  if (bookBeforeMin > 0) {
+    const bookDeadline = new Date(session.starts_at).getTime() - bookBeforeMin * 60000;
+    if (Date.now() >= bookDeadline) {
+      const h = Math.floor(bookBeforeMin / 60);
+      const m = bookBeforeMin % 60;
+      const label = h > 0 ? `${h}시간${m > 0 ? ` ${m}분` : ""}` : `${m}분`;
+      return NextResponse.json(
+        { error: `예약이 마감됐어요. 수업 시작 ${label} 전까지만 예약할 수 있어요.`, closed: true },
+        { status: 409 }
+      );
+    }
+  }
 
   // 유효 수강권(그 상품). 횟수제는 잔여>0 필요, 기간제는 유효(만료 전)면 OK.
   const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);

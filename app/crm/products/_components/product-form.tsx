@@ -32,6 +32,7 @@ export interface ProductInitial {
   attendance_mileage_earn?: number;
   capacity?: number;
   class_cancel_before_min?: number | null;
+  class_book_before_min?: number | null;
   session_minutes?: number;
   daily_check_in_limit?: number;
   daily_time_limit_enabled?: boolean;
@@ -66,6 +67,7 @@ interface ExistingProduct {
   session_minutes: number | null;
   capacity: number | null;
   class_cancel_before_min?: number | null;
+  class_book_before_min?: number | null;
 }
 
 interface TypeOption {
@@ -266,6 +268,10 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
   const [classCancelBeforeMin, setClassCancelBeforeMin] = useState(
     initial?.class_cancel_before_min ?? 60
   );
+  // 클래스 예약 마감 시간(분, 10분 단위): 수업 시작 N분 전까지만 예약 가능
+  const [classBookBeforeMin, setClassBookBeforeMin] = useState(
+    initial?.class_book_before_min ?? 0
+  );
 
   // 회원권 전용: 일일 입장 가능 횟수 (0 = 무제한 sentinel)
   const [dailyCheckInLimit, setDailyCheckInLimit] = useState<number>(
@@ -438,6 +444,7 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
           type === "class" || type === "personal" || type === "group"
             ? Math.max(0, classCancelBeforeMin)
             : 60,
+        class_book_before_min: type === "class" ? Math.max(0, classBookBeforeMin) : 0,
         session_minutes:
           type === "personal" || type === "group" || type === "class" ? sessionMinutes ?? 0 : 0,
         daily_check_in_limit: effectiveDaily,
@@ -636,6 +643,64 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
             ))}
           </div>
 
+        </Section>
+      )}
+
+      {/* 클래스 예약 마감 설정 */}
+      {type === "class" && (
+        <Section title="클래스 예약 마감 설정">
+          <FieldLabel>예약 마감 시간</FieldLabel>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">수업 시작</span>
+            <input
+              type="number"
+              min={0}
+              max={168}
+              value={Math.floor(classBookBeforeMin / 60)}
+              onChange={(e) => {
+                const h = Math.max(0, Math.min(168, Number(e.target.value) || 0));
+                setClassBookBeforeMin(h * 60 + (classBookBeforeMin % 60));
+              }}
+              className={`${crmInputClass} max-w-[90px] text-center`}
+            />
+            <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">시간</span>
+            <input
+              type="number"
+              min={0}
+              max={50}
+              step={10}
+              value={classBookBeforeMin % 60}
+              onChange={(e) => {
+                // 10분 단위로 반올림(0~50)
+                const raw = Math.max(0, Math.min(59, Number(e.target.value) || 0));
+                const m = Math.min(50, Math.round(raw / 10) * 10);
+                setClassBookBeforeMin(Math.floor(classBookBeforeMin / 60) * 60 + m);
+              }}
+              className={`${crmInputClass} max-w-[90px] text-center`}
+            />
+            <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">분 전까지 예약 가능 (10분 단위)</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {[0, 30, 60, 120, 180, 360, 720, 1440].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setClassBookBeforeMin(n)}
+                className={`px-2.5 py-1 rounded-full text-[12px] font-medium border whitespace-nowrap
+                  ${classBookBeforeMin === n
+                    ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                    : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                  }`}
+              >
+                {n === 0 ? "제한 없음" : n < 60 ? `${n}분 전` : `${n / 60}시간 전`}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[11.5px] text-[#A89B80] leading-relaxed">
+            {classBookBeforeMin === 0
+              ? "0시간 0분 = 수업 시작 직전까지 예약할 수 있어요."
+              : `수업 시작 ${Math.floor(classBookBeforeMin / 60)}시간 ${classBookBeforeMin % 60}분 전이 지나면 회원 앱에서 이 수업이 사라지고 예약할 수 없어요. (예: 1시간 설정 + 11:00 수업 → 10:00까지 예약 가능, 10:01부터 불가)`}
+          </p>
         </Section>
       )}
 

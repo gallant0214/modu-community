@@ -27,16 +27,28 @@ export interface ProductDetail {
   attendance_mileage_earn?: number;
   capacity: number;
   session_minutes: number;
+  class_cancel_before_min?: number | null;
+  class_book_before_min?: number | null;
   daily_check_in_limit?: number;
   daily_time_limit_enabled?: boolean;
   components?: import("./product-form").BundleComponent[];
   status: string;
 }
 
+/** 90 → "1시간 30분", 60 → "1시간", 30 → "30분" */
+function beforeLabel(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h > 0 && m > 0) return `${h}시간 ${m}분`;
+  if (h > 0) return `${h}시간`;
+  return `${m}분`;
+}
+
 const TYPE_LABEL: Record<string, string> = {
   membership: "회원권",
   group: "그룹 수업",
   personal: "개인 레슨",
+  class: "클래스수업",
   locker: "락커",
   apparel: "운동복",
   goods: "운동 용품",
@@ -112,11 +124,25 @@ export function ProductDetailModal({ product, typeLabel, onClose, onEdit, onDele
           {p.billing_mode === "period" && p.service_days ? (
             <Field label="서비스 기간(일)">{p.service_days}일</Field>
           ) : null}
-          {(p.type === "personal" || p.type === "group") && (
+          {(p.type === "personal" || p.type === "group" || p.type === "class") && (
             <Field label="수업 시간">{p.session_minutes}분</Field>
           )}
-          {p.type === "group" && (
-            <Field label="그룹 정원">{p.capacity}명</Field>
+          {(p.type === "group" || p.type === "class") && (
+            <Field label={p.type === "class" ? "클래스 정원" : "그룹 정원"}>{p.capacity}명</Field>
+          )}
+          {p.type === "class" && (
+            <Field label="예약 마감">
+              {p.class_book_before_min
+                ? `수업 시작 ${beforeLabel(p.class_book_before_min)} 전까지`
+                : "제한 없음 (시작 직전까지)"}
+            </Field>
+          )}
+          {(p.type === "personal" || p.type === "group" || p.type === "class") && (
+            <Field label="취소 마감">
+              {p.class_cancel_before_min
+                ? `수업 시작 ${beforeLabel(p.class_cancel_before_min)} 전까지`
+                : "제한 없음 (시작 직전까지)"}
+            </Field>
           )}
           <Field label="운영 요일">{daysText || "—"}</Field>
           <Field label="하루 이용 가능 시간">
