@@ -14,7 +14,7 @@ import {
 } from "../_components/crm-labels";
 import { useColumnWidths, ResizableTh } from "../_components/use-column-widths";
 import { PeriodSelect, inPeriod } from "../_components/period-filter";
-import { unitToDays } from "@/app/lib/duration-convert";
+import { unitToDays, computeExpiryYmd } from "@/app/lib/duration-convert";
 import { MembershipDetailModal } from "./_components/membership-detail-modal";
 
 const M_COLS = [
@@ -673,6 +673,9 @@ function IssueModal({
   const [pickedProductId, setPickedProductId] = useState<number | "">("");
   const [planName, setPlanName] = useState("1개월 헬스 이용권");
   const [duration, setDuration] = useState(30);
+  // 개월/년 상품은 달력 기준 만료. 일수 직접입력이면 unit=day.
+  const [durationUnit, setDurationUnit] = useState<string>("day");
+  const [durationValue, setDurationValue] = useState<number>(30);
   const [serviceDays, setServiceDays] = useState(0);
   const [showServiceDays, setShowServiceDays] = useState(false);
   const [priceWon, setPriceWon] = useState(0);
@@ -729,6 +732,8 @@ function IssueModal({
       setPickedProductId("");
       setPlanName("1개월 헬스 이용권");
       setDuration(30);
+      setDurationUnit("day");
+      setDurationValue(30);
       setServiceDays(0);
       setShowServiceDays(false);
       setPriceWon(0);
@@ -783,19 +788,37 @@ function IssueModal({
     setPlanName(`${p.name} (신규)`);
     setPriceWon(p.price_won);
     if (p.billing_mode === "period") {
-      // 12개월 = 365일이 되도록 공통 헬퍼로 환산 (구 로직: month * 30 → 360일 오차)
+      // 개월/년 상품은 원본 value+unit 유지(달력 만료). 일수 표시는 unitToDays 로.
       const base = unitToDays(p.duration_value ?? 0, p.duration_unit);
-      setDuration(Math.max(1, base + (p.service_days || 0)));
+      setDuration(Math.max(1, base));
+      setDurationUnit(p.duration_unit ?? "day");
+      setDurationValue(p.duration_value ?? 0);
+      const sd = p.service_days || 0;
+      setServiceDays(sd);
+      if (sd > 0) setShowServiceDays(true);
     }
   };
 
-  // duration/서비스일수 변경 시 expires_at 자동 계산
+  // duration/서비스일수 변경 시 expires_at 자동 계산.
+  // 개월/년은 달력 기준(시작일+N개월-1일) + 서비스일수, 일수는 시작일+일수+서비스일수.
   useEffect(() => {
-    if (!startDate || !duration) return;
-    const d = new Date(startDate);
-    d.setDate(d.getDate() + Number(duration) + Number(serviceDays || 0));
-    setExpiresAt(d.toISOString().slice(0, 10));
-  }, [startDate, duration, serviceDays]);
+    if (!startDate) return;
+    let ymd: string;
+    if ((durationUnit === "month" || durationUnit === "year") && durationValue > 0) {
+      ymd = computeExpiryYmd(startDate, durationValue, durationUnit);
+      if (serviceDays > 0) {
+        const d = new Date(`${ymd}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + Number(serviceDays));
+        ymd = d.toISOString().slice(0, 10);
+      }
+    } else {
+      if (!duration) return;
+      const d = new Date(startDate);
+      d.setDate(d.getDate() + Number(duration) + Number(serviceDays || 0));
+      ymd = d.toISOString().slice(0, 10);
+    }
+    setExpiresAt(ymd);
+  }, [startDate, duration, serviceDays, durationValue, durationUnit]);
 
   const search = async () => {
     const q = memberQuery.trim();
@@ -954,7 +977,13 @@ function IssueModal({
               min={1}
               className={crmInputClass}
               value={duration}
-              onChange={(e) => setDuration(Number(e.target.value) || 0)}
+              onChange={(e) => {
+                const n = Number(e.target.value) || 0;
+                setDuration(n);
+                // 일수를 직접 수정하면 일(day) 기준으로 전환
+                setDurationUnit("day");
+                setDurationValue(n);
+              }}
             />
           </CrmField>
           <CrmField label="결제 금액 (원)">

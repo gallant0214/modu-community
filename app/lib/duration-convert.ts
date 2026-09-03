@@ -37,6 +37,39 @@ export function unitToDays(
   return v; // day / null / 알 수 없음
 }
 
+/**
+ * 시작일 + 기간(value, unit) → 만료일(YYYY-MM-DD).
+ * 🚨 개월/년은 '일수 환산'이 아니라 '달력' 기준으로 계산한다.
+ *   만료일 = 시작일 + N개월 - 1일.
+ *   예) 2024-09-02 + 3개월 → 2024-12-02 - 1일 = 2024-12-01
+ *       2025-01-02 + 3개월 → 2025-04-02 - 1일 = 2025-04-01
+ *   월말 시작(대상 월에 같은 일자 없음)은 그 달 마지막 날로 클램프 후 -1일.
+ * 일(day)/미지정은 기존대로 '시작일 + value일'.
+ */
+export function computeExpiryYmd(
+  startYmd: string,
+  value: number | null | undefined,
+  unit: string | null | undefined
+): string {
+  const v = Math.max(0, Math.floor(Number(value) || 0));
+  const [y, m, d] = (startYmd || "").split("-").map(Number);
+  if (!y || !m || !d) return startYmd;
+  if ((unit === "month" || unit === "year") && v > 0) {
+    const months = unit === "year" ? v * 12 : v;
+    const totalM = y * 12 + (m - 1) + months;
+    const ny = Math.floor(totalM / 12);
+    const nm = totalM % 12; // 0-based
+    const lastDay = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate();
+    const nd = Math.min(d, lastDay);
+    const dt = new Date(Date.UTC(ny, nm, nd));
+    dt.setUTCDate(dt.getUTCDate() - 1); // 시작일 + N개월 - 1일
+    return dt.toISOString().slice(0, 10);
+  }
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + v);
+  return dt.toISOString().slice(0, 10);
+}
+
 /** duration_unit → 한글 라벨 (day 일 / month 개월 / year 년) */
 export function unitLabel(unit: string | null | undefined): string {
   if (unit === "year") return "년";

@@ -17,7 +17,7 @@ import {
 import { CrmModal, CrmField, crmInputClass } from "../../_components/crm-modal";
 import { LockerPickerModal } from "../../_components/locker-picker-modal";
 import { CrmLineChart } from "../../_components/crm-line-chart";
-import { unitToDays, formatDuration } from "@/app/lib/duration-convert";
+import { unitToDays, formatDuration, computeExpiryYmd } from "@/app/lib/duration-convert";
 import { computeFaceDescriptor } from "../../_lib/faceapi";
 
 interface Member {
@@ -6025,7 +6025,7 @@ async function postBundleComponent(
   );
   const expires = isCount
     ? UNLIMITED_EXPIRY
-    : addDaysYmd(args.startDate, durationDays || 30);
+    : computeExpiryYmd(args.startDate, comp.duration_value ?? 0, comp.duration_unit ?? "day");
   try {
     let res: Response;
     if (comp.type === "membership") {
@@ -6092,7 +6092,7 @@ async function postBundleComponent(
       } catch {
         /* 조회 실패 시 미배정 대여권만 생성(기존 동작) */
       }
-      const lockerExpires = addDaysYmd(lockerStart, durationDays || 30);
+      const lockerExpires = computeExpiryYmd(lockerStart, comp.duration_value ?? 0, comp.duration_unit ?? "day");
       res = await fetch("/api/crm/rentals", {
         method: "POST",
         headers,
@@ -6232,6 +6232,9 @@ function UsageIssueModal({
     () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
   );
   const [durationDays, setDurationDays] = useState<number>(0);
+  // 개월/년 상품은 달력 기준 만료 계산을 위해 원본 value+unit 도 추적. 일수 직접입력이면 unit=day.
+  const [durationUnit, setDurationUnit] = useState<string>("day");
+  const [durationValue, setDurationValue] = useState<number>(0);
   const [memo, setMemo] = useState("");
   const [sellerId, setSellerId] = useState<number | "">("");
   const [products, setProducts] = useState<UsageProduct[]>([]);
@@ -6262,6 +6265,8 @@ function UsageIssueModal({
     startDate: string;
     purchaseDate: string;
     durationDays: number;
+    durationValue: number;
+    durationUnit: string;
     lockerId?: number;
     lockerLabel?: string;
     lockerPassword?: string;
@@ -6326,6 +6331,8 @@ function UsageIssueModal({
     setMileageUse(0);
     setStartDate("");
     setDurationDays(0);
+    setDurationUnit("day");
+    setDurationValue(0);
     setMemo("");
     setLockerZone("");
     setLockerId("");
@@ -6365,6 +6372,8 @@ function UsageIssueModal({
       startDate,
       purchaseDate: purchaseDate || new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10),
       durationDays,
+      durationValue: durationValue > 0 ? durationValue : durationDays,
+      durationUnit: durationValue > 0 ? durationUnit : "day",
       lockerId: type === "locker" && lockerId ? Number(lockerId) : undefined,
       lockerLabel: loc ? `${loc.zone_name} ${loc.number}번` : undefined,
       lockerPassword: type === "locker" ? lockerPassword : undefined,
@@ -6381,9 +6390,9 @@ function UsageIssueModal({
 
   const expiresAt = (() => {
     if (!startDate) return "";
-    const d = new Date(`${startDate}T00:00:00Z`);
-    d.setUTCDate(d.getUTCDate() + Math.max(1, durationDays));
-    return d.toISOString().slice(0, 10);
+    // 개월/년은 달력 기준(시작일+N개월-1일), 일수는 그대로. 일수 직접입력이면 unit=day.
+    if (durationValue > 0) return computeExpiryYmd(startDate, durationValue, durationUnit);
+    return computeExpiryYmd(startDate, Math.max(1, durationDays), "day");
   })();
 
   // 초기화
@@ -6404,6 +6413,8 @@ function UsageIssueModal({
       // 구매일은 매 오픈마다 오늘(KST)로 초기화
       setPurchaseDate(new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10));
       setDurationDays(0);
+      setDurationUnit("day");
+      setDurationValue(0);
       setMemo("");
       setLockerZone("");
       setLockerId("");
@@ -6435,6 +6446,8 @@ function UsageIssueModal({
     setMileageUse(0);
     setStartDate("");
     setDurationDays(0);
+    setDurationUnit("day");
+    setDurationValue(0);
     setMemo("");
     setLockerZone("");
     setLockerId("");
@@ -6527,11 +6540,15 @@ function UsageIssueModal({
     setStartDate(new Date().toISOString().slice(0, 10)); // 즉시 fallback
     fetchChainedStart(type).then(setStartDate);
     if (p.duration_value && p.duration_unit) {
-      // 12개월 = 365일이 되도록 unitToDays 공통 헬퍼 사용
+      // 개월/년 상품은 원본 value+unit 유지(달력 만료). 일수 표시는 unitToDays 로.
       setDurationDays(Math.max(1, unitToDays(p.duration_value, p.duration_unit)));
+      setDurationUnit(p.duration_unit);
+      setDurationValue(p.duration_value);
     } else {
       // 기간 미설정 상품은 기본 30일로
       setDurationDays(30);
+      setDurationUnit("day");
+      setDurationValue(30);
     }
   };
 
@@ -6542,9 +6559,9 @@ function UsageIssueModal({
   ): Promise<{ ok: boolean; error?: string }> => {
     const lineExpires = (() => {
       if (!line.startDate) return "";
-      const d = new Date(`${line.startDate}T00:00:00Z`);
-      d.setUTCDate(d.getUTCDate() + Math.max(1, line.durationDays));
-      return d.toISOString().slice(0, 10);
+      // 개월/년은 달력 기준(시작일+N개월-1일), 일수는 그대로.
+      if (line.durationValue > 0) return computeExpiryYmd(line.startDate, line.durationValue, line.durationUnit);
+      return computeExpiryYmd(line.startDate, Math.max(1, line.durationDays), "day");
     })();
     try {
       let res: Response;
@@ -6695,6 +6712,8 @@ function UsageIssueModal({
           startDate,
           purchaseDate: purchaseDate || new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10),
           durationDays,
+          durationValue: durationValue > 0 ? durationValue : durationDays,
+          durationUnit: durationValue > 0 ? durationUnit : "day",
           lockerId: type === "locker" ? (lockerId as number) : undefined,
           lockerLabel: loc ? `${loc.zone_name} ${loc.number}번` : undefined,
           lockerPassword: type === "locker" ? lockerPassword : undefined,
@@ -6988,15 +7007,22 @@ function UsageIssueModal({
               min={1}
               className={crmInputClass}
               value={durationDays > 0 ? durationDays : ""}
-              onChange={(e) =>
-                setDurationDays(Math.max(0, Number(e.target.value) || 0))
-              }
+              onChange={(e) => {
+                const n = Math.max(0, Number(e.target.value) || 0);
+                setDurationDays(n);
+                // 일수를 직접 수정하면 일(day) 기준으로 전환
+                setDurationUnit("day");
+                setDurationValue(n);
+              }}
               placeholder="상품 선택 후 자동 입력"
             />
           </CrmField>
         </div>
         <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 -mt-1">
           만료일: <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{expiresAt || "—"}</strong>
+          {(durationUnit === "month" || durationUnit === "year") && durationValue > 0 && (
+            <span className="ml-1 text-[#8C8270]">({durationValue}{durationUnit === "year" ? "년" : "개월"} · 달력 기준)</span>
+          )}
         </div>
 
         <CrmField label="판매자" required>
@@ -7294,7 +7320,7 @@ function UsageIssueModal({
                     <li key={c.key} className="px-2.5 py-1.5 flex items-center justify-between gap-2">
                       <span className="truncate text-[#3A342A] dark:text-zinc-200">{c.name}</span>
                       <span className="text-[#8C8270] shrink-0 tabular-nums">
-                        {bulkStartDate} ~ {addDaysYmd(bulkStartDate, Math.max(1, c.durationDays))}
+                        {bulkStartDate} ~ {c.durationValue > 0 ? computeExpiryYmd(bulkStartDate, c.durationValue, c.durationUnit) : addDaysYmd(bulkStartDate, Math.max(1, c.durationDays))}
                       </span>
                     </li>
                   ))}
@@ -7583,13 +7609,15 @@ function PassIssueModal({
   const [issuedAt, setIssuedAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [durationDays, setDurationDays] = useState(40);
+  // 개월/년 수강권은 달력 기준 만료. 일수 직접입력/service_days 는 unit=day.
+  const [durationUnit, setDurationUnit] = useState<string>("day");
+  const [durationValue, setDurationValue] = useState<number>(40);
   const [unlimited, setUnlimited] = useState(false);
   const expiresAt = (() => {
     if (unlimited) return "9999-12-31";
     if (!startDate) return "";
-    const d = new Date(`${startDate}T00:00:00Z`);
-    d.setUTCDate(d.getUTCDate() + Math.max(0, durationDays));
-    return d.toISOString().slice(0, 10);
+    if (durationValue > 0) return computeExpiryYmd(startDate, durationValue, durationUnit);
+    return computeExpiryYmd(startDate, Math.max(0, durationDays), "day");
   })();
   const [memo, setMemo] = useState("");
   const [trainerId, setTrainerId] = useState<number | "">("");
@@ -7671,11 +7699,16 @@ function PassIssueModal({
     setPriceWon(p.price_won ?? 0);
     setDiscountWon(0);
     if (p.service_days && p.service_days > 0) {
+      // service_days = 일수 기준 유효기간 → 달력계산 제외(unit=day)
       setDurationDays(p.service_days);
+      setDurationUnit("day");
+      setDurationValue(p.service_days);
       setUnlimited(false);
     } else if (p.duration_value && p.duration_value > 0 && p.duration_unit) {
-      // 12개월 = 365일이 되도록 unitToDays 공통 헬퍼 사용
+      // 개월/년 상품은 원본 value+unit 유지(달력 만료). 일수 표시는 unitToDays 로.
       setDurationDays(Math.max(1, unitToDays(p.duration_value, p.duration_unit)));
+      setDurationUnit(p.duration_unit);
+      setDurationValue(p.duration_value);
       setUnlimited(false);
     } else {
       // 유효기간 미설정(0) = 무기한
@@ -8048,9 +8081,12 @@ function PassIssueModal({
                 disabled={unlimited}
                 className={`${crmInputClass} pr-9 disabled:opacity-50`}
                 value={durationDays}
-                onChange={(e) =>
-                  setDurationDays(Math.max(0, Number(e.target.value) || 0))
-                }
+                onChange={(e) => {
+                  const n = Math.max(0, Number(e.target.value) || 0);
+                  setDurationDays(n);
+                  setDurationUnit("day");
+                  setDurationValue(n);
+                }}
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] text-[#A89B80]">
                 일
