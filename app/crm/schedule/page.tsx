@@ -50,6 +50,20 @@ interface ScheduleEvent {
   ends_at: string;
 }
 
+/** 클래스 수업 세션 (crm_class_sessions) — 정원을 여러 회원이 공유하는 그룹 수업 */
+interface ClassSession {
+  id: number;
+  product_id: number;
+  product_name: string | null;
+  trainer_member_id: number | null;
+  trainer_name: string | null;
+  title: string | null;
+  starts_at: string;
+  ends_at: string;
+  capacity: number;
+  booked_count: number;
+}
+
 interface StaffOption {
   id: number;
   display_name: string;
@@ -126,6 +140,7 @@ export default function CrmSchedulePage() {
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
+  const [classSessions, setClassSessions] = useState<ClassSession[]>([]);
   const [role, setRole] = useState<"owner" | "admin" | "manager" | "trainer" | null>(null);
   const [perms, setPerms] = useState<Record<string, boolean>>({});
   const [myMemberId, setMyMemberId] = useState<number | null>(null);
@@ -135,6 +150,7 @@ export default function CrmSchedulePage() {
   const [picked, setPicked] = useState<Reservation | null>(null);
   const [editing, setEditing] = useState<Reservation | null>(null);
   const [pickedEvent, setPickedEvent] = useState<ScheduleEvent | null>(null);
+  const [pickedClass, setPickedClass] = useState<ClassSession | null>(null);
   const [newSlot, setNewSlot] = useState<{
     trainerId: number;
     trainerName: string;
@@ -164,13 +180,18 @@ export default function CrmSchedulePage() {
         canPickTrainer && selectedTrainerId !== "all"
           ? `&trainer_id=${selectedTrainerId}`
           : "";
-      const [resR, resE] = await Promise.all([
+      const [resR, resE, resC] = await Promise.all([
         // all=1: 웹 CRM은 센터 전체 조회 (앱은 이 파라미터 없이 본인 것만)
         fetch(`/api/crm/reservations?from=${range.from}&to=${range.to}&all=1${trainerQs}`, {
           headers: { authorization: `Bearer ${token}` },
           cache: "no-store",
         }),
         fetch(`/api/crm/schedule-events?from=${range.from}&to=${range.to}&all=1${trainerQs}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }),
+        // 클래스 수업 세션(정원 공유 그룹수업)도 같은 기간으로 조회해 그리드에 함께 표시
+        fetch(`/api/crm/class-sessions?from=${range.from}&to=${range.to}`, {
           headers: { authorization: `Bearer ${token}` },
           cache: "no-store",
         }),
@@ -181,6 +202,10 @@ export default function CrmSchedulePage() {
       if (resE.ok) {
         const dataE = await resE.json();
         setEvents(dataE.events ?? []);
+      }
+      if (resC.ok) {
+        const dataC = await resC.json();
+        setClassSessions(dataC.sessions ?? []);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
@@ -430,9 +455,11 @@ export default function CrmSchedulePage() {
           trainers={visibleTrainers}
           reservations={reservations}
           events={events}
+          classSessions={classSessions}
           anchorDate={anchor}
           onPick={setPicked}
           onPickEvent={setPickedEvent}
+          onPickClass={setPickedClass}
           onReschedule={proposeReschedule}
           strictTrainerId={selectedTrainerId === "all" ? null : selectedTrainerId}
           onSlotClick={(trainer, h, m) => {
@@ -451,9 +478,11 @@ export default function CrmSchedulePage() {
           anchor={anchor}
           reservations={reservations}
           events={events}
+          classSessions={classSessions}
           trainers={visibleTrainers}
           onPick={setPicked}
           onPickEvent={setPickedEvent}
+          onPickClass={setPickedClass}
           onReschedule={proposeReschedule}
           strictTrainerId={selectedTrainerId === "all" ? null : selectedTrainerId}
           onSlotClick={(ymd, h, m, defaultTrainer) => {
@@ -557,6 +586,18 @@ export default function CrmSchedulePage() {
               return;
             }
             setPickedEvent(null);
+            load();
+          }}
+        />
+      )}
+
+      {pickedClass && (
+        <ClassSessionDialog
+          session={pickedClass}
+          canCancel={perms["schedule.class_create"] === true}
+          onClose={() => setPickedClass(null)}
+          onCancelled={() => {
+            setPickedClass(null);
             load();
           }}
         />
@@ -1000,6 +1041,157 @@ function MemberQuickModal({
   );
 }
 
+/** 클래스 수업 상세 다이얼로그 — 예약 명단 + 수업 취소 */
+function ClassSessionDialog({
+  session,
+  canCancel,
+  onClose,
+  onCancelled,
+}: {
+  session: ClassSession;
+  canCancel: boolean;
+  onClose: () => void;
+  onCancelled: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [bookings, setBookings] = useState<
+    { id: number; member_name: string; member_phone: string | null; status: string }[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`/api/crm/class-sessions/${session.id}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) setBookings((await res.json()).bookings ?? []);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [session.id, getIdToken]);
+
+  const active = bookings.filter((b) => b.status === "booked" || b.status === "attended");
+
+  const cancelSession = async () => {
+    const msg =
+      active.length > 0
+        ? `예약된 회원 ${active.length}명이 있어요. 취소하면 예약이 모두 취소되고 차감이 원복됩니다. 진행할까요?`
+        : "이 클래스 수업을 취소할까요?";
+    if (!window.confirm(msg)) return;
+    setWorking(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/class-sessions/${session.id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d?.error || "취소 실패");
+      onCancelled();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-sm rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-xl p-5">
+        <h2 className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">클래스 수업</h2>
+        <div className="mt-2 text-[13px] text-[#6B5D47] dark:text-zinc-400 space-y-1">
+          <div>
+            <span className="text-[11.5px] text-[#A89B80] mr-1.5">수업</span>
+            <span className="font-medium text-[#3A342A] dark:text-zinc-200">
+              {session.title || session.product_name || "클래스 수업"}
+            </span>
+          </div>
+          <div>
+            <span className="text-[11.5px] text-[#A89B80] mr-1.5">시간</span>
+            {fmtKstMd(session.starts_at)} {fmtKstHm(session.starts_at)} ~ {fmtKstHm(session.ends_at)}
+          </div>
+          {session.trainer_name && (
+            <div>
+              <span className="text-[11.5px] text-[#A89B80] mr-1.5">담당</span>
+              {session.trainer_name}
+            </div>
+          )}
+          <div>
+            <span className="text-[11.5px] text-[#A89B80] mr-1.5">정원</span>
+            <span className="font-medium text-[#3A342A] dark:text-zinc-200">
+              {session.booked_count}/{session.capacity}명
+            </span>
+            {session.booked_count >= session.capacity && (
+              <span className="ml-1.5 text-[11.5px] text-[#B47B2A]">마감</span>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200 mb-1.5">
+            예약 명단
+          </div>
+          {loading ? (
+            <div className="py-3 text-center text-[12.5px] text-[#8C8270]">불러오는 중…</div>
+          ) : active.length === 0 ? (
+            <div className="px-3 py-3 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-lg">
+              아직 예약한 회원이 없어요.
+            </div>
+          ) : (
+            <ul className="space-y-1 max-h-[200px] overflow-y-auto">
+              {active.map((b) => (
+                <li
+                  key={b.id}
+                  className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 text-[12.5px] text-[#3A342A] dark:text-zinc-200"
+                >
+                  <span className="truncate font-medium">{b.member_name}</span>
+                  <span className="shrink-0 text-[11px] text-[#8C8270]">
+                    {b.status === "attended" ? "출석" : "예약"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {error && (
+          <div className="mt-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[12.5px] text-red-700 dark:text-red-300">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-4 flex gap-2">
+          {canCancel && (
+            <button
+              onClick={cancelSession}
+              disabled={working}
+              className="flex-1 px-4 py-2.5 rounded-lg border border-red-300 text-red-600 dark:border-red-900 dark:text-red-400 text-[13.5px] font-semibold hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
+            >
+              {working ? "취소 중…" : "수업 취소"}
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** 센터/개인 일정 상세 다이얼로그 (삭제 지원) */
 function EventDialog({
   event,
@@ -1186,9 +1378,11 @@ function DayView({
   trainers,
   reservations,
   events,
+  classSessions,
   anchorDate,
   onPick,
   onPickEvent,
+  onPickClass,
   onSlotClick,
   onReschedule,
   strictTrainerId,
@@ -1196,9 +1390,11 @@ function DayView({
   trainers: StaffOption[];
   reservations: Reservation[];
   events: ScheduleEvent[];
+  classSessions: ClassSession[];
   anchorDate: string;
   onPick: (r: Reservation) => void;
   onPickEvent: (e: ScheduleEvent) => void;
+  onPickClass: (c: ClassSession) => void;
   onSlotClick: (trainer: StaffOption, h: number, m: number) => void;
   onReschedule: (
     r: Reservation,
@@ -1354,11 +1550,14 @@ function DayView({
             const evList = events.filter(
               (e) => e.type === "personal" && e.trainer_member_id === t.id
             );
-            // 예약·개인일정 겹침을 가로 분할로 배치.
+            // 클래스 수업도 담당 강사 컬럼에 배치.
+            const clsList = classSessions.filter((c) => c.trainer_member_id === t.id);
+            // 예약·개인일정·클래스 겹침을 가로 분할로 배치.
             type Lay = { id: string; starts_at: string; ends_at: string };
             const layInput: Lay[] = [
               ...list.map((r) => ({ id: `r-${r.id}`, starts_at: r.starts_at, ends_at: r.ends_at })),
               ...evList.map((e) => ({ id: `e-${e.id}`, starts_at: e.starts_at, ends_at: e.ends_at })),
+              ...clsList.map((c) => ({ id: `c-${c.id}`, starts_at: c.starts_at, ends_at: c.ends_at })),
             ];
             const layout = layoutOverlaps(layInput);
             const laneStyle = (id: string) => {
@@ -1410,6 +1609,36 @@ function DayView({
                     >
                       <div className="truncate font-semibold">
                         [개인] {e.title}
+                      </div>
+                    </button>
+                  );
+                })}
+                {clsList.map((c) => {
+                  const top = offsetPx(c.starts_at);
+                  const bottom = offsetPx(c.ends_at);
+                  const height = Math.max(SLOT_HEIGHT_PX * 0.9, bottom - top);
+                  const full = c.booked_count >= c.capacity;
+                  return (
+                    <button
+                      type="button"
+                      key={`cls-${c.id}`}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        onPickClass(c);
+                      }}
+                      className={`absolute px-2 py-1 rounded-md text-left text-[11.5px] font-medium border cursor-pointer
+                        ${full
+                          ? "bg-[#B47B2A]/15 text-[#8F5F1E] border-[#B47B2A]/45 hover:bg-[#B47B2A]/25"
+                          : "bg-[#2F9E8F]/15 text-[#217A6E] border-[#2F9E8F]/45 hover:bg-[#2F9E8F]/25"
+                        }`}
+                      style={{ top: `${top}px`, height: `${height}px`, ...laneStyle(`c-${c.id}`) }}
+                      title={`${c.product_name ?? "클래스"} · ${fmtKstHm(c.starts_at)}~${fmtKstHm(c.ends_at)} · ${c.booked_count}/${c.capacity}명`}
+                    >
+                      <div className="truncate font-semibold">
+                        [클래스] {c.title || c.product_name || "클래스 수업"}
+                      </div>
+                      <div className="truncate text-[10.5px] opacity-80">
+                        {c.booked_count}/{c.capacity}명{full ? " · 마감" : ""}
                       </div>
                     </button>
                   );
@@ -1644,9 +1873,11 @@ function WeekView({
   anchor,
   reservations,
   events,
+  classSessions,
   trainers,
   onPick,
   onPickEvent,
+  onPickClass,
   onSlotClick,
   onReschedule,
   strictTrainerId,
@@ -1654,9 +1885,11 @@ function WeekView({
   anchor: string;
   reservations: Reservation[];
   events: ScheduleEvent[];
+  classSessions: ClassSession[];
   trainers: StaffOption[];
   onPick: (r: Reservation) => void;
   onPickEvent: (e: ScheduleEvent) => void;
+  onPickClass: (c: ClassSession) => void;
   onSlotClick: (ymd: string, h: number, m: number, trainer: StaffOption | null) => void;
   onReschedule: (
     r: Reservation,
@@ -1764,11 +1997,13 @@ function WeekView({
             void strictTrainerId;
             // 서버가 trainer_id 로 이미 필터함. 클라이언트는 날짜 매칭만.
             const evList = events.filter((e) => kstDateKey(e.starts_at) === key);
-            // 겹치는 아이템들을 나란히 배치하기 위한 좌표. 예약(res-N) + 이벤트(ev-N) 통합 계산.
+            const clsList = classSessions.filter((c) => kstDateKey(c.starts_at) === key);
+            // 겹치는 아이템들을 나란히 배치하기 위한 좌표. 예약(r-N) + 이벤트(e-N) + 클래스(c-N) 통합 계산.
             type Lay = { id: string; starts_at: string; ends_at: string };
             const layInput: Lay[] = [
               ...list.map((r) => ({ id: `r-${r.id}`, starts_at: r.starts_at, ends_at: r.ends_at })),
               ...evList.map((e) => ({ id: `e-${e.id}`, starts_at: e.starts_at, ends_at: e.ends_at })),
+              ...clsList.map((c) => ({ id: `c-${c.id}`, starts_at: c.starts_at, ends_at: c.ends_at })),
             ];
             const layout = layoutOverlaps(layInput);
             const laneStyle = (id: string) => {
@@ -1836,6 +2071,36 @@ function WeekView({
                       <div className="truncate font-semibold">
                         {e.type === "center" ? "센터·" : "개인·"}
                         {e.title}
+                      </div>
+                    </button>
+                  );
+                })}
+                {clsList.map((c) => {
+                  const top = offsetPx(c.starts_at);
+                  const bottom = offsetPx(c.ends_at);
+                  const height = Math.max(SLOT_HEIGHT_PX * 0.9, bottom - top);
+                  const full = c.booked_count >= c.capacity;
+                  return (
+                    <button
+                      type="button"
+                      key={`cls-${c.id}`}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        onPickClass(c);
+                      }}
+                      className={`absolute px-1 py-0.5 rounded text-left text-[11px] font-medium border cursor-pointer
+                        ${full
+                          ? "bg-[#B47B2A]/15 text-[#8F5F1E] border-[#B47B2A]/45 hover:bg-[#B47B2A]/25"
+                          : "bg-[#2F9E8F]/15 text-[#217A6E] border-[#2F9E8F]/45 hover:bg-[#2F9E8F]/25"
+                        }`}
+                      style={{ top: `${top}px`, height: `${height}px`, ...laneStyle(`c-${c.id}`) }}
+                      title={`${c.product_name ?? "클래스"} · ${fmtKstHm(c.starts_at)}~${fmtKstHm(c.ends_at)} · ${c.booked_count}/${c.capacity}명`}
+                    >
+                      <div className="truncate font-semibold">
+                        클래스·{c.title || c.product_name || "수업"}
+                      </div>
+                      <div className="truncate text-[10.5px] opacity-80">
+                        {c.booked_count}/{c.capacity}
                       </div>
                     </button>
                   );

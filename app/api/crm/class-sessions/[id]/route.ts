@@ -51,7 +51,7 @@ export async function GET(
 /**
  * DELETE /api/crm/class-sessions/[id] — 클래스 세션 취소.
  * 예약한 회원들의 차감(consumed) 세션은 되돌려주고(잔여 +1) 예약을 취소한다.
- * 권한: schedule.reserve.
+ * 권한: schedule.class_create (클래스 수업 생성·취소 동일 권한).
  */
 export async function DELETE(
   request: Request,
@@ -59,8 +59,8 @@ export async function DELETE(
 ) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
-  if (!(await ctxHasPermission(ctx, "schedule.reserve"))) {
-    return NextResponse.json({ error: "예약 관리 권한이 없습니다" }, { status: 403 });
+  if (!(await ctxHasPermission(ctx, "schedule.class_create"))) {
+    return NextResponse.json({ error: "클래스 수업을 관리할 권한이 없습니다" }, { status: 403 });
   }
   const { id } = await params;
   const sessionId = Number(id);
