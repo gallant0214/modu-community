@@ -25,7 +25,7 @@ const WSS_URL = "wss://speech.platform.bing.com/consumer/speech/synthesize/reada
 const SEC_MS_GEC_VERSION = "1-130.0.2849.68";
 const WIN_EPOCH = 11644473600;
 const EDGE_VOICE = "ko-KR-SunHiNeural"; // 한국어 여성
-const EDGE_RATE = "+25%"; // 속도 1.25배
+const EDGE_RATE = "+50%"; // 속도 1.5배
 
 function generateSecMsGec(): string {
   let ticks = Date.now() / 1000 + WIN_EPOCH;

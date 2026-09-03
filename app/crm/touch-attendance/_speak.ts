@@ -124,8 +124,8 @@ export function speakMessages(messages: string[]) {
           if (_voiceSrc) { try { _voiceSrc.stop(); } catch { /* noop */ } }
           const src = ctx.createBufferSource();
           src.buffer = audioBuf;
-          // 속도가 오디오에 안 들어간 엔진(google)이면 재생속도로 1.25배 적용
-          if (speedMode === "client") src.playbackRate.value = 1.25;
+          // 속도가 오디오에 안 들어간 엔진(google)이면 재생속도로 1.5배 적용
+          if (speedMode === "client") src.playbackRate.value = 1.5;
           src.connect(ctx.destination);
           _voiceSrc = src;
           // 확인음(띵)과 겹치지 않게 살짝 뒤에 시작
