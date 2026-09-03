@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { setCenterCookie } from "../_components/crm-center-cookie";
+import { EMPLOYMENT_TYPE_LABEL } from "../_components/crm-labels";
 
 interface CenterCtx {
   centerMemberId: number;
@@ -12,6 +13,7 @@ interface CenterCtx {
   centerKind: "solo" | "center";
   region: string | null;
   role: "owner" | "admin" | "manager" | "trainer";
+  employmentType: string | null;
   gradeLabel: string | null;
   isSoloOwner: boolean;
   status: "active" | "pending";
@@ -149,7 +151,12 @@ export default function CrmSelectPage() {
                     <ContextCard
                       key={c.centerMemberId}
                       title={c.centerName || "센터"}
-                      badge={c.gradeLabel || ROLE_LABEL[c.role] || c.role}
+                      badge={
+                        (c.employmentType ? EMPLOYMENT_TYPE_LABEL[c.employmentType] : "") ||
+                        c.gradeLabel ||
+                        ROLE_LABEL[c.role] ||
+                        c.role
+                      }
                       sub={c.region ?? undefined}
                       disabled={!!blocked}
                       disabledLabel={blocked ?? undefined}

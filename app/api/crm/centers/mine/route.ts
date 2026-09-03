@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("crm_center_members")
     .select(
-      "id, center_id, role, grade_id, access_level, is_solo_owner, status, joined_at, crm_centers!inner(name, kind, region_sido, region_sigungu, address), crm_grades(label)"
+      "id, center_id, role, grade_id, employment_type, access_level, is_solo_owner, status, joined_at, crm_centers!inner(name, kind, region_sido, region_sigungu, address), crm_grades(label)"
     )
     .eq("firebase_uid", user.uid)
     .in("status", ["active", "pending"])
@@ -62,7 +62,9 @@ export async function GET(request: Request) {
         region: [c?.region_sido, c?.region_sigungu].filter(Boolean).join(" ") || null,
         address: c?.address ?? null,
         role: m.role,
-        // 표시용 등급 라벨(아르바이트·FC 등). 없으면 프론트에서 role 라벨로 폴백.
+        // 각 센터에 등록된 근무형태(정규직/아르바이트/프리랜서). 표시 1순위.
+        employmentType: m.employment_type ?? null,
+        // 표시용 등급 라벨(아르바이트·FC 등). 근무형태 없을 때 폴백.
         gradeLabel: (g as { label?: string } | null)?.label ?? null,
         accessLevel: m.is_solo_owner ? "admin" : m.access_level,
         isSoloOwner: m.is_solo_owner,
