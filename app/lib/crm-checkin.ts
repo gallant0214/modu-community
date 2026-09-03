@@ -108,10 +108,14 @@ export async function runCheckIn(
   let voiceMessages: string[] = [];
   try {
     const v = await buildAttendanceVoiceMessages(centerId, member);
-    voiceMessages = v.messages;
-    // 출석 포인트 적립이 없는(적립금 0) 회원은 환영 인사만 안내.
-    // (만료 회원은 만료 안내를 유지하므로 v.expired 는 제외)
-    if (!v.expired && (await attendanceEarnAmount(centerId, member.id)) <= 0) {
+    if (v.expired) {
+      // 만료(사용 가능 상품 없음) 회원 → 만료 안내 유지
+      voiceMessages = v.messages;
+    } else if ((await attendanceEarnAmount(centerId, member.id)) > 0) {
+      // 출석 포인트 적립되는 회원 → '적립되었습니다' 안내만
+      voiceMessages = ["출석 포인트가 적립되었습니다."];
+    } else {
+      // 적립 없는(적립금 0) 회원 → 환영 인사만
       voiceMessages = v.greeting;
     }
   } catch {
@@ -394,10 +398,12 @@ export async function getLatestQrCheckin(centerId: number, sinceId: number | nul
   let voice_messages: string[] = [];
   try {
     const v = await buildAttendanceVoiceMessages(centerId, member as CheckinMember);
-    voice_messages = v.messages;
-    // 적립 없는(적립금 0) 회원은 환영 인사만 (만료 회원 제외)
-    if (!v.expired && (await attendanceEarnAmount(centerId, member.id)) <= 0) {
-      voice_messages = v.greeting;
+    if (v.expired) {
+      voice_messages = v.messages; // 만료 안내
+    } else if ((await attendanceEarnAmount(centerId, member.id)) > 0) {
+      voice_messages = ["출석 포인트가 적립되었습니다."]; // 적립 회원
+    } else {
+      voice_messages = v.greeting; // 적립 없는 회원 = 환영 인사만
     }
   } catch {
     voice_messages = [];

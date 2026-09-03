@@ -84,11 +84,13 @@ function playTones(notes: { f: number; t: number; d: number; type?: OscillatorTy
   }
 }
 
-/** 출석 성공 확인음 — 밝은 2음 '띠링'. TTS 안 되는 기기에서도 확실히 소리가 난다. */
+/** 출석 성공 확인음 — 밝은 '띠링 띠링'(2회 반복). TTS 안 되는 기기에서도 확실히 소리가 난다. */
 export function playCheckinChime() {
   playTones([
-    { f: 784, t: 0, d: 0.16 }, // G5
-    { f: 1047, t: 0.13, d: 0.22 }, // C6
+    { f: 784, t: 0, d: 0.16 }, // 띠링 (G5→C6)
+    { f: 1047, t: 0.13, d: 0.22 },
+    { f: 784, t: 0.42, d: 0.16 }, // 띠링 (반복)
+    { f: 1047, t: 0.55, d: 0.22 },
   ]);
 }
 
@@ -170,8 +172,8 @@ export function speakMessages(messages: string[]) {
           gain.connect(comp);
           comp.connect(ctx.destination);
           _voiceSrc = src;
-          // 확인음(띵)과 겹치지 않게 살짝 뒤에 시작
-          src.start(ctx.currentTime + 0.35);
+          // 확인음(띠링 띠링, 약 0.8초)과 겹치지 않게 그 뒤에 시작
+          src.start(ctx.currentTime + 0.85);
         } catch { /* noop */ }
       })
       .catch(() => {
