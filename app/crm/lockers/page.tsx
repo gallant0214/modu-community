@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
+import { useCrmToast } from "../_components/crm-toast";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 import { formatPhone } from "../_components/crm-labels";
 import { MemberQuickModal } from "../_components/member-quick-modal";
@@ -921,6 +922,7 @@ function MoveLockerModal({
   const [vacant, setVacant] = useState<
     { id: number; zone_id: number; zone_name: string; number: number }[]
   >([]);
+  const { show: showToast } = useCrmToast();
   const [loading, setLoading] = useState(false);
   const [zoneId, setZoneId] = useState<number | "">("");
   const [targetId, setTargetId] = useState<number | "">("");
@@ -1006,6 +1008,7 @@ function MoveLockerModal({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "이동 실패");
+      showToast(ACTION_DONE_MSG.move);
       onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
@@ -1938,6 +1941,7 @@ function LockerActionModal({
   variant?: "modal" | "panel";
 }) {
   const { getIdToken } = useAuth();
+  const { show: showToast } = useCrmToast();
   const open = locker !== null;
   const ds = locker ? getDisplayState(locker, today) : "unassigned";
   const [error, setError] = useState("");
@@ -2152,7 +2156,15 @@ function LockerActionModal({
         body: JSON.stringify({ action, ...payload }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "실패");
+      if (!res.ok) {
+        // "변경할 항목이 없어요" 는 실패가 아니라 안내 — 빨간 에러 대신 토스트로 알린다.
+        if (res.status === 400 && typeof data?.error === "string" && data.error.includes("변경할 항목")) {
+          showToast("변경된 내용이 없어요");
+          return;
+        }
+        throw new Error(data?.error || "실패");
+      }
+      showToast(ACTION_DONE_MSG[action] ?? "저장되었습니다");
       // 비밀번호·메모 저장(update)·수리상태 변경은 배정이 유지되므로 상세 패널을 열어둔 채 왼쪽만 갱신.
       const keepOpen = action === "update" || action === "broken" || action === "repaired";
       onDone({ keepOpen });
@@ -2555,7 +2567,11 @@ function LockerActionModal({
                   disabled={submitting}
                   className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] text-[13.5px] font-semibold hover:bg-[#6B7B3A]/5"
                 >
-                  {locker.state === "assigned" ? "정보 저장" : "비밀번호·메모 저장"}
+                  {submitting
+                    ? "저장 중…"
+                    : locker.state === "assigned"
+                      ? "정보 저장"
+                      : "비밀번호·메모 저장"}
                 </button>
               )}
 
@@ -2659,6 +2675,16 @@ function LockerActionModal({
     </>
   );
 }
+
+/** 액션 성공 시 토스트 문구 */
+const ACTION_DONE_MSG: Record<string, string> = {
+  assign: "락커를 배정했어요",
+  return: "락커를 회수했어요",
+  update: "저장되었습니다",
+  move: "락커를 이동했어요",
+  broken: "고장 처리했어요",
+  repaired: "수리 완료 처리했어요",
+};
 
 const ACTION_KO: Record<string, string> = {
   assign: "배정",
