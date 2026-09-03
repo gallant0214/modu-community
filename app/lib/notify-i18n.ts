@@ -73,6 +73,15 @@ const NOTIF: Record<string, NotifTpl> = {
       zh: "{slot} 的课程预约已取消 · 原因：{reason}",
     },
   },
+  classCancelled: {
+    title: { ko: "클래스 수업 예약이 취소되었습니다", en: "Class booking cancelled", ja: "クラス予約が取り消されました", zh: "团课预约已取消" },
+    body: {
+      ko: "{slot} 클래스 수업 예약이 취소되었습니다",
+      en: "Your {slot} class booking was cancelled",
+      ja: "{slot} のクラス予約が取り消されました",
+      zh: "{slot} 的团课预约已取消",
+    },
+  },
   reservationRejected: {
     title: { ko: "예약요청이 반려됐어요", en: "Request declined", ja: "予約リクエストが却下されました", zh: "预约请求被拒绝" },
     body: {

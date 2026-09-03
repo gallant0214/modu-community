@@ -5,6 +5,62 @@ import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 export const dynamic = "force-dynamic";
 
 /**
+ * GET /api/crm/member-app/class-bookings?centerId=&from=&to=
+ * 내 클래스 수업 예약 목록(스케줄 리스트·달력 표시용). status='booked'만.
+ * from/to (YYYY-MM-DD) 로 세션 시작일 범위 필터(선택).
+ */
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const centerId = Number(url.searchParams.get("centerId"));
+  const ctx = await requireMemberForCenter(request, centerId);
+  if (isMemberError(ctx)) return ctx;
+
+  const { data: bookings } = await supabase
+    .from("crm_class_bookings")
+    .select("id, session_id, status")
+    .eq("center_id", ctx.centerId)
+    .eq("member_id", ctx.memberId)
+    .eq("status", "booked");
+  const sessionIds = Array.from(new Set((bookings ?? []).map((b) => b.session_id).filter(Boolean)));
+  if (sessionIds.length === 0) return NextResponse.json({ bookings: [] });
+
+  const from = url.searchParams.get("from");
+  const to = url.searchParams.get("to");
+  let sq = supabase
+    .from("crm_class_sessions")
+    .select("id, product_id, trainer_member_id, title, starts_at, ends_at")
+    .in("id", sessionIds);
+  if (from) sq = sq.gte("starts_at", `${from}T00:00:00+09:00`);
+  if (to) sq = sq.lte("starts_at", `${to}T23:59:59+09:00`);
+  const { data: sessions } = await sq;
+
+  const productIds = Array.from(new Set((sessions ?? []).map((s) => s.product_id).filter(Boolean)));
+  const trainerIds = Array.from(new Set((sessions ?? []).map((s) => s.trainer_member_id).filter(Boolean)));
+  const [prodRes, trainerRes] = await Promise.all([
+    productIds.length
+      ? supabase.from("crm_products").select("id, name").in("id", productIds as number[])
+      : Promise.resolve({ data: [] as { id: number; name: string }[] }),
+    trainerIds.length
+      ? supabase.from("crm_center_members").select("id, display_name").in("id", trainerIds as number[])
+      : Promise.resolve({ data: [] as { id: number; display_name: string }[] }),
+  ]);
+  const productName = new Map((prodRes.data ?? []).map((p) => [p.id, p.name]));
+  const trainerName = new Map((trainerRes.data ?? []).map((t) => [t.id, t.display_name]));
+  const bookingBySession = new Map((bookings ?? []).map((b) => [b.session_id, b.id]));
+
+  return NextResponse.json({
+    bookings: (sessions ?? []).map((s) => ({
+      booking_id: bookingBySession.get(s.id) ?? null,
+      session_id: s.id,
+      product_name: productName.get(s.product_id) ?? "클래스 수업",
+      trainer_name: s.trainer_member_id ? trainerName.get(s.trainer_member_id) ?? null : null,
+      starts_at: s.starts_at,
+      ends_at: s.ends_at,
+    })),
+  });
+}
+
+/**
  * POST /api/crm/member-app/class-bookings  { centerId, session_id }
  * 클래스 수업 예약(선착순). 예약 시 유효 클래스 수강권에서 1회 차감(consumed).
  * 규칙:

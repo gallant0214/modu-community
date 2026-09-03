@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const { data: passes, error } = await supabase
     .from("crm_passes")
     .select(
-      "id, lesson_kind, issue_type, total_sessions, remaining_sessions, session_minutes, group_capacity, trainer_member_id, co_trainer_ids, issued_at, price_won, discount_won, start_date, expires_at, status"
+      "id, lesson_kind, issue_type, total_sessions, remaining_sessions, session_minutes, group_capacity, trainer_member_id, co_trainer_ids, issued_at, price_won, discount_won, start_date, expires_at, status, product_id"
     )
     .eq("center_id", ctx.centerId)
     .eq("member_id", ctx.memberId)
@@ -63,6 +63,20 @@ export async function GET(request: Request) {
     }
   }
 
+  // 클래스 상품 수강권 판별용 (클래스 수강권은 '클래스 수업' 탭에서만 예약 → 개인예약 목록서 제외)
+  const productIds = Array.from(
+    new Set(list.map((p) => p.product_id).filter((v): v is number => !!v))
+  );
+  const classProductIds = new Set<number>();
+  if (productIds.length) {
+    const { data: prods } = await supabase
+      .from("crm_products")
+      .select("id, type")
+      .in("id", productIds)
+      .eq("type", "class");
+    for (const pr of prods ?? []) classProductIds.add(pr.id);
+  }
+
   const todayYmd = new Date(new Date().getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
   return NextResponse.json({
@@ -100,6 +114,7 @@ export async function GET(request: Request) {
         dday,
         status: p.status,
         bookable: notExpired && hasRoom && hasTrainer,
+        isClass: p.product_id ? classProductIds.has(p.product_id) : false,
       };
     }),
   });
