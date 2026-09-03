@@ -28,6 +28,29 @@ export function primeAudio() {
   getAudioCtx();
 }
 
+// ─── 음성 안내 볼륨/속도 설정 (기기별 localStorage) ───
+const LS_VOL = "touch_voice_volume"; // 게인 배수 1~8 (기본 4)
+const LS_RATE = "touch_voice_rate"; // 재생 속도 0.8~2.0 (기본 1.2)
+export const VOICE_VOL_DEFAULT = 4;
+export const VOICE_RATE_DEFAULT = 1.2;
+
+export function getVoiceVolume(): number {
+  if (typeof window === "undefined") return VOICE_VOL_DEFAULT;
+  const v = parseFloat(window.localStorage.getItem(LS_VOL) || "");
+  return Number.isFinite(v) && v > 0 ? Math.min(8, Math.max(1, v)) : VOICE_VOL_DEFAULT;
+}
+export function setVoiceVolume(v: number) {
+  try { window.localStorage.setItem(LS_VOL, String(v)); } catch { /* noop */ }
+}
+export function getVoiceRate(): number {
+  if (typeof window === "undefined") return VOICE_RATE_DEFAULT;
+  const v = parseFloat(window.localStorage.getItem(LS_RATE) || "");
+  return Number.isFinite(v) && v > 0 ? Math.min(2, Math.max(0.8, v)) : VOICE_RATE_DEFAULT;
+}
+export function setVoiceRate(v: number) {
+  try { window.localStorage.setItem(LS_RATE, String(v)); } catch { /* noop */ }
+}
+
 function playTones(notes: { f: number; t: number; d: number; type?: OscillatorType }[]) {
   const ctx = getAudioCtx();
   if (!ctx) return;
@@ -111,11 +134,9 @@ export function speakMessages(messages: string[]) {
   if (ctx) {
     // 여러 안내는 쉼표+공백으로 이어 한 번에 합성(자연스러운 끊어읽기)
     const text = clean.join(",  ");
-    let speedMode = "baked";
     fetch(`/api/tts?text=${encodeURIComponent(text)}`, { cache: "force-cache" })
       .then((res) => {
         if (!res.ok) throw new Error(`tts ${res.status}`);
-        speedMode = res.headers.get("X-Tts-Speed") || "baked";
         return res.arrayBuffer();
       })
       .then((buf) => decodeAudio(ctx, buf.slice(0)))
@@ -124,11 +145,11 @@ export function speakMessages(messages: string[]) {
           if (_voiceSrc) { try { _voiceSrc.stop(); } catch { /* noop */ } }
           const src = ctx.createBufferSource();
           src.buffer = audioBuf;
-          // 속도가 오디오에 안 들어간 엔진(google)이면 재생속도로 1.5배 적용
-          if (speedMode === "client") src.playbackRate.value = 1.5;
-          // 볼륨 최대화: 게인 부스트 → 컴프레서(리미터)로 클리핑 없이 최대 음량
+          // 말하기 속도(설정값, 기본 1.2배)
+          src.playbackRate.value = getVoiceRate();
+          // 볼륨(설정값 게인 부스트) → 컴프레서(리미터)로 클리핑 없이 크게
           const gain = ctx.createGain();
-          gain.gain.value = 4.0;
+          gain.gain.value = getVoiceVolume();
           const comp = ctx.createDynamicsCompressor();
           comp.threshold.value = -8;
           comp.knee.value = 6;

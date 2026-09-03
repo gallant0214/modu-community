@@ -6,7 +6,19 @@ import { formatPhone } from "../_components/crm-labels";
 import FaceAttendance from "./face-attendance";
 import FaceEnroll from "./face-enroll";
 import QrDisplay from "./qr-display";
-import { speakMessages, playWarningBeep, playCheckinChime, primeSpeech, primeAudio } from "./_speak";
+import {
+  speakMessages,
+  playWarningBeep,
+  playCheckinChime,
+  primeSpeech,
+  primeAudio,
+  getVoiceVolume,
+  setVoiceVolume,
+  getVoiceRate,
+  setVoiceRate,
+  VOICE_VOL_DEFAULT,
+  VOICE_RATE_DEFAULT,
+} from "./_speak";
 
 interface MemberLite {
   id: number;
@@ -128,6 +140,14 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   // 얼굴 미등록 회원 체크인 시 '사진 촬영 권유' 여부 (터치출석 설정 photo_suggest_enabled)
   const [photoSuggest, setPhotoSuggest] = useState(true);
+
+  // 음성 안내 볼륨/속도 (기기별 localStorage). 모든 안내 음성에 공통 적용.
+  const [voiceVol, setVoiceVolState] = useState(VOICE_VOL_DEFAULT);
+  const [voiceRate, setVoiceRateState] = useState(VOICE_RATE_DEFAULT);
+  useEffect(() => {
+    setVoiceVolState(getVoiceVolume());
+    setVoiceRateState(getVoiceRate());
+  }, []);
 
   // 가로/세로 레이아웃 기억
   useEffect(() => {
@@ -708,6 +728,70 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
                   </button>
                 );
               })}
+            </div>
+
+            {/* 음성 안내 설정 — 모든 안내 음성(만료 안내 등)에 공통 적용 */}
+            <div className="mt-5 pt-4 border-t border-[#E8E0D0] dark:border-zinc-800">
+              <div className="text-[12.5px] text-[#8C8270] dark:text-zinc-500 mb-3">음성 안내 (모든 안내 공통)</div>
+
+              <div className="mb-3.5">
+                <div className="flex items-center justify-between text-[13.5px] text-[#3A342A] dark:text-zinc-200 mb-1.5">
+                  <span>볼륨</span>
+                  <span className="tabular-nums text-[#6B7B3A] dark:text-[#A8B87A] font-semibold">
+                    {Math.round((voiceVol / 8) * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={8}
+                  step={0.5}
+                  value={voiceVol}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setVoiceVolState(v);
+                    setVoiceVolume(v);
+                  }}
+                  className="w-full accent-[#6B7B3A]"
+                />
+              </div>
+
+              <div className="mb-3.5">
+                <div className="flex items-center justify-between text-[13.5px] text-[#3A342A] dark:text-zinc-200 mb-1.5">
+                  <span>말하기 속도</span>
+                  <span className="tabular-nums text-[#6B7B3A] dark:text-[#A8B87A] font-semibold">
+                    {voiceRate.toFixed(2)}배
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0.8}
+                  max={2}
+                  step={0.05}
+                  value={voiceRate}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setVoiceRateState(v);
+                    setVoiceRate(v);
+                  }}
+                  className="w-full accent-[#6B7B3A]"
+                />
+                <div className="mt-1 flex justify-between text-[11px] text-[#A89B80]">
+                  <span>느리게</span>
+                  <span>빠르게</span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  primeSpeech();
+                  primeAudio();
+                  speakMessages(["안녕하세요. 안내 음성 볼륨과 속도 예시입니다."]);
+                }}
+                className="w-full px-4 py-2.5 rounded-xl border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] text-[14px] font-semibold hover:bg-[#6B7B3A]/5"
+              >
+                ▶ 미리듣기
+              </button>
             </div>
           </div>
         </div>
