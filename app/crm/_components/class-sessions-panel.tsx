@@ -35,7 +35,12 @@ function hm(iso: string): string {
   return `${String(k.getUTCHours()).padStart(2, "0")}:${String(k.getUTCMinutes()).padStart(2, "0")}`;
 }
 
-export default function ClassSessionsPanel() {
+export default function ClassSessionsPanel({
+  canCreate = true,
+}: {
+  /** 직급 권한 schedule.class_create — 끄면 등록 폼을 숨기고 목록만 본다 */
+  canCreate?: boolean;
+}) {
   const { getIdToken } = useAuth();
   const [products, setProducts] = useState<ClassProduct[]>([]);
   const [sessions, setSessions] = useState<ClassSession[]>([]);
@@ -147,7 +152,8 @@ export default function ClassSessionsPanel() {
 
   return (
     <div className="space-y-5 max-w-3xl">
-      {/* 등록 폼 */}
+      {/* 등록 폼 — schedule.class_create 권한자만 */}
+      {canCreate && (
       <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4">
         <div className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">클래스 수업 등록</div>
         {products.length === 0 ? (
@@ -221,6 +227,7 @@ export default function ClassSessionsPanel() {
           </div>
         )}
       </div>
+      )}
 
       {error && (
         <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">

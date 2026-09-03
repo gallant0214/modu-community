@@ -68,13 +68,13 @@ export async function GET(request: Request) {
 /**
  * POST /api/crm/class-sessions
  * body: { product_id, trainer_member_id?, starts_at, ends_at?, capacity?, title? }
- * 강사가 특정 '클래스 상품'으로 수업 세션을 등록. 권한: schedule.reserve.
+ * 강사가 특정 '클래스 상품'으로 수업 세션을 등록. 권한: schedule.class_create.
  */
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
-  if (!(await ctxHasPermission(ctx, "schedule.reserve"))) {
-    return NextResponse.json({ error: "예약 등록 권한이 없습니다" }, { status: 403 });
+  if (!(await ctxHasPermission(ctx, "schedule.class_create"))) {
+    return NextResponse.json({ error: "클래스 수업을 생성할 권한이 없습니다" }, { status: 403 });
   }
 
   let body: {

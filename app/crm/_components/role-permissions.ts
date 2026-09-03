@@ -129,6 +129,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     label: "스케줄 · 예약 · 출석",
     items: [
       { key: "schedule.reserve", label: "수업 예약 잡기·변경·취소",   defaults: D_STAFF_NO_ALBA },
+      { key: "schedule.class_create", label: "클래스 수업 생성 — 스케줄에서 클래스 상품으로 수업 만들기", defaults: D_ADMIN },
       { key: "schedule.attend",  label: "수업 출석·노쇼 처리 — 예약된 수업 진행 확정",  defaults: D_STAFF_NO_ALBA },
       { key: "attendance.manage", label: "터치출석 체크인·출석기록 삭제 — 키오스크 입장 처리", defaults: D_STAFF_NO_ALBA },
       {

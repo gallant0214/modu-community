@@ -127,6 +127,7 @@ export default function CrmSchedulePage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [role, setRole] = useState<"owner" | "admin" | "manager" | "trainer" | null>(null);
+  const [perms, setPerms] = useState<Record<string, boolean>>({});
   const [myMemberId, setMyMemberId] = useState<number | null>(null);
   const [selectedTrainerId, setSelectedTrainerId] = useState<number | "all">("all");
   const [loading, setLoading] = useState(true);
@@ -207,6 +208,7 @@ export default function CrmSchedulePage() {
       if (resBoot.ok) {
         const data = await resBoot.json();
         if (data?.role) setRole(data.role);
+        if (data?.permissions) setPerms(data.permissions as Record<string, boolean>);
         if (typeof data?.centerMemberId === "number") setMyMemberId(data.centerMemberId);
       }
     })();
@@ -420,7 +422,7 @@ export default function CrmSchedulePage() {
       {loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
       ) : panelMode === "class" ? (
-        <ClassSessionsPanel />
+        <ClassSessionsPanel canCreate={perms["schedule.class_create"] === true} />
       ) : panelMode === "list" ? (
         <CrmLessonsList />
       ) : viewMode === "day" ? (
@@ -485,6 +487,7 @@ export default function CrmSchedulePage() {
         <NewReservationModal
           slot={newSlot}
           trainers={visibleTrainers}
+          canCreateClass={perms["schedule.class_create"] === true}
           onChangeTrainer={(t) =>
             setNewSlot((prev) =>
               prev ? { ...prev, trainerId: t.id, trainerName: t.display_name } : prev
@@ -2593,6 +2596,7 @@ function remainingTone(remaining: number) {
 function NewReservationModal({
   slot,
   trainers,
+  canCreateClass,
   onChangeTrainer,
   onClose,
   onCreated,
@@ -2604,15 +2608,31 @@ function NewReservationModal({
     endsAt: string;
   };
   trainers: StaffOption[];
+  /** 직급 권한 schedule.class_create — 클래스 수업 생성 가능 여부 */
+  canCreateClass: boolean;
   onChangeTrainer: (t: StaffOption) => void;
   onClose: () => void;
   onCreated: () => void;
 }) {
   const { getIdToken } = useAuth();
   const [duration, setDuration] = useState(50);
-  const [eventType, setEventType] = useState<"lesson" | "center" | "personal">("lesson");
+  const [eventType, setEventType] = useState<"lesson" | "class" | "center" | "personal">("lesson");
   const [eventTitle, setEventTitle] = useState("");
   const [eventDescription, setEventDescription] = useState("");
+
+  // 클래스 수업 등록: 상품 관리에 'class' 로 등록된 상품 목록에서 고른다.
+  interface ClassProduct {
+    id: number;
+    name: string;
+    capacity: number | null;
+    session_minutes: number | null;
+    price_won: number | null;
+  }
+  const [classProducts, setClassProducts] = useState<ClassProduct[]>([]);
+  const [loadingClassProducts, setLoadingClassProducts] = useState(false);
+  const [classProductId, setClassProductId] = useState<number | null>(null);
+  const [classCapacity, setClassCapacity] = useState<number>(0);
+  const pickedClassProduct = classProducts.find((p) => p.id === classProductId) ?? null;
 
   // 담당 강사의 유효 수강권을 회원별로 묶은 목록
   interface AssignedPass {
@@ -2760,6 +2780,37 @@ function NewReservationModal({
     })();
   }, [slot.trainerId, getIdToken]);
 
+  // '클래스' 탭을 처음 열 때 클래스 상품 목록 로드 (상품 관리 > 유형 '클래스')
+  useEffect(() => {
+    if (eventType !== "class" || classProducts.length > 0 || loadingClassProducts) return;
+    (async () => {
+      setLoadingClassProducts(true);
+      setError("");
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/products?type=class", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "클래스 상품 조회 실패");
+        setClassProducts(data.products ?? []);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "네트워크 오류");
+      } finally {
+        setLoadingClassProducts(false);
+      }
+    })();
+  }, [eventType, classProducts.length, loadingClassProducts, getIdToken]);
+
+  // 클래스 상품 선택 시 수업 시간·정원을 상품 설정값으로 자동 적용
+  const pickClassProduct = (p: ClassProduct) => {
+    setClassProductId(p.id);
+    if (p.session_minutes && p.session_minutes > 0) setDuration(p.session_minutes);
+    setClassCapacity(p.capacity && p.capacity > 0 ? p.capacity : 0);
+  };
+
   const searchOther = async () => {
     const q = filterText.trim();
     if (!q) return;
@@ -2885,6 +2936,8 @@ function NewReservationModal({
     if (eventType === "lesson") {
       if (!picked) return setError("회원을 선택해 주세요");
       if (!passId) return setError("사용할 수강권을 선택해 주세요");
+    } else if (eventType === "class") {
+      if (!classProductId) return setError("클래스 상품을 선택해 주세요");
     } else {
       if (!eventTitle.trim()) return setError("제목을 입력해 주세요");
     }
@@ -2932,6 +2985,19 @@ function NewReservationModal({
           throw new Error(failed.join(" · "));
         }
         res = lastRes as Response;
+      } else if (eventType === "class") {
+        // 클래스 수업 세션 등록 (정원 공유·선착순). 예약은 회원이 앱에서 신청.
+        res = await fetch("/api/crm/class-sessions", {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({
+            product_id: classProductId,
+            trainer_member_id: slot.trainerId,
+            starts_at: startsAt,
+            ends_at: endsAt,
+            capacity: classCapacity > 0 ? classCapacity : undefined,
+          }),
+        });
       } else {
         res = await fetch("/api/crm/schedule-events", {
           method: "POST",
@@ -3013,9 +3079,11 @@ function NewReservationModal({
             {(
               [
                 { key: "lesson", label: "수업" },
+                // 클래스 수업 생성은 직급 권한(schedule.class_create) 보유자만 노출
+                ...(canCreateClass ? [{ key: "class", label: "클래스" }] : []),
                 { key: "center", label: "센터일정" },
                 { key: "personal", label: "개인일정" },
-              ] as const
+              ] as { key: "lesson" | "class" | "center" | "personal"; label: string }[]
             ).map((opt) => (
               <button
                 key={opt.key}
@@ -3083,8 +3151,95 @@ function NewReservationModal({
             )}
           </div>
 
+          {/* 클래스 수업 — 상품 관리에 '클래스'로 등록한 상품 중 선택 */}
+          {eventType === "class" && (
+            <>
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400">
+                    클래스 상품 <span className="text-[#B47B2A]">*</span>
+                  </div>
+                  <span className="text-[11px] text-[#8C8270] dark:text-zinc-500">
+                    {classProducts.length}개
+                  </span>
+                </div>
+                {loadingClassProducts ? (
+                  <div className="px-3 py-4 text-center text-[12.5px] text-[#8C8270]">불러오는 중…</div>
+                ) : classProducts.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-lg">
+                    등록된 클래스 상품이 없어요. 상품 관리에서 유형 &lsquo;클래스&rsquo;로 먼저 등록해 주세요.
+                  </div>
+                ) : (
+                  <ul className="space-y-2 max-h-[300px] overflow-y-auto pr-0.5">
+                    {classProducts.map((p) => {
+                      const selected = classProductId === p.id;
+                      return (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            onClick={() => pickClassProduct(p)}
+                            className={`w-full text-left px-3 py-2.5 rounded-xl border transition
+                              ${selected
+                                ? "border-[#6B7B3A] bg-[#6B7B3A]/8 dark:bg-[#6B7B3A]/15"
+                                : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+                              }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
+                                {p.name}
+                              </span>
+                              {selected && (
+                                <span className="shrink-0 text-[11px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">
+                                  선택됨
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+                              정원 {p.capacity && p.capacity > 0 ? `${p.capacity}명` : "미설정"}
+                              {p.session_minutes ? ` · ${p.session_minutes}분` : ""}
+                              {p.price_won ? ` · ${p.price_won.toLocaleString()}원` : ""}
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              {pickedClassProduct && (
+                <div>
+                  <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
+                    정원(명)
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={200}
+                      value={classCapacity || ""}
+                      onChange={(e) =>
+                        setClassCapacity(Math.max(0, Math.min(200, Number(e.target.value) || 0)))
+                      }
+                      placeholder={String(pickedClassProduct.capacity ?? 1)}
+                      className="w-24 px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[13.5px] text-center"
+                    />
+                    <span className="text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+                      비워두면 상품 설정값({pickedClassProduct.capacity ?? 1}명)으로 등록돼요.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="px-3 py-2 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+                등록한 클래스 수업은 회원이 앱에서 선착순으로 예약해요. 명단·취소는 스케줄 상단
+                &lsquo;클래스 수업&rsquo; 탭에서 확인할 수 있어요.
+              </div>
+            </>
+          )}
+
           {/* 이벤트(센터/개인) 제목·설명 입력 */}
-          {eventType !== "lesson" && (
+          {(eventType === "center" || eventType === "personal") && (
             <>
               <div>
                 <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
@@ -3643,7 +3798,9 @@ function NewReservationModal({
               submitting ||
               (eventType === "lesson"
                 ? !picked || !passId
-                : !eventTitle.trim())
+                : eventType === "class"
+                  ? !classProductId
+                  : !eventTitle.trim())
             }
             className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-50 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
           >
@@ -3651,9 +3808,11 @@ function NewReservationModal({
               ? "저장 중…"
               : eventType === "lesson"
                 ? "예약 만들기"
-                : eventType === "center"
-                  ? "센터 일정 등록"
-                  : "개인 일정 등록"}
+                : eventType === "class"
+                  ? "클래스 수업 등록"
+                  : eventType === "center"
+                    ? "센터 일정 등록"
+                    : "개인 일정 등록"}
           </button>
         </div>
       </div>
