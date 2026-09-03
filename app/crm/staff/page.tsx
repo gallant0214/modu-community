@@ -177,7 +177,14 @@ export default function CrmStaffPage() {
           />
           {inactive.length > 0 && (
             <div className="mt-8">
-              <StaffTable rows={inactive} label="퇴사" muted />
+              <StaffTable
+                rows={inactive}
+                label="퇴사"
+                muted
+                deletable
+                getIdToken={getIdToken}
+                onSaved={load}
+              />
             </div>
           )}
         </>
@@ -669,6 +676,7 @@ function StaffTable({
   label,
   muted,
   editable,
+  deletable,
   grades,
   getIdToken,
   onSaved,
@@ -677,10 +685,36 @@ function StaffTable({
   label: string;
   muted?: boolean;
   editable?: boolean;
+  deletable?: boolean;
   grades?: { id: number; base_role: string; label: string }[];
   getIdToken?: () => Promise<string | null>;
   onSaved?: () => Promise<void> | void;
 }) {
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const remove = async (s: StaffRow) => {
+    if (!getIdToken) return;
+    if (
+      !window.confirm(
+        `정말 "${s.display_name}" 직원 정보를 삭제할까요?\n\n판매·예약·스케줄 이력이 남아 있으면 삭제되지 않고 퇴사 상태로 유지됩니다.\n되돌릴 수 없습니다.`,
+      )
+    ) return;
+    setDeletingId(s.id);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없어요");
+      const res = await fetch(`/api/crm/staff/${s.id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "삭제 실패");
+      await onSaved?.();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setDeletingId(null);
+    }
+  };
   // 인라인 편집값: { [staffId]: { grade_id?, employment_type? } } — 원본과 다른 값만 담김
   const [edits, setEdits] = useState<
     Record<number, { grade_id?: number | null; employment_type?: string | null }>
@@ -843,12 +877,24 @@ function StaffTable({
                 <Td className="text-[#8C8270] dark:text-zinc-500">{s.email || "—"}</Td>
                 <Td className="text-[#8C8270] dark:text-zinc-500">{formatDate(s.joined_at)}</Td>
                 <Td className="text-right pr-4">
-                  <Link
-                    href={`/crm/staff/${s.id}`}
-                    className="inline-flex items-center px-2.5 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[#6B7B3A] dark:text-[#A8B87A] text-[12px] font-medium hover:bg-[#6B7B3A]/5"
-                  >
-                    상세
-                  </Link>
+                  <div className="inline-flex items-center gap-1.5">
+                    <Link
+                      href={`/crm/staff/${s.id}`}
+                      className="inline-flex items-center px-2.5 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[#6B7B3A] dark:text-[#A8B87A] text-[12px] font-medium hover:bg-[#6B7B3A]/5"
+                    >
+                      상세
+                    </Link>
+                    {deletable && !s.is_solo_owner && s.role !== "owner" && (
+                      <button
+                        type="button"
+                        onClick={() => remove(s)}
+                        disabled={deletingId === s.id}
+                        className="inline-flex items-center px-2.5 py-1 rounded-md border border-red-200 dark:border-red-900 text-red-600 dark:text-red-300 text-[12px] font-medium hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50"
+                      >
+                        {deletingId === s.id ? "삭제 중…" : "삭제"}
+                      </button>
+                    )}
+                  </div>
                 </Td>
               </tr>
             ))}

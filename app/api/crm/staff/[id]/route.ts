@@ -364,3 +364,76 @@ export async function PATCH(
 
   return NextResponse.json({ ok: true });
 }
+
+/**
+ * DELETE /api/crm/staff/[id] — 퇴사(status='inactive') 직원 완전 삭제.
+ *
+ * 조건:
+ *  - 요청자: owner/admin/manager
+ *  - 대상: status='inactive' (재직 상태는 먼저 퇴사 처리 필요)
+ *  - 오너·본인 계정 삭제 금지
+ * 참조 이력(수강권·회원권·예약·스케줄) 이 있으면 DB FK 가 삭제를 거부 → 사용자에게 안내.
+ */
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const ctx = await requireCrmContext(request);
+  if (isCrmError(ctx)) return ctx;
+
+  const isManagerish = ctx.role === "owner" || ctx.role === "admin" || ctx.role === "manager";
+  if (!isManagerish) {
+    return NextResponse.json({ error: "직원을 삭제할 권한이 없습니다" }, { status: 403 });
+  }
+
+  const { id } = await params;
+  const memberId = Number(id);
+  if (!memberId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+
+  if (memberId === ctx.centerMemberId) {
+    return NextResponse.json({ error: "본인 계정은 삭제할 수 없습니다" }, { status: 400 });
+  }
+
+  const { data: staff } = await supabase
+    .from("crm_center_members")
+    .select("id, display_name, status, is_solo_owner, role")
+    .eq("id", memberId)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+  if (!staff) return NextResponse.json({ error: "직원을 찾을 수 없습니다" }, { status: 404 });
+
+  const s = staff as { id: number; display_name: string; status: string; is_solo_owner: boolean | null; role: string };
+  if (s.status !== "inactive") {
+    return NextResponse.json({ error: "재직 상태인 직원은 삭제할 수 없어요. 먼저 퇴사 처리해 주세요." }, { status: 400 });
+  }
+  if (s.role === "owner" || s.is_solo_owner) {
+    return NextResponse.json({ error: "센터 오너는 삭제할 수 없습니다" }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from("crm_center_members")
+    .delete()
+    .eq("id", memberId)
+    .eq("center_id", ctx.centerId);
+  if (error) {
+    // PostgreSQL FK 위반(23503) = 판매/예약/스케줄 이력이 남아 있어 삭제 불가.
+    if ((error as { code?: string }).code === "23503") {
+      return NextResponse.json({
+        error: "이 직원의 판매·예약·스케줄 이력이 남아 있어 삭제할 수 없어요. 퇴사 상태로 유지됩니다.",
+        detail: error.message,
+      }, { status: 400 });
+    }
+    return NextResponse.json({ error: "삭제 실패", detail: error.message }, { status: 500 });
+  }
+
+  await supabase.from("crm_audit_logs").insert({
+    center_id: ctx.centerId,
+    actor_uid: ctx.uid,
+    action: "staff.delete",
+    entity_type: "center_member",
+    entity_id: memberId,
+    payload: { display_name: s.display_name, role: s.role } as never,
+  });
+
+  return NextResponse.json({ ok: true });
+}
