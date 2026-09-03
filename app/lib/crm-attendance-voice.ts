@@ -23,7 +23,7 @@ interface Member {
 export async function buildAttendanceVoiceMessages(
   centerId: number,
   member: Member
-): Promise<string[]> {
+): Promise<{ messages: string[]; expired: boolean }> {
   const { data: rules } = await supabase
     .from("crm_attendance_voice_rules")
     .select("trigger_type, threshold_int, message, enabled, sort_order")
@@ -311,7 +311,8 @@ export async function buildAttendanceVoiceMessages(
     messages.unshift(...pendingWelcome);
   }
 
-  return messages;
+  // expired=true → 만료(사용 가능한 회원권 없음) 회원. 중복 출석 시에도 만료 안내 재생용.
+  return { messages, expired: expiredAnnounced };
 }
 
 interface MsRow {

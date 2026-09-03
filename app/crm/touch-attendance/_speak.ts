@@ -39,7 +39,7 @@ function playTones(notes: { f: number; t: number; d: number; type?: OscillatorTy
       osc.type = n.type ?? "sine";
       osc.frequency.value = n.f;
       gain.gain.setValueAtTime(0.0001, now + n.t);
-      gain.gain.exponentialRampToValueAtTime(0.35, now + n.t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.9, now + n.t + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + n.t + n.d);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -126,7 +126,18 @@ export function speakMessages(messages: string[]) {
           src.buffer = audioBuf;
           // 속도가 오디오에 안 들어간 엔진(google)이면 재생속도로 1.5배 적용
           if (speedMode === "client") src.playbackRate.value = 1.5;
-          src.connect(ctx.destination);
+          // 볼륨 최대화: 게인 부스트 → 컴프레서(리미터)로 클리핑 없이 최대 음량
+          const gain = ctx.createGain();
+          gain.gain.value = 4.0;
+          const comp = ctx.createDynamicsCompressor();
+          comp.threshold.value = -8;
+          comp.knee.value = 6;
+          comp.ratio.value = 20;
+          comp.attack.value = 0.002;
+          comp.release.value = 0.15;
+          src.connect(gain);
+          gain.connect(comp);
+          comp.connect(ctx.destination);
           _voiceSrc = src;
           // 확인음(띵)과 겹치지 않게 살짝 뒤에 시작
           src.start(ctx.currentTime + 0.35);

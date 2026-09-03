@@ -55,13 +55,26 @@ export async function runCheckIn(
     .limit(1);
 
   if (recent && recent.length > 0) {
+    // 만료(사용 가능한 회원권 없음) 회원은 반복 출석해도 매번 만료 안내 음성 재생.
+    // 일반 회원은 기존대로 '이미 출석하셨습니다'만.
+    let dupMessage = "이미 출석하셨습니다.";
+    let dupVoice: string[] = [];
+    try {
+      const v = await buildAttendanceVoiceMessages(centerId, member);
+      if (v.expired && v.messages.length > 0) {
+        dupVoice = v.messages;
+        dupMessage = v.messages[0];
+      }
+    } catch {
+      /* 음성 계산 실패해도 중복 응답은 유지 */
+    }
     return {
       ok: true as const,
       duplicate: true,
       member,
       attendance: recent[0],
-      message: "이미 출석하셨습니다.",
-      voice_messages: [] as string[],
+      message: dupMessage,
+      voice_messages: dupVoice,
     };
   }
 
@@ -93,7 +106,7 @@ export async function runCheckIn(
 
   let voiceMessages: string[] = [];
   try {
-    voiceMessages = await buildAttendanceVoiceMessages(centerId, member);
+    voiceMessages = (await buildAttendanceVoiceMessages(centerId, member)).messages;
   } catch {
     voiceMessages = [];
   }
@@ -342,7 +355,7 @@ export async function getLatestQrCheckin(centerId: number, sinceId: number | nul
   const summary = await buildCheckinSummary(centerId, member.id);
   let voice_messages: string[] = [];
   try {
-    voice_messages = await buildAttendanceVoiceMessages(centerId, member as CheckinMember);
+    voice_messages = (await buildAttendanceVoiceMessages(centerId, member as CheckinMember)).messages;
   } catch {
     voice_messages = [];
   }
