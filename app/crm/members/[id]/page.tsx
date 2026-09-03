@@ -7622,13 +7622,15 @@ function PassIssueModal({
         const data = await res.json();
         setLessonKinds(data.kinds ?? []);
       }
-      const [pRes, gRes] = await Promise.all([
+      const [pRes, gRes, cRes] = await Promise.all([
         fetch("/api/crm/products?type=personal", { headers, cache: "no-store" }),
         fetch("/api/crm/products?type=group", { headers, cache: "no-store" }),
+        fetch("/api/crm/products?type=class", { headers, cache: "no-store" }),
       ]);
       const merged: PassProduct[] = [];
       if (pRes.ok) merged.push(...((await pRes.json()).products ?? []));
       if (gRes.ok) merged.push(...((await gRes.json()).products ?? []));
+      if (cRes.ok) merged.push(...((await cRes.json()).products ?? []));
       setPassProducts(merged);
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
