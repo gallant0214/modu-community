@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
-import { loadCrmContextForUid } from "@/app/lib/crm-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -26,19 +25,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
   }
 
-  // 이미 어딘가에 가입돼 있으면 그대로 반환
-  const existing = await loadCrmContextForUid(user.uid);
-  if (existing) {
-    return NextResponse.json({
-      onboarded: true,
-      centerId: existing.centerId,
-      centerName: existing.centerName,
-      centerKind: existing.centerKind,
-      role: existing.role,
-      accessLevel: existing.accessLevel,
-      isSoloOwner: existing.isSoloOwner,
-    });
-  }
+  // 🚨 다른 CRM(개인 CRM·타 센터)에 이미 소속돼 있어도, 이 센터 가입 요청은 별도로 생성해야 한다.
+  //    → 여기서 전체 컨텍스트로 조기 반환하지 않음. 아래에서 '이 센터' 기준으로만 판정.
 
   let body: { centerId?: number; name?: string };
   try {
@@ -85,10 +73,15 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (existingRow) {
+    if (existingRow.status === "active") {
+      // 이미 이 센터 소속(강등 금지) — 접속 선택 화면으로 유도
+      return NextResponse.json({ onboarded: true, centerId: center.id, centerName: center.name });
+    }
     if (existingRow.status === "pending") {
       // 이미 요청함 — 멱등 응답
       return NextResponse.json({ pending: true, centerId: center.id, centerName: center.name });
     }
+    // rejected/inactive(거절·퇴사) → 다시 pending 으로 재요청
     const { error: reErr } = await supabase
       .from("crm_center_members")
       .update({
