@@ -16,6 +16,8 @@ import {
   setVoiceVolume,
   getVoiceRate,
   setVoiceRate,
+  getVoiceGender,
+  setVoiceGender,
   VOICE_VOL_DEFAULT,
   VOICE_RATE_DEFAULT,
 } from "./_speak";
@@ -144,9 +146,11 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   // 음성 안내 볼륨/속도 (기기별 localStorage). 모든 안내 음성에 공통 적용.
   const [voiceVol, setVoiceVolState] = useState(VOICE_VOL_DEFAULT);
   const [voiceRate, setVoiceRateState] = useState(VOICE_RATE_DEFAULT);
+  const [voiceGender, setVoiceGenderState] = useState<"female" | "male">("female");
   useEffect(() => {
     setVoiceVolState(getVoiceVolume());
     setVoiceRateState(getVoiceRate());
+    setVoiceGenderState(getVoiceGender());
   }, []);
 
   // 가로/세로 레이아웃 기억
@@ -733,6 +737,38 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
             {/* 음성 안내 설정 — 모든 안내 음성(만료 안내 등)에 공통 적용 */}
             <div className="mt-5 pt-4 border-t border-[#E8E0D0] dark:border-zinc-800">
               <div className="text-[12.5px] text-[#8C8270] dark:text-zinc-500 mb-3">음성 안내 (모든 안내 공통)</div>
+
+              {/* 목소리 성별 */}
+              <div className="mb-3.5">
+                <div className="text-[13.5px] text-[#3A342A] dark:text-zinc-200 mb-1.5">목소리</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { k: "female", label: "여성" },
+                    { k: "male", label: "남성" },
+                  ] as const).map(({ k, label }) => {
+                    const active = voiceGender === k;
+                    return (
+                      <button
+                        key={k}
+                        onClick={() => {
+                          setVoiceGenderState(k);
+                          setVoiceGender(k);
+                          primeSpeech();
+                          primeAudio();
+                          speakMessages(["안녕하세요. 안내 음성 예시입니다."]);
+                        }}
+                        className={`px-4 py-2.5 rounded-xl border text-[14px] font-semibold transition-colors ${
+                          active
+                            ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
+                            : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
+                        }`}
+                      >
+                        {active ? "✓ " : ""}{label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               <div className="mb-3.5">
                 <div className="flex items-center justify-between text-[13.5px] text-[#3A342A] dark:text-zinc-200 mb-1.5">

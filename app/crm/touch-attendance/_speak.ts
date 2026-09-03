@@ -51,6 +51,16 @@ export function setVoiceRate(v: number) {
   try { window.localStorage.setItem(LS_RATE, String(v)); } catch { /* noop */ }
 }
 
+// 음성 성별 (female 기본 / male). Google Cloud TTS 활성 시 실제 남/여 반영.
+const LS_GENDER = "touch_voice_gender";
+export function getVoiceGender(): "female" | "male" {
+  if (typeof window === "undefined") return "female";
+  return window.localStorage.getItem(LS_GENDER) === "male" ? "male" : "female";
+}
+export function setVoiceGender(g: "female" | "male") {
+  try { window.localStorage.setItem(LS_GENDER, g); } catch { /* noop */ }
+}
+
 function playTones(notes: { f: number; t: number; d: number; type?: OscillatorType }[]) {
   const ctx = getAudioCtx();
   if (!ctx) return;
@@ -134,7 +144,7 @@ export function speakMessages(messages: string[]) {
   if (ctx) {
     // 여러 안내는 쉼표+공백으로 이어 한 번에 합성(자연스러운 끊어읽기)
     const text = clean.join(",  ");
-    fetch(`/api/tts?text=${encodeURIComponent(text)}`, { cache: "force-cache" })
+    fetch(`/api/tts?voice=${getVoiceGender()}&text=${encodeURIComponent(text)}`, { cache: "force-cache" })
       .then((res) => {
         if (!res.ok) throw new Error(`tts ${res.status}`);
         return res.arrayBuffer();
