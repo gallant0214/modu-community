@@ -76,6 +76,18 @@ export default function CrmStaffDetailPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // 하단 단일 저장: 각 폼 섹션이 '현재 값 payload' 를 반환하는 collector 를 등록 →
+  // saveAll 에서 모두 병합해 한 번에 PATCH.
+  const collectorsRef = useRef<Record<string, () => Record<string, unknown>>>({});
+  const registerCollector = useCallback(
+    (key: string, fn: () => Record<string, unknown>) => {
+      collectorsRef.current[key] = fn;
+    },
+    []
+  );
+  const [employmentType, setEmploymentType] = useState<string>("");
+  const [gradeId, setGradeId] = useState<number | null>(null);
+
   const load = useCallback(async () => {
     setError("");
     try {
@@ -99,6 +111,14 @@ export default function CrmStaffDetailPage() {
   useEffect(() => {
     if (memberId) load();
   }, [memberId, load]);
+
+  // member 로드/갱신 시 단일저장용 로컬 상태(근무형태·등급) 동기화
+  useEffect(() => {
+    if (member) {
+      setEmploymentType(member.employment_type ?? "");
+      setGradeId(member.grade_id ?? null);
+    }
+  }, [member]);
 
   // 등급 목록 1회 로드
   useEffect(() => {
@@ -157,6 +177,30 @@ export default function CrmStaffDetailPage() {
     }
   };
 
+  // 하단 단일 저장 — 등록된 모든 섹션 payload + 근무형태·등급을 병합해 한 번에 저장
+  const saveAll = async () => {
+    if (!member || saving) return;
+    const merged: Record<string, unknown> = {};
+    for (const fn of Object.values(collectorsRef.current)) {
+      try {
+        Object.assign(merged, fn());
+      } catch {
+        /* 개별 섹션 payload 생성 실패는 건너뜀 */
+      }
+    }
+    // 관리 필드(근무형태·등급)는 '변경됐을 때만' 전송 → 권한 없는 편집자가 연락처만
+    // 수정해도 관리필드 동봉으로 전체가 403 되는 것을 방지.
+    if (!member.is_solo_owner) {
+      if ((employmentType || null) !== (member.employment_type ?? null)) {
+        merged.employment_type = employmentType || null;
+      }
+      if (gradeId !== (member.grade_id ?? null)) {
+        merged.grade_id = gradeId;
+      }
+    }
+    await patchMember(merged);
+  };
+
   if (loading) {
     return (
       <div className="px-5 md:px-8 py-6">
@@ -197,15 +241,8 @@ export default function CrmStaffDetailPage() {
         phone={member.phone}
         email={member.email}
         address={member.address}
-        saving={saving}
-        onSave={(p) => patchMember(p)}
+        register={registerCollector}
       />
-
-      {error && (
-        <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
-          {error}
-        </div>
-      )}
 
       {/* 개인 강사(solo) 본인 프로필에서는 급여·계약·등급·권한·재직 등 센터 관리 섹션 숨김 (개인 CRM 불필요) */}
       {!member.is_solo_owner && (
@@ -215,9 +252,9 @@ export default function CrmStaffDetailPage() {
           <div className="text-[12.5px] text-[#A89B80] mb-1.5">근무형태</div>
           <select
             className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 disabled:opacity-60"
-            value={member.employment_type ?? ""}
+            value={employmentType}
             disabled={saving}
-            onChange={(e) => patchMember({ employment_type: e.target.value || null })}
+            onChange={(e) => setEmploymentType(e.target.value)}
           >
             <option value="">선택 안 함</option>
             {Object.entries(EMPLOYMENT_TYPE_LABEL).map(([k, v]) => (
@@ -227,25 +264,16 @@ export default function CrmStaffDetailPage() {
         </div>
       </Section>
 
-      <CommissionSection member={member} saving={saving} onSave={(p) => patchMember(p)} />
+      <CommissionSection member={member} register={registerCollector} />
 
       <StaffContractsSection staffMemberId={member.id} />
-
-      <DisplayNameSection
-        currentName={member.display_name}
-        saving={saving}
-        onSave={(name) => patchMember({ display_name: name })}
-      />
 
       <Section title="등급">
         <select
           className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A] disabled:opacity-60"
-          value={member.grade_id ?? ""}
+          value={gradeId ?? ""}
           disabled={saving || member.is_solo_owner}
-          onChange={(e) => {
-            const id = e.target.value ? Number(e.target.value) : null;
-            if (id) patchMember({ grade_id: id });
-          }}
+          onChange={(e) => setGradeId(e.target.value ? Number(e.target.value) : null)}
         >
           <option value="">선택해 주세요</option>
           {grades.map((g) => (
@@ -313,10 +341,26 @@ export default function CrmStaffDetailPage() {
         </div>
         <p className="mt-2 text-[12px] text-[#A89B80] leading-relaxed">
           휴직: CRM 접근은 유지되고 재직 목록에 남아요. 퇴사 처리: CRM 접근이 차단돼요.
+          {" "}(재직/휴직/퇴사는 누르는 즉시 적용돼요.)
         </p>
       </Section>
         </>
       )}
+
+      {error && (
+        <div className="mt-2 mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
+      {/* 하단 단일 저장 — 위에서 작성한 내용(연락처·인사·수업료·등급)을 한 번에 저장 */}
+      <button
+        onClick={saveAll}
+        disabled={saving}
+        className="mt-2 w-full px-4 py-3 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[14px] font-bold hover:bg-[#5a6932] transition-colors"
+      >
+        {saving ? "저장 중…" : "저장"}
+      </button>
     </div>
   );
 }
@@ -395,12 +439,10 @@ interface TierInput {
 
 function CommissionSection({
   member,
-  saving,
-  onSave,
+  register,
 }: {
   member: StaffMember;
-  saving: boolean;
-  onSave: (p: Record<string, unknown>) => void;
+  register: (key: string, fn: () => Record<string, unknown>) => void;
 }) {
   const [type, setType] = useState<"fixed" | "tiered">(
     member.commission_type === "tiered" ? "tiered" : "fixed"
@@ -459,7 +501,8 @@ function CommissionSection({
     ]);
   const removeBonus = (i: number) => setBonuses((prev) => prev.filter((_, idx) => idx !== i));
 
-  const save = () => {
+  // 하단 단일저장용 payload 생성기 등록 (항상 최신 값 반영)
+  const buildPayload = (): Record<string, unknown> => {
     const base = hasBase ? Math.max(0, Number(baseSalary) || 0) : 0;
     const bonusPayload = bonuses
       .filter(
@@ -485,17 +528,27 @@ function CommissionSection({
       commission_bonuses: bonusPayload,
     };
     if (type === "fixed") {
-      onSave({ ...common, commission_type: "fixed", commission_rate: Number(rate) || 0 });
-    } else {
-      const parsed = tiers
-        .filter((t) => t.rate.trim() !== "")
-        .map((t) => ({
-          upTo: t.upToMan.trim() === "" ? null : Math.round((Number(t.upToMan) || 0) * 10000),
-          rate: Number(t.rate) || 0,
-        }));
-      onSave({ ...common, commission_type: "tiered", commission_tiers: parsed });
+      return { ...common, commission_type: "fixed", commission_rate: Number(rate) || 0 };
     }
+    const parsed = tiers
+      .filter((t) => t.rate.trim() !== "")
+      .map((t) => ({
+        upTo: t.upToMan.trim() === "" ? null : Math.round((Number(t.upToMan) || 0) * 10000),
+        rate: Number(t.rate) || 0,
+      }));
+    return { ...common, commission_type: "tiered", commission_tiers: parsed };
   };
+  const payloadRef = useRef(buildPayload);
+  payloadRef.current = buildPayload;
+  // 초기(로드시) 값 스냅샷 — 수업료 설정을 '건드렸을 때만' 전송(권한 게이트 회피)
+  const baselineRef = useRef<string | null>(null);
+  if (baselineRef.current === null) baselineRef.current = JSON.stringify(buildPayload());
+  useEffect(() => {
+    register("commission", () => {
+      const cur = payloadRef.current();
+      return JSON.stringify(cur) === baselineRef.current ? {} : cur;
+    });
+  }, [register]);
 
   return (
     <Section title="수업료(정산) 설정">
@@ -737,14 +790,6 @@ function CommissionSection({
           현금 지급액은 <strong>3.3% 원천징수 대상이 아니에요</strong>. 총 지급액에는 더해지고, 세금 계산에서는 제외됩니다.
         </p>
       </div>
-
-      <button
-        onClick={save}
-        disabled={saving}
-        className="mt-4 w-full px-4 py-2.5 rounded-lg bg-[#6B7B3A] disabled:opacity-60 text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
-      >
-        {saving ? "저장 중…" : "수업료 설정 저장"}
-      </button>
     </Section>
   );
 }
@@ -818,66 +863,20 @@ function ToggleRow({
   );
 }
 
-function DisplayNameSection({
-  currentName,
-  saving,
-  onSave,
-}: {
-  currentName: string;
-  saving: boolean;
-  onSave: (name: string) => void;
-}) {
-  const [name, setName] = useState(currentName);
-
-  useEffect(() => {
-    setName(currentName);
-  }, [currentName]);
-
-  const changed = name.trim() !== currentName && name.trim().length > 0;
-
-  return (
-    <section className="mb-6 px-4 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-      <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-1">
-        센터 표시명
-      </h2>
-      <p className="text-[12px] text-[#A89B80] mb-3 leading-relaxed">
-        센터 안에서만 보이는 이름이에요. 모두의 지도사 커뮤니티 닉네임은 그대로 유지돼요.
-      </p>
-      <div className="flex gap-2">
-        <input
-          className={`${crmInputClass} flex-1`}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="실명을 입력해 주세요"
-        />
-        <button
-          onClick={() => onSave(name.trim())}
-          disabled={saving || !changed}
-          className={`px-4 rounded-lg text-[13px] font-semibold whitespace-nowrap transition-colors ${changed ? "bg-[#6B7B3A] text-white hover:bg-[#5a6932] disabled:opacity-60" : "bg-[#E9E2D2] text-[#B0A488] dark:bg-zinc-800 dark:text-zinc-500"}`}
-        >
-          {saving ? "저장 중…" : "저장"}
-        </button>
-      </div>
-    </section>
-  );
-}
-
 function ContactSection({
   name,
   birth,
   phone,
   email,
   address,
-  saving,
-  onSave,
+  register,
 }: {
   name: string;
   birth: string | null;
   phone: string | null;
   email: string | null;
   address: string | null;
-  saving: boolean;
-  onSave: (patch: { display_name?: string; birth?: string | null; phone?: string | null; email?: string | null; address?: string | null }) => void;
+  register: (key: string, fn: () => Record<string, unknown>) => void;
 }) {
   const [n, setN] = useState(name ?? "");
   const [b, setB] = useState(birth ?? "");
@@ -895,23 +894,22 @@ function ContactSection({
     setA(address ?? "");
   }, [name, birth, phone, email, address]);
 
-  const dirtyName = n.trim() !== (name ?? "").trim();
-  const dirtyBirth = b !== (birth ?? "");
-  const dirtyPhone = p !== formatPhone(phone ?? "");
-  const dirtyEmail = e !== (email ?? "");
-  const dirtyAddress = a !== (address ?? "");
-  const dirty = dirtyName || dirtyBirth || dirtyPhone || dirtyEmail || dirtyAddress;
-
-  const save = () => {
-    const patch: { display_name?: string; birth?: string | null; phone?: string | null; email?: string | null; address?: string | null } = {};
-    if (dirtyName && n.trim()) patch.display_name = n.trim();
+  // 하단 단일저장용 payload 생성기 등록 (항상 최신 값 반영)
+  const buildPayload = (): Record<string, unknown> => {
+    const patch: Record<string, unknown> = {};
+    if (n.trim()) patch.display_name = n.trim();
     // 완전한 날짜(YYYY-MM-DD)만 저장. 부분 입력이면 null(빈 값)로.
-    if (dirtyBirth) patch.birth = /^\d{4}-\d{2}-\d{2}$/.test(b.trim()) ? b.trim() : null;
-    if (dirtyPhone) patch.phone = p.trim() || null;
-    if (dirtyEmail) patch.email = e.trim() || null;
-    if (dirtyAddress) patch.address = a.trim() || null;
-    onSave(patch);
+    patch.birth = /^\d{4}-\d{2}-\d{2}$/.test(b.trim()) ? b.trim() : null;
+    patch.phone = p.trim() || null;
+    patch.email = e.trim() || null;
+    patch.address = a.trim() || null;
+    return patch;
   };
+  const payloadRef = useRef(buildPayload);
+  payloadRef.current = buildPayload;
+  useEffect(() => {
+    register("contact", () => payloadRef.current());
+  }, [register]);
 
   return (
     <section className="mb-6 px-4 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
@@ -1030,16 +1028,9 @@ function ContactSection({
         </div>
         {(!n.trim() || !p.trim()) && (
           <p className="text-[12px] text-red-600 dark:text-red-400">
-            실명과 연락처는 필수 항목이에요.
+            실명과 연락처는 필수 항목이에요. (하단 저장 버튼으로 저장)
           </p>
         )}
-        <button
-          onClick={save}
-          disabled={!dirty || saving || !n.trim() || !p.trim()}
-          className={`w-full px-4 py-2.5 rounded-lg text-[13.5px] font-semibold transition-colors ${dirty ? "bg-[#6B7B3A] text-white hover:bg-[#5a6932] disabled:opacity-60" : "bg-[#E9E2D2] text-[#B0A488] dark:bg-zinc-800 dark:text-zinc-500"}`}
-        >
-          {saving ? "저장 중…" : "저장"}
-        </button>
       </div>
     </section>
   );
