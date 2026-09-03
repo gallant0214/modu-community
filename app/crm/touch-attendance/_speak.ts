@@ -82,14 +82,64 @@ export function primeSpeech() {
   }
 }
 
+/** MP3 ArrayBuffer 디코드 (구형 WebView 콜백형 + 최신 Promise형 모두 지원) */
+function decodeAudio(ctx: AudioContext, buf: ArrayBuffer): Promise<AudioBuffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const p = ctx.decodeAudioData(buf, resolve, reject) as unknown as Promise<AudioBuffer> | undefined;
+      if (p && typeof p.then === "function") p.then(resolve, reject);
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+let _voiceSrc: AudioBufferSourceNode | null = null;
+
 /**
- * 브라우저 내장 SpeechSynthesis 로 한국어 안내 음성 재생.
- * - messages 를 순차 재생. 이전 큐를 지우고 새로 시작.
- * - 음성 목록 미로드 시 로드 후 재생(Chrome 최초 무음 방지).
- * - utterance 참조 유지로 GC 로 인한 무음/끊김 방지.
- * - 지원 안 하는 브라우저에서는 조용히 no-op.
+ * 센터에서 설정한 음성 안내를 재생.
+ * 1순위: 서버 TTS(/api/tts) 로 만든 오디오를 '잠금 해제된 AudioContext'(확인음과 동일 경로)로 재생
+ *   → 브라우저 TTS(SpeechSynthesis)가 없는 기기(구형 안드로이드 태블릿 등)에서도 소리가 난다.
+ * 2순위(폴백): 서버 오디오 실패 시 브라우저 SpeechSynthesis (PC 등 지원 기기).
  */
 export function speakMessages(messages: string[]) {
+  const clean = (messages || []).map((m) => (m ?? "").trim()).filter(Boolean);
+  if (clean.length === 0) return;
+  if (typeof window === "undefined") return;
+
+  const ctx = getAudioCtx();
+  if (ctx) {
+    // 여러 안내는 쉼표+공백으로 이어 한 번에 합성(자연스러운 끊어읽기)
+    const text = clean.join(",  ");
+    fetch(`/api/tts?text=${encodeURIComponent(text)}`, { cache: "force-cache" })
+      .then((res) => {
+        if (!res.ok) throw new Error(`tts ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((buf) => decodeAudio(ctx, buf.slice(0)))
+      .then((audioBuf) => {
+        try {
+          if (_voiceSrc) { try { _voiceSrc.stop(); } catch { /* noop */ } }
+          const src = ctx.createBufferSource();
+          src.buffer = audioBuf;
+          src.connect(ctx.destination);
+          _voiceSrc = src;
+          // 확인음(띵)과 겹치지 않게 살짝 뒤에 시작
+          src.start(ctx.currentTime + 0.35);
+        } catch { /* noop */ }
+      })
+      .catch(() => {
+        // 서버 TTS 실패 → 브라우저 TTS 폴백(가능한 기기에서만)
+        speakViaSynthesis(clean);
+      });
+    return;
+  }
+  // AudioContext 자체가 없으면 브라우저 TTS 폴백
+  speakViaSynthesis(clean);
+}
+
+/** 브라우저 내장 SpeechSynthesis 폴백 (지원 안 하는 기기에서는 no-op). */
+function speakViaSynthesis(messages: string[]) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   const clean = (messages || []).map((m) => (m ?? "").trim()).filter(Boolean);
   if (clean.length === 0) return;
