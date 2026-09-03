@@ -111,9 +111,11 @@ export function speakMessages(messages: string[]) {
   if (ctx) {
     // 여러 안내는 쉼표+공백으로 이어 한 번에 합성(자연스러운 끊어읽기)
     const text = clean.join(",  ");
+    let speedMode = "baked";
     fetch(`/api/tts?text=${encodeURIComponent(text)}`, { cache: "force-cache" })
       .then((res) => {
         if (!res.ok) throw new Error(`tts ${res.status}`);
+        speedMode = res.headers.get("X-Tts-Speed") || "baked";
         return res.arrayBuffer();
       })
       .then((buf) => decodeAudio(ctx, buf.slice(0)))
@@ -122,6 +124,8 @@ export function speakMessages(messages: string[]) {
           if (_voiceSrc) { try { _voiceSrc.stop(); } catch { /* noop */ } }
           const src = ctx.createBufferSource();
           src.buffer = audioBuf;
+          // 속도가 오디오에 안 들어간 엔진(google)이면 재생속도로 1.25배 적용
+          if (speedMode === "client") src.playbackRate.value = 1.25;
           src.connect(ctx.destination);
           _voiceSrc = src;
           // 확인음(띵)과 겹치지 않게 살짝 뒤에 시작
