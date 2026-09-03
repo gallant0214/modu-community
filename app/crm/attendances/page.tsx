@@ -364,30 +364,41 @@ export default function CrmAttendancesPage() {
               데이터가 없어요.
             </div>
           ) : (
-            <div className="flex items-end gap-1.5 h-28">
-              {hourly.map((count, h) => {
-                const ratio = count / maxHourly;
-                return (
-                  <div key={h} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-                    <div className="w-full flex items-end justify-center h-full rounded-t bg-[#F7F2E8] dark:bg-zinc-950/50">
-                      <div
-                        className={`w-full rounded-t transition-all ${
-                          count === 0
-                            ? "bg-[#EDE4D4] dark:bg-zinc-800"
-                            : h === peakHour.hour
-                            ? "bg-[#B47B2A]"
-                            : "bg-[#6B7B3A]"
-                        }`}
-                        style={{ height: `${Math.max(4, ratio * 100)}%` }}
-                        title={`${h}시 ${count}건`}
-                      />
-                    </div>
-                    <div className="h-3 text-[9px] text-[#A89B80] dark:text-zinc-500 leading-none">
+            <div className="overflow-x-auto -mx-1 px-1">
+              <div className="min-w-[520px]">
+                {/* 바 영역: 24 시간 균등 배치, 각 셀 min-width 로 축소 방지 */}
+                <div className="flex items-end gap-[3px] h-28">
+                  {hourly.map((count, h) => {
+                    const ratio = count / maxHourly;
+                    return (
+                      <div key={h} className="flex-1 min-w-[14px] h-full flex items-end rounded-t bg-[#F7F2E8] dark:bg-zinc-950/50">
+                        <div
+                          className={`w-full rounded-t transition-all ${
+                            count === 0
+                              ? "bg-[#EDE4D4] dark:bg-zinc-800"
+                              : h === peakHour.hour
+                                ? "bg-[#B47B2A]"
+                                : "bg-[#6B7B3A]"
+                          }`}
+                          style={{ height: `${Math.max(4, ratio * 100)}%` }}
+                          title={`${h}시 ${count}건`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* 라벨 영역: 바와 동일한 24 트랙 그리드로 정확히 정렬. 3시간 간격 표시 */}
+                <div
+                  className="mt-1 grid text-[10px] text-[#A89B80] dark:text-zinc-500"
+                  style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))", columnGap: "3px" }}
+                >
+                  {hourly.map((_, h) => (
+                    <div key={h} className="text-center leading-none">
                       {h % 3 === 0 ? `${h}` : ""}
                     </div>
-                  </div>
-                );
-              })}
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </section>
