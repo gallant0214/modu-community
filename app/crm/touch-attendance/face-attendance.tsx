@@ -124,7 +124,13 @@ export default function FaceAttendance({
           const who = data.member?.name ?? name;
           if (data.duplicate) {
             // 2시간 이내 이미 출석 → 재출석 불인정, 안내만.
-            setStatus(`${who} · 이미 출석하셨습니다`);
+            // 단, 만료 회원 등 서버가 준 안내 음성은 중복이어도 재생(경고음+음성).
+            const dupVoice = Array.isArray(data.voice_messages) ? data.voice_messages : [];
+            setStatus(`${who} · ${data.message || "이미 출석하셨습니다"}`);
+            if (dupVoice.length) {
+              playWarningBeep();
+              speakMessages(dupVoice);
+            }
           } else {
             setLastHit({ name: who, at: Date.now() });
             // 출석 성공 소리: 입장 불가=경고음, 정상=확인음 (TTS 무관하게 항상 소리)

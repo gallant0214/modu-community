@@ -329,12 +329,16 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           summary: data.summary as CheckinSummary | undefined,
         });
         // 출석 성공 소리: 입장 불가(유효 이용권 없음)=경고음, 정상=확인음. (TTS 무관하게 항상 소리)
+        const hasVoice = Array.isArray(data.voice_messages) && data.voice_messages.length > 0;
         if (!data.duplicate) {
           if (data.summary && data.summary.can_enter === false) playWarningBeep();
           else playCheckinChime();
+        } else if (hasVoice) {
+          // 중복이라도 안내(만료 회원 반복 출석 등)가 있으면 경고음
+          playWarningBeep();
         }
-        // 서버에서 매칭된 음성 안내(예: 회원권 만료 임박) 재생 (TTS 되는 기기)
-        speakMessages(Array.isArray(data.voice_messages) ? data.voice_messages : []);
+        // 서버에서 매칭된 음성 안내(만료 회원·만료 임박 등) 재생 — 중복 출석도 포함
+        speakMessages(hasVoice ? (data.voice_messages as string[]) : []);
       }
     } catch (e) {
       setResult({ kind: "error", message: e instanceof Error ? e.message : "네트워크 오류" });
