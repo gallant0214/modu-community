@@ -23,7 +23,7 @@ interface Member {
 export async function buildAttendanceVoiceMessages(
   centerId: number,
   member: Member
-): Promise<{ messages: string[]; expired: boolean }> {
+): Promise<{ messages: string[]; expired: boolean; greeting: string[] }> {
   const { data: rules } = await supabase
     .from("crm_attendance_voice_rules")
     .select("trigger_type, threshold_int, message, enabled, sort_order")
@@ -78,6 +78,8 @@ export async function buildAttendanceVoiceMessages(
   // 만료 판정은 아래 터치설정 블록에서 이뤄지므로, 여기선 후보만 모아두고 마지막에 결정.
   const pendingWelcome: string[] = [];
   let expiredAnnounced = false;
+  // 입장(활성) 인사 문구 — '적립 없는 회원은 환영 인사만' 처리에 사용
+  let activeEntryMsg: string | null = null;
 
   const substitute = (raw: string) => raw.replace(/\{name\}/g, member.name).trim();
 
@@ -265,7 +267,8 @@ export async function buildAttendanceVoiceMessages(
       }
       // 회원 상태 인사(상호 배타): 활성 / 예정 / 홀딩 / 만료(=회원권 없음)
       if (on("msg_active_entry") && hasActive) {
-        messages.push(txt("msg_active_entry"));
+        activeEntryMsg = txt("msg_active_entry");
+        messages.push(activeEntryMsg);
       } else if (on("msg_scheduled_membership") && hasScheduled) {
         messages.push(txt("msg_scheduled_membership"));
       } else if (on("msg_holding") && hasHolding) {
@@ -312,7 +315,11 @@ export async function buildAttendanceVoiceMessages(
   }
 
   // expired=true → 만료(사용 가능한 회원권 없음) 회원. 중복 출석 시에도 만료 안내 재생용.
-  return { messages, expired: expiredAnnounced };
+  // greeting → 환영/입장 인사만. '출석 포인트 적립 없는 회원은 환영 인사만' 처리에 사용.
+  const greeting = expiredAnnounced
+    ? []
+    : [...pendingWelcome, ...(activeEntryMsg ? [activeEntryMsg] : [])];
+  return { messages, expired: expiredAnnounced, greeting };
 }
 
 interface MsRow {

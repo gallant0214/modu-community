@@ -107,7 +107,13 @@ export async function runCheckIn(
 
   let voiceMessages: string[] = [];
   try {
-    voiceMessages = (await buildAttendanceVoiceMessages(centerId, member)).messages;
+    const v = await buildAttendanceVoiceMessages(centerId, member);
+    voiceMessages = v.messages;
+    // 출석 포인트 적립이 없는(적립금 0) 회원은 환영 인사만 안내.
+    // (만료 회원은 만료 안내를 유지하므로 v.expired 는 제외)
+    if (!v.expired && (await attendanceEarnAmount(centerId, member.id)) <= 0) {
+      voiceMessages = v.greeting;
+    }
   } catch {
     voiceMessages = [];
   }
@@ -246,6 +252,37 @@ export async function buildCheckinSummary(centerId: number, memberId: number) {
 }
 
 /**
+ * 이 회원이 출석 시 적립되는 출석포인트 '적립 가능액'(일일 중복과 무관, 상품 설정 기준).
+ * 유효·미정지 회원권/수강권의 attendance_mileage_earn 중 최대값. 0이면 적립 없는 회원.
+ */
+export async function attendanceEarnAmount(centerId: number, memberId: number): Promise<number> {
+  const ymd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const [{ data: memberships }, { data: passes }] = await Promise.all([
+    supabase
+      .from("crm_memberships")
+      .select("attendance_mileage_earn")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .eq("status", "valid")
+      .eq("is_paused", false)
+      .gte("expires_at", ymd),
+    supabase
+      .from("crm_passes")
+      .select("attendance_mileage_earn")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .eq("status", "valid")
+      .eq("is_paused", false)
+      .gte("expires_at", ymd),
+  ]);
+  return Math.max(
+    0,
+    ...(memberships ?? []).map((m) => Number(m.attendance_mileage_earn) || 0),
+    ...(passes ?? []).map((p) => Number(p.attendance_mileage_earn) || 0)
+  );
+}
+
+/**
  * 출석 시 마일리지 적립 — KST 기준 하루 1회.
  * 오늘 이미 적립 이력 있으면 0. 없으면 유효 회원권/수강권 중 최대 적립액.
  */
@@ -356,7 +393,12 @@ export async function getLatestQrCheckin(centerId: number, sinceId: number | nul
   const summary = await buildCheckinSummary(centerId, member.id);
   let voice_messages: string[] = [];
   try {
-    voice_messages = (await buildAttendanceVoiceMessages(centerId, member as CheckinMember)).messages;
+    const v = await buildAttendanceVoiceMessages(centerId, member as CheckinMember);
+    voice_messages = v.messages;
+    // 적립 없는(적립금 0) 회원은 환영 인사만 (만료 회원 제외)
+    if (!v.expired && (await attendanceEarnAmount(centerId, member.id)) <= 0) {
+      voice_messages = v.greeting;
+    }
   } catch {
     voice_messages = [];
   }
