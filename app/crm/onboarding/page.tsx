@@ -6,7 +6,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone } from "../_components/crm-labels";
 
 type Mode = "solo" | "center";
-type Step = "mode" | "center-search" | "center-register";
+type Step = "mode" | "center-search" | "center-register" | "requested";
 
 interface CenterSearchResult {
   id: number;
@@ -36,6 +36,8 @@ export default function CrmOnboardingPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // 가입 요청 완료 화면에 표시할 센터명
+  const [requestedCenter, setRequestedCenter] = useState("");
 
   // 검색은 명시적 트리거 (버튼 클릭 또는 Enter). 자동 디바운스 안 함.
   const runSearch = async () => {
@@ -137,7 +139,7 @@ export default function CrmOnboardingPage() {
     }
   };
 
-  const joinCenter = async (centerId: number) => {
+  const joinCenter = async (centerId: number, centerName: string) => {
     if (submitting) return;
     setError("");
     setSubmitting(true);
@@ -151,7 +153,14 @@ export default function CrmOnboardingPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "가입에 실패했습니다");
-      router.replace("/crm/dashboard");
+      // 이미 가입돼 있으면(멱등) 접속 선택 화면으로.
+      if (data.onboarded) {
+        router.replace("/crm/select");
+        return;
+      }
+      // 신규/재요청 → 승인 대기. 성공 안내 화면 표시(대시보드로 튕기지 않음).
+      setRequestedCenter(data.centerName || centerName || "");
+      setStep("requested");
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -232,7 +241,7 @@ export default function CrmOnboardingPage() {
                 {results.map((c) => (
                   <li key={c.id}>
                     <button
-                      onClick={() => joinCenter(c.id)}
+                      onClick={() => joinCenter(c.id, c.name)}
                       disabled={submitting}
                       className="w-full text-left px-4 py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors disabled:opacity-60"
                     >
@@ -317,7 +326,32 @@ export default function CrmOnboardingPage() {
         </>
       )}
 
-      {error && (
+      {step === "requested" && (
+        <div className="text-center py-6">
+          <div className="mx-auto mb-4 flex items-center justify-center w-16 h-16 rounded-full bg-[#EFF5E2] dark:bg-[#6B7B3A]/20">
+            <svg className="w-8 h-8 text-[#6B7B3A] dark:text-[#A8B87A]" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-[19px] font-bold text-[#241F18] dark:text-zinc-100">
+            가입 요청이 접수됐어요
+          </h2>
+          <p className="mt-2 text-[13.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
+            {requestedCenter ? <><span className="font-semibold text-[#3A342A] dark:text-zinc-200">{requestedCenter}</span>에 </> : null}
+            강사 가입을 요청했어요.<br />
+            <span className="font-semibold text-[#3A342A] dark:text-zinc-200">센터 대표자가 승인</span>하면 접속할 수 있어요.
+          </p>
+          <div className="mt-4 px-4 py-3 rounded-xl bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
+            대표자에게 <span className="font-semibold">직원관리 &gt; 가입 요청</span>에서 수락해 달라고 알려주세요.
+            승인 전까지는 접속 선택 화면에 <span className="font-semibold">‘승인 대기 중’</span>으로 표시돼요.
+          </div>
+          <PrimaryButton onClick={() => router.replace("/crm/select")}>
+            접속 선택 화면으로
+          </PrimaryButton>
+        </div>
+      )}
+
+      {step !== "requested" && error && (
         <div className="mt-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
           {error}
         </div>
@@ -330,7 +364,7 @@ const inputClass =
   "w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 placeholder:text-[#A89B80] focus:outline-none focus:border-[#6B7B3A]";
 
 function Header({ step, onBack }: { step: Step; onBack: () => void }) {
-  if (step === "mode") return null;
+  if (step === "mode" || step === "requested") return null;
   return (
     <button
       onClick={onBack}
