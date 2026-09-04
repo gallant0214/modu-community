@@ -11,6 +11,7 @@ import {
   smsKind,
   type SendBasis,
 } from "@/app/lib/auto-message-triggers";
+import { formatPhone } from "../_components/crm-labels";
 
 interface CouponAttach {
   name: string;
@@ -464,6 +465,9 @@ function AutoMessageEditor({
     />
   );
 
+  // 미리보기 아래 테스트 발송 — 저장 전 문구를 한 명에게 실제 문자로 보내본다.
+  const testPanel = <TestSendPanel body={body} />;
+
   const inputCls =
     "w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-[#2A251D] dark:text-zinc-100";
 
@@ -603,10 +607,15 @@ function AutoMessageEditor({
             </NumberedField>
 
             {/* 04 전송 방법 */}
-            <NumberedField no="04" title="전송 방법" hint="실제 발송 채널 연동은 준비중입니다. 선택값은 미리 저장돼요.">
+            <NumberedField
+              no="04"
+              title="전송 방법"
+              hint="문자메시지를 켜면 자동 메세지 실행 시 실제 문자로 발송됩니다. 그 외 채널은 연동 준비중이며 선택값만 저장돼요."
+            >
               <div className="flex flex-wrap gap-2">
                 {METHOD_OPTIONS.map((m) => {
-                  const locked = m.key === "sms"; // 문자메시지 자동발송은 준비중
+                  // 문자메시지만 실제 발송(솔라피) 연동 완료. 나머지 채널은 아직 준비중.
+                  const locked = m.key !== "sms";
                   const active = !locked && methods.includes(m.key);
                   return (
                     <button
@@ -633,6 +642,12 @@ function AutoMessageEditor({
                   );
                 })}
               </div>
+              {methods.includes("sms") && (
+                <p className="mt-2 text-[11.5px] leading-relaxed text-[#B47B2A] dark:text-amber-300">
+                  ⚠️ 이 알림은 &lsquo;지금 실행&rsquo; 시 조건에 맞는 회원에게 <strong>실제 문자가 발송</strong>되고
+                  건당 요금이 발생합니다. 한 번 실행에 최대 200명까지 발송돼요.
+                </p>
+              )}
             </NumberedField>
 
             {/* 05 파일 첨부 */}
@@ -736,12 +751,16 @@ function AutoMessageEditor({
             </NumberedField>
 
             {/* 모바일: 미리보기 하단 표시 */}
-            <div className="md:hidden">{preview}</div>
+            <div className="md:hidden">
+              {preview}
+              {testPanel}
+            </div>
           </div>
 
           {/* 우측 미리보기 (데스크톱) */}
           <aside className="hidden md:block border-l border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 overflow-y-auto">
             {preview}
+            {testPanel}
           </aside>
         </div>
 
@@ -763,6 +782,174 @@ function AutoMessageEditor({
             {saving ? "저장 중…" : "저장"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── 테스트 발송 (미리보기 하단) ─────────────── */
+/**
+ * 저장 전 문구를 특정 회원 1명에게 실제 문자로 보내본다.
+ * 회원명·연락처로 검색 → 선택 → 발송. 상품/만료일처럼 트리거로 정해지는 변수는
+ * 서버에서 예시값으로 치환한다.
+ */
+function TestSendPanel({ body }: { body: string }) {
+  const { getIdToken } = useAuth();
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<{ id: number; name: string; phone: string | null }[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [picked, setPicked] = useState<{ id: number; name: string; phone: string | null } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+
+  // 입력 즉시 검색(디바운스 250ms). 이미 고른 뒤엔 재검색하지 않는다.
+  useEffect(() => {
+    if (picked) return;
+    const term = q.trim();
+    if (!term) {
+      setResults([]);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`/api/crm/members?q=${encodeURIComponent(term)}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!cancelled && res.ok) setResults((data.members ?? []).slice(0, 8));
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [q, picked, getIdToken]);
+
+  const send = async () => {
+    if (!picked || sending) return;
+    setErr("");
+    setMsg("");
+    if (!body.trim()) {
+      setErr("메세지 내용을 먼저 입력해 주세요");
+      return;
+    }
+    if (!window.confirm(`${picked.name} 님에게 실제 문자를 보냅니다. 요금이 발생해요. 진행할까요?`)) return;
+    setSending(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/auto-messages/test-send", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ member_id: picked.id, body }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "발송 실패");
+      setMsg(data?.message || "테스트 발송했어요");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="px-4 pb-4">
+      <div className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 p-3.5">
+        <div className="text-[12px] font-bold text-[#2A251D] dark:text-zinc-100">테스트 발송</div>
+        <p className="mt-0.5 text-[11px] leading-relaxed text-[#8C8270] dark:text-zinc-500">
+          저장 전에 이 문구를 한 명에게 실제 문자로 보내봅니다. 상품·만료일 같은 변수는 예시값으로 채워져요.
+        </p>
+
+        {picked ? (
+          <div className="mt-2.5 flex items-center justify-between gap-2 rounded-lg border border-[#6B7B3A]/40 bg-[#6B7B3A]/[0.07] px-3 py-2">
+            <div className="min-w-0">
+              <div className="truncate text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                {picked.name}
+              </div>
+              <div className="truncate text-[11.5px] text-[#8C8270]">
+                {picked.phone ? formatPhone(picked.phone) : "연락처 없음"}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setPicked(null);
+                setQ("");
+                setResults([]);
+                setMsg("");
+                setErr("");
+              }}
+              className="shrink-0 rounded-md px-2 py-1 text-[11.5px] font-semibold text-[#6B5D47] hover:bg-[#F5F0E5] dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              변경
+            </button>
+          </div>
+        ) : (
+          <>
+            <input
+              type="text"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="수신인 검색 (이름 또는 연락처)"
+              className="mt-2.5 w-full rounded-lg border border-[#E8E0D0] px-3 py-2 text-[13px] text-[#2A251D] outline-none focus:border-[#6B7B3A] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+            />
+            {searching && (
+              <div className="mt-1.5 text-[11.5px] text-[#8C8270]">검색 중…</div>
+            )}
+            {!searching && q.trim() && results.length === 0 && (
+              <div className="mt-1.5 text-[11.5px] text-[#8C8270]">일치하는 회원이 없어요.</div>
+            )}
+            {results.length > 0 && (
+              <ul className="mt-1.5 max-h-[176px] space-y-1 overflow-y-auto">
+                {results.map((m) => (
+                  <li key={m.id}>
+                    <button
+                      type="button"
+                      onClick={() => setPicked(m)}
+                      className="flex w-full items-center justify-between gap-2 rounded-lg border border-[#E8E0D0] px-2.5 py-1.5 text-left hover:bg-[#F5F0E5] dark:border-zinc-700 dark:hover:bg-zinc-800"
+                    >
+                      <span className="truncate text-[12.5px] font-medium text-[#2A251D] dark:text-zinc-100">
+                        {m.name}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-[#8C8270]">
+                        {m.phone ? formatPhone(m.phone) : "번호 없음"}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+
+        {err && (
+          <div className="mt-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-[11.5px] text-red-700 dark:bg-red-950/40 dark:text-red-300">
+            {err}
+          </div>
+        )}
+        {msg && (
+          <div className="mt-2 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11.5px] text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+            {msg}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={send}
+          disabled={!picked || sending || !picked.phone}
+          className="mt-2.5 w-full rounded-lg bg-[#6B7B3A] px-3 py-2 text-[12.5px] font-semibold text-white hover:bg-[#5a6932] disabled:opacity-50"
+        >
+          {sending ? "발송 중…" : "테스트 발송"}
+        </button>
+        <p className="mt-1.5 text-[10.5px] text-[#A89B80]">실제 문자로 발송되며 건당 요금이 발생해요.</p>
       </div>
     </div>
   );

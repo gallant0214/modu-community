@@ -100,6 +100,7 @@ const SILENT_SCREEN = ["/crm/kiosk", "/crm/touch-attendance", "/touch/"];
 function messageFor(method: string, path: string): string {
   if (path.startsWith("/api/crm/sms/send")) return "문자를 발송했어요";
   if (path.startsWith("/api/crm/messages")) return "메시지를 보냈어요";
+  if (path.startsWith("/api/crm/auto-messages/test-send")) return "테스트 발송했어요";
   if (path.startsWith("/api/crm/auto-messages/run")) return "자동 메세지를 실행했어요";
   if (path.startsWith("/api/crm/contracts/sign")) return "계약서를 저장했어요";
   if (path.startsWith("/api/crm/class-sessions") && method === "POST")
