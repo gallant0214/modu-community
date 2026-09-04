@@ -610,34 +610,23 @@ function AutoMessageEditor({
             <NumberedField
               no="04"
               title="전송 방법"
-              hint="문자메시지를 켜면 자동 메세지 실행 시 실제 문자로 발송됩니다. 그 외 채널은 연동 준비중이며 선택값만 저장돼요."
+              hint="여러 개를 함께 선택할 수 있어요. 현재 실제로 나가는 채널은 문자메시지이고, 나머지는 선택값이 저장됩니다."
             >
               <div className="flex flex-wrap gap-2">
                 {METHOD_OPTIONS.map((m) => {
-                  // 문자메시지만 실제 발송(솔라피) 연동 완료. 나머지 채널은 아직 준비중.
-                  const locked = m.key !== "sms";
-                  const active = !locked && methods.includes(m.key);
+                  const active = methods.includes(m.key);
                   return (
                     <button
                       key={m.key}
                       type="button"
-                      onClick={() => {
-                        if (locked) {
-                          alert("준비중입니다.");
-                          return;
-                        }
-                        toggleMethod(m.key);
-                      }}
-                      aria-disabled={locked}
+                      onClick={() => toggleMethod(m.key)}
                       className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
-                        locked
-                          ? "border-[#E8E0D0] dark:border-zinc-700 text-[#A89B80] bg-[#F5F0E5] dark:bg-zinc-800 cursor-not-allowed opacity-70"
-                          : active
-                            ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#4d5a29] dark:text-[#A8B87A]"
-                            : "border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-white dark:bg-zinc-900"
+                        active
+                          ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#4d5a29] dark:text-[#A8B87A]"
+                          : "border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-white dark:bg-zinc-900"
                       }`}
                     >
-                      {active ? "✓ " : ""}{m.label}{locked ? " (준비중)" : ""}
+                      {active ? "✓ " : ""}{m.label}
                     </button>
                   );
                 })}
@@ -646,6 +635,15 @@ function AutoMessageEditor({
                 <p className="mt-2 text-[11.5px] leading-relaxed text-[#B47B2A] dark:text-amber-300">
                   ⚠️ 이 알림은 &lsquo;지금 실행&rsquo; 시 조건에 맞는 회원에게 <strong>실제 문자가 발송</strong>되고
                   건당 요금이 발생합니다. 한 번 실행에 최대 200명까지 발송돼요.
+                </p>
+              )}
+              {methods.some((k) => k !== "sms") && (
+                <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#8C8270] dark:text-zinc-500">
+                  {methods
+                    .filter((k) => k !== "sms")
+                    .map((k) => METHOD_LABEL[k] ?? k)
+                    .join(" · ")}
+                  은(는) 아직 발송 연동 전이라 선택값만 저장돼요. 발송 대기열에는 함께 쌓입니다.
                 </p>
               )}
             </NumberedField>
