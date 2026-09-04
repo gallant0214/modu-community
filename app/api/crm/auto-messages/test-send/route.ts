@@ -60,6 +60,7 @@ export async function POST(request: Request) {
     payment: "(예시) 150,000원",
     appLink,
     basis: "(예시) 만료 7일 전",
+    lastVisit: kstYmd(),
   });
 
   const result = await sendCrmSms({

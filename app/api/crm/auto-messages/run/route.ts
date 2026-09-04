@@ -75,6 +75,7 @@ export async function POST(request: Request) {
         payment: paymentText(m.product, m.price),
         appLink,
         basis: basisText(s.trigger_key, s, today, m.expiry),
+        lastVisit: m.lastVisit,
       }),
       methods: (Array.isArray(s.methods) ? s.methods : []) as never,
       status: "pending",

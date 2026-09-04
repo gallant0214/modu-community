@@ -101,7 +101,8 @@ export const MESSAGE_VARIABLES: { token: string; desc: string }[] = [
   { token: "#회원명#", desc: "회원 이름" },
   { token: "#상품명#", desc: "구매/대상 상품명" },
   { token: "#결제내역#", desc: "결제 상세(상품명·금액)" },
-  { token: "#만료일#", desc: "만료 날짜" },
+  { token: "#만료일#", desc: "대상 상품의 만료 날짜" },
+  { token: "#마지막방문일#", desc: "마지막 출석 날짜 (장기 미출석 알림용)" },
   { token: "#전송기준#", desc: "남은 기간(예: 10일)" },
   { token: "#앱설치링크#", desc: "회원 앱 설치 링크" },
 ];

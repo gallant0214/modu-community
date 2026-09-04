@@ -11,8 +11,11 @@ export interface Match {
   member_id: number;
   name: string;
   product?: string;
+  /** 대상 상품의 만료일 (#만료일#). 상품이 없는 트리거는 비워 둔다. */
   expiry?: string;
   price?: number;
+  /** 마지막 출석일 (#마지막방문일#) — 장기 미출석 알림용 */
+  lastVisit?: string;
 }
 
 export interface TriggerSetting {
@@ -278,7 +281,8 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
     const out: Match[] = [];
     for (const m of members.values()) {
       const last = m.last_attended_at ? ymdOf(new Date(m.last_attended_at)) : null;
-      if (last && last === cutoff) out.push({ member_id: m.id, name: m.name, expiry: last });
+      // 마지막 출석일은 #만료일# 이 아니라 #마지막방문일# 로 전달 (상품 만료일과 혼동 방지)
+      if (last && last === cutoff) out.push({ member_id: m.id, name: m.name, lastVisit: last });
     }
     return out;
   }
@@ -347,6 +351,7 @@ export function renderMessage(
     payment?: string;
     appLink?: string;
     basis?: string;
+    lastVisit?: string;
   }
 ): string {
   return (template || "")
@@ -354,6 +359,7 @@ export function renderMessage(
     .replaceAll("#회원명#", vars.name)
     .replaceAll("#상품명#", vars.product ?? "")
     .replaceAll("#만료일#", vars.expiry ?? "")
+    .replaceAll("#마지막방문일#", vars.lastVisit ?? "")
     .replaceAll("#결제내역#", vars.payment ?? "")
     .replaceAll("#앱설치링크#", vars.appLink ?? "")
     .replaceAll("#전송기준#", vars.basis ?? "");

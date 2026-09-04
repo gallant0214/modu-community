@@ -438,7 +438,8 @@ function AutoMessageEditor({
           attachments,
           coupon: couponName.trim() ? { name: couponName.trim(), link: couponLink.trim() } : null,
           send_days_dir: sendDaysDir,
-          send_hour: sendHour,
+          // '즉시'는 발송 시각 개념이 없어 저장하지 않는다.
+          send_hour: sendBasis === "immediate" ? null : sendHour,
         },
       });
     } finally {
@@ -586,24 +587,30 @@ function AutoMessageEditor({
                   <span>회 (미출석 등)</span>
                 </div>
               )}
-              {/* 발송 시각 — 즉시/일정/횟수 공통, 시 단위 */}
-              <div className="mt-3 flex items-center gap-2 flex-wrap text-[13px] text-[#3A342A] dark:text-zinc-200">
-                <span>발송 시각</span>
-                <select
-                  value={sendHour}
-                  onChange={(e) => setSendHour(Number(e.target.value))}
-                  className="px-2 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
-                >
-                  {Array.from({ length: 24 }, (_, h) => (
-                    <option key={h} value={h}>
-                      {String(h).padStart(2, "0")}시
-                    </option>
-                  ))}
-                </select>
-                <span className="text-[12px] text-[#8C8270] dark:text-zinc-500">
-                  (해당 시각에 발송 · KST 기준)
-                </span>
-              </div>
+              {/* 발송 시각 — 일정/횟수 기준만. '즉시'는 조건 충족 시 바로 나가므로 시각 선택이 없다. */}
+              {sendBasis === "immediate" ? (
+                <div className="mt-3 text-[12.5px] text-[#8C8270] dark:text-zinc-500">
+                  조건에 맞으면 바로 발송돼요. 발송 시각을 따로 정하지 않습니다.
+                </div>
+              ) : (
+                <div className="mt-3 flex items-center gap-2 flex-wrap text-[13px] text-[#3A342A] dark:text-zinc-200">
+                  <span>발송 시각</span>
+                  <select
+                    value={sendHour}
+                    onChange={(e) => setSendHour(Number(e.target.value))}
+                    className="px-2 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
+                  >
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <option key={h} value={h}>
+                        {String(h).padStart(2, "0")}시
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[12px] text-[#8C8270] dark:text-zinc-500">
+                    (해당 시각에 발송 · KST 기준)
+                  </span>
+                </div>
+              )}
             </NumberedField>
 
             {/* 04 전송 방법 */}
@@ -986,11 +993,11 @@ function MessagePreview({
   recipient: string;
 }) {
   const basisText =
-    (sendBasis === "schedule"
-      ? `일정 기준 ${sendDays}일 ${sendDaysDir === "before" ? "전" : "후"}`
+    sendBasis === "schedule"
+      ? `일정 기준 ${sendDays}일 ${sendDaysDir === "before" ? "전" : "후"} · ${String(sendHour).padStart(2, "0")}시 발송`
       : sendBasis === "count"
-        ? `횟수 기준 ${sendCount}회`
-        : "즉시") + ` · ${String(sendHour).padStart(2, "0")}시 발송`;
+        ? `횟수 기준 ${sendCount}회 · ${String(sendHour).padStart(2, "0")}시 발송`
+        : "즉시 (조건 충족 시 바로 발송)";
   return (
     <div className="p-4">
       <div className="text-[12px] font-bold text-[#2A251D] dark:text-zinc-100 mb-2">미리 보기</div>
