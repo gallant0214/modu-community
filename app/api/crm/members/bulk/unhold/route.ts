@@ -10,10 +10,15 @@ const addDays = (ymd: string, n: number) => {
   return d.toISOString().slice(0, 10);
 };
 
+const TABLES = ["crm_memberships", "crm_passes", "crm_rentals"] as const;
+type TableName = (typeof TABLES)[number];
+
 /**
  * POST /api/crm/members/bulk/unhold — 선택 회원 일괄 홀딩 해제
- * 각 회원의 진행 중(active) 홀딩(crm_pauses)을 취소하고, 홀딩 시 연장했던 만료일
- * (extended_days)만큼 되돌린 뒤 is_paused=false 로 복구. (개별 해제 pauses/[id] DELETE 와 동일 규칙)
+ * 선택 회원의 is_paused=true 인 이용권(회원권·수강권·대여권)을 모두 해제.
+ *  - 진행 중(active) 홀딩 기록(crm_pauses)이 있으면: 연장했던 만료일(extended_days)을 되돌리고
+ *    그 기록을 cancelled 처리.
+ *  - 홀딩 기록이 없는 '고아' 일시정지(과거 다른 경로로 is_paused 만 켜진 것)도: is_paused=false 로 해제.
  */
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request, { needRole: "manager" });
@@ -33,77 +38,76 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "회원을 선택해 주세요" }, { status: 400 });
   }
 
-  type Pause = {
-    id: number;
-    member_id: number;
-    pass_id: number | null;
-    membership_id: number | null;
-    rental_id: number | null;
-    extended_days: number | null;
-  };
-  const pauses: Pause[] = [];
-  for (let i = 0; i < memberIds.length; i += 200) {
-    const chunk = memberIds.slice(i, i + 200);
-    const { data, error } = await supabase
-      .from("crm_pauses")
-      .select("id, member_id, pass_id, membership_id, rental_id, extended_days")
-      .eq("center_id", ctx.centerId)
-      .eq("status", "active")
-      .in("member_id", chunk);
-    if (error) {
-      return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+  // 1) is_paused=true 이용권 로드 (테이블별, 선택 회원)
+  type Held = { table: TableName; id: number; member_id: number; expires_at: string | null };
+  const held: Held[] = [];
+  for (const table of TABLES) {
+    for (let i = 0; i < memberIds.length; i += 200) {
+      const chunk = memberIds.slice(i, i + 200);
+      const { data, error } = await supabase
+        .from(table)
+        .select("id, member_id, expires_at")
+        .eq("center_id", ctx.centerId)
+        .eq("is_paused", true)
+        .in("member_id", chunk);
+      if (error) {
+        return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+      }
+      for (const r of (data ?? []) as { id: number; member_id: number; expires_at: string | null }[]) {
+        held.push({ table, id: r.id, member_id: r.member_id, expires_at: r.expires_at });
+      }
     }
-    pauses.push(...((data ?? []) as Pause[]));
   }
 
-  if (pauses.length === 0) {
+  if (held.length === 0) {
     return NextResponse.json({ ok: true, members_affected: 0, items_unheld: 0, skipped: memberIds.length });
   }
 
+  // 2) 이 회원들의 active 홀딩 기록 → (테이블:항목id) 로 매핑
+  const pauseByItem = new Map<string, { pauseId: number; extended_days: number }>();
+  for (let i = 0; i < memberIds.length; i += 200) {
+    const chunk = memberIds.slice(i, i + 200);
+    const { data } = await supabase
+      .from("crm_pauses")
+      .select("id, pass_id, membership_id, rental_id, extended_days")
+      .eq("center_id", ctx.centerId)
+      .eq("status", "active")
+      .in("member_id", chunk);
+    for (const p of (data ?? []) as {
+      id: number;
+      pass_id: number | null;
+      membership_id: number | null;
+      rental_id: number | null;
+      extended_days: number | null;
+    }[]) {
+      const table: TableName = p.pass_id ? "crm_passes" : p.membership_id ? "crm_memberships" : "crm_rentals";
+      const targetId = p.pass_id ?? p.membership_id ?? p.rental_id;
+      if (targetId) pauseByItem.set(`${table}:${targetId}`, { pauseId: p.id, extended_days: p.extended_days || 0 });
+    }
+  }
+
+  // 3) 각 일시정지 항목 해제
   let unheld = 0;
   const affected = new Set<number>();
-  for (const p of pauses) {
-    const table = p.pass_id ? "crm_passes" : p.membership_id ? "crm_memberships" : "crm_rentals";
-    const targetId = (p.pass_id ?? p.membership_id ?? p.rental_id) as number | null;
-    if (!targetId) continue;
-
-    const { data: target } = await supabase
-      .from(table)
-      .select("expires_at")
-      .eq("id", targetId)
-      .eq("center_id", ctx.centerId)
-      .maybeSingle();
-
-    if (target && (target as { expires_at: string | null }).expires_at) {
-      const restored = addDays(
-        (target as { expires_at: string }).expires_at,
-        -Math.max(0, p.extended_days || 0)
-      );
-      await supabase
-        .from(table)
-        .update({ expires_at: restored, is_paused: false } as never)
-        .eq("id", targetId)
-        .eq("center_id", ctx.centerId);
-    } else {
-      // 만료일 없는(무기한 등) 경우 일시정지만 해제
-      await supabase
-        .from(table)
-        .update({ is_paused: false } as never)
-        .eq("id", targetId)
-        .eq("center_id", ctx.centerId);
+  for (const h of held) {
+    const pause = pauseByItem.get(`${h.table}:${h.id}`);
+    const patch: Record<string, unknown> = { is_paused: false };
+    if (pause && h.expires_at) {
+      patch.expires_at = addDays(h.expires_at, -Math.max(0, pause.extended_days));
     }
-
-    await supabase
-      .from("crm_pauses")
-      .update({
-        status: "cancelled",
-        cancelled_at: new Date().toISOString(),
-        cancelled_by_uid: ctx.uid,
-      } as never)
-      .eq("id", p.id);
-
+    await supabase.from(h.table).update(patch as never).eq("id", h.id).eq("center_id", ctx.centerId);
+    if (pause) {
+      await supabase
+        .from("crm_pauses")
+        .update({
+          status: "cancelled",
+          cancelled_at: new Date().toISOString(),
+          cancelled_by_uid: ctx.uid,
+        } as never)
+        .eq("id", pause.pauseId);
+    }
     unheld++;
-    affected.add(p.member_id);
+    affected.add(h.member_id);
   }
 
   await supabase.from("crm_audit_logs").insert({
