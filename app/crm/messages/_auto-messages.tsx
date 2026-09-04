@@ -617,7 +617,7 @@ function AutoMessageEditor({
             <NumberedField
               no="04"
               title="전송 방법"
-              hint="여러 개를 함께 선택할 수 있어요. 현재 실제로 나가는 채널은 문자메시지이고, 나머지는 선택값이 저장됩니다."
+              hint="여러 개를 함께 선택할 수 있어요. 스마트 전송은 앱 설치 회원에게 푸시, 미설치 회원에게 문자로 자동 분기합니다."
             >
               <div className="flex flex-wrap gap-2">
                 {METHOD_OPTIONS.map((m) => {
@@ -644,13 +644,21 @@ function AutoMessageEditor({
                   건당 요금이 발생합니다. 한 번 실행에 최대 200명까지 발송돼요.
                 </p>
               )}
-              {methods.some((k) => k !== "sms") && (
+              {methods.includes("smart") && (
+                <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#6B5D47] dark:text-zinc-400">
+                  📱 <strong>스마트 전송</strong> — 회원 앱이 설치된 회원에게는 <strong>앱 푸시</strong>로,
+                  앱이 없는 회원에게는 <strong>문자</strong>로 자동 분기해 보냅니다. (문자로 나간 건만 요금 발생)
+                </p>
+              )}
+              {methods.includes("push") && (
                 <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#8C8270] dark:text-zinc-500">
-                  {methods
-                    .filter((k) => k !== "sms")
-                    .map((k) => METHOD_LABEL[k] ?? k)
-                    .join(" · ")}
-                  은(는) 아직 발송 연동 전이라 선택값만 저장돼요. 발송 대기열에는 함께 쌓입니다.
+                  앱 푸시는 회원 앱이 설치·로그인된 회원에게만 전달돼요. 앱이 없는 회원에게도 보내려면
+                  &lsquo;스마트 전송&rsquo;을 쓰세요.
+                </p>
+              )}
+              {methods.includes("alimtalk") && (
+                <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#8C8270] dark:text-zinc-500">
+                  알림톡은 아직 발송 연동 전이라 선택값만 저장돼요.
                 </p>
               )}
             </NumberedField>

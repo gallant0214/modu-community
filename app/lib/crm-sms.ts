@@ -21,6 +21,50 @@ export interface CrmSmsResult {
   message: string;
 }
 
+/**
+ * 회원 id 목록 중 **앱 푸시를 받을 수 있는 회원** 집합.
+ * 기준 = 등록된 기기 토큰이 있는지 (앱 설치 + 로그인 상태).
+ * '스마트 전송'이 푸시/문자를 가르는 판정에 쓴다.
+ */
+export async function loadPushableMembers(
+  centerId: number,
+  memberIds: number[]
+): Promise<Set<number>> {
+  const out = new Set<number>();
+  if (memberIds.length === 0) return out;
+  // 회원이 다른 센터로도 연동돼 있을 수 있어 uid 기준 토큰도 함께 본다.
+  const uidByMember = new Map<string, number>();
+  for (let i = 0; i < memberIds.length; i += 500) {
+    const chunk = memberIds.slice(i, i + 500);
+    const { data } = await supabase
+      .from("crm_members")
+      .select("id, linked_firebase_uid")
+      .eq("center_id", centerId)
+      .in("id", chunk);
+    for (const m of data ?? []) {
+      const uid = (m as { linked_firebase_uid?: string | null }).linked_firebase_uid;
+      if (uid) uidByMember.set(uid, m.id);
+    }
+    const { data: byMember } = await supabase
+      .from("crm_member_device_tokens")
+      .select("member_id")
+      .in("member_id", chunk);
+    for (const t of byMember ?? []) out.add(t.member_id);
+  }
+  const uids = Array.from(uidByMember.keys());
+  for (let i = 0; i < uids.length; i += 500) {
+    const { data } = await supabase
+      .from("crm_member_device_tokens")
+      .select("firebase_uid")
+      .in("firebase_uid", uids.slice(i, i + 500));
+    for (const t of data ?? []) {
+      const id = uidByMember.get(t.firebase_uid);
+      if (id) out.add(id);
+    }
+  }
+  return out;
+}
+
 /** 회원 id 목록 → 휴대폰 번호 (번호 없는 회원은 제외) */
 export async function loadMemberPhones(
   centerId: number,
