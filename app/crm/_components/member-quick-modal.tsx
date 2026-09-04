@@ -32,6 +32,7 @@ interface MemberDetail {
   current_rental: string | null;
   current_locker: string | null;
   face_image_thumb: string | null;
+  face_image_data: string | null;
 }
 
 interface Props {
@@ -49,8 +50,11 @@ export function MemberQuickModal({ memberId, onClose }: Props) {
   const [data, setData] = useState<MemberDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // 얼굴 사진 확대 보기 (썸네일은 작아서 얼굴 확인이 어려움)
+  const [zoomed, setZoomed] = useState(false);
 
   useEffect(() => {
+    setZoomed(false);
     if (!memberId) {
       setData(null);
       return;
@@ -80,9 +84,13 @@ export function MemberQuickModal({ memberId, onClose }: Props) {
     };
   }, [memberId, getIdToken]);
 
+  // 확대용은 원본(face_image_data), 없으면 썸네일로 대체
+  const photoSrc = data?.face_image_data || data?.face_image_thumb || null;
+
   if (!memberId) return null;
 
   return (
+    <>
     <CrmModal
       open
       onClose={onClose}
@@ -99,16 +107,29 @@ export function MemberQuickModal({ memberId, onClose }: Props) {
         <div className="space-y-3">
           {/* 얼굴 + 이름 (누군지 바로 알아보기 위함 — 얼굴을 이름보다 크게) */}
           <div className="flex items-center gap-3.5">
-            <div className="shrink-0 w-20 h-20 rounded-2xl overflow-hidden border border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
-              {data.face_image_thumb ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={data.face_image_thumb} alt={`${data.name} 얼굴`} className="w-full h-full object-cover" />
-              ) : (
+            {photoSrc ? (
+              <button
+                type="button"
+                onClick={() => setZoomed(true)}
+                aria-label="얼굴 사진 크게 보기"
+                title="클릭하면 크게 볼 수 있어요"
+                className="group relative shrink-0 w-20 h-20 rounded-2xl overflow-hidden border border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-[#6B7B3A]/40"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photoSrc} alt={`${data.name} 얼굴`} className="w-full h-full object-cover" />
+                <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 18a7 7 0 110-14 7 7 0 010 14zM11 8v6M8 11h6" />
+                  </svg>
+                </span>
+              </button>
+            ) : (
+              <div className="shrink-0 w-20 h-20 rounded-2xl overflow-hidden border border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5] dark:bg-zinc-800 flex items-center justify-center">
                 <svg className="w-10 h-10 text-[#C9BEA6] dark:text-zinc-600" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
-              )}
-            </div>
+              </div>
+            )}
             <div className="min-w-0">
               <div className="text-[18px] font-bold text-[#2A251D] dark:text-zinc-100 truncate">
                 {data.name} 님
@@ -192,6 +213,65 @@ export function MemberQuickModal({ memberId, onClose }: Props) {
         </div>
       ) : null}
     </CrmModal>
+
+    {/* 얼굴 사진 확대 — 모달(z-50)·토스트(z-100) 위에 표시. 아무 곳이나 누르면 닫힘 */}
+    {zoomed && photoSrc && data && (
+      <PhotoLightbox src={photoSrc} name={data.name} onClose={() => setZoomed(false)} />
+    )}
+    </>
+  );
+}
+
+/** 얼굴 사진 전체화면 확대 뷰어 (ESC·배경 클릭·닫기 버튼으로 종료) */
+function PhotoLightbox({
+  src,
+  name,
+  onClose,
+}: {
+  src: string;
+  name: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    // capture 로 받아 뒤쪽 모달이 함께 닫히지 않게 한다
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 px-4 py-8 cursor-zoom-out"
+      onClick={onClose}
+      role="dialog"
+      aria-label={`${name} 얼굴 사진`}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={`${name} 얼굴`}
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-full max-w-full rounded-2xl object-contain shadow-2xl cursor-default"
+      />
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="닫기"
+        className="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white hover:bg-black/70"
+      >
+        <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+      <div className="pointer-events-none absolute bottom-6 left-0 right-0 text-center text-[13px] font-medium text-white/85">
+        {name} · 아무 곳이나 누르면 닫혀요
+      </div>
+    </div>
   );
 }
 
