@@ -166,6 +166,29 @@ export default function CrmSchedulePage() {
     newTrainerName?: string;
   } | null>(null);
 
+  /**
+   * 이미 일정이 있는 칸은 클릭해도 상세창만 열려 새 예약을 잡을 수 없다.
+   * 상세창의 '+ 이 시간에 스케줄 추가하기' 가 이 함수로 같은 시간·강사의 새 예약 모달을 연다.
+   */
+  const openAddScheduleAt = useCallback(
+    (startsAt: string, endsAt: string, trainerMemberId: number | null) => {
+      setPicked(null);
+      setPickedEvent(null);
+      setPickedClass(null);
+      const fromStaff = staff.find((t) => t.id === trainerMemberId);
+      const me = myMemberId != null ? staff.find((t) => t.id === myMemberId) : undefined;
+      const chosen = fromStaff ?? me ?? staff[0];
+      if (!chosen) return;
+      setNewSlot({
+        trainerId: chosen.id,
+        trainerName: chosen.display_name,
+        startsAt,
+        endsAt,
+      });
+    },
+    [staff, myMemberId]
+  );
+
   const range = useMemo(() => computeRange(viewMode, anchor), [viewMode, anchor]);
   const rangeLabel = useMemo(() => formatRangeLabel(viewMode, anchor, range), [viewMode, anchor, range]);
 
@@ -532,6 +555,9 @@ export default function CrmSchedulePage() {
 
       {picked && (
         <ReservationDialog
+          onAddSchedule={() =>
+            openAddScheduleAt(picked.starts_at, picked.ends_at, picked.trainer_member_id)
+          }
           reservation={picked}
           onClose={() => setPicked(null)}
           onEdit={() => {
@@ -571,6 +597,9 @@ export default function CrmSchedulePage() {
       {pickedEvent && (
         <EventDialog
           event={pickedEvent}
+          onAddSchedule={() =>
+            openAddScheduleAt(pickedEvent.starts_at, pickedEvent.ends_at, pickedEvent.trainer_member_id)
+          }
           trainers={trainers}
           onClose={() => setPickedEvent(null)}
           onDelete={async () => {
@@ -594,6 +623,9 @@ export default function CrmSchedulePage() {
       {pickedClass && (
         <ClassSessionDialog
           session={pickedClass}
+          onAddSchedule={() =>
+            openAddScheduleAt(pickedClass.starts_at, pickedClass.ends_at, pickedClass.trainer_member_id)
+          }
           canCancel={perms["schedule.class_create"] === true}
           onClose={() => setPickedClass(null)}
           onCancelled={() => {
@@ -1047,11 +1079,14 @@ function ClassSessionDialog({
   canCancel,
   onClose,
   onCancelled,
+  onAddSchedule,
 }: {
   session: ClassSession;
   canCancel: boolean;
   onClose: () => void;
   onCancelled: () => void;
+  /** 같은 시간대에 일정을 하나 더 잡기 */
+  onAddSchedule: () => void;
 }) {
   const { getIdToken } = useAuth();
   const [bookings, setBookings] = useState<
@@ -1187,6 +1222,9 @@ function ClassSessionDialog({
             닫기
           </button>
         </div>
+        <div className="mt-2">
+          <AddScheduleBtn onClick={onAddSchedule} />
+        </div>
       </div>
     </div>
   );
@@ -1198,11 +1236,14 @@ function EventDialog({
   trainers,
   onClose,
   onDelete,
+  onAddSchedule,
 }: {
   event: ScheduleEvent;
   trainers: StaffOption[];
   onClose: () => void;
   onDelete: () => void;
+  /** 같은 시간대에 일정을 하나 더 잡기 */
+  onAddSchedule: () => void;
 }) {
   const trainerName = trainers.find((t) => t.id === event.trainer_member_id)?.display_name ?? null;
   const typeLabel = event.type === "center" ? "센터 일정" : "개인 일정";
@@ -1251,6 +1292,7 @@ function EventDialog({
               >
                 닫기
               </button>
+              <AddScheduleBtn onClick={onAddSchedule} />
             </>
           ) : (
             <>
@@ -2439,11 +2481,14 @@ function ReservationDialog({
   onClose,
   onChange,
   onEdit,
+  onAddSchedule,
 }: {
   reservation: Reservation;
   onClose: () => void;
   onChange: (next: string, reason?: string) => void;
   onEdit: () => void;
+  /** 같은 시간대에 일정을 하나 더 잡기 — 칸이 이미 차 있어 슬롯 클릭이 안 될 때의 우회 경로 */
+  onAddSchedule: () => void;
 }) {
   const [reason, setReason] = useState<string>("");
   const [reasonNote, setReasonNote] = useState<string>("");
@@ -2614,6 +2659,7 @@ function ReservationDialog({
                   닫기
                 </button>
               </div>
+              <AddScheduleBtn onClick={onAddSchedule} />
             </>
             )
           ) : (
@@ -2687,6 +2733,23 @@ function ReservationDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * 같은 시간대에 일정을 하나 더 추가하는 버튼.
+ * 스케줄 칸이 이미 차 있으면 그 칸을 클릭해도 기존 상세창만 열려 새 예약을 못 잡는다.
+ * (예: 11시에 클래스 수업이 있는데 같은 시간 개인레슨을 추가로 잡고 싶을 때)
+ */
+function AddScheduleBtn({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full px-3 py-2.5 rounded-lg border border-dashed border-[#6B7B3A]/60 text-[13px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/5"
+    >
+      + 이 시간에 스케줄 추가하기
+    </button>
   );
 }
 
