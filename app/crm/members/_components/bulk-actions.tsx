@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { CrmModal, crmInputClass } from "../../_components/crm-modal";
 
-type Action = "hold" | "extend" | "message" | "mileage";
+type Action = "hold" | "unhold" | "extend" | "message" | "mileage";
 
 function todayYmd(): string {
   const kst = new Date(Date.now() + 9 * 3600 * 1000);
@@ -78,6 +78,14 @@ export function BulkActionBar({
       <BulkBtn disabled={count === 0} onClick={() => setAction("message")}>메시지 보내기</BulkBtn>
       <BulkBtn disabled={count === 0} onClick={() => setAction("mileage")}>마일리지</BulkBtn>
       <BulkBtn disabled={count === 0} onClick={onExportExcel}>엑셀 다운로드</BulkBtn>
+      {/* 홀딩 해제 — 회원 삭제 왼쪽. 진행 중 홀딩을 풀고 연장분 원복 */}
+      <button
+        onClick={() => setAction("unhold")}
+        disabled={count === 0}
+        className="px-3 py-1.5 rounded-full text-[12.5px] font-semibold border border-[#B47B2A] dark:border-amber-700 bg-white dark:bg-zinc-900 text-[#B47B2A] dark:text-amber-300 hover:bg-[#B47B2A]/10 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        홀딩 해제
+      </button>
       <button
         onClick={onDelete}
         disabled={count === 0}
@@ -129,6 +137,7 @@ function BulkBtn({
 
 const TITLES: Record<Action, string> = {
   hold: "일괄 홀딩",
+  unhold: "홀딩 해제",
   extend: "기간 연장",
   message: "메시지 보내기",
   mileage: "마일리지 지급 / 차감",
@@ -241,6 +250,9 @@ function BulkActionModal({
             return { kind, id: Number(id) };
           }),
         };
+      } else if (action === "unhold") {
+        url = "/api/crm/members/bulk/unhold";
+        payload = { member_ids: selectedIds };
       } else if (action === "extend") {
         url = "/api/crm/members/bulk/extend";
         payload = { member_ids: selectedIds, days: extendDays, reason: extendReason.trim() || undefined };
@@ -269,6 +281,10 @@ function BulkActionModal({
       if (action === "hold") {
         summary = `${data.members_affected}명 · 이용권 ${data.items_held}건 홀딩 완료 (${data.extended_days}일 연장)`;
         if (data.skipped > 0) summary += ` · 유효 이용권 없어 제외 ${data.skipped}명`;
+      } else if (action === "unhold") {
+        summary = data.items_unheld > 0
+          ? `${data.members_affected}명 · 이용권 ${data.items_unheld}건 홀딩 해제 완료 (연장분 원복)`
+          : "진행 중인 홀딩이 없어요";
       } else if (action === "extend") {
         summary = `${data.members_affected}명 · 이용권 ${data.items_extended}건 ${data.days}일 연장 완료`;
         if (data.skipped > 0) summary += ` · 유효 이용권 없어 제외 ${data.skipped}명`;
@@ -444,6 +460,17 @@ function BulkActionModal({
               선택한 상품에만 홀딩이 적용되고, 홀딩 기간만큼 만료일이 자동 연장됩니다.
             </p>
           </>
+        )}
+
+        {action === "unhold" && (
+          <div className="space-y-2">
+            <p className="text-[13.5px] text-[#3A342A] dark:text-zinc-200 leading-relaxed">
+              선택한 <strong className="font-semibold">{selectedIds.length}명</strong>의 <strong className="font-semibold">진행 중인 홀딩을 모두 해제</strong>합니다.
+            </p>
+            <div className="px-3 py-2.5 rounded-lg bg-[#FBF7EB] dark:bg-zinc-900/60 border border-[#E8E0D0] dark:border-zinc-800 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
+              홀딩할 때 연장됐던 만료일이 <strong>남은 홀딩 기간만큼 원래대로 원복</strong>되고, 이용권이 다시 활성화됩니다. (홀딩 중이 아닌 회원은 변화 없음)
+            </div>
+          </div>
         )}
 
         {action === "extend" && (
