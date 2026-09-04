@@ -27,7 +27,7 @@ export async function DELETE(
 
   const { data: pause, error: pErr } = await supabase
     .from("crm_pauses")
-    .select("id, pass_id, membership_id, rental_id, extended_days, status")
+    .select("id, pass_id, membership_id, rental_id, extended_days, start_date, status")
     .eq("id", pauseId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -51,7 +51,15 @@ export async function DELETE(
     return NextResponse.json({ error: "원본을 찾을 수 없습니다" }, { status: 404 });
   }
 
-  const restoredExpires = addDays(target.expires_at, -pause.extended_days);
+  // 조기 해제 = 안 쓴(남은) 홀딩 일수만 원복. 실제 정지된 기간은 만료 연장으로 유지.
+  const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const pr2 = pause as typeof pause & { start_date: string | null };
+  const ext = Math.max(0, pause.extended_days || 0);
+  const used = pr2.start_date
+    ? Math.max(0, Math.round((Date.parse(`${todayKst}T00:00:00Z`) - Date.parse(`${pr2.start_date}T00:00:00Z`)) / 86400000))
+    : 0;
+  const revert = Math.max(0, ext - used);
+  const restoredExpires = addDays(target.expires_at, -revert);
 
   await supabase
     .from(table)
@@ -73,7 +81,7 @@ export async function DELETE(
     action: "pause.cancel",
     entity_type: entityType,
     entity_id: targetId,
-    payload: { pause_id: pauseId, restored_days: pause.extended_days } as never,
+    payload: { pause_id: pauseId, restored_days: revert } as never,
   });
 
   return NextResponse.json({ ok: true, restored_expires_at: restoredExpires });

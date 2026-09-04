@@ -9,6 +9,15 @@ const addDays = (ymd: string, n: number) => {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
+const dayDiff = (a: string, b: string) =>
+  Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+/** 조기 해제 시 되돌릴 일수 = 안 쓴(남은) 홀딩 일수. 실제 정지된 기간은 유지. */
+const revertDays = (extendedDays: number, startDate: string | null, todayKst: string) => {
+  const ext = Math.max(0, extendedDays || 0);
+  if (!startDate) return ext; // 시작일 불명 → 전체 원복(하위호환)
+  const used = Math.max(0, dayDiff(startDate, todayKst)); // 시작일~오늘 = 실제 정지 일수
+  return Math.max(0, ext - used);
+};
 
 const KIND_TABLE: Record<string, "crm_memberships" | "crm_passes" | "crm_rentals"> = {
   membership: "crm_memberships",
@@ -60,7 +69,7 @@ export async function POST(request: Request) {
   // 진행 중 홀딩 기록 조회
   const { data: pause } = await supabase
     .from("crm_pauses")
-    .select("id, extended_days")
+    .select("id, extended_days, start_date")
     .eq("center_id", ctx.centerId)
     .eq("status", "active")
     .eq(col, id)
@@ -69,8 +78,12 @@ export async function POST(request: Request) {
 
   const patch: Record<string, unknown> = { is_paused: false };
   const expiresAt = (item as { expires_at: string | null }).expires_at;
+  const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  let revert = 0;
   if (pause && expiresAt) {
-    patch.expires_at = addDays(expiresAt, -Math.max(0, (pause as { extended_days: number | null }).extended_days || 0));
+    const p = pause as { extended_days: number | null; start_date: string | null };
+    revert = revertDays(p.extended_days || 0, p.start_date, todayKst); // 안 쓴 남은 일수만 원복
+    patch.expires_at = addDays(expiresAt, -revert);
   }
 
   await supabase.from(table).update(patch as never).eq("id", id).eq("center_id", ctx.centerId);
@@ -92,8 +105,8 @@ export async function POST(request: Request) {
     action: "pause.cancel",
     entity_type: table,
     entity_id: id,
-    payload: { kind, reverted: !!(pause && expiresAt), had_record: !!pause } as never,
+    payload: { kind, reverted_days: revert, had_record: !!pause } as never,
   });
 
-  return NextResponse.json({ ok: true, reverted: !!(pause && expiresAt) });
+  return NextResponse.json({ ok: true, reverted_days: revert });
 }

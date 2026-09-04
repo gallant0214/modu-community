@@ -9,6 +9,15 @@ const addDays = (ymd: string, n: number) => {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
+const dayDiff = (a: string, b: string) =>
+  Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+/** 조기 해제 시 되돌릴 일수 = 안 쓴(남은) 홀딩 일수. 실제 정지된 기간은 유지. */
+const revertDays = (extendedDays: number, startDate: string | null, todayKst: string) => {
+  const ext = Math.max(0, extendedDays || 0);
+  if (!startDate) return ext;
+  const used = Math.max(0, dayDiff(startDate, todayKst));
+  return Math.max(0, ext - used);
+};
 
 const TABLES = ["crm_memberships", "crm_passes", "crm_rentals"] as const;
 type TableName = (typeof TABLES)[number];
@@ -64,12 +73,12 @@ export async function POST(request: Request) {
   }
 
   // 2) 이 회원들의 active 홀딩 기록 → (테이블:항목id) 로 매핑
-  const pauseByItem = new Map<string, { pauseId: number; extended_days: number }>();
+  const pauseByItem = new Map<string, { pauseId: number; extended_days: number; start_date: string | null }>();
   for (let i = 0; i < memberIds.length; i += 200) {
     const chunk = memberIds.slice(i, i + 200);
     const { data } = await supabase
       .from("crm_pauses")
-      .select("id, pass_id, membership_id, rental_id, extended_days")
+      .select("id, pass_id, membership_id, rental_id, extended_days, start_date")
       .eq("center_id", ctx.centerId)
       .eq("status", "active")
       .in("member_id", chunk);
@@ -79,21 +88,24 @@ export async function POST(request: Request) {
       membership_id: number | null;
       rental_id: number | null;
       extended_days: number | null;
+      start_date: string | null;
     }[]) {
       const table: TableName = p.pass_id ? "crm_passes" : p.membership_id ? "crm_memberships" : "crm_rentals";
       const targetId = p.pass_id ?? p.membership_id ?? p.rental_id;
-      if (targetId) pauseByItem.set(`${table}:${targetId}`, { pauseId: p.id, extended_days: p.extended_days || 0 });
+      if (targetId) pauseByItem.set(`${table}:${targetId}`, { pauseId: p.id, extended_days: p.extended_days || 0, start_date: p.start_date });
     }
   }
 
-  // 3) 각 일시정지 항목 해제
+  // 3) 각 일시정지 항목 해제 (조기 해제 = 안 쓴 남은 일수만 원복)
+  const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   let unheld = 0;
   const affected = new Set<number>();
   for (const h of held) {
     const pause = pauseByItem.get(`${h.table}:${h.id}`);
     const patch: Record<string, unknown> = { is_paused: false };
     if (pause && h.expires_at) {
-      patch.expires_at = addDays(h.expires_at, -Math.max(0, pause.extended_days));
+      const revert = revertDays(pause.extended_days, pause.start_date, todayKst);
+      patch.expires_at = addDays(h.expires_at, -revert);
     }
     await supabase.from(h.table).update(patch as never).eq("id", h.id).eq("center_id", ctx.centerId);
     if (pause) {
