@@ -327,7 +327,10 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
     const wantRenew = key === "membership_renew";
     const out: Match[] = [];
     for (const r of rows) {
-      if (!r.created_at || ymdOf(new Date(r.created_at)) !== today) continue;
+      // created_at 은 UTC. KST 로 변환해 비교하지 않으면 새벽(00~09시) 등록분이 누락된다.
+      if (!r.created_at) continue;
+      const createdKst = ymdOf(new Date(new Date(r.created_at).getTime() + 9 * 3600 * 1000));
+      if (createdKst !== today) continue;
       const total = countByMember.get(r.member_id) ?? 1;
       const isRenew = total > 1;
       if (isRenew !== wantRenew) continue;

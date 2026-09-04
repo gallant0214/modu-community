@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 
+import { fireAutoMessage } from "@/app/lib/crm-auto-message";
+
 export const dynamic = "force-dynamic";
 
 const PAYMENT_METHODS = ["cash", "card", "transfer", "etc"] as const;
@@ -220,6 +222,32 @@ export async function POST(request: Request) {
       ...(mileageUsed > 0 ? { mileage_used: mileageUsed } : {}),
     } as never,
   });
+
+  // 자동 메세지 '이용권 신규 등록 시' / '이용권 재등록 시' 즉시 발송.
+  // 이 회원의 회원권이 이번 건 포함 2건 이상이면 재등록으로 본다.
+  try {
+    const [{ count: mcount }, { data: mem }] = await Promise.all([
+      supabase
+        .from("crm_memberships")
+        .select("id", { count: "exact", head: true })
+        .eq("center_id", ctx.centerId)
+        .eq("member_id", memberId),
+      supabase.from("crm_members").select("name").eq("id", memberId).maybeSingle(),
+    ]);
+    await fireAutoMessage({
+      centerId: ctx.centerId,
+      uid: ctx.uid,
+      triggerKey: (mcount ?? 1) > 1 ? "membership_renew" : "membership_new",
+      memberId,
+      memberName: (mem as { name?: string } | null)?.name ?? "",
+      dedupeSuffix: created.id,
+      product: plan,
+      expiry: body.expires_at,
+      price: priceWon,
+    });
+  } catch {
+    /* 자동 메세지 실패가 발급 자체를 막지 않도록 무시 */
+  }
 
   return NextResponse.json({ ok: true, membershipId: created.id });
 }
