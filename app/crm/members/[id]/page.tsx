@@ -5118,7 +5118,31 @@ function HoldingDetailModal({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [refunding, setRefunding] = useState(false);
+  const [unholding, setUnholding] = useState(false);
   const [error, setError] = useState("");
+
+  // 이 상품 단독 홀딩 해제 (진행중 홀딩=연장분 원복, 고아 일시정지=is_paused만 해제)
+  const doUnhold = async () => {
+    if (!detail?.id || !detail?.kind || unholding) return;
+    if (!window.confirm("이 상품의 홀딩을 해제할까요?\n진행 중인 홀딩이면 연장했던 만료일이 원복됩니다.")) return;
+    setUnholding(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/pauses/unhold-item", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ kind: detail.kind, id: detail.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "홀딩 해제 실패");
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+      setUnholding(false);
+    }
+  };
 
   // 편집 폼 값
   const [ePrice, setEPrice] = useState(0);
@@ -5737,9 +5761,14 @@ function HoldingDetailModal({
                   )}
                   {hasRecord &&
                     (detail.isPaused ? (
-                      <div className="flex-1 min-w-[46%] px-3 py-2.5 rounded-lg bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300 text-[12.5px] text-center font-medium">
-                        홀딩 중 (만료일 연장됨)
-                      </div>
+                      <button
+                        onClick={doUnhold}
+                        disabled={unholding}
+                        className="flex-1 min-w-[46%] px-4 py-2.5 rounded-lg border border-[#B47B2A]/60 bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300 text-[13.5px] font-semibold hover:bg-[#B47B2A]/20 disabled:opacity-50"
+                        title="홀딩 중 · 눌러서 해제"
+                      >
+                        {unholding ? "해제 중…" : "▶ 홀딩 해제"}
+                      </button>
                     ) : (
                       <button
                         onClick={() => detail.id && detail.kind && onHold({ kind: detail.kind, id: detail.id })}
