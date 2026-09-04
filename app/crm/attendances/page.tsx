@@ -349,7 +349,7 @@ export default function CrmAttendancesPage() {
           <div className="mb-4 flex items-center justify-between gap-2">
             <div>
               <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
-                시간대별 출석 흐름
+                시간대별 출석 그래프
               </h2>
               <p className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
                 KST 기준 24시간 체크인 분포
@@ -373,16 +373,22 @@ export default function CrmAttendancesPage() {
                     return (
                       <div key={h} className="flex-1 min-w-[14px] h-full flex items-end rounded-t bg-[#F7F2E8] dark:bg-zinc-950/50">
                         <div
-                          className={`w-full rounded-t transition-all ${
+                          className={`w-full rounded-t transition-all flex items-center justify-center ${
                             count === 0
                               ? "bg-[#EDE4D4] dark:bg-zinc-800"
                               : h === peakHour.hour
                                 ? "bg-[#B47B2A]"
                                 : "bg-[#6B7B3A]"
                           }`}
-                          style={{ height: `${Math.max(4, ratio * 100)}%` }}
+                          style={{ height: `${count > 0 ? Math.max(18, ratio * 100) : 4}%` }}
                           title={`${h}시 ${count}건`}
-                        />
+                        >
+                          {count > 0 && (
+                            <span className="text-[9.5px] font-bold leading-none text-white tabular-nums select-none">
+                              {count}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
