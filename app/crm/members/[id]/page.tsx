@@ -961,6 +961,8 @@ export default function CrmMemberDetailPage() {
           setDetailPassId(null);
           setPassStartEdit(false);
           load();
+          // 현재보유 칩(홀딩/예정)·요약·상세목록은 usageReload 키에 의존 → 함께 갱신
+          setUsageReload((n) => n + 1);
         }}
       />
     </div>
