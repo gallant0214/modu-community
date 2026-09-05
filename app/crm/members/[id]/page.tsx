@@ -314,6 +314,18 @@ export default function CrmMemberDetailPage() {
     if (ps.some((p) => p.start_date > holdToday)) return "scheduled";
     return null;
   };
+  // 카드 칩 상태: 홀딩중이면 hold, 아니면 '아직 시작 안 한(사용 전) 상품'은 scheduled(예정),
+  // 미래 홀딩도 scheduled. 그 외 null. → 사용 전 상품엔 모두 [예정] 칩.
+  const chipStateFor = (
+    kind: "membership" | "pass" | "rental",
+    id: number | null | undefined,
+    startDate: string | null | undefined
+  ): "hold" | "scheduled" | null => {
+    const hs = holdStateFor(kind, id);
+    if (hs === "hold") return "hold";
+    if (startDate && startDate > holdToday) return "scheduled"; // 아직 시작 전 = 예정
+    return hs; // 미래 홀딩 scheduled 또는 null
+  };
   const validHoldMs = holdMs.filter((m) => m.status === "valid" && m.expires_at >= holdToday);
   const validHoldRs = holdRs.filter((r) => r.status === "valid" && r.expires_at >= holdToday);
   // 배정된 락커 중 유효기간이 남은 것 (만료 락커는 현재 보유에 제외 — 회원권·대여권과 동일 기준)
@@ -564,7 +576,7 @@ export default function CrmMemberDetailPage() {
                   tag="회원권"
                   name={m.plan_name}
                   period={fmtPeriod(m.start_date, m.expires_at)}
-                  holdState={holdStateFor("membership", m.id)}
+                  holdState={chipStateFor("membership", m.id, m.start_date)}
                   onClick={() => setPaymentDetail(membershipToDetail(m, staffName))}
                 />
               ))
@@ -577,7 +589,7 @@ export default function CrmMemberDetailPage() {
                   tag="수강권"
                   name={stripPassCountSuffix(p.lesson_kind)}
                   period={`잔여 ${p.remaining_sessions}/${p.total_sessions}회 · ${p.expires_at === "9999-12-31" ? "무기한" : `~${p.expires_at}`}`}
-                  holdState={holdStateFor("pass", p.id)}
+                  holdState={chipStateFor("pass", p.id, (p as { start_date?: string | null }).start_date ?? null)}
                   onClick={() => { setPassStartEdit(false); setDetailPassId(p.id); }}
                 />
               ))
@@ -590,7 +602,7 @@ export default function CrmMemberDetailPage() {
                   tag="대여권"
                   name={r.item_name}
                   period={fmtPeriod(r.start_date, r.expires_at)}
-                  holdState={holdStateFor("rental", r.id)}
+                  holdState={chipStateFor("rental", r.id, r.start_date)}
                   onClick={() => setPaymentDetail(rentalToDetail(r, staffName))}
                 />
               ))
@@ -606,7 +618,7 @@ export default function CrmMemberDetailPage() {
                   name={c.assign ? `${c.assign.zone_name} ${c.assign.number}번` : c.name}
                   period={fmtPeriod(c.start, c.exp)}
                   lockerUnassigned={!c.assign}
-                  holdState={holdStateFor("rental", c.rental?.id)}
+                  holdState={chipStateFor("rental", c.rental?.id, c.start)}
                   onClick={
                     c.rental
                       ? () =>
@@ -4782,7 +4794,17 @@ function mergeLockerItems(
 
   // 각 락커 대여권 = 카드 1개 (그 구매의 기간 그대로). 현재 자리 대여권엔 물리 배지.
   for (const x of lockerRentals) {
-    const l = badgeByRental.get(x.id) ?? null;
+    let l = badgeByRental.get(x.id) ?? null;
+    // 배지(현재 자리)를 못 받은 대여권도, '회수-보존(미배정) 상품'이 아니면
+    // 기존 배정된 락커 정보를 이어서 표시한다. (유효기간 남은 락커에 이어 재구매한 경우 = 같은 자리)
+    if (!l && lockers.length > 0) {
+      const genuinelyUnassigned = (x.item_name ?? "").includes("미배정");
+      if (!genuinelyUnassigned) {
+        l =
+          lockers.find((ll) => (x.memo ?? "").includes(`${ll.zone_name} ${ll.number}번`)) ??
+          (lockers.length === 1 ? lockers[0] : null);
+      }
+    }
     cards.push({
       key: `lr${x.id}`,
       name: x.item_name,
@@ -4875,6 +4897,17 @@ function UsageSection({
     if (ps.some((p) => p.start_date > holdTodayKst)) return "scheduled";
     return null;
   };
+  // 홀딩중이면 hold, 아니면 아직 시작 안 한(사용 전) 상품은 scheduled(예정).
+  const chipStateFor = (
+    kind: "membership" | "rental",
+    id: number | null | undefined,
+    startDate: string | null | undefined
+  ): "hold" | "scheduled" | null => {
+    const hs = holdStateFor(kind, id);
+    if (hs === "hold") return "hold";
+    if (startDate && startDate > holdTodayKst) return "scheduled";
+    return hs;
+  };
   const sellerName = (id: number | null) =>
     id ? staffList.find((s) => s.id === id)?.display_name ?? null : null;
 
@@ -4895,7 +4928,7 @@ function UsageSection({
           price={m.price_won}
           period={fmtPeriod(m.start_date, m.expires_at)}
           valid={isValid(m.status, m.expires_at)}
-          holdState={holdStateFor("membership", m.id)}
+          holdState={chipStateFor("membership", m.id, m.start_date)}
           onClick={() => onOpenDetail(membershipToDetail(m, sellerName))}
         />
       ),
@@ -4910,7 +4943,7 @@ function UsageSection({
           price={r.price_won}
           period={fmtPeriod(r.start_date, r.expires_at)}
           valid={isValid(r.status, r.expires_at)}
-          holdState={holdStateFor("rental", r.id)}
+          holdState={chipStateFor("rental", r.id, r.start_date)}
           onClick={() => onOpenDetail(rentalToDetail(r, sellerName))}
         />
       ),
@@ -4927,7 +4960,7 @@ function UsageSection({
             price={c.price}
             period={fmtPeriod(c.start, c.exp)}
             valid={valid}
-            holdState={holdStateFor("rental", c.rental?.id)}
+            holdState={chipStateFor("rental", c.rental?.id, c.start)}
             lockerAssign={c.assign ? { zone_name: c.assign.zone_name, number: c.assign.number } : "unassigned"}
             onClick={
               c.rental
@@ -8800,15 +8833,16 @@ function PassDetailModal({
       : PAYMENT_METHOD_LABEL[pass.payment_method] ?? pass.payment_method
     : "";
 
-  // 헤더 홀딩 칩: crm_pauses 기준. 오늘이 홀딩 기간 내=hold(홀딩중) / 시작 전=scheduled(예정).
+  // 헤더 칩: 홀딩 기간 내=hold(홀딩중). 아니면 아직 시작 안 한(사용 전) 수강권=scheduled(예정).
   const passHoldTodayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-  const passHoldState: "hold" | "scheduled" | null = activePause
-    ? activePause.start_date <= passHoldTodayKst && passHoldTodayKst <= activePause.end_date
+  const passStartYmd = (pass as { start_date?: string | null } | undefined)?.start_date ?? null;
+  const passHoldState: "hold" | "scheduled" | null =
+    activePause && activePause.start_date <= passHoldTodayKst && passHoldTodayKst <= activePause.end_date
       ? "hold"
-      : activePause.start_date > passHoldTodayKst
+      : (activePause && activePause.start_date > passHoldTodayKst) ||
+          (passStartYmd && passStartYmd > passHoldTodayKst)
         ? "scheduled"
-        : null
-    : null;
+        : null;
 
   return (
     <>
