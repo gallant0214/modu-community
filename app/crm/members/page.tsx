@@ -302,6 +302,21 @@ const matchStatus = (m: MemberRow, filter: StatusFilter, todayStr: string): bool
   }
 };
 
+/**
+ * 회원 리스트 [상태] 칩 — 우선순위: 홀딩 > 예정 > 만료 > 임박 > 유효.
+ * 색상 칩으로 가독성 확보.
+ */
+function memberStatusChip(m: MemberRow, todayStr: string): { label: string; cls: string } {
+  const eff = effExpiry(m);
+  if (m.on_hold) return { label: "홀딩", cls: "bg-violet-500 text-white border-violet-500" };
+  if (m.scheduled) return { label: "예정", cls: "bg-sky-500 text-white border-sky-500" };
+  if (!eff || eff < todayStr)
+    return { label: "만료", cls: "bg-zinc-400 text-white border-zinc-400 dark:bg-zinc-600 dark:border-zinc-600" };
+  if (eff <= addDaysYmd(todayStr, EXPIRING_DAYS))
+    return { label: "임박", cls: "bg-[#B47B2A] text-white border-[#B47B2A]" };
+  return { label: "유효", cls: "bg-emerald-500 text-white border-emerald-500" };
+}
+
 export default function CrmMembersPage() {
   const { getIdToken } = useAuth();
   const searchParamsHook = useSearchParams();
@@ -1004,7 +1019,7 @@ export default function CrmMembersPage() {
         m.registered_at ?? "",
         m.first_use_at ?? "",
         formatDate(m.created_at),
-        eff && eff >= todayStr ? "유효" : "만료",
+        memberStatusChip(m, todayStr).label,
         holdings,
         unlimited ? "무기한" : eff ?? "",
         unlimited ? "무기한" : daysLeft === null ? "" : daysLeft >= 0 ? `${daysLeft}일 남음` : `${-daysLeft}일 지남`,
@@ -1583,8 +1598,12 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
     label: "상태",
     sortKey: "status",
     render: (m, todayStr) => {
-      const eff = effExpiry(m);
-      return <StatusBadge isValid={!!eff && eff >= todayStr} hasAny={hasHoldings(m)} />;
+      const s = memberStatusChip(m, todayStr);
+      return (
+        <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold border ${s.cls}`}>
+          {s.label}
+        </span>
+      );
     },
   },
   registration_type: {
@@ -1890,28 +1909,6 @@ function MembersTable({
         </tbody>
       </table>
     </div>
-  );
-}
-
-function StatusBadge({ isValid, hasAny }: { isValid: boolean; hasAny: boolean }) {
-  if (!hasAny) {
-    return (
-      <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#F5F0E5] dark:bg-zinc-800 text-[#A89B80]">
-        만료
-      </span>
-    );
-  }
-  if (isValid) {
-    return (
-      <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-medium bg-transparent border border-[#4CAF50] text-[#4CAF50] dark:border-[#6ECF70] dark:text-[#6ECF70]">
-        유효
-      </span>
-    );
-  }
-  return (
-    <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#F5E4C8]/70 dark:bg-amber-950/40 text-[#B47B2A] dark:text-amber-300">
-      만료
-    </span>
   );
 }
 
