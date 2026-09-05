@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
+import { actionLabel } from "@/app/lib/crm-audit-format";
 import { GENDER_LABEL, formatPhone } from "../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 import { SortIndicator } from "../_components/use-column-widths";
@@ -2427,48 +2428,7 @@ function formatDateTime(iso: string) {
   }
 }
 
-const LOG_ACTION_LABEL: Record<string, string> = {
-  "member.create": "회원 등록",
-  "member.update": "회원 정보 수정",
-  "member.delete": "회원 삭제",
-  "attendance.cancel": "출석 취소",
-  "members.bulk_hold": "회원 일괄 홀딩",
-  "members.bulk_extend": "회원 일괄 기간 연장",
-  "members.bulk_mileage": "회원 일괄 마일리지",
-  "pass.issue": "수강권 발급",
-  "pass.update": "수강권 수정",
-  "pass.refund": "수강권 환불",
-  "membership.issue": "회원권 발급",
-  "membership.update": "회원권 수정",
-  "membership.refund": "회원권 환불",
-  "rental.update": "대여권 수정",
-  "rental.refund": "대여권 환불",
-  "pause.create": "홀딩 등록",
-  "pause.cancel": "홀딩 취소",
-  "reservation.book": "예약 생성",
-  "reservation.update": "예약 상태 변경",
-  "reservation.reschedule": "예약 시간 이동",
-  "reservation.cancel": "예약 취소",
-  "reservation.attended": "출석 처리",
-  "locker.assign": "락커 배정",
-  "locker.return": "락커 회수",
-  "locker_zone.update": "락커룸 수정",
-  "locker_layout.save": "락커 배치 저장",
-  "message.send": "메시지 발송",
-  "reservation.cancelled": "예약 취소",
-  "product.create": "상품 추가",
-  "product.update": "상품 수정",
-  "product.delete": "상품 삭제",
-  "staff.add": "직원 추가",
-  "staff.update": "직원 정보 수정",
-  "staff.remove": "직원 삭제",
-  "contract.create": "계약서 작성",
-  "contract.request": "계약서 발송",
-  "contract.void": "계약서 무효화",
-  "settings.update": "설정 변경",
-  "role_permission.update": "권한 변경",
-  "grade_permission.update": "직급 권한 변경",
-};
+// 로그 작업명은 공용 모듈(app/lib/crm-audit-format)의 actionLabel 로 통일.
 
 const LOG_ENTITY_LABEL: Record<string, string> = {
   member: "회원",
@@ -2550,7 +2510,7 @@ function MemberLogModal({ open, onClose }: { open: boolean; onClose: () => void 
               >
                 <span className="text-[#3A342A] dark:text-zinc-300 min-w-0">
                   <span className="font-medium">
-                    {LOG_ACTION_LABEL[log.action] ?? log.action}
+                    {actionLabel(log.action)}
                   </span>
                   {(name || entity) && (
                     <span className="ml-1.5 text-[#8C8270] dark:text-zinc-500 truncate">

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
+import { actionLabel } from "@/app/lib/crm-audit-format";
 import { CrmModal } from "../_components/crm-modal";
 import { crmInputClass } from "../_components/crm-modal";
 import { formatWon, parseWon, formatPhone } from "../_components/crm-labels";
@@ -48,67 +49,7 @@ interface AuditLog {
   subject_name?: string | null;
 }
 
-const ACTION_LABEL: Record<string, string> = {
-  "staff.add": "직원 추가",
-  "staff.update": "직원 정보 수정",
-  "staff.permissions.update": "직원 권한 수정",
-  "staff.reactivate": "직원 재등록",
-  "member.create": "회원 등록",
-  "member.delete": "회원 삭제",
-  "attendance.cancel": "출석 취소",
-  "member.face_register": "얼굴 등록",
-  "pass.issue": "수강권 발급",
-  "pass.refund": "수강권 환불",
-  "reservation.cancelled": "예약 취소",
-  "reservation.noshow": "노쇼 처리",
-  "settings.update": "설정 변경",
-  "contract.create": "계약서 추가",
-  "contract.delete": "계약서 삭제",
-  "locker_zone.update": "락커 구역 설정 변경",
-  "membership.issue": "회원권 발급",
-  "membership.refund": "회원권 환불",
-  "payout_rule.create": "정산 규칙 추가",
-  "attendance.check_in": "출석 체크인",
-  "measurement.create": "신체 측정 기록",
-  "assign": "락커 배정",
-  "return": "락커 회수",
-  "move": "락커 이동",
-  "broken": "락커 고장 처리",
-  "repaired": "락커 수리 완료",
-  "grade.create": "등급 추가",
-  "grade.update": "등급 수정",
-  "grade.delete": "등급 삭제",
-  "grade_permission.update": "직급 권한 변경",
-  "role_permission.update": "직급 권한 변경",
-  "center.transfer": "센터 양도",
-  "member.update": "회원 정보 수정",
-  "membership.update": "회원권 수정",
-  "pass.update": "수강권 수정",
-  "rental.issue": "대여권 발급",
-  "rental.update": "대여권 수정",
-  "payment.create": "결제 기록 추가",
-  "product.create": "상품 추가",
-  "notice.create": "공지 등록",
-  "message.broadcast": "메시지 발송",
-  "schedule_event.create": "일정 등록",
-  "reservation.reschedule": "예약 시간 변경",
-  "pause.create": "홀딩(일시정지) 시작",
-  "pause.cancel": "홀딩 취소",
-  "fixed_expense.create": "고정 지출 추가",
-  "vendor.create": "거래처 등록",
-  "fixed_expense.update": "고정 지출 수정",
-  "fixed_expense.delete": "고정 지출 삭제",
-  "additional_expense.create": "추가 지출 추가",
-  "additional_expense.update": "추가 지출 수정",
-  "additional_expense.delete": "추가 지출 삭제",
-  "locker_layout.save": "락커 배치 저장",
-  "contract.request": "계약서 발송 요청",
-  "contract.sign": "계약서 서명",
-  "contract.void": "계약서 무효화",
-  "members.bulk_extend": "회원 기간 일괄 연장",
-  "members.bulk_hold": "회원 일괄 홀딩",
-  "members.bulk_mileage": "회원 마일리지 일괄 지급",
-};
+// 로그 작업명은 공용 모듈(app/lib/crm-audit-format)의 actionLabel 로 통일.
 
 const BASE_ROLE_LABEL: Record<string, string> = {
   owner: "대표자",
@@ -711,7 +652,7 @@ export default function CrmSettingsPage() {
                   className="flex items-baseline justify-between gap-3 py-1.5 border-b border-[#E8E0D0]/40 dark:border-zinc-800/40 last:border-0 text-[12.5px]"
                 >
                   <span className="min-w-0 text-[#3A342A] dark:text-zinc-300 truncate">
-                    <span className="font-medium">{ACTION_LABEL[log.action] ?? log.action}</span>
+                    <span className="font-medium">{actionLabel(log.action)}</span>
                     {log.subject_name && (
                       <span className="font-semibold text-[#6B7B3A] dark:text-[#A8B87A]"> · {log.subject_name}</span>
                     )}
