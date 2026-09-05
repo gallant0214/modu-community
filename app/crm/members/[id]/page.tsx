@@ -4962,6 +4962,7 @@ function UsageSection({
             price={c.price}
             period={fmtPeriod(c.start, c.exp)}
             valid={valid}
+            paused={!!c.rental?.is_paused}
             lockerAssign={c.assign ? { zone_name: c.assign.zone_name, number: c.assign.number } : "unassigned"}
             onClick={
               c.rental
@@ -5060,6 +5061,11 @@ function UsageCard({
       >
         <div className="flex items-baseline justify-between gap-2">
           <span className="flex flex-wrap items-center gap-1.5">
+            {paused && (
+              <span className="px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 text-[10px] font-bold">
+                홀딩
+              </span>
+            )}
             <span className={`text-[10.5px] font-bold ${tone}`}>{tag}</span>
             <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{name}</span>
             {lockerAssign === "unassigned" ? (
@@ -5076,11 +5082,6 @@ function UsageCard({
                 </span>
               </>
             ) : null}
-            {paused && (
-              <span className="px-1.5 py-0.5 rounded-full bg-[#B47B2A]/12 text-[#B47B2A] dark:text-amber-300 text-[10px] font-semibold">
-                홀딩중
-              </span>
-            )}
           </span>
           <span
             className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
