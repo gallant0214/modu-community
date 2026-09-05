@@ -856,9 +856,11 @@ function ConsultationFormInner({
             <Field label="전화번호">
               <input
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(formatPhone(e.target.value))}
                 className={crmInputClass}
                 placeholder="010-0000-0000"
+                inputMode="numeric"
+                maxLength={13}
               />
             </Field>
             <Field label="주소 (동)">
@@ -1057,15 +1059,9 @@ function ConsultationFormInner({
               { label: "저녁", timeKey: mealDinnerTime, setTime: setMealDinnerTime, menu: mealDinnerMenu, setMenu: setMealDinnerMenu },
             ] as const
           ).map((r) => (
-            <div key={r.label} className="grid grid-cols-1 sm:grid-cols-[64px_120px_1fr] gap-2 sm:items-center">
+            <div key={r.label} className="grid grid-cols-1 sm:grid-cols-[64px_170px_1fr] gap-2 sm:items-center">
               <div className="text-[12.5px] font-semibold text-[#6B5D47]">{r.label}</div>
-              <input
-                type="time"
-                step={600}
-                value={r.timeKey}
-                onChange={(e) => r.setTime(e.target.value)}
-                className={crmInputClass}
-              />
+              <Time10Picker value={r.timeKey} onChange={r.setTime} />
               <input
                 value={r.menu}
                 onChange={(e) => r.setMenu(e.target.value)}
@@ -1139,14 +1135,13 @@ function ConsultationFormInner({
             </Field>
             <Field label="흡연">
               <div className="flex gap-2 items-center">
-                <label className="inline-flex items-center gap-1.5">
+                <label className="inline-flex items-center">
                   <input
                     type="checkbox"
                     checked={smoking}
                     onChange={(e) => setSmoking(e.target.checked)}
                     className="w-4 h-4 accent-[#6B7B3A]"
                   />
-                  <span className="text-[13px]">흡연</span>
                 </label>
                 <input
                   type="number"
@@ -1215,20 +1210,10 @@ function ConsultationFormInner({
               />
             </Field>
             <Field label="근무 시간">
-              <div className="flex items-center gap-2">
-                <input
-                  type="time"
-                  value={workStart}
-                  onChange={(e) => setWorkStart(e.target.value)}
-                  className={crmInputClass}
-                />
+              <div className="flex items-center gap-2 flex-wrap">
+                <Time10Picker value={workStart} onChange={setWorkStart} />
                 <span className="text-[13px] text-[#A89B80]">~</span>
-                <input
-                  type="time"
-                  value={workEnd}
-                  onChange={(e) => setWorkEnd(e.target.value)}
-                  className={crmInputClass}
-                />
+                <Time10Picker value={workEnd} onChange={setWorkEnd} />
               </div>
             </Field>
           </div>
@@ -1728,6 +1713,48 @@ function Field({
         {required && <span className="text-[#B47B2A] ml-0.5">*</span>}
       </div>
       {children}
+    </div>
+  );
+}
+
+/**
+ * HH:MM 형식 시간 선택기. 시(0~23) + 분(0/10/20/30/40/50) 2개 select.
+ * value="" 는 미설정. 부분 입력(시만 선택, 분만 선택)도 허용해 사용자가 순서대로 조작 가능.
+ * 저장 시 분 미선택이면 "00" 으로 채움. 시 미선택이면 "" 유지.
+ */
+function Time10Picker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [hStr, mStr] = value ? value.split(":") : ["", ""];
+  const hVal: number | "" = hStr !== undefined && hStr !== "" ? Number(hStr) : "";
+  const mVal: number | "" = mStr !== undefined && mStr !== "" ? Number(mStr) : "";
+  const combine = (nh: number | "", nm: number | "") => {
+    if (nh === "" && nm === "") return "";
+    if (nh === "") return "";
+    const hh = String(nh).padStart(2, "0");
+    const mm = String(nm === "" ? 0 : nm).padStart(2, "0");
+    return `${hh}:${mm}`;
+  };
+  return (
+    <div className="flex items-center gap-1.5">
+      <select
+        value={hVal}
+        onChange={(e) => onChange(combine(e.target.value === "" ? "" : Number(e.target.value), mVal))}
+        className={crmInputClass}
+      >
+        <option value="">-</option>
+        {HOURS.map((h) => (
+          <option key={h} value={h}>{h}시</option>
+        ))}
+      </select>
+      <select
+        value={mVal}
+        onChange={(e) => onChange(combine(hVal, e.target.value === "" ? "" : Number(e.target.value)))}
+        className={crmInputClass}
+      >
+        <option value="">-</option>
+        {MINUTES_10.map((m) => (
+          <option key={m} value={m}>{String(m).padStart(2, "0")}분</option>
+        ))}
+      </select>
     </div>
   );
 }
