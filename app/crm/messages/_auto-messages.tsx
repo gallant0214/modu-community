@@ -719,7 +719,8 @@ function AutoMessageEditor({
             <NumberedField
               no="05"
               title="파일 첨부"
-              hint="1440×1440px 이하 · 각 300KB(최대 2장) · jpg/jpeg. ⚠️ 지금은 미리보기에만 보이고 실제 문자·푸시에는 첨부되지 않아요(MMS 연동 예정)."
+              preparing
+              hint="이미지 첨부(MMS) 연동 후 사용할 수 있어요. 지금은 설정해도 실제 발송에 포함되지 않습니다."
             >
               <input
                 ref={fileRef}
@@ -763,7 +764,8 @@ function AutoMessageEditor({
             <NumberedField
               no="06"
               title="쿠폰 첨부"
-              hint="최대 1개. ⚠️ 지금은 미리보기에만 표시되고 실제 발송 문구에는 들어가지 않아요. 쿠폰 링크를 꼭 보내려면 07 메세지 본문에 직접 적어 주세요."
+              preparing
+              hint="쿠폰 시스템 연동 후 사용할 수 있어요. 지금 쿠폰 링크를 보내시려면 07 메세지 본문에 직접 적어 주세요."
             >
               <div className="space-y-2">
                 <input
@@ -1125,19 +1127,27 @@ function MessagePreview({
           <div className="rounded-xl bg-[#FBF7EB] dark:bg-zinc-800 px-3 py-2.5 text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-200 whitespace-pre-wrap break-words min-h-[64px]">
             {body.trim() ? body : <span className="text-[#A89B80]">메세지 내용이 여기에 표시됩니다.</span>}
           </div>
-          {attachments.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {attachments.map((src, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={i} src={src} alt="첨부" className="w-16 h-16 rounded-lg object-cover border border-[#E8E0D0] dark:border-zinc-700" />
-              ))}
-            </div>
-          )}
-          {couponName.trim() && (
-            <div className="mt-2 px-3 py-2 rounded-lg border border-[#B47B2A]/40 bg-[#F5E4C8]/40 text-[11.5px] text-[#7a5518] leading-relaxed">
-              🎫 쿠폰이 발급되었습니다
-              <div className="font-semibold">{couponName}</div>
-              {couponLink.trim() && <div className="text-[#6B7B3A] break-all">{couponLink}</div>}
+          {/* 첨부·쿠폰은 아직 실제 발송에 포함되지 않는다 — 미리보기에서도 '준비중'으로 구분 표시 */}
+          {(attachments.length > 0 || couponName.trim()) && (
+            <div className="mt-2 rounded-lg border border-dashed border-[#E8E0D0] bg-[#F5F0E5]/40 p-2 dark:border-zinc-700 dark:bg-zinc-800/30">
+              <div className="mb-1.5 text-[10.5px] font-semibold text-[#A89B80]">
+                🚧 준비중 · 실제 발송에는 포함되지 않아요
+              </div>
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 opacity-60">
+                  {attachments.map((src, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={i} src={src} alt="첨부" className="w-16 h-16 rounded-lg object-cover border border-[#E8E0D0] dark:border-zinc-700" />
+                  ))}
+                </div>
+              )}
+              {couponName.trim() && (
+                <div className="mt-1.5 px-3 py-2 rounded-lg border border-[#B47B2A]/30 bg-[#F5E4C8]/25 text-[11.5px] leading-relaxed text-[#7a5518] opacity-70">
+                  🎫 쿠폰이 발급되었습니다
+                  <div className="font-semibold">{couponName}</div>
+                  {couponLink.trim() && <div className="text-[#6B7B3A] break-all">{couponLink}</div>}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1163,22 +1173,54 @@ function NumberedField({
   no,
   title,
   hint,
+  /** 아직 동작하지 않는 기능 — 배지 + 안내를 붙이고 입력을 잠근다 */
+  preparing,
   children,
 }: {
   no: string;
   title: string;
   hint?: string;
+  preparing?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <div>
+    <div className={preparing ? "opacity-70" : undefined}>
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A] text-[10.5px] font-bold">
+        <span
+          className={`inline-flex items-center justify-center w-5 h-5 rounded-md text-[10.5px] font-bold ${
+            preparing
+              ? "bg-[#E8E0D0]/70 text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500"
+              : "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]"
+          }`}
+        >
           {no}
         </span>
-        <span className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">{title}</span>
+        <span
+          className={`text-[13px] font-semibold ${
+            preparing ? "text-[#8C8270] dark:text-zinc-400" : "text-[#2A251D] dark:text-zinc-100"
+          }`}
+        >
+          {title}
+        </span>
+        {preparing && (
+          <span className="rounded-full border border-[#E8E0D0] bg-[#F5F0E5] px-2 py-0.5 text-[10.5px] font-bold text-[#A89B80] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+            준비중
+          </span>
+        )}
       </div>
-      {children}
+      {preparing && (
+        <div className="mb-2 rounded-lg border border-dashed border-[#E8E0D0] bg-[#F5F0E5]/50 px-3 py-2 text-[12px] font-medium text-[#8C8270] dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-400">
+          🚧 서비스 준비중인 기능입니다.
+        </div>
+      )}
+      {preparing ? (
+        // 잠금 — 클릭·입력 모두 막고 흐리게 표시
+        <div className="pointer-events-none select-none opacity-50" aria-disabled>
+          {children}
+        </div>
+      ) : (
+        children
+      )}
       {hint && <p className="mt-1.5 text-[11px] text-[#A89B80] leading-relaxed">* {hint}</p>}
     </div>
   );
