@@ -87,7 +87,12 @@ export function SmsSendTab() {
   const { getIdToken } = useAuth();
   const [remain, setRemain] = useState<{ balance: number; point: number } | null>(null);
   // 솔라피 계정의 실제 발송 단가(원/건) — 예상 지출 금액 계산용
-  const [pricing, setPricing] = useState<{ sms: number; lms: number; mms: number } | null>(null);
+  const [pricing, setPricing] = useState<{
+    sms: number;
+    lms: number;
+    mms: number;
+    source?: "env" | "api";
+  } | null>(null);
   const [sender, setSender] = useState<string>("");
   const [remainMsg, setRemainMsg] = useState<string>("");
   const [numbersRaw, setNumbersRaw] = useState("");
@@ -535,6 +540,9 @@ export function SmsSendTab() {
               {unitPrice != null && (
                 <div className="text-right text-[11px] text-[#A89B80]">
                   {msgType} {unitPrice.toLocaleString()}원 × {allNumbers.length}명
+                  {pricing?.source === "api" && (
+                    <span className="ml-1 text-[10.5px]">(솔라피 조회 단가 · 실제 청구와 다를 수 있어요)</span>
+                  )}
                 </div>
               )}
               {notEnoughCash && (

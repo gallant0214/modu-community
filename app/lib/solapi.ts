@@ -120,10 +120,29 @@ export interface SolapiPricing {
 }
 
 /**
- * 이 계정의 실제 발송 단가 조회 (국내, MT 기준).
- * 발송 전 '예상 지출 금액' 계산에 쓴다. 실패하면 null.
+ * 발송 단가(원/건) — '예상 지출 금액' 계산용.
+ *
+ * 1순위: 환경변수 SOLAPI_PRICE_SMS / _LMS / _MMS (실제 계약 단가를 직접 지정)
+ * 2순위: 솔라피 API 조회값 (GET /pricing/v1/messaging)
+ * 둘 다 없으면 null → 화면에서 금액 표시를 숨긴다.
+ *
+ * ⚠️ API 조회값은 계정 요금제와 다를 수 있어(할인 요금제 등) 실제 청구액과 차이가 날 수 있다.
+ *    정확한 금액이 필요하면 환경변수로 계약 단가를 지정할 것.
  */
-export async function solapiPricing(): Promise<SolapiPricing | null> {
+export async function solapiPricing(): Promise<(SolapiPricing & { source: "env" | "api" }) | null> {
+  const envNum = (k: string) => {
+    const v = Number(process.env[k]);
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  };
+  const envSms = envNum("SOLAPI_PRICE_SMS");
+  if (envSms > 0) {
+    return {
+      sms: envSms,
+      lms: envNum("SOLAPI_PRICE_LMS") || envSms * 2.5,
+      mms: envNum("SOLAPI_PRICE_MMS") || envSms * 6,
+      source: "env",
+    };
+  }
   try {
     const res = await fetch(`${SOLAPI_BASE}/pricing/v1/messaging`, {
       headers: { Authorization: authHeader() },
@@ -132,7 +151,7 @@ export async function solapiPricing(): Promise<SolapiPricing | null> {
     const data = await res.json().catch(() => null);
     if (!data) return null;
     const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-    const out = { sms: num(data.sms), lms: num(data.lms), mms: num(data.mms) };
+    const out = { sms: num(data.sms), lms: num(data.lms), mms: num(data.mms), source: "api" as const };
     return out.sms > 0 ? out : null;
   } catch {
     return null;
