@@ -80,6 +80,13 @@ const METHOD_OPTIONS: { key: string; label: string }[] = [
   { key: "smart", label: "스마트 전송" },
   { key: "alimtalk", label: "알림톡" },
 ];
+/**
+ * '즉시' 트리거 중 실제로 발송을 시작하는 코드(호출부)가 연결된 것.
+ * 여기 없는 즉시 트리거는 켜 두어도 발송되지 않으므로 설정 화면에서 안내한다.
+ * (연결 위치: POST /api/crm/memberships → fireAutoMessage)
+ */
+const IMMEDIATE_WIRED = new Set<string>(["membership_new", "membership_renew"]);
+
 const METHOD_LABEL: Record<string, string> = Object.fromEntries(METHOD_OPTIONS.map((m) => [m.key, m.label]));
 
 export function AutoMessagesTab() {
@@ -111,6 +118,13 @@ export function AutoMessagesTab() {
   }, [getIdToken]);
 
   const runNow = useCallback(async () => {
+    // 실제 문자·푸시가 나가고 문자는 요금이 발생하므로 반드시 확인받는다.
+    if (
+      !window.confirm(
+        "지금 조건에 맞는 회원에게 실제로 문자·앱 푸시를 발송합니다.\n문자는 건당 요금이 발생하며, 한 번에 최대 200명까지 발송돼요.\n진행할까요?"
+      )
+    )
+      return;
     setRunning(true);
     setRunMsg("");
     try {
@@ -121,10 +135,19 @@ export function AutoMessagesTab() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "실행 실패");
+      const smsSent = data?.sms?.sent ?? 0;
+      const pushSent = data?.push?.sent ?? 0;
+      const parts: string[] = [];
+      if (smsSent > 0) parts.push(`문자 ${smsSent}건`);
+      if (pushSent > 0) parts.push(`앱 푸시 ${pushSent}건`);
+      if (data?.sms?.failed > 0 || data?.push?.failed > 0)
+        parts.push(`실패 ${(data?.sms?.failed ?? 0) + (data?.push?.failed ?? 0)}건`);
       setRunMsg(
         data.total > 0
-          ? `평가 완료 · 조건에 맞는 ${data.total}명을 발송 대기열에 적재했어요. (실제 발송은 회원 앱 연동 후)`
-          : "평가 완료 · 지금 조건에 해당하는 회원이 없어요."
+          ? `조건에 맞는 ${data.total}명 · ${parts.length > 0 ? parts.join(" · ") + " 발송" : "발송된 채널 없음(전송 방법 확인)"}${
+              data?.sms?.message ? ` · ${data.sms.message}` : ""
+            }`
+          : "지금 조건에 해당하는 회원이 없어요."
       );
       loadMatches();
     } catch (e) {
@@ -216,10 +239,14 @@ export function AutoMessagesTab() {
     <div className="space-y-5">
       <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/50 dark:bg-zinc-900/50 px-4 py-3">
         <div className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
-          상황별 자동 메세지를 켜 두면 조건이 충족될 때 회원에게 자동으로 발송됩니다.
+          상황별 자동 메세지를 켜 두면 조건이 충족될 때 회원에게 문자·앱 푸시로 <strong>실제 발송</strong>됩니다.
           각 항목의 <span className="font-semibold text-[#3A342A] dark:text-zinc-200">설정</span>에서 발송 시점·문구를 정할 수 있어요.
           <br />
-          <span className="text-[11.5px] text-[#A89B80]">실제 발송(회원 앱 푸시 등)은 회원용 앱 연동 시점에 대기열을 소비합니다. 지금은 대상 회원 매칭까지 동작해요.</span>
+          <span className="text-[11.5px] text-[#A89B80]">
+            이용권 신규·재등록처럼 <strong>사건이 일어나는 순간</strong> 나가는 알림은 자동으로 발송돼요.
+            만료·생일·장기 미출석처럼 <strong>날짜를 매일 확인해야 하는 알림</strong>은 아직 자동으로 돌지 않아,
+            아래 &lsquo;지금 실행&rsquo; 버튼을 눌러야 발송됩니다.
+          </span>
         </div>
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
           <button
@@ -228,7 +255,7 @@ export function AutoMessagesTab() {
             disabled={running}
             className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
           >
-            {running ? "평가 중…" : "지금 평가 실행"}
+            {running ? "발송 중…" : "지금 실행 (조건 평가 + 발송)"}
           </button>
           {runMsg && <span className="text-[11.5px] text-[#4d5a29] dark:text-[#A8B87A]">{runMsg}</span>}
         </div>
@@ -489,7 +516,10 @@ function AutoMessageEditor({
             <div className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">자동알림 설정</div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[12px] font-medium text-[#6B5D47] dark:text-zinc-400">사용 여부</span>
+            <div className="text-right leading-tight">
+              <div className="text-[12px] font-medium text-[#6B5D47] dark:text-zinc-400">사용 여부</div>
+              <div className="text-[10.5px] text-[#A89B80]">저장을 눌러야 반영돼요</div>
+            </div>
             <Switch on={enabled} onChange={setEnabled} />
           </div>
         </div>
@@ -516,7 +546,11 @@ function AutoMessageEditor({
             </NumberedField>
 
             {/* 03 전송 기준 (모두 선택 가능) */}
-            <NumberedField no="03" title="전송 기준">
+            <NumberedField
+              no="03"
+              title="전송 기준"
+              hint="언제 보낼지 정합니다. 즉시=사건이 일어난 순간 / 일정 기준=기준일로부터 N일 전·후 / 횟수 기준=조건이 N회 쌓였을 때."
+            >
               <div className="flex flex-wrap gap-2">
                 {(["immediate", "schedule", "count"] as SendBasis[]).map((b) => {
                   const active = sendBasis === b;
@@ -545,6 +579,18 @@ function AutoMessageEditor({
                     ? <><span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">{trigger.basisNoun ?? "기준일"}</span> 기준 {sendDays}일 {sendDaysDir === "before" ? "전" : "후"} 발송</>
                     : <>조건 <span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">{sendCount}회</span> 도달 시 발송</>}
               </p>
+              {sendBasis === "immediate" && !IMMEDIATE_WIRED.has(trigger.key) && (
+                <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#B47B2A] dark:text-amber-300">
+                  ⚠️ 이 알림은 아직 발송을 시작하는 연결이 없어, 켜 두어도 자동으로 나가지 않아요.
+                  현재 즉시 발송되는 알림은 <strong>이용권 신규 등록 / 이용권 재등록</strong> 입니다.
+                </p>
+              )}
+              {sendBasis !== "immediate" && (
+                <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#B47B2A] dark:text-amber-300">
+                  ⚠️ 날짜를 매일 확인하는 알림은 아직 자동으로 돌지 않아요. 목록 상단
+                  &lsquo;지금 실행&rsquo; 버튼을 눌러야 그날 조건에 맞는 회원에게 발송됩니다.
+                </p>
+              )}
               {sendBasis === "schedule" && (
                 <div className="mt-2.5 flex items-center gap-2 flex-wrap text-[13px] text-[#3A342A] dark:text-zinc-200">
                   <span>{trigger.basisNoun ?? "기준일"}</span>
@@ -670,7 +716,11 @@ function AutoMessageEditor({
             </NumberedField>
 
             {/* 05 파일 첨부 */}
-            <NumberedField no="05" title="파일 첨부" hint="1440×1440px 이하 · 각 300KB(최대 2장) · jpg/jpeg">
+            <NumberedField
+              no="05"
+              title="파일 첨부"
+              hint="1440×1440px 이하 · 각 300KB(최대 2장) · jpg/jpeg. ⚠️ 지금은 미리보기에만 보이고 실제 문자·푸시에는 첨부되지 않아요(MMS 연동 예정)."
+            >
               <input
                 ref={fileRef}
                 type="file"
@@ -710,7 +760,11 @@ function AutoMessageEditor({
             </NumberedField>
 
             {/* 06 쿠폰 첨부 */}
-            <NumberedField no="06" title="쿠폰 첨부" hint="쿠폰명과 링크를 입력하면 메세지에 함께 안내됩니다. 최대 1개.">
+            <NumberedField
+              no="06"
+              title="쿠폰 첨부"
+              hint="최대 1개. ⚠️ 지금은 미리보기에만 표시되고 실제 발송 문구에는 들어가지 않아요. 쿠폰 링크를 꼭 보내려면 07 메세지 본문에 직접 적어 주세요."
+            >
               <div className="space-y-2">
                 <input
                   type="text"
@@ -739,7 +793,11 @@ function AutoMessageEditor({
             </NumberedField>
 
             {/* 07 메세지 입력 */}
-            <NumberedField no="07" title="메세지 입력">
+            <NumberedField
+              no="07"
+              title="메세지 입력"
+              hint="아래 변수 버튼을 누르면 커서 위치에 삽입됩니다. 발송 시 회원별 값으로 자동 치환되고, 값이 없는 변수는 빈칸으로 나갑니다. 90Byte를 넘으면 장문(LMS)으로 전환돼 문자 요금이 올라가요."
+            >
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {MESSAGE_VARIABLES.map((v) => (
                   <button
