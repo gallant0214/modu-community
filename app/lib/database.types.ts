@@ -1288,6 +1288,14 @@ export type Database = {
           operating_hours: string | null
           kiosk_token: string | null
           logo_data_url: string | null
+          industry: string | null
+          business_license_data_url: string | null
+          postal_code: string | null
+          address_detail: string | null
+          owner_name: string | null
+          owner_birth: string | null
+          owner_gender: string | null
+          owner_phone: string | null
           created_at: string
           updated_at: string
         }
@@ -1309,6 +1317,14 @@ export type Database = {
           operating_hours?: string | null
           kiosk_token?: string | null
           logo_data_url?: string | null
+          industry?: string | null
+          business_license_data_url?: string | null
+          postal_code?: string | null
+          address_detail?: string | null
+          owner_name?: string | null
+          owner_birth?: string | null
+          owner_gender?: string | null
+          owner_phone?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1330,6 +1346,14 @@ export type Database = {
           operating_hours?: string | null
           kiosk_token?: string | null
           logo_data_url?: string | null
+          industry?: string | null
+          business_license_data_url?: string | null
+          postal_code?: string | null
+          address_detail?: string | null
+          owner_name?: string | null
+          owner_birth?: string | null
+          owner_gender?: string | null
+          owner_phone?: string | null
           created_at?: string
           updated_at?: string
         }
