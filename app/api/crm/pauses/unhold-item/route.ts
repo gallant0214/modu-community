@@ -62,11 +62,9 @@ export async function POST(request: Request) {
     .eq("center_id", ctx.centerId)
     .maybeSingle();
   if (!item) return NextResponse.json({ error: "이용권을 찾을 수 없습니다" }, { status: 404 });
-  if (!(item as { is_paused?: boolean }).is_paused) {
-    return NextResponse.json({ error: "홀딩 중이 아닙니다" }, { status: 400 });
-  }
 
-  // 진행 중 홀딩 기록 조회
+  // 진행 중 홀딩 기록 조회 (is_paused 플래그보다 crm_pauses 를 진실 소스로 본다 —
+  // is_paused 가 실제 홀딩 기록과 어긋난 케이스에서도 해제되도록)
   const { data: pause } = await supabase
     .from("crm_pauses")
     .select("id, extended_days, start_date")
@@ -75,6 +73,10 @@ export async function POST(request: Request) {
     .eq(col, id)
     .order("id", { ascending: false })
     .maybeSingle();
+
+  if (!(item as { is_paused?: boolean }).is_paused && !pause) {
+    return NextResponse.json({ error: "홀딩 중이 아닙니다" }, { status: 400 });
+  }
 
   const patch: Record<string, unknown> = { is_paused: false };
   const expiresAt = (item as { expires_at: string | null }).expires_at;

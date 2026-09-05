@@ -8661,6 +8661,9 @@ function PassDetailModal({
   const [error, setError] = useState("");
   const [refunding, setRefunding] = useState(false);
   const [holdOpen, setHoldOpen] = useState(false);
+  // 이 수강권의 진행 중(active) 홀딩 기록 — is_paused 플래그가 아니라 crm_pauses 로 판정.
+  const [activePause, setActivePause] = useState<{ id: number; start_date: string; end_date: string } | null>(null);
+  const [unholding, setUnholding] = useState(false);
   const [editing, setEditing] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
   const [canRefund, setCanRefund] = useState(false);
@@ -8709,6 +8712,8 @@ function PassDetailModal({
 
   useEffect(() => {
     setEditing(false); // 열 때마다 보기 모드로 초기화 (startInEdit 이면 아래 이펙트가 편집으로 전환)
+    setUnholding(false);
+    setActivePause(null);
     if (passId === null) {
       setDetail(null);
       setError("");
@@ -8727,6 +8732,21 @@ function PassDetailModal({
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || "조회 실패");
         setDetail(data);
+        // 이 수강권의 진행 중 홀딩 기록 조회 (홀딩/홀딩 해제 버튼 분기용)
+        const mid = data?.member?.id;
+        if (mid) {
+          const pRes = await fetch(`/api/crm/pauses?member_id=${mid}`, {
+            headers: { authorization: `Bearer ${token}` },
+            cache: "no-store",
+          });
+          if (pRes.ok) {
+            const ps = ((await pRes.json()).pauses ?? []) as {
+              id: number; pass_id: number | null; status: string; start_date: string; end_date: string;
+            }[];
+            const act = ps.find((p) => p.pass_id === passId && p.status === "active") ?? null;
+            setActivePause(act ? { id: act.id, start_date: act.start_date, end_date: act.end_date } : null);
+          }
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "네트워크 오류");
       } finally {
@@ -8734,6 +8754,29 @@ function PassDetailModal({
       }
     })();
   }, [passId, getIdToken]);
+
+  // 수강권 단독 홀딩 해제 (진행중 홀딩=연장분 원복). crm_pauses 기준.
+  const doUnhold = async () => {
+    if (!detail || unholding) return;
+    if (!window.confirm("이 수강권의 홀딩을 해제할까요?\n진행 중인 홀딩이면 연장했던 만료일이 원복됩니다.")) return;
+    setUnholding(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/pauses/unhold-item", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ kind: "pass", id: detail.pass.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "홀딩 해제 실패");
+      onRefunded();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+      setUnholding(false);
+    }
+  };
 
   const refund = async () => {
     if (!detail || refunding) return;
@@ -9234,19 +9277,25 @@ function PassDetailModal({
                 수강권 수정
               </button>
             )}
-            {pass.status === "valid" && (
-              <button
-                onClick={() => setHoldOpen(true)}
-                disabled={refunding}
-                className={`flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border text-[13.5px] font-semibold disabled:opacity-60
-                  ${(pass as Pass).is_paused
-                    ? "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
-                    : "border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 hover:bg-amber-50/60"
-                  }`}
-              >
-                {(pass as Pass).is_paused ? "홀딩중" : "홀딩"}
-              </button>
-            )}
+            {pass.status === "valid" &&
+              (activePause ? (
+                <button
+                  onClick={doUnhold}
+                  disabled={refunding || unholding}
+                  className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-[#B47B2A]/60 bg-[#B47B2A]/10 text-[#B47B2A] dark:text-amber-300 text-[13.5px] font-semibold hover:bg-[#B47B2A]/20 disabled:opacity-60"
+                  title="홀딩 중 · 눌러서 해제"
+                >
+                  {unholding ? "해제 중…" : "▶ 홀딩 해제"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setHoldOpen(true)}
+                  disabled={refunding}
+                  className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-[#B47B2A] text-[#B47B2A] dark:border-amber-300 dark:text-amber-300 text-[13.5px] font-semibold hover:bg-amber-50/60 disabled:opacity-60"
+                >
+                  ⏸ 홀딩 (일시정지)
+                </button>
+              ))}
             {pass.status === "valid" && canRefund && (
               <button
                 onClick={refund}
