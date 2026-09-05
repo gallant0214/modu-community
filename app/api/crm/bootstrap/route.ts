@@ -110,6 +110,17 @@ export async function POST(request: Request) {
     business_no?: string;
     region_sido?: string;
     region_sigungu?: string;
+    // center 등록 확장 필드 (2026-09-06)
+    industry?: string;
+    business_license_data_url?: string;
+    postal_code?: string;
+    address?: string;
+    address_detail?: string;
+    logo_data_url?: string;
+    owner_name?: string;
+    owner_birth?: string; // YYYY-MM-DD
+    owner_gender?: string; // male | female
+    owner_phone?: string;
   };
   try {
     body = await request.json();
@@ -183,7 +194,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "센터명을 입력해주세요" }, { status: 400 });
   }
 
+  // 센터 등록 시 필수 필드 검증 (신규 폼 대응, solo 는 스킵)
+  if (mode === "center") {
+    const bizDigits = (body.business_no ?? "").replace(/\D/g, "");
+    if (!bizDigits || bizDigits.length !== 10) {
+      return NextResponse.json({ error: "사업자등록번호를 정확히 입력해 주세요 (숫자 10자리)" }, { status: 400 });
+    }
+    if (!(body.business_license_data_url ?? "").startsWith("data:")) {
+      return NextResponse.json({ error: "사업자등록증 사본을 첨부해 주세요" }, { status: 400 });
+    }
+    if (!(body.industry ?? "").trim()) {
+      return NextResponse.json({ error: "업종을 선택해 주세요" }, { status: 400 });
+    }
+    if (!(body.phone ?? "").trim()) {
+      return NextResponse.json({ error: "센터 전화번호를 입력해 주세요" }, { status: 400 });
+    }
+    if (!(body.address ?? "").trim()) {
+      return NextResponse.json({ error: "센터 주소를 입력해 주세요" }, { status: 400 });
+    }
+    if (!(body.owner_name ?? "").trim()) {
+      return NextResponse.json({ error: "대표자명을 입력해 주세요" }, { status: 400 });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(body.owner_birth ?? "")) {
+      return NextResponse.json({ error: "대표자 생년월일을 입력해 주세요" }, { status: 400 });
+    }
+    if (!["male", "female"].includes(body.owner_gender ?? "")) {
+      return NextResponse.json({ error: "대표자 성별을 선택해 주세요" }, { status: 400 });
+    }
+    if (!(body.owner_phone ?? "").trim()) {
+      return NextResponse.json({ error: "대표자 휴대전화 번호를 입력해 주세요" }, { status: 400 });
+    }
+  }
+
   // 1) 센터 생성
+  const isCenter = mode === "center";
   const { data: center, error: centerErr } = await supabase
     .from("crm_centers")
     .insert({
@@ -191,9 +235,20 @@ export async function POST(request: Request) {
       name: centerName,
       kind: mode,
       phone: body.phone?.trim() || null,
-      business_no: body.business_no?.trim() || null,
+      business_no: isCenter ? (body.business_no ?? "").replace(/\D/g, "") : (body.business_no?.trim() || null),
       region_sido: body.region_sido?.trim() || null,
       region_sigungu: body.region_sigungu?.trim() || null,
+      // 신규 필드 (center 만)
+      industry: isCenter ? (body.industry?.trim() || null) : null,
+      business_license_data_url: isCenter ? (body.business_license_data_url || null) : null,
+      postal_code: isCenter ? (body.postal_code?.trim() || null) : null,
+      address: isCenter ? (body.address?.trim() || null) : null,
+      address_detail: isCenter ? (body.address_detail?.trim() || null) : null,
+      logo_data_url: isCenter ? (body.logo_data_url || null) : null,
+      owner_name: isCenter ? (body.owner_name?.trim() || null) : null,
+      owner_birth: isCenter ? (body.owner_birth || null) : null,
+      owner_gender: isCenter ? (body.owner_gender || null) : null,
+      owner_phone: isCenter ? (body.owner_phone?.trim() || null) : null,
     })
     .select("id")
     .single();

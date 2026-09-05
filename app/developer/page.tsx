@@ -19,7 +19,41 @@ export default function AdminPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"report" | "pending" | "resolved" | "inquiries" | "notice" | "push" | "settings" | "kpi" | "crm" | "user">("report");
+  const [tab, setTab] = useState<"report" | "pending" | "resolved" | "inquiries" | "notice" | "push" | "settings" | "kpi" | "crm" | "user" | "centers">("report");
+  // 등록 센터 목록 (신규 센터 등록 시 사업자등록증 확인용)
+  interface AdminCenterRow {
+    id: number;
+    name: string;
+    kind: string;
+    status: string;
+    industry: string | null;
+    business_no: string | null;
+    phone: string | null;
+    postal_code: string | null;
+    address: string | null;
+    address_detail: string | null;
+    region_sido: string | null;
+    region_sigungu: string | null;
+    logo_data_url: string | null;
+    owner_uid: string;
+    owner_name: string | null;
+    owner_birth: string | null;
+    owner_gender: string | null;
+    owner_phone: string | null;
+    has_business_license: boolean;
+    created_at: string;
+  }
+  const [centersList, setCentersList] = useState<AdminCenterRow[]>([]);
+  const [centersLoading, setCentersLoading] = useState(false);
+  const [centersQuery, setCentersQuery] = useState("");
+  const [licenseView, setLicenseView] = useState<{
+    id: number;
+    name: string;
+    business_no: string | null;
+    owner_name: string | null;
+    dataUrl: string | null;
+  } | null>(null);
+  const [licenseLoading, setLicenseLoading] = useState(false);
 
   // CRM 종합 KPI (별도 API 호출)
   const [crmStats, setCrmStats] = useState<any>(null);
@@ -457,6 +491,44 @@ export default function AdminPage() {
     }
   }, [authStep, tab, crmStats, crmLoading, crmRange, loadCrmStats]);
 
+  const loadCenters = useCallback(async (q?: string) => {
+    setCentersLoading(true);
+    try {
+      const res = await fetch("/api/admin/centers-list", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: storedPassword, q: q ?? centersQuery }),
+      });
+      const data = await res.json();
+      if (res.ok) setCentersList(data.centers ?? []);
+    } finally {
+      setCentersLoading(false);
+    }
+  }, [storedPassword, centersQuery]);
+
+  useEffect(() => {
+    if (authStep === "authenticated" && tab === "centers" && centersList.length === 0 && !centersLoading) {
+      loadCenters();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStep, tab]);
+
+  const openLicense = async (c: AdminCenterRow) => {
+    setLicenseView({ id: c.id, name: c.name, business_no: c.business_no, owner_name: c.owner_name, dataUrl: null });
+    setLicenseLoading(true);
+    try {
+      const res = await fetch("/api/admin/center-license", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: storedPassword, id: c.id }),
+      });
+      const data = await res.json();
+      if (res.ok) setLicenseView({ id: data.id, name: data.name, business_no: data.business_no, owner_name: data.owner_name, dataUrl: data.business_license_data_url });
+    } finally {
+      setLicenseLoading(false);
+    }
+  };
+
   async function handleRefresh() {
     setRefreshing(true);
     if (tab === "kpi") {
@@ -885,6 +957,9 @@ export default function AdminPage() {
           </button>
           <button onClick={() => setTab("user")} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "user" ? "border-b-2 border-cyan-500 text-cyan-600 dark:text-cyan-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
             USER
+          </button>
+          <button onClick={() => setTab("centers")} className={`flex-1 py-3 text-center text-sm font-semibold transition-colors ${tab === "centers" ? "border-b-2 border-orange-500 text-orange-600 dark:text-orange-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}>
+            센터
           </button>
         </div>
 
@@ -1981,6 +2056,149 @@ export default function AdminPage() {
         )}
 
         {/* ===== USER 조회 탭 ===== */}
+        {tab === "centers" && (
+          <div className="p-4 space-y-4">
+            <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+              <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2">
+                등록된 센터 목록 (kind=center) — 신규 등록 센터의 사업자등록증 확인용
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={centersQuery}
+                  onChange={(e) => setCentersQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") loadCenters(); }}
+                  placeholder="센터명 · 대표자명 · 사업자번호 · 전화번호"
+                  className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                />
+                <button
+                  onClick={() => loadCenters()}
+                  disabled={centersLoading}
+                  className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+                >
+                  {centersLoading ? "조회 중…" : "조회"}
+                </button>
+              </div>
+              <p className="mt-2 text-[11.5px] text-zinc-500 dark:text-zinc-400">
+                총 {centersList.length}개 센터
+              </p>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+              <table className="w-full text-sm">
+                <thead className="bg-zinc-50 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400">
+                  <tr>
+                    <th className="px-3 py-2 text-left">등록일</th>
+                    <th className="px-3 py-2 text-left">센터명 / 업종</th>
+                    <th className="px-3 py-2 text-left">대표자 / 생년월일</th>
+                    <th className="px-3 py-2 text-left">연락처</th>
+                    <th className="px-3 py-2 text-left">사업자번호</th>
+                    <th className="px-3 py-2 text-left">주소</th>
+                    <th className="px-3 py-2 text-center">등록증</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {centersList.map((c) => (
+                    <tr key={c.id} className="hover:bg-orange-50/50 dark:hover:bg-orange-950/10">
+                      <td className="px-3 py-2 text-[12px] text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
+                        {new Date(c.created_at).toISOString().slice(0, 10)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="font-semibold text-zinc-900 dark:text-zinc-100">{c.name}</div>
+                        <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                          {c.industry ?? "-"} · <span className={c.status === "active" ? "text-emerald-600" : "text-zinc-400"}>{c.status}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-[12.5px]">
+                        <div className="text-zinc-800 dark:text-zinc-200">{c.owner_name ?? "-"}</div>
+                        <div className="text-[11px] text-zinc-500">
+                          {c.owner_birth ?? "-"} {c.owner_gender === "male" ? "남" : c.owner_gender === "female" ? "여" : ""}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-[12.5px]">
+                        <div>{c.owner_phone ?? "-"}</div>
+                        <div className="text-[11px] text-zinc-500">센터 {c.phone ?? "-"}</div>
+                      </td>
+                      <td className="px-3 py-2 text-[12.5px] font-mono">{c.business_no ?? "-"}</td>
+                      <td className="px-3 py-2 text-[12px] text-zinc-600 dark:text-zinc-300">
+                        {c.postal_code && <span className="text-[11px] text-zinc-400 mr-1">[{c.postal_code}]</span>}
+                        {c.address ?? "-"}
+                        {c.address_detail && <span className="ml-1 text-zinc-500">{c.address_detail}</span>}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {c.has_business_license ? (
+                          <button
+                            onClick={() => openLicense(c)}
+                            className="rounded-md bg-orange-500 px-2.5 py-1 text-[11.5px] font-semibold text-white hover:bg-orange-600"
+                          >
+                            확인
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-red-500">미첨부</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {centersList.length === 0 && !centersLoading && (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-8 text-center text-[13px] text-zinc-400">
+                        등록된 센터가 없거나 조건에 맞는 결과가 없습니다.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 사업자등록증 뷰 모달 */}
+        {licenseView && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setLicenseView(null)}>
+            <div className="mx-4 w-full max-w-3xl max-h-[90vh] rounded-2xl bg-white p-5 shadow-xl dark:bg-zinc-900 flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">사업자등록증 확인</h3>
+                  <p className="mt-0.5 text-[12px] text-zinc-500 dark:text-zinc-400">
+                    {licenseView.name} · 대표 {licenseView.owner_name ?? "-"} · 사업자번호 {licenseView.business_no ?? "-"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setLicenseView(null)}
+                  className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex-1 overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950">
+                {licenseLoading ? (
+                  <div className="py-16 text-center text-zinc-400 text-sm">불러오는 중…</div>
+                ) : licenseView.dataUrl ? (
+                  licenseView.dataUrl.startsWith("data:application/pdf") ? (
+                    <iframe src={licenseView.dataUrl} title="사업자등록증" className="w-full h-[70vh]" />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={licenseView.dataUrl} alt="사업자등록증" className="w-full h-auto" />
+                  )
+                ) : (
+                  <div className="py-16 text-center text-red-500 text-sm">첨부 파일을 찾을 수 없습니다.</div>
+                )}
+              </div>
+              {licenseView.dataUrl && (
+                <div className="mt-3 flex justify-end">
+                  <a
+                    href={licenseView.dataUrl}
+                    download={`business-license-${licenseView.id}${licenseView.dataUrl.startsWith("data:application/pdf") ? ".pdf" : ".jpg"}`}
+                    className="rounded-lg bg-zinc-700 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
+                  >
+                    다운로드
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {tab === "user" && (
           <div className="p-4 space-y-4">
             <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
