@@ -117,6 +117,10 @@ export default function CrmMemberDetailPage() {
   const [holdLockers, setHoldLockers] = useState<
     { id: number; zone_name: string; number: number; start_date: string | null; expires_at: string | null; password?: string | null }[]
   >([]);
+  // 홀딩(일시정지) 기록 — 현재보유 카드에 [홀딩](기간 내)·[예정](시작 전) 칩 표시용
+  const [pauses, setPauses] = useState<
+    { id: number; pass_id: number | null; membership_id: number | null; rental_id: number | null; start_date: string; end_date: string; status: string }[]
+  >([]);
   const [bodyOpen, setBodyOpen] = useState(false);
   const [bodyChooserOpen, setBodyChooserOpen] = useState(false); // +측정기록 → 직접입력/사진등록 선택
   const [bodyPhotoMode, setBodyPhotoMode] = useState(false); // 측정 모달을 인바디 사진 등록 모드로
@@ -191,14 +195,16 @@ export default function CrmMemberDetailPage() {
       const token = await getIdToken();
       if (!token) return;
       const h = { authorization: `Bearer ${token}` };
-      const [mR, rR, lR] = await Promise.all([
+      const [mR, rR, lR, pR] = await Promise.all([
         fetch(`/api/crm/memberships?member_id=${memberId}`, { headers: h, cache: "no-store" }),
         fetch(`/api/crm/rentals?member_id=${memberId}`, { headers: h, cache: "no-store" }),
         fetch(`/api/crm/lockers/of-member?member_id=${memberId}`, { headers: h, cache: "no-store" }),
+        fetch(`/api/crm/pauses?member_id=${memberId}`, { headers: h, cache: "no-store" }),
       ]);
       if (mR.ok) setHoldMs((await mR.json()).memberships ?? []);
       if (rR.ok) setHoldRs((await rR.json()).rentals ?? []);
       if (lR.ok) setHoldLockers((await lR.json()).lockers ?? []);
+      if (pR.ok) setPauses((await pR.json()).pauses ?? []);
     })();
   }, [memberId, usageReload, getIdToken]);
 
@@ -293,6 +299,20 @@ export default function CrmMemberDetailPage() {
     id ? staffList.find((s) => s.id === id)?.display_name ?? null : null;
   // 오늘(KST) 기준. UTC 로 하면 한국 자정~오전9시 사이 만료 판정이 하루 어긋난다.
   const holdToday = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  // 상품별 홀딩 상태: 오늘이 홀딩 시작~종료 사이면 "hold", 시작 전(예정)이면 "scheduled", 아니면 null.
+  // is_paused 플래그가 아니라 실제 홀딩 기간(crm_pauses)으로 판정한다.
+  const holdStateFor = (
+    kind: "membership" | "pass" | "rental",
+    id: number | null | undefined
+  ): "hold" | "scheduled" | null => {
+    if (!id) return null;
+    const field = kind === "membership" ? "membership_id" : kind === "pass" ? "pass_id" : "rental_id";
+    const ps = pauses.filter((p) => p.status === "active" && p[field] === id);
+    if (ps.length === 0) return null;
+    if (ps.some((p) => p.start_date <= holdToday && holdToday <= p.end_date)) return "hold";
+    if (ps.some((p) => p.start_date > holdToday)) return "scheduled";
+    return null;
+  };
   const validHoldMs = holdMs.filter((m) => m.status === "valid" && m.expires_at >= holdToday);
   const validHoldRs = holdRs.filter((r) => r.status === "valid" && r.expires_at >= holdToday);
   // 배정된 락커 중 유효기간이 남은 것 (만료 락커는 현재 보유에 제외 — 회원권·대여권과 동일 기준)
@@ -543,6 +563,7 @@ export default function CrmMemberDetailPage() {
                   tag="회원권"
                   name={m.plan_name}
                   period={fmtPeriod(m.start_date, m.expires_at)}
+                  holdState={holdStateFor("membership", m.id)}
                   onClick={() => setPaymentDetail(membershipToDetail(m, staffName))}
                 />
               ))
@@ -555,6 +576,7 @@ export default function CrmMemberDetailPage() {
                   tag="수강권"
                   name={stripPassCountSuffix(p.lesson_kind)}
                   period={`잔여 ${p.remaining_sessions}/${p.total_sessions}회 · ${p.expires_at === "9999-12-31" ? "무기한" : `~${p.expires_at}`}`}
+                  holdState={holdStateFor("pass", p.id)}
                   onClick={() => { setPassStartEdit(false); setDetailPassId(p.id); }}
                 />
               ))
@@ -567,6 +589,7 @@ export default function CrmMemberDetailPage() {
                   tag="대여권"
                   name={r.item_name}
                   period={fmtPeriod(r.start_date, r.expires_at)}
+                  holdState={holdStateFor("rental", r.id)}
                   onClick={() => setPaymentDetail(rentalToDetail(r, staffName))}
                 />
               ))
@@ -582,6 +605,7 @@ export default function CrmMemberDetailPage() {
                   name={c.assign ? `${c.assign.zone_name} ${c.assign.number}번` : c.name}
                   period={fmtPeriod(c.start, c.exp)}
                   lockerUnassigned={!c.assign}
+                  holdState={holdStateFor("rental", c.rental?.id)}
                   onClick={
                     c.rental
                       ? () =>
@@ -4225,12 +4249,15 @@ function SnapHoldingCard({
   name,
   period,
   lockerUnassigned,
+  holdState,
   onClick,
 }: {
   tag: string;
   name: string;
   period: string | null;
   lockerUnassigned?: boolean;
+  // 홀딩 상태 칩: "hold"=현재 홀딩 기간(빨강 [홀딩]) / "scheduled"=홀딩 시작 전(파랑 [예정]) / null=없음
+  holdState?: "hold" | "scheduled" | null;
   onClick?: () => void;
 }) {
   return (
@@ -4241,7 +4268,19 @@ function SnapHoldingCard({
         SNAP_STYLE[tag] ?? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
       }`}
     >
-      <span className="text-[9.5px] font-bold uppercase tracking-wide opacity-80">{tag}</span>
+      <span className="flex items-center gap-1">
+        {holdState === "hold" && (
+          <span className="px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 text-[9.5px] font-bold">
+            홀딩
+          </span>
+        )}
+        {holdState === "scheduled" && (
+          <span className="px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 text-[9.5px] font-bold">
+            예정
+          </span>
+        )}
+        <span className="text-[9.5px] font-bold uppercase tracking-wide opacity-80">{tag}</span>
+      </span>
       <span className="flex items-center gap-1 text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
         {name}
         {lockerUnassigned && (
@@ -4883,6 +4922,9 @@ function UsageSection({
   >([]);
   const [loading, setLoading] = useState(true);
   const [showExpired, setShowExpired] = useState(false); // 만료 항목 펼치기
+  const [pauses, setPauses] = useState<
+    { id: number; pass_id: number | null; membership_id: number | null; rental_id: number | null; start_date: string; end_date: string; status: string }[]
+  >([]);
 
   useEffect(() => {
     (async () => {
@@ -4891,10 +4933,11 @@ function UsageSection({
         const token = await getIdToken();
         if (!token) return;
         const headers = { authorization: `Bearer ${token}` };
-        const [mRes, rRes, lRes] = await Promise.all([
+        const [mRes, rRes, lRes, pRes] = await Promise.all([
           fetch(`/api/crm/memberships?member_id=${memberId}`, { headers, cache: "no-store" }),
           fetch(`/api/crm/rentals?member_id=${memberId}`, { headers, cache: "no-store" }),
           fetch(`/api/crm/lockers/of-member?member_id=${memberId}`, { headers, cache: "no-store" }),
+          fetch(`/api/crm/pauses?member_id=${memberId}`, { headers, cache: "no-store" }),
         ]);
         if (mRes.ok) setMemberships((await mRes.json()).memberships ?? []);
         if (rRes.ok) setRentals((await rRes.json()).rentals ?? []);
@@ -4902,6 +4945,7 @@ function UsageSection({
           const lData = await lRes.json();
           setLockers(lData.lockers ?? []);
         }
+        if (pRes.ok) setPauses((await pRes.json()).pauses ?? []);
       } finally {
         setLoading(false);
       }
@@ -4910,6 +4954,20 @@ function UsageSection({
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const isValid = (s: string, exp: string) => s === "valid" && exp >= todayStr;
+  // 상품별 홀딩 상태(오늘이 홀딩 기간 내=hold / 시작 전=scheduled). is_paused 플래그가 아니라 실제 기간으로 판정.
+  const holdTodayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const holdStateFor = (
+    kind: "membership" | "rental",
+    id: number | null | undefined
+  ): "hold" | "scheduled" | null => {
+    if (!id) return null;
+    const field = kind === "membership" ? "membership_id" : "rental_id";
+    const ps = pauses.filter((p) => p.status === "active" && p[field] === id);
+    if (ps.length === 0) return null;
+    if (ps.some((p) => p.start_date <= holdTodayKst && holdTodayKst <= p.end_date)) return "hold";
+    if (ps.some((p) => p.start_date > holdTodayKst)) return "scheduled";
+    return null;
+  };
   const sellerName = (id: number | null) =>
     id ? staffList.find((s) => s.id === id)?.display_name ?? null : null;
 
@@ -4930,7 +4988,7 @@ function UsageSection({
           price={m.price_won}
           period={fmtPeriod(m.start_date, m.expires_at)}
           valid={isValid(m.status, m.expires_at)}
-          paused={m.is_paused}
+          holdState={holdStateFor("membership", m.id)}
           onClick={() => onOpenDetail(membershipToDetail(m, sellerName))}
         />
       ),
@@ -4945,7 +5003,7 @@ function UsageSection({
           price={r.price_won}
           period={fmtPeriod(r.start_date, r.expires_at)}
           valid={isValid(r.status, r.expires_at)}
-          paused={r.is_paused}
+          holdState={holdStateFor("rental", r.id)}
           onClick={() => onOpenDetail(rentalToDetail(r, sellerName))}
         />
       ),
@@ -4962,7 +5020,7 @@ function UsageSection({
             price={c.price}
             period={fmtPeriod(c.start, c.exp)}
             valid={valid}
-            paused={!!c.rental?.is_paused}
+            holdState={holdStateFor("rental", c.rental?.id)}
             lockerAssign={c.assign ? { zone_name: c.assign.zone_name, number: c.assign.number } : "unassigned"}
             onClick={
               c.rental
@@ -5033,7 +5091,7 @@ function UsageCard({
   price,
   period,
   valid,
-  paused,
+  holdState,
   lockerAssign,
   onClick,
 }: {
@@ -5042,7 +5100,8 @@ function UsageCard({
   price: number;
   period: string;
   valid: boolean;
-  paused?: boolean;
+  // 홀딩 상태 칩: "hold"=현재 홀딩 기간(빨강 [홀딩]) / "scheduled"=홀딩 시작 전(파랑 [예정]) / null=없음
+  holdState?: "hold" | "scheduled" | null;
   // 락커 배정 상태 칩: 배정됨(구역·번호) / "unassigned"(미배정) / 없음
   lockerAssign?: { zone_name: string; number: number } | "unassigned";
   onClick: () => void;
@@ -5061,9 +5120,14 @@ function UsageCard({
       >
         <div className="flex items-baseline justify-between gap-2">
           <span className="flex flex-wrap items-center gap-1.5">
-            {paused && (
+            {holdState === "hold" && (
               <span className="px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 text-[10px] font-bold">
                 홀딩
+              </span>
+            )}
+            {holdState === "scheduled" && (
+              <span className="px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 text-[10px] font-bold">
+                예정
               </span>
             )}
             <span className={`text-[10.5px] font-bold ${tone}`}>{tag}</span>
