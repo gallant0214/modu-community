@@ -120,14 +120,21 @@ export interface SolapiPricing {
 }
 
 /**
- * 발송 단가(원/건) — '예상 지출 금액' 계산용.
+ * 실제 캐시 차감액 / API 표시 단가 비율.
  *
- * 1순위: 환경변수 SOLAPI_PRICE_SMS / _LMS / _MMS (실제 계약 단가를 직접 지정)
- * 2순위: 솔라피 API 조회값 (GET /pricing/v1/messaging)
+ * 2026-09-06 실측: API 가 알려주는 단가에서 정확히 1% 낮은 금액이 캐시에서 빠진다.
+ *   SMS 표시 18원  → 캐시 차감 17.82원 (18 × 0.99)
+ *   LMS 표시 45원  → 캐시 차감 44.55원 (45 × 0.99)
+ * 화면의 '캐시 잔액'과 같은 기준으로 보여주기 위해 이 비율을 적용한다.
+ */
+const CASH_DEDUCTION_RATE = 0.99;
+
+/**
+ * 발송 1건당 실제 캐시 차감액(원) — '예상 지출 금액' 계산용.
+ *
+ * 1순위: 환경변수 SOLAPI_PRICE_SMS / _LMS / _MMS (실차감액을 직접 지정. 비율 미적용)
+ * 2순위: 솔라피 API 조회값 × CASH_DEDUCTION_RATE
  * 둘 다 없으면 null → 화면에서 금액 표시를 숨긴다.
- *
- * ⚠️ API 조회값은 계정 요금제와 다를 수 있어(할인 요금제 등) 실제 청구액과 차이가 날 수 있다.
- *    정확한 금액이 필요하면 환경변수로 계약 단가를 지정할 것.
  */
 export async function solapiPricing(): Promise<(SolapiPricing & { source: "env" | "api" }) | null> {
   const envNum = (k: string) => {
@@ -151,7 +158,13 @@ export async function solapiPricing(): Promise<(SolapiPricing & { source: "env" 
     const data = await res.json().catch(() => null);
     if (!data) return null;
     const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-    const out = { sms: num(data.sms), lms: num(data.lms), mms: num(data.mms), source: "api" as const };
+    const round2 = (n: number) => Math.round(n * CASH_DEDUCTION_RATE * 100) / 100;
+    const out = {
+      sms: round2(num(data.sms)),
+      lms: round2(num(data.lms)),
+      mms: round2(num(data.mms)),
+      source: "api" as const,
+    };
     return out.sms > 0 ? out : null;
   } catch {
     return null;

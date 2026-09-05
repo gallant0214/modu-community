@@ -540,9 +540,7 @@ export function SmsSendTab() {
               {unitPrice != null && (
                 <div className="text-right text-[11px] text-[#A89B80]">
                   {msgType} {unitPrice.toLocaleString()}원 × {allNumbers.length}명
-                  {pricing?.source === "api" && (
-                    <span className="ml-1 text-[10.5px]">(솔라피 조회 단가 · 실제 청구와 다를 수 있어요)</span>
-                  )}
+                  <span className="ml-1 text-[10.5px]">(캐시 실차감 기준)</span>
                 </div>
               )}
               {notEnoughCash && (
