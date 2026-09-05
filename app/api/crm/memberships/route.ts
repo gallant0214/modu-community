@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 
 import { fireAutoMessage } from "@/app/lib/crm-auto-message";
 
@@ -247,6 +248,13 @@ export async function POST(request: Request) {
     });
   } catch {
     /* 자동 메세지 실패가 발급 자체를 막지 않도록 무시 */
+  }
+
+  // 가입 및 등록 알림 — 상품 구매(회원권). 실결제(paidAmount>0)만 '구매' 알림.
+  if (paidAmount > 0) {
+    after(() =>
+      notifyCenterStaffSignupPurchase({ centerId: ctx.centerId, kind: "purchase", memberId, productName: plan, amountWon: paidAmount })
+    );
   }
 
   return NextResponse.json({ ok: true, membershipId: created.id });

@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { digitsOnly } from "@/app/lib/crm-identity";
+import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -134,5 +135,10 @@ export async function POST(request: Request) {
   if (error || !created) {
     return NextResponse.json({ error: "가입 실패", detail: error?.message }, { status: 500 });
   }
+
+  // 가입 및 등록 알림 — 권한 있는 직원에게 신규가입 알림
+  after(() =>
+    notifyCenterStaffSignupPurchase({ centerId, kind: "signup", memberId: created.id, memberName: name })
+  );
   return NextResponse.json({ ok: true, memberId: created.id, created: true });
 }

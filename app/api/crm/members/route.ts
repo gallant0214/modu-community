@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -559,6 +560,11 @@ export async function POST(request: Request) {
     entity_id: data.id,
     payload: { member_type: memberType, name } as never,
   });
+
+  // 가입 및 등록 알림 — 권한 있는 직원에게 신규가입 알림
+  after(() =>
+    notifyCenterStaffSignupPurchase({ centerId: ctx.centerId, kind: "signup", memberId: data.id, memberName: name })
+  );
 
   return NextResponse.json({ ok: true, memberId: data.id });
 }

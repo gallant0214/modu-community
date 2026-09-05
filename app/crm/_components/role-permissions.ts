@@ -176,6 +176,13 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "settings.edit", label: "센터 설정 변경 — 예약·음성·키오스크·사업자정보", defaults: D_ADMIN },
     ],
   },
+  {
+    key: "app_notify",
+    label: "앱 알림 권한 설정",
+    items: [
+      { key: "app_notify.signup_purchase", label: "가입 및 등록 알림 — 회원 신규가입·상품 구매·환불 시 강사앱 알림 받기", defaults: D_ADMIN },
+    ],
+  },
 ];
 
 /** 저장된 값을 defaults 와 병합해 (role,perm) → enabled 매트릭스 반환 */

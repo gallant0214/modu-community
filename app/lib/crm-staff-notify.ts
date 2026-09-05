@@ -2,6 +2,8 @@ import { getApps } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import { supabase } from "./supabase";
 import { buildCheckinSummary } from "./crm-checkin";
+import { ctxHasPermission } from "./crm-permissions";
+import type { CrmContext } from "./crm-auth";
 
 function getAdmin() {
   const apps = getApps();
@@ -39,6 +41,9 @@ export async function notifyStaffMember(params: {
       reservation_request: "notify_reservation_request",
       reservation_cancelled: "notify_reservation_cancelled",
       member_attendance: "notify_attendance",
+      member_signup: "notify_signup_purchase",
+      member_purchase: "notify_signup_purchase",
+      member_refund: "notify_signup_purchase",
     };
     const prefCol = PREF_COLUMN[type];
     if (prefCol) {
@@ -193,5 +198,82 @@ export async function notifyCenterStaffAttendance(params: {
     }
   } catch (e) {
     console.error("[crm-staff-notify] attendance error", e);
+  }
+}
+
+/**
+ * 회원 신규가입 / 상품 구매 / 환불 시 알림.
+ * 대상: 그 센터에서 '가입 및 등록 알림' 권한(app_notify.signup_purchase)이 있고
+ *       토글(notify_signup_purchase)을 켠 직원. (권한은 owner/admin/solo 항상 통과, 그 외는 직급권한)
+ */
+export async function notifyCenterStaffSignupPurchase(params: {
+  centerId: number;
+  kind: "signup" | "purchase" | "refund";
+  memberId?: number;
+  memberName?: string;
+  productName?: string;
+  amountWon?: number;
+}) {
+  const { centerId, kind, memberId } = params;
+  try {
+    // 1) 이 센터에서 '가입 및 등록 알림' 토글 ON 인 직원
+    const { data: prefs } = await supabase
+      .from("crm_staff_notification_prefs")
+      .select("center_member_id")
+      .eq("center_id", centerId)
+      .eq("notify_signup_purchase", true);
+    const ids = (prefs ?? []).map((p) => p.center_member_id);
+    if (ids.length === 0) return true;
+
+    const { data: staff } = await supabase
+      .from("crm_center_members")
+      .select("id, role, grade_id, is_solo_owner")
+      .eq("center_id", centerId)
+      .eq("status", "active")
+      .in("id", ids);
+    if (!staff || staff.length === 0) return true;
+
+    // 회원 이름 (미제공 시 조회)
+    let memberName = params.memberName;
+    if (!memberName && memberId) {
+      const { data: m } = await supabase.from("crm_members").select("name").eq("id", memberId).maybeSingle();
+      memberName = m?.name ?? "회원";
+    }
+    memberName = memberName ?? "회원";
+
+    const { data: center } = await supabase.from("crm_centers").select("name").eq("id", centerId).maybeSingle();
+    const centerName = center?.name ?? "센터";
+
+    const won = (n?: number) => (n && n > 0 ? n.toLocaleString("ko-KR") : "0");
+    const product = params.productName ?? "상품";
+    let type: string, title: string, body: string;
+    if (kind === "signup") {
+      type = "member_signup";
+      title = `[${centerName}] 신규가입`;
+      body = `${memberName}님이 신규가입 하였습니다`;
+    } else if (kind === "refund") {
+      type = "member_refund";
+      title = `[${centerName}] 상품 환불`;
+      body = `${memberName}님이 ${product} 상품을 환불하였습니다${params.amountWon ? ` (${won(params.amountWon)}원)` : ""}`;
+    } else {
+      type = "member_purchase";
+      title = `[${centerName}] 상품 구매`;
+      body = `${memberName}님이 ${product} 상품을 ${won(params.amountWon)}원 구매하였습니다`;
+    }
+    const data: Record<string, string> = { kind: type };
+    if (memberId) data.member_id = String(memberId);
+
+    for (const s of staff) {
+      const ok = await ctxHasPermission(
+        { centerId, role: s.role, gradeId: s.grade_id ?? null, isSoloOwner: s.is_solo_owner ?? false } as CrmContext,
+        "app_notify.signup_purchase"
+      );
+      if (!ok) continue;
+      await notifyStaffMember({ centerId, centerMemberId: s.id, type, title, body, data }).catch(() => {});
+    }
+    return true;
+  } catch (e) {
+    console.error("[crm-staff-notify] signup/purchase error", e);
+    return true;
   }
 }

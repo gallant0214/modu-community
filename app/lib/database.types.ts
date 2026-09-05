@@ -3505,6 +3505,7 @@ export type Database = {
           notify_reservation_request: boolean
           notify_reservation_cancelled: boolean
           notify_attendance: boolean
+          notify_signup_purchase: boolean
           updated_at: string
         }
         Insert: {
@@ -3513,6 +3514,7 @@ export type Database = {
           notify_reservation_request?: boolean
           notify_reservation_cancelled?: boolean
           notify_attendance?: boolean
+          notify_signup_purchase?: boolean
           updated_at?: string
         }
         Update: {
@@ -3521,6 +3523,7 @@ export type Database = {
           notify_reservation_request?: boolean
           notify_reservation_cancelled?: boolean
           notify_attendance?: boolean
+          notify_signup_purchase?: boolean
           updated_at?: string
         }
         Relationships: []

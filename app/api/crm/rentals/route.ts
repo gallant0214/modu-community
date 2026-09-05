@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -205,6 +206,13 @@ export async function POST(request: Request) {
       ...(mileageUsed > 0 ? { mileage_used: mileageUsed } : {}),
     } as never,
   });
+
+  // 가입 및 등록 알림 — 상품 구매(대여권: 운동복·락커). 실결제(paidWon>0)만.
+  if (paidWon > 0) {
+    after(() =>
+      notifyCenterStaffSignupPurchase({ centerId: ctx.centerId, kind: "purchase", memberId, productName: itemName, amountWon: paidWon })
+    );
+  }
 
   return NextResponse.json({ ok: true, rentalId: created.id });
 }

@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -126,7 +127,7 @@ export async function DELETE(
 
   const { data: cur } = await supabase
     .from("crm_payments")
-    .select("id, member_id, pass_id, membership_id, rental_id")
+    .select("id, member_id, pass_id, membership_id, rental_id, amount_won")
     .eq("id", paymentId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -136,6 +137,7 @@ export async function DELETE(
   const membershipId = (cur as { membership_id: number | null }).membership_id ?? null;
   const passId = (cur as { pass_id: number | null }).pass_id ?? null;
   const rentalId = (cur as { rental_id: number | null }).rental_id ?? null;
+  const refundAmount = (cur as { amount_won: number | null }).amount_won ?? 0;
 
   // 이 결제에 연결된 '단일 상품'만 삭제. 묶음(장바구니) 결제라도 각 상품이 각자 결제행이므로
   // 한 결제내역을 지우면 그 상품 하나만 삭제된다. (락커 대여권일 때만 해당 락커 원복)
@@ -260,5 +262,19 @@ export async function DELETE(
     entity_id: paymentId,
     payload: removed as never,
   });
+
+  // 가입 및 등록 알림 — 구매취소(환불). 상품 유형 라벨 + 환불 금액.
+  if (memberId) {
+    const refundProduct = membershipId ? "회원권" : passId ? "수강권" : rentalId ? "대여권" : "상품";
+    after(() =>
+      notifyCenterStaffSignupPurchase({
+        centerId: ctx.centerId,
+        kind: "refund",
+        memberId,
+        productName: refundProduct,
+        amountWon: refundAmount,
+      })
+    );
+  }
   return NextResponse.json({ ok: true, removed });
 }

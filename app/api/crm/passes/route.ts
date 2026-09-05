@@ -1,6 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
 
@@ -333,6 +334,19 @@ export async function POST(request: Request) {
       price_won: Number(body.price_won) || 0,
     } as never,
   });
+
+  // 가입 및 등록 알림 — 상품 구매(수강권). 실결제(paidAmount>0)만.
+  if (paidAmount > 0) {
+    after(() =>
+      notifyCenterStaffSignupPurchase({
+        centerId: ctx.centerId,
+        kind: "purchase",
+        memberId,
+        productName: (body.lesson_kind || "").trim(),
+        amountWon: paidAmount,
+      })
+    );
+  }
 
   // 서비스(무상) 회차: 본 수강권과 별개로 '서비스 수강권'을 0원으로 추가 발급.
   // 담당강사·추가강사·시작일·만료일·수업시간 등은 본 수강권과 동일. (수업료 계산 오류 방지)
