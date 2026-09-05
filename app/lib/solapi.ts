@@ -109,3 +109,32 @@ export async function solapiBalance(): Promise<SolapiBalance> {
   }
   return { ok: true, balance: Number(data?.balance ?? 0), point: Number(data?.point ?? 0) };
 }
+
+export interface SolapiPricing {
+  /** 단문(90byte 이하) 1건 단가(원) */
+  sms: number;
+  /** 장문 1건 단가(원) */
+  lms: number;
+  /** 이미지(MMS) 1건 단가(원) */
+  mms: number;
+}
+
+/**
+ * 이 계정의 실제 발송 단가 조회 (국내, MT 기준).
+ * 발송 전 '예상 지출 금액' 계산에 쓴다. 실패하면 null.
+ */
+export async function solapiPricing(): Promise<SolapiPricing | null> {
+  try {
+    const res = await fetch(`${SOLAPI_BASE}/pricing/v1/messaging`, {
+      headers: { Authorization: authHeader() },
+    });
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => null);
+    if (!data) return null;
+    const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+    const out = { sms: num(data.sms), lms: num(data.lms), mms: num(data.mms) };
+    return out.sms > 0 ? out : null;
+  } catch {
+    return null;
+  }
+}

@@ -86,6 +86,8 @@ function Panel({
 export function SmsSendTab() {
   const { getIdToken } = useAuth();
   const [remain, setRemain] = useState<{ balance: number; point: number } | null>(null);
+  // 솔라피 계정의 실제 발송 단가(원/건) — 예상 지출 금액 계산용
+  const [pricing, setPricing] = useState<{ sms: number; lms: number; mms: number } | null>(null);
   const [sender, setSender] = useState<string>("");
   const [remainMsg, setRemainMsg] = useState<string>("");
   const [numbersRaw, setNumbersRaw] = useState("");
@@ -114,6 +116,13 @@ export function SmsSendTab() {
   const bytes = byteLen(msg);
   const msgType = bytes <= 90 ? "SMS" : "LMS";
 
+  // 총 예상 지출 = 수신자 수 × 문자 유형별 단가. 테스트 모드는 실제 발송이 없어 0원.
+  const unitPrice = pricing ? (msgType === "SMS" ? pricing.sms : pricing.lms) : null;
+  const estimatedCost =
+    unitPrice != null && !testmode ? unitPrice * allNumbers.length : testmode ? 0 : null;
+  const notEnoughCash =
+    estimatedCost != null && remain != null && estimatedCost > remain.balance;
+
   const loadRemain = useCallback(async () => {
     try {
       const token = await getIdToken();
@@ -128,7 +137,10 @@ export function SmsSendTab() {
         return;
       }
       if (data?.sender) setSender(data.sender);
-      if (data?.ok) setRemain({ balance: data.balance, point: data.point });
+      if (data?.ok) {
+        setRemain({ balance: data.balance, point: data.point });
+        if (data?.pricing) setPricing(data.pricing);
+      }
       else setRemainMsg(data?.message || "잔액을 불러오지 못했어요.");
     } catch {
       setRemainMsg("잔액 조회 중 오류가 발생했어요.");
@@ -222,7 +234,9 @@ export function SmsSendTab() {
     }
     const label = testmode
       ? `[테스트 모드] 실제 발송 없이 검증만 합니다.\n${allNumbers.length}명 대상, ${msgType}.`
-      : `실제 발송됩니다.\n${allNumbers.length}명에게 ${msgType} 발송(과금).`;
+      : `실제 발송됩니다.\n${allNumbers.length}명에게 ${msgType} 발송(과금).${
+          estimatedCost != null ? `\n예상 지출 ${estimatedCost.toLocaleString()}원` : ""
+        }`;
     if (!window.confirm(`${label}\n\n계속할까요?`)) return;
 
     setSending(true);
@@ -498,6 +512,36 @@ export function SmsSendTab() {
                 <dt className="text-[#8C8270]">발신번호</dt>
                 <dd className="font-semibold text-[#3A342A] dark:text-zinc-100">{sender ? formatPhone(sender) : "-"}</dd>
               </div>
+
+              {/* 총 예상 지출 — 수신자 수 × 문자 유형 단가 */}
+              <div className="mt-1 flex justify-between gap-3 border-t border-[#E8E0D0] pt-2 dark:border-zinc-800">
+                <dt className="font-semibold text-[#6B5D47] dark:text-zinc-300">총 예상 지출 금액</dt>
+                <dd
+                  className={`font-bold ${
+                    testmode
+                      ? "text-[#8C8270]"
+                      : notEnoughCash
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-[#B4472A] dark:text-amber-300"
+                  }`}
+                >
+                  {testmode
+                    ? "0원 (검증만)"
+                    : estimatedCost != null
+                      ? `${estimatedCost.toLocaleString()}원`
+                      : "단가 조회 실패"}
+                </dd>
+              </div>
+              {unitPrice != null && (
+                <div className="text-right text-[11px] text-[#A89B80]">
+                  {msgType} {unitPrice.toLocaleString()}원 × {allNumbers.length}명
+                </div>
+              )}
+              {notEnoughCash && (
+                <div className="rounded-lg bg-red-50 px-2.5 py-1.5 text-[11.5px] font-medium text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                  캐시 잔액이 부족해요. 충전 후 발송해 주세요.
+                </div>
+              )}
             </dl>
 
             <div className="mt-4 rounded-lg bg-[#FBF7EB] px-3 py-2 text-[12px] text-[#6B5D47] dark:bg-zinc-950 dark:text-zinc-300">

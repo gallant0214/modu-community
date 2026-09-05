@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
-import { solapiConfigured, solapiBalance } from "@/app/lib/solapi";
+import { solapiConfigured, solapiBalance, solapiPricing } from "@/app/lib/solapi";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/crm/sms/remain — 솔라피 잔액(캐시/포인트) 조회 */
+/** GET /api/crm/sms/remain — 솔라피 잔액(캐시/포인트) + 발송 단가 조회 */
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
@@ -21,9 +21,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ configured: false }, { status: 200 });
   }
   const sender = (process.env.SOLAPI_SENDER ?? "").replace(/\D/g, "");
-  const r = await solapiBalance();
+  const [r, pricing] = await Promise.all([solapiBalance(), solapiPricing()]);
   if (!r.ok) {
     return NextResponse.json({ configured: true, ok: false, message: r.message, sender }, { status: 200 });
   }
-  return NextResponse.json({ configured: true, ok: true, balance: r.balance, point: r.point, sender });
+  return NextResponse.json({
+    configured: true,
+    ok: true,
+    balance: r.balance,
+    point: r.point,
+    sender,
+    // 예상 지출 금액 계산용 실제 단가(원/건). 조회 실패 시 null → 화면에서 금액 숨김
+    pricing,
+  });
 }
