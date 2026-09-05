@@ -473,7 +473,7 @@ function AutoMessageEditor({
   );
 
   // 미리보기 아래 테스트 발송 — 저장 전 문구를 한 명에게 실제 문자로 보내본다.
-  const testPanel = <TestSendPanel body={body} />;
+  const testPanel = <TestSendPanel body={body} methods={methods} />;
 
   const inputCls =
     "w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-[#2A251D] dark:text-zinc-100";
@@ -812,8 +812,18 @@ function AutoMessageEditor({
  * 회원명·연락처로 검색 → 선택 → 발송. 상품/만료일처럼 트리거로 정해지는 변수는
  * 서버에서 예시값으로 치환한다.
  */
-function TestSendPanel({ body }: { body: string }) {
+const TEST_METHODS: { key: "sms" | "push" | "smart"; label: string }[] = [
+  { key: "sms", label: "문자메시지" },
+  { key: "push", label: "앱 푸시" },
+  { key: "smart", label: "스마트 전송" },
+];
+
+function TestSendPanel({ body, methods }: { body: string; methods: string[] }) {
   const { getIdToken } = useAuth();
+  // 기본 채널 = 04 전송 방법에서 고른 것 중 발송 가능한 첫 채널
+  const [method, setMethod] = useState<"sms" | "push" | "smart">(
+    () => (TEST_METHODS.find((t) => methods.includes(t.key))?.key ?? "sms")
+  );
   const [q, setQ] = useState("");
   const [results, setResults] = useState<{ id: number; name: string; phone: string | null }[]>([]);
   const [searching, setSearching] = useState(false);
@@ -860,14 +870,20 @@ function TestSendPanel({ body }: { body: string }) {
       setErr("메세지 내용을 먼저 입력해 주세요");
       return;
     }
-    if (!window.confirm(`${picked.name} 님에게 실제 문자를 보냅니다. 요금이 발생해요. 진행할까요?`)) return;
+    const what =
+      method === "push"
+        ? "앱 푸시를 보냅니다."
+        : method === "smart"
+          ? "앱이 있으면 푸시로, 없으면 문자로 보냅니다. (문자일 때만 요금 발생)"
+          : "실제 문자를 보냅니다. 요금이 발생해요.";
+    if (!window.confirm(`${picked.name} 님에게 ${what} 진행할까요?`)) return;
     setSending(true);
     try {
       const token = await getIdToken();
       const res = await fetch("/api/crm/auto-messages/test-send", {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ member_id: picked.id, body }),
+        body: JSON.stringify({ member_id: picked.id, body, method }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "발송 실패");
@@ -884,7 +900,35 @@ function TestSendPanel({ body }: { body: string }) {
       <div className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 p-3.5">
         <div className="text-[12px] font-bold text-[#2A251D] dark:text-zinc-100">테스트 발송</div>
         <p className="mt-0.5 text-[11px] leading-relaxed text-[#8C8270] dark:text-zinc-500">
-          저장 전에 이 문구를 한 명에게 실제 문자로 보내봅니다. 상품·만료일 같은 변수는 예시값으로 채워져요.
+          저장 전에 이 문구를 한 명에게 실제로 보내봅니다. 상품·만료일 같은 변수는 예시값으로 채워져요.
+        </p>
+
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {TEST_METHODS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => {
+                setMethod(t.key);
+                setMsg("");
+                setErr("");
+              }}
+              className={`rounded-full border px-2.5 py-1 text-[11.5px] font-semibold transition-colors ${
+                method === t.key
+                  ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#4d5a29] dark:text-[#A8B87A]"
+                  : "border-[#E8E0D0] bg-white text-[#6B5D47] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1 text-[10.5px] leading-relaxed text-[#A89B80]">
+          {method === "push"
+            ? "회원 앱이 설치·로그인된 회원에게만 전달돼요."
+            : method === "smart"
+              ? "앱 설치 회원 → 푸시 / 미설치 회원 → 문자로 자동 분기해요."
+              : "실제 문자로 발송되며 건당 요금이 발생해요."}
         </p>
 
         {picked ? (
@@ -963,12 +1007,11 @@ function TestSendPanel({ body }: { body: string }) {
         <button
           type="button"
           onClick={send}
-          disabled={!picked || sending || !picked.phone}
+          disabled={!picked || sending || (method === "sms" && !picked.phone)}
           className="mt-2.5 w-full rounded-lg bg-[#6B7B3A] px-3 py-2 text-[12.5px] font-semibold text-white hover:bg-[#5a6932] disabled:opacity-50"
         >
           {sending ? "발송 중…" : "테스트 발송"}
         </button>
-        <p className="mt-1.5 text-[10.5px] text-[#A89B80]">실제 문자로 발송되며 건당 요금이 발생해요.</p>
       </div>
     </div>
   );
