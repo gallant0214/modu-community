@@ -447,6 +447,12 @@ function AutoMessageEditor({
     }
   };
 
+  // 수신 대상 문구 — 장기 미출석은 며칠 기준인지 함께 보여준다 (설정값에 따라 실시간 반영).
+  const recipientText =
+    trigger.key === "long_absence"
+      ? `장기 미출석(휴면 ${sendBasis === "count" ? sendCount : sendDays}일) 회원`
+      : trigger.recipient;
+
   const preview = (
     <MessagePreview
       name={name}
@@ -462,7 +468,7 @@ function AutoMessageEditor({
       sendDaysDir={sendDaysDir}
       sendCount={sendCount}
       sendHour={sendHour}
-      recipient={trigger.recipient}
+      recipient={recipientText}
     />
   );
 
@@ -503,7 +509,7 @@ function AutoMessageEditor({
               <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg border border-[#6B7B3A]/30 bg-[#6B7B3A]/[0.06] dark:bg-[#6B7B3A]/10">
                 <span className="mt-0.5 text-[#6B7B3A] dark:text-[#A8B87A]">👥</span>
                 <div className="text-[13px] text-[#3A342A] dark:text-zinc-200 leading-relaxed">
-                  <span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">{trigger.recipient}</span>
+                  <span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">{recipientText}</span>
                   에게 자동 발송됩니다.
                 </div>
               </div>
