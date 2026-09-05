@@ -90,9 +90,15 @@ export async function PATCH(
       .maybeSingle();
     if (!member) return NextResponse.json({ error: "회원을 찾을 수 없습니다" }, { status: 404 });
 
+    // 같은 회원에게 이어붙이기(연장) 재배정이면 시작일은 '원래 시작일' 그대로 유지하고
+    // 만료일만 갱신한다. (이어붙이기마다 start_date 가 새 기간 시작일로 밀리는 문제 방지)
+    const sameMemberRenewal =
+      locker.state === "assigned" && locker.assigned_member_id === memberId && !!locker.start_date;
+    const keptStart = sameMemberRenewal ? (locker.start_date as string) : body.start_date;
+
     updates.state = "assigned";
     updates.assigned_member_id = memberId;
-    updates.start_date = body.start_date;
+    updates.start_date = keptStart;
     updates.expires_at = body.expires_at;
     if (body.password !== undefined) updates.password = body.password || null;
     if (body.memo !== undefined) updates.memo = body.memo || null;
@@ -100,7 +106,7 @@ export async function PATCH(
     history.action = "assign";
     history.member_id = memberId;
     history.member_name = member.name;
-    history.start_date = body.start_date;
+    history.start_date = keptStart;
     history.expires_at = body.expires_at;
     history.note = body.note ?? null;
     // 배정 시 등록한 비밀번호 기록 ("무엇으로 등록했는지")
