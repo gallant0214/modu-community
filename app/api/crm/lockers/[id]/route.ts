@@ -121,6 +121,38 @@ export async function PATCH(
         .maybeSingle();
       memberName = m?.name ?? null;
     }
+
+    // 🚨 잔여 기간이 남은 락커를 회수하면, 회원의 락커 이용권을 '미배정 대여권'으로 보존한다.
+    //    (물리 자리만 반납하고 남은 기간은 유지 → 회원 상세에 '미배정 락커'로 계속 표시, 재배정 가능)
+    //    이미 유효한 락커 대여권이 있으면(그게 미배정으로 표시됨) 중복 생성하지 않는다.
+    const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    if (locker.assigned_member_id && locker.expires_at && locker.expires_at >= todayKst) {
+      const { data: valids } = await supabase
+        .from("crm_rentals")
+        .select("id, item_name, memo")
+        .eq("center_id", ctx.centerId)
+        .eq("member_id", locker.assigned_member_id)
+        .eq("status", "valid")
+        .gte("expires_at", todayKst);
+      const isLockerRental = (r: { item_name?: string | null; memo?: string | null }) =>
+        /^(락커|상가)/.test((r.item_name ?? "").trim()) ||
+        (r.memo ?? "").includes("락커") ||
+        /\d+번/.test(r.memo ?? "");
+      const hasLockerRental = (valids ?? []).some(isLockerRental);
+      if (!hasLockerRental) {
+        await supabase.from("crm_rentals").insert({
+          center_id: ctx.centerId,
+          member_id: locker.assigned_member_id,
+          item_name: "락커 이용권 (미배정)",
+          price_won: 0,
+          start_date: locker.start_date || todayKst,
+          expires_at: locker.expires_at,
+          status: "valid",
+          memo: "미배정 (락커 회수 시 잔여 이용권 보존)",
+        } as never);
+      }
+    }
+
     updates.state = "unassigned";
     updates.assigned_member_id = null;
     updates.start_date = null;
