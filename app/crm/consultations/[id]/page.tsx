@@ -98,6 +98,7 @@ interface Consultation {
   pain_parts_etc: string | null;
 
   conditions: string[] | null;
+  conditions_past: string[] | null;
   medications: string | null;
   current_state: string | null;
 
@@ -360,12 +361,17 @@ export default function ConsultationDetailPage() {
           />
           <SummaryItem
             label="통증 · 건강 주의"
-            warning={Boolean(safetyFlagValues.length || c.injury_history || c.pain_parts?.length || c.conditions?.length || c.medications)}
+            warning={Boolean(safetyFlagValues.length || c.injury_history || c.pain_parts?.length || c.conditions?.length || c.conditions_past?.length || c.medications)}
             value={[
               labelJoin(SAFETY_FLAGS, safetyFlagValues, objectText(safety.other)),
               c.injury_history,
               labelJoin(PAIN_PARTS, c.pain_parts, c.pain_parts_etc),
-              labelJoin(CONDITIONS, c.conditions, objectText(selectionOther.conditions)),
+              c.conditions_past?.length || objectText(selectionOther.conditions_past)
+                ? `과거: ${labelJoin(CONDITIONS, c.conditions_past, objectText(selectionOther.conditions_past))}`
+                : null,
+              c.conditions?.length || objectText(selectionOther.conditions)
+                ? `현재: ${labelJoin(CONDITIONS, c.conditions, objectText(selectionOther.conditions))}`
+                : null,
               c.medications ? `복용약: ${c.medications}` : null,
             ].filter(Boolean).join(" · ") || "기록된 주의사항 없음"}
           />
@@ -522,7 +528,8 @@ export default function ConsultationDetailPage() {
       <SectionCard title="과거 / 현재 병력">
         <KVList
           rows={[
-            ["병력", labelJoin(CONDITIONS, c.conditions, objectText(selectionOther.conditions))],
+            ["과거 병력", labelJoin(CONDITIONS, c.conditions_past, objectText(selectionOther.conditions_past))],
+            ["현재 병력", labelJoin(CONDITIONS, c.conditions, objectText(selectionOther.conditions))],
             ["약물 복용", c.medications],
             ["현재 상태", c.current_state],
           ]}

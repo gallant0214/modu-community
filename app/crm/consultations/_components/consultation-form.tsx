@@ -217,6 +217,9 @@ function ConsultationFormInner({
   const [jobTraitsOther, setJobTraitsOther] = useState(nestedStr("selection_other_details", "job_traits"));
   const [fatigueWhenOther, setFatigueWhenOther] = useState(nestedStr("selection_other_details", "fatigue_when"));
   const [conditionsOther, setConditionsOther] = useState(nestedStr("selection_other_details", "conditions"));
+  // 과거 병력 (신규 필드). 기존 데이터는 conditions 를 현재 병력으로 간주하고, past 는 빈 상태로 시작.
+  const [conditionsPast, setConditionsPast] = useState<string[]>(asArr("conditions_past"));
+  const [conditionsPastOther, setConditionsPastOther] = useState(nestedStr("selection_other_details", "conditions_past"));
   const [primaryGoal, setPrimaryGoal] = useState(nestedStr("goal_details", "primary_goal"));
   const [goalDeadline, setGoalDeadline] = useState(nestedStr("goal_details", "deadline"));
   const [currentMetric, setCurrentMetric] = useState(nestedStr("goal_details", "current_metric"));
@@ -587,6 +590,7 @@ function ConsultationFormInner({
       treatment: painTreatment,
     },
     conditions,
+    conditions_past: conditionsPast,
     medications,
     current_state: currentState,
     safety_screening: {
@@ -630,6 +634,7 @@ function ConsultationFormInner({
       job_traits: jobTraitsOther,
       fatigue_when: fatigueWhenOther,
       conditions: conditionsOther,
+      conditions_past: conditionsPastOther,
     },
     request_note: requestNote,
     memo,
@@ -1437,7 +1442,18 @@ function ConsultationFormInner({
       {/* ===== 과거 / 현재 병력 ===== */}
       <Section title="과거 / 현재 병력">
         <div className="space-y-3">
-          <Field label="해당 사항을 선택해 주세요">
+          <Field label="과거 병력">
+            <ChipList
+              options={CONDITIONS.map((s) => ({ v: s.v, l: s.l }))}
+              value={conditionsPast}
+              onToggle={(v) => toggle(conditionsPast, v, setConditionsPast)}
+              allowOther
+              otherText={conditionsPastOther}
+              onOtherTextChange={setConditionsPastOther}
+              otherPlaceholder="기타 과거 병력·건강 상태를 입력해 주세요"
+            />
+          </Field>
+          <Field label="현재 병력">
             <ChipList
               options={CONDITIONS.map((s) => ({ v: s.v, l: s.l }))}
               value={conditions}
@@ -1445,7 +1461,7 @@ function ConsultationFormInner({
               allowOther
               otherText={conditionsOther}
               onOtherTextChange={setConditionsOther}
-              otherPlaceholder="기타 병력·건강 상태를 입력해 주세요"
+              otherPlaceholder="기타 현재 병력·건강 상태를 입력해 주세요"
             />
           </Field>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

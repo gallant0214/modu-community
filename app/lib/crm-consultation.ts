@@ -108,6 +108,7 @@ export function buildConsultationPayload(
     pain_parts_etc: asStr(body.pain_parts_etc),
 
     conditions: asArr(body.conditions),
+    conditions_past: asArr(body.conditions_past),
     medications: asStr(body.medications),
     current_state: asStr(body.current_state),
     safety_screening: asObj(body.safety_screening),
