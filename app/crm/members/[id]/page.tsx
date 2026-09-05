@@ -4635,12 +4635,12 @@ function PassStatusChip({
   const label = PASS_STATUS_LABEL[eff] ?? eff;
   const cls =
     eff === "valid"
-      ? "bg-[#EFE7D5] text-[#6B7B3A] dark:bg-[#6B7B3A]/20 dark:text-[#A8B87A]"
+      ? "bg-[#22C55E] text-white dark:bg-[#22C55E] dark:text-white shadow-sm"
       : eff === "expired"
       ? "bg-[#F5F0E5] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500"
       : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
   return (
-    <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${cls}`}>
+    <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${cls}`}>
       {label}
     </span>
   );
@@ -5150,9 +5150,9 @@ function UsageCard({
             ) : null}
           </span>
           <span
-            className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+            className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
               valid
-                ? "bg-transparent border border-[#4CAF50] text-[#4CAF50]"
+                ? "bg-[#22C55E] text-white shadow-sm"
                 : "bg-[#F5F0E5] dark:bg-zinc-800 text-[#A89B80]"
             }`}
           >
@@ -8895,6 +8895,15 @@ function PassDetailModal({
       : PAYMENT_METHOD_LABEL[pass.payment_method] ?? pass.payment_method
     : "";
 
+  // 헤더 홀딩 칩: crm_pauses 기준. 오늘이 홀딩 기간 내=hold(홀딩중) / 시작 전=scheduled(예정).
+  const passHoldTodayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const passHoldState: "hold" | "scheduled" | null = activePause
+    ? activePause.start_date <= passHoldTodayKst && passHoldTodayKst <= activePause.end_date
+      ? "hold"
+      : activePause.start_date > passHoldTodayKst
+        ? "scheduled"
+        : null
+    : null;
 
   return (
     <>
@@ -8910,11 +8919,23 @@ function PassDetailModal({
               <span className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">
                 {pass.lesson_kind}
               </span>
-              <PassStatusChip
-                status={pass.status}
-                totalSessions={pass.total_sessions}
-                remainingSessions={pass.remaining_sessions}
-              />
+              <span className="flex items-center gap-1.5">
+                {passHoldState === "hold" && (
+                  <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 text-[11px] font-bold">
+                    홀딩중
+                  </span>
+                )}
+                {passHoldState === "scheduled" && (
+                  <span className="px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 text-[11px] font-bold">
+                    예정
+                  </span>
+                )}
+                <PassStatusChip
+                  status={pass.status}
+                  totalSessions={pass.total_sessions}
+                  remainingSessions={pass.remaining_sessions}
+                />
+              </span>
             </div>
             <div className="mt-1.5 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
               {ISSUE_TYPE_LABEL[pass.issue_type] ?? pass.issue_type} ·{" "}
