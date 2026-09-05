@@ -4791,54 +4791,72 @@ function mergeLockerItems(
 ): { cards: MergedLocker[]; usedRentalIds: Set<number> } {
   const used = new Set<number>();
   const cards: MergedLocker[] = [];
+  const todayStr = new Date().toISOString().slice(0, 10);
   // 락커 대여권 판별: memo 가 락커 배정/미배정 이거나, 상품명이 락커/상가.
   const isLockerRental = (x: RentalRow) =>
     (x.memo ?? "").includes("미배정") ||
     (x.memo ?? "").includes("락커") ||
     /\d+번/.test(x.memo ?? "") ||
     /^(락커|상가)/.test((x.item_name ?? "").trim());
-  // 배정된 물리 락커의 라벨 목록 — 재등록(같은 자리 여러 대여권) 판정에 사용
-  const assignedLabels = lockers.map((l) => `${l.zone_name} ${l.number}번`);
-  // 1) 배정된 락커 → 대여권 결합.
-  //    ① memo 라벨("여자탈의실 39번") 정확 매칭 우선
-  //    ② 없으면(락커관리에서 따로 배정해 memo 가 '구역 미배정' 그대로인 경우)
-  //       미배정 락커 대여권을 흡수 — 시작일 동일 우선, 아니면 아무거나 하나
+
+  // 🚨 락커도 회원권처럼 "구매 1건 = 카드 1개".
+  //    crm_rentals 에는 이미 구매마다 새 행이 쌓이므로, 각 락커 대여권을 개별 카드로 펼친다.
+  //    물리 자리(번호/비밀번호) 배지는 그 자리의 '현재 유효한' 대여권 카드 1개에만 붙인다.
+  const lockerRentals = rentals.filter(isLockerRental);
+  for (const x of lockerRentals) used.add(x.id); // 락커 대여권은 전부 카드로 소비 (otherRentals 제외)
+
+  const isValidR = (x: RentalRow) =>
+    x.status === "valid" && (x.expires_at ?? "") >= todayStr;
+  const badgeByRental = new Map<number, LockerAssignRow>(); // rentalId → 붙일 물리 락커
+  const badgedRentalIds = new Set<number>();
+  const slotsWithoutRental: LockerAssignRow[] = [];
   for (const l of lockers) {
     const label = `${l.zone_name} ${l.number}번`;
-    let r = rentals.find((x) => !used.has(x.id) && (x.memo ?? "").includes(label)) ?? null;
-    if (!r) {
-      const cands = rentals.filter((x) => !used.has(x.id) && isLockerRental(x));
-      r = cands.find((x) => x.start_date && x.start_date === l.start_date) ?? cands[0] ?? null;
+    // ① memo 라벨 매칭 후보, 없으면(구역 미배정 memo 등) 아무 락커 대여권 후보
+    let cands = lockerRentals.filter(
+      (x) => !badgedRentalIds.has(x.id) && (x.memo ?? "").includes(label)
+    );
+    if (cands.length === 0) {
+      cands = lockerRentals.filter((x) => !badgedRentalIds.has(x.id));
     }
-    if (r) used.add(r.id);
-    cards.push({
-      key: `la${l.id}`,
-      name: r?.item_name ?? "락커",
-      price: r?.price_won ?? 0,
-      start: l.start_date,
-      exp: l.expires_at,
-      assign: l,
-      rental: r,
-    });
+    // 현재 유효+시작일일치 > 유효 > 시작일일치 > 만료일 최신
+    const chosen =
+      cands.find((x) => isValidR(x) && x.start_date === l.start_date) ??
+      cands.find((x) => isValidR(x)) ??
+      cands.find((x) => x.start_date === l.start_date) ??
+      [...cands].sort((a, b) => (b.expires_at ?? "").localeCompare(a.expires_at ?? ""))[0] ??
+      null;
+    if (chosen) {
+      badgeByRental.set(chosen.id, l);
+      badgedRentalIds.add(chosen.id);
+    } else {
+      slotsWithoutRental.push(l); // 대여권 없는 물리 배정(락커관리 직접 배정)
+    }
   }
-  // 2) 남은 락커 대여권 = 실제로 물리 락커가 배정 안 된 미배정 건
-  for (const x of rentals) {
-    if (used.has(x.id)) continue;
-    if (!isLockerRental(x)) continue;
-    // 이미 배정된 락커와 같은 자리를 가리키는 대여권(재등록 이력)은 별도 미배정 카드로 표시하지 않음
-    if (assignedLabels.some((lbl) => (x.memo ?? "").includes(lbl))) {
-      used.add(x.id);
-      continue;
-    }
-    used.add(x.id);
+
+  // 각 락커 대여권 = 카드 1개 (그 구매의 기간 그대로). 현재 자리 대여권엔 물리 배지.
+  for (const x of lockerRentals) {
+    const l = badgeByRental.get(x.id) ?? null;
     cards.push({
       key: `lr${x.id}`,
       name: x.item_name,
       price: x.price_won,
       start: x.start_date,
       exp: x.expires_at,
-      assign: null,
+      assign: l,
       rental: x,
+    });
+  }
+  // 대여권 없이 물리로만 배정된 자리 = 카드 1개
+  for (const l of slotsWithoutRental) {
+    cards.push({
+      key: `la${l.id}`,
+      name: "락커",
+      price: 0,
+      start: l.start_date,
+      exp: l.expires_at,
+      assign: l,
+      rental: null,
     });
   }
   return { cards, usedRentalIds: used };
