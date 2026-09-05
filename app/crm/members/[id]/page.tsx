@@ -5358,6 +5358,12 @@ function HoldingDetailModal({
   useEffect(() => {
     setEditing(false);
     setError("");
+    // 액션 진행중 플래그 초기화 — 모달은 언마운트되지 않고 detail prop 만 바뀌므로,
+    // 이전 상품에서 홀딩해제/환불 등을 한 뒤 다른 상품을 열면 "해제 중…" 등이 그대로 남는 문제 방지.
+    setUnholding(false);
+    setRefunding(false);
+    setSaving(false);
+    setAssigningLocker(false);
     if (!open) return;
     (async () => {
       try {
