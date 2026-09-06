@@ -166,7 +166,7 @@ const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
   attendance_no: 84,
 };
 const COL_WIDTH_KEY = "crm_members_col_widths_v1";
-const SORT_KEY_STORAGE = "crm_members_sort_v2";
+const SORT_KEY_STORAGE = "crm_members_sort_v3";
 
 const PAGE_SIZE = 25;
 
@@ -490,7 +490,7 @@ export default function CrmMembersPage() {
   }, [loadingForScroll]);
 
   // 정렬 (헤더 클릭, localStorage 저장)
-  // 기본값: 최근 등록/구매(recency) 최신순 → 최근 등록·구매 회원이 최상단
+  // 기본값: 최근 활동(recency) 최신순 → 신규·결제·재등록·가입 등 활동이 최근인 회원이 최상단
   const [sortKey, setSortKey] = useState<SortKey | null>("recency");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   useEffect(() => {
@@ -759,9 +759,12 @@ export default function CrmMembersPage() {
     const val = (m: MemberRow): string | number => {
       switch (sortKey) {
         case "recency": {
-          // 최근 등록일/마지막 구매일 중 더 최신 날짜 (둘 다 없으면 가입일)
-          const cands = [m.registered_at, m.last_purchase_at].filter(Boolean) as string[];
-          if (cands.length === 0) return (m.created_at || "").slice(0, 10);
+          // 최근 활동일 = 신규/재등록(등록일)·결제(구매일)·가입(생성일)·이용시작일 중 가장 최신.
+          // → 최근 신규·결제·재등록·가입 등 활동이 있었던 회원이 항상 최상단.
+          const cands = [m.registered_at, m.last_purchase_at, m.first_use_at, m.created_at]
+            .filter(Boolean)
+            .map((s) => (s as string).slice(0, 10));
+          if (cands.length === 0) return "";
           return cands.reduce((a, b) => (b > a ? b : a));
         }
         case "name":
