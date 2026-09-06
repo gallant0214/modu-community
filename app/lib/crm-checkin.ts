@@ -269,7 +269,8 @@ export async function attendanceEarnAmount(centerId: number, memberId: number): 
       .eq("member_id", memberId)
       .eq("status", "valid")
       .eq("is_paused", false)
-      .gte("expires_at", ymd),
+      .gte("expires_at", ymd)
+      .or(`start_date.lte.${ymd},start_date.is.null`),
     supabase
       .from("crm_passes")
       .select("attendance_mileage_earn")
@@ -277,7 +278,8 @@ export async function attendanceEarnAmount(centerId: number, memberId: number): 
       .eq("member_id", memberId)
       .eq("status", "valid")
       .eq("is_paused", false)
-      .gte("expires_at", ymd),
+      .gte("expires_at", ymd)
+      .or(`start_date.lte.${ymd},start_date.is.null`),
   ]);
   return Math.max(
     0,
@@ -319,7 +321,8 @@ export async function awardAttendanceMileage(
       .eq("member_id", memberId)
       .eq("status", "valid")
       .eq("is_paused", false)
-      .gte("expires_at", ymd),
+      .gte("expires_at", ymd)
+      .or(`start_date.lte.${ymd},start_date.is.null`),
     supabase
       .from("crm_passes")
       .select("attendance_mileage_earn")
@@ -327,7 +330,8 @@ export async function awardAttendanceMileage(
       .eq("member_id", memberId)
       .eq("status", "valid")
       .eq("is_paused", false)
-      .gte("expires_at", ymd),
+      .gte("expires_at", ymd)
+      .or(`start_date.lte.${ymd},start_date.is.null`),
   ]);
 
   const amount = Math.max(
