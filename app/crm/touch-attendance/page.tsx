@@ -373,6 +373,18 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
     }
   };
 
+  // 회원 확정 후: 얼굴 미등록자에게 촬영 권유(공개 태블릿=무조건 / 로그인=권유설정 ON), 아니면 바로 체크인.
+  const proceedMember = async (m: MemberLite) => {
+    const shouldEnroll = !m.has_face && (kiosk || photoSuggest);
+    if (!shouldEnroll) {
+      await checkin(m);
+    } else {
+      setCandidates(null);
+      setEnrollTarget(m);
+      setBusy(false);
+    }
+  };
+
   const submit = async () => {
     if (busy || !num.trim()) return;
     setBusy(true);
@@ -398,15 +410,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         setBusy(false);
         setNum("");
       } else if (members.length === 1) {
-        const m = members[0];
-        if (kiosk || m.has_face || !photoSuggest) {
-          // 공개 키오스크(번호 전용) / 이미 얼굴 등록 / 사진 촬영 권유 OFF → 바로 체크인
-          await checkin(m);
-        } else {
-          // 얼굴 미등록 + 사진 촬영 권유 ON → 촬영/동의 플로우
-          setEnrollTarget(m);
-          setBusy(false);
-        }
+        await proceedMember(members[0]);
       } else {
         // 동명(같은 번호) 여러 명 → 이름 선택
         setCandidates(members);
@@ -558,6 +562,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         /* 얼굴 미등록 단일 회원 → 동의·촬영 */
         <FaceEnroll
           member={enrollTarget}
+          kioskToken={kioskToken}
           onCancel={clearAll}
           onDone={async () => {
             const m = enrollTarget;
@@ -575,7 +580,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
             {candidates.map((m) => (
               <li key={m.id}>
                 <button
-                  onClick={() => checkin(m)}
+                  onClick={() => proceedMember(m)}
                   disabled={busy}
                   className="w-full px-7 py-6 rounded-3xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-left hover:border-[#6B7B3A] active:bg-[#F5F0E5] dark:active:bg-zinc-800 disabled:opacity-50"
                 >

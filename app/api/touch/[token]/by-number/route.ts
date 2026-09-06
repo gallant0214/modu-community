@@ -28,7 +28,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("crm_members")
-    .select("id, name, phone")
+    .select("id, name, phone, face_image_data")
     .eq("center_id", center.centerId)
     .eq("status", "active")
     .eq("attendance_no", no)
@@ -37,13 +37,14 @@ export async function GET(
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
 
-  // 동명이인 구분용으로 이름·연락처만. 얼굴은 공개 안 함(has_face=false 고정).
+  // 얼굴 사진 자체는 공개하지 않고, '등록 여부(has_face)'만 반환 —
+  // 얼굴 미등록자에게 현장 촬영 권유를 띄우기 위함(사진 데이터는 응답에서 제외).
   const members = (data ?? []).map(
-    (m: { id: number; name: string; phone: string | null }) => ({
+    (m: { id: number; name: string; phone: string | null; face_image_data: string | null }) => ({
       id: m.id,
       name: m.name,
       phone: m.phone,
-      has_face: false,
+      has_face: !!m.face_image_data,
     })
   );
   return NextResponse.json({ members });

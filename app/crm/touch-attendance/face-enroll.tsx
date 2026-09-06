@@ -18,11 +18,14 @@ export default function FaceEnroll({
   member,
   onDone,
   onCancel,
+  kioskToken,
 }: {
   member: Member;
   /** 완료(등록했든 미동의로 건너뛰든) → 부모가 출석 처리 */
   onDone: (registered: boolean) => void;
   onCancel: () => void;
+  /** 공개 터치링크(로그인 없음) 모드면 kioskToken 으로 공개 저장 엔드포인트 사용 */
+  kioskToken?: string;
 }) {
   const { getIdToken } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -106,12 +109,18 @@ export default function FaceEnroll({
     setError("");
     try {
       const thumb = await makeThumb(captured);
-      const token = await getIdToken();
-      const res = await fetch("/api/crm/attendances/register-face", {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ member_id: member.id, face_image_data: captured, face_image_thumb: thumb }),
-      });
+      // 공개 터치링크(kioskToken) → 인증 없는 공개 저장 엔드포인트 / 로그인 CRM → 기존 인증 엔드포인트
+      const res = kioskToken
+        ? await fetch(`/api/touch/${kioskToken}/register-face`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ member_id: member.id, face_image_data: captured, face_image_thumb: thumb }),
+          })
+        : await fetch("/api/crm/attendances/register-face", {
+            method: "POST",
+            headers: { authorization: `Bearer ${await getIdToken()}`, "content-type": "application/json" },
+            body: JSON.stringify({ member_id: member.id, face_image_data: captured, face_image_thumb: thumb }),
+          });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "얼굴 등록 실패");
       stopCamera();
