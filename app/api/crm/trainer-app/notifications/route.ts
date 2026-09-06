@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   const [{ data, error }, { count }] = await Promise.all([
     supabase
       .from("crm_staff_notifications")
-      .select("id, type, title, body, data_json, read_at, created_at")
+      .select("id, type, title, body, data_json, read_at, created_at, center_id")
       .eq("center_member_id", ctx.centerMemberId)
       .order("created_at", { ascending: false })
       .limit(100),
@@ -65,6 +65,7 @@ export async function GET(request: Request) {
         body: n.body,
         data: n.data_json,
         memberFace: mid ? faceMap.get(mid) ?? null : null,
+        centerId: n.center_id,
         readAt: n.read_at,
         createdAt: n.created_at,
       };
