@@ -131,11 +131,11 @@ export default function CrmAttendancesPage() {
     loadMonth();
   }, [loadMonth]);
 
-  // 선택 날짜가 현재 표시 중인 달과 다르면 달을 맞춤
+  // 선택 날짜가 바뀌면 그 날짜의 달로 달력을 맞춤.
+  // (month 를 의존성에 넣으면 ‹ › 로 달을 이동해도 이 효과가 다시 돌아 date 의 달로 되돌려버려서 제외)
   useEffect(() => {
-    const m = date.slice(0, 7);
-    if (m !== month) setMonth(m);
-  }, [date, month]);
+    setMonth(date.slice(0, 7));
+  }, [date]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 오늘 날짜를 새로고침하면 달력의 오늘 카운트도 갱신
   useEffect(() => {
