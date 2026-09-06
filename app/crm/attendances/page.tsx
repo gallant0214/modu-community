@@ -257,7 +257,7 @@ export default function CrmAttendancesPage() {
               출석 현황
             </h1>
             <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-              {date} 기준 출석 흐름과 회원별 체크인 상태를 확인합니다.
+              {date} ({weekdayKo(date)}) 기준 출석 흐름과 회원별 체크인 상태를 확인합니다.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -273,6 +273,9 @@ export default function CrmAttendancesPage() {
               onChange={(e) => setDate(e.target.value)}
               className={`${crmInputClass} !h-9 !w-auto`}
             />
+            <span className="text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 shrink-0">
+              ({weekdayKo(date)})
+            </span>
             <button
               onClick={() => shift(1)}
               disabled={date >= todayKst()}
@@ -700,6 +703,14 @@ function todayKst(): string {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 3600 * 1000);
   return kst.toISOString().slice(0, 10);
+}
+
+/** ISO 날짜(YYYY-MM-DD) → 한글 요일 한 글자 (일~토) */
+function weekdayKo(ymd: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || "");
+  if (!m) return "";
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return ["일", "월", "화", "수", "목", "금", "토"][d.getUTCDay()] ?? "";
 }
 
 function formatTimeKST(iso: string) {
