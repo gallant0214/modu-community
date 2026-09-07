@@ -115,6 +115,40 @@ export default function AdminPage() {
       setUserListLoading(false);
     }
   }, [storedPassword]);
+  // USER 탭 — 목록 소스 전환 (커뮤니티 가입 / 회원용 앱 가입)
+  const [userListSource, setUserListSource] = useState<"community" | "app">("community");
+  // USER 탭 — 회원용 앱 가입자 리스트 (crm_members.linked_firebase_uid 기준)
+  const [appListPage, setAppListPage] = useState(1);
+  const [appListQuery, setAppListQuery] = useState("");
+  const [appListData, setAppListData] = useState<{
+    users: any[]; total: number; page: number; limit: number; totalPages: number;
+  } | null>(null);
+  const [appListLoading, setAppListLoading] = useState(false);
+  const [appListError, setAppListError] = useState<string>("");
+  const loadAppList = useCallback(async (page: number, q?: string) => {
+    if (!storedPassword) return;
+    setAppListLoading(true);
+    setAppListError("");
+    try {
+      const res = await fetch("/api/admin/users/app-list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: storedPassword, page, limit: 30, q: q ?? "" }),
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAppListError(data?.error || "조회 실패");
+        setAppListData(null);
+      } else {
+        setAppListData(data);
+      }
+    } catch (e: any) {
+      setAppListError(e?.message || "네트워크 오류");
+    } finally {
+      setAppListLoading(false);
+    }
+  }, [storedPassword]);
   // USER 탭에 진입할 때마다 항상 최신 정보를 다시 조회 (1페이지로 초기화)
   useEffect(() => {
     if (tab === "user" && storedPassword) {
@@ -124,6 +158,13 @@ export default function AdminPage() {
     // tab 이 "user" 로 바뀌는 시점에만 실행. userListData/page 는 의존성에서 제외(재조회 루프 방지).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, storedPassword, loadUserList]);
+  // '회원용 앱 가입' 으로 전환했을 때 최초 1회 조회 (전환 후에는 새로고침 버튼으로 갱신)
+  useEffect(() => {
+    if (tab === "user" && userListSource === "app" && storedPassword && !appListData && !appListLoading) {
+      loadAppList(1, appListQuery);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, userListSource, storedPassword]);
   const lookupUser = async () => {
     if (!storedPassword) return;
     const q = userQuery.trim();
@@ -2501,24 +2542,47 @@ export default function AdminPage() {
 
             {/* ── 전체 유저 리스트 (30명/페이지) — 맨 아래 ── */}
             <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-200">
-                  전체 유저
-                  {userListData && (
-                    <span className="ml-2 text-xs font-normal text-zinc-400">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* 가입 경로 분리 — 커뮤니티(nicknames) vs 회원용 앱(crm_members 계정 연동) */}
+                  <div className="inline-flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
+                    <button
+                      onClick={() => setUserListSource("community")}
+                      className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${userListSource === "community" ? "bg-cyan-500 text-white" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}
+                    >
+                      커뮤니티 가입
+                    </button>
+                    <button
+                      onClick={() => setUserListSource("app")}
+                      className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${userListSource === "app" ? "bg-cyan-500 text-white" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}
+                    >
+                      회원용 앱 가입
+                    </button>
+                  </div>
+                  {userListSource === "community" && userListData && (
+                    <span className="text-xs font-normal text-zinc-400">
                       총 {userListData.total.toLocaleString()}명 · {userListData.page}/{userListData.totalPages || 1}p
                     </span>
                   )}
-                </h3>
+                  {userListSource === "app" && appListData && (
+                    <span className="text-xs font-normal text-zinc-400">
+                      총 {appListData.total.toLocaleString()}명 · {appListData.page}/{appListData.totalPages || 1}p
+                    </span>
+                  )}
+                </div>
                 <button
-                  onClick={() => { setUserListData(null); loadUserList(userListPage); }}
-                  disabled={userListLoading}
+                  onClick={() => {
+                    if (userListSource === "community") { setUserListData(null); loadUserList(userListPage); }
+                    else { setAppListData(null); loadAppList(appListPage, appListQuery); }
+                  }}
+                  disabled={userListSource === "community" ? userListLoading : appListLoading}
                   className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
-                  {userListLoading ? "로드 중…" : "새로고침"}
+                  {(userListSource === "community" ? userListLoading : appListLoading) ? "로드 중…" : "새로고침"}
                 </button>
               </div>
 
+              {userListSource === "community" && (<>
               {userListError && <p className="mb-2 text-sm text-red-500">{userListError}</p>}
 
               {userListLoading && !userListData ? (
@@ -2599,6 +2663,145 @@ export default function AdminPage() {
                   )}
                 </>
               ) : null}
+              </>)}
+
+              {/* ── 회원용 앱(모두의지도사 회원용) 가입자 — crm_members 계정 연동 기준 ── */}
+              {userListSource === "app" && (<>
+                <div className="mb-3 flex gap-2">
+                  <input
+                    type="text"
+                    value={appListQuery}
+                    onChange={(e) => setAppListQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { setAppListPage(1); loadAppList(1, appListQuery); } }}
+                    placeholder="이름 · 연락처 · 센터명 검색"
+                    className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  />
+                  <button
+                    onClick={() => { setAppListPage(1); loadAppList(1, appListQuery); }}
+                    disabled={appListLoading}
+                    className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-600 disabled:opacity-50"
+                  >
+                    {appListLoading ? "조회 중…" : "조회"}
+                  </button>
+                </div>
+
+                {appListError && <p className="mb-2 text-sm text-red-500">{appListError}</p>}
+
+                {appListLoading && !appListData ? (
+                  <div className="flex justify-center py-12"><div className="h-6 w-6 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" /></div>
+                ) : appListData && appListData.users.length === 0 ? (
+                  <p className="py-8 text-center text-xs text-zinc-400">회원용 앱 가입자가 없습니다</p>
+                ) : appListData ? (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[900px] text-xs">
+                        <thead className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                          <tr>
+                            <th className="py-2 pr-2 text-left font-semibold">#</th>
+                            <th className="py-2 pr-2 text-left font-semibold">이름 (이메일)</th>
+                            <th className="py-2 pr-2 text-left font-semibold">연락처</th>
+                            <th className="py-2 pr-2 text-left font-semibold">소속 센터</th>
+                            <th className="py-2 pr-2 text-left font-semibold">가입 경로</th>
+                            <th className="py-2 pr-2 text-left font-semibold">가입일</th>
+                            <th className="py-2 pr-2 text-left font-semibold">최근 로그인</th>
+                            <th className="py-2 pr-2 text-center font-semibold">앱 설치</th>
+                            <th className="py-2 pr-2 text-left font-semibold">커뮤니티</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {appListData.users.map((u: any, i: number) => {
+                            const startIdx = (appListData.page - 1) * appListData.limit;
+                            return (
+                              <tr key={u.firebase_uid} className="border-b border-zinc-100 last:border-0 dark:border-zinc-800 align-top">
+                                <td className="py-1.5 pr-2 text-zinc-400">{startIdx + i + 1}</td>
+                                <td className="py-1.5 pr-2">
+                                  <div className="font-semibold text-zinc-800 dark:text-zinc-100">{u.name}</div>
+                                  <div className="text-[10px] text-zinc-400">{u.email || "-"}</div>
+                                </td>
+                                <td className="py-1.5 pr-2 text-zinc-600 dark:text-zinc-300 whitespace-nowrap">{u.phone || "-"}</td>
+                                <td className="py-1.5 pr-2 text-zinc-700 dark:text-zinc-200">
+                                  {(u.centers || []).map((c: any) => (
+                                    <div key={c.member_id} className="whitespace-nowrap">
+                                      {c.name}
+                                      {c.status !== "active" && <span className="ml-1 text-[10px] text-zinc-400">({c.status})</span>}
+                                    </div>
+                                  ))}
+                                </td>
+                                <td className="py-1.5 pr-2 whitespace-nowrap">
+                                  <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${u.self_signup ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"}`}>
+                                    {u.self_signup ? "앱 자체가입" : "기존회원 연동"}
+                                  </span>
+                                </td>
+                                <td className="py-1.5 pr-2 text-zinc-600 dark:text-zinc-300 whitespace-nowrap">
+                                  <div>{u.joined_at ? new Date(u.joined_at).toLocaleDateString("ko-KR") : "-"}</div>
+                                  {u.joined_basis === "member_created" && (
+                                    <div className="text-[10px] text-zinc-400">센터 등록일 기준</div>
+                                  )}
+                                </td>
+                                <td className="py-1.5 pr-2 text-zinc-600 dark:text-zinc-300 whitespace-nowrap">
+                                  {u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString("ko-KR") : "-"}
+                                </td>
+                                <td className="py-1.5 pr-2 text-center whitespace-nowrap">
+                                  {(u.device_platforms || []).length > 0 ? (
+                                    (u.device_platforms as string[]).map((pf) => (
+                                      <span
+                                        key={pf}
+                                        className={`mr-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${pf === "ios" ? "bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"}`}
+                                      >
+                                        {pf === "ios" ? "iOS" : "Android"}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-[10px] text-zinc-400">미설치</span>
+                                  )}
+                                </td>
+                                <td className="py-1.5 pr-2">
+                                  {u.community_nickname ? (
+                                    <button
+                                      onClick={() => { setUserQuery(u.community_nickname); lookupUser(); }}
+                                      className="rounded-md bg-cyan-50 px-2 py-1 text-[10px] font-bold text-cyan-700 hover:bg-cyan-100 dark:bg-cyan-950/40 dark:text-cyan-300 dark:hover:bg-cyan-950/60"
+                                    >
+                                      {u.community_nickname}
+                                    </button>
+                                  ) : (
+                                    <span className="text-[10px] text-zinc-400">앱 전용</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* 페이지네이션 */}
+                    {appListData.totalPages > 1 && (
+                      <div className="mt-4 flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => { const p = Math.max(1, appListPage - 1); setAppListPage(p); loadAppList(p, appListQuery); }}
+                          disabled={appListPage <= 1 || appListLoading}
+                          className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-30 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        >
+                          이전
+                        </button>
+                        <span className="text-xs text-zinc-500">
+                          {appListPage} / {appListData.totalPages}
+                        </span>
+                        <button
+                          onClick={() => { const p = Math.min(appListData.totalPages, appListPage + 1); setAppListPage(p); loadAppList(p, appListQuery); }}
+                          disabled={appListPage >= appListData.totalPages || appListLoading}
+                          className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 disabled:opacity-30 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        >
+                          다음
+                        </button>
+                      </div>
+                    )}
+                    <p className="mt-3 text-[10.5px] text-zinc-400">
+                      회원용 앱 계정이 연동된 CRM 회원 기준 · 여러 센터에 등록된 사람은 1명으로 합산 · 앱에서 직접 가입한 경우 가입일은 동의 시각, 기존 회원 연동은 센터 등록일로 표시됩니다.
+                    </p>
+                  </>
+                ) : null}
+              </>)}
             </div>
           </div>
         )}
