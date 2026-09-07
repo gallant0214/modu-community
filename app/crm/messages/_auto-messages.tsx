@@ -9,7 +9,11 @@ import {
   MESSAGE_VARIABLES,
   smsByteLength,
   smsKind,
+  EXPIRY_BASIS_TRIGGERS,
+  EXPIRY_BASIS_LABEL,
+  EXPIRY_BASIS_DESC,
   type SendBasis,
+  type ExpiryBasis,
 } from "@/app/lib/auto-message-triggers";
 import { formatPhone } from "../_components/crm-labels";
 
@@ -24,6 +28,8 @@ interface SettingConfig {
   send_days_dir?: "before" | "after";
   /** 발송 시각(KST 0~23시). 전송 기준(즉시/일정/횟수) 공통. 기본 10시 */
   send_hour?: number | null;
+  /** 만료 판정 기준(수강권 만료 시): 기간 만료(period, 기본) / 횟수 소진(sessions) */
+  expiry_basis?: ExpiryBasis;
 }
 interface SettingRow {
   trigger_key: string;
@@ -286,6 +292,8 @@ export function AutoMessagesTab() {
                       {scanSet.has(t.key)
                         ? ` · 대상 ${counts[t.key] ?? 0}명`
                         : " · 이벤트 기반"}
+                      {EXPIRY_BASIS_TRIGGERS.has(t.key) &&
+                        ` · ${EXPIRY_BASIS_LABEL[row?.config?.expiry_basis === "sessions" ? "sessions" : "period"]}`}
                     </div>
                   </div>
                   <button
@@ -384,6 +392,11 @@ function AutoMessageEditor({
     typeof base.config?.send_hour === "number" ? base.config.send_hour : 10
   );
   const [sendCount, setSendCount] = useState<number>(base.send_count ?? 10);
+  // 만료 판정 기준 — 수강권 만료 시에만 노출 (기간 만료 / 횟수 소진)
+  const showExpiryBasis = EXPIRY_BASIS_TRIGGERS.has(triggerKey);
+  const [expiryBasis, setExpiryBasis] = useState<ExpiryBasis>(
+    base.config?.expiry_basis === "sessions" ? "sessions" : "period"
+  );
   const [methods, setMethods] = useState<string[]>(base.methods ?? []);
   const [attachments, setAttachments] = useState<string[]>(base.config?.attachments ?? []);
   const [couponName, setCouponName] = useState(base.config?.coupon?.name ?? "");
@@ -467,6 +480,7 @@ function AutoMessageEditor({
           send_days_dir: sendDaysDir,
           // '즉시'는 발송 시각 개념이 없어 저장하지 않는다.
           send_hour: sendBasis === "immediate" ? null : sendHour,
+          ...(showExpiryBasis ? { expiry_basis: expiryBasis } : {}),
         },
       });
     } finally {
@@ -474,11 +488,17 @@ function AutoMessageEditor({
     }
   };
 
-  // 수신 대상 문구 — 장기 미출석은 며칠 기준인지 함께 보여준다 (설정값에 따라 실시간 반영).
+  // 수신 대상 문구 — 장기 미출석은 며칠 기준인지, 수강권 만료는 어떤 판정 기준인지 함께 보여준다.
   const recipientText =
     trigger.key === "long_absence"
       ? `장기 미출석(휴면 ${sendBasis === "count" ? sendCount : sendDays}일) 회원`
-      : trigger.recipient;
+      : showExpiryBasis
+        ? EXPIRY_BASIS_DESC[expiryBasis]
+        : trigger.recipient;
+
+  // 일정 기준의 기준일 명칭 — 횟수 소진 기준이면 만료일이 아니라 '소진일'이 기준이 된다.
+  const basisNoun =
+    showExpiryBasis && expiryBasis === "sessions" ? "횟수 소진일" : trigger.basisNoun ?? "기준일";
 
   const preview = (
     <MessagePreview
@@ -551,6 +571,43 @@ function AutoMessageEditor({
               title="전송 기준"
               hint="언제 보낼지 정합니다. 즉시=사건이 일어난 순간 / 일정 기준=기준일로부터 N일 전·후 / 횟수 기준=조건이 N회 쌓였을 때."
             >
+              {/* 만료 판정 기준 — 기간이 끝났을 때 / 횟수를 다 썼을 때 (수강권 만료 시 전용) */}
+              {showExpiryBasis && (
+                <div className="mb-3 px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FAF7F0] dark:bg-zinc-900/60">
+                  <div className="text-[12.5px] font-semibold text-[#4d5a29] dark:text-[#A8B87A] mb-2">
+                    만료 판정 기준
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(["period", "sessions"] as ExpiryBasis[]).map((b) => {
+                      const active = expiryBasis === b;
+                      return (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => setExpiryBasis(b)}
+                          className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
+                            active
+                              ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                              : "border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-white dark:bg-zinc-900"
+                          }`}
+                        >
+                          {EXPIRY_BASIS_LABEL[b]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[11.5px] leading-relaxed text-[#6B5D47] dark:text-zinc-400">
+                    {expiryBasis === "period"
+                      ? "수강권 만료일(기간)이 지난 회원에게 발송해요. 잔여 횟수가 남아 있어도 기간이 끝나면 대상이 됩니다."
+                      : "잔여 횟수를 모두 소진(마지막 회차 출석·노쇼)한 회원에게 발송해요. 기간이 남아 있어도 대상이 됩니다. 다른 수강권이 아직 남은 회원과 서비스 세션은 제외돼요."}
+                  </p>
+                  {expiryBasis === "sessions" && sendBasis === "schedule" && sendDaysDir === "before" && (
+                    <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#B47B2A] dark:text-amber-300">
+                      ⚠️ 횟수 소진은 미리 알 수 없어요. 일정 기준을 쓰려면 소진일 <strong>&lsquo;후&rsquo;</strong>로 정해 주세요.
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 {(["immediate", "schedule", "count"] as SendBasis[]).map((b) => {
                   const active = sendBasis === b;
@@ -576,7 +633,7 @@ function AutoMessageEditor({
                 {sendBasis === "immediate"
                   ? <>이벤트 발생 <span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">즉시</span> 발송</>
                   : sendBasis === "schedule"
-                    ? <><span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">{trigger.basisNoun ?? "기준일"}</span> 기준 {sendDays}일 {sendDaysDir === "before" ? "전" : "후"} 발송</>
+                    ? <><span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">{basisNoun}</span> 기준 {sendDays}일 {sendDaysDir === "before" ? "전" : "후"} 발송</>
                     : <>조건 <span className="font-semibold text-[#4d5a29] dark:text-[#A8B87A]">{sendCount}회</span> 도달 시 발송</>}
               </p>
               {sendBasis === "immediate" && !IMMEDIATE_WIRED.has(trigger.key) && (
@@ -593,7 +650,7 @@ function AutoMessageEditor({
               )}
               {sendBasis === "schedule" && (
                 <div className="mt-2.5 flex items-center gap-2 flex-wrap text-[13px] text-[#3A342A] dark:text-zinc-200">
-                  <span>{trigger.basisNoun ?? "기준일"}</span>
+                  <span>{basisNoun}</span>
                   <input
                     type="number"
                     min={0}
@@ -621,7 +678,7 @@ function AutoMessageEditor({
                     ))}
                   </div>
                   <span className="text-[12px] text-[#8C8270] dark:text-zinc-500">
-                    ({trigger.basisNoun ?? "기준일"} {sendDaysDir === "before" ? "전" : "후"})
+                    ({basisNoun} {sendDaysDir === "before" ? "전" : "후"})
                   </span>
                 </div>
               )}

@@ -24,8 +24,14 @@ export async function GET(request: Request) {
     .eq("center_id", ctx.centerId);
 
   const byKey = new Map<string, TriggerSetting>();
-  for (const s of (settings ?? []) as (TriggerSetting & { config?: { send_days_dir?: "before" | "after" } | null })[]) {
-    byKey.set(s.trigger_key, { ...s, send_days_dir: s.config?.send_days_dir });
+  for (const s of (settings ?? []) as (TriggerSetting & {
+    config?: { send_days_dir?: "before" | "after"; expiry_basis?: "period" | "sessions" } | null;
+  })[]) {
+    byKey.set(s.trigger_key, {
+      ...s,
+      send_days_dir: s.config?.send_days_dir,
+      expiry_basis: s.config?.expiry_basis,
+    });
   }
 
   const counts: Record<string, number> = {};

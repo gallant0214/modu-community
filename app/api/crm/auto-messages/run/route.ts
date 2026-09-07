@@ -55,11 +55,17 @@ export async function POST(request: Request) {
   const byTrigger: Record<string, number> = {};
   let total = 0;
 
-  for (const s of (settings ?? []) as (FullSetting & { config?: { send_days_dir?: "before" | "after" } | null })[]) {
+  for (const s of (settings ?? []) as (FullSetting & {
+    config?: { send_days_dir?: "before" | "after"; expiry_basis?: "period" | "sessions" } | null;
+  })[]) {
     if (!SCAN_TRIGGERS.has(s.trigger_key)) continue;
     let matches;
     try {
-      matches = await computeMatches(ctx.centerId, { ...s, send_days_dir: s.config?.send_days_dir });
+      matches = await computeMatches(ctx.centerId, {
+        ...s,
+        send_days_dir: s.config?.send_days_dir,
+        expiry_basis: s.config?.expiry_basis,
+      });
     } catch {
       continue;
     }

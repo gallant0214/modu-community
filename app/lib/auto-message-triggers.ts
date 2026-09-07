@@ -78,6 +78,24 @@ export const TRIGGER_BY_KEY: Record<string, AutoMsgTrigger> = Object.fromEntries
 
 export const AUTO_MESSAGE_TRIGGER_KEYS: Set<string> = new Set(ALL_TRIGGERS.map((t) => t.key));
 
+/**
+ * '만료' 판정 기준 — 기간(만료일)이 지났을 때 / 횟수를 모두 소진했을 때.
+ * 지금은 수강권 만료 시(pass_expired)에서만 고를 수 있다.
+ */
+export type ExpiryBasis = "period" | "sessions";
+
+export const EXPIRY_BASIS_TRIGGERS = new Set<string>(["pass_expired"]);
+
+export const EXPIRY_BASIS_LABEL: Record<ExpiryBasis, string> = {
+  period: "기간 만료",
+  sessions: "횟수 소진",
+};
+
+export const EXPIRY_BASIS_DESC: Record<ExpiryBasis, string> = {
+  period: "수강권 만료일(기간)이 지난 회원",
+  sessions: "수강권 잔여 횟수를 모두 소진한 회원",
+};
+
 export const SEND_BASIS_LABEL: Record<SendBasis, string> = {
   immediate: "즉시",
   schedule: "일정 기준",

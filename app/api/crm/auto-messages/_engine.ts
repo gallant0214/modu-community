@@ -25,6 +25,8 @@ export interface TriggerSetting {
   send_count: number | null;
   /** 기준일 방향(생일 등): 기준일 전(before, 기본) / 후(after) */
   send_days_dir?: "before" | "after";
+  /** 수강권 만료 판정: 기간 만료(period, 기본) / 횟수 소진(sessions) */
+  expiry_basis?: "period" | "sessions";
 }
 
 /** 스캔(데이터 기반)으로 대상 산출이 가능한 트리거 */
@@ -157,22 +159,37 @@ function latestByMember(rows: DatedRow[]): Map<number, DatedRow> {
   return m;
 }
 
-/** 수강권 로드 (상품 type 분류 위해 product_id 포함) */
-async function loadPasses(centerId: number): Promise<(DatedRow & { productId: number | null })[]> {
-  return paginateAll<DatedRow & { productId: number | null }>(async (f, t) => {
+/** 수강권 행 — 상품 type 분류(product_id)와 횟수 소진 판정(잔여/상태)에 필요한 값 포함 */
+interface PassRow extends DatedRow {
+  id: number;
+  productId: number | null;
+  remaining: number;
+  status: string;
+  issueType: string;
+}
+
+/** 수강권 로드 */
+async function loadPasses(centerId: number): Promise<PassRow[]> {
+  return paginateAll<PassRow>(async (f, t) => {
     const r = await supabase
       .from("crm_passes")
-      .select("member_id, expires_at, created_at, price_won, lesson_kind, product_id")
+      .select(
+        "id, member_id, expires_at, created_at, price_won, lesson_kind, product_id, remaining_sessions, status, issue_type"
+      )
       .eq("center_id", centerId)
       .range(f, t);
     const data = (r.data as Record<string, unknown>[] | null)?.map((x) => ({
+      id: Number(x.id),
       member_id: Number(x.member_id),
       expires_at: String(x.expires_at ?? ""),
       created_at: String(x.created_at ?? ""),
       label: String(x.lesson_kind ?? ""),
       price: x.price_won != null ? Number(x.price_won) : undefined,
       productId: x.product_id != null ? Number(x.product_id) : null,
-    })) as (DatedRow & { productId: number | null })[] | null;
+      remaining: Number(x.remaining_sessions ?? 0),
+      status: String(x.status ?? ""),
+      issueType: String(x.issue_type ?? ""),
+    })) as PassRow[] | null;
     return { data, error: r.error };
   });
 }
@@ -255,6 +272,85 @@ function matchExpiry(rows: DatedRow[], members: Map<number, MemberLite>, target:
   return out;
 }
 
+/** 소진 판정에서 제외할 수강권 상태(취소·환불 등) */
+const DEAD_PASS_STATUS = new Set(["cancelled", "rejected", "refunded"]);
+
+/**
+ * 지정 수강권들 중 consumed(출석·노쇼로 차감) 예약이 있는 pass_id 집합.
+ * starts_at(수업일) 기준 범위로 조회하며, id 목록은 300개씩 나눠 질의한다.
+ */
+async function consumedPassIds(
+  centerId: number,
+  passIds: number[],
+  range: { gte?: string; lte?: string; gt?: string }
+): Promise<Set<number>> {
+  const out = new Set<number>();
+  for (let i = 0; i < passIds.length; i += 300) {
+    const chunk = passIds.slice(i, i + 300);
+    const rows = await paginateAll<{ pass_id: number }>(async (f, t) => {
+      let q = supabase
+        .from("crm_reservations")
+        .select("pass_id")
+        .eq("center_id", centerId)
+        .eq("consumed", true)
+        .in("pass_id", chunk);
+      if (range.gte) q = q.gte("starts_at", range.gte);
+      if (range.lte) q = q.lte("starts_at", range.lte);
+      if (range.gt) q = q.gt("starts_at", range.gt);
+      const r = await q.range(f, t);
+      return { data: r.data as { pass_id: number }[] | null, error: r.error };
+    });
+    rows.forEach((r) => out.add(Number(r.pass_id)));
+  }
+  return out;
+}
+
+/**
+ * '횟수 소진' 기준 매칭 — target 날짜에 **마지막 남은 회차**를 써서 잔여 0이 된 회원.
+ * 기간(만료일)과 무관하며, 소진일 = 그 회차를 차감한 예약의 수업일(starts_at, KST).
+ * 서비스 세션(0원 별도 발급)과 취소·환불 수강권은 제외하고,
+ * 아직 쓸 수 있는 다른 수강권이 남아 있는 회원도 제외한다(기간 기준의 '최신 1건' 규칙과 같은 취지).
+ */
+async function matchDepleted(
+  centerId: number,
+  passes: PassRow[],
+  members: Map<number, MemberLite>,
+  target: string,
+  today: string
+): Promise<Match[]> {
+  const alive = passes.filter((p) => !DEAD_PASS_STATUS.has(p.status) && p.issueType !== "service");
+  const depleted = alive.filter((p) => p.remaining <= 0);
+  if (depleted.length === 0) return [];
+
+  const dayStart = `${target}T00:00:00+09:00`;
+  const dayEnd = `${target}T23:59:59.999+09:00`;
+  const usedOnTarget = await consumedPassIds(centerId, depleted.map((p) => p.id), {
+    gte: dayStart,
+    lte: dayEnd,
+  });
+  const candidates = depleted.filter((p) => usedOnTarget.has(p.id));
+  if (candidates.length === 0) return [];
+
+  // target 이후에도 차감 이력이 있으면 그 날이 '마지막 회차'가 아니다
+  const usedLater = await consumedPassIds(centerId, candidates.map((p) => p.id), { gt: dayEnd });
+
+  // 잔여가 남아 있고 아직 기간도 남은 수강권 보유 회원은 '다 썼다' 안내 대상이 아니다
+  const stillUsable = new Set(
+    alive.filter((p) => p.remaining > 0 && (!p.expires_at || p.expires_at >= today)).map((p) => p.member_id)
+  );
+
+  const out: Match[] = [];
+  const seen = new Set<number>();
+  for (const p of candidates) {
+    if (usedLater.has(p.id) || stillUsable.has(p.member_id) || seen.has(p.member_id)) continue;
+    const m = members.get(p.member_id);
+    if (!m) continue;
+    seen.add(p.member_id);
+    out.push({ member_id: p.member_id, name: m.name, product: p.label, expiry: p.expires_at, price: p.price });
+  }
+  return out;
+}
+
 /* ─── 트리거 매칭 ───────────────────────────────── */
 export async function computeMatches(centerId: number, setting: TriggerSetting): Promise<Match[]> {
   const key = setting.trigger_key;
@@ -305,6 +401,10 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
         const isClass = t === "class";
         return wantClass ? isClass : !isClass;
       });
+      // '수강권 만료 시' 는 만료 판정 기준을 고를 수 있다 — 기간 만료(기본) / 횟수 소진
+      if (key === "pass_expired" && setting.expiry_basis === "sessions") {
+        return matchDepleted(centerId, filtered, members, target, today);
+      }
       return matchExpiry(filtered, members, target);
     }
     // 락커 → crm_lockers (배정된 물리 락커)

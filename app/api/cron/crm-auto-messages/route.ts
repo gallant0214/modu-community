@@ -58,7 +58,11 @@ export async function GET(request: Request) {
     send_count: number | null;
     methods: unknown;
     message_body: string;
-    config: { send_hour?: number; send_days_dir?: "before" | "after" } | null;
+    config: {
+      send_hour?: number;
+      send_days_dir?: "before" | "after";
+      expiry_basis?: "period" | "sessions";
+    } | null;
   }[]) {
     if (processed >= MAX_SENDS) break;
     if (!SCAN_TRIGGERS.has(s.trigger_key)) continue;
@@ -80,6 +84,7 @@ export async function GET(request: Request) {
       send_days: s.send_days,
       send_count: s.send_count,
       send_days_dir: cfg.send_days_dir,
+      expiry_basis: cfg.expiry_basis,
     };
 
     let matches;
