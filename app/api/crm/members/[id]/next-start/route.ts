@@ -43,16 +43,24 @@ export async function GET(
         .limit(1);
       maxExpiry = data?.[0]?.expires_at ?? null;
     } else if (type === "apparel" || type === "rental") {
+      // 🚨 crm_rentals 에는 운동복 + 락커(대여권)가 함께 있으므로, 운동복 시작일 이어붙이기는
+      //    '기존 운동복(=락커가 아닌 대여권)' 만 대상으로 한다. (락커 만료일 뒤로 밀리는 문제 방지)
+      //    락커/운동복/회원권은 서로 별개 상품 → 같은 종류끼리만 이어붙임.
       const { data } = await supabase
         .from("crm_rentals")
-        .select("expires_at")
+        .select("item_name, memo, expires_at")
         .eq("center_id", ctx.centerId)
         .eq("member_id", memberId)
         .in("status", ["valid", "active"])
         .gte("expires_at", todayYmd)
-        .order("expires_at", { ascending: false })
-        .limit(1);
-      maxExpiry = data?.[0]?.expires_at ?? null;
+        .order("expires_at", { ascending: false });
+      const isLocker = (r: { item_name: string | null; memo: string | null }) =>
+        (r.memo ?? "").includes("미배정") ||
+        (r.memo ?? "").includes("락커") ||
+        /\d+번/.test(r.memo ?? "") ||
+        /^(락커|상가)/.test((r.item_name ?? "").trim());
+      const apparel = (data ?? []).filter((r) => !isLocker(r));
+      maxExpiry = apparel[0]?.expires_at ?? null; // 이미 만료일 내림차순 → 첫 항목이 최종
     } else if (type === "locker") {
       const { data } = await supabase
         .from("crm_lockers")
