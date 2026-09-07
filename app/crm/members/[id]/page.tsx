@@ -6362,11 +6362,23 @@ function UsageIssueModal({
       pickedComponents.reduce((s, k) => s + Math.max(0, Math.floor(k.price_won ?? 0)), 0)
     : 0;
   const checkoutTotal = cart.length > 0 ? cartTotalPrice : formNetPrice;
-  // 적용 가능한 최대 마일리지 = 보유량과 결제 총액 중 작은 값.
-  const maxApplicableMileage = Math.min(ownedMileage, checkoutTotal);
-  const appliedOwnedMileage = useOwnedMileage
-    ? Math.min(Math.max(0, Math.floor(mileageUseInput) || 0), maxApplicableMileage)
-    : 0;
+  // 마일리지 사용이 가능한 금액 = 사용 제한 상품(mileage_usable=false)을 뺀 합계.
+  const mileageEligibleTotal =
+    cart.length > 0
+      ? cart.reduce((s, c) => s + (c.mileageUsable === false ? 0 : lineTotal(c)), 0)
+      : mileageUsable
+        ? formNetPrice
+        : 0;
+  // 적용 가능한 최대 마일리지 = 보유량과 사용 가능 금액 중 작은 값.
+  const maxApplicableMileage = Math.min(ownedMileage, mileageEligibleTotal);
+  // 장바구니가 비어 폼 항목을 바로 결제하는 경우, 폼에 입력한 마일리지도 결제 단위 사용액으로 합산.
+  // (장바구니에 담으면 담는 시점에 아래 mileageUseInput 으로 승격되므로 중복 계산되지 않는다.)
+  const formMileageUse =
+    cart.length === 0 && mileageUsable ? Math.max(0, Math.floor(mileageUse) || 0) : 0;
+  const appliedOwnedMileage = Math.min(
+    maxApplicableMileage,
+    (useOwnedMileage ? Math.max(0, Math.floor(mileageUseInput) || 0) : 0) + formMileageUse
+  );
   const finalPayAmount = Math.max(0, checkoutTotal - appliedOwnedMileage);
 
   // 결제 성공 직후: 전자계약서 작성 여부 묻는 다이얼로그
@@ -6441,9 +6453,23 @@ function UsageIssueModal({
       memo,
       components: pickedComponents.length ? pickedComponents : undefined,
     };
-    setCart((cur) => [...cur, line]);
+    const nextCart = [...cart, line];
+    setCart(nextCart);
+    // 폼에 입력한 마일리지는 결제 단위 사용액으로 승격 —
+    // 담는 즉시 '보유 마일리지 사용' 체크 + 사용할 마일리지 자동 입력 + 총 결제 금액에 반영.
+    if (line.mileageUse > 0) syncMileageFromCart(nextCart);
     resetFormOnly();
     return null;
+  };
+
+  /** 장바구니 라인들에 입력된 마일리지 합계를 결제 단위 사용액에 반영 (담기·제거 시 호출) */
+  const syncMileageFromCart = (lines: CartLine[]) => {
+    const sum = lines.reduce(
+      (acc, c) => acc + (c.mileageUsable === false ? 0 : Math.max(0, Math.floor(c.mileageUse) || 0)),
+      0
+    );
+    setUseOwnedMileage(sum > 0);
+    setMileageUseInput(Math.min(sum, ownedMileage));
   };
 
   const expiresAt = (() => {
@@ -6784,18 +6810,17 @@ function UsageIssueModal({
       ];
     }
 
-    // 보유 마일리지 사용: 총액 한도 내 적용액을 각 라인에 순서대로 배분(mileage_used).
-    // 서버가 라인 발급 시 회원 잔고에서 차감하고 발급 이력(회원 로그)에 기록한다.
-    if (useOwnedMileage && appliedOwnedMileage > 0) {
-      let remaining = appliedOwnedMileage;
-      toProcess = toProcess.map((line) => {
-        if (remaining <= 0) return line;
-        const net = Math.max(0, line.priceWon - line.discountWon);
-        const alloc = Math.min(remaining, net);
-        remaining -= alloc;
-        return { ...line, mileageUse: line.mileageUse + alloc };
-      });
-    }
+    // 보유 마일리지 사용: 결제 단위 사용액(appliedOwnedMileage)이 유일한 기준.
+    //   폼/라인에 입력된 마일리지는 이미 이 값에 합산돼 있으므로 라인 값은 0으로 초기화한 뒤
+    //   총액 한도 내에서 각 라인에 순서대로 재배분한다(중복 차감 방지).
+    //   마일리지 사용이 제한된 상품(mileageUsable=false)은 배분 대상에서 제외.
+    let remaining = appliedOwnedMileage;
+    toProcess = toProcess.map((line) => {
+      if (remaining <= 0 || line.mileageUsable === false) return { ...line, mileageUse: 0 };
+      const alloc = Math.min(remaining, lineTotal(line));
+      remaining -= alloc;
+      return { ...line, mileageUse: alloc };
+    });
 
     setSubmitting(true);
     try {
@@ -7331,9 +7356,12 @@ function UsageIssueModal({
                         </div>
                         <button
                           type="button"
-                          onClick={() =>
-                            setCart((cur) => cur.filter((_, idx) => idx !== i))
-                          }
+                          onClick={() => {
+                            const next = cart.filter((_, idx) => idx !== i);
+                            setCart(next);
+                            // 마일리지를 담고 있던 라인을 빼면 결제 단위 사용액도 다시 계산
+                            if (c.mileageUse > 0) syncMileageFromCart(next);
+                          }}
                           className="text-[11px] text-red-600 hover:underline shrink-0"
                         >
                           제거
@@ -7451,11 +7479,11 @@ function UsageIssueModal({
               useOwnedMileage
                 ? "border-[#B47B2A] bg-[#B47B2A]/5"
                 : "border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900"
-            } ${ownedMileage <= 0 || checkoutTotal <= 0 ? "opacity-50" : ""}`}
+            } ${maxApplicableMileage <= 0 ? "opacity-50" : ""}`}
           >
             <label
               className={`flex items-center justify-between gap-3 px-3 py-2.5 ${
-                ownedMileage <= 0 || checkoutTotal <= 0 ? "cursor-not-allowed" : "cursor-pointer"
+                maxApplicableMileage <= 0 ? "cursor-not-allowed" : "cursor-pointer"
               }`}
             >
               <span className="flex flex-col min-w-0">
@@ -7470,7 +7498,7 @@ function UsageIssueModal({
               <input
                 type="checkbox"
                 checked={useOwnedMileage}
-                disabled={ownedMileage <= 0 || checkoutTotal <= 0}
+                disabled={maxApplicableMileage <= 0}
                 onChange={(e) => {
                   const on = e.target.checked;
                   setUseOwnedMileage(on);
