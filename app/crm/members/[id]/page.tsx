@@ -7684,14 +7684,12 @@ function PassIssueModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // 첫 직원을 기본 강사로, 판매자 기본값은 로그인 직원(본인)
+  // 담당 강사·판매자 기본값 = 로그인 직원(본인). 본인이 강사목록에 없으면 담당강사는 미배정(첫 직원 자동입력 안 함).
   useEffect(() => {
     if (open && staffList.length > 0) {
-      if (trainerId === "") setTrainerId(staffList[0].id);
-      if (sellerId === "") {
-        const mine = myMemberId && staffList.some((s) => s.id === myMemberId) ? myMemberId : staffList[0].id;
-        setSellerId(mine);
-      }
+      const mineInList = myMemberId && staffList.some((s) => s.id === myMemberId) ? myMemberId : null;
+      if (trainerId === "" && mineInList) setTrainerId(mineInList);
+      if (sellerId === "") setSellerId(mineInList ?? staffList[0].id);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, staffList, myMemberId]);
