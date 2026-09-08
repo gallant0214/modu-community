@@ -3012,9 +3012,15 @@ function NewReservationModal({
   // 반복 예약 설정 (회원 선택 후) — 강사앱과 동일. JS getDay: 0=일 … 6=토
   const [recurring, setRecurring] = useState(false);
   const [weekdays, setWeekdays] = useState<Set<number>>(new Set());
-  const [repeatMode, setRepeatMode] = useState<"count" | "date">("count");
-  const [repeatCount, setRepeatCount] = useState("4");
+  // 반복 종료 기준: sessions=선택한 수강권의 예약 가능 잔여 세션을 모두 소진 / date=종료일까지
+  const [repeatMode, setRepeatMode] = useState<"sessions" | "date">("sessions");
   const [repeatEndDate, setRepeatEndDate] = useState("");
+
+  // 선택한 수강권의 예약 가능 잔여 횟수. 기간제(총 횟수 없음)는 null(무제한).
+  const bookableLeftOfPicked: number | null =
+    pickedPass && pickedPass.total_sessions > 0
+      ? Math.max(0, pickedPass.total_sessions - (pickedPass.reserved_count ?? 0))
+      : null;
 
   // 반복 일정 전개: 시작일 이후 요일 매칭 날짜(YYYY-MM-DD) 목록
   const buildOccurrenceDates = (): string[] => {
@@ -3024,7 +3030,12 @@ function NewReservationModal({
     const baseDow = new Date(`${baseYmd}T00:00:00Z`).getUTCDay();
     const wd = weekdays.size > 0 ? weekdays : new Set([baseDow]);
     let limit = HARD_MAX;
-    if (repeatMode === "count") limit = Math.min(Math.max(Number(repeatCount) || 1, 1), HARD_MAX);
+    if (repeatMode === "sessions") {
+      // 예약 가능 잔여(총 횟수 - 이미 잡힌 예약) 만큼만 생성. 기간제(무제한)는 종료일 기준만 사용.
+      // 기간제(무제한) 수강권은 소진 기준이 없으므로 1회만 생성(종료일 기준을 쓰도록 안내).
+      const left = bookableLeftOfPicked;
+      limit = left === null ? 1 : Math.min(Math.max(left, 1), HARD_MAX);
+    }
     const bound = repeatMode === "date" && repeatEndDate ? repeatEndDate : null;
     const out: string[] = [];
     const [y, m, d] = baseYmd.split("-").map(Number);
@@ -3043,6 +3054,105 @@ function NewReservationModal({
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  /** 반복 예약 설정 블록 — 선택된 회원(수강권) 카드 바로 아래에 렌더링 */
+  const renderRecurring = () => (
+            <div className="rounded-lg border border-[#E8E0D0] dark:border-zinc-800 p-3 space-y-2.5">
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">반복 예약 설정</span>
+                <input
+                  type="checkbox"
+                  checked={recurring}
+                  onChange={(e) => setRecurring(e.target.checked)}
+                  className="w-4 h-4 accent-[#6B7B3A]"
+                />
+              </label>
+              {recurring && (
+                <>
+                  <div>
+                    <div className="text-[12px] text-[#6B5D47] dark:text-zinc-400 mb-1.5">반복 요일</div>
+                    <div className="flex gap-1">
+                      {([[1, "월"], [2, "화"], [3, "수"], [4, "목"], [5, "금"], [6, "토"], [0, "일"]] as [number, string][]).map(
+                        ([dow, label]) => {
+                          const on = weekdays.has(dow);
+                          return (
+                            <button
+                              key={dow}
+                              type="button"
+                              onClick={() =>
+                                setWeekdays((prev) => {
+                                  const n = new Set(prev);
+                                  if (n.has(dow)) n.delete(dow);
+                                  else n.add(dow);
+                                  return n;
+                                })
+                              }
+                              className={`flex-1 py-1.5 rounded-md text-[12.5px] font-semibold border ${
+                                on
+                                  ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                                  : "border-[#E8E0D0] dark:border-zinc-700 text-[#3A342A] dark:text-zinc-300"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        }
+                      )}
+                    </div>
+                    <div className="mt-1 text-[11px] text-[#A89B80]">미선택 시 시작일 요일로 반복돼요.</div>
+                  </div>
+                  <div>
+                    <div className="text-[12px] text-[#6B5D47] dark:text-zinc-400 mb-1.5">종료 기준</div>
+                    <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
+                      {([["sessions", "잔여 세션 소진까지"], ["date", "종료일까지"]] as const).map(([k, l]) => (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => setRepeatMode(k)}
+                          className={`px-3 py-1.5 text-[12.5px] font-medium ${
+                            repeatMode === k
+                              ? "bg-[#6B7B3A] text-white"
+                              : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
+                          }`}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                    {repeatMode === "sessions" ? (
+                      <div className="mt-2 text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                        {bookableLeftOfPicked === null
+                          ? "기간제(무제한) 수강권이라 잔여 세션이 없어요. 종료일까지 기준을 사용해 주세요."
+                          : `예약 가능 잔여 ${bookableLeftOfPicked}회를 모두 예약해요.`}
+                      </div>
+                    ) : (
+                      <input
+                        type="date"
+                        value={repeatEndDate}
+                        onChange={(e) => setRepeatEndDate(e.target.value)}
+                        className="mt-2 w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
+                      />
+                    )}
+                  </div>
+                  <div className="text-[12px] font-medium text-[#6B7B3A] dark:text-[#A8B87A]">
+                    총 {buildOccurrenceDates().length}회 예약이 생성돼요
+                    {groupParticipants.length > 0 ? ` (회당 ${groupParticipants.length + 1}명)` : ""}.
+                  </div>
+                </>
+              )}
+            </div>
+  );
+
+  /** 회원(수강권) 카드 재클릭 = 선택 해제 → 회원 목록 다시 펼치기 */
+  const clearPick = () => {
+    setPicked(null);
+    setPassId(null);
+    setPickedPass(null);
+    setGroupParticipants([]);
+    setShowAddParticipant(false);
+    setRecurring(false);
+  };
+
 
   useEffect(() => {
     // ESC 로 닫기
@@ -3258,6 +3368,19 @@ function NewReservationModal({
         p.lesson_kind.toLowerCase().includes(q)
     );
   })();
+
+  // 회원(수강권) 카드를 고르면 나머지 목록은 접고 선택한 카드만 남긴다.
+  const selectedAssigned = passId ? filteredAssigned.find((p) => p.id === passId) ?? null : null;
+  const assignedToShow = selectedAssigned ? [selectedAssigned] : filteredAssigned;
+
+  /** 검색 경로: 수강권만 해제(회원 선택은 유지) → 수강권 목록 다시 펼치기 */
+  const clearPass = () => {
+    setPassId(null);
+    setPickedPass(null);
+    setGroupParticipants([]);
+    setShowAddParticipant(false);
+    setRecurring(false);
+  };
 
   const submit = async () => {
     setError("");
@@ -3630,6 +3753,7 @@ function NewReservationModal({
 
             {searchMode === "assigned" ? (
               <>
+                {!selectedAssigned && (
                 <div className="mb-3 rounded-xl border border-[#E8E0D0]/80 bg-[#F7F1E4] p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <div>
@@ -3652,6 +3776,7 @@ function NewReservationModal({
                     className="w-full rounded-lg border border-[#D9CEBA] bg-white px-3 py-2.5 text-[13px] text-[#2A251D] shadow-sm outline-none transition focus:border-[#6B7B3A] focus:ring-2 focus:ring-[#6B7B3A]/15 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
                   />
                 </div>
+                )}
                 {loadingAssigned ? (
                   <div className="px-3 py-4 text-center text-[12.5px] text-[#8C8270]">불러오는 중…</div>
                 ) : filteredAssigned.length === 0 ? (
@@ -3664,14 +3789,14 @@ function NewReservationModal({
                   <>
                   <div className="mb-2 flex items-center justify-between">
                     <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-100">
-                      예약 가능한 회원
+                      {selectedAssigned ? "선택한 회원" : "예약 가능한 회원"}
                     </div>
                     <div className="text-[11px] text-[#8C8270] dark:text-zinc-500">
-                      수강권 상태를 확인하고 선택하세요
+                      {selectedAssigned ? "카드를 다시 누르면 목록으로 돌아가요" : "수강권 상태를 확인하고 선택하세요"}
                     </div>
                   </div>
-                  <ul className="space-y-2 max-h-[300px] overflow-y-auto pr-0.5">
-                    {filteredAssigned.map((p) => {
+                  <ul className={`space-y-2 ${selectedAssigned ? "" : "max-h-[300px] overflow-y-auto"} pr-0.5`}>
+                    {assignedToShow.map((p) => {
                       const selected = passId === p.id;
                       const expiry = formatExpiryBadge(p.expires_at);
                       const bookable =
@@ -3686,7 +3811,7 @@ function NewReservationModal({
                         <li key={p.id}>
                           <button
                             type="button"
-                            onClick={() => pickAssignedPass(p)}
+                            onClick={() => (selected ? clearPick() : pickAssignedPass(p))}
                             className={`w-full text-left px-3.5 py-3 rounded-xl border transition-colors
                               ${selected
                                 ? "border-[#6B7B3A] bg-[#6B7B3A]/10 shadow-sm ring-1 ring-[#6B7B3A]/20"
@@ -3738,6 +3863,8 @@ function NewReservationModal({
                       );
                     })}
                   </ul>
+                  {/* 선택한 회원 카드 바로 아래에 반복 예약 설정 */}
+                  {picked && passId && <div className="mt-3">{renderRecurring()}</div>}
                   </>
                 )}
               </>
@@ -3768,7 +3895,7 @@ function NewReservationModal({
                         사용할 수강권
                       </div>
                       <div className="text-[11px] text-[#8C8270] dark:text-zinc-500">
-                        잔여와 만료일을 확인하세요
+                        {passId ? "카드를 다시 누르면 수강권 목록으로 돌아가요" : "잔여와 만료일을 확인하세요"}
                       </div>
                     </div>
                     {loadingOtherPasses ? (
@@ -3779,7 +3906,7 @@ function NewReservationModal({
                       </div>
                     ) : (
                       <ul className="space-y-2">
-                        {otherPasses.map((p) => {
+                        {(passId ? otherPasses.filter((p) => p.id === passId) : otherPasses).map((p) => {
                           const selected = passId === p.id;
                           const expiry = formatExpiryBadge(p.expires_at);
                           const bookable =
@@ -3794,7 +3921,7 @@ function NewReservationModal({
                             <li key={p.id}>
                               <button
                                 type="button"
-                                onClick={() => pickOtherPass(p)}
+                                onClick={() => (selected ? clearPass() : pickOtherPass(p))}
                                 className={`w-full text-left px-3.5 py-3 rounded-xl border transition-colors
                                   ${selected
                                     ? "border-[#6B7B3A] bg-[#6B7B3A]/10 shadow-sm ring-1 ring-[#6B7B3A]/20"
@@ -3850,6 +3977,8 @@ function NewReservationModal({
                         })}
                       </ul>
                     )}
+                    {/* 선택한 수강권 카드 바로 아래에 반복 예약 설정 */}
+                    {picked && passId && <div className="mt-3">{renderRecurring()}</div>}
                   </>
                 ) : (
                   <>
@@ -4012,99 +4141,6 @@ function NewReservationModal({
             </div>
           )}
 
-          {/* 반복 예약 설정 (회원·수강권 선택 후) */}
-          {eventType === "lesson" && picked && passId && (
-            <div className="rounded-lg border border-[#E8E0D0] dark:border-zinc-800 p-3 space-y-2.5">
-              <label className="flex items-center justify-between cursor-pointer">
-                <span className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">반복 예약 설정</span>
-                <input
-                  type="checkbox"
-                  checked={recurring}
-                  onChange={(e) => setRecurring(e.target.checked)}
-                  className="w-4 h-4 accent-[#6B7B3A]"
-                />
-              </label>
-              {recurring && (
-                <>
-                  <div>
-                    <div className="text-[12px] text-[#6B5D47] dark:text-zinc-400 mb-1.5">반복 요일</div>
-                    <div className="flex gap-1">
-                      {([[1, "월"], [2, "화"], [3, "수"], [4, "목"], [5, "금"], [6, "토"], [0, "일"]] as [number, string][]).map(
-                        ([dow, label]) => {
-                          const on = weekdays.has(dow);
-                          return (
-                            <button
-                              key={dow}
-                              type="button"
-                              onClick={() =>
-                                setWeekdays((prev) => {
-                                  const n = new Set(prev);
-                                  if (n.has(dow)) n.delete(dow);
-                                  else n.add(dow);
-                                  return n;
-                                })
-                              }
-                              className={`flex-1 py-1.5 rounded-md text-[12.5px] font-semibold border ${
-                                on
-                                  ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
-                                  : "border-[#E8E0D0] dark:border-zinc-700 text-[#3A342A] dark:text-zinc-300"
-                              }`}
-                            >
-                              {label}
-                            </button>
-                          );
-                        }
-                      )}
-                    </div>
-                    <div className="mt-1 text-[11px] text-[#A89B80]">미선택 시 시작일 요일로 반복돼요.</div>
-                  </div>
-                  <div>
-                    <div className="text-[12px] text-[#6B5D47] dark:text-zinc-400 mb-1.5">종료 기준</div>
-                    <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
-                      {([["count", "반복 횟수"], ["date", "종료일까지"]] as const).map(([k, l]) => (
-                        <button
-                          key={k}
-                          type="button"
-                          onClick={() => setRepeatMode(k)}
-                          className={`px-3 py-1.5 text-[12.5px] font-medium ${
-                            repeatMode === k
-                              ? "bg-[#6B7B3A] text-white"
-                              : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#3A342A] dark:text-zinc-300"
-                          }`}
-                        >
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                    {repeatMode === "count" ? (
-                      <div className="mt-2 flex items-center gap-2">
-                        <input
-                          type="number"
-                          min={1}
-                          max={60}
-                          value={repeatCount}
-                          onChange={(e) => setRepeatCount(e.target.value)}
-                          className="w-24 px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
-                        />
-                        <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">회</span>
-                      </div>
-                    ) : (
-                      <input
-                        type="date"
-                        value={repeatEndDate}
-                        onChange={(e) => setRepeatEndDate(e.target.value)}
-                        className="mt-2 w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-[13px] text-[#2A251D] dark:text-zinc-100"
-                      />
-                    )}
-                  </div>
-                  <div className="text-[12px] font-medium text-[#6B7B3A] dark:text-[#A8B87A]">
-                    총 {buildOccurrenceDates().length}회 예약이 생성돼요
-                    {groupParticipants.length > 0 ? ` (회당 ${groupParticipants.length + 1}명)` : ""}.
-                  </div>
-                </>
-              )}
-            </div>
-          )}
 
           {error && (
             <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
