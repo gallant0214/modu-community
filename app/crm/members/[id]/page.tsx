@@ -4173,29 +4173,39 @@ function MileageAdjustCard({
   const { getIdToken } = useAuth();
   const [editing, setEditing] = useState(false);
   const [amount, setAmount] = useState("");
-  const [saving, setSaving] = useState<"add" | "sub" | null>(null);
+  const [saving, setSaving] = useState<"add" | "sub" | "set" | null>(null);
   const [error, setError] = useState("");
 
   const current = Math.max(0, Math.floor(Number(value ?? 0)));
   const n = Math.max(0, Math.floor(Number(amount.replace(/[^\d]/g, "")) || 0));
 
-  const apply = async (sign: 1 | -1) => {
-    if (n <= 0) {
+  // mode: add=입력값만큼 추가 / sub=차감 / set=입력한 숫자로 보유 마일리지를 변경(차이를 delta 로 반영)
+  const apply = async (mode: "add" | "sub" | "set") => {
+    if (!amount.trim()) {
+      setError("마일리지를 입력해 주세요");
+      return;
+    }
+    if (n <= 0 && mode !== "set") {
       setError("조정할 마일리지를 입력해 주세요");
       return;
     }
-    if (sign < 0 && n > current) {
+    if (mode === "sub" && n > current) {
       setError(`보유 ${current.toLocaleString()}P 보다 많이 차감할 수 없어요`);
       return;
     }
-    setSaving(sign > 0 ? "add" : "sub");
+    const delta = mode === "add" ? n : mode === "sub" ? -n : n - current;
+    if (delta === 0) {
+      setError("현재 마일리지와 같아요");
+      return;
+    }
+    setSaving(mode);
     setError("");
     try {
       const token = await getIdToken();
       const res = await fetch(`/api/crm/members/${memberId}/mileage`, {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ delta: sign * n }),
+        body: JSON.stringify({ delta }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "수정 실패");
@@ -4243,28 +4253,37 @@ function MileageAdjustCard({
             />
             <span className="text-[12px] text-[#8C8270]">P</span>
           </div>
-          {n > 0 && (
+          {amount.trim() !== "" && (
             <div className="text-[11px] text-[#8C8270] dark:text-zinc-500">
-              추가 시 {(current + n).toLocaleString()}P · 차감 시 {Math.max(0, current - n).toLocaleString()}P
+              추가 {(current + n).toLocaleString()}P · 차감 {Math.max(0, current - n).toLocaleString()}P · 수정 {n.toLocaleString()}P
             </div>
           )}
           {error && <div className="text-[11px] text-red-600">{error}</div>}
           <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
-              onClick={() => apply(1)}
+              onClick={() => apply("add")}
               disabled={saving !== null}
               className="px-3 py-1 rounded-lg bg-[#6B7B3A] text-white text-[11.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
             >
-              {saving === "add" ? "…" : "추가하기"}
+              {saving === "add" ? "…" : "추가"}
             </button>
             <button
               type="button"
-              onClick={() => apply(-1)}
+              onClick={() => apply("sub")}
               disabled={saving !== null}
               className="px-3 py-1 rounded-lg bg-[#B47B2A] text-white text-[11.5px] font-semibold hover:bg-[#9c682a] disabled:opacity-60"
             >
-              {saving === "sub" ? "…" : "차감하기"}
+              {saving === "sub" ? "…" : "차감"}
+            </button>
+            <button
+              type="button"
+              onClick={() => apply("set")}
+              disabled={saving !== null}
+              title="입력한 숫자로 보유 마일리지를 변경해요"
+              className="px-3 py-1 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] text-[11.5px] font-semibold hover:bg-[#6B7B3A]/10 disabled:opacity-60"
+            >
+              {saving === "set" ? "…" : "수정"}
             </button>
             <button
               type="button"
