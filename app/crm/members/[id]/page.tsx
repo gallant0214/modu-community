@@ -443,20 +443,23 @@ export default function CrmMemberDetailPage() {
                     className="tabular-nums"
                   />
                 </div>
-                <CheckInButton
-                  memberId={member.id}
-                  centerId={foreignCenter ? Number(foreignCenter) : undefined}
-                  onDone={load}
-                />
+                {/* 출석 처리 · 앱 연동 해지는 같은 줄에 나란히 */}
+                <div className="flex flex-wrap items-start gap-2">
+                  <CheckInButton
+                    memberId={member.id}
+                    centerId={foreignCenter ? Number(foreignCenter) : undefined}
+                    onDone={load}
+                  />
+                  {member.linked_firebase_uid && (
+                    <UnlinkAppButton memberId={member.id} canEdit={canEditBasic} onDone={load} />
+                  )}
+                </div>
                 <MemberMessageButton
                   memberId={member.id}
                   memberName={member.name}
                   memberPhone={member.phone}
                   linked={!!member.linked_firebase_uid}
                 />
-                {member.linked_firebase_uid && (
-                  <UnlinkAppButton memberId={member.id} canEdit={canEditBasic} onDone={load} />
-                )}
               </div>
             </div>
           </div>
@@ -473,11 +476,13 @@ export default function CrmMemberDetailPage() {
                 </button>
               </div>
             )}
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 h-full">
+            <div className="grid grid-cols-2 xl:grid-cols-3 gap-2 h-full">
               <SummaryMetric label="최종 만료" value={fmtExp(member.final_expire_at)} hint={expireHint(member.final_expire_at)} tone={expireTone(member.final_expire_at)} />
               <SummaryMetric label="누적 결제" value={`${formatWon(member.total_paid_won)}원`} hint={member.last_purchase_at ? `최근 ${member.last_purchase_at}` : "결제 기록 없음"} tone="money" />
               <SummaryMetric label="마지막 출석" value={member.last_attended_at ?? "—"} hint={attendanceHint(member.last_attended_at)} />
               <SummaryMetric label="보유 상품" value={`${currentHoldings}종`} hint={currentHoldings > 0 ? "보유 내역 있음" : "보유 내역 없음"} />
+              <SummaryMetric label="마일리지" value={`${(member.mileage ?? 0).toLocaleString()}P`} hint={(member.mileage ?? 0) > 0 ? "사용 가능" : "적립 내역 없음"} tone="money" />
+              <SummaryMetric label="생년월일" value={member.birth ? String(member.birth).slice(0, 10) : "—"} hint={birthHint(member.birth)} />
             </div>
           </div>
         </div>
@@ -684,7 +689,7 @@ export default function CrmMemberDetailPage() {
         <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="total_paid_won" label="누적 결제" value={member.total_paid_won} type="number" suffix="원" onSaved={load} />
         <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="attendance_no" label="출석번호" value={member.attendance_no} type="text" onSaved={load} />
         <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="workout_goal" label="운동 목적" value={member.workout_goal} type="text" onSaved={load} />
-        <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="mileage" label="마일리지" value={member.mileage} type="number" suffix="점" onSaved={load} />
+        <MileageAdjustCard canEdit={canEditUsage} memberId={member.id} value={member.mileage} onSaved={load} />
       </DetailSection>
 
       <DetailSection title="관리 정보">
@@ -1699,6 +1704,25 @@ function attendanceHint(date: string | null): string {
   if (days === 0) return "오늘 출석";
   if (days < 0) return `${Math.abs(days)}일 전`;
   return "미래 날짜";
+}
+
+/** 생년월일 힌트 — 만 나이 + 올해 생일까지 남은 일수 */
+function birthHint(birth: string | null): string {
+  if (!birth) return "생년월일 미등록";
+  const b = String(birth).slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(b);
+  if (!m) return "날짜 확인 필요";
+  const [, y, mo, d] = m;
+  const today = todayDate();
+  const [ty, tm, td] = today.split("-").map(Number);
+  let age = ty - Number(y);
+  if (tm < Number(mo) || (tm === Number(mo) && td < Number(d))) age -= 1;
+  // 올해(지났으면 내년) 생일까지 남은 일수
+  const thisYear = `${ty}-${mo}-${d}`;
+  const target = thisYear >= today ? thisYear : `${ty + 1}-${mo}-${d}`;
+  const left = daysFromToday(target);
+  const bday = left === 0 ? "오늘 생일 🎂" : left !== null && left <= 30 ? `생일 D-${left}` : "";
+  return [`만 ${age}세`, bday].filter(Boolean).join(" · ");
 }
 
 function daysFromToday(date: string): number | null {
@@ -4124,6 +4148,137 @@ function EditableInfoCard({
       ) : (
         <div className="mt-0.5 text-[13px] text-[#2A251D] dark:text-zinc-100 font-medium break-words">
           {displayValue}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 마일리지 카드 — [수정] 을 누르면 숫자를 입력하고 [추가하기] / [차감하기] 로 증감 조정.
+ * 절대값 덮어쓰기가 아니라 서버(POST /api/crm/members/[id]/mileage)에서 현재 잔액에 delta 를 적용해
+ * 회원앱 마일리지 내역(crm_member_mileage_logs)에도 남는다.
+ */
+function MileageAdjustCard({
+  memberId,
+  value,
+  canEdit = true,
+  onSaved,
+}: {
+  memberId: number;
+  value: number | null;
+  canEdit?: boolean;
+  onSaved: () => void;
+}) {
+  const { getIdToken } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [saving, setSaving] = useState<"add" | "sub" | null>(null);
+  const [error, setError] = useState("");
+
+  const current = Math.max(0, Math.floor(Number(value ?? 0)));
+  const n = Math.max(0, Math.floor(Number(amount.replace(/[^\d]/g, "")) || 0));
+
+  const apply = async (sign: 1 | -1) => {
+    if (n <= 0) {
+      setError("조정할 마일리지를 입력해 주세요");
+      return;
+    }
+    if (sign < 0 && n > current) {
+      setError(`보유 ${current.toLocaleString()}P 보다 많이 차감할 수 없어요`);
+      return;
+    }
+    setSaving(sign > 0 ? "add" : "sub");
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/members/${memberId}/mileage`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ delta: sign * n }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "수정 실패");
+      setAmount("");
+      setEditing(false);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <div className="group px-3 py-2 rounded-lg bg-white/60 dark:bg-zinc-950/40 border border-[#E8E0D0]/50 dark:border-zinc-800/60 hover:border-[#6B7B3A]/40 transition-colors">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[11px] text-[#A89B80] dark:text-zinc-500">마일리지</span>
+        {!editing && canEdit && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="text-[11px] text-[#6B7B3A] dark:text-[#A8B87A] hover:underline opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            수정
+          </button>
+        )}
+      </div>
+      <div className="mt-0.5 text-[13px] text-[#2A251D] dark:text-zinc-100 font-medium break-words">
+        {current.toLocaleString()}P
+      </div>
+      {editing && (
+        <div className="mt-1.5 space-y-1.5">
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={amount ? n.toLocaleString() : ""}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                setError("");
+              }}
+              placeholder="0"
+              className={crmInputClass}
+              autoFocus
+            />
+            <span className="text-[12px] text-[#8C8270]">P</span>
+          </div>
+          {n > 0 && (
+            <div className="text-[11px] text-[#8C8270] dark:text-zinc-500">
+              추가 시 {(current + n).toLocaleString()}P · 차감 시 {Math.max(0, current - n).toLocaleString()}P
+            </div>
+          )}
+          {error && <div className="text-[11px] text-red-600">{error}</div>}
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => apply(1)}
+              disabled={saving !== null}
+              className="px-3 py-1 rounded-lg bg-[#6B7B3A] text-white text-[11.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+            >
+              {saving === "add" ? "…" : "추가하기"}
+            </button>
+            <button
+              type="button"
+              onClick={() => apply(-1)}
+              disabled={saving !== null}
+              className="px-3 py-1 rounded-lg bg-[#B47B2A] text-white text-[11.5px] font-semibold hover:bg-[#9c682a] disabled:opacity-60"
+            >
+              {saving === "sub" ? "…" : "차감하기"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(false);
+                setAmount("");
+                setError("");
+              }}
+              disabled={saving !== null}
+              className="px-3 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[11.5px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5]"
+            >
+              닫기
+            </button>
+          </div>
         </div>
       )}
     </div>

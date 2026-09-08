@@ -106,6 +106,7 @@ function messageFor(method: string, path: string): string {
   if (path.startsWith("/api/crm/class-sessions") && method === "POST")
     return "클래스 수업을 등록했어요";
   if (path.startsWith("/api/crm/reservations") && method === "POST") return "예약이 등록되었어요";
+  if (/^\/api\/crm\/members\/\d+\/mileage$/.test(path)) return "마일리지를 조정했어요";
   return method === "DELETE" ? "삭제되었습니다" : "저장되었습니다";
 }
 

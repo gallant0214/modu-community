@@ -12,6 +12,7 @@ export const ACTION_LABEL: Record<string, string> = {
   "member.delete": "회원 삭제",
   "member.face_register": "얼굴 등록",
   "member.app_unlink": "앱 연동 해제",
+  "member.mileage_adjust": "마일리지 조정",
   "members.bulk_hold": "회원 일괄 홀딩",
   "members.bulk_unhold": "회원 일괄 홀딩 해제",
   "members.bulk_extend": "회원 일괄 기간 연장",
@@ -201,6 +202,14 @@ export function summarizeAuditLog(
   if (action === "pause.cancel") {
     const r = Number(p.reverted_days ?? 0);
     return r > 0 ? `만료일 ${r}일 원복` : "연장 원복 없음";
+  }
+
+  if (action === "member.mileage_adjust") {
+    const d = Number(p.delta ?? 0);
+    const memo = typeof p.memo === "string" && p.memo.trim() ? ` · ${p.memo.trim()}` : "";
+    return `${d > 0 ? "추가" : "차감"} ${Math.abs(d).toLocaleString()}P · ${Number(
+      p.before ?? 0
+    ).toLocaleString()}P→${Number(p.after ?? 0).toLocaleString()}P${memo}`;
   }
 
   // 2) 회원 정보 수정: changes { field: {from, to} }
