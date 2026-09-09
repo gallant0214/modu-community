@@ -448,6 +448,137 @@ export default function CrmAttendancesPage() {
               </div>
             </div>
           )}
+
+          {/* 요일별 출석 그래프 — 이번주 vs 지난주 (일요일 시작, 위 달력과 같은 기준) */}
+          <div className="mt-5 pt-4 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+            <div className="mb-3 flex items-start justify-between gap-2 flex-wrap">
+              <div>
+                <h3 className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                  요일별 출석 그래프
+                </h3>
+                <p className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+                  {weekData
+                    ? `이번주 ${fmtMd(weekData.thisWeek.start)}~${fmtMd(weekData.thisWeek.end)} · 지난주 ${fmtMd(weekData.lastWeek.start)}~${fmtMd(weekData.lastWeek.end)}`
+                    : "KST 기준 요일별 체크인 비교"}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center gap-1.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+                  <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#6B7B3A]" /> 이번주
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
+                  <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#C9BEA6] dark:bg-zinc-600" /> 지난주
+                </span>
+              </div>
+            </div>
+
+            {!weekData ? (
+              <div className="py-12 text-center text-[12.5px] text-[#8C8270]">불러오는 중…</div>
+            ) : (() => {
+              const thisTotal = weekData.thisWeek.days.reduce((sum, d) => sum + d.total, 0);
+              const lastTotal = weekData.lastWeek.days.reduce((sum, d) => sum + d.total, 0);
+              const diff = thisTotal - lastTotal;
+              const max = Math.max(
+                1,
+                ...weekData.thisWeek.days.map((d) => d.total),
+                ...weekData.lastWeek.days.map((d) => d.total)
+              );
+              const today = todayKst();
+              const bestDow = weekData.thisWeek.days.reduce(
+                (best, d) => (d.total > best.total ? d : best),
+                weekData.thisWeek.days[0]
+              );
+              return (
+                <>
+                  <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[12px]">
+                    <span className="text-[#6B5D47] dark:text-zinc-400">
+                      이번주 <strong className="text-[#3A342A] dark:text-zinc-100 tabular-nums">{thisTotal.toLocaleString()}회</strong>
+                    </span>
+                    <span className="text-[#6B5D47] dark:text-zinc-400">
+                      지난주 <strong className="text-[#3A342A] dark:text-zinc-100 tabular-nums">{lastTotal.toLocaleString()}회</strong>
+                    </span>
+                    <span
+                      className={`font-semibold tabular-nums ${
+                        diff > 0
+                          ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+                          : diff < 0
+                            ? "text-[#B47B2A] dark:text-amber-300"
+                            : "text-[#A89B80]"
+                      }`}
+                    >
+                      {diff > 0 ? `▲ ${diff}회` : diff < 0 ? `▼ ${Math.abs(diff)}회` : "지난주와 동일"}
+                    </span>
+                    {thisTotal > 0 && (
+                      <span className="text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+                        이번주 최다 {DOW_LABEL[bestDow.dow]}요일 · {bestDow.total}회
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="overflow-x-auto -mx-1 px-1">
+                    <div className="min-w-[420px]">
+                      <div className="flex items-end gap-2 h-32">
+                        {weekData.thisWeek.days.map((d, i) => {
+                          const last = weekData.lastWeek.days[i];
+                          const isFuture = d.date > today;
+                          const isSelected = d.date === date;
+                          return (
+                            <div key={d.date} className="flex-1 min-w-[38px] h-full flex flex-col">
+                              <div className="flex-1 flex items-end justify-center gap-[3px]">
+                                <div
+                                  className={`flex-1 rounded-t flex items-center justify-center transition-all ${
+                                    d.total === 0 ? "bg-[#EDE4D4] dark:bg-zinc-800" : "bg-[#6B7B3A]"
+                                  }`}
+                                  style={{ height: `${d.total > 0 ? Math.max(16, (d.total / max) * 100) : 3}%` }}
+                                  title={`이번주 ${fmtMd(d.date)}(${DOW_LABEL[d.dow]}) ${d.total}건 · ${d.unique}명`}
+                                >
+                                  {d.total > 0 && (
+                                    <span className="text-[9.5px] font-bold leading-none text-white tabular-nums select-none">
+                                      {d.total}
+                                    </span>
+                                  )}
+                                </div>
+                                <div
+                                  className={`flex-1 rounded-t flex items-center justify-center transition-all ${
+                                    last.total === 0
+                                      ? "bg-[#EDE4D4] dark:bg-zinc-800"
+                                      : "bg-[#C9BEA6] dark:bg-zinc-600"
+                                  }`}
+                                  style={{ height: `${last.total > 0 ? Math.max(16, (last.total / max) * 100) : 3}%` }}
+                                  title={`지난주 ${fmtMd(last.date)}(${DOW_LABEL[last.dow]}) ${last.total}건 · ${last.unique}명`}
+                                >
+                                  {last.total > 0 && (
+                                    <span className="text-[9.5px] font-bold leading-none text-white tabular-nums select-none">
+                                      {last.total}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => !isFuture && setDate(d.date)}
+                                disabled={isFuture}
+                                className={`mt-1.5 py-0.5 rounded text-[11px] font-semibold leading-none transition-colors ${
+                                  isFuture
+                                    ? "text-[#C9BFA8] dark:text-zinc-700 cursor-not-allowed"
+                                    : isSelected
+                                      ? "bg-[#2F3A2B] text-white dark:bg-[#A8B87A] dark:text-zinc-950"
+                                      : "text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
+                                }`}
+                                title={isFuture ? "" : `${d.date} 출석 보기`}
+                              >
+                                {DOW_LABEL[d.dow]}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
         </section>
 
         <section className="rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-4 py-4 shadow-sm">
@@ -547,137 +678,6 @@ export default function CrmAttendancesPage() {
           )}
         </section>
       </div>
-
-      {/* 요일별 출석 그래프 — 이번주 vs 지난주 (일요일 시작, 위 달력과 같은 기준) */}
-      <section className="mb-5 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-5 py-4 shadow-sm">
-        <div className="mb-4 flex items-start justify-between gap-2 flex-wrap">
-          <div>
-            <h2 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
-              요일별 출석 그래프
-            </h2>
-            <p className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
-              {weekData
-                ? `이번주 ${fmtMd(weekData.thisWeek.start)}~${fmtMd(weekData.thisWeek.end)} · 지난주 ${fmtMd(weekData.lastWeek.start)}~${fmtMd(weekData.lastWeek.end)}`
-                : "KST 기준 요일별 체크인 비교"}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
-              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#6B7B3A]" /> 이번주
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
-              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#C9BEA6] dark:bg-zinc-600" /> 지난주
-            </span>
-          </div>
-        </div>
-
-        {!weekData ? (
-          <div className="py-12 text-center text-[12.5px] text-[#8C8270]">불러오는 중…</div>
-        ) : (() => {
-          const thisTotal = weekData.thisWeek.days.reduce((sum, d) => sum + d.total, 0);
-          const lastTotal = weekData.lastWeek.days.reduce((sum, d) => sum + d.total, 0);
-          const diff = thisTotal - lastTotal;
-          const max = Math.max(
-            1,
-            ...weekData.thisWeek.days.map((d) => d.total),
-            ...weekData.lastWeek.days.map((d) => d.total)
-          );
-          const today = todayKst();
-          const bestDow = weekData.thisWeek.days.reduce(
-            (best, d) => (d.total > best.total ? d : best),
-            weekData.thisWeek.days[0]
-          );
-          return (
-            <>
-              <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[12px]">
-                <span className="text-[#6B5D47] dark:text-zinc-400">
-                  이번주 <strong className="text-[#3A342A] dark:text-zinc-100 tabular-nums">{thisTotal.toLocaleString()}회</strong>
-                </span>
-                <span className="text-[#6B5D47] dark:text-zinc-400">
-                  지난주 <strong className="text-[#3A342A] dark:text-zinc-100 tabular-nums">{lastTotal.toLocaleString()}회</strong>
-                </span>
-                <span
-                  className={`font-semibold tabular-nums ${
-                    diff > 0
-                      ? "text-[#6B7B3A] dark:text-[#A8B87A]"
-                      : diff < 0
-                        ? "text-[#B47B2A] dark:text-amber-300"
-                        : "text-[#A89B80]"
-                  }`}
-                >
-                  {diff > 0 ? `▲ ${diff}회` : diff < 0 ? `▼ ${Math.abs(diff)}회` : "지난주와 동일"}
-                </span>
-                {thisTotal > 0 && (
-                  <span className="text-[11.5px] text-[#8C8270] dark:text-zinc-500">
-                    이번주 최다 {DOW_LABEL[bestDow.dow]}요일 · {bestDow.total}회
-                  </span>
-                )}
-              </div>
-
-              <div className="overflow-x-auto -mx-1 px-1">
-                <div className="min-w-[420px]">
-                  <div className="flex items-end gap-2 h-32">
-                    {weekData.thisWeek.days.map((d, i) => {
-                      const last = weekData.lastWeek.days[i];
-                      const isFuture = d.date > today;
-                      const isSelected = d.date === date;
-                      return (
-                        <div key={d.date} className="flex-1 min-w-[38px] h-full flex flex-col">
-                          <div className="flex-1 flex items-end justify-center gap-[3px]">
-                            <div
-                              className={`flex-1 rounded-t flex items-center justify-center transition-all ${
-                                d.total === 0 ? "bg-[#EDE4D4] dark:bg-zinc-800" : "bg-[#6B7B3A]"
-                              }`}
-                              style={{ height: `${d.total > 0 ? Math.max(16, (d.total / max) * 100) : 3}%` }}
-                              title={`이번주 ${fmtMd(d.date)}(${DOW_LABEL[d.dow]}) ${d.total}건 · ${d.unique}명`}
-                            >
-                              {d.total > 0 && (
-                                <span className="text-[9.5px] font-bold leading-none text-white tabular-nums select-none">
-                                  {d.total}
-                                </span>
-                              )}
-                            </div>
-                            <div
-                              className={`flex-1 rounded-t flex items-center justify-center transition-all ${
-                                last.total === 0
-                                  ? "bg-[#EDE4D4] dark:bg-zinc-800"
-                                  : "bg-[#C9BEA6] dark:bg-zinc-600"
-                              }`}
-                              style={{ height: `${last.total > 0 ? Math.max(16, (last.total / max) * 100) : 3}%` }}
-                              title={`지난주 ${fmtMd(last.date)}(${DOW_LABEL[last.dow]}) ${last.total}건 · ${last.unique}명`}
-                            >
-                              {last.total > 0 && (
-                                <span className="text-[9.5px] font-bold leading-none text-white tabular-nums select-none">
-                                  {last.total}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => !isFuture && setDate(d.date)}
-                            disabled={isFuture}
-                            className={`mt-1.5 py-0.5 rounded text-[11px] font-semibold leading-none transition-colors ${
-                              isFuture
-                                ? "text-[#C9BFA8] dark:text-zinc-700 cursor-not-allowed"
-                                : isSelected
-                                  ? "bg-[#2F3A2B] text-white dark:bg-[#A8B87A] dark:text-zinc-950"
-                                  : "text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60"
-                            }`}
-                            title={isFuture ? "" : `${d.date} 출석 보기`}
-                          >
-                            {DOW_LABEL[d.dow]}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </>
-          );
-        })()}
-      </section>
 
       <div className="mb-2 flex items-end justify-between gap-3 flex-wrap">
         <div>
