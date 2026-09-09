@@ -186,11 +186,12 @@ export async function buildAttendanceVoiceMessages(
         on("msg_expired_rental")
           ? supabase
               .from("crm_rentals")
-              .select("expires_at")
+              // 상태값은 valid/expired (active 는 존재하지 않음 — 예전 필터로는 항상 0건이었다)
+              .select("item_name, expires_at")
               .eq("center_id", centerId)
               .eq("member_id", member.id)
-              .eq("status", "active")
-          : Promise.resolve({ data: [] as { expires_at: string }[] }),
+              .eq("status", "valid")
+          : Promise.resolve({ data: [] as { item_name: string; expires_at: string }[] }),
         on("msg_expired_locker")
           ? supabase
               .from("crm_lockers")
@@ -290,9 +291,24 @@ export async function buildAttendanceVoiceMessages(
       // 운동복(대여권) 만료
       if (on("msg_expired_rental")) {
         const days = Number(s.msg_expired_rental_days ?? 0);
-        const hit = ((rentalsRes.data ?? []) as { expires_at: string }[]).some((r) =>
-          isExpiredWithin(r.expires_at, days)
-        );
+        // 같은 종류를 이어서 결제했으면(예: 운동복 재결제) 지난 건은 만료로 보지 않는다.
+        // 종류 키 = 괄호 설명·기간 표기·공백 제거.
+        const kindOf = (name: string): string => {
+          const raw = (name ?? "").trim();
+          return (
+            raw
+              .replace(/\([^)]*\)/g, "")
+              .replace(/\d+\s*(개월|달|년|주|일)/g, "")
+              .replace(/\s+/g, "") || raw
+          );
+        };
+        const latest = new Map<string, string>(); // kind → 가장 늦은 만료일
+        for (const r of (rentalsRes.data ?? []) as { item_name: string; expires_at: string }[]) {
+          const k = kindOf(r.item_name);
+          const cur = latest.get(k);
+          if (!cur || r.expires_at > cur) latest.set(k, r.expires_at);
+        }
+        const hit = [...latest.values()].some((exp) => isExpiredWithin(exp, days));
         if (hit) messages.push(txt("msg_expired_rental"));
       }
       // 락커 만료

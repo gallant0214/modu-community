@@ -115,7 +115,26 @@ export async function GET(request: Request) {
     arr.push(item);
     expiredItems.set(memberId, arr);
   };
+  // 대여권 종류 키 — "운동복" 과 "운동복 3개월(상가)" 를 같은 종류로 묶기 위해
+  // 괄호 설명·기간 표기(N개월/N일…)·공백을 제거한 값을 사용.
+  const rentalKind = (name: string): string => {
+    const raw = (name ?? "").trim();
+    const key = raw
+      .replace(/\([^)]*\)/g, "")
+      .replace(/\d+\s*(개월|달|년|주|일)/g, "")
+      .replace(/\s+/g, "");
+    return key || raw;
+  };
+
+  // 같은 종류를 이어서 결제한 경우(예: 운동복 재결제) 지난 건은 만료로 보지 않는다.
+  // 종류별로 만료일이 가장 늦은 1건만 판단 대상.
+  const latestRental = new Map<string, Rental>();
   for (const r of (rentalRes.data ?? []) as unknown as Rental[]) {
+    const key = `${r.member_id}:${rentalKind(r.item_name)}`;
+    const cur = latestRental.get(key);
+    if (!cur || r.expires_at > cur.expires_at) latestRental.set(key, r);
+  }
+  for (const r of latestRental.values()) {
     if (r.expires_at < todayKst) {
       pushExpired(r.member_id, { type: "rental", name: r.item_name, expires_at: r.expires_at });
     }
