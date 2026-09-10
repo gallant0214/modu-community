@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
-import { fetchSales, saleCategory } from "@/app/lib/crm-sales";
+import { fetchSales, saleCategory, buildRegistrationClassifier } from "@/app/lib/crm-sales";
 import { cached, crmCacheKey } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
@@ -75,9 +75,11 @@ export async function GET(request: Request) {
   );
   const payload = await cached(cacheKey, 60, async () => {
   const { hasSales: centerHasSales, cutoffYmd } = await centerSalesInfo(ctx.centerId);
-  const periodSales = centerHasSales
-    ? await fetchSales(ctx.centerId, startDate, nextMonth)
-    : [];
+  const [periodSales, regClassifier] = await Promise.all([
+    centerHasSales ? fetchSales(ctx.centerId, startDate, nextMonth) : Promise.resolve([]),
+    // 신규/재등록은 저장된 플래그가 아니라 회원별 '최초 구매일' 로 판정한다.
+    buildRegistrationClassifier(ctx.centerId),
+  ]);
   let membershipRevenue = 0;
   let passRevenue = 0;
   let goodsRevenue = 0;
@@ -109,10 +111,10 @@ export async function GET(request: Request) {
   };
   const addReg = (bucket: ReturnType<typeof emptyReg>, s: (typeof periodSales)[number]) => {
     const amt = s.amount_won ?? 0;
-    const t = (s.registration_type ?? "").trim();
-    if (t === "신규") bucket.new += amt;
-    else if (t === "재등록") bucket.renewal += amt;
-    else bucket.unknown += amt;
+    const rowYmd = new Date(new Date(s.tx_at).getTime() + 9 * 3600 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    bucket[regClassifier.classify(s.member_id, s.customer_phone, rowYmd)] += amt;
   };
 
   for (const s of periodSales) {
@@ -147,11 +149,13 @@ export async function GET(request: Request) {
         price_won: number;
         payment_method: string | null;
         start_date?: string | null;
+        purchased_at?: string | null;
+        member_id: number | null;
       }>((f, t) =>
-        // 주의: crm_memberships 에는 registration_type 컬럼이 없음(신규/재등록 미구분).
+        // crm_memberships 에는 registration_type 이 없다 → 회원의 최초 구매일로 판정.
         supabase
           .from("crm_memberships")
-          .select("price_won, payment_method, start_date")
+          .select("price_won, payment_method, start_date, purchased_at, member_id")
           .eq("center_id", ctx.centerId)
           .gte("start_date", issuanceStart)
           .lt("start_date", nextMonth)
@@ -162,10 +166,11 @@ export async function GET(request: Request) {
         payment_method: string | null;
         issue_type: string | null;
         issued_at: string | null;
+        member_id: number | null;
       }>((f, t) =>
         supabase
           .from("crm_passes")
-          .select("price_won, payment_method, issue_type, issued_at")
+          .select("price_won, payment_method, issue_type, issued_at, member_id")
           .eq("center_id", ctx.centerId)
           .gte("issued_at", issuanceStart)
           .lt("issued_at", nextMonth)
@@ -174,12 +179,12 @@ export async function GET(request: Request) {
       paginateAll<{
         price_won: number;
         payment_method: string | null;
-        registration_type?: string | null;
         start_date?: string | null;
+        member_id: number | null;
       }>((f, t) =>
         supabase
           .from("crm_rentals")
-          .select("price_won, payment_method, start_date")
+          .select("price_won, payment_method, start_date, member_id")
           .eq("center_id", ctx.centerId)
           .gte("start_date", issuanceStart)
           .lt("start_date", nextMonth)
@@ -216,18 +221,17 @@ export async function GET(request: Request) {
       regTotal[regKey] += priceWon;
     };
 
+    // 발급분도 동일 기준(회원의 최초 구매일)으로 신규/재등록 판정
     for (const m of issMemberships) {
-      // crm_memberships 에 registration_type 없음 → 신규/재등록 미분류
-      applyIssuance(m.price_won ?? 0, m.payment_method, "unknown", "membership");
+      const key = regClassifier.classify(m.member_id, null, m.purchased_at ?? m.start_date);
+      applyIssuance(m.price_won ?? 0, m.payment_method, key, "membership");
     }
     for (const p of issPasses) {
-      const key: "new" | "renewal" | "unknown" =
-        p.issue_type === "new" ? "new" : p.issue_type === "renewal" ? "renewal" : "unknown";
+      const key = regClassifier.classify(p.member_id, null, p.issued_at);
       applyIssuance(p.price_won ?? 0, p.payment_method, key, "pass");
     }
     for (const r of issRentals) {
-      const rt = (r.registration_type ?? "").trim();
-      const key = rt === "신규" ? "new" : rt === "재등록" ? "renewal" : "unknown";
+      const key = regClassifier.classify(r.member_id, null, r.start_date);
       applyIssuance(r.price_won ?? 0, r.payment_method, key, "membership");
     }
   }
