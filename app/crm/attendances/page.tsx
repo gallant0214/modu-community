@@ -672,10 +672,10 @@ export default function CrmAttendancesPage() {
                   <span className="mt-auto">
                     {count > 0 ? (
                       <span
-                        className={`inline-block min-w-[38px] px-2 py-1 rounded-full text-[11px] font-bold leading-none tabular-nums ${
+                        className={`inline-block min-w-[40px] px-2 py-1 rounded-full text-[11.5px] font-extrabold leading-none tabular-nums shadow-sm ${
                           selected
-                            ? "bg-white/25 text-white dark:bg-zinc-950/20 dark:text-zinc-950"
-                            : "bg-[#6B7B3A]/15 text-[#6B7B3A] dark:bg-[#6B7B3A]/30 dark:text-[#A8B87A]"
+                            ? "bg-white text-[#2F3A2B] dark:bg-zinc-950 dark:text-[#A8B87A]"
+                            : "bg-[#6B7B3A] text-white dark:bg-[#A8B87A] dark:text-zinc-950"
                         }`}
                       >
                         {count}명
