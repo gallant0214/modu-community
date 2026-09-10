@@ -130,6 +130,34 @@ export default function CrmAttendancesPage() {
     [getIdToken, cancelingId]
   );
 
+  // 선택 날짜와 같은 요일의 과거 평균으로 계산한 '예상 피크 시간'
+  const [peakPredict, setPeakPredict] = useState<{
+    dow: number;
+    weeks: number;
+    sample_days: number;
+    peak_hour: number | null;
+    peak_avg: number;
+  } | null>(null);
+
+  const loadPeakPredict = useCallback(async () => {
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/crm/attendances/peak-hour?date=${date}&weeks=8`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (res.ok) setPeakPredict(data);
+    } catch {
+      // 보조 지표 — 실패해도 나머지 화면은 유지
+    }
+  }, [getIdToken, date]);
+
+  useEffect(() => {
+    loadPeakPredict();
+  }, [loadPeakPredict]);
+
   // 요일별(이번주/지난주) 출석 — 일요일 시작, KST 기준
   interface WeekDay { date: string; dow: number; total: number; unique: number }
   interface WeekBlock { start: string; end: string; days: WeekDay[] }
@@ -353,7 +381,24 @@ export default function CrmAttendancesPage() {
         <div className="mt-4 grid grid-cols-2 lg:grid-cols-5 gap-2.5">
           <KpiCard label="총 출석" value={`${stats.total}회`} hint="전체 체크인" />
           <KpiCard label="출석 회원" value={`${stats.unique}명`} hint="중복 제외" tone="olive" />
-          <KpiCard label="피크 시간" value={peakHour.count > 0 ? hourRangeLabel(peakHour.hour) : "—"} hint={peakHour.count > 0 ? `${peakHour.count}회 집중` : "기록 없음"} tone="blue" />
+          <KpiCard
+            label={`피크 시간 (${DOW_LABEL[new Date(`${date}T00:00:00Z`).getUTCDay()]}요일 예상)`}
+            value={
+              peakPredict?.peak_hour !== null && peakPredict?.peak_hour !== undefined
+                ? hourRangeLabel(peakPredict.peak_hour)
+                : peakHour.count > 0
+                  ? hourRangeLabel(peakHour.hour)
+                  : "—"
+            }
+            hint={
+              peakPredict?.peak_hour !== null && peakPredict?.peak_hour !== undefined
+                ? `최근 ${peakPredict.sample_days}주 평균 ${peakPredict.peak_avg}회`
+                : peakHour.count > 0
+                  ? `이 날 피크 ${peakHour.count}회`
+                  : "기록 없음"
+            }
+            tone="blue"
+          />
           <KpiCard label="터치/QR" value={`${stats.sources.touch + stats.sources.kiosk}회`} hint={`터치 ${stats.sources.touch} · QR ${stats.sources.kiosk}`} tone="olive" />
           <KpiCard label="수동/앱" value={`${stats.sources.manual + stats.sources.app}회`} hint={`수동 ${stats.sources.manual} · 앱 ${stats.sources.app}`} tone="amber" />
         </div>
