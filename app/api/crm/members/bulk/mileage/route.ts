@@ -60,6 +60,19 @@ export async function POST(request: Request) {
     );
   }
 
+  // 회원앱 마일리지 내역 원장 (센터 수동 조정: 방향별로 '센터 추가'/'센터 차감')
+  const reason = amount > 0 ? "center_add" : "center_deduct";
+  const mlogs = updates.map((u) => ({
+    center_id: ctx.centerId,
+    member_id: u.id,
+    delta: amount,
+    reason,
+    balance_after: u.next,
+  }));
+  for (let i = 0; i < mlogs.length; i += 100) {
+    await supabase.from("crm_member_mileage_logs").insert(mlogs.slice(i, i + 100) as never);
+  }
+
   await supabase.from("crm_audit_logs").insert({
     center_id: ctx.centerId,
     actor_uid: ctx.uid,

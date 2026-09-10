@@ -68,12 +68,12 @@ export async function POST(
     return NextResponse.json({ error: "수정 실패", detail: updErr.message }, { status: 500 });
   }
 
-  // 회원앱 마일리지 내역 원장
+  // 회원앱 마일리지 내역 원장 (센터 수동 조정: 방향별로 '센터 추가'/'센터 차감')
   await supabase.from("crm_member_mileage_logs").insert({
     center_id: ctx.centerId,
     member_id: memberId,
     delta,
-    reason: "adjust",
+    reason: delta > 0 ? "center_add" : "center_deduct",
     balance_after: after,
   } as never);
 

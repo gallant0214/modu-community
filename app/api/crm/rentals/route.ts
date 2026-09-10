@@ -186,12 +186,21 @@ export async function POST(request: Request) {
       .eq("id", memberId)
       .eq("center_id", ctx.centerId)
       .maybeSingle();
-    const nextMileage = Math.max(0, (mem?.mileage ?? 0) + mileageEarned - mileageUsed);
+    const base = mem?.mileage ?? 0;
+    const afterEarn = base + mileageEarned;
+    const nextMileage = Math.max(0, afterEarn - mileageUsed);
     await supabase
       .from("crm_members")
       .update({ mileage: nextMileage } as never)
       .eq("id", memberId)
       .eq("center_id", ctx.centerId);
+    // 회원앱 마일리지 내역 표시용 원장 로그
+    const mlogs: Record<string, unknown>[] = [];
+    if (mileageEarned > 0)
+      mlogs.push({ center_id: ctx.centerId, member_id: memberId, delta: mileageEarned, reason: "earn", balance_after: afterEarn });
+    if (mileageUsed > 0)
+      mlogs.push({ center_id: ctx.centerId, member_id: memberId, delta: -mileageUsed, reason: "use", balance_after: nextMileage });
+    if (mlogs.length) await supabase.from("crm_member_mileage_logs").insert(mlogs as never);
   }
 
   await supabase.from("crm_audit_logs").insert({
