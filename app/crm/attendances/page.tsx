@@ -47,6 +47,19 @@ const SOURCE_STYLE: Record<string, string> = {
  */
 const DOW_LABEL = ["일", "월", "화", "수", "목", "금", "토"];
 
+/** 0~23시 → "오전 7시~8시" / "오후 6시~7시" (걸치면 "오전 11시~오후 12시") */
+function hourRangeLabel(h: number): string {
+  const ampm = (x: number) => (x % 24 < 12 ? "오전" : "오후");
+  const h12 = (x: number) => {
+    const v = x % 12;
+    return v === 0 ? 12 : v;
+  };
+  const end = (h + 1) % 24;
+  return ampm(h) === ampm(end)
+    ? `${ampm(h)} ${h12(h)}시~${h12(end)}시`
+    : `${ampm(h)} ${h12(h)}시~${ampm(end)} ${h12(end)}시`;
+}
+
 /** YYYY-MM-DD → M/D */
 function fmtMd(ymd: string): string {
   const [, m, d] = ymd.split("-");
@@ -340,7 +353,7 @@ export default function CrmAttendancesPage() {
         <div className="mt-4 grid grid-cols-2 lg:grid-cols-5 gap-2.5">
           <KpiCard label="총 출석" value={`${stats.total}회`} hint="전체 체크인" />
           <KpiCard label="출석 회원" value={`${stats.unique}명`} hint="중복 제외" tone="olive" />
-          <KpiCard label="피크 시간" value={peakHour.count > 0 ? `${peakHour.hour}시` : "—"} hint={peakHour.count > 0 ? `${peakHour.count}회 집중` : "기록 없음"} tone="blue" />
+          <KpiCard label="피크 시간" value={peakHour.count > 0 ? hourRangeLabel(peakHour.hour) : "—"} hint={peakHour.count > 0 ? `${peakHour.count}회 집중` : "기록 없음"} tone="blue" />
           <KpiCard label="터치/QR" value={`${stats.sources.touch + stats.sources.kiosk}회`} hint={`터치 ${stats.sources.touch} · QR ${stats.sources.kiosk}`} tone="olive" />
           <KpiCard label="수동/앱" value={`${stats.sources.manual + stats.sources.app}회`} hint={`수동 ${stats.sources.manual} · 앱 ${stats.sources.app}`} tone="amber" />
         </div>
@@ -397,7 +410,7 @@ export default function CrmAttendancesPage() {
               </p>
             </div>
             <span className="text-[11.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">
-              {peakHour.count > 0 ? `피크 ${peakHour.hour}시 · ${peakHour.count}회` : "출석 없음"}
+              {peakHour.count > 0 ? `피크 ${hourRangeLabel(peakHour.hour)} · ${peakHour.count}회` : "출석 없음"}
             </span>
           </div>
           {rows.length === 0 ? (
@@ -491,10 +504,12 @@ export default function CrmAttendancesPage() {
               return (
                 <>
                   <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[12px]">
-                    <span className="text-[#6B5D47] dark:text-zinc-400">
+                    <span className="inline-flex items-center gap-1.5 text-[#6B5D47] dark:text-zinc-400">
+                      <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#6B7B3A]" />
                       이번주 <strong className="text-[#3A342A] dark:text-zinc-100 tabular-nums">{thisTotal.toLocaleString()}회</strong>
                     </span>
-                    <span className="text-[#6B5D47] dark:text-zinc-400">
+                    <span className="inline-flex items-center gap-1.5 text-[#6B5D47] dark:text-zinc-400">
+                      <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#C9BEA6] dark:bg-zinc-600" />
                       지난주 <strong className="text-[#3A342A] dark:text-zinc-100 tabular-nums">{lastTotal.toLocaleString()}회</strong>
                     </span>
                     <span
