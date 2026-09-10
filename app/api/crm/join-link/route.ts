@@ -34,15 +34,16 @@ async function createLink(centerId: number): Promise<{ token: string; code: stri
 }
 
 /**
- * GET /api/crm/join-link — 센터 회원가입 QR 링크(없으면 생성). owner/admin.
+ * GET /api/crm/join-link — 센터 회원가입 QR 링크(없으면 생성).
+ *
+ * 🚨 권한 게이트 없음(센터 소속 직원이면 누구나). 신규 회원 가입 안내는
+ *    강사·FC·아르바이트 등 현장 응대 직원이 해야 하는 일이라 직급으로 막지 않는다.
+ *    (링크 재발급=기존 QR 무효화 인 POST 만 settings.edit 로 제한)
  * → { token, code, url }
  */
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
-  if (!(await ctxHasPermission(ctx, "settings.edit"))) {
-    return NextResponse.json({ error: "센터 설정 권한이 없습니다" }, { status: 403 });
-  }
 
   let { data: link } = await supabase
     .from("crm_center_join_links")
@@ -59,6 +60,8 @@ export async function GET(request: Request) {
     token: link.token,
     code: link.code,
     url: `${APP_ORIGIN}/join/${link.token}`,
+    // 재발급(기존 QR 무효화)은 권한자만 — 화면에서 버튼 노출 판단용
+    canRegenerate: await ctxHasPermission(ctx, "settings.edit"),
   });
 }
 

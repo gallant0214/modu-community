@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatWon } from "../_components/crm-labels";
 import { DualLineChart } from "./_components/dual-line-chart";
+import { JoinLinkModal } from "./_components/join-link-modal";
 
 interface Sess {
   reservationId: number;
@@ -106,6 +107,7 @@ export function TrainerDashboard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [marking, setMarking] = useState<number | null>(null);
+  const [joinModal, setJoinModal] = useState<"qr" | "link" | null>(null);
 
   const load = useCallback(async () => {
     setError("");
@@ -155,15 +157,32 @@ export function TrainerDashboard({
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-6xl mx-auto">
       {/* 헤더 */}
       <header className="mb-5 rounded-2xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-4 py-4 md:px-5 md:py-5 shadow-sm">
-        <p className="text-[12px] font-semibold text-[#7F6F55] dark:text-zinc-500">{centerName || "CRM"}</p>
-        <h1 className="mt-1 text-[24px] md:text-[28px] leading-tight font-bold text-[#241F18] dark:text-zinc-100">
-          개인 트레이너 대시보드
-        </h1>
-        <p className="mt-1.5 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-          {displayName ? <strong className="text-[#2A251D] dark:text-zinc-100">{displayName}</strong> : null}
-          {displayName ? " · " : ""}내가 담당·등록한 회원과 내 수업료 중심
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[12px] font-semibold text-[#7F6F55] dark:text-zinc-500">{centerName || "CRM"}</p>
+            <h1 className="mt-1 text-[24px] md:text-[28px] leading-tight font-bold text-[#241F18] dark:text-zinc-100">
+              개인 트레이너 대시보드
+            </h1>
+            <p className="mt-1.5 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+              {displayName ? <strong className="text-[#2A251D] dark:text-zinc-100">{displayName}</strong> : null}
+              {displayName ? " · " : ""}내가 담당·등록한 회원과 내 수업료 중심
+            </p>
+          </div>
+          {/* 신규 회원 가입 안내용 QR — 직급과 무관하게 항상 노출 */}
+          <button
+            type="button"
+            onClick={() => setJoinModal("qr")}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-[#6B7B3A] bg-[#6B7B3A] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#5a6932]"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 3h3m-3 3h6m0-6v.01M17 14h3" />
+            </svg>
+            센터 연결 QR 생성
+          </button>
+        </div>
       </header>
+
+      {joinModal && <JoinLinkModal mode={joinModal} onClose={() => setJoinModal(null)} />}
 
       {error && (
         <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</div>

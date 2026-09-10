@@ -10,6 +10,8 @@ interface JoinLink {
   token: string;
   code: string;
   url: string;
+  /** 재발급(기존 QR 무효화) 권한 — settings.edit */
+  canRegenerate?: boolean;
 }
 
 /**
@@ -23,6 +25,7 @@ export function JoinLinkModal({ mode, onClose }: { mode: "qr" | "link"; onClose:
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const canRegenerate = data?.canRegenerate === true;
   const qrWrapRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -157,14 +160,19 @@ export function JoinLinkModal({ mode, onClose }: { mode: "qr" | "link"; onClose:
           </div>
 
           <div className="flex items-center justify-between pt-1">
-            <button
-              type="button"
-              onClick={regenerate}
-              disabled={busy}
-              className="text-[12px] font-semibold text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
-            >
-              {busy ? "재발급 중…" : "링크 재발급"}
-            </button>
+            {/* 재발급은 기존 QR 을 무효화하므로 권한자에게만 노출 */}
+            {canRegenerate ? (
+              <button
+                type="button"
+                onClick={regenerate}
+                disabled={busy}
+                className="text-[12px] font-semibold text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
+              >
+                {busy ? "재발급 중…" : "링크 재발급"}
+              </button>
+            ) : (
+              <span />
+            )}
             <button
               type="button"
               onClick={onClose}
