@@ -182,8 +182,23 @@ export async function GET(request: Request) {
   for (const p of validPasses) feedOutstanding(p.member_id, p.outstanding_won, p.payment_status, "lesson");
   for (const m of validMemberships) feedOutstanding(m.member_id, m.outstanding_won, m.payment_status, "membership");
 
+  // 홀딩(일시정지) 중인 회원 — is_paused 플래그가 아니라 실제 홀딩 기간(crm_pauses) 기준.
+  // 오늘이 start_date ~ end_date 안에 있는 active 홀딩 기록의 회원을 중복 없이 센다.
+  const activePauses = await paginateAll<{ member_id: number }>((f, t) =>
+    supabase
+      .from("crm_pauses")
+      .select("member_id")
+      .eq("center_id", ctx.centerId)
+      .eq("status", "active")
+      .lte("start_date", today)
+      .gte("end_date", today)
+      .range(f, t)
+  );
+  const holdingMemberIds = new Set<number>(activePauses.map((p) => p.member_id));
+
   // 회원 통계 집계
   const totalMembers = emptyGC();
+  const holdingMembers = emptyGC();
   const activeMembers = emptyGC();
   const expiredMembers = emptyGC();
   const newMembers = emptyGC();
@@ -202,6 +217,7 @@ export async function GET(request: Request) {
 
   for (const m of members) {
     addGender(totalMembers, m.gender);
+    if (holdingMemberIds.has(m.id)) addGender(holdingMembers, m.gender);
     // 활성: 정식 데이터 우선 → 없으면 POS 스냅샷 final_expire_at
     const isActive =
       activeMemberIds.has(m.id) ||
@@ -397,6 +413,7 @@ export async function GET(request: Request) {
       expired: expiredMembers,
       newly: newMembers,
       reregistered: reregisteredMembers,
+      holding: holdingMembers,
     },
     attendance: {
       attended: attendedMembers,

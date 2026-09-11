@@ -53,6 +53,8 @@ interface SummaryResp {
     expired: GenderCount;
     newly: GenderCount;
     reregistered: GenderCount;
+    /** 현재 홀딩(일시정지) 중인 회원 — 배포 전 캐시 응답 대비 optional */
+    holding?: GenderCount;
   };
   attendance: {
     attended: GenderCount;
@@ -376,8 +378,19 @@ export default function CrmDashboardPage() {
           )}
           {summary && (
             <>
-              <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
                 <GenderStatCard label="유효 회원" data={summary.members.active} accent />
+                <GenderStatCard
+                  label="홀딩 회원"
+                  data={summary.members.holding ?? { count: 0, male: 0, female: 0 }}
+                  tone="hold"
+                  ratioNote={(() => {
+                    const h = summary.members.holding?.count ?? 0;
+                    const a = summary.members.active.count;
+                    if (!h) return "홀딩 없음";
+                    return a > 0 ? `유효 중 ${Math.round((h / a) * 100)}%` : undefined;
+                  })()}
+                />
                 <GenderStatCard label="만기 회원" data={summary.members.expired} tone="warn" />
                 <GenderStatCard
                   label="신규 가입"
@@ -888,12 +901,14 @@ function GenderStatCard({
   label: string;
   data: GenderCount;
   accent?: boolean;
-  tone?: "warn";
+  tone?: "warn" | "hold";
   ratioNote?: string;
 }) {
   const mainCls =
     tone === "warn"
       ? "text-[#B47B2A] dark:text-amber-300"
+      : tone === "hold"
+      ? "text-[#8B6BB1] dark:text-purple-300"
       : accent
       ? "text-[#6B7B3A] dark:text-[#A8B87A]"
       : "text-[#2A251D] dark:text-zinc-100";
