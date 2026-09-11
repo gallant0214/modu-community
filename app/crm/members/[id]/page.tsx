@@ -2358,6 +2358,9 @@ const STATUS_LABEL_R: Record<string, string> = {
   cancelled: "예약 취소",
   noshow: "노쇼",
 };
+/** 요일 라벨 (0=일) */
+const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"];
+
 const STATUS_STYLE_R: Record<string, string> = {
   booked: "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]",
   attended: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
@@ -2585,7 +2588,8 @@ function MemberReservationsSection({ memberId }: { memberId: number }) {
             {filteredRows.map((r, i) => {
               const d = new Date(r.starts_at);
               const k = new Date(d.getTime() + 9 * 3600 * 1000);
-              const dateStr = `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")}`;
+              // KST 로 보정한 뒤 getUTC* 로 뽑아야 요일이 하루 어긋나지 않는다
+              const dateStr = `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")} (${DOW_KO[k.getUTCDay()]})`;
               const hm = `${String(k.getUTCHours()).padStart(2, "0")}:${String(k.getUTCMinutes()).padStart(2, "0")}`;
               const eD = new Date(r.ends_at);
               const eK = new Date(eD.getTime() + 9 * 3600 * 1000);
@@ -2930,7 +2934,8 @@ function MemberAttendanceSection({ memberId }: { memberId: number }) {
             {rows.map((r, i) => {
               const d = new Date(r.checked_in_at);
               const k = new Date(d.getTime() + 9 * 3600 * 1000);
-              const dateStr = `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")}`;
+              // KST 로 보정한 뒤 getUTC* 로 뽑아야 요일이 하루 어긋나지 않는다
+              const dateStr = `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")} (${DOW_KO[k.getUTCDay()]})`;
               const hm = `${String(k.getUTCHours()).padStart(2, "0")}:${String(k.getUTCMinutes()).padStart(2, "0")}`;
               return (
                 <li key={r.id} className="px-4 py-2.5">
