@@ -16,6 +16,7 @@ import {
   formatPhone,
 } from "../../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../../_components/crm-modal";
+import BirthDateInput from "@/app/crm/_components/birth-date-input";
 import { LockerPickerModal } from "../../_components/locker-picker-modal";
 import { CrmLineChart } from "../../_components/crm-line-chart";
 import { unitToDays, formatDuration, computeExpiryYmd } from "@/app/lib/duration-convert";
@@ -670,7 +671,7 @@ export default function CrmMemberDetailPage() {
           <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="name" label="이름" value={member.name} type="text" onSaved={load} />
           <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="phone" label="연락처" value={member.phone} type="text" formatDisplay={(v) => (v ? formatPhone(String(v)) : "—")} onSaved={load} />
           <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="gender" label="성별" value={member.gender} type="select" options={[{ v: "M", l: "남" }, { v: "F", l: "여" }]} formatDisplay={(v) => (v ? GENDER_LABEL[v as "M" | "F" | "N"] ?? String(v) : "—")} onSaved={load} />
-          <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="birth" label="생년월일" value={member.birth} type="date" onSaved={load} />
+          <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="birth" label="생년월일" value={member.birth} type="birth" onSaved={load} />
           <EditableInfoCard canEdit={canEditBasic} memberId={member.id} field="email" label="이메일" value={member.email} type="text" onSaved={load} />
           <EditableInfoCard canEdit={canEditUsage} memberId={member.id} field="address" label="주소" value={member.address} type="text" onSaved={load} />
         </DetailSection>
@@ -3976,7 +3977,7 @@ function EditableInfoCard({
   field: string;
   label: string;
   value: string | number | boolean | null;
-  type: "text" | "date" | "number" | "select" | "bool";
+  type: "text" | "date" | "number" | "select" | "bool" | "birth";
   options?: { v: string; l: string }[];
   suffix?: string;
   formatDisplay?: (v: string | number | boolean | null) => string;
@@ -4078,6 +4079,14 @@ function EditableInfoCard({
               value={draft as string}
               onChange={(e) => setDraft(e.target.value)}
               className={crmInputClass}
+              autoFocus
+            />
+          )}
+          {/* 생년월일 — 숫자 키패드로 년(4)→월(2)→일(2) 자동 이동 입력 */}
+          {type === "birth" && (
+            <BirthDateInput
+              value={(draft as string) || ""}
+              onChange={(v) => setDraft(v)}
               autoFocus
             />
           )}

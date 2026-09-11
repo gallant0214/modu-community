@@ -7,6 +7,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { actionLabel } from "@/app/lib/crm-audit-format";
 import { GENDER_LABEL, formatPhone } from "../_components/crm-labels";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
+import BirthDateInput from "../_components/birth-date-input";
 import { SortIndicator } from "../_components/use-column-widths";
 import { BulkActionBar } from "./_components/bulk-actions";
 
@@ -2279,12 +2280,7 @@ function RegisterModal({
             </select>
           </CrmField>
           <CrmField label="생년월일">
-            <input
-              type="date"
-              className={crmInputClass}
-              value={birth}
-              onChange={(e) => setBirth(e.target.value)}
-            />
+            <BirthDateInput value={birth} onChange={setBirth} />
           </CrmField>
         </div>
         <CrmField label="가입 구분">
