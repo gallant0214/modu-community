@@ -346,6 +346,35 @@ export default function CrmMemberDetailPage() {
     validHoldRs
   );
   const holdOtherRs = validHoldRs.filter((r) => !holdUsedRentalIds.has(r.id));
+  // 홀딩 모달 '함께 홀딩' 후보 — 현재 보유 중인 유효 상품 전체(회원권·수강권·대여권/락커)
+  const holdCandidates: HoldCandidate[] = [
+    ...validHoldMs.map((m) => ({
+      kind: "membership" as const,
+      id: m.id,
+      name: m.plan_name,
+      expiresAt: m.expires_at,
+      createdAt: m.created_at ?? null,
+      isPaused: !!m.is_paused,
+    })),
+    ...validHoldPasses.map((p) => ({
+      kind: "pass" as const,
+      id: p.id,
+      name: p.lesson_kind,
+      expiresAt: p.expires_at,
+      createdAt: (p as { created_at?: string }).created_at ?? null,
+      isPaused: !!p.is_paused,
+    })),
+    ...validHoldRs.map((r) => ({
+      kind: "rental" as const,
+      id: r.id,
+      name: r.item_name,
+      expiresAt: r.expires_at,
+      createdAt: r.created_at ?? null,
+      isPaused: !!r.is_paused,
+      tag: /^(락커|상가)/.test(r.item_name.trim()) ? "락커" : "대여권",
+    })),
+  ];
+
   const hasHoldings =
     validHoldMs.length > 0 ||
     validHoldRs.length > 0 ||
@@ -863,6 +892,7 @@ export default function CrmMemberDetailPage() {
         passId={null}
         membershipId={holdTarget?.kind === "membership" ? holdTarget.id : null}
         rentalId={holdTarget?.kind === "rental" ? holdTarget.id : null}
+        companions={holdCandidates}
         onClose={() => setHoldTarget(null)}
         onDone={() => {
           setHoldTarget(null);
@@ -10820,11 +10850,24 @@ function PurchaseDoneBanner({ open, onClose }: { open: boolean; onClose: () => v
   );
 }
 
+/** 홀딩 모달에서 '함께 홀딩' 후보로 보여줄 보유 상품 */
+interface HoldCandidate {
+  kind: "membership" | "pass" | "rental";
+  id: number;
+  name: string;
+  expiresAt: string;
+  createdAt: string | null;
+  isPaused: boolean;
+  /** 화면 표기용 태그 (락커/운동복 등) */
+  tag?: string;
+}
+
 function HoldModal({
   open,
   passId,
   membershipId,
   rentalId = null,
+  companions = [],
   onClose,
   onDone,
 }: {
@@ -10832,6 +10875,8 @@ function HoldModal({
   passId: number | null;
   membershipId: number | null;
   rentalId?: number | null;
+  /** 같은 회원의 다른 보유 상품 — 체크하면 같은 기간으로 함께 홀딩된다. */
+  companions?: HoldCandidate[];
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -10842,6 +10887,27 @@ function HoldModal({
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  /** 함께 홀딩할 상품 선택 (키: "kind:id") */
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+
+  const targetKind: HoldCandidate["kind"] | null = passId
+    ? "pass"
+    : membershipId
+      ? "membership"
+      : rentalId
+        ? "rental"
+        : null;
+  const targetId = passId ?? membershipId ?? rentalId ?? null;
+  const targetCand = companions.find((c) => c.kind === targetKind && c.id === targetId) ?? null;
+  // 묶음(같은 결제 ±3초로 함께 발급) 형제는 서버에서도 자동 포함 → 기본 체크 + 해제 불가
+  const isBundleSibling = (c: HoldCandidate) =>
+    !!targetCand &&
+    !!targetCand.createdAt &&
+    !!c.createdAt &&
+    Math.abs(Date.parse(c.createdAt) - Date.parse(targetCand.createdAt)) <= 3000;
+  const others = companions.filter(
+    (c) => !(c.kind === targetKind && c.id === targetId) && !c.isPaused
+  );
 
   useEffect(() => {
     if (!open) {
@@ -10849,8 +10915,16 @@ function HoldModal({
       setEndDate(todayStr);
       setReason("");
       setError("");
+      setPicked(new Set());
     }
   }, [open, todayStr]);
+
+  // 열릴 때 묶음 형제는 자동 체크 (해제 불가 — 서버도 자동 포함)
+  useEffect(() => {
+    if (!open) return;
+    setPicked(new Set(others.filter(isBundleSibling).map((c) => `${c.kind}:${c.id}`)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, targetKind, targetId, companions.length]);
 
   const days = (() => {
     if (!startDate || !endDate || endDate < startDate) return 0;
@@ -10874,6 +10948,11 @@ function HoldModal({
           pass_id: passId,
           membership_id: membershipId,
           rental_id: rentalId,
+          // 체크한 다른 보유 상품도 같은 기간으로 함께 홀딩
+          items: [...picked].map((k) => {
+            const [kind, id] = k.split(":");
+            return { kind, id: Number(id) };
+          }),
           start_date: startDate,
           end_date: endDate,
           reason: reason.trim() || undefined,
@@ -10917,6 +10996,65 @@ function HoldModal({
             만료일이 자동으로 {days}일 늘어납니다.
           </div>
         )}
+        {/* 함께 홀딩할 상품 — 묶음(같은 결제) 형제는 자동 포함(체크 해제 불가) */}
+        {others.length > 0 && (
+          <div className="rounded-lg border border-[#E8E0D0] dark:border-zinc-800 p-3 space-y-2">
+            <div>
+              <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                함께 홀딩할 상품
+              </div>
+              <div className="text-[11px] text-[#8C8270] dark:text-zinc-500">
+                체크한 상품도 같은 기간으로 홀딩되고 만료일이 함께 밀려요.
+              </div>
+            </div>
+            <ul className="space-y-1">
+              {others.map((c) => {
+                const key = `${c.kind}:${c.id}`;
+                const bundled = isBundleSibling(c);
+                const on = picked.has(key);
+                return (
+                  <li key={key}>
+                    <label
+                      className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg border text-[12.5px] ${
+                        on
+                          ? "border-[#B47B2A]/50 bg-[#B47B2A]/5"
+                          : "border-[#E8E0D0]/70 dark:border-zinc-800"
+                      } ${bundled ? "cursor-default" : "cursor-pointer"}`}
+                    >
+                      <span className="min-w-0">
+                        <span className="px-1.5 py-0.5 mr-1.5 rounded text-[10.5px] font-semibold bg-[#6B7B3A]/10 text-[#6B7B3A] dark:text-[#A8B87A]">
+                          {c.kind === "membership" ? "회원권" : c.kind === "pass" ? "수강권" : c.tag ?? "대여권"}
+                        </span>
+                        <strong className="text-[#2A251D] dark:text-zinc-100">{c.name}</strong>
+                        {bundled && (
+                          <span className="ml-1.5 text-[10.5px] font-semibold text-[#B47B2A]">
+                            묶음
+                          </span>
+                        )}
+                        <span className="block mt-0.5 text-[11px] text-[#8C8270] dark:text-zinc-500">
+                          만료 {c.expiresAt}
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={bundled}
+                        onChange={(e) => {
+                          const next = new Set(picked);
+                          if (e.target.checked) next.add(key);
+                          else next.delete(key);
+                          setPicked(next);
+                        }}
+                        className="w-4 h-4 accent-[#B47B2A] shrink-0 disabled:opacity-60"
+                      />
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
         <CrmField label="홀딩 사유">
           <textarea
             className={`${crmInputClass} min-h-[72px]`}

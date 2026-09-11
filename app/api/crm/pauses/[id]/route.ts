@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { syncLockerDatesFromRental } from "@/app/lib/crm-locker-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,23 @@ export async function DELETE(
     .from(table)
     .update({ expires_at: restoredExpires, is_paused: false } as never)
     .eq("id", targetId);
+
+  // 락커 대여권이면 물리 락커 만료일도 함께 원복 (한쪽만 UPDATE 되어 어긋나는 것 방지)
+  if (table === "crm_rentals") {
+    const { data: rentalInfo } = await supabase
+      .from("crm_rentals")
+      .select("member_id, item_name, memo")
+      .eq("id", targetId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    if (rentalInfo) {
+      await syncLockerDatesFromRental(
+        ctx.centerId,
+        rentalInfo as { member_id: number | null; item_name: string | null; memo: string | null },
+        { expires_at: restoredExpires }
+      );
+    }
+  }
 
   await supabase
     .from("crm_pauses")
