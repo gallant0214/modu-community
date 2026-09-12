@@ -731,6 +731,15 @@ interface CenterRevenueResp {
     notStarted: number;
     inProgress: number;
   };
+  /** 선택 기간 잠재부채 변동 (배포 전 캐시 응답 대비 optional) */
+  liability_change?: {
+    inflow: number;
+    outflow: number;
+    outflow_sessions: number;
+    outflow_elapsed: number;
+    net: number;
+    consumed_sessions: number;
+  };
   payment_totals: {
     total: PaymentBucket;
     membership: PaymentBucket;
@@ -788,6 +797,13 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
     rows.push(["  수강권", data.liability_breakdown.pass]);
     rows.push(["  미시작", data.liability_breakdown.notStarted]);
     rows.push(["  진행중", data.liability_breakdown.inProgress]);
+    if (data.liability_change) {
+      rows.push(["  기간 유입(신규 결제)", data.liability_change.inflow]);
+      rows.push(["  기간 소진(이용)", data.liability_change.outflow]);
+      rows.push(["    수업 소진", data.liability_change.outflow_sessions]);
+      rows.push(["    기간 경과", data.liability_change.outflow_elapsed]);
+      rows.push(["  기간 순증감", data.liability_change.net]);
+    }
     rows.push([]);
     rows.push(["결제수단별", "현금(원)", "카드(원)", "문화상품권(원)", "기타(원)"]);
     (
@@ -971,8 +987,62 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
         </div>
       </section>
 
+      {/* 기간 중 잠재부채 증감 — 총액이 왜 제자리인지(유입 vs 소진) 보여준다 */}
+      {data?.liability_change && (
+        <section className="mt-3 px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
+          <div className="flex items-baseline justify-between gap-2 flex-wrap">
+            <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+              이 기간 잠재부채 변동
+            </div>
+            <div className="text-[11.5px] text-[#A89B80]">신규 결제로 쌓인 금액 vs 이용으로 빠진 금액</div>
+          </div>
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="px-4 py-3 rounded-xl bg-[#FBF7EB]/70 dark:bg-zinc-950/40 border border-[#E8E0D0]/70 dark:border-zinc-800">
+              <div className="text-[11.5px] text-[#A89B80]">유입 (신규 결제)</div>
+              <div className="mt-0.5 text-[17px] font-bold text-[#B47B2A] dark:text-amber-300 tabular-nums">
+                +{formatWon(data.liability_change.inflow)}원
+              </div>
+            </div>
+            <div className="px-4 py-3 rounded-xl bg-[#FBF7EB]/70 dark:bg-zinc-950/40 border border-[#E8E0D0]/70 dark:border-zinc-800">
+              <div className="text-[11.5px] text-[#A89B80]">소진 (이용)</div>
+              <div className="mt-0.5 text-[17px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] tabular-nums">
+                −{formatWon(data.liability_change.outflow)}원
+              </div>
+              <div className="mt-1 text-[11px] text-[#8C8270] dark:text-zinc-500">
+                수업 {data.liability_change.consumed_sessions}회 {formatWon(data.liability_change.outflow_sessions)}원
+                {" · "}기간 경과 {formatWon(data.liability_change.outflow_elapsed)}원
+              </div>
+            </div>
+            <div className="px-4 py-3 rounded-xl bg-[#FBF7EB]/70 dark:bg-zinc-950/40 border border-[#E8E0D0]/70 dark:border-zinc-800">
+              <div className="text-[11.5px] text-[#A89B80]">순증감</div>
+              <div
+                className={`mt-0.5 text-[17px] font-bold tabular-nums ${
+                  data.liability_change.net > 0
+                    ? "text-[#B47B2A] dark:text-amber-300"
+                    : data.liability_change.net < 0
+                      ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+                      : "text-[#3A342A] dark:text-zinc-100"
+                }`}
+              >
+                {data.liability_change.net > 0 ? "+" : data.liability_change.net < 0 ? "−" : ""}
+                {formatWon(Math.abs(data.liability_change.net))}원
+              </div>
+              <div className="mt-1 text-[11px] text-[#8C8270] dark:text-zinc-500">
+                {data.liability_change.net > 0
+                  ? "판 금액이 더 많아 부채가 늘었어요"
+                  : data.liability_change.net < 0
+                    ? "이용분이 더 많아 부채가 줄었어요"
+                    : "변동 없음"}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       <div className="mt-3 px-4 py-3 rounded-xl bg-[#FBF7EB]/60 dark:bg-zinc-900/40 text-[11.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
         💡 <strong>잠재부채</strong>는 회원이 결제했으나 아직 이용하지 않은 금액이에요. 예) 7월에 60만원 PT 10회를 결제하고 8월부터 시작한다면, 오늘 시점 잠재부채는 60만원. 진행 중인 상품은 남은 일수/횟수 비율로 계산해요.
+        <br />
+        💡 <strong>총액은 잔액(스톡)</strong>이라 수업을 해도 그만큼 새 결제가 쌓이면 제자리로 보여요. 실제로 얼마나 빠지고 채워졌는지는 위 &lsquo;이 기간 잠재부채 변동&rsquo;에서 확인하세요. (환불·삭제분 제외 참고치)
         <br />
         💡 <strong>부가세</strong>는 결제 시 상품에 &quot;부가세 포함&quot; 옵션을 체크한 건만 10% 를 제외한 실매출로 환산해요.
       </div>

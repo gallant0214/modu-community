@@ -266,6 +266,7 @@ export async function GET(request: Request) {
         .range(f, t)
     ),
     paginateAll<{
+      id: number;
       price_won: number;
       vat_included: boolean | null;
       start_date: string;
@@ -274,7 +275,7 @@ export async function GET(request: Request) {
     }>((f, t) =>
       supabase
         .from("crm_passes")
-        .select("price_won, vat_included, start_date, total_sessions, remaining_sessions")
+        .select("id, price_won, vat_included, start_date, total_sessions, remaining_sessions")
         .eq("center_id", ctx.centerId)
         .eq("status", "valid")
         .range(f, t)
@@ -366,6 +367,96 @@ export async function GET(request: Request) {
   const potentialLiability = liabilityMembership + liabilityPass;
   const liabilityVat = potentialLiability - liabilityExVat;
 
+  // ── 선택 기간 잠재부채 변동 (유입 / 소진) ─────────────────────────────
+  // 총액은 '잔액(스톡)' 이라 수업을 해도 신규 결제가 그만큼 쌓이면 제자리로 보인다.
+  // 왜 안 줄었는지 알 수 있도록 기간 중 증감을 함께 계산해 내려준다.
+  //   유입 = 기간 내 발급된 상품의 결제금액 (새로 쌓인 선수금)
+  //   소진 = 수업 소진(출석·노쇼 회차 × 회당 단가) + 기간 경과분(기간제 일할)
+  // 환불·삭제분은 제외한 참고치.
+  const periodEndExclusive = nextMonth; // [startDate, nextMonth)
+  // 기간 경과분 계산은 '오늘까지'만 (미래 구간은 아직 소진되지 않음)
+  const decayEnd = periodEndExclusive <= today ? periodEndExclusive : today;
+
+  const [issuedMs, issuedRs, issuedPs, consumedRes] = await Promise.all([
+    paginateAll<{ price_won: number }>((f, t) =>
+      supabase
+        .from("crm_memberships")
+        .select("price_won")
+        .eq("center_id", ctx.centerId)
+        .eq("status", "valid")
+        .gte("created_at", `${startDate}T00:00:00+09:00`)
+        .lt("created_at", `${periodEndExclusive}T00:00:00+09:00`)
+        .range(f, t)
+    ),
+    paginateAll<{ price_won: number }>((f, t) =>
+      supabase
+        .from("crm_rentals")
+        .select("price_won")
+        .eq("center_id", ctx.centerId)
+        .eq("status", "valid")
+        .gte("created_at", `${startDate}T00:00:00+09:00`)
+        .lt("created_at", `${periodEndExclusive}T00:00:00+09:00`)
+        .range(f, t)
+    ),
+    paginateAll<{ price_won: number }>((f, t) =>
+      supabase
+        .from("crm_passes")
+        .select("price_won")
+        .eq("center_id", ctx.centerId)
+        .eq("status", "valid")
+        .gte("created_at", `${startDate}T00:00:00+09:00`)
+        .lt("created_at", `${periodEndExclusive}T00:00:00+09:00`)
+        .range(f, t)
+    ),
+    paginateAll<{ pass_id: number | null }>((f, t) =>
+      supabase
+        .from("crm_reservations")
+        .select("pass_id")
+        .eq("center_id", ctx.centerId)
+        .in("status", ["attended", "noshow"])
+        .gte("starts_at", `${startDate}T00:00:00+09:00`)
+        .lt("starts_at", `${periodEndExclusive}T00:00:00+09:00`)
+        .range(f, t)
+    ),
+  ]);
+
+  const inflow =
+    [...issuedMs, ...issuedRs, ...issuedPs].reduce((sum, r) => sum + (r.price_won ?? 0), 0);
+
+  // 수업 소진: 회차당 단가 = price / total_sessions (세션제만)
+  const passUnitPrice = new Map<number, number>();
+  for (const p of passesValid) {
+    const total = p.total_sessions ?? 0;
+    if (total > 0 && p.price_won) passUnitPrice.set(p.id, p.price_won / total);
+  }
+  let outflowSessions = 0;
+  let consumedSessionCount = 0;
+  for (const r of consumedRes) {
+    const unit = r.pass_id ? passUnitPrice.get(r.pass_id) : undefined;
+    if (unit === undefined) continue;
+    outflowSessions += unit;
+    consumedSessionCount += 1;
+  }
+  outflowSessions = Math.round(outflowSessions);
+
+  // 기간 경과분(기간제): 기간과 겹치는 일수 × 일단가
+  const decayOf = (price: number, startYmd: string, expiresYmd: string): number => {
+    if (!price) return 0;
+    const totalDays = daysBetween(startYmd, expiresYmd) + 1;
+    if (totalDays <= 0) return 0;
+    const from = startYmd > startDate ? startYmd : startDate;
+    const toEx = expiresYmd < decayEnd ? expiresYmd : decayEnd; // expires 당일까지 소진
+    const days = daysBetween(from, toEx) + (expiresYmd < decayEnd ? 1 : 0);
+    if (days <= 0) return 0;
+    return (price / totalDays) * Math.min(days, totalDays);
+  };
+  let outflowElapsed = 0;
+  for (const m of membershipsValid) outflowElapsed += decayOf(m.price_won ?? 0, m.start_date, m.expires_at);
+  for (const r of rentalsValid) outflowElapsed += decayOf(r.price_won ?? 0, r.start_date, r.expires_at);
+  outflowElapsed = Math.round(outflowElapsed);
+
+  const outflow = outflowSessions + outflowElapsed;
+
   return {
     ym,
     total,
@@ -397,6 +488,15 @@ export async function GET(request: Request) {
       pass: liabilityPass,
       notStarted: liabilityNotStarted,
       inProgress: liabilityInProgress,
+    },
+    // 선택 기간 잠재부채 변동 (환불·삭제 제외 참고치)
+    liability_change: {
+      inflow,
+      outflow,
+      outflow_sessions: outflowSessions,
+      outflow_elapsed: outflowElapsed,
+      net: inflow - outflow,
+      consumed_sessions: consumedSessionCount,
     },
     // 결제수단별 매출 (현금·카드·문화상품권·기타) — 전체 / 회원권 / 수강권
     payment_totals: {
