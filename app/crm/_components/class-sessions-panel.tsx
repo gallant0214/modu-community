@@ -68,7 +68,8 @@ export default function ClassSessionsPanel({
       const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
       const to = new Date(Date.now() + 90 * 864e5 + 9 * 3600 * 1000).toISOString().slice(0, 10);
       const [pRes, sRes] = await Promise.all([
-        fetch("/api/crm/products?type=class&sellable=1", { headers: h, cache: "no-store" }),
+        // 수업 개설은 운영 기능 — 판매중지 상품도 기존 구매 회원을 위해 수업을 열 수 있어야 한다.
+        fetch("/api/crm/products?type=class", { headers: h, cache: "no-store" }),
         fetch(`/api/crm/class-sessions?from=${today}&to=${to}`, { headers: h, cache: "no-store" }),
       ]);
       if (pRes.ok) setProducts((await pRes.json()).products ?? []);

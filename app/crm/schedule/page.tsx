@@ -3291,7 +3291,9 @@ function NewReservationModal({
       try {
         const token = await getIdToken();
         if (!token) return;
-        const res = await fetch("/api/crm/products?type=class&sellable=1", {
+        // 판매중지(sellable) 여부와 무관하게 전부 불러온다 —
+        // 판매만 중단됐을 뿐, 이미 구매한 회원은 계속 예약해야 하므로 수업은 열 수 있어야 한다.
+        const res = await fetch("/api/crm/products?type=class", {
           headers: { authorization: `Bearer ${token}` },
           cache: "no-store",
         });
