@@ -3012,6 +3012,11 @@ function NewReservationModal({
   // 반복 예약 설정 (회원 선택 후) — 강사앱과 동일. JS getDay: 0=일 … 6=토
   const [recurring, setRecurring] = useState(false);
   const [weekdays, setWeekdays] = useState<Set<number>>(new Set());
+  /**
+   * 요일별 수업 시작 시각("HH:MM"). 요일을 켤 때 슬롯 시각으로 초기화되고,
+   * 아래 목록에서 요일마다 다르게 바꿀 수 있다. (예: 월 10:00 / 수 19:00)
+   */
+  const [weekdayTimes, setWeekdayTimes] = useState<Record<number, string>>({});
   // 반복 종료 기준: sessions=선택한 수강권의 예약 가능 잔여 세션을 모두 소진 / date=종료일까지
   const [repeatMode, setRepeatMode] = useState<"sessions" | "date">("sessions");
   const [repeatEndDate, setRepeatEndDate] = useState("");
@@ -3022,10 +3027,30 @@ function NewReservationModal({
       ? Math.max(0, pickedPass.total_sessions - (pickedPass.reserved_count ?? 0))
       : null;
 
-  // 반복 일정 전개: 시작일 이후 요일 매칭 날짜(YYYY-MM-DD) 목록
-  const buildOccurrenceDates = (): string[] => {
+  /** 슬롯에서 고른 시작 시각 "HH:MM" (요일 시간의 기본값) */
+  const slotHm = (() => {
+    const { h, m } = kstParts(slot.startsAt);
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  })();
+
+  /** 요일 토글 — 켤 때 그 요일의 시간을 슬롯 시각으로 초기화 */
+  const toggleWeekday = (dow: number) => {
+    const turningOn = !weekdays.has(dow);
+    const next = new Set(weekdays);
+    if (turningOn) next.add(dow);
+    else next.delete(dow);
+    setWeekdays(next);
+    // 처음 켜는 요일이면 기본 시각 채움(껐다 켜도 이전에 고른 시간은 유지)
+    if (turningOn && !weekdayTimes[dow]) {
+      setWeekdayTimes((t) => ({ ...t, [dow]: slotHm }));
+    }
+  };
+
+  // 반복 일정 전개: 날짜 + 그 요일에 지정한 시각
+  const buildOccurrences = (): { ymd: string; h: number; m: number }[] => {
     const baseYmd = new Date(new Date(slot.startsAt).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-    if (!recurring) return [baseYmd];
+    const base = kstParts(slot.startsAt);
+    if (!recurring) return [{ ymd: baseYmd, h: base.h, m: base.m }];
     const HARD_MAX = 60;
     const baseDow = new Date(`${baseYmd}T00:00:00Z`).getUTCDay();
     const wd = weekdays.size > 0 ? weekdays : new Set([baseDow]);
@@ -3037,15 +3062,21 @@ function NewReservationModal({
       limit = left === null ? 1 : Math.min(Math.max(left, 1), HARD_MAX);
     }
     const bound = repeatMode === "date" && repeatEndDate ? repeatEndDate : null;
-    const out: string[] = [];
-    const [y, m, d] = baseYmd.split("-").map(Number);
-    let cur = Date.UTC(y, m - 1, d);
+    const out: { ymd: string; h: number; m: number }[] = [];
+    const [y, m0, d] = baseYmd.split("-").map(Number);
+    let cur = Date.UTC(y, m0 - 1, d);
     let guard = 0;
     while (out.length < limit && guard < 400) {
       const dt = new Date(cur);
       const ymd = dt.toISOString().slice(0, 10);
       if (bound && ymd > bound) break;
-      if (wd.has(dt.getUTCDay())) out.push(ymd);
+      const dow = dt.getUTCDay();
+      if (wd.has(dow)) {
+        // 요일별 지정 시각이 있으면 그 시각, 없으면 슬롯 시각
+        const hm = weekdayTimes[dow] ?? slotHm;
+        const [hh, mm] = hm.split(":").map(Number);
+        out.push({ ymd, h: Number.isFinite(hh) ? hh : base.h, m: Number.isFinite(mm) ? mm : base.m });
+      }
       cur += 86400000;
       guard += 1;
     }
@@ -3079,14 +3110,7 @@ function NewReservationModal({
                             <button
                               key={dow}
                               type="button"
-                              onClick={() =>
-                                setWeekdays((prev) => {
-                                  const n = new Set(prev);
-                                  if (n.has(dow)) n.delete(dow);
-                                  else n.add(dow);
-                                  return n;
-                                })
-                              }
+                              onClick={() => toggleWeekday(dow)}
                               className={`flex-1 py-1.5 rounded-md text-[12.5px] font-semibold border ${
                                 on
                                   ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
@@ -3100,6 +3124,46 @@ function NewReservationModal({
                       )}
                     </div>
                     <div className="mt-1 text-[11px] text-[#A89B80]">미선택 시 시작일 요일로 반복돼요.</div>
+
+                    {/* 선택한 요일별 수업 시간 — 요일마다 다르게 지정 가능 */}
+                    {weekdays.size > 0 && (
+                      <div className="mt-2 space-y-1.5">
+                        <div className="text-[12px] text-[#6B5D47] dark:text-zinc-400">요일별 수업 시간</div>
+                        {([[1, "월요일"], [2, "화요일"], [3, "수요일"], [4, "목요일"], [5, "금요일"], [6, "토요일"], [0, "일요일"]] as [number, string][])
+                          .filter(([dow]) => weekdays.has(dow))
+                          .map(([dow, label]) => {
+                            const hm = weekdayTimes[dow] ?? slotHm;
+                            const [hh, mm] = hm.split(":").map(Number);
+                            const end = new Date(Date.UTC(2000, 0, 1, hh || 0, (mm || 0) + duration));
+                            return (
+                              <div
+                                key={dow}
+                                className="flex items-center gap-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/60 dark:bg-zinc-900/60 px-2.5 py-1.5"
+                              >
+                                <span className="w-14 shrink-0 text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                                  {label}
+                                </span>
+                                <input
+                                  type="time"
+                                  step={600}
+                                  value={hm}
+                                  onChange={(e) =>
+                                    setWeekdayTimes((t) => ({ ...t, [dow]: e.target.value || slotHm }))
+                                  }
+                                  className="px-2 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-[#2A251D] dark:text-zinc-100"
+                                />
+                                <span className="text-[11.5px] text-[#8C8270]">
+                                  ~ {String(end.getUTCHours()).padStart(2, "0")}:
+                                  {String(end.getUTCMinutes()).padStart(2, "0")} ({duration}분)
+                                </span>
+                              </div>
+                            );
+                          })}
+                        <div className="text-[11px] text-[#A89B80]">
+                          요일마다 시간을 다르게 잡을 수 있어요. 기본값은 위에서 고른 {slotHm} 입니다.
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div className="text-[12px] text-[#6B5D47] dark:text-zinc-400 mb-1.5">종료 기준</div>
@@ -3135,7 +3199,7 @@ function NewReservationModal({
                     )}
                   </div>
                   <div className="text-[12px] font-medium text-[#6B7B3A] dark:text-[#A8B87A]">
-                    총 {buildOccurrenceDates().length}회 예약이 생성돼요
+                    총 {buildOccurrences().length}회 예약이 생성돼요
                     {groupParticipants.length > 0 ? ` (회당 ${groupParticipants.length + 1}명)` : ""}.
                   </div>
                 </>
@@ -3399,12 +3463,11 @@ function NewReservationModal({
       if (eventType === "lesson") {
         // 주 pass + 그룹 참가자들 각각 예약 생성. 반복 설정이면 요일별 날짜마다 반복.
         const allPassIds = [passId!, ...groupParticipants.map((g) => g.passId)];
-        const dates = buildOccurrenceDates();
-        const { h, m } = kstParts(slot.startsAt);
+        const occurrences = buildOccurrences();
         let lastRes: Response | null = null;
         const failed: string[] = [];
         let okCount = 0;
-        for (const ymd of dates) {
+        for (const { ymd, h, m } of occurrences) {
           const sIso = kstDateToUTCISO(ymd, h, m);
           const eIso = kstDateToUTCISO(ymd, h, m + duration);
           for (const pid of allPassIds) {
