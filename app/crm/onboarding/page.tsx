@@ -32,7 +32,6 @@ export default function CrmOnboardingPage() {
   const [postalCode, setPostalCode] = useState("");
   const [address, setAddress] = useState("");
   const [addressDetail, setAddressDetail] = useState("");
-  const [logo, setLogo] = useState<{ dataUrl: string; name: string } | null>(null);
   const [ownerName, setOwnerName] = useState("");
   const [ownerBirth, setOwnerBirth] = useState("");
   const [ownerGender, setOwnerGender] = useState<"male" | "female" | "">("");
@@ -151,7 +150,6 @@ export default function CrmOnboardingPage() {
           postal_code: postalCode.trim() || undefined,
           address: address.trim(),
           address_detail: addressDetail.trim() || undefined,
-          logo_data_url: logo?.dataUrl,
           owner_name: ownerName.trim(),
           owner_birth: ownerBirth,
           owner_gender: ownerGender,
@@ -219,20 +217,6 @@ export default function CrmOnboardingPage() {
     }
   };
 
-  const onPickLogo = async (file: File | null) => {
-    if (!file) return;
-    setError("");
-    try {
-      const r = await readFileAsDataUrl(file, {
-        maxBytes: 2 * 1024 * 1024,
-        acceptTypes: ["image/png", "image/jpeg"],
-        requireSquareImage: true,
-      });
-      setLogo(r);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "업로드 실패");
-    }
-  };
 
   const joinCenter = async (centerId: number, centerName: string) => {
     if (submitting) return;
@@ -492,16 +476,6 @@ export default function CrmOnboardingPage() {
               </div>
             </Field>
 
-            <Field label="센터 로고 이미지">
-              <FilePicker
-                accept="image/png,image/jpeg"
-                fileName={logo?.name}
-                onPick={onPickLogo}
-                onClear={() => setLogo(null)}
-                hint="PNG 또는 JPG 파일 / 최대 2MB / 정사각형 이미지만 사용 가능"
-                previewDataUrl={logo?.dataUrl}
-              />
-            </Field>
           </SubSection>
 
           <SubSection title="대표자 정보">
