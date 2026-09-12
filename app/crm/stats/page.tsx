@@ -1156,11 +1156,52 @@ function PaymentBreakdown({ data }: { data: CenterRevenueResp | null }) {
   );
 }
 
+/** 버킷 내 신규/재등록 비중(%) */
+function regPct(bucket: RegBucket | undefined, key: "new" | "renewal"): number {
+  const sum = (bucket?.new ?? 0) + (bucket?.renewal ?? 0) + (bucket?.unknown ?? 0);
+  if (sum <= 0) return 0;
+  return Math.round(((bucket?.[key] ?? 0) / sum) * 100);
+}
+
+/** 신규/재등록 비중 한 줄 — 상품군별로 각각 표시 */
+function RegRatioRow({ label, bucket }: { label: string; bucket: RegBucket | undefined }) {
+  const sum = (bucket?.new ?? 0) + (bucket?.renewal ?? 0) + (bucket?.unknown ?? 0);
+  const pctNew = sum > 0 ? Math.round(((bucket?.new ?? 0) / sum) * 100) : 0;
+  const pctRe = sum > 0 ? Math.round(((bucket?.renewal ?? 0) / sum) * 100) : 0;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2 text-[11.5px]">
+        <span className="text-[#6B5D47] dark:text-zinc-400 font-medium">{label}</span>
+        <span className="text-[#A89B80] shrink-0">
+          {sum > 0 ? (
+            <>
+              <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">신규 {pctNew}%</strong>
+              <span className="mx-1">·</span>
+              <strong className="text-[#B47B2A] dark:text-amber-300">재등록 {pctRe}%</strong>
+            </>
+          ) : (
+            "매출 없음"
+          )}
+        </span>
+      </div>
+      <div className="mt-1 h-2 rounded-full bg-[#EFE7D5] dark:bg-zinc-800 overflow-hidden flex">
+        <div
+          className="h-full bg-[#6B7B3A]"
+          style={{ width: `${pctNew}%` }}
+          title={`신규 ${pctNew}% (${formatWon(bucket?.new ?? 0)}원)`}
+        />
+        <div
+          className="h-full bg-[#B47B2A]"
+          style={{ width: `${pctRe}%` }}
+          title={`재등록 ${pctRe}% (${formatWon(bucket?.renewal ?? 0)}원)`}
+        />
+      </div>
+    </div>
+  );
+}
+
 function RegistrationBreakdown({ data }: { data: CenterRevenueResp | null }) {
   const total = data?.registration_totals.total;
-  const totalSum = (total?.new ?? 0) + (total?.renewal ?? 0) + (total?.unknown ?? 0);
-  const pctNew = totalSum > 0 ? Math.round(((total?.new ?? 0) / totalSum) * 100) : 0;
-  const pctRe = totalSum > 0 ? Math.round(((total?.renewal ?? 0) / totalSum) * 100) : 0;
   const rows: { label: string; bucket: RegBucket | undefined; accent: boolean }[] = [
     { label: "전체 매출", bucket: total, accent: true },
     { label: "회원권 매출", bucket: data?.registration_totals.membership, accent: false },
@@ -1168,26 +1209,11 @@ function RegistrationBreakdown({ data }: { data: CenterRevenueResp | null }) {
   ];
   return (
     <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden">
-      {/* 전체 요약 바 */}
-      <div className="px-4 pt-3 pb-2">
-        <div className="text-[11.5px] text-[#A89B80]">
-          전체 <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">신규 {pctNew}%</strong> ·
-          <strong className="ml-1 text-[#B47B2A] dark:text-amber-300">재등록 {pctRe}%</strong>
-        </div>
-        {totalSum > 0 && (
-          <div className="mt-1.5 h-2 rounded-full bg-[#EFE7D5] dark:bg-zinc-800 overflow-hidden flex">
-            <div
-              className="h-full bg-[#6B7B3A]"
-              style={{ width: `${pctNew}%` }}
-              title={`신규 ${pctNew}%`}
-            />
-            <div
-              className="h-full bg-[#B47B2A]"
-              style={{ width: `${pctRe}%` }}
-              title={`재등록 ${pctRe}%`}
-            />
-          </div>
-        )}
+      {/* 요약 바 — 전체 / 회원권 / 수강권 각각의 신규·재등록 비중 */}
+      <div className="px-4 pt-3 pb-2.5 space-y-2.5">
+        <RegRatioRow label="전체" bucket={total} />
+        <RegRatioRow label="회원권 (헬스·락커·운동복)" bucket={data?.registration_totals.membership} />
+        <RegRatioRow label="수강권 (PT·레슨)" bucket={data?.registration_totals.pass} />
       </div>
 
       <div className="overflow-x-auto -mx-2 px-2">
@@ -1209,9 +1235,15 @@ function RegistrationBreakdown({ data }: { data: CenterRevenueResp | null }) {
                 <td className="py-2 pl-4 pr-2 font-semibold">{r.label}</td>
                 <td className="py-2 px-2 text-right tabular-nums text-[#6B7B3A] dark:text-[#A8B87A]">
                   {formatWon(r.bucket?.new ?? 0)}원
+                  <span className="block text-[10.5px] text-[#A89B80] font-medium">
+                    {regPct(r.bucket, "new")}%
+                  </span>
                 </td>
                 <td className="py-2 px-2 text-right tabular-nums text-[#B47B2A] dark:text-amber-300">
                   {formatWon(r.bucket?.renewal ?? 0)}원
+                  <span className="block text-[10.5px] text-[#A89B80] font-medium">
+                    {regPct(r.bucket, "renewal")}%
+                  </span>
                 </td>
                 <td className="py-2 pr-4 pl-2 text-right tabular-nums text-[#8C8270]">
                   {formatWon(r.bucket?.unknown ?? 0)}원
