@@ -87,7 +87,7 @@ export async function GET(request: Request) {
   let passCount = 0;
 
   // 결제수단 집계 (전체 · 회원권그룹 · 수강권그룹)
-  const emptyPay = () => ({ cash: 0, card: 0, culture: 0, other: 0 });
+  const emptyPay = () => ({ cash: 0, card: 0, transfer: 0, other: 0 });
   const payTotal = emptyPay();
   const payMembership = emptyPay();
   const payPass = emptyPay();
@@ -98,15 +98,31 @@ export async function GET(request: Request) {
   const regMembership = emptyReg();
   const regPass = emptyReg();
 
+  // 원장(crm_sales) 결제수단 집계 — 결제채널(payment_channel) 우선.
+  // BROJ 원장은 계좌이체 건도 cash_won/card_won 에 금액이 쪼개져 들어와 있어
+  // 금액 칼럼만으로는 계좌이체를 구분할 수 없다. 채널이 단일 수단이면 총액을 그 수단에 싣고,
+  // 혼합('현금+카드')·미상 채널만 금액 칼럼으로 분해한다.
   const addPay = (bucket: ReturnType<typeof emptyPay>, s: (typeof periodSales)[number]) => {
+    const amount = s.amount_won ?? 0;
+    const channel = (s.payment_channel ?? "").trim();
+    if (channel === "계좌이체") {
+      bucket.transfer += amount;
+      return;
+    }
+    if (channel === "카드") {
+      bucket.card += amount;
+      return;
+    }
+    if (channel === "현금") {
+      bucket.cash += amount;
+      return;
+    }
+    // 혼합·기타 채널: 금액 칼럼으로 분해하고 나머지는 기타
     const cash = s.cash_won ?? 0;
     const card = s.card_won ?? 0;
-    const culture = s.culture_won ?? 0;
     bucket.cash += cash;
     bucket.card += card;
-    bucket.culture += culture;
-    // 총액 - (현금 + 카드 + 문화) 나머지 = 계좌이체·상품권 등 기타
-    const other = (s.amount_won ?? 0) - cash - card - culture;
+    const other = amount - cash - card;
     if (other) bucket.other += other;
   };
   const addReg = (bucket: ReturnType<typeof emptyReg>, s: (typeof periodSales)[number]) => {
@@ -206,12 +222,14 @@ export async function GET(request: Request) {
         membershipCount += 1;
       }
       // 결제수단 매핑
-      const key: "cash" | "card" | "culture" | "other" =
+      const key: "cash" | "card" | "transfer" | "other" =
         paymentMethod === "cash"
           ? "cash"
           : paymentMethod === "card"
             ? "card"
-            : "other"; // transfer / etc / custom / null 모두 '기타'
+            : paymentMethod === "transfer"
+              ? "transfer" // 발급 모달의 '계좌' 선택
+              : "other"; // etc / custom / null
       const payBucket = cat === "pass" ? payPass : payMembership;
       payBucket[key] += priceWon;
       payTotal[key] += priceWon;

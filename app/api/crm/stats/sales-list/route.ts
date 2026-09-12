@@ -77,14 +77,22 @@ export async function GET(request: Request) {
     locker: "락커",
     goods: "기타",
   };
-  const salePayMethod = (cash: number, card: number, culture: number, amount: number): string => {
+  // 원장 결제수단 표기 — 결제채널이 단일 수단이면 그대로 쓴다.
+  // (BROJ 원장은 계좌이체 건도 cash_won/card_won 에 금액이 쪼개져 들어와 금액만으로는 구분 불가)
+  const salePayMethod = (
+    channel: string | null,
+    cash: number,
+    card: number,
+    amount: number
+  ): string => {
+    const ch = (channel ?? "").trim();
+    if (ch === "계좌이체" || ch === "카드" || ch === "현금") return ch;
     const parts: string[] = [];
     if (card > 0) parts.push("카드");
     if (cash > 0) parts.push("현금");
-    if (culture > 0) parts.push("문화상품권");
-    const other = amount - cash - card - culture;
-    if (other > 0) parts.push("계좌이체·기타");
-    return parts.length ? parts.join("+") : "기타";
+    const other = amount - cash - card;
+    if (other > 0) parts.push("기타");
+    return parts.length ? parts.join("+") : ch || "기타";
   };
   const methodKo = (pm: string | null): string =>
     pm === "cash"
@@ -110,13 +118,14 @@ export async function GET(request: Request) {
       cash_won: number;
       card_won: number;
       culture_won: number;
+      payment_channel: string | null;
       registration_type: string | null;
     };
     const rows = await paginateAll<Row>((f, t) =>
       supabase
         .from("crm_sales")
         .select(
-          "tx_at, amount_won, product_type, product_name, member_id, customer_name, cash_won, card_won, culture_won, registration_type"
+          "tx_at, amount_won, product_type, product_name, member_id, customer_name, cash_won, card_won, culture_won, payment_channel, registration_type"
         )
         .eq("center_id", ctx.centerId)
         .gte("tx_at", `${startDate}T00:00:00+09:00`)
@@ -137,7 +146,7 @@ export async function GET(request: Request) {
         product_name: r.product_name ?? CAT_KO[cat] ?? "상품",
         category: CAT_KO[cat] ?? "기타",
         amount_won: r.amount_won ?? 0,
-        payment_method: salePayMethod(r.cash_won ?? 0, r.card_won ?? 0, r.culture_won ?? 0, r.amount_won ?? 0),
+        payment_method: salePayMethod(r.payment_channel, r.cash_won ?? 0, r.card_won ?? 0, r.amount_won ?? 0),
         registration_type: (r.registration_type ?? "").trim() || null,
         source: "ledger",
       });

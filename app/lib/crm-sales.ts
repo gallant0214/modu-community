@@ -14,6 +14,8 @@ export type SaleRow = {
   cash_won: number;
   card_won: number;
   culture_won: number;
+  /** 원장 결제채널('카드'/'현금'/'계좌이체'/'현금+카드' 등) — 계좌이체 구분에 필요 */
+  payment_channel: string | null;
   registration_type: string | null;   // '신규' | '재등록' | null
   /** 원장에 member_id 가 비어 있을 때 회원 매칭용(임포트분 일부가 미연결) */
   customer_phone: string | null;
@@ -59,7 +61,7 @@ export async function fetchSales(
   for (let from = 0; ; from += chunk) {
     const { data, error } = await supabase
       .from("crm_sales")
-      .select("tx_at, amount_won, product_type, member_id, cash_won, card_won, culture_won, registration_type, customer_phone")
+      .select("tx_at, amount_won, product_type, member_id, cash_won, card_won, culture_won, payment_channel, registration_type, customer_phone")
       .eq("center_id", centerId)
       .gte("tx_at", `${startYmd}T00:00:00+09:00`)
       .lt("tx_at", `${endExclYmd}T00:00:00+09:00`)

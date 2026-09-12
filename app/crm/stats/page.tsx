@@ -694,7 +694,7 @@ function kstDateHm(iso: string): string {
 interface PaymentBucket {
   cash: number;
   card: number;
-  culture: number;
+  transfer: number;
   other: number;
 }
 interface RegBucket {
@@ -814,7 +814,7 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
       rows.push(["  기간 순증감", data.liability_change.net]);
     }
     rows.push([]);
-    rows.push(["결제수단별", "현금(원)", "카드(원)", "문화상품권(원)", "기타(원)"]);
+    rows.push(["결제수단별", "현금(원)", "카드(원)", "계좌이체(원)", "기타(원)"]);
     (
       [
         ["전체", data.payment_totals.total],
@@ -822,7 +822,7 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
         ["수강권", data.payment_totals.pass],
       ] as const
     ).forEach(([label, b]) => {
-      rows.push([label, b.cash, b.card, b.culture, b.other]);
+      rows.push([label, b.cash, b.card, b.transfer, b.other]);
     });
     rows.push([]);
     rows.push(["신규·재등록", "신규(원)", "재등록(원)", "미분류(원)"]);
@@ -1122,7 +1122,7 @@ function PaymentBreakdown({ data }: { data: CenterRevenueResp | null }) {
             <th className="text-left py-2 pl-4 pr-2 font-semibold">구분</th>
             <th className="text-right py-2 px-2 font-semibold">현금</th>
             <th className="text-right py-2 px-2 font-semibold">카드</th>
-            <th className="text-right py-2 px-2 font-semibold">문화상품권</th>
+            <th className="text-right py-2 px-2 font-semibold">계좌이체</th>
             <th className="text-right py-2 pr-4 pl-2 font-semibold">기타</th>
           </tr>
         </thead>
@@ -1140,7 +1140,7 @@ function PaymentBreakdown({ data }: { data: CenterRevenueResp | null }) {
                 {formatWon(r.bucket?.card ?? 0)}원
               </td>
               <td className="py-2 px-2 text-right tabular-nums text-[#8C8270]">
-                {formatWon(r.bucket?.culture ?? 0)}원
+                {formatWon(r.bucket?.transfer ?? 0)}원
               </td>
               <td className="py-2 pr-4 pl-2 text-right tabular-nums text-[#8C8270]">
                 {formatWon(r.bucket?.other ?? 0)}원
@@ -1150,7 +1150,7 @@ function PaymentBreakdown({ data }: { data: CenterRevenueResp | null }) {
         </tbody>
       </table>
       <div className="px-4 py-2 text-[11px] text-[#A89B80]">
-        기타 = 총 결제금액 − (현금+카드+문화상품권). 계좌이체·상품권·포인트 등 기타 결제 수단 포함.
+        발급 시 고른 결제수단(현금·카드·계좌) 기준이에요. 기타 = 그 외 수단(상품권·포인트 등)과 결제채널이 확인되지 않는 원장 건.
       </div>
     </section>
   );
