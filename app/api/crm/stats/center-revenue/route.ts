@@ -253,6 +253,7 @@ export async function GET(request: Request) {
   const today = kstYmd();
   const [membershipsValid, passesValid, rentalsValid] = await Promise.all([
     paginateAll<{
+      member_id: number;
       price_won: number;
       vat_included: boolean | null;
       start_date: string;
@@ -260,13 +261,14 @@ export async function GET(request: Request) {
     }>((f, t) =>
       supabase
         .from("crm_memberships")
-        .select("price_won, vat_included, start_date, expires_at")
+        .select("member_id, price_won, vat_included, start_date, expires_at")
         .eq("center_id", ctx.centerId)
         .eq("status", "valid")
         .range(f, t)
     ),
     paginateAll<{
       id: number;
+      member_id: number;
       price_won: number;
       vat_included: boolean | null;
       start_date: string;
@@ -275,12 +277,13 @@ export async function GET(request: Request) {
     }>((f, t) =>
       supabase
         .from("crm_passes")
-        .select("id, price_won, vat_included, start_date, total_sessions, remaining_sessions")
+        .select("id, member_id, price_won, vat_included, start_date, total_sessions, remaining_sessions")
         .eq("center_id", ctx.centerId)
         .eq("status", "valid")
         .range(f, t)
     ),
     paginateAll<{
+      member_id: number;
       price_won: number;
       vat_included: boolean | null;
       start_date: string;
@@ -288,7 +291,7 @@ export async function GET(request: Request) {
     }>((f, t) =>
       supabase
         .from("crm_rentals")
-        .select("price_won, vat_included, start_date, expires_at")
+        .select("member_id, price_won, vat_included, start_date, expires_at")
         .eq("center_id", ctx.centerId)
         .eq("status", "valid")
         .range(f, t)
@@ -297,6 +300,10 @@ export async function GET(request: Request) {
 
   let liabilityMembership = 0;
   let liabilityPass = 0;
+  // 카드 표시용 — 부채가 남아 있는 회원 수 / 수강권 잔여 회차 합
+  const liabilityMembershipMembers = new Set<number>();
+  const liabilityPassMembers = new Set<number>();
+  let liabilityPassSessions = 0;
   let liabilityNotStarted = 0;
   let liabilityInProgress = 0;
   // 잠재부채 중 부가세 제외분 (vat_included 건은 /1.1)
@@ -310,6 +317,7 @@ export async function GET(request: Request) {
       liabilityMembership += price;
       liabilityNotStarted += price;
       liabilityExVat += exVat;
+      liabilityMembershipMembers.add(m.member_id);
       continue;
     }
     // 진행중: 잔여일 / 전체일 × price
@@ -321,6 +329,7 @@ export async function GET(request: Request) {
     liabilityMembership += unused;
     liabilityInProgress += unused;
     liabilityExVat += Math.round(frac * exVat);
+    if (unused > 0) liabilityMembershipMembers.add(m.member_id);
   }
 
   // 락커·운동복(crm_rentals) — 기간제, 회원권 그룹에 합산
@@ -332,6 +341,7 @@ export async function GET(request: Request) {
       liabilityMembership += price;
       liabilityNotStarted += price;
       liabilityExVat += exVat;
+      liabilityMembershipMembers.add(r.member_id);
       continue;
     }
     const totalDays = daysBetween(r.start_date, r.expires_at) + 1;
@@ -342,6 +352,7 @@ export async function GET(request: Request) {
     liabilityMembership += unused;
     liabilityInProgress += unused;
     liabilityExVat += Math.round(frac * exVat);
+    if (unused > 0) liabilityMembershipMembers.add(r.member_id);
   }
 
   for (const p of passesValid) {
@@ -352,6 +363,8 @@ export async function GET(request: Request) {
       liabilityPass += price;
       liabilityNotStarted += price;
       liabilityExVat += exVat;
+      liabilityPassMembers.add(p.member_id);
+      liabilityPassSessions += Math.max(0, p.remaining_sessions ?? p.total_sessions ?? 0);
       continue;
     }
     const total = p.total_sessions ?? 0;
@@ -362,6 +375,10 @@ export async function GET(request: Request) {
     liabilityPass += unused;
     liabilityInProgress += unused;
     liabilityExVat += Math.round(frac * exVat);
+    if (remaining > 0) {
+      liabilityPassMembers.add(p.member_id);
+      liabilityPassSessions += remaining;
+    }
   }
 
   const potentialLiability = liabilityMembership + liabilityPass;
@@ -488,6 +505,13 @@ export async function GET(request: Request) {
       pass: liabilityPass,
       notStarted: liabilityNotStarted,
       inProgress: liabilityInProgress,
+      // 카드 표시용 — 인원 수 / 수강권 잔여 회차
+      membership_members: liabilityMembershipMembers.size,
+      membership_avg_per_member: liabilityMembershipMembers.size
+        ? Math.round(liabilityMembership / liabilityMembershipMembers.size)
+        : 0,
+      pass_members: liabilityPassMembers.size,
+      pass_sessions: liabilityPassSessions,
     },
     // 선택 기간 잠재부채 변동 (환불·삭제 제외 참고치)
     liability_change: {

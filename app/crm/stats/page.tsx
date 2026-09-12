@@ -730,6 +730,11 @@ interface CenterRevenueResp {
     pass: number;
     notStarted: number;
     inProgress: number;
+    /** 카드 표시용 (배포 전 캐시 응답 대비 optional) */
+    membership_members?: number;
+    membership_avg_per_member?: number;
+    pass_members?: number;
+    pass_sessions?: number;
   };
   /** 선택 기간 잠재부채 변동 (배포 전 캐시 응답 대비 optional) */
   liability_change?: {
@@ -797,6 +802,10 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
     rows.push(["  수강권", data.liability_breakdown.pass]);
     rows.push(["  미시작", data.liability_breakdown.notStarted]);
     rows.push(["  진행중", data.liability_breakdown.inProgress]);
+    rows.push(["  회원권 대상 인원(명)", data.liability_breakdown.membership_members ?? 0]);
+    rows.push(["  회원권 인당 평균", data.liability_breakdown.membership_avg_per_member ?? 0]);
+    rows.push(["  수강권 대상 인원(명)", data.liability_breakdown.pass_members ?? 0]);
+    rows.push(["  수강권 잔여 회차(회)", data.liability_breakdown.pass_sessions ?? 0]);
     if (data.liability_change) {
       rows.push(["  기간 유입(신규 결제)", data.liability_change.inflow]);
       rows.push(["  기간 소진(이용)", data.liability_change.outflow]);
@@ -972,8 +981,22 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
           <div className="mt-1 text-[18px] font-bold text-[#B47B2A] dark:text-amber-300">
             {formatWon(data?.liability_breakdown.membership ?? 0)}원
           </div>
+          {(data?.liability_breakdown.membership_members ?? 0) > 0 && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <span className="px-2 py-1 rounded-lg bg-[#FBF7EB] dark:bg-zinc-950/50 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12px] text-[#6B5D47] dark:text-zinc-300">
+                대상 <strong className="text-[#3A342A] dark:text-zinc-100 tabular-nums">
+                  {(data?.liability_breakdown.membership_members ?? 0).toLocaleString()}명
+                </strong>
+              </span>
+              <span className="px-2 py-1 rounded-lg bg-[#FBF7EB] dark:bg-zinc-950/50 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12px] text-[#6B5D47] dark:text-zinc-300">
+                인당 평균 <strong className="text-[#3A342A] dark:text-zinc-100 tabular-nums">
+                  {formatWon(data?.liability_breakdown.membership_avg_per_member ?? 0)}원
+                </strong>
+              </span>
+            </div>
+          )}
           <div className="mt-2 text-[11.5px] text-[#A89B80]">
-            아직 이용하지 않은 회원권 금액 (일할 계산)
+            아직 이용하지 않은 회원권 금액 (일할 계산) · 인당 평균은 중도 환불 시 1인 평균 예상액이에요
           </div>
         </div>
         <div className="px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
@@ -981,6 +1004,20 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
           <div className="mt-1 text-[18px] font-bold text-[#B47B2A] dark:text-amber-300">
             {formatWon(data?.liability_breakdown.pass ?? 0)}원
           </div>
+          {(data?.liability_breakdown.pass_members ?? 0) > 0 && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <span className="px-2 py-1 rounded-lg bg-[#FBF7EB] dark:bg-zinc-950/50 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12px] text-[#6B5D47] dark:text-zinc-300">
+                잔여 <strong className="text-[#3A342A] dark:text-zinc-100 tabular-nums">
+                  {(data?.liability_breakdown.pass_sessions ?? 0).toLocaleString()}회
+                </strong>
+              </span>
+              <span className="px-2 py-1 rounded-lg bg-[#FBF7EB] dark:bg-zinc-950/50 border border-[#E8E0D0]/70 dark:border-zinc-800 text-[12px] text-[#6B5D47] dark:text-zinc-300">
+                대상 <strong className="text-[#3A342A] dark:text-zinc-100 tabular-nums">
+                  {(data?.liability_breakdown.pass_members ?? 0).toLocaleString()}명
+                </strong>
+              </span>
+            </div>
+          )}
           <div className="mt-2 text-[11.5px] text-[#A89B80]">
             남은 회차 × 회당 단가 (미시작 건은 전액)
           </div>
