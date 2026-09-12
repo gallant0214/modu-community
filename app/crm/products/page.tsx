@@ -59,7 +59,6 @@ function TypeHelpDot({
         role="img"
         aria-label="유형 설명"
         tabIndex={0}
-        title={text}
         onClick={(e) => e.stopPropagation()}
         className={`flex h-2.5 w-2.5 cursor-help items-center justify-center rounded-full border text-[7px] font-bold leading-none transition-colors
           ${active
@@ -69,9 +68,14 @@ function TypeHelpDot({
       >
         ?
       </span>
+      {/*
+        회색 말풍선 — 칩 버튼의 whitespace-nowrap 을 상속하지 않도록
+        whitespace-normal 을 반드시 지정해야 글자가 카드 안에서 줄바꿈된다.
+        지연 없이 즉시 표시(transition 없음).
+      */}
       <span
         role="tooltip"
-        className={`pointer-events-none absolute top-full z-50 mt-2 w-[430px] max-w-[calc(100vw-2rem)] rounded-xl border border-[#E8E0D0] bg-white px-4 py-3 text-left text-[13px] font-normal leading-relaxed text-[#3A342A] opacity-0 shadow-[0_12px_28px_-10px_rgba(58,52,42,0.35)] transition-opacity duration-150 group-hover/help:opacity-100 group-focus-within/help:opacity-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200
+        className={`pointer-events-none invisible absolute top-full z-50 mt-2 w-[430px] max-w-[calc(100vw-2rem)] whitespace-normal break-words rounded-xl bg-[#4A4640] px-4 py-3 text-left text-[13px] font-normal leading-relaxed text-white opacity-0 shadow-[0_12px_28px_-10px_rgba(0,0,0,0.45)] group-hover/help:visible group-hover/help:opacity-100 group-focus-within/help:visible group-focus-within/help:opacity-100
           ${align === "end" ? "right-0" : "left-0"}`}
       >
         {text}
