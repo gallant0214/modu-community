@@ -26,7 +26,7 @@ const BUILT_IN_KEYS = ["membership", "personal", "group", "class", "apparel", "l
  * "이 유형이 어떤 식으로 팔리고 예약되는 상품인가" 를 한 줄로 알려준다.
  */
 const TYPE_HELP: Record<string, string> = {
-  "": "등록된 모든 상품을 유형 구분 없이 보여줍니다.",
+  // '전체'·운동복·락커는 이름만으로 충분해서 물음표를 붙이지 않는다(사용자 요청).
   membership:
     "회원권은 정해진 기간 동안 센터 시설을 자유롭게 이용하는 상품입니다. 예약 없이 출석만 하면 되고, 기간이 끝나면 만료됩니다.",
   personal:
@@ -35,27 +35,35 @@ const TYPE_HELP: Record<string, string> = {
     "그룹 수업은 정해진 인원이 함께 받는 소규모 수업입니다. 개인 레슨과 같은 방식으로 예약하되 한 수업에 여러 회원을 함께 넣을 수 있습니다.",
   class:
     "클래스수업은 스케줄에 수업 시간을 먼저 등록해 두면 회원이 앱에서 직접 원하는 수업을 선택해 예약하는 방식의 상품입니다. 정원까지 선착순으로 채워지고 예약할 때 횟수가 차감됩니다.",
-  apparel:
-    "운동복은 기간 단위로 빌려주는 대여 상품입니다. 예약이나 차감 없이 시작일~만료일 동안 이용합니다.",
-  locker:
-    "락커는 개인 사물함을 기간 단위로 배정하는 상품입니다. 판매 후 락커 관리에서 실제 자리를 배정하고 비밀번호를 관리합니다.",
   goods:
     "운동 용품은 1회성으로 판매하는 물품입니다. 기간·횟수 개념 없이 판매 기록만 남습니다.",
 };
 
-/** 유형 칩 오른쪽 위 물음표 — hover(모바일은 탭)로 설명 표시 */
-function TypeHelpDot({ text, active }: { text: string; active: boolean }) {
+/**
+ * 유형 칩 오른쪽 위 물음표 — hover(모바일은 탭)로 설명 표시.
+ * 설명 카드는 가로로 넓은 직사각형. 화면 밖으로 나가지 않게
+ * 오른쪽 끝 칩은 카드를 오른쪽 기준으로 붙인다(align="end").
+ */
+function TypeHelpDot({
+  text,
+  active,
+  align = "start",
+}: {
+  text: string;
+  active: boolean;
+  align?: "start" | "end";
+}) {
   return (
-    <span className="group/help relative ml-1 inline-flex">
+    <span className="group/help relative ml-0.5 inline-flex">
       <span
         role="img"
         aria-label="유형 설명"
         tabIndex={0}
         title={text}
         onClick={(e) => e.stopPropagation()}
-        className={`flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border text-[9px] font-bold leading-none transition-colors
+        className={`flex h-2.5 w-2.5 cursor-help items-center justify-center rounded-full border text-[7px] font-bold leading-none transition-colors
           ${active
-            ? "border-white/60 text-white dark:border-zinc-900/50 dark:text-zinc-900"
+            ? "border-white/70 text-white dark:border-zinc-900/60 dark:text-zinc-900"
             : "border-[#C9BEA6] text-[#A89B80] dark:border-zinc-600 dark:text-zinc-500"
           }`}
       >
@@ -63,7 +71,8 @@ function TypeHelpDot({ text, active }: { text: string; active: boolean }) {
       </span>
       <span
         role="tooltip"
-        className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 w-60 -translate-x-1/2 rounded-lg border border-[#E8E0D0] bg-white px-3 py-2 text-left text-[11.5px] font-normal leading-relaxed text-[#3A342A] opacity-0 shadow-lg transition-opacity duration-150 group-hover/help:opacity-100 group-focus-within/help:opacity-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+        className={`pointer-events-none absolute top-full z-50 mt-2 w-[430px] max-w-[calc(100vw-2rem)] rounded-xl border border-[#E8E0D0] bg-white px-4 py-3 text-left text-[13px] font-normal leading-relaxed text-[#3A342A] opacity-0 shadow-[0_12px_28px_-10px_rgba(58,52,42,0.35)] transition-opacity duration-150 group-hover/help:opacity-100 group-focus-within/help:opacity-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200
+          ${align === "end" ? "right-0" : "left-0"}`}
       >
         {text}
       </span>
@@ -315,7 +324,7 @@ export default function CrmProductsPage() {
             />
           </div>
           <div className="flex gap-1.5 overflow-x-auto category-scroll pb-0.5 lg:overflow-visible lg:flex-wrap lg:pb-0">
-            {typeKeys.map((t) => (
+            {typeKeys.map((t, idx) => (
               <button
                 key={t || "all"}
                 onClick={() => setType(t)}
@@ -327,7 +336,13 @@ export default function CrmProductsPage() {
               >
                 <span className="inline-flex items-start">
                   {t ? typeLabelOf(t) : "전체"}
-                  {TYPE_HELP[t] && <TypeHelpDot text={TYPE_HELP[t]} active={type === t} />}
+                  {TYPE_HELP[t] && (
+                    <TypeHelpDot
+                      text={TYPE_HELP[t]}
+                      active={type === t}
+                      align={idx >= typeKeys.length - 3 ? "end" : "start"}
+                    />
+                  )}
                 </span>
               </button>
             ))}
