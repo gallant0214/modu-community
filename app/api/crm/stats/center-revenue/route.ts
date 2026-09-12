@@ -407,40 +407,72 @@ export async function GET(request: Request) {
   // 왜 안 줄었는지 알 수 있도록 기간 중 증감을 함께 계산해 내려준다.
   //   유입 = 기간 내 발급된 상품의 결제금액 (새로 쌓인 선수금)
   //   소진 = 수업 소진(출석·노쇼 회차 × 회당 단가) + 기간 경과분(기간제 일할)
-  // 환불·삭제분은 제외한 참고치.
+  // 지난달을 선택해도 맞게 나오도록 status=valid 로 좁히지 않고 환불(refunded)만 제외한다.
+  // (그 사이 만료된 상품도 그 기간엔 부채였고 소진도 발생했기 때문)
   const periodEndExclusive = nextMonth; // [startDate, nextMonth)
   // 기간 경과분 계산은 '오늘까지'만 (미래 구간은 아직 소진되지 않음)
   const decayEnd = periodEndExclusive <= today ? periodEndExclusive : today;
 
-  const [issuedMs, issuedRs, issuedPs, consumedRes] = await Promise.all([
-    paginateAll<{ price_won: number }>((f, t) =>
+  type ChangeItem = {
+    price_won: number | null;
+    start_date: string | null;
+    expires_at: string | null;
+    /** 결제일(YYYY-MM-DD). BROJ 이관분은 created_at 이 이관 시각이라 쓸 수 없다. */
+    paid_ymd: string | null;
+  };
+  const notRefunded = "refunded";
+  const [chgMemberships, chgRentals, chgPasses, consumedRes] = await Promise.all([
+    paginateAll<{
+      price_won: number | null;
+      start_date: string | null;
+      expires_at: string | null;
+      purchased_at: string | null;
+    }>((f, t) =>
       supabase
         .from("crm_memberships")
-        .select("price_won")
+        .select("price_won, start_date, expires_at, purchased_at")
         .eq("center_id", ctx.centerId)
-        .eq("status", "valid")
-        .gte("created_at", `${startDate}T00:00:00+09:00`)
-        .lt("created_at", `${periodEndExclusive}T00:00:00+09:00`)
+        .neq("status", notRefunded)
         .range(f, t)
+    ).then((rows) =>
+      rows.map<ChangeItem>((m) => ({
+        price_won: m.price_won,
+        start_date: m.start_date,
+        expires_at: m.expires_at,
+        paid_ymd: (m.purchased_at ?? m.start_date)?.slice(0, 10) ?? null,
+      }))
     ),
-    paginateAll<{ price_won: number }>((f, t) =>
+    paginateAll<{
+      price_won: number | null;
+      start_date: string | null;
+      expires_at: string | null;
+    }>((f, t) =>
       supabase
         .from("crm_rentals")
-        .select("price_won")
+        .select("price_won, start_date, expires_at")
         .eq("center_id", ctx.centerId)
-        .eq("status", "valid")
-        .gte("created_at", `${startDate}T00:00:00+09:00`)
-        .lt("created_at", `${periodEndExclusive}T00:00:00+09:00`)
+        .neq("status", notRefunded)
         .range(f, t)
+    ).then((rows) =>
+      rows.map<ChangeItem>((r) => ({
+        price_won: r.price_won,
+        start_date: r.start_date,
+        expires_at: r.expires_at,
+        paid_ymd: r.start_date?.slice(0, 10) ?? null, // 대여권은 결제일 컬럼이 없어 시작일 기준
+      }))
     ),
-    paginateAll<{ price_won: number }>((f, t) =>
+    paginateAll<{
+      id: number;
+      price_won: number | null;
+      total_sessions: number | null;
+      issued_at: string | null;
+      start_date: string | null;
+    }>((f, t) =>
       supabase
         .from("crm_passes")
-        .select("price_won")
+        .select("id, price_won, total_sessions, issued_at, start_date")
         .eq("center_id", ctx.centerId)
-        .eq("status", "valid")
-        .gte("created_at", `${startDate}T00:00:00+09:00`)
-        .lt("created_at", `${periodEndExclusive}T00:00:00+09:00`)
+        .neq("status", notRefunded)
         .range(f, t)
     ),
     paginateAll<{ pass_id: number | null }>((f, t) =>
@@ -455,12 +487,21 @@ export async function GET(request: Request) {
     ),
   ]);
 
-  const inflow =
-    [...issuedMs, ...issuedRs, ...issuedPs].reduce((sum, r) => sum + (r.price_won ?? 0), 0);
+  // 유입 = 기간 내 '결제'된 상품 금액.
+  // created_at 은 BROJ 이관 시각(전량 8월)이라 쓰면 안 되고, 매출 집계와 같은 결제일 기준을 쓴다.
+  const paidInPeriod = (ymd: string | null): boolean =>
+    !!ymd && ymd >= startDate && ymd < periodEndExclusive;
+  let inflow = 0;
+  for (const m of chgMemberships) if (paidInPeriod(m.paid_ymd)) inflow += m.price_won ?? 0;
+  for (const r of chgRentals) if (paidInPeriod(r.paid_ymd)) inflow += r.price_won ?? 0;
+  for (const p of chgPasses) {
+    const paid = (p.issued_at ?? p.start_date)?.slice(0, 10) ?? null;
+    if (paidInPeriod(paid)) inflow += p.price_won ?? 0;
+  }
 
   // 수업 소진: 회차당 단가 = price / total_sessions (세션제만)
   const passUnitPrice = new Map<number, number>();
-  for (const p of passesValid) {
+  for (const p of chgPasses) {
     const total = p.total_sessions ?? 0;
     if (total > 0 && p.price_won) passUnitPrice.set(p.id, p.price_won / total);
   }
@@ -474,9 +515,13 @@ export async function GET(request: Request) {
   }
   outflowSessions = Math.round(outflowSessions);
 
-  // 기간 경과분(기간제): 기간과 겹치는 일수 × 일단가
-  const decayOf = (price: number, startYmd: string, expiresYmd: string): number => {
-    if (!price) return 0;
+  // 기간 경과분(기간제): 선택 기간과 겹치는 일수 × 일단가
+  const decayOf = (
+    price: number | null,
+    startYmd: string | null,
+    expiresYmd: string | null
+  ): number => {
+    if (!price || !startYmd || !expiresYmd) return 0;
     const totalDays = daysBetween(startYmd, expiresYmd) + 1;
     if (totalDays <= 0) return 0;
     const from = startYmd > startDate ? startYmd : startDate;
@@ -486,14 +531,24 @@ export async function GET(request: Request) {
     return (price / totalDays) * Math.min(days, totalDays);
   };
   let outflowElapsed = 0;
-  for (const m of membershipsValid) outflowElapsed += decayOf(m.price_won ?? 0, m.start_date, m.expires_at);
-  for (const r of rentalsValid) outflowElapsed += decayOf(r.price_won ?? 0, r.start_date, r.expires_at);
+  for (const m of chgMemberships) outflowElapsed += decayOf(m.price_won, m.start_date, m.expires_at);
+  for (const r of chgRentals) outflowElapsed += decayOf(r.price_won, r.start_date, r.expires_at);
   outflowElapsed = Math.round(outflowElapsed);
 
   const outflow = outflowSessions + outflowElapsed;
 
   return {
     ym,
+    // 화면 라벨용 — 실제 집계에 쓰인 기간(끝일 포함)
+    period: {
+      from: startDate,
+      to: (() => {
+        const d = new Date(`${nextMonth}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() - 1);
+        return d.toISOString().slice(0, 10);
+      })(),
+      is_range: isRange,
+    },
     total,
     total_ex_vat: totalExVat,
     vat_amount: total - totalExVat,

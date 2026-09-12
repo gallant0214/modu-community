@@ -722,6 +722,8 @@ interface CenterRevenueResp {
     goods: number;
     etc: number;
   };
+  /** 집계에 쓰인 기간 (배포 전 캐시 응답 대비 optional) */
+  period?: { from: string; to: string; is_range: boolean };
   potential_liability: number;
   potential_liability_ex_vat: number;
   potential_liability_vat: number;
@@ -1029,7 +1031,7 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
         <section className="mt-3 px-5 py-4 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
           <div className="flex items-baseline justify-between gap-2 flex-wrap">
             <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
-              이 기간 잠재부채 변동
+              {liabilityPeriodLabel(data)} 잠재부채 변동
             </div>
             <div className="text-[11.5px] text-[#A89B80]">신규 결제로 쌓인 금액 vs 이용으로 빠진 금액</div>
           </div>
@@ -1094,7 +1096,7 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
       <div className="mt-3 px-4 py-3 rounded-xl bg-[#FBF7EB]/60 dark:bg-zinc-900/40 text-[11.5px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
         💡 <strong>잠재부채</strong>는 회원이 결제했으나 아직 이용하지 않은 금액이에요. 예) 7월에 60만원 PT 10회를 결제하고 8월부터 시작한다면, 오늘 시점 잠재부채는 60만원. 진행 중인 상품은 남은 일수/횟수 비율로 계산해요.
         <br />
-        💡 <strong>총액은 잔액(스톡)</strong>이라 수업을 해도 그만큼 새 결제가 쌓이면 제자리로 보여요. 실제로 얼마나 빠지고 채워졌는지는 위 &lsquo;이 기간 잠재부채 변동&rsquo;에서 확인하세요. (환불·삭제분 제외 참고치)
+        💡 <strong>총액은 잔액(스톡)</strong>이라 수업을 해도 그만큼 새 결제가 쌓이면 제자리로 보여요. 실제로 얼마나 빠지고 채워졌는지는 위 &lsquo;{liabilityPeriodLabel(data)} 잠재부채 변동&rsquo;에서 확인하세요. (환불분 제외 참고치)
         <br />
         💡 <strong>부가세</strong>는 결제 시 상품에 &quot;부가세 포함&quot; 옵션을 체크한 건만 10% 를 제외한 실매출로 환산해요.
       </div>
@@ -1154,6 +1156,24 @@ function PaymentBreakdown({ data }: { data: CenterRevenueResp | null }) {
       </div>
     </section>
   );
+}
+
+/** 잠재부채 변동 카드 제목 — 상단에서 고른 기간을 그대로 반영 */
+function liabilityPeriodLabel(data: CenterRevenueResp | null): string {
+  const p = data?.period;
+  if (!p) return "이번달";
+  const thisMonth = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 7);
+  if (!p.is_range) {
+    const ym = p.from.slice(0, 7);
+    if (ym === thisMonth) return "이번달";
+    const [y, m] = ym.split("-");
+    return `${y}년 ${Number(m)}월`;
+  }
+  // 연/직접 선택 — 한 해 전체면 'YYYY년', 아니면 기간 그대로
+  if (p.from.endsWith("-01-01") && p.to.endsWith("-12-31") && p.from.slice(0, 4) === p.to.slice(0, 4)) {
+    return `${p.from.slice(0, 4)}년`;
+  }
+  return `${p.from} ~ ${p.to}`;
 }
 
 /** 버킷 내 신규/재등록 비중(%) */
