@@ -59,11 +59,14 @@ export async function GET(request: Request) {
   const type = url.searchParams.get("type");
   const q = (url.searchParams.get("q") || "").trim();
   const scope = url.searchParams.get("scope") === "personal" ? "personal" : "center";
+  // sellable=1 → 판매 ON 인 상품만. 회원권·수강권 발급 등 '상품을 고르는' 화면이 사용.
+  // 상품 관리 화면은 이 파라미터 없이 호출해 판매중지 상품도 함께 본다.
+  const sellableOnly = url.searchParams.get("sellable") === "1";
 
   let query = supabase
     .from("crm_products")
     .select(
-      "id, type, billing_mode, category, name, description, open_time, close_time, operating_days, duration_value, duration_unit, service_days, total_sessions, pause_enabled, pause_days, pause_count, price_won, vat_included, mileage_earn, mileage_usable, attendance_mileage_earn, capacity, class_cancel_before_min, class_book_before_min, session_minutes, daily_check_in_limit, daily_time_limit_enabled, components, trainer_member_id, status, created_at, updated_at"
+      "id, type, billing_mode, category, name, description, open_time, close_time, operating_days, duration_value, duration_unit, service_days, total_sessions, pause_enabled, pause_days, pause_count, price_won, vat_included, mileage_earn, mileage_usable, attendance_mileage_earn, capacity, class_cancel_before_min, class_book_before_min, session_minutes, daily_check_in_limit, daily_time_limit_enabled, components, trainer_member_id, status, sale_enabled, created_at, updated_at"
     )
     .eq("center_id", ctx.centerId)
     .eq("status", "active")
@@ -78,6 +81,9 @@ export async function GET(request: Request) {
   // 필터 시엔 커스텀 유형도 허용 (센터별로 다르니 문자열 매칭)
   if (type) {
     query = query.eq("type", type);
+  }
+  if (sellableOnly) {
+    query = query.eq("sale_enabled", true);
   }
   if (q) {
     query = query.ilike("name", `%${q}%`);

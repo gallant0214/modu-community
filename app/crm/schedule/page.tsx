@@ -3291,7 +3291,7 @@ function NewReservationModal({
       try {
         const token = await getIdToken();
         if (!token) return;
-        const res = await fetch("/api/crm/products?type=class", {
+        const res = await fetch("/api/crm/products?type=class&sellable=1", {
           headers: { authorization: `Bearer ${token}` },
           cache: "no-store",
         });

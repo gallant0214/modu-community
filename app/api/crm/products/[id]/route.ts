@@ -95,6 +95,7 @@ export async function PATCH(
     "capacity",
     "class_cancel_before_min",
     "class_book_before_min",
+    "sale_enabled",
     "session_minutes",
     "daily_check_in_limit",
     "daily_time_limit_enabled",

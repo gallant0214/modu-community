@@ -1613,6 +1613,7 @@ export type Database = {
           daily_time_limit_enabled: boolean
           components: Json
           status: string
+          sale_enabled: boolean
           created_at: string
           updated_at: string
         }
@@ -1648,6 +1649,7 @@ export type Database = {
           daily_time_limit_enabled?: boolean
           components?: Json
           status?: string
+          sale_enabled?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -1683,6 +1685,7 @@ export type Database = {
           daily_time_limit_enabled?: boolean
           components?: Json
           status?: string
+          sale_enabled?: boolean
           created_at?: string
           updated_at?: string
         }

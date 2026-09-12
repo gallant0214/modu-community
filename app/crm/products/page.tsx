@@ -122,6 +122,8 @@ interface Product {
   session_minutes?: number;
   service_days?: number | null;
   status?: string;
+  /** 판매 on/off. false 면 회원권·수강권 발급 목록에서 제외 */
+  sale_enabled?: boolean;
   created_at?: string;
   updated_at?: string;
   components?: unknown[] | null;
@@ -202,6 +204,28 @@ export default function CrmProductsPage() {
   };
   const typeBadgeClsOf = (key: string): string =>
     BUILT_IN_BADGE[key] ?? CUSTOM_BADGE;
+
+  /** 판매 on/off 토글 — 낙관적 반영 후 PATCH, 실패 시 롤백 */
+  const [saleBusy, setSaleBusy] = useState<number | null>(null);
+  const toggleSale = async (p: Product) => {
+    const next = p.sale_enabled === false; // 현재 OFF 면 켜기
+    setSaleBusy(p.id);
+    setList((prev) => prev.map((x) => (x.id === p.id ? { ...x, sale_enabled: next } : x)));
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/products/${p.id}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ sale_enabled: next }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setList((prev) => prev.map((x) => (x.id === p.id ? { ...x, sale_enabled: !next } : x)));
+      window.alert("판매 설정을 바꾸지 못했어요. 권한을 확인해 주세요.");
+    } finally {
+      setSaleBusy(null);
+    }
+  };
 
   const remove = async (id: number) => {
     if (!window.confirm("이 상품을 삭제할까요?")) return;
@@ -457,7 +481,44 @@ export default function CrmProductsPage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 flex justify-end items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <div className="mt-3 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {/* 판매 on/off — OFF 면 회원권·수강권 발급 목록에서 제외된다 */}
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={p.sale_enabled !== false}
+                      disabled={saleBusy === p.id}
+                      onClick={() => toggleSale(p)}
+                      title={
+                        p.sale_enabled === false
+                          ? "판매 중지됨 — 회원권·수강권 발급 목록에 나오지 않아요. 누르면 다시 판매합니다."
+                          : "판매 중 — 발급 목록에 표시됩니다. 누르면 판매를 중지합니다."
+                      }
+                      className="mr-auto inline-flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <span
+                        className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
+                          p.sale_enabled === false
+                            ? "bg-[#D9CDB8] dark:bg-zinc-700"
+                            : "bg-[#6B7B3A]"
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                            p.sale_enabled === false ? "left-0.5" : "left-3.5"
+                          }`}
+                        />
+                      </span>
+                      <span
+                        className={`text-[11.5px] font-semibold ${
+                          p.sale_enabled === false
+                            ? "text-[#A89B80] dark:text-zinc-500"
+                            : "text-[#6B7B3A] dark:text-[#A8B87A]"
+                        }`}
+                      >
+                        {p.sale_enabled === false ? "판매중지" : "판매중"}
+                      </span>
+                    </button>
                     <button
                       type="button"
                       onClick={async () => {

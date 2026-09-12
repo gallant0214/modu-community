@@ -6760,7 +6760,7 @@ function UsageIssueModal({
       const token = await getIdToken();
       if (!token) return;
       const productType = type === "apparel" ? "apparel" : type; // membership | locker | apparel
-      const res = await fetch(`/api/crm/products?type=${productType}`, {
+      const res = await fetch(`/api/crm/products?type=${productType}&sellable=1`, {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
@@ -7953,9 +7953,9 @@ function PassIssueModal({
         setLessonKinds(data.kinds ?? []);
       }
       const [pRes, gRes, cRes] = await Promise.all([
-        fetch("/api/crm/products?type=personal", { headers, cache: "no-store" }),
-        fetch("/api/crm/products?type=group", { headers, cache: "no-store" }),
-        fetch("/api/crm/products?type=class", { headers, cache: "no-store" }),
+        fetch("/api/crm/products?type=personal&sellable=1", { headers, cache: "no-store" }),
+        fetch("/api/crm/products?type=group&sellable=1", { headers, cache: "no-store" }),
+        fetch("/api/crm/products?type=class&sellable=1", { headers, cache: "no-store" }),
       ]);
       const merged: PassProduct[] = [];
       if (pRes.ok) merged.push(...((await pRes.json()).products ?? []));

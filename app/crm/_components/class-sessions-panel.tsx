@@ -68,7 +68,7 @@ export default function ClassSessionsPanel({
       const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
       const to = new Date(Date.now() + 90 * 864e5 + 9 * 3600 * 1000).toISOString().slice(0, 10);
       const [pRes, sRes] = await Promise.all([
-        fetch("/api/crm/products?type=class", { headers: h, cache: "no-store" }),
+        fetch("/api/crm/products?type=class&sellable=1", { headers: h, cache: "no-store" }),
         fetch(`/api/crm/class-sessions?from=${today}&to=${to}`, { headers: h, cache: "no-store" }),
       ]);
       if (pRes.ok) setProducts((await pRes.json()).products ?? []);
