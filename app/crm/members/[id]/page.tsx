@@ -2362,7 +2362,7 @@ const STATUS_LABEL_R: Record<string, string> = {
 const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
 const STATUS_STYLE_R: Record<string, string> = {
-  booked: "bg-[#6B7B3A]/10 text-[#6B7B3A] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]",
+  booked: "bg-[#FEE500] text-[#3C1E1E] dark:bg-[#FEE500] dark:text-[#3C1E1E]",
   attended: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
   cancelled: "bg-[#F5F0E5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-400",
   noshow: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300",
