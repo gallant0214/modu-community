@@ -132,7 +132,7 @@ export const RESERVATION_STATUS_COLOR: Record<
   booked: {
     bg: "bg-[#F5E4C8] dark:bg-amber-950/40",
     text: "text-[#B47B2A] dark:text-amber-300",
-    dot: "bg-[#B47B2A]",
+    dot: "bg-[#FEE500]", // 예약 동그라미 = 카카오톡 노란색
   },
   attended: {
     bg: "bg-emerald-100 dark:bg-emerald-950/40",
