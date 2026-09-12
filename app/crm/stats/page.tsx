@@ -1045,9 +1045,24 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
               <div className="mt-0.5 text-[17px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] tabular-nums">
                 −{formatWon(data.liability_change.outflow)}원
               </div>
-              <div className="mt-1 text-[11px] text-[#8C8270] dark:text-zinc-500">
-                수업 {data.liability_change.consumed_sessions}회 {formatWon(data.liability_change.outflow_sessions)}원
-                {" · "}기간 경과 {formatWon(data.liability_change.outflow_elapsed)}원
+              {/* 상품군별 소진 — 회원권(기간 경과) / 수강권(수업 소진) */}
+              <div className="mt-1.5 space-y-1">
+                <div className="flex items-baseline justify-between gap-2 text-[11.5px]">
+                  <span className="text-[#6B5D47] dark:text-zinc-400">
+                    회원권 <span className="text-[#A89B80]">(헬스·락커·운동복 기간 경과)</span>
+                  </span>
+                  <span className="font-semibold text-[#3A342A] dark:text-zinc-200 tabular-nums shrink-0">
+                    {formatWon(data.liability_change.outflow_elapsed)}원
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-2 text-[11.5px]">
+                  <span className="text-[#6B5D47] dark:text-zinc-400">
+                    수강권 <span className="text-[#A89B80]">(수업 {data.liability_change.consumed_sessions}회 소진)</span>
+                  </span>
+                  <span className="font-semibold text-[#3A342A] dark:text-zinc-200 tabular-nums shrink-0">
+                    {formatWon(data.liability_change.outflow_sessions)}원
+                  </span>
+                </div>
               </div>
             </div>
             <div className="px-4 py-3 rounded-xl bg-[#FBF7EB]/70 dark:bg-zinc-950/40 border border-[#E8E0D0]/70 dark:border-zinc-800">
