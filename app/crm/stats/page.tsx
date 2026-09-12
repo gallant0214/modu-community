@@ -79,6 +79,39 @@ export default function CrmStatsPage() {
     return `ym=${appliedYm}`;
   })();
 
+  // 화면에 크게 띄울 기간 라벨 — 예: '9월 전체' / '8~9월 전체' / '2025년 전체'
+  const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
+  const thisYear = nowKst.getUTCFullYear();
+  const lastDayOf = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const { appliedPeriodLabel, appliedRangeText } = (() => {
+    if (appliedDateMode === "year") {
+      return { appliedPeriodLabel: `${appliedYear}년 전체`, appliedRangeText: `${appliedYear}-01-01 ~ ${appliedYear}-12-31` };
+    }
+    if (appliedDateMode === "range" && appliedFrom && appliedTo && appliedTo >= appliedFrom) {
+      const [fy, fm, fd] = appliedFrom.split("-").map(Number);
+      const [ty, tm, td] = appliedTo.split("-").map(Number);
+      const fullMonths = fd === 1 && td === lastDayOf(ty, tm);
+      const rangeText = `${appliedFrom} ~ ${appliedTo}`;
+      if (fullMonths && fy === ty) {
+        const label = fm === tm ? `${fm}월 전체` : `${fm}~${tm}월 전체`;
+        return {
+          appliedPeriodLabel: fy === thisYear ? label : `${fy}년 ${label}`,
+          appliedRangeText: rangeText,
+        };
+      }
+      if (fullMonths) {
+        return { appliedPeriodLabel: `${fy}년 ${fm}월 ~ ${ty}년 ${tm}월`, appliedRangeText: rangeText };
+      }
+      return { appliedPeriodLabel: `${appliedFrom} ~ ${appliedTo}`, appliedRangeText: "직접 선택한 기간" };
+    }
+    const [my, mm] = appliedYm.split("-").map(Number);
+    const label = `${mm}월 전체`;
+    return {
+      appliedPeriodLabel: my === thisYear ? label : `${my}년 ${label}`,
+      appliedRangeText: `${appliedYm}-01 ~ ${appliedYm}-${String(lastDayOf(my, mm)).padStart(2, "0")}`,
+    };
+  })();
+
   const applyFilters = () => {
     setAppliedDateMode(dateMode);
     setAppliedYear(year);
@@ -227,6 +260,14 @@ export default function CrmStatsPage() {
         <TabBtn active={tab === "payroll"} onClick={() => setTab("payroll")}>
           직원 급여
         </TabBtn>
+      </div>
+
+      {/* 선택한 기간 — 지금 보고 있는 범위를 크게 표시 */}
+      <div className="mb-4 flex items-baseline gap-2 flex-wrap">
+        <h2 className="text-[20px] md:text-[22px] font-extrabold text-[#241F18] dark:text-zinc-100">
+          {appliedPeriodLabel}
+        </h2>
+        <span className="text-[12px] text-[#A89B80] dark:text-zinc-500">{appliedRangeText}</span>
       </div>
 
       {error && (
