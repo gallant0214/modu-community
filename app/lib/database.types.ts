@@ -1298,6 +1298,9 @@ export type Database = {
           owner_phone: string | null
           created_at: string
           updated_at: string
+          lat: number | null
+          lng: number | null
+          geocoded_at: string | null
         }
         Insert: {
           id?: number
@@ -1327,6 +1330,9 @@ export type Database = {
           owner_phone?: string | null
           created_at?: string
           updated_at?: string
+          lat?: number | null
+          lng?: number | null
+          geocoded_at?: string | null
         }
         Update: {
           id?: number
@@ -1356,6 +1362,9 @@ export type Database = {
           owner_phone?: string | null
           created_at?: string
           updated_at?: string
+          lat?: number | null
+          lng?: number | null
+          geocoded_at?: string | null
         }
         Relationships: []
       }
@@ -2264,6 +2273,93 @@ export type Database = {
           permission_key?: string
           enabled?: boolean
           updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_market_facilities: {
+        Row: {
+          mgt_no: string
+          biz_type: string
+          svc_name: string | null
+          upte_name: string | null
+          biz_name: string | null
+          road_addr: string | null
+          lot_addr: string | null
+          sido: string | null
+          sigungu: string | null
+          lat: number | null
+          lng: number | null
+          geocode_state: string
+          opened_on: string | null
+          closed_on: string | null
+          state_name: string | null
+          is_open: boolean
+          raw: Json | null
+          synced_at: string
+          created_at: string
+        }
+        Insert: {
+          mgt_no: string
+          biz_type: string
+          svc_name?: string | null
+          upte_name?: string | null
+          biz_name?: string | null
+          road_addr?: string | null
+          lot_addr?: string | null
+          sido?: string | null
+          sigungu?: string | null
+          lat?: number | null
+          lng?: number | null
+          geocode_state?: string
+          opened_on?: string | null
+          closed_on?: string | null
+          state_name?: string | null
+          is_open?: boolean
+          raw?: Json | null
+          synced_at?: string
+          created_at?: string
+        }
+        Update: {
+          mgt_no?: string
+          biz_type?: string
+          svc_name?: string | null
+          upte_name?: string | null
+          biz_name?: string | null
+          road_addr?: string | null
+          lot_addr?: string | null
+          sido?: string | null
+          sigungu?: string | null
+          lat?: number | null
+          lng?: number | null
+          geocode_state?: string
+          opened_on?: string | null
+          closed_on?: string | null
+          state_name?: string | null
+          is_open?: boolean
+          raw?: Json | null
+          synced_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      crm_market_sync_state: {
+        Row: {
+          biz_type: string
+          last_synced_at: string | null
+          synced_through: string | null
+          last_result: Json | null
+        }
+        Insert: {
+          biz_type: string
+          last_synced_at?: string | null
+          synced_through?: string | null
+          last_result?: Json | null
+        }
+        Update: {
+          biz_type?: string
+          last_synced_at?: string | null
+          synced_through?: string | null
+          last_result?: Json | null
         }
         Relationships: []
       }

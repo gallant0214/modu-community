@@ -91,6 +91,7 @@ const SILENT_API = [
   "/api/crm/members/thumbs", // 목록 썸네일 지연 로드(POST 지만 조회)
   "/api/crm/members/faces", // 얼굴 인식용 조회
   "/api/crm/attendances/check-in", // 출석 체크인 (자체 결과 화면 있음)
+  "/api/crm/market/sync", // 상권 데이터 수집 (자체 결과 문구 표시)
 ];
 
 /** 키오스크성 전체화면 — 떠다니는 토스트가 어울리지 않아 제외 */

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { ROLE_LABEL, formatWon, parseWon } from "../_components/crm-labels";
 import { TrainerSessionsChart, TrainerRevenueChart } from "./_components/trainer-sessions-chart";
+import { MarketTrend } from "./_components/market-trend";
 import { PayrollList } from "../payroll/_payroll-list";
 
 interface MonthlyResp {
@@ -26,7 +27,7 @@ interface MonthlyResp {
   }[];
 }
 
-type Tab = "trainer" | "center" | "saleslist" | "settlement" | "payroll";
+type Tab = "trainer" | "center" | "saleslist" | "settlement" | "payroll" | "market";
 
 type DateMode = "year" | "month" | "range";
 
@@ -35,7 +36,7 @@ export default function CrmStatsPage() {
   const [tab, setTab] = useState<Tab>(() => {
     if (typeof window === "undefined") return "center";
     const t = new URLSearchParams(window.location.search).get("tab");
-    return t === "payroll" || t === "trainer" || t === "settlement" || t === "saleslist" || t === "center"
+    return t === "payroll" || t === "trainer" || t === "settlement" || t === "saleslist" || t === "center" || t === "market"
       ? (t as Tab)
       : "center";
   });
@@ -165,7 +166,9 @@ export default function CrmStatsPage() {
             통계
           </h1>
           <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-            {tab === "payroll"
+            {tab === "market"
+              ? "센터 반경 내 경쟁업체가 얼마나 새로 생기고 없어졌는지 확인해요."
+              : tab === "payroll"
               ? "강사를 선택하면 매출·담당 회원·수업 내역·급여를 확인할 수 있어요."
               : tab === "trainer"
               ? `강사별 매출과 수업 현황을 ${appliedDateMode === "year" ? "연 단위" : appliedDateMode === "month" ? "월 단위" : "지정 기간"}로 확인해요.`
@@ -176,7 +179,7 @@ export default function CrmStatsPage() {
               : `총매출에서 고정지출·부가세·직원급여·추가지출을 뺀 순이익을 ${appliedDateMode === "year" ? "연 단위" : appliedDateMode === "month" ? "월 단위" : "지정 기간"}로 정산해요.`}
           </p>
         </div>
-        {tab !== "payroll" && tab !== "saleslist" && (
+        {tab !== "payroll" && tab !== "saleslist" && tab !== "market" && (
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
             <ModeBtn active={dateMode === "year"} onClick={() => setDateMode("year")}>
@@ -260,10 +263,13 @@ export default function CrmStatsPage() {
         <TabBtn active={tab === "payroll"} onClick={() => setTab("payroll")}>
           직원 급여
         </TabBtn>
+        <TabBtn active={tab === "market"} onClick={() => setTab("market")}>
+          상권 동향
+        </TabBtn>
       </div>
 
       {/* 선택한 기간 — 지금 보고 있는 범위를 크게 표시 */}
-      <div className="mb-4 flex items-baseline gap-2 flex-wrap">
+      <div className={`mb-4 flex items-baseline gap-2 flex-wrap ${tab === "market" ? "hidden" : ""}`}>
         <h2 className="text-[20px] md:text-[22px] font-extrabold text-[#241F18] dark:text-zinc-100">
           {appliedPeriodLabel}
         </h2>
@@ -276,7 +282,9 @@ export default function CrmStatsPage() {
         </div>
       )}
 
-      {tab === "payroll" ? (
+      {tab === "market" ? (
+        <MarketTrend />
+      ) : tab === "payroll" ? (
         <PayrollList />
       ) : tab === "saleslist" ? (
         <SalesListTab />
