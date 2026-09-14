@@ -10,7 +10,7 @@ export const maxDuration = 300;
 
 /**
  * POST /api/crm/market/sync
- * LOCALDATA 인허가 데이터 수집 + 좌표 변환을 지금 실행한다.
+ * 인허가 데이터(공공데이터포털) 수집 + 좌표 변환을 지금 실행한다.
  * body: { months?: number, maxPages?: number, geocodeLimit?: number }
  *
  * 최초 1회는 과거분을 끌어오기 위해 months 를 크게(예: 240) 줘서 돌리고,
@@ -24,9 +24,9 @@ export async function POST(request: Request) {
   }
 
   const keys = marketKeysConfigured();
-  if (!keys.localdata) {
+  if (!keys.dataGoKr) {
     return NextResponse.json(
-      { error: "LOCALDATA_API_KEY 가 설정되지 않았습니다", keys },
+      { error: "DATA_GO_KR_KEY 가 설정되지 않았습니다", keys },
       { status: 400 }
     );
   }

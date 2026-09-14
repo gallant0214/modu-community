@@ -1,9 +1,13 @@
 /**
  * 상권 동향(경쟁업체) 데이터 공용 모듈.
  *
- * 데이터 출처: **행정안전부 지방행정 인허가 데이터(LOCALDATA)** 체육시설업.
+ * 데이터 출처: **행정안전부 생활 체력단련장업 조회서비스** (공공데이터포털 data.go.kr).
  *   - `인허가일자(apvPermYmd)` / `폐업일자(dcbYmd)` 가 있어 "언제 몇 개가 새로 생겼나"를 소급 분석할 수 있다.
  *   - 국민체육진흥공단 '전국체육시설' 데이터는 공공체육시설 위주 + 개업/폐업일이 없어 이 용도로 쓸 수 없다.
+ *
+ * 🚨 localdata.go.kr(LOCALDATA 포털)은 **2026-04-16 서비스 종료**되어 data.go.kr 로 이관됐다.
+ *    이관된 서비스는 LOCALDATA 필드명(mgtNo/apvPermYmd/dcbYmd/...)을 그대로 쓰되
+ *    인증은 data.go.kr 방식(serviceKey)이라, 기존 DATA_GO_KR_KEY 를 그대로 쓴다.
  *
  * ⚠️ 한계(사용자 안내 필수): 소규모 PT샵·필라테스는 체육시설업 신고 없이 자유업으로 등록되는 경우가 있어
  *    집계값은 **최소치**다. 인허가일과 실제 개업일 사이에도 시차가 있을 수 있다.
@@ -20,19 +24,45 @@
 export interface MarketBizType {
   key: string;
   label: string;
-  /** LOCALDATA 개방서비스 ID */
-  opnSvcId: string;
+  /** 공공데이터포털 데이터셋 번호 (data.go.kr/data/<id>/openapi.do) — 활용신청 대상 */
+  dataPk: string;
+  /**
+   * 요청 엔드포인트. 포털 '상세기능정보'에 표시되는 주소를 그대로 넣는다.
+   * 환경변수 MARKET_API_URL_<KEY 대문자> 로 덮어쓸 수 있다(스펙이 다를 때 배포 없이 교정).
+   */
+  endpoint: string;
   /** 수집·표시 대상 여부 */
   enabled: boolean;
 }
 
 export const MARKET_BIZ_TYPES: MarketBizType[] = [
-  { key: "gym", label: "헬스장(체력단련장업)", opnSvcId: "07_24_04_P", enabled: true },
-  { key: "dojang", label: "체육도장업(요가·필라테스·복싱 등)", opnSvcId: "07_24_05_P", enabled: false },
-  { key: "swim", label: "수영장업", opnSvcId: "07_24_03_P", enabled: false },
-  { key: "golf", label: "골프연습장업", opnSvcId: "07_24_02_P", enabled: false },
-  { key: "complex", label: "종합체육시설업", opnSvcId: "07_24_01_P", enabled: false },
+  {
+    key: "gym",
+    label: "헬스장(체력단련장업)",
+    dataPk: "15155077",
+    endpoint: "https://apis.data.go.kr/1741000/PhysicalTrainingBusiness/getPhysicalTrainingBusinessList",
+    enabled: true,
+  },
+  {
+    key: "complex",
+    label: "종합체육시설업",
+    dataPk: "15155071",
+    endpoint: "https://apis.data.go.kr/1741000/ComplexSportsFacility/getComplexSportsFacilityList",
+    enabled: false,
+  },
+  {
+    key: "registered",
+    label: "등록체육시설업(골프장·스키장 등)",
+    dataPk: "15155018",
+    endpoint: "https://apis.data.go.kr/1741000/RegisteredSportsFacility/getRegisteredSportsFacilityList",
+    enabled: false,
+  },
 ];
+
+/** 카탈로그 기본 엔드포인트를 환경변수로 덮어쓴다 (예: MARKET_API_URL_GYM) */
+export function endpointFor(biz: MarketBizType): string {
+  return process.env[`MARKET_API_URL_${biz.key.toUpperCase()}`] || biz.endpoint;
+}
 
 export const ENABLED_BIZ_TYPES = MARKET_BIZ_TYPES.filter((b) => b.enabled);
 
@@ -82,9 +112,7 @@ export function isOpenState(stateName: string | null, closedOn: string | null): 
   return !(s.includes("폐업") || s.includes("취소") || s.includes("말소"));
 }
 
-/* ─── LOCALDATA API ────────────────────────────── */
-
-const LOCALDATA_BASE = "https://www.localdata.go.kr/platform/rest/TO0/openDataApi";
+/* ─── 인허가 데이터 API (data.go.kr) ───────────── */
 
 export interface RawFacility {
   mgtNo: string;
@@ -109,81 +137,146 @@ function pick(row: Record<string, unknown>, ...keys: string[]): string {
 }
 
 export function normalizeRow(row: Record<string, unknown>): RawFacility | null {
-  const mgtNo = pick(row, "mgtNo", "MGTNO", "mgtno");
+  const mgtNo = pick(row, "mgtNo", "MGTNO", "mgtno", "관리번호");
   if (!mgtNo) return null;
-  const closedOn = parseYmd(pick(row, "dcbYmd", "DCBYMD"));
+  const closedOn = parseYmd(pick(row, "dcbYmd", "DCBYMD", "폐업일자"));
   return {
     mgtNo,
-    bizName: pick(row, "bplcNm", "BPLCNM"),
-    roadAddr: pick(row, "rdnWhlAddr", "RDNWHLADDR"),
-    lotAddr: pick(row, "siteWhlAddr", "SITEWHLADDR"),
-    openedOn: parseYmd(pick(row, "apvPermYmd", "APVPERMYMD")),
+    bizName: pick(row, "bplcNm", "BPLCNM", "사업장명"),
+    roadAddr: pick(row, "rdnWhlAddr", "RDNWHLADDR", "도로명전체주소"),
+    lotAddr: pick(row, "siteWhlAddr", "SITEWHLADDR", "소재지전체주소"),
+    openedOn: parseYmd(pick(row, "apvPermYmd", "APVPERMYMD", "인허가일자")),
     closedOn,
-    stateName: pick(row, "trdStateNm", "TRDSTATENM"),
-    svcName: pick(row, "opnSvcNm", "OPNSVCNM"),
-    upteName: pick(row, "uptaeNm", "UPTAENM"),
+    stateName: pick(row, "trdStateNm", "TRDSTATENM", "영업상태명"),
+    svcName: pick(row, "opnSvcNm", "OPNSVCNM", "개방서비스명"),
+    upteName: pick(row, "uptaeNm", "UPTAENM", "업태구분명"),
     raw: row,
   };
 }
 
-/** 응답 JSON 에서 행 배열을 찾아낸다(LOCALDATA 응답 래핑이 문서마다 조금 다름). */
-function extractRows(json: unknown): Record<string, unknown>[] {
-  const j = json as Record<string, unknown> | null;
-  if (!j) return [];
-  const result = (j.result ?? j) as Record<string, unknown>;
-  const body = (result?.body ?? result) as Record<string, unknown>;
-  const rows = (body?.rows ?? body?.row ?? body?.items) as unknown;
-  if (Array.isArray(rows)) {
-    // [{ row: [...] }] 형태로 한 번 더 감싸진 경우
-    if (rows.length > 0 && !Array.isArray(rows[0]) && (rows[0] as Record<string, unknown>)?.row) {
-      const inner = (rows[0] as Record<string, unknown>).row;
-      return Array.isArray(inner) ? (inner as Record<string, unknown>[]) : [];
+/**
+ * 응답 JSON 에서 행 배열을 찾아낸다.
+ * data.go.kr 표준(response.body.items.item)과 LOCALDATA 유산(result.body.rows[0].row)을 모두 받는다.
+ */
+export function extractRows(json: unknown): Record<string, unknown>[] {
+  const seen = new Set<unknown>();
+
+  const walk = (node: unknown, depth: number): Record<string, unknown>[] | null => {
+    if (!node || typeof node !== "object" || depth > 6 || seen.has(node)) return null;
+    seen.add(node);
+
+    if (Array.isArray(node)) {
+      // 업소 행처럼 보이는 배열인가? (관리번호나 사업장명이 있는 객체들)
+      const objs = node.filter((v) => v && typeof v === "object" && !Array.isArray(v));
+      if (objs.length > 0) {
+        const first = objs[0] as Record<string, unknown>;
+        const looksLikeRow = ["mgtNo", "MGTNO", "bplcNm", "BPLCNM", "apvPermYmd", "관리번호", "사업장명"].some(
+          (k) => k in first
+        );
+        if (looksLikeRow) return objs as Record<string, unknown>[];
+      }
+      for (const v of node) {
+        const hit = walk(v, depth + 1);
+        if (hit) return hit;
+      }
+      return null;
     }
-    return rows as Record<string, unknown>[];
-  }
-  return [];
+
+    const obj = node as Record<string, unknown>;
+    // 흔한 래핑 키를 우선 탐색
+    for (const k of ["item", "items", "row", "rows", "body", "response", "result", "data"]) {
+      if (k in obj) {
+        const hit = walk(obj[k], depth + 1);
+        if (hit) return hit;
+      }
+    }
+    for (const v of Object.values(obj)) {
+      const hit = walk(v, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  return walk(json, 0) ?? [];
 }
 
 export interface FetchPageResult {
   rows: RawFacility[];
-  /** 진단용 — 인증키/서비스ID 가 맞는지 확인할 때 본다. */
-  diagnostics: { requestedUrl: string; httpStatus: number; rawCount: number; sample?: unknown };
+  /** 진단용 — 인증키/엔드포인트가 맞는지 확인할 때 본다. */
+  diagnostics: {
+    requestedUrl: string;
+    httpStatus: number;
+    rawCount: number;
+    sample?: unknown;
+    /** 응답에 담긴 에러 메시지(있으면) */
+    apiMessage?: string;
+  };
+}
+
+/** data.go.kr 이 에러를 본문에 담아 200 으로 주는 경우가 많아 별도로 캐낸다. */
+function apiMessageOf(json: unknown): string | undefined {
+  const s = JSON.stringify(json ?? "");
+  const m =
+    /"(?:resultMsg|returnAuthMsg|errMsg|returnReasonCode|resultCode)"\s*:\s*"([^"]+)"/.exec(s) ??
+    /<(?:resultMsg|returnAuthMsg|errMsg)>([^<]+)</.exec(s);
+  return m?.[1];
 }
 
 /**
- * LOCALDATA 한 페이지 조회.
- * @param bgnYmd/endYmd 인허가일자 범위 (YYYYMMDD)
+ * 인허가 업소 한 페이지 조회.
+ * 페이지 파라미터는 서비스마다 pageNo/numOfRows 또는 pageIndex/pageSize 를 쓰므로 **양쪽 다** 보낸다.
  */
-export async function fetchLocaldataPage(opts: {
-  authKey: string;
-  opnSvcId: string;
+export async function fetchFacilityPage(opts: {
+  serviceKey: string;
+  endpoint: string;
   pageIndex: number;
   pageSize: number;
-  bgnYmd: string;
-  endYmd: string;
 }): Promise<FetchPageResult> {
-  const params = new URLSearchParams({
-    authKey: opts.authKey,
-    opnSvcId: opts.opnSvcId,
+  // serviceKey 는 포털에서 받은 Encoding 값을 그대로 붙인다(재인코딩 금지 — 공휴일 API 와 동일 규칙)
+  const extra = new URLSearchParams({
+    pageNo: String(opts.pageIndex),
+    numOfRows: String(opts.pageSize),
     pageIndex: String(opts.pageIndex),
     pageSize: String(opts.pageSize),
+    type: "json",
+    _type: "json",
     resultType: "json",
-    bgnYmd: opts.bgnYmd,
-    endYmd: opts.endYmd,
   });
-  const url = `${LOCALDATA_BASE}?${params.toString()}`;
-  const res = await fetch(url, { cache: "no-store" });
+  const url = `${opts.endpoint}?serviceKey=${opts.serviceKey}&${extra.toString()}`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(20000) });
+  } catch (e) {
+    return {
+      rows: [],
+      diagnostics: {
+        requestedUrl: maskKey(url),
+        httpStatus: 0,
+        rawCount: 0,
+        apiMessage: e instanceof Error ? e.message : "요청 실패",
+      },
+    };
+  }
+
   const text = await res.text();
   let json: unknown = null;
   try {
     json = JSON.parse(text);
   } catch {
-    // JSON 이 아니면(에러 HTML 등) 진단에 앞부분만 담는다
+    // XML/HTML 로 돌아오는 경우 — 앞부분을 그대로 진단에 담는다
     return {
       rows: [],
-      diagnostics: { requestedUrl: maskKey(url), httpStatus: res.status, rawCount: 0, sample: text.slice(0, 300) },
+      diagnostics: {
+        requestedUrl: maskKey(url),
+        httpStatus: res.status,
+        rawCount: 0,
+        sample: text.slice(0, 400),
+        apiMessage: apiMessageOf(text),
+      },
     };
   }
+
   const raw = extractRows(json);
   const rows = raw.map(normalizeRow).filter((r): r is RawFacility => r !== null);
   return {
@@ -193,13 +286,14 @@ export async function fetchLocaldataPage(opts: {
       httpStatus: res.status,
       rawCount: raw.length,
       sample: raw[0] ?? json,
+      apiMessage: rows.length === 0 ? apiMessageOf(json) : undefined,
     },
   };
 }
 
 /** 로그·응답에 인증키가 노출되지 않게 가린다 */
 function maskKey(url: string): string {
-  return url.replace(/authKey=[^&]*/, "authKey=***");
+  return url.replace(/serviceKey=[^&]*/, "serviceKey=***");
 }
 
 /* ─── 카카오 로컬(지오코딩) ─────────────────────── */
@@ -237,9 +331,9 @@ export async function geocodeAddress(addresses: string[]): Promise<GeoPoint | nu
   return null;
 }
 
-export function marketKeysConfigured(): { localdata: boolean; kakao: boolean } {
+export function marketKeysConfigured(): { dataGoKr: boolean; kakao: boolean } {
   return {
-    localdata: !!process.env.LOCALDATA_API_KEY,
+    dataGoKr: !!process.env.DATA_GO_KR_KEY,
     kakao: !!process.env.KAKAO_REST_API_KEY,
   };
 }

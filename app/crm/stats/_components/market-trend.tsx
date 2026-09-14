@@ -9,7 +9,7 @@ interface Resp {
   months: number;
   bizType: string;
   bizTypes: { key: string; label: string }[];
-  keys: { localdata: boolean; kakao: boolean };
+  keys: { dataGoKr: boolean; kakao: boolean };
   center:
     | { ready: true; lat: number; lng: number; address: string; sido: string; sigungu: string }
     | { ready: false; address: string; reason: string };
@@ -83,14 +83,25 @@ export function MarketTrend() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "수집 실패");
-      const fetched = (json.reports ?? []).reduce(
-        (a: number, r: { fetched?: number }) => a + (r.fetched ?? 0),
-        0
-      );
-      setSyncMsg(
-        `수집 ${fetched}건 · 좌표 확보 ${json.geocode?.ok ?? 0}건` +
-          (json.geocode?.skipped ? " (카카오 키 미설정으로 좌표 변환 생략)" : "")
-      );
+      const reports = (json.reports ?? []) as {
+        fetched?: number;
+        diagnostics?: { requestedUrl?: string; httpStatus?: number; apiMessage?: string };
+      }[];
+      const fetched = reports.reduce((a, r) => a + (r.fetched ?? 0), 0);
+      if (fetched === 0) {
+        // 아무것도 못 받았을 때는 원인을 그대로 보여준다(엔드포인트·활용신청 확인용)
+        const d = reports[0]?.diagnostics;
+        setSyncMsg(
+          `0건 — ${d?.apiMessage || "응답에 업소 데이터가 없습니다"}` +
+            (d?.httpStatus ? ` (HTTP ${d.httpStatus})` : "") +
+            (d?.requestedUrl ? `\n요청: ${d.requestedUrl}` : "")
+        );
+      } else {
+        setSyncMsg(
+          `수집 ${fetched}건 · 좌표 확보 ${json.geocode?.ok ?? 0}건` +
+            (json.geocode?.skipped ? " (카카오 키 미설정으로 좌표 변환 생략)" : "")
+        );
+      }
       await load();
     } catch (e) {
       setSyncMsg(e instanceof Error ? e.message : "네트워크 오류");
@@ -106,7 +117,7 @@ export function MarketTrend() {
       ]
     : [];
 
-  const keysMissing = data && (!data.keys.localdata || !data.keys.kakao);
+  const keysMissing = data && (!data.keys.dataGoKr || !data.keys.kakao);
 
   return (
     <div className="space-y-4">
@@ -169,7 +180,9 @@ export function MarketTrend() {
         </button>
       </div>
       {syncMsg && (
-        <p className="text-[12px] text-[#4d5a29] dark:text-[#A8B87A]">{syncMsg}</p>
+        <p className="text-[12px] whitespace-pre-wrap break-all text-[#4d5a29] dark:text-[#A8B87A]">
+          {syncMsg}
+        </p>
       )}
 
       {/* 준비 안 된 상태 안내 */}
@@ -177,9 +190,9 @@ export function MarketTrend() {
         <div className="rounded-xl border border-[#B47B2A]/40 bg-[#B47B2A]/[0.07] px-4 py-3 text-[12.5px] leading-relaxed text-[#6B5D47] dark:text-zinc-300">
           <strong className="text-[#B47B2A] dark:text-amber-300">설정이 더 필요해요.</strong>
           <ul className="mt-1.5 space-y-0.5 list-disc pl-4">
-            {!data?.keys.localdata && (
+            {!data?.keys.dataGoKr && (
               <li>
-                <code>LOCALDATA_API_KEY</code> 미설정 — 인허가 데이터를 받아올 수 없습니다.
+                <code>DATA_GO_KR_KEY</code> 미설정 — 인허가 데이터를 받아올 수 없습니다.
               </li>
             )}
             {!data?.keys.kakao && (
@@ -298,7 +311,7 @@ export function MarketTrend() {
           {/* 출처·한계 */}
           <div className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 px-4 py-3 text-[11.5px] leading-relaxed text-[#6B5D47] dark:text-zinc-400">
             <div>
-              출처: <strong>행정안전부 지방행정 인허가 데이터(LOCALDATA) 체육시설업</strong>
+              출처: <strong>행정안전부 생활 체력단련장업 조회서비스 (공공데이터포털)</strong>
               {data.lastSyncedAt && ` · 마지막 수집 ${data.lastSyncedAt.slice(0, 10)}`}
               {` · 좌표 확보 ${data.coverage.geocoded}/${data.coverage.total}건`}
               {data.coverage.pending > 0 && ` (대기 ${data.coverage.pending}건)`}

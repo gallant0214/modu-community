@@ -9,7 +9,8 @@
 import { supabase } from "@/app/lib/supabase";
 import {
   ENABLED_BIZ_TYPES,
-  fetchLocaldataPage,
+  endpointFor,
+  fetchFacilityPage,
   geocodeAddress,
   isOpenState,
   splitRegion,
@@ -17,7 +18,7 @@ import {
   type RawFacility,
 } from "@/app/lib/market-data";
 
-/** LOCALDATA 한 번에 받아올 페이지 크기 */
+/** 한 번에 받아올 페이지 크기 */
 const PAGE_SIZE = 500;
 
 export interface SyncReport {
@@ -31,10 +32,6 @@ export interface SyncReport {
   error?: string;
 }
 
-function ymdCompact(d: Date): string {
-  return d.toISOString().slice(0, 10).replace(/-/g, "");
-}
-
 /**
  * 인허가일자 기준 최근 `months` 개월분을 받아 업서트한다.
  * 좌표(lat/lng)·지오코딩 상태는 payload 에 넣지 않는다 → 재동기화해도 기존 좌표가 지워지지 않는다.
@@ -44,22 +41,21 @@ export async function syncFacilities(opts: {
   /** 업종당 최대 페이지 수(폭주 방지) */
   maxPages: number;
 }): Promise<SyncReport[]> {
-  const authKey = process.env.LOCALDATA_API_KEY;
-  if (!authKey) {
+  const serviceKey = process.env.DATA_GO_KR_KEY;
+  if (!serviceKey) {
     return ENABLED_BIZ_TYPES.map((b) => ({
       bizType: b.key,
       fetched: 0,
       upserted: 0,
       pages: 0,
-      error: "LOCALDATA_API_KEY 가 설정되지 않았습니다",
+      error: "DATA_GO_KR_KEY 가 설정되지 않았습니다",
     }));
   }
 
-  const end = new Date();
-  const begin = new Date();
-  begin.setMonth(begin.getMonth() - Math.max(1, opts.months));
-  const bgnYmd = ymdCompact(begin);
-  const endYmd = ymdCompact(end);
+  // 응답에 인허가일자 범위 필터가 없는 서비스가 있어, 받아온 뒤 이 기준일로 걸러 저장한다.
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - Math.max(1, opts.months));
+  const cutoffYmd = cutoff.toISOString().slice(0, 10);
 
   const reports: SyncReport[] = [];
 
@@ -67,13 +63,11 @@ export async function syncFacilities(opts: {
     const report: SyncReport = { bizType: biz.key, fetched: 0, upserted: 0, pages: 0 };
     try {
       for (let page = 1; page <= opts.maxPages; page++) {
-        const { rows, diagnostics } = await fetchLocaldataPage({
-          authKey,
-          opnSvcId: biz.opnSvcId,
+        const { rows, diagnostics } = await fetchFacilityPage({
+          serviceKey,
+          endpoint: endpointFor(biz),
           pageIndex: page,
           pageSize: PAGE_SIZE,
-          bgnYmd,
-          endYmd,
         });
         if (page === 1) {
           report.diagnostics = diagnostics;
@@ -82,7 +76,9 @@ export async function syncFacilities(opts: {
         report.pages = page;
         if (rows.length === 0) break;
         report.fetched += rows.length;
-        report.upserted += await upsertFacilities(biz.key, rows);
+        // 인허가일이 기준일보다 오래된 건은 저장하지 않는다(개업일 없는 행은 남겨 둔다)
+        const keep = rows.filter((r) => !r.openedOn || r.openedOn >= cutoffYmd);
+        report.upserted += await upsertFacilities(biz.key, keep);
         if (rows.length < PAGE_SIZE) break;
       }
 
@@ -90,7 +86,7 @@ export async function syncFacilities(opts: {
         {
           biz_type: biz.key,
           last_synced_at: new Date().toISOString(),
-          synced_through: end.toISOString().slice(0, 10),
+          synced_through: new Date().toISOString().slice(0, 10),
           last_result: { fetched: report.fetched, upserted: report.upserted } as never,
         } as never,
         { onConflict: "biz_type" }
