@@ -192,6 +192,31 @@ export default function CrmSchedulePage() {
   const range = useMemo(() => computeRange(viewMode, anchor), [viewMode, anchor]);
   const rangeLabel = useMemo(() => formatRangeLabel(viewMode, anchor, range), [viewMode, anchor, range]);
 
+  // 공휴일(법정·임시·대체) — { 'YYYY-MM-DD': '개천절' }. 보조 정보라 실패해도 화면은 그대로.
+  const [holidays, setHolidays] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const years = Array.from(
+      new Set([range.from.slice(0, 4), range.to.slice(0, 4)])
+    ).join(",");
+    let alive = true;
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`/api/crm/holidays?years=${years}`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (alive && res.ok) setHolidays((prev) => ({ ...prev, ...(data.holidays ?? {}) }));
+      } catch {
+        /* 공휴일 조회 실패 — 무시 */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [range.from, range.to, getIdToken]);
+
   const canPickTrainer = role === "owner" || role === "admin" || role === "manager";
 
   const load = useCallback(async () => {
@@ -447,7 +472,15 @@ export default function CrmSchedulePage() {
       {panelMode === "calendar" && (
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
         <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
-          {rangeLabel} · 예약 {reservations.length}건 · 일정 {events.length}건
+          {/* 일간 보기에서 그 날이 공휴일이면 날짜를 빨간색 + 공휴일명으로 */}
+          {viewMode === "day" && holidays[anchor] ? (
+            <span className="font-semibold text-red-600">
+              {rangeLabel} · {holidays[anchor]}
+            </span>
+          ) : (
+            rangeLabel
+          )}{" "}
+          · 예약 {reservations.length}건 · 일정 {events.length}건
         </span>
         {/* 상태 색상 범례 */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -503,6 +536,7 @@ export default function CrmSchedulePage() {
           events={events}
           classSessions={classSessions}
           trainers={visibleTrainers}
+          holidays={holidays}
           onPick={setPicked}
           onPickEvent={setPickedEvent}
           onPickClass={setPickedClass}
@@ -528,6 +562,7 @@ export default function CrmSchedulePage() {
         <MonthView
           anchor={anchor}
           reservations={reservations}
+          holidays={holidays}
           onPickDate={(d) => {
             setAnchor(d);
             setViewMode("day");
@@ -1917,6 +1952,7 @@ function WeekView({
   events,
   classSessions,
   trainers,
+  holidays,
   onPick,
   onPickEvent,
   onPickClass,
@@ -1929,6 +1965,8 @@ function WeekView({
   events: ScheduleEvent[];
   classSessions: ClassSession[];
   trainers: StaffOption[];
+  /** 공휴일 { 'YYYY-MM-DD': '개천절' } */
+  holidays: Record<string, string>;
   onPick: (r: Reservation) => void;
   onPickEvent: (e: ScheduleEvent) => void;
   onPickClass: (c: ClassSession) => void;
@@ -1986,13 +2024,17 @@ function WeekView({
           <div className="px-2 py-2 text-[11px] font-medium text-[#A89B80]">시간</div>
           {days.map((d, i) => {
             const today = isToday(d);
+            const holiday = holidays[dayKey(d)];
             return (
               <div
                 key={i}
+                title={holiday ?? undefined}
                 className={`px-3 py-2 text-[12.5px] font-semibold border-l border-[#E8E0D0]/70 dark:border-zinc-800
                   ${today
                     ? "bg-[#6B7B3A]/12 dark:bg-[#6B7B3A]/25 text-[#6B7B3A] dark:text-[#A8B87A]"
-                    : "text-[#2A251D] dark:text-zinc-100"
+                    : holiday
+                      ? "text-red-600"
+                      : "text-[#2A251D] dark:text-zinc-100"
                   }`}
               >
                 <div className="flex items-center gap-1.5">
@@ -2003,9 +2045,20 @@ function WeekView({
                     </span>
                   )}
                 </div>
-                <div className={`text-[11px] font-normal ${today ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#A89B80]"}`}>
+                <div
+                  className={`text-[11px] font-normal ${
+                    today
+                      ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+                      : holiday
+                        ? "text-red-600"
+                        : "text-[#A89B80]"
+                  }`}
+                >
                   {d.getMonth() + 1}/{d.getDate()}
                 </div>
+                {holiday && (
+                  <div className="text-[10px] font-medium text-red-600 truncate">{holiday}</div>
+                )}
               </div>
             );
           })}
@@ -2373,10 +2426,13 @@ function WeekDragGhost({ drag }: { drag: NonNullable<WeekDragState> }) {
 function MonthView({
   anchor,
   reservations,
+  holidays,
   onPickDate,
 }: {
   anchor: string;
   reservations: Reservation[];
+  /** 공휴일 { 'YYYY-MM-DD': '개천절' } — 날짜를 빨간색으로 표시 */
+  holidays: Record<string, string>;
   onPickDate: (date: string) => void;
 }) {
   const cells = useMemo(() => buildMonthCells(anchor), [anchor]);
@@ -2413,27 +2469,36 @@ function MonthView({
       <div className="grid" style={{ gridTemplateColumns: "repeat(7, 1fr)" }}>
         {cells.map((c, i) => {
           const stats = byDate.get(c.key);
+          const holiday = holidays[c.key];
           return (
             <button
               key={i}
               onClick={() => onPickDate(c.key)}
+              title={holiday ?? undefined}
               className={`text-left min-h-[78px] px-2 py-1.5 border-r border-b border-[#E8E0D0]/60 dark:border-zinc-800/60
                 ${c.isCurrentMonth ? "bg-[#FEFCF7] dark:bg-zinc-900" : "bg-[#FBF7EB]/40 dark:bg-zinc-900/40"}
                 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800/60`}
             >
               <div className="flex items-baseline justify-between">
-                <span
-                  className={`text-[12.5px] font-semibold ${
-                    !c.isCurrentMonth
-                      ? "text-[#A89B80]"
-                      : c.dayOfWeek === 0
-                      ? "text-red-600"
-                      : c.dayOfWeek === 6
-                      ? "text-blue-600"
-                      : "text-[#2A251D] dark:text-zinc-100"
-                  } ${c.isToday ? "px-1.5 py-0.5 rounded-full bg-[#6B7B3A] text-white" : ""}`}
-                >
-                  {c.day}
+                <span className="flex items-baseline gap-1 min-w-0">
+                  <span
+                    className={`text-[12.5px] font-semibold ${
+                      !c.isCurrentMonth
+                        ? holiday
+                          ? "text-red-400"
+                          : "text-[#A89B80]"
+                        : holiday || c.dayOfWeek === 0
+                        ? "text-red-600"
+                        : c.dayOfWeek === 6
+                        ? "text-blue-600"
+                        : "text-[#2A251D] dark:text-zinc-100"
+                    } ${c.isToday ? "px-1.5 py-0.5 rounded-full bg-[#6B7B3A] text-white" : ""}`}
+                  >
+                    {c.day}
+                  </span>
+                  {holiday && c.isCurrentMonth && (
+                    <span className="text-[9.5px] text-red-600 truncate">{holiday}</span>
+                  )}
                 </span>
                 {stats && (
                   <span className="text-[10.5px] text-[#6B7B3A] font-semibold">
