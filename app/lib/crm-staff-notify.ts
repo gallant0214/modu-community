@@ -1,6 +1,7 @@
 import { getApps } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import { supabase } from "./supabase";
+import { sendApnsPush } from "./apns";
 import { buildCheckinSummary } from "./crm-checkin";
 import { ctxHasPermission } from "./crm-permissions";
 import type { CrmContext } from "./crm-auth";
@@ -77,22 +78,48 @@ export async function notifyStaffMember(params: {
     // 3) 강사앱 디바이스 토큰으로 푸시 (토큰 미등록이면 알림함만 저장하고 종료)
     const { data: tokens } = await supabase
       .from("crm_staff_device_tokens")
-      .select("token")
+      .select("token, platform")
       .eq("firebase_uid", staff.firebase_uid);
-    const tokenList = (tokens ?? []).map((t) => t.token);
-    if (tokenList.length === 0) return true;
+    const rows = (tokens ?? []) as { token: string; platform: string | null }[];
+    if (rows.length === 0) return true;
 
-    const messaging = getMessaging(getAdmin());
-    for (let i = 0; i < tokenList.length; i += 500) {
-      const batch = tokenList.slice(i, i + 500);
-      await messaging
-        .sendEachForMulticast({
-          notification: { title, body },
-          data: { type, ...(data ?? {}) },
-          apns: { payload: { aps: { sound: "default", badge: 1 } } },
-          tokens: batch,
-        })
-        .catch(() => {});
+    // iOS 는 APNs 원시 토큰(64 hex)이라 FCM 으로 못 보냄 → APNs 직접 발송.
+    // 안드로이드는 FCM 토큰 → 기존 Firebase Admin 멀티캐스트.
+    const isIosToken = (r: { token: string; platform: string | null }) =>
+      r.platform === "ios" || (/^[0-9a-fA-F]{64}$/.test(r.token) && r.platform !== "android");
+    const iosTokens = rows.filter(isIosToken).map((r) => r.token);
+    const fcmTokens = rows.filter((r) => !isIosToken(r)).map((r) => r.token);
+
+    // Android/FCM
+    if (fcmTokens.length > 0) {
+      const messaging = getMessaging(getAdmin());
+      for (let i = 0; i < fcmTokens.length; i += 500) {
+        const batch = fcmTokens.slice(i, i + 500);
+        await messaging
+          .sendEachForMulticast({
+            notification: { title, body },
+            data: { type, ...(data ?? {}) },
+            apns: { payload: { aps: { sound: "default", badge: 1 } } },
+            tokens: batch,
+          })
+          .catch(() => {});
+      }
+    }
+
+    // iOS/APNs (환경변수 미설정 시 sendApnsPush 가 조용히 no-op)
+    if (iosTokens.length > 0) {
+      try {
+        const res = await sendApnsPush(iosTokens, { title, body, data: { type, ...(data ?? {}) } });
+        // 더 이상 유효하지 않은 토큰은 정리(다음부터 헛발송 방지)
+        if (res.invalidTokens.length > 0) {
+          await supabase
+            .from("crm_staff_device_tokens")
+            .delete()
+            .in("token", res.invalidTokens);
+        }
+      } catch (e) {
+        console.error("[crm-staff-notify] APNs 발송 오류", e);
+      }
     }
     return true;
   } catch (e) {
