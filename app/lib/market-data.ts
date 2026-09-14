@@ -122,6 +122,8 @@ export interface RawFacility {
   lotAddr: string;
   sido: string;
   sigungu: string;
+  emd: string;
+  gfa: number | null;
   lat: number | null;
   lng: number | null;
   stateName: string;
@@ -152,6 +154,8 @@ export function normalizeRow(row: Record<string, unknown>): RawFacility | null {
     lotAddr: str(row, "faci_addr"),
     sido: str(row, "addr_ctpv_nm"),
     sigungu: str(row, "addr_cpb_nm"),
+    emd: str(row, "addr_emd_nm"),
+    gfa: num(row, "faci_gfa"),
     lat: num(row, "faci_lat"),
     lng: num(row, "faci_lot"),
     stateName: str(row, "faci_stat_nm"),

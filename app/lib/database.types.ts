@@ -2302,6 +2302,8 @@ export type Database = {
           base_on: string | null
           first_seen_at: string
           source: string
+          emd: string | null
+          gfa: number | null
         }
         Insert: {
           mgt_no: string
@@ -2328,6 +2330,8 @@ export type Database = {
           base_on?: string | null
           first_seen_at?: string
           source?: string
+          emd?: string | null
+          gfa?: number | null
         }
         Update: {
           mgt_no?: string
@@ -2354,6 +2358,8 @@ export type Database = {
           base_on?: string | null
           first_seen_at?: string
           source?: string
+          emd?: string | null
+          gfa?: number | null
         }
         Relationships: []
       }

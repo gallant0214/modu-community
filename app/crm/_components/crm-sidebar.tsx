@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { clearCenterCookie } from "./crm-center-cookie";
+import { isMarketAnalysisCenter } from "@/app/lib/market-access";
 
 type Role = "owner" | "admin" | "manager" | "trainer";
 
@@ -18,6 +19,8 @@ interface MenuItem {
   newWindow?: boolean;
   /** 직급권한 키. 지정 시 해당 권한이 false 면 메뉴 숨김. */
   perm?: string;
+  /** 특정 센터 전용. 다른 센터에서는 잠금 아이콘과 함께 비활성으로 보인다. */
+  restricted?: "market";
   icon: (props: { className?: string }) => React.ReactElement;
 }
 
@@ -34,6 +37,7 @@ const MENU: MenuItem[] = [
   { href: "/crm/messages",    label: "메세지 전송",   group: "engage", perm: "messages.send", icon: IconMessage },
   { href: "/crm/stats",       label: "통계",          group: "admin", perm: "stats.view", icon: IconStats },
   { href: "/crm/settings",    label: "센터설정",       group: "admin", staffOnly: true, icon: IconSettings },
+  { href: "/crm/market",      label: "상권분석",       group: "admin", perm: "stats.view", restricted: "market", icon: IconMarket },
   { href: "/crm/touch-attendance", label: "터치출석", group: "tools", perm: "attendance.manage", newWindow: true, icon: IconTouch },
   { href: "/crm/touch-attendance-settings", label: "터치출석 설정", group: "tools", staffOnly: true, icon: IconSettings },
 ];
@@ -161,6 +165,9 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
   // 센터 소속 강사(개인 센터가 아닌 실제 센터의 trainer): 출석 현황·터치출석 추가 노출.
   const isCenterTrainer = role === "trainer" && centerKind !== "solo";
   const specialBody = isSpecialBodyCenter(centerName);
+  // 상권분석은 스페셜바디 범어점 전용 — 다른 센터에는 잠금 표시만 남긴다
+  const marketAllowed = isMarketAnalysisCenter(centerName);
+  const isLocked = (item: MenuItem) => item.restricted === "market" && !marketAllowed;
   const visible = (
     isSoloMode
       ? buildSoloMenu(centerMemberId ?? null, {
@@ -191,9 +198,12 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
           >
             {items.map((item) => {
               const active = isActive(item.href);
+              const locked = isLocked(item);
               const Icon = item.icon;
               const cls = `group relative flex h-10 items-center gap-2.5 px-2.5 rounded-lg text-[13.5px] transition-all w-full text-left
-                ${active && !item.newWindow
+                ${locked
+                  ? "text-[#A89B80] cursor-not-allowed dark:text-zinc-600"
+                  : active && !item.newWindow
                   ? "bg-[#2F3A2B] text-white shadow-sm dark:bg-[#A8B87A] dark:text-zinc-950 font-semibold"
                   : "text-[#3A342A] hover:bg-[#F5F0E5] dark:text-zinc-300 dark:hover:bg-zinc-800/70"
                 }`;
@@ -221,8 +231,21 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
                       새창
                     </span>
                   )}
+                  {locked && <IconLock className="w-3.5 h-3.5 shrink-0 text-[#A89B80] dark:text-zinc-600" />}
                 </>
               );
+              if (locked) {
+                return (
+                  <div
+                    key={item.href}
+                    className={cls}
+                    title="상권분석은 현재 스페셜바디 범어점에서만 사용할 수 있어요"
+                    aria-disabled="true"
+                  >
+                    {body}
+                  </div>
+                );
+              }
               if (item.newWindow) {
                 return (
                   <button
@@ -689,6 +712,30 @@ function IconCenter({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M4 10l8-6 8 6M6 10v11M18 10v11M10 21v-6h4v6" />
+    </svg>
+  );
+}
+
+/** 상권분석 — 지역(핀) 안의 막대그래프 */
+function IconMarket({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Z"
+      />
+      <path strokeLinecap="round" d="M9.5 12.5v-2M12 12.5v-4M14.5 12.5v-3" />
+    </svg>
+  );
+}
+
+/** 잠금 — 사용 권한이 없는 메뉴 표시 */
+function IconLock({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <rect x="5" y="10.5" width="14" height="9" rx="2" />
+      <path strokeLinecap="round" d="M8.5 10.5V7.5a3.5 3.5 0 1 1 7 0v3" />
     </svg>
   );
 }

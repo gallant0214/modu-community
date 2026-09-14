@@ -184,6 +184,8 @@ async function upsertFacilities(rows: RawFacility[]): Promise<{ stored: number; 
       lot_addr: r.lotAddr,
       sido: r.sido,
       sigungu: r.sigungu,
+      emd: r.emd,
+      gfa: r.gfa,
       lat: r.lat,
       lng: r.lng,
       geocode_state: r.lat != null && r.lng != null ? "ok" : "failed",
