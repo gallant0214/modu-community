@@ -205,19 +205,18 @@ export async function POST(request: Request) {
     purchasedYmd < kstYmd()
       ? new Date(`${purchasedYmd}T12:00:00+09:00`).toISOString()
       : new Date().toISOString();
-  if (paidAmount > 0) {
-    await supabase.from("crm_payments").insert({
-      center_id: ctx.centerId,
-      member_id: memberId,
-      membership_id: created.id,
-      amount_won: paidAmount,
-      method: paymentMethod,
-      method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
-      paid_at: paidAtIso,
-      recorded_by_uid: ctx.uid,
-      status: "completed",
-    });
-  }
+  // 0원(무료·서비스 발급)도 결제내역에 남긴다 — 대여권·수강권과 동일 기준.
+  await supabase.from("crm_payments").insert({
+    center_id: ctx.centerId,
+    member_id: memberId,
+    membership_id: created.id,
+    amount_won: paidAmount,
+    method: paymentMethod,
+    method_custom: paymentMethod === "etc" ? body.payment_method_custom?.trim() || null : null,
+    paid_at: paidAtIso,
+    recorded_by_uid: ctx.uid,
+    status: "completed",
+  });
 
   await supabase.from("crm_audit_logs").insert({
     center_id: ctx.centerId,
