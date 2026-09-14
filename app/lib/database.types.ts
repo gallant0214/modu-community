@@ -2297,6 +2297,11 @@ export type Database = {
           raw: Json | null
           synced_at: string
           created_at: string
+          ftype_name: string | null
+          faci_gb: string | null
+          base_on: string | null
+          first_seen_at: string
+          source: string
         }
         Insert: {
           mgt_no: string
@@ -2318,6 +2323,11 @@ export type Database = {
           raw?: Json | null
           synced_at?: string
           created_at?: string
+          ftype_name?: string | null
+          faci_gb?: string | null
+          base_on?: string | null
+          first_seen_at?: string
+          source?: string
         }
         Update: {
           mgt_no?: string
@@ -2339,6 +2349,11 @@ export type Database = {
           raw?: Json | null
           synced_at?: string
           created_at?: string
+          ftype_name?: string | null
+          faci_gb?: string | null
+          base_on?: string | null
+          first_seen_at?: string
+          source?: string
         }
         Relationships: []
       }
@@ -2348,18 +2363,24 @@ export type Database = {
           last_synced_at: string | null
           synced_through: string | null
           last_result: Json | null
+          last_page: number
+          total_count: number | null
         }
         Insert: {
           biz_type: string
           last_synced_at?: string | null
           synced_through?: string | null
           last_result?: Json | null
+          last_page?: number
+          total_count?: number | null
         }
         Update: {
           biz_type?: string
           last_synced_at?: string | null
           synced_through?: string | null
           last_result?: Json | null
+          last_page?: number
+          total_count?: number | null
         }
         Relationships: []
       }

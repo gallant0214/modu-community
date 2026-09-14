@@ -3,18 +3,16 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { marketKeysConfigured } from "@/app/lib/market-data";
-import { syncFacilities, geocodePending, ensureCenterCoords } from "@/app/lib/market-sync";
+import { syncFacilities, ensureCenterCoords } from "@/app/lib/market-sync";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 /**
  * POST /api/crm/market/sync
- * 인허가 데이터(공공데이터포털) 수집 + 좌표 변환을 지금 실행한다.
- * body: { months?: number, maxPages?: number, geocodeLimit?: number }
- *
- * 최초 1회는 과거분을 끌어오기 위해 months 를 크게(예: 240) 줘서 돌리고,
- * 이후에는 주간 크론이 최근분만 증분 수집한다.
+ * 전국체육시설 목록을 지금 수집한다. 전국이 154페이지라 한 번에 다 못 돌면
+ * 페이지 커서가 남아 다음 실행이 이어받는다(응답의 completed 로 확인).
+ * body: { maxPages?: number, restart?: boolean }
  */
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
@@ -25,31 +23,20 @@ export async function POST(request: Request) {
 
   const keys = marketKeysConfigured();
   if (!keys.dataGoKr) {
-    return NextResponse.json(
-      { error: "DATA_GO_KR_KEY 가 설정되지 않았습니다", keys },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "DATA_GO_KR_KEY 가 설정되지 않았습니다", keys }, { status: 400 });
   }
 
   let body: Record<string, unknown> = {};
   try {
     body = await request.json();
   } catch {
-    /* 기본값 사용 */
+    /* 기본값 */
   }
-  const months = Math.min(600, Math.max(1, Math.floor(Number(body.months) || 24)));
-  const maxPages = Math.min(200, Math.max(1, Math.floor(Number(body.maxPages) || 20)));
-  const geocodeLimit = Math.min(1000, Math.max(0, Math.floor(Number(body.geocodeLimit) ?? 300)));
+  const maxPages = Math.min(200, Math.max(1, Math.floor(Number(body.maxPages) || 60)));
 
-  const reports = await syncFacilities({ months, maxPages });
-
-  // 센터 좌표(반경 기준점) 확보 → 그 시군구부터 우선 지오코딩
+  // 반경 기준점부터 확보(없으면 지도에 찍을 중심이 없다)
   const center = await ensureCenterCoords(ctx.centerId);
-  const geocode = await geocodePending({
-    sido: center.sido || undefined,
-    sigungu: center.sigungu || undefined,
-    limit: geocodeLimit,
-  });
+  const report = await syncFacilities({ maxPages, restart: !!body.restart });
 
   await supabase.from("crm_audit_logs").insert({
     center_id: ctx.centerId,
@@ -57,15 +44,13 @@ export async function POST(request: Request) {
     action: "market.sync",
     entity_type: "market_facilities",
     entity_id: null,
-    payload: { months, maxPages, reports, geocode } as never,
+    payload: { report } as never,
   });
 
   return NextResponse.json({
-    ok: true,
+    ok: !report.error,
     keys,
-    months,
-    reports,
-    geocode,
+    report,
     center: center.point
       ? { ready: true, sido: center.sido, sigungu: center.sigungu }
       : { ready: false, reason: (center as { reason: string }).reason },
