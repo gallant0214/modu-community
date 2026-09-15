@@ -473,7 +473,8 @@ export default function CrmMemberDetailPage() {
                     className="tabular-nums"
                   />
                 </div>
-                {/* 액션 버튼 — 높이·모양 통일해 한 줄에 정렬(좁으면 자동 줄바꿈) */}
+                {/* 액션 버튼 — 높이·모양은 통일, 배치는 2줄
+                    (1줄: 출석 처리·앱 연동 해지 / 2줄: 메세지 전송) */}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <CheckInButton
                     memberId={member.id}
@@ -483,6 +484,8 @@ export default function CrmMemberDetailPage() {
                   {member.linked_firebase_uid && (
                     <UnlinkAppButton memberId={member.id} canEdit={canEditBasic} onDone={load} />
                   )}
+                </div>
+                <div className="mt-2">
                   <MemberMessageButton
                     memberId={member.id}
                     memberName={member.name}
