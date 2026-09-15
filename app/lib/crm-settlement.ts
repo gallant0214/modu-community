@@ -1,6 +1,15 @@
 import { supabase } from "@/app/lib/supabase";
 import { fetchSales, saleCategory, type SalesCategory } from "@/app/lib/crm-sales";
 import { perSessionFee } from "@/app/lib/crm-commission";
+import {
+  loadPayHistory,
+  payConfigFromMember,
+  monthlyCommission,
+  monthEndConfig,
+  bonusPayoutOf,
+  kstYmdOf,
+  type SessionFee,
+} from "@/app/lib/crm-pay-history";
 
 /**
  * 센터 정산(손익) 계산 공용 로직.
@@ -257,10 +266,10 @@ export async function computeSettlement(
   // ── 강사 수업료 기준 = 진행 소진분 (출석 + 노쇼) ──
   const startUtcS = new Date(`${startDate}T00:00:00+09:00`).toISOString();
   const endUtcS = new Date(`${nextMonth}T00:00:00+09:00`).toISOString();
-  const attRes = await pageAll<{ pass_id: number | null; trainer_member_id: number | null }>((f, t) =>
+  const attRes = await pageAll<{ pass_id: number | null; trainer_member_id: number | null; starts_at: string }>((f, t) =>
     supabase
       .from("crm_reservations")
-      .select("pass_id, trainer_member_id")
+      .select("pass_id, trainer_member_id, starts_at")
       .eq("center_id", centerId)
       .in("status", ["attended", "noshow"])
       .gte("starts_at", startUtcS)
@@ -279,20 +288,18 @@ export async function computeSettlement(
       .in("id", attPassIds.slice(i, i + 500));
     for (const p of data ?? []) attPassMap.set(p.id, p);
   }
-  const revenueByTrainer = new Map<number, number>();
-  const sessionCountByTrainer = new Map<number, number>();
+  // 강사별 · 월별 진행 수업 — 수업일에 유효한 수업료 설정을 쓰기 위해 시각 보존
+  const sessionsByTrainerMonth = new Map<number, Map<string, SessionFee[]>>();
   for (const r of attRes) {
     if (!r.trainer_member_id || !r.pass_id) continue;
     const p = attPassMap.get(r.pass_id);
     if (!p) continue;
-    revenueByTrainer.set(
-      r.trainer_member_id,
-      (revenueByTrainer.get(r.trainer_member_id) ?? 0) + perSessionFee(p)
-    );
-    sessionCountByTrainer.set(
-      r.trainer_member_id,
-      (sessionCountByTrainer.get(r.trainer_member_id) ?? 0) + 1
-    );
+    const mym = kstYmdOf(r.starts_at).slice(0, 7);
+    const byMonth = sessionsByTrainerMonth.get(r.trainer_member_id) ?? new Map<string, SessionFee[]>();
+    const list = byMonth.get(mym) ?? [];
+    list.push({ at: r.starts_at, fee: perSessionFee(p) });
+    byMonth.set(mym, list);
+    sessionsByTrainerMonth.set(r.trainer_member_id, byMonth);
   }
 
   // ── 고정 지출 ──
@@ -308,9 +315,9 @@ export async function computeSettlement(
     .reduce((s, x) => s + (x.amount_won ?? 0), 0);
   const fixedTotal = fixedMonthly * monthsInPeriod;
 
-  // ── 직원 급여 (직원급여 상세 payroll 과 동일 규칙) ──
-  type Tier = { upTo: number | null; rate: number };
-  type Bonus = { metric: string; gte: number; reward_type?: string; bonus_won?: number; bonus_percent?: number };
+  // ── 직원 급여 ──
+  // 🚨 수업료 설정 이력(crm_staff_pay_history) 기준 — 설정을 바꿔도 과거 달이 다시 계산되지 않게.
+  //   수업료: 수업일에 유효한 설정 / 고정급·현금·성과급 조건: 각 달 말일에 유효한 설정
   const { data: staff } = await supabase
     .from("crm_center_members")
     .select(
@@ -319,44 +326,29 @@ export async function computeSettlement(
     .eq("center_id", centerId)
     .eq("status", "active")
     .in("role", ["owner", "admin", "manager", "trainer"]);
+  const staffList = staff ?? [];
+  const payHistory = await loadPayHistory(centerId, staffList.map((s) => s.id));
 
   const staffBreakdown: StaffPay[] = [];
   let salaryTotal = 0;
   let salaryFixed = 0;
   let salaryVariable = 0;
-  for (const s of staff ?? []) {
-    const revenue = revenueByTrainer.get(s.id) ?? 0;
-    const sessionCount = sessionCountByTrainer.get(s.id) ?? 0;
-    const type = (s.commission_type as string) ?? "fixed";
-    const rate = Number(s.commission_rate ?? 0);
-    const tiers: Tier[] = Array.isArray(s.commission_tiers) ? (s.commission_tiers as Tier[]) : [];
-    let effectiveRate = rate;
-    if (type === "tiered") {
-      const sorted = [...tiers].sort(
-        (a, b) => (a.upTo ?? Number.POSITIVE_INFINITY) - (b.upTo ?? Number.POSITIVE_INFINITY)
-      );
-      const tier = sorted.find((t) => t.upTo == null || revenue <= t.upTo);
-      effectiveRate = tier ? Number(tier.rate) : 0;
+  for (const s of staffList) {
+    const versions = payHistory.get(s.id);
+    const fallback = payConfigFromMember(s);
+    const byMonth = sessionsByTrainerMonth.get(s.id);
+    let base = 0;
+    let commission = 0;
+    let bonus = 0;
+    let cash = 0;
+    for (const mym of monthsList) {
+      const mc = monthlyCommission(byMonth?.get(mym) ?? [], versions, fallback, mym);
+      const endCfg = monthEndConfig(versions, mym, fallback);
+      base += Math.max(0, Number(endCfg?.base_salary ?? 0));
+      if (endCfg?.cash_pay_enabled) cash += Math.max(0, Number(endCfg.cash_pay_won ?? 0));
+      commission += mc.payout;
+      bonus += bonusPayoutOf(endCfg, mc.revenue, mc.sessions, mc.payout).payout;
     }
-    const commission = Math.round((revenue * effectiveRate) / 100);
-    const base = Math.max(0, Number(s.base_salary ?? 0)) * monthsInPeriod;
-
-    // 성과급: 지표별 '가장 높은 달성 구간 1개'만 (누적 X)
-    const bonuses: Bonus[] = Array.isArray(s.commission_bonuses) ? (s.commission_bonuses as Bonus[]) : [];
-    const bestByMetric = new Map<string, Bonus>();
-    for (const b of bonuses) {
-      const actual = b.metric === "sessions" ? sessionCount : revenue;
-      if (actual < (Number(b.gte) || 0)) continue;
-      const cur = bestByMetric.get(b.metric);
-      if (!cur || (Number(b.gte) || 0) > (Number(cur.gte) || 0)) bestByMetric.set(b.metric, b);
-    }
-    const bonus = [...bestByMetric.values()].reduce((sum, b) => {
-      if (b.reward_type === "percent") return sum + Math.round((commission * (Number(b.bonus_percent) || 0)) / 100);
-      return sum + Math.max(0, Number(b.bonus_won) || 0);
-    }, 0);
-
-    const cash = s.cash_pay_enabled ? Math.max(0, Number(s.cash_pay_won ?? 0)) * monthsInPeriod : 0;
-
     const pay = base + commission + bonus + cash;
     if (pay <= 0) continue;
     staffBreakdown.push({ id: s.id, name: s.display_name ?? "", base, commission, bonus, cash, total: pay });

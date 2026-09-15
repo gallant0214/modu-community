@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { perSessionFee } from "@/app/lib/crm-commission";
 import {
-  perSessionFee,
-  effectiveCommissionRate,
-  type CommissionConfig,
-} from "@/app/lib/crm-commission";
+  loadPayHistory,
+  payConfigFromMember,
+  monthlyCommission,
+  hasCommissionConfig,
+  type SessionFee,
+} from "@/app/lib/crm-pay-history";
 
 export const dynamic = "force-dynamic";
 
@@ -70,24 +73,25 @@ export async function GET(request: Request) {
     : { data: [] as { id: number; price_won: number; discount_won: number; vat_included: boolean; total_sessions: number }[] };
   const passMap = new Map((passes ?? []).map((p) => [p.id, p]));
 
-  // 월별 매출(회당 수업료 합)
-  const revByMonth = new Map<string, number>();
+  // 월별 진행 수업 — 수업일에 유효한 설정 요율을 쓰기 위해 시각 보존
+  const sessionsByMonth = new Map<string, SessionFee[]>();
   for (const r of attended ?? []) {
     const ym = kstYmd(new Date(r.starts_at)).slice(0, 7);
     const p = r.pass_id ? passMap.get(r.pass_id) : null;
-    revByMonth.set(ym, (revByMonth.get(ym) ?? 0) + (p ? perSessionFee(p) : 0));
+    const list = sessionsByMonth.get(ym) ?? [];
+    list.push({ at: r.starts_at, fee: p ? perSessionFee(p) : 0 });
+    sessionsByMonth.set(ym, list);
   }
 
-  const cfg: CommissionConfig = meRow ?? {};
+  // 🚨 수업료 설정은 이력 기준 — 설정을 바꿔도 지난 달 월급 추이가 바뀌지 않게
+  const payVersions = (await loadPayHistory(centerId, me ? [me] : [])).get(me ?? 0);
+  const payFallback = payConfigFromMember(meRow);
   const hasCommission =
-    (String(cfg.commission_type) === "tiered" &&
-      Array.isArray(cfg.commission_tiers) &&
-      cfg.commission_tiers.length > 0) ||
-    Number(cfg.commission_rate ?? 0) > 0;
+    hasCommissionConfig(payFallback) || (payVersions ?? []).some((v) => hasCommissionConfig(v));
   const salaryOf = (ym: string): number => {
-    const rev = revByMonth.get(ym) ?? 0;
-    if (!hasCommission) return rev;
-    return Math.round((rev * effectiveCommissionRate(cfg, rev)) / 100);
+    const mc = monthlyCommission(sessionsByMonth.get(ym) ?? [], payVersions, payFallback, ym);
+    // 그 달에 수업료 설정이 없으면 매출 그대로 (기존 동작 유지)
+    return mc.hasCommission ? mc.payout : mc.revenue;
   };
 
   const months = months12.map((ym) => ({

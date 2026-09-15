@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext, ctxHasPermission } from "@/app/lib/crm-permissions";
+import { savePayVersion } from "@/app/lib/crm-pay-history";
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +117,8 @@ export async function PATCH(
       bonus_percent?: number;
     }[];
     birth?: string | null;
+    /** 수업료 설정 적용 시작일(YYYY-MM-DD). 없으면 오늘(KST) */
+    pay_effective_from?: string | null;
   };
   try {
     body = await request.json();
@@ -179,6 +182,9 @@ export async function PATCH(
     const perms = await loadPermissionsForContext(ctx);
     if (!perms["sales.commission_edit"]) {
       return NextResponse.json({ error: "수업료 설정 권한이 없습니다" }, { status: 403 });
+    }
+    if (body.pay_effective_from && !/^\d{4}-\d{2}-\d{2}$/.test(String(body.pay_effective_from))) {
+      return NextResponse.json({ error: "적용 시작일 형식이 잘못됐어요 (YYYY-MM-DD)" }, { status: 400 });
     }
     if (body.cash_pay_enabled !== undefined) {
       patch.cash_pay_enabled = !!body.cash_pay_enabled;
@@ -343,6 +349,18 @@ export async function PATCH(
     }
   }
 
+  // 수업료 설정 변경 시 '변경 전' 값 확보 → 적용 시작일 기준 이력 버전으로 저장
+  let payBefore: Record<string, unknown> | null = null;
+  if (touchesCommission) {
+    const { data: prev } = await supabase
+      .from("crm_center_members")
+      .select("commission_type, commission_rate, commission_tiers, base_salary, cash_pay_enabled, cash_pay_won, commission_bonuses")
+      .eq("id", memberId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    payBefore = (prev as Record<string, unknown> | null) ?? {};
+  }
+
   const { error: updErr } = await supabase
     .from("crm_center_members")
     .update(patch as never)
@@ -353,13 +371,41 @@ export async function PATCH(
     return NextResponse.json({ error: "수정 실패", detail: updErr.message }, { status: 500 });
   }
 
+  // 🚨 수업료 설정 이력 저장 — 통계·급여는 수업일에 유효한 버전으로 계산하므로 과거 달이 바뀌지 않는다
+  let payEffectiveFrom: string | null = null;
+  if (touchesCommission && payBefore) {
+    payEffectiveFrom =
+      typeof body.pay_effective_from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.pay_effective_from)
+        ? body.pay_effective_from
+        : new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const payKeys = [
+      "commission_type",
+      "commission_rate",
+      "commission_tiers",
+      "base_salary",
+      "cash_pay_enabled",
+      "cash_pay_won",
+      "commission_bonuses",
+    ];
+    const after: Record<string, unknown> = { ...payBefore };
+    for (const k of payKeys) if (patch[k] !== undefined) after[k] = patch[k];
+    await savePayVersion({
+      centerId: ctx.centerId,
+      memberId,
+      effectiveFrom: payEffectiveFrom,
+      before: payBefore,
+      after,
+      uid: ctx.uid,
+    });
+  }
+
   await supabase.from("crm_audit_logs").insert({
     center_id: ctx.centerId,
     actor_uid: ctx.uid,
     action: "staff.update",
     entity_type: "center_member",
     entity_id: memberId,
-    payload: patch as never,
+    payload: (payEffectiveFrom ? { ...patch, pay_effective_from: payEffectiveFrom } : patch) as never,
   });
 
   return NextResponse.json({ ok: true });

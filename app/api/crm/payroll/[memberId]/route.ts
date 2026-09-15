@@ -3,6 +3,19 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { perSessionFee } from "@/app/lib/crm-commission";
+import { listMonths } from "@/app/lib/crm-settlement";
+import {
+  loadPayHistory,
+  payConfigFromMember,
+  monthlyCommission,
+  monthEndConfig,
+  bonusPayoutOf,
+  rateOf,
+  kstYmdOf,
+  type SessionFee,
+  type MonthlyCommission,
+  type CommissionBonus,
+} from "@/app/lib/crm-pay-history";
 
 export const dynamic = "force-dynamic";
 
@@ -212,13 +225,9 @@ export async function GET(
     else if (p.issue_type === "trial") payout.trial += amount;
   }
 
-  // 강사 개인 수업료 설정으로 지급액 계산 (매출 전체에 적용)
-  type Tier = { upTo: number | null; rate: number };
-  const commissionType = (trainer?.commission_type as string) ?? "fixed";
-  const commissionRate = Number(trainer?.commission_rate ?? 0);
-  const commissionTiers: Tier[] = Array.isArray(trainer?.commission_tiers)
-    ? (trainer!.commission_tiers as Tier[])
-    : [];
+  // 🚨 수업료 설정은 이력(crm_staff_pay_history) 기준 — 수업일·각 달 말일에 유효한 설정으로 계산
+  const payVersions = (await loadPayHistory(ctx.centerId, [trainerId])).get(trainerId);
+  const payFallback = payConfigFromMember(trainer);
   // ── 지급액 근거 = "진행(출석) 수업 소진분" ──────────────────────────
   // 판매 시점이 아니라 수업을 진행할 때마다 커미션이 쌓인다.
   //   진행 수업료(회당) = perSessionFee(pass) = 부가세제외가 ÷ 총횟수
@@ -292,61 +301,55 @@ export async function GET(
     });
   }
 
-  // 커미션 % 는 진행 수업료(부가세 제외) 합 기준
+  // 커미션 % 는 진행 수업료(부가세 제외) 합 기준 — 달마다 '수업일에 유효한 설정' 요율 적용
   const revenue = sessionRevenue;
-  let effectiveRate = commissionRate;
-  if (commissionType === "tiered") {
-    const sorted = [...commissionTiers].sort(
-      (a, b) => (a.upTo ?? Number.POSITIVE_INFINITY) - (b.upTo ?? Number.POSITIVE_INFINITY)
-    );
-    const tier = sorted.find((t) => t.upTo == null || revenue <= t.upTo);
-    effectiveRate = tier ? Number(tier.rate) : 0;
+  const periodMonths = listMonths(startDate, nextMonth);
+  const lastYm = periodMonths[periodMonths.length - 1];
+  const sessionsByMonth = new Map<string, SessionFee[]>();
+  for (const l of rawSessionLines) {
+    const mym = kstYmdOf(l.starts_at).slice(0, 7);
+    const list = sessionsByMonth.get(mym) ?? [];
+    list.push({ at: l.starts_at, fee: l.per_session_won });
+    sessionsByMonth.set(mym, list);
   }
-  const commissionPayout = Math.round((revenue * effectiveRate) / 100);
-  // 고정급은 기간 개월수만큼 (다기간 조회 시 정산 탭과 동일 기준). 단일월=1.
-  const baseSalary = Math.max(0, Number(trainer?.base_salary ?? 0)) * monthsInPeriod;
+  const monthCalc = new Map<string, MonthlyCommission>();
+  let commissionPayout = 0;
+  let baseSalary = 0;
+  let bonusPayout = 0;
+  let cashPay = 0;
+  let configChanged = false;
+  const achievedBonuses: CommissionBonus[] = [];
+  for (const mym of periodMonths) {
+    const mc = monthlyCommission(sessionsByMonth.get(mym) ?? [], payVersions, payFallback, mym);
+    monthCalc.set(mym, mc);
+    if (mc.split) configChanged = true;
+    // 고정급·현금 지급·성과급 조건 = 그 달 말일 기준 설정
+    const endCfg = monthEndConfig(payVersions, mym, payFallback);
+    commissionPayout += mc.payout;
+    baseSalary += Math.max(0, Number(endCfg?.base_salary ?? 0));
+    if (endCfg?.cash_pay_enabled) cashPay += Math.max(0, Number(endCfg.cash_pay_won ?? 0));
+    const b = bonusPayoutOf(endCfg, mc.revenue, mc.sessions, mc.payout);
+    bonusPayout += b.payout;
+    achievedBonuses.push(...b.achieved);
+  }
+  // 화면 표시용 설정 = 조회 기간 마지막 달 말일 기준
+  const displayCfg = monthEndConfig(payVersions, lastYm, payFallback);
+  const commissionType = displayCfg?.commission_type ?? "fixed";
+  const commissionRate = Number(displayCfg?.commission_rate ?? 0);
+  const commissionTiers = displayCfg?.commission_tiers ?? [];
+  const effectiveRate =
+    revenue > 0 ? Math.round((commissionPayout / revenue) * 10000) / 100 : rateOf(displayCfg, 0);
 
-  // 라인별 수업료 = 회당 수업료 × 유효 커미션율. (합계 ≈ commissionPayout)
-  const sessionLines = rawSessionLines.map((l) => ({
-    ...l,
-    fee_won: Math.round((l.per_session_won * effectiveRate) / 100),
-  }));
+  // 라인별 수업료 = 회당 수업료 × 그 수업일에 유효한 요율
+  const sessionLines = rawSessionLines.map((l) => {
+    const mc = monthCalc.get(kstYmdOf(l.starts_at).slice(0, 7));
+    const r = mc ? mc.rateAt(l.starts_at) : 0;
+    return { ...l, rate: r, fee_won: Math.round((l.per_session_won * r) / 100) };
+  });
   const sessionFeeTotal = sessionLines.reduce((s, l) => s + l.fee_won, 0);
 
-  // 커미션(성과급): 조건 달성 시 보너스 가산.
-  // metric: revenue=월매출 / sessions=이번달 진행세션. reward_type: won=정액 / percent=수업료의 %
-  type Bonus = {
-    metric: string;
-    gte: number;
-    reward_type?: string;
-    bonus_won?: number;
-    bonus_percent?: number;
-  };
-  const bonuses: Bonus[] = Array.isArray(trainer?.commission_bonuses)
-    ? (trainer!.commission_bonuses as Bonus[])
-    : [];
-  const achieved = bonuses.filter((b) => {
-    const actual = b.metric === "sessions" ? sessionCount : revenue;
-    return actual >= (Number(b.gte) || 0);
-  });
-  // 같은 지표(sessions/revenue)끼리는 '가장 높은 달성 구간 1개'만 적용 (누적 합산 X).
-  // 예: 진행세션 100/150/200건 구간에서 201건이면 200건 구간(최고)만 적용.
-  const bestByMetric = new Map<string, Bonus>();
-  for (const b of achieved) {
-    const cur = bestByMetric.get(b.metric);
-    if (!cur || (Number(b.gte) || 0) > (Number(cur.gte) || 0)) bestByMetric.set(b.metric, b);
-  }
-  const achievedBonuses = [...bestByMetric.values()];
-  const bonusPayout = achievedBonuses.reduce((s, b) => {
-    if (b.reward_type === "percent") {
-      return s + Math.round((commissionPayout * (Number(b.bonus_percent) || 0)) / 100);
-    }
-    return s + Math.max(0, Number(b.bonus_won) || 0);
-  }, 0);
-
-  // 현금 지급 (3.3% 원천징수 대상 아님)
-  const cashEnabled = !!trainer?.cash_pay_enabled;
-  const cashPay = cashEnabled ? Math.max(0, Number(trainer?.cash_pay_won ?? 0)) : 0;
+  const bonuses = displayCfg?.commission_bonuses ?? [];
+  const cashEnabled = !!displayCfg?.cash_pay_enabled;
 
   const totalPay = baseSalary + commissionPayout + bonusPayout + cashPay;
 
@@ -375,7 +378,10 @@ export async function GET(
       effective_rate: effectiveRate,
       base: revenue, // 부가세 제외 수업료 기준
       payout: commissionPayout,
+      // 조회 기간 중 설정이 바뀌어 날짜별로 나눠 계산했는지
+      config_changed_in_period: configChanged,
     },
+    pay_history: payVersions ?? [],
     base_salary: baseSalary,
     // 진행 수업(출석·노쇼) 라인별 수업료 + 합계 (수업 내역 탭)
     session_lines: sessionLines,

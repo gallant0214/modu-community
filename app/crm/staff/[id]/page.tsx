@@ -437,6 +437,32 @@ interface TierInput {
   rate: string; // %
 }
 
+/** 수업료 설정 이력 1건 (crm_staff_pay_history) */
+interface PayVersion {
+  effective_from: string;
+  commission_type: string | null;
+  commission_rate: number | null;
+  commission_tiers: { upTo: number | null; rate: number }[] | null;
+  base_salary: number | null;
+  cash_pay_enabled: boolean | null;
+  cash_pay_won: number | null;
+  commission_bonuses: unknown[] | null;
+}
+
+function payVersionSummary(v: PayVersion): string {
+  const parts: string[] = [];
+  if (v.commission_type === "tiered") {
+    const rates = (v.commission_tiers ?? []).map((t) => `${t.rate}%`).join("·");
+    parts.push(`매출 구간별 ${rates || "미설정"}`);
+  } else {
+    parts.push(`고정 ${Number(v.commission_rate ?? 0)}%`);
+  }
+  if (Number(v.base_salary ?? 0) > 0) parts.push(`고정급 ${Number(v.base_salary).toLocaleString()}원`);
+  if (v.cash_pay_enabled && Number(v.cash_pay_won ?? 0) > 0) parts.push(`현금 ${Number(v.cash_pay_won).toLocaleString()}원`);
+  if ((v.commission_bonuses ?? []).length > 0) parts.push(`성과급 조건 ${(v.commission_bonuses ?? []).length}개`);
+  return parts.join(" · ");
+}
+
 function CommissionSection({
   member,
   register,
@@ -444,6 +470,39 @@ function CommissionSection({
   member: StaffMember;
   register: (key: string, fn: () => Record<string, unknown>) => void;
 }) {
+  const { getIdToken } = useAuth();
+  // 적용 시작일 — 이 날짜(포함)에 진행한 수업부터 새 설정으로 계산. 기본 오늘(KST)
+  // 렌더 중 Date.now() 호출 금지(react 순수성 규칙) → 최초 1회만 계산
+  const [todayKst] = useState(() => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10));
+  const [effectiveFrom, setEffectiveFrom] = useState(todayKst);
+  // 저장 시점에 최신 적용일을 읽기 위한 ref (렌더 중 ref 쓰기 금지 → effect 에서 동기화)
+  const effRef = useRef(todayKst);
+  useEffect(() => {
+    effRef.current = effectiveFrom;
+  }, [effectiveFrom]);
+  const [history, setHistory] = useState<PayVersion[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`/api/crm/staff/${member.id}/pay-history`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const j = await res.json();
+        if (!cancelled) setHistory(j.history ?? []);
+      } catch {
+        /* 이력 표시는 부가 정보 — 실패해도 설정 편집은 가능 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getIdToken, member]);
+
   const [type, setType] = useState<"fixed" | "tiered">(
     member.commission_type === "tiered" ? "tiered" : "fixed"
   );
@@ -546,12 +605,61 @@ function CommissionSection({
   useEffect(() => {
     register("commission", () => {
       const cur = payloadRef.current();
-      return JSON.stringify(cur) === baselineRef.current ? {} : cur;
+      // 설정을 실제로 바꿨을 때만 전송 + 적용 시작일 동봉 (서버가 이력 버전으로 저장)
+      return JSON.stringify(cur) === baselineRef.current ? {} : { ...cur, pay_effective_from: effRef.current };
     });
   }, [register]);
 
   return (
     <Section title="수업료(정산) 설정">
+      {/* 적용 시작일 + 설정 이력 */}
+      <div className="mb-4 pb-4 border-b border-[#E8E0D0]/70 dark:border-zinc-800">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-300">적용 시작일</span>
+          <input
+            type="date"
+            value={effectiveFrom}
+            onChange={(e) => setEffectiveFrom(e.target.value || todayKst)}
+            className={`${crmInputClass} max-w-[170px]`}
+          />
+          {effectiveFrom < todayKst && (
+            <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-300">
+              지난 날짜 — 그날 수업부터 소급 적용돼요
+            </span>
+          )}
+          {effectiveFrom > todayKst && (
+            <span className="text-[12px] font-semibold text-[#487596] dark:text-[#8FB7D4]">적용 예정</span>
+          )}
+        </div>
+        <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#A89B80]">
+          아래 수업료 설정을 바꾸고 저장하면 <strong>이 날짜에 진행한 수업부터</strong> 새 설정으로 계산돼요.
+          그 전 수업은 기존 설정 그대로 유지됩니다. 고정 급여·현금 지급·성과급 조건은 각 달 말일 기준 설정이 적용돼요.
+        </p>
+        {history.length > 0 && (
+          <div className="mt-2.5">
+            <div className="mb-1 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400">설정 이력</div>
+            <ul className="space-y-1">
+              {[...history].reverse().map((v) => (
+                <li
+                  key={v.effective_from}
+                  className="flex flex-wrap items-center gap-2 rounded-lg border border-[#E8E0D0] bg-white px-2.5 py-1.5 text-[12px] dark:border-zinc-700 dark:bg-zinc-900"
+                >
+                  <span className="font-semibold tabular-nums text-[#2A251D] dark:text-zinc-100">
+                    {v.effective_from === "2000-01-01" ? "기준 (이력 도입 전)" : `${v.effective_from}부터`}
+                  </span>
+                  {v.effective_from > todayKst && (
+                    <span className="rounded-full bg-[#5A8BB0]/15 px-1.5 py-0.5 text-[10.5px] font-bold text-[#487596] dark:text-[#8FB7D4]">
+                      적용 예정
+                    </span>
+                  )}
+                  <span className="text-[#6B5D47] dark:text-zinc-400">{payVersionSummary(v)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
       {/* 고정 급여 유무 */}
       <div className="mb-4 pb-4 border-b border-[#E8E0D0]/70 dark:border-zinc-800">
         <label className="flex items-center gap-2 cursor-pointer mb-2">

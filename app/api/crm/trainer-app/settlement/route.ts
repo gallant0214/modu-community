@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { perSessionFee } from "@/app/lib/crm-commission";
 import {
-  perSessionFee,
-  effectiveCommissionRate,
-  commissionPayout,
-  type CommissionConfig,
-} from "@/app/lib/crm-commission";
+  loadPayHistory,
+  payConfigFromMember,
+  monthlyCommission,
+  type SessionFee,
+} from "@/app/lib/crm-pay-history";
 
 export const dynamic = "force-dynamic";
 
@@ -73,24 +74,28 @@ export async function GET(request: Request) {
   let expectedRevenue = 0; // 진행 + 예정(booked) 매출
   let attendedCount = 0;
   let bookedCount = 0;
+  const confirmedSessions: SessionFee[] = [];
+  const expectedSessions: SessionFee[] = [];
   for (const r of monthRes ?? []) {
     const p = r.pass_id ? passMap.get(r.pass_id) : null;
     const fee = p ? perSessionFee(p) : 0;
     if (r.status === "attended" || r.status === "noshow") {
       confirmedRevenue += fee; // 진행(출석+노쇼) 소진분 = 확정 매출
+      confirmedSessions.push({ at: r.starts_at, fee });
       if (r.status === "attended") attendedCount += 1;
     } else if (r.status === "booked") {
       bookedCount += 1;
     }
     expectedRevenue += fee;
+    expectedSessions.push({ at: r.starts_at, fee });
   }
 
-  const cfg: CommissionConfig = meRow ?? {};
-  const hasCommission =
-    (String(cfg.commission_type) === "tiered" &&
-      Array.isArray(cfg.commission_tiers) &&
-      cfg.commission_tiers.length > 0) ||
-    Number(cfg.commission_rate ?? 0) > 0;
+  // 🚨 수업료 설정은 이력 기준 — 수업일에 유효한 설정의 요율 적용 (앱 정산도 웹과 동일)
+  const payVersions = (await loadPayHistory(centerId, me ? [me] : [])).get(me ?? 0);
+  const payFallback = payConfigFromMember(meRow);
+  const confirmedCalc = monthlyCommission(confirmedSessions, payVersions, payFallback, ym);
+  const expectedCalc = monthlyCommission(expectedSessions, payVersions, payFallback, ym);
+  const hasCommission = expectedCalc.hasCommission || confirmedCalc.hasCommission;
 
   return NextResponse.json({
     ym,
@@ -99,10 +104,10 @@ export async function GET(request: Request) {
     attendedCount,
     bookedCount,
     hasCommission,
-    effectiveRate: hasCommission ? effectiveCommissionRate(cfg, expectedRevenue) : 0,
+    effectiveRate: hasCommission ? Math.round(expectedCalc.effectiveRate * 100) / 100 : 0,
     confirmedRevenue,
     expectedRevenue,
-    confirmedPayout: hasCommission ? commissionPayout(cfg, confirmedRevenue) : null,
-    expectedPayout: hasCommission ? commissionPayout(cfg, expectedRevenue) : null,
+    confirmedPayout: hasCommission ? confirmedCalc.payout : null,
+    expectedPayout: hasCommission ? expectedCalc.payout : null,
   });
 }

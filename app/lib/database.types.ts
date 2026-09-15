@@ -1841,6 +1841,57 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_staff_pay_history: {
+        Row: {
+          id: number
+          center_id: number
+          center_member_id: number
+          effective_from: string
+          commission_type: string | null
+          commission_rate: number | null
+          commission_tiers: Json | null
+          base_salary: number | null
+          cash_pay_enabled: boolean | null
+          cash_pay_won: number | null
+          commission_bonuses: Json | null
+          note: string | null
+          created_by_uid: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          center_member_id: number
+          effective_from: string
+          commission_type?: string | null
+          commission_rate?: number | null
+          commission_tiers?: Json | null
+          base_salary?: number | null
+          cash_pay_enabled?: boolean | null
+          cash_pay_won?: number | null
+          commission_bonuses?: Json | null
+          note?: string | null
+          created_by_uid?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          center_member_id?: number
+          effective_from?: string
+          commission_type?: string | null
+          commission_rate?: number | null
+          commission_tiers?: Json | null
+          base_salary?: number | null
+          cash_pay_enabled?: boolean | null
+          cash_pay_won?: number | null
+          commission_bonuses?: Json | null
+          note?: string | null
+          created_by_uid?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       crm_sales: {
         Row: {
           id: number
