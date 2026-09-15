@@ -2455,6 +2455,8 @@ function FixedExpensesPanel() {
         순이익·손익분기점 계산에 그대로 쓰여서, 빠진 항목이 있으면 이익이 실제보다 크게 보입니다.
       </p>
 
+      <CardFeeSetting />
+
       {/* 자주 빠뜨리는 항목 — 눌러서 항목명 채우기 */}
       <div>
         <div className="mb-1.5 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400">
@@ -2694,6 +2696,112 @@ function FixedExpensesPanel() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * 카드 가맹점 수수료율 — 통계 정산에서 '카드 매출 × 수수료율' 을 지출로 차감한다.
+ * 기본 0(미설정). 가맹점마다 우대수수료율이 달라 추측값을 넣지 않는다.
+ */
+function CardFeeSetting() {
+  const { getIdToken } = useAuth();
+  const [value, setValue] = useState("");
+  const [saved, setSaved] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/settings", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const j = await res.json();
+        const v = Number(j?.settings?.card_fee_percent ?? 0) || 0;
+        if (cancelled) return;
+        setSaved(v);
+        setValue(v > 0 ? String(v) : "");
+      } catch {
+        /* 조회 실패 시 입력칸만 비워둔다 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getIdToken]);
+
+  const save = async () => {
+    setErr("");
+    const n = Number(value || 0);
+    if (Number.isNaN(n) || n < 0 || n > 10) {
+      setErr("0~10 사이 숫자로 입력해 주세요");
+      return;
+    }
+    setBusy(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/settings", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ card_fee_percent: n }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || "저장 실패");
+      setSaved(n);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const unset = saved === 0;
+  return (
+    <div
+      className={`rounded-2xl border px-3.5 py-3 ${
+        unset
+          ? "border-amber-300/70 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20"
+          : "border-[#E8E0D0] bg-[#FBF7EB]/40 dark:border-zinc-800 dark:bg-zinc-900/40"
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[13px] font-semibold text-[#2A251D] dark:text-zinc-100">카드 수수료율</span>
+        <div className="flex items-center gap-1">
+          <input
+            className={`${crmInputClass} w-20 text-right`}
+            value={value}
+            onChange={(e) => setValue(e.target.value.replace(/[^0-9.]/g, "").slice(0, 5))}
+            inputMode="decimal"
+            placeholder="예: 1.1"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                save();
+              }
+            }}
+          />
+          <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">%</span>
+        </div>
+        <button
+          onClick={save}
+          disabled={busy}
+          className="rounded-lg bg-[#6B7B3A] px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-[#5a6932] disabled:opacity-60"
+        >
+          {busy ? "…" : "저장"}
+        </button>
+        {unset && <span className="text-[12px] font-semibold text-amber-800 dark:text-amber-300">미설정</span>}
+      </div>
+      <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#8C8270] dark:text-zinc-500">
+        통계 정산에서 카드 매출 × 수수료율만큼 지출로 빠져요. 카드사 가맹점 매출 규모에 따라 우대수수료율
+        (대략 0.4~1.5%)이 적용되니, 카드단말기 정산 내역이나 카드사 안내 문자에서 확인해 입력해 주세요.
+      </p>
+      {err && <p className="mt-1 text-[12px] text-red-600 dark:text-red-400">{err}</p>}
     </div>
   );
 }

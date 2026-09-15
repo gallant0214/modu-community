@@ -4019,6 +4019,7 @@ export type Database = {
       }
       crm_center_settings: {
         Row: {
+          card_fee_percent: number
           center_id: number
           cancel_hours: number
           cancel_enabled: boolean
@@ -4040,6 +4041,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          card_fee_percent?: number
           center_id: number
           cancel_hours?: number
           class_booking_enabled?: boolean
@@ -4057,6 +4059,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          card_fee_percent?: number
           center_id?: number
           cancel_hours?: number
           class_booking_enabled?: boolean

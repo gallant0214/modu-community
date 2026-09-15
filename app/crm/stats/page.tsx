@@ -6,6 +6,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { ROLE_LABEL, formatWon, parseWon } from "../_components/crm-labels";
 import { TrainerSessionsChart, TrainerRevenueChart } from "./_components/trainer-sessions-chart";
 import { MarketTrend } from "./_components/market-trend";
+import { BusinessSummary } from "./_components/business-summary";
 import { PayrollList } from "../payroll/_payroll-list";
 
 interface MonthlyResp {
@@ -27,7 +28,7 @@ interface MonthlyResp {
   }[];
 }
 
-type Tab = "trainer" | "center" | "saleslist" | "settlement" | "payroll" | "market";
+type Tab = "summary" | "trainer" | "center" | "saleslist" | "settlement" | "payroll" | "market";
 
 type DateMode = "year" | "month" | "range";
 
@@ -36,7 +37,7 @@ export default function CrmStatsPage() {
   const [tab, setTab] = useState<Tab>(() => {
     if (typeof window === "undefined") return "center";
     const t = new URLSearchParams(window.location.search).get("tab");
-    return t === "payroll" || t === "trainer" || t === "settlement" || t === "saleslist" || t === "center" || t === "market"
+    return t === "summary" || t === "payroll" || t === "trainer" || t === "settlement" || t === "saleslist" || t === "center" || t === "market"
       ? (t as Tab)
       : "center";
   });
@@ -166,7 +167,9 @@ export default function CrmStatsPage() {
             통계
           </h1>
           <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-            {tab === "market"
+            {tab === "summary"
+              ? "매출 대비 지출, 손익분기점, 12개월 추세로 경영 안정성을 한눈에 확인해요."
+              : tab === "market"
               ? "센터 반경 내 경쟁업체가 얼마나 새로 생기고 없어졌는지 확인해요."
               : tab === "payroll"
               ? "강사를 선택하면 매출·담당 회원·수업 내역·급여를 확인할 수 있어요."
@@ -179,7 +182,7 @@ export default function CrmStatsPage() {
               : `총매출에서 고정지출·부가세·직원급여·추가지출을 뺀 순이익을 ${appliedDateMode === "year" ? "연 단위" : appliedDateMode === "month" ? "월 단위" : "지정 기간"}로 정산해요.`}
           </p>
         </div>
-        {tab !== "payroll" && tab !== "saleslist" && tab !== "market" && (
+        {tab !== "payroll" && tab !== "saleslist" && tab !== "market" && tab !== "summary" && (
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
             <ModeBtn active={dateMode === "year"} onClick={() => setDateMode("year")}>
@@ -247,7 +250,10 @@ export default function CrmStatsPage() {
         )}
       </header>
 
-      <div className="mb-5 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800">
+      <div className="mb-5 flex gap-1.5 overflow-x-auto border-b border-[#E8E0D0] dark:border-zinc-800">
+        <TabBtn active={tab === "summary"} onClick={() => setTab("summary")}>
+          경영 요약
+        </TabBtn>
         <TabBtn active={tab === "center"} onClick={() => setTab("center")}>
           센터 매출
         </TabBtn>
@@ -269,7 +275,7 @@ export default function CrmStatsPage() {
       </div>
 
       {/* 선택한 기간 — 지금 보고 있는 범위를 크게 표시 */}
-      <div className={`mb-4 flex items-baseline gap-2 flex-wrap ${tab === "market" ? "hidden" : ""}`}>
+      <div className={`mb-4 flex items-baseline gap-2 flex-wrap ${tab === "market" || tab === "summary" ? "hidden" : ""}`}>
         <h2 className="text-[20px] md:text-[22px] font-extrabold text-[#241F18] dark:text-zinc-100">
           {appliedPeriodLabel}
         </h2>
@@ -284,6 +290,8 @@ export default function CrmStatsPage() {
 
       {tab === "market" ? (
         <MarketTrend />
+      ) : tab === "summary" ? (
+        <BusinessSummary />
       ) : tab === "payroll" ? (
         <PayrollList />
       ) : tab === "saleslist" ? (
@@ -1345,6 +1353,15 @@ interface SettlementResp {
   additional_total: number;
   additional_income_total?: number;
   net_profit: number;
+  output_vat?: number;
+  input_vat?: number;
+  vat_payable?: number;
+  card_sales?: number;
+  card_fee_percent?: number;
+  card_fee?: number;
+  labor_ratio?: number | null;
+  expense_ratio?: number | null;
+  net_margin?: number | null;
 }
 
 interface AdditionalExpense {
@@ -1352,6 +1369,7 @@ interface AdditionalExpense {
   ym: string;
   label: string;
   amount_won: number;
+  vat_deductible?: boolean;
   memo: string | null;
 }
 
@@ -1366,12 +1384,14 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
   const [nLabel, setNLabel] = useState("");
   const [nAmount, setNAmount] = useState("");
   const [nMemo, setNMemo] = useState("");
+  const [nVat, setNVat] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [eLabel, setELabel] = useState("");
   const [eAmount, setEAmount] = useState("");
   const [eMemo, setEMemo] = useState("");
+  const [eVat, setEVat] = useState(false);
 
   const loadSettlement = useCallback(async () => {
     try {
@@ -1403,6 +1423,29 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
   useEffect(() => {
     loadSettlement();
   }, [loadSettlement]);
+
+  // 분기 부가세 집계 — 선택한 월이 속한 분기 전체
+  const [quarterData, setQuarterData] = useState<SettlementResp | null>(null);
+  const quarterKey = (() => {
+    const [yy, mm] = defaultYm.split("-").map(Number);
+    return yy && mm ? `${yy}-Q${Math.ceil(mm / 3)}` : null;
+  })();
+  useEffect(() => {
+    if (!quarterKey) return;
+    let cancelled = false;
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/crm/stats/settlement?quarter=${quarterKey}`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok && !cancelled) setQuarterData(await res.json());
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getIdToken, quarterKey]);
   useEffect(() => {
     loadAddList();
   }, [loadAddList]);
@@ -1417,13 +1460,14 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
       const res = await fetch("/api/crm/additional-expenses", {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ ym: expenseYm, label, amount_won: parseWon(nAmount), memo: nMemo.trim() || null }),
+        body: JSON.stringify({ ym: expenseYm, label, amount_won: parseWon(nAmount), memo: nMemo.trim() || null, vat_deductible: nVat }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || "추가 실패");
       setNLabel("");
       setNAmount("");
       setNMemo("");
+      setNVat(false);
       loadAddList();
       loadSettlement();
     } catch (e) {
@@ -1438,6 +1482,7 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
     setELabel(x.label);
     setEAmount(String(x.amount_won ?? 0));
     setEMemo(x.memo ?? "");
+    setEVat(x.vat_deductible === true);
   };
   const saveEdit = async () => {
     if (!editingId) return;
@@ -1447,7 +1492,7 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
     const res = await fetch(`/api/crm/additional-expenses/${editingId}`, {
       method: "PATCH",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ label, amount_won: parseWon(eAmount), memo: eMemo.trim() || null }),
+      body: JSON.stringify({ label, amount_won: parseWon(eAmount), memo: eMemo.trim() || null, vat_deductible: eVat }),
     });
     if (res.ok) {
       setEditingId(null);
@@ -1488,14 +1533,38 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
             선택 기간 {data?.months_in_period}개월 합산 (고정지출·직원 고정급은 개월수만큼 반영)
           </div>
         )}
+        {data && data.total_revenue > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <RatioChip label="순이익률" value={data.net_margin} />
+            <RatioChip label="매출 대비 지출" value={data.expense_ratio} />
+            <RatioChip label="인건비 비중" value={data.labor_ratio} />
+          </div>
+        )}
       </section>
 
       {/* 계산 상세 */}
       <section className="mb-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden">
         <SettleRow label="총 매출 (부가세 포함)" value={data?.total_revenue ?? 0} sign="" strong />
         <SettleRow label="− 고정 지출" value={-(data?.fixed_total ?? 0)} sub={multiMonth ? `월 ${formatWon(data?.fixed_monthly ?? 0)}원 × ${data?.months_in_period}개월` : undefined} />
-        <SettleRow label="− 부가세" value={-(data?.vat_amount ?? 0)} sub="부가세 포함 결제 건의 10%" />
-        <SettleRow label="− 직원 급여" value={-(data?.salary_total ?? 0)} sub="고정급 + 수업료(정산)" />
+        <SettleRow
+          label="− 부가세 (납부 예상)"
+          value={-(data?.vat_payable ?? data?.vat_amount ?? 0)}
+          sub={`매출세액 ${formatWon(data?.output_vat ?? data?.vat_amount ?? 0)}원 − 매입세액 ${formatWon(data?.input_vat ?? 0)}원`}
+        />
+        <SettleRow
+          label="− 카드 수수료"
+          value={-(data?.card_fee ?? 0)}
+          sub={
+            (data?.card_fee_percent ?? 0) > 0
+              ? `카드 매출 ${formatWon(data?.card_sales ?? 0)}원 × ${data?.card_fee_percent}%`
+              : "수수료율 미설정 — 설정 › 고정 지출에서 입력하면 반영돼요"
+          }
+        />
+        <SettleRow
+          label="− 직원 급여"
+          value={-(data?.salary_total ?? 0)}
+          sub={`고정급 + 수업료(정산)${data && data.total_revenue > 0 ? ` · 매출 대비 ${ratioText(data.labor_ratio)}` : ""}`}
+        />
         <SettleRow label="− 추가 지출" value={-(data?.additional_total ?? 0)} />
         <SettleRow label="+ 추가 수입" value={data?.additional_income_total ?? 0} />
         <div className="flex items-center justify-between px-5 py-3.5 bg-[#6B7B3A]/8 dark:bg-[#6B7B3A]/15 border-t border-[#6B7B3A]/25">
@@ -1505,6 +1574,36 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
           </span>
         </div>
       </section>
+
+      {/* 분기 부가세 */}
+      {quarterData && quarterKey && (
+        <section className="mb-5 overflow-hidden rounded-2xl border border-[#5A8BB0]/30 bg-[#5A8BB0]/[0.05] dark:bg-[#5A8BB0]/10">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pb-2 pt-4">
+            <div className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100">
+              {quarterKey.replace("-Q", "년 ")}분기 부가세{" "}
+              <span className="font-normal text-[#8C8270]">(분기 전체 집계)</span>
+            </div>
+            <div className="text-[11.5px] text-[#487596] dark:text-[#8FB7D4]">{vatDeadlineText(quarterKey)}</div>
+          </div>
+          <SettleRow
+            label="매출세액"
+            value={quarterData.output_vat ?? quarterData.vat_amount}
+            sub={`부가세 포함 매출 ${formatWon(quarterData.total_revenue)}원 ÷ 11`}
+          />
+          <SettleRow label="− 매입세액" value={-(quarterData.input_vat ?? 0)} sub="세금계산서 받은 고정·추가 지출 ÷ 11" />
+          <div className="flex items-center justify-between border-t border-[#5A8BB0]/20 bg-[#5A8BB0]/10 px-5 py-3">
+            <span className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100">= 납부 예상 세액</span>
+            <span className="text-[15px] font-bold tabular-nums text-[#487596] dark:text-[#8FB7D4]">
+              {formatWon(quarterData.vat_payable ?? quarterData.vat_amount)}원
+            </span>
+          </div>
+          <div className="px-5 py-2.5 text-[11px] leading-relaxed text-[#8C8270] dark:text-zinc-500">
+            참고용 추정치예요. 이 분기 카드 매출 {formatWon(quarterData.card_sales ?? 0)}원. 매입세액은 여기 등록한 지출
+            기준이라 실제 세금계산서와 다를 수 있고, 과세 유형(간이·법인)에 따라 신고 방식이 달라요. 신고 전 세무사
+            확인을 권장해요.
+          </div>
+        </section>
+      )}
 
       {/* 직원 급여 상세 */}
       {(data?.staff_breakdown.length ?? 0) > 0 && (
@@ -1575,6 +1674,17 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
           </button>
         </div>
 
+        <label className="flex items-center gap-2 text-[12.5px] text-[#3A342A] dark:text-zinc-300 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={nVat}
+            onChange={(e) => setNVat(e.target.checked)}
+            className="h-4 w-4 accent-[#6B7B3A]"
+          />
+          세금계산서를 받은 지출이에요
+          <span className="text-[11.5px] text-[#A89B80]">(매입세액 공제)</span>
+        </label>
+
         {error && (
           <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">{error}</div>
         )}
@@ -1607,6 +1717,15 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
                       onChange={(e) => setEMemo(e.target.value.slice(0, 100))}
                       placeholder="메모"
                     />
+                    <label className="flex items-center gap-1.5 text-[12px] text-[#3A342A] dark:text-zinc-300 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={eVat}
+                        onChange={(e) => setEVat(e.target.checked)}
+                        className="h-3.5 w-3.5 accent-[#6B7B3A]"
+                      />
+                      세금계산서
+                    </label>
                     <button onClick={saveEdit} className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12px] font-semibold">저장</button>
                     <button onClick={() => setEditingId(null)} className="px-2 py-1.5 text-[12px] text-[#6B5D47]">취소</button>
                   </div>
@@ -1615,6 +1734,11 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
                     <div className="flex-1 min-w-0">
                       <span className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">{x.label}</span>
                       {x.memo && <span className="ml-2 text-[11.5px] text-[#8C8270]">{x.memo}</span>}
+                      {x.vat_deductible && (
+                        <span className="ml-2 rounded-full border border-[#5A8BB0]/40 bg-[#5A8BB0]/10 px-1.5 py-0.5 text-[10.5px] font-semibold text-[#487596] dark:text-[#8FB7D4]">
+                          세금계산서
+                        </span>
+                      )}
                     </div>
                     <span className="text-[13px] font-bold text-[#3A342A] dark:text-zinc-100 tabular-nums whitespace-nowrap">{formatWon(x.amount_won)}원</span>
                     <button onClick={() => startEdit(x)} className="px-2 py-1 rounded-md border border-[#E8E0D0] dark:border-zinc-700 text-[12px] text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5]">수정</button>
@@ -1850,6 +1974,27 @@ function AdditionalLedgerPanel({
         <div className="text-[11.5px] text-[#A89B80] leading-relaxed">{footnote}</div>
       </section>
     </>
+  );
+}
+
+const ratioText = (r: number | null | undefined) =>
+  r == null || !Number.isFinite(r) ? "—" : `${(r * 100).toFixed(1)}%`;
+
+/** 분기 부가세 신고·납부 기한 안내 (개인 일반과세자 기준 일반적 일정) */
+function vatDeadlineText(quarterKey: string): string {
+  const q = Number(quarterKey.slice(-1));
+  if (q === 1) return "신고·납부 기한 4월 25일";
+  if (q === 2) return "신고·납부 기한 7월 25일 (상반기 확정)";
+  if (q === 3) return "신고·납부 기한 10월 25일";
+  return "신고·납부 기한 다음 해 1월 25일 (하반기 확정)";
+}
+
+function RatioChip({ label, value }: { label: string; value: number | null | undefined }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#E8E0D0] bg-white px-2.5 py-1 text-[12px] dark:border-zinc-700 dark:bg-zinc-950">
+      <span className="text-[#8C8270] dark:text-zinc-500">{label}</span>
+      <strong className="tabular-nums text-[#2A251D] dark:text-zinc-100">{ratioText(value)}</strong>
+    </span>
   );
 }
 

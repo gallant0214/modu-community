@@ -79,6 +79,7 @@ export async function PATCH(request: Request) {
     "default_columns",
     "checkout_mileage_enabled",
     "checkout_mileage_earn",
+    "card_fee_percent",
   ];
   const patch: Record<string, unknown> = {};
   for (const key of allowed) {
@@ -89,6 +90,12 @@ export async function PATCH(request: Request) {
   }
 
   // 간단한 범위 검증
+  if (patch.card_fee_percent !== undefined) {
+    const n = Number(patch.card_fee_percent);
+    if (Number.isNaN(n) || n < 0 || n > 10)
+      return NextResponse.json({ error: "카드 수수료율은 0~10% 사이로 입력해 주세요" }, { status: 400 });
+    patch.card_fee_percent = Math.round(n * 100) / 100;
+  }
   if (patch.cancel_hours !== undefined) {
     const n = Number(patch.cancel_hours);
     if (Number.isNaN(n) || n < 0 || n > 72)
