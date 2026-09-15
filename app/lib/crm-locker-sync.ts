@@ -50,3 +50,24 @@ export async function syncLockerDatesFromRental(
     .eq("center_id", centerId);
   return target.id;
 }
+
+/**
+ * 대여권 '종류' 키 — 만료 판정 시 같은 종류를 이어서 결제했는지 묶는 기준.
+ *
+ * 이름 문자열 정규화만으로는 부족하다: '스포츠바우처 1개월(운동복)' 처럼 종류가 괄호 안에
+ * 들어간 상품명이 있어, 괄호를 지우면 '운동복 1개월' 과 다른 종류로 오판된다.
+ * 그래서 카테고리를 먼저 판정한다.
+ *   1) 이름 어디든 '운동복' → apparel   ('운동복 3개월(상가)' 처럼 상가가 괄호에 있어도 운동복)
+ *   2) 락커 대여권(이름·메모 기준)       → locker
+ *   3) 그 외 → 괄호 설명·기간 표기·공백을 뺀 이름
+ */
+export function rentalKindKey(itemName: string | null, memo: string | null): string {
+  const name = (itemName ?? "").trim();
+  if (name.includes("운동복")) return "apparel";
+  if (name.includes("락커") || looksLikeLockerRental(name, memo)) return "locker";
+  const key = name
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\d+\s*(개월|달|년|주|일)/g, "")
+    .replace(/\s+/g, "");
+  return key || name;
+}

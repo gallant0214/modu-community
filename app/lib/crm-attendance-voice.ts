@@ -1,4 +1,5 @@
 import { supabase } from "@/app/lib/supabase";
+import { rentalKindKey } from "@/app/lib/crm-locker-sync";
 
 interface Rule {
   trigger_type: string;
@@ -187,11 +188,11 @@ export async function buildAttendanceVoiceMessages(
           ? supabase
               .from("crm_rentals")
               // 상태값은 valid/expired (active 는 존재하지 않음 — 예전 필터로는 항상 0건이었다)
-              .select("item_name, expires_at")
+              .select("item_name, memo, expires_at")
               .eq("center_id", centerId)
               .eq("member_id", member.id)
               .eq("status", "valid")
-          : Promise.resolve({ data: [] as { item_name: string; expires_at: string }[] }),
+          : Promise.resolve({ data: [] as { item_name: string; memo: string | null; expires_at: string }[] }),
         on("msg_expired_locker")
           ? supabase
               .from("crm_lockers")
@@ -293,18 +294,9 @@ export async function buildAttendanceVoiceMessages(
         const days = Number(s.msg_expired_rental_days ?? 0);
         // 같은 종류를 이어서 결제했으면(예: 운동복 재결제) 지난 건은 만료로 보지 않는다.
         // 종류 키 = 괄호 설명·기간 표기·공백 제거.
-        const kindOf = (name: string): string => {
-          const raw = (name ?? "").trim();
-          return (
-            raw
-              .replace(/\([^)]*\)/g, "")
-              .replace(/\d+\s*(개월|달|년|주|일)/g, "")
-              .replace(/\s+/g, "") || raw
-          );
-        };
         const latest = new Map<string, string>(); // kind → 가장 늦은 만료일
-        for (const r of (rentalsRes.data ?? []) as { item_name: string; expires_at: string }[]) {
-          const k = kindOf(r.item_name);
+        for (const r of (rentalsRes.data ?? []) as { item_name: string; memo: string | null; expires_at: string }[]) {
+          const k = rentalKindKey(r.item_name, r.memo);
           const cur = latest.get(k);
           if (!cur || r.expires_at > cur) latest.set(k, r.expires_at);
         }

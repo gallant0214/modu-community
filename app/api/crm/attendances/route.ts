@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { rentalKindKey } from "@/app/lib/crm-locker-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ export async function GET(request: Request) {
     memberIds.length
       ? supabase
           .from("crm_rentals")
-          .select("member_id, item_name, expires_at, status")
+          .select("member_id, item_name, memo, expires_at, status")
           .eq("center_id", ctx.centerId)
           .eq("status", "valid")
           .in("member_id", memberIds)
@@ -84,7 +85,7 @@ export async function GET(request: Request) {
 
   type Mship = { member_id: number; plan_name: string; expires_at: string };
   type Pass = { member_id: number; expires_at: string };
-  type Rental = { member_id: number; item_name: string; expires_at: string };
+  type Rental = { member_id: number; item_name: string; memo: string | null; expires_at: string };
   type Locker = { assigned_member_id: number; number: string | number; expires_at: string | null };
 
   const primaryMembership = new Map<number, { plan_name: string; expires_at: string; days_left: number }>();
@@ -115,22 +116,11 @@ export async function GET(request: Request) {
     arr.push(item);
     expiredItems.set(memberId, arr);
   };
-  // 대여권 종류 키 — "운동복" 과 "운동복 3개월(상가)" 를 같은 종류로 묶기 위해
-  // 괄호 설명·기간 표기(N개월/N일…)·공백을 제거한 값을 사용.
-  const rentalKind = (name: string): string => {
-    const raw = (name ?? "").trim();
-    const key = raw
-      .replace(/\([^)]*\)/g, "")
-      .replace(/\d+\s*(개월|달|년|주|일)/g, "")
-      .replace(/\s+/g, "");
-    return key || raw;
-  };
-
   // 같은 종류를 이어서 결제한 경우(예: 운동복 재결제) 지난 건은 만료로 보지 않는다.
   // 종류별로 만료일이 가장 늦은 1건만 판단 대상.
   const latestRental = new Map<string, Rental>();
   for (const r of (rentalRes.data ?? []) as unknown as Rental[]) {
-    const key = `${r.member_id}:${rentalKind(r.item_name)}`;
+    const key = `${r.member_id}:${rentalKindKey(r.item_name, r.memo)}`;
     const cur = latestRental.get(key);
     if (!cur || r.expires_at > cur.expires_at) latestRental.set(key, r);
   }
