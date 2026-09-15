@@ -150,7 +150,7 @@ export const LOG_FIELD_LABEL: Record<string, string> = {
   duration_days: "기간", item_name: "상품", total_sessions: "총 세션", remaining_sessions: "잔여 세션",
   session_minutes: "수업 시간", issue_type: "발급 유형", lesson_kind: "수업 종류",
   mileage_earned: "적립 마일리지", mileage_used: "사용 마일리지", co_trainer_ids: "추가 강사",
-  reason: "사유", requested_by: "요청자", count: "대상",
+  reason: "사유", requested_by: "요청자", count: "대상", commission_rate: "커미션 요율",
 };
 
 const LOG_MONEY_FIELDS = new Set(["price_won", "amount_won", "discount_won", "total_paid_won"]);

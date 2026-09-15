@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
+import { perSessionFee } from "@/app/lib/crm-commission";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,7 @@ export async function GET(
   // 담당 수강권(주강사 또는 추가강사) — 회원 집계용
   const { data: passes, error } = await supabase
     .from("crm_passes")
-    .select("member_id, lesson_kind, total_sessions, remaining_sessions, issued_at, expires_at, outstanding_won, status, product_id, group_capacity")
+    .select("id, member_id, lesson_kind, total_sessions, remaining_sessions, issued_at, expires_at, outstanding_won, status, product_id, group_capacity, price_won, discount_won, vat_included, commission_rate")
     .eq("center_id", ctx.centerId)
     .neq("status", "deleted")
     .or(`trainer_member_id.eq.${trainerId},co_trainer_ids.cs.{${trainerId}}`)
@@ -55,9 +56,43 @@ export async function GET(
     valid: boolean;
     pass_outstanding: number;
   };
+  // 회원별 수강권 목록(요율 편집용) — 담당(주/추가강사) 수강권만.
+  type PassLite = {
+    id: number;
+    lesson_kind: string | null;
+    total_sessions: number;
+    remaining_sessions: number;
+    per_session_won: number;
+    commission_rate: number | null;
+    valid: boolean;
+    issued_at: string | null;
+    expires_at: string | null;
+  };
+  const passesByMember = new Map<number, PassLite[]>();
+
   const agg = new Map<number, Agg>();
   for (const p of passes ?? []) {
     if (p.member_id == null) continue;
+    {
+      const notExp = p.expires_at === "9999-12-31" || (p.expires_at ?? "") >= todayKst;
+      const hasRem = (p.total_sessions ?? 0) === 0 || (p.remaining_sessions ?? 0) > 0;
+      const list = passesByMember.get(p.member_id) ?? [];
+      list.push({
+        id: (p as { id: number }).id,
+        lesson_kind: p.lesson_kind ?? null,
+        total_sessions: p.total_sessions ?? 0,
+        remaining_sessions: p.remaining_sessions ?? 0,
+        per_session_won: perSessionFee(p as never),
+        commission_rate:
+          (p as { commission_rate?: number | null }).commission_rate != null
+            ? Number((p as { commission_rate?: number | null }).commission_rate)
+            : null,
+        valid: p.status === "valid" && notExp && hasRem,
+        issued_at: p.issued_at ?? null,
+        expires_at: p.expires_at ?? null,
+      });
+      passesByMember.set(p.member_id, list);
+    }
     const cur =
       agg.get(p.member_id) ??
       { latest_pass: null, latest_issued: null, latest_product_id: null, latest_group_capacity: 1, has_pt: false, lesson_experience: false, valid: false, pass_outstanding: 0 };
@@ -151,6 +186,7 @@ export async function GET(
         lesson_experience: a?.lesson_experience ?? false,
         total_paid_won: m.total_paid_won ?? 0,
         outstanding_total: (a?.pass_outstanding ?? 0) + (mbOutstanding.get(m.id) ?? 0),
+        passes: passesByMember.get(m.id) ?? [],
       };
     })
     // 유효 회원 먼저(최근 발급 순). 그 아래 만료 회원은 '최신 만료(만기일 늦은)' 순.

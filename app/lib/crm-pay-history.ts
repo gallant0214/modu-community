@@ -145,6 +145,11 @@ export interface SessionFee {
   at: string;
   /** 회당 수업료(부가세 제외) */
   fee: number;
+  /**
+   * 이 수업이 속한 수강권의 커미션 요율 override(%). null/undefined 면 강사 기본요율(고정/구간) 사용.
+   * 값이 있으면 그 수강권은 tiered·이력요율과 무관하게 무조건 이 요율로 계산.
+   */
+  overrideRate?: number | null;
 }
 
 export interface MonthlyCommission {
@@ -175,7 +180,15 @@ export function monthlyCommission(
   const revenue = sessions.reduce((s, x) => s + x.fee, 0);
   const groups = new Map<string, { cfg: PayConfig | null; rev: number }>();
   let any = false;
+  let overridePayout = 0;
+  let overrideUsed = false;
   for (const s of sessions) {
+    // 수강권별 요율 override 가 있으면 그 요율로 즉시 계산(구간/이력요율 무시).
+    if (s.overrideRate != null) {
+      overridePayout += Math.round((s.fee * Number(s.overrideRate)) / 100);
+      overrideUsed = true;
+      continue;
+    }
     const cfg = payConfigAt(versions, kstYmdOf(s.at), fallback);
     const key = cfg?.effective_from ?? "none";
     const g = groups.get(key) ?? { cfg, rev: 0 };
@@ -183,8 +196,11 @@ export function monthlyCommission(
     groups.set(key, g);
     if (hasCommissionConfig(cfg)) any = true;
   }
-  let payout = 0;
-  for (const g of groups.values()) payout += Math.round((g.rev * rateOf(g.cfg, revenue)) / 100);
+  // 구간(tiered) 기준 매출은 override 가 아닌 수업 매출 기준(override 는 자기 요율로 별도 계산됨)
+  const nonOverrideRevenue = revenue - sessions.reduce((s, x) => s + (x.overrideRate != null ? x.fee : 0), 0);
+  let payout = overridePayout;
+  for (const g of groups.values()) payout += Math.round((g.rev * rateOf(g.cfg, nonOverrideRevenue)) / 100);
+  if (overrideUsed) any = true;
   const endCfg = monthEndConfig(versions, ym, fallback);
   if (sessions.length === 0 && hasCommissionConfig(endCfg)) any = true;
   return {
@@ -194,7 +210,7 @@ export function monthlyCommission(
     effectiveRate: revenue > 0 ? (payout / revenue) * 100 : rateOf(endCfg, 0),
     hasCommission: any,
     split: groups.size > 1,
-    rateAt: (atIso: string) => rateOf(payConfigAt(versions, kstYmdOf(atIso), fallback), revenue),
+    rateAt: (atIso: string) => rateOf(payConfigAt(versions, kstYmdOf(atIso), fallback), nonOverrideRevenue),
   };
 }
 

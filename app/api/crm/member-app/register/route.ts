@@ -31,6 +31,7 @@ export async function POST(request: Request) {
     centerId?: number;
     name?: string;
     birth?: string;
+    gender?: string;
     phone?: string;
     address?: string;
     privacyConsent?: boolean;
@@ -45,11 +46,13 @@ export async function POST(request: Request) {
   const name = (body.name ?? "").trim();
   const phoneDigits = digitsOnly(body.phone);
   const birth = typeof body.birth === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.birth) ? body.birth : null;
+  const gender = body.gender === "M" || body.gender === "F" ? body.gender : null;
   const address = (body.address ?? "").trim() || null;
 
   if (!centerId) return NextResponse.json({ error: "센터를 선택해주세요" }, { status: 400 });
   if (!name) return NextResponse.json({ error: "이름을 입력해주세요" }, { status: 400 });
   if (!birth) return NextResponse.json({ error: "생년월일을 정확히 입력해주세요" }, { status: 400 });
+  if (!gender) return NextResponse.json({ error: "성별을 선택해주세요" }, { status: 400 });
   if (phoneDigits.length < 10) return NextResponse.json({ error: "연락처를 정확히 입력해주세요" }, { status: 400 });
   if (body.privacyConsent !== true) {
     return NextResponse.json({ error: "개인정보 수집·이용 동의가 필요해요" }, { status: 400 });
@@ -81,7 +84,7 @@ export async function POST(request: Request) {
   const last4 = phoneDigits.slice(-4);
   const { data: candidates } = await supabase
     .from("crm_members")
-    .select("id, name, phone, linked_firebase_uid, birth, address, attendance_no")
+    .select("id, name, phone, linked_firebase_uid, birth, gender, address, attendance_no")
     .eq("center_id", centerId)
     .eq("status", "active")
     .ilike("phone", `%${last4}%`);
@@ -96,6 +99,7 @@ export async function POST(request: Request) {
       linked_firebase_uid: user.uid,
       member_type: "matched",
       birth: match.birth ?? birth,
+      gender: match.gender ?? gender,
       address: match.address ?? address,
       privacy_agreed_at: nowIso,
     };
@@ -121,6 +125,7 @@ export async function POST(request: Request) {
       name,
       phone: hyphenPhone(phoneDigits),
       birth,
+      gender,
       address,
       linked_firebase_uid: user.uid,
       privacy_agreed_at: nowIso,

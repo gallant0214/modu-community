@@ -3116,6 +3116,7 @@ export type Database = {
           product_id: number | null
           group_capacity: number
           attendance_mileage_earn: number
+          commission_rate: number | null
           created_at: string
           updated_at: string
         }
@@ -3148,6 +3149,7 @@ export type Database = {
           product_id?: number | null
           group_capacity?: number
           attendance_mileage_earn?: number
+          commission_rate?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -3180,6 +3182,7 @@ export type Database = {
           product_id?: number | null
           group_capacity?: number
           attendance_mileage_earn?: number
+          commission_rate?: number | null
           created_at?: string
           updated_at?: string
         }

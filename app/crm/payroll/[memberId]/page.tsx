@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { ROLE_LABEL, formatWon, formatPhone } from "../../_components/crm-labels";
@@ -415,6 +415,17 @@ function RevenueKpi({
 
 /* ─── 담당 회원 탭 ────────────────────────────── */
 
+interface PassLite {
+  id: number;
+  lesson_kind: string | null;
+  total_sessions: number;
+  remaining_sessions: number;
+  per_session_won: number;
+  commission_rate: number | null;
+  valid: boolean;
+  issued_at: string | null;
+  expires_at: string | null;
+}
 interface MemberRow {
   id: number;
   name: string;
@@ -430,6 +441,7 @@ interface MemberRow {
   lesson_experience: boolean;
   total_paid_won: number;
   outstanding_total: number;
+  passes: PassLite[];
 }
 
 function ageFromBirth(birth: string | null): string {
@@ -449,6 +461,40 @@ function MembersTab({ memberId }: { memberId: number }) {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "dormant">("all");
   const [q, setQ] = useState("");
+  const [expanded, setExpanded] = useState<number | null>(null); // 요율 편집 펼친 회원
+  const [savingPass, setSavingPass] = useState<number | null>(null);
+
+  // 수강권 요율 override 저장 (비우면 강사 기본요율). 대표자/관리자만.
+  const saveRate = async (memberIdRow: number, passId: number, raw: string) => {
+    const trimmed = raw.trim();
+    const rate = trimmed === "" ? null : Number(trimmed);
+    if (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 100)) {
+      alert("요율은 0~100 사이 숫자로 입력해 주세요.");
+      return;
+    }
+    setSavingPass(passId);
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/payroll/pass-commission`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ pass_id: passId, rate }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "저장 실패");
+      setRows((prev) =>
+        prev.map((m) =>
+          m.id === memberIdRow
+            ? { ...m, passes: m.passes.map((p) => (p.id === passId ? { ...p, commission_rate: rate } : p)) }
+            : m
+        )
+      );
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSavingPass(null);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -525,18 +571,19 @@ function MembersTab({ memberId }: { memberId: number }) {
               <Th>최근 구매 상품</Th>
               <Th>총 결제 금액</Th>
               <Th>총 미수금</Th>
+              <Th>수업료 요율</Th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={14} className="px-3 py-12 text-center text-[13px] text-[#8C8270]">
+                <td colSpan={15} className="px-3 py-12 text-center text-[13px] text-[#8C8270]">
                   불러오는 중…
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={14} className="px-3 py-12 text-center">
+                <td colSpan={15} className="px-3 py-12 text-center">
                   <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">데이터가 없어요</div>
                   <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
                     {rows.length === 0 ? "아직 담당 회원이 없어요." : "조건에 맞는 회원이 없어요."}
@@ -545,8 +592,8 @@ function MembersTab({ memberId }: { memberId: number }) {
               </tr>
             ) : (
               filtered.map((r) => (
+                <Fragment key={r.id}>
                 <tr
-                  key={r.id}
                   className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 text-[#3A342A] dark:text-zinc-200"
                 >
                   <td className="px-3 py-2.5 whitespace-nowrap tabular-nums text-[#8C8270]">{r.id}</td>
@@ -579,13 +626,101 @@ function MembersTab({ memberId }: { memberId: number }) {
                   <td className={`px-3 py-2.5 whitespace-nowrap tabular-nums ${r.outstanding_total > 0 ? "text-[#B4452A] font-medium" : "text-[#A89B80]"}`}>
                     {formatWon(r.outstanding_total)} 원
                   </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {r.passes.length === 0 ? (
+                      <span className="text-[#A89B80]">—</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(expanded === r.id ? null : r.id)}
+                        className="px-2 py-1 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[12px] font-semibold hover:bg-[#6B7B3A]/8"
+                      >
+                        {(() => {
+                          const set = r.passes.filter((p) => p.commission_rate != null).length;
+                          return set > 0 ? `설정 ${set}건 ▾` : "요율 설정 ▾";
+                        })()}
+                      </button>
+                    )}
+                  </td>
                 </tr>
+                {expanded === r.id && (
+                  <tr className="bg-[#FBF7EB]/60 dark:bg-zinc-900/60">
+                    <td colSpan={15} className="px-3 py-3">
+                      <div className="text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300 mb-2">
+                        {r.name} · 발급 수강권별 커미션 요율{" "}
+                        <span className="font-normal text-[#A89B80]">(비우면 강사 기본요율 적용)</span>
+                      </div>
+                      <div className="space-y-1.5 max-w-[720px]">
+                        {r.passes.map((p) => (
+                          <PassRateRow
+                            key={p.id}
+                            pass={p}
+                            saving={savingPass === p.id}
+                            onSave={(raw) => saveRate(r.id, p.id, raw)}
+                          />
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))
             )}
           </tbody>
         </table>
       </div>
     </section>
+  );
+}
+
+/** 수강권 1건의 커미션 요율(%) 편집 행 — 비우면 강사 기본요율 */
+function PassRateRow({
+  pass,
+  saving,
+  onSave,
+}: {
+  pass: PassLite;
+  saving: boolean;
+  onSave: (raw: string) => void;
+}) {
+  const [val, setVal] = useState(pass.commission_rate != null ? String(pass.commission_rate) : "");
+  useEffect(() => {
+    setVal(pass.commission_rate != null ? String(pass.commission_rate) : "");
+  }, [pass.commission_rate]);
+  const dirty =
+    (val.trim() === "") !== (pass.commission_rate == null) ||
+    (val.trim() !== "" && Number(val) !== pass.commission_rate);
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px]">
+      <span className="min-w-[150px] font-medium text-[#3A342A] dark:text-zinc-200">
+        {pass.lesson_kind ?? "수강권"}
+        {!pass.valid && <span className="ml-1 text-[11px] text-[#A89B80]">(만료)</span>}
+      </span>
+      <span className="text-[#8C8270]">
+        회당 {formatWon(pass.per_session_won)}원 · 잔여 {pass.remaining_sessions}/{pass.total_sessions}
+      </span>
+      <span className="flex items-center gap-1 ml-auto">
+        <input
+          type="number"
+          min={0}
+          max={100}
+          step="0.1"
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          placeholder="기본"
+          className="w-20 px-2 py-1 rounded-lg border border-[#D9CDB8] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-right text-[12.5px] focus:outline-none focus:border-[#6B7B3A]"
+        />
+        <span className="text-[#8C8270]">%</span>
+        <button
+          type="button"
+          disabled={saving || !dirty}
+          onClick={() => onSave(val)}
+          className="px-2.5 py-1 rounded-lg bg-[#6B7B3A] text-white text-[12px] font-semibold disabled:opacity-40 hover:bg-[#5a6932]"
+        >
+          {saving ? "저장 중" : "저장"}
+        </button>
+      </span>
+    </div>
   );
 }
 

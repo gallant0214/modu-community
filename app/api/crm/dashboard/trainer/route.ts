@@ -95,7 +95,7 @@ export async function GET(request: Request) {
     supabase
       .from("crm_passes")
       .select(
-        "id, member_id, lesson_kind, expires_at, remaining_sessions, total_sessions, price_won, vat_included, payment_status, outstanding_won, status"
+        "id, member_id, lesson_kind, expires_at, remaining_sessions, total_sessions, price_won, vat_included, payment_status, outstanding_won, status, commission_rate"
       )
       .eq("center_id", centerId)
       .eq("status", "valid")
@@ -182,15 +182,19 @@ export async function GET(request: Request) {
   for (const r of monthRes ?? []) {
     const p = r.pass_id ? passMap.get(r.pass_id) : null;
     const fee = p ? perSessionFee(p) : 0;
+    const overrideRate =
+      (p as { commission_rate?: number | null } | null)?.commission_rate != null
+        ? Number((p as { commission_rate?: number | null }).commission_rate)
+        : null;
     if (r.status === "attended" || r.status === "noshow") {
       confirmedRevenue += fee; // 진행(출석+노쇼) 소진분 = 확정 수업료 (급여/정산과 동일 기준)
-      confirmedSessions.push({ at: r.starts_at, fee });
+      confirmedSessions.push({ at: r.starts_at, fee, overrideRate });
       if (r.status === "attended") attendedCount += 1;
     } else if (r.status === "booked") {
       bookedCount += 1;
     }
     expectedRevenue += fee; // 진행(출석+노쇼) + 예정(booked)
-    expectedSessions.push({ at: r.starts_at, fee });
+    expectedSessions.push({ at: r.starts_at, fee, overrideRate });
   }
   // 🚨 수업료 설정은 이력 기준 — 수업일에 유효한 설정의 요율 적용
   const payVersions = (await loadPayHistory(centerId, me ? [me] : [])).get(me ?? 0);

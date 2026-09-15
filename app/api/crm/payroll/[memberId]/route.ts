@@ -256,10 +256,10 @@ export async function GET(
       ? supabase
           .from("crm_passes")
           // discount_won 필수 — perSessionFee 가 (정가−할인) 기준이라 빠지면 정산 탭과 금액이 달라짐
-          .select("id, price_won, discount_won, vat_included, total_sessions, lesson_kind")
+          .select("id, price_won, discount_won, vat_included, total_sessions, lesson_kind, commission_rate")
           .eq("center_id", ctx.centerId)
           .in("id", attendedPassIds)
-      : Promise.resolve({ data: [] as { id: number; price_won: number | null; discount_won: number | null; vat_included: boolean | null; total_sessions: number | null; lesson_kind: string | null }[] }),
+      : Promise.resolve({ data: [] as { id: number; price_won: number | null; discount_won: number | null; vat_included: boolean | null; total_sessions: number | null; lesson_kind: string | null; commission_rate: number | null }[] }),
     attendedMemberIds.length
       ? supabase.from("crm_members").select("id, name, phone").eq("center_id", ctx.centerId).in("id", attendedMemberIds)
       : Promise.resolve({ data: [] as { id: number; name: string; phone: string | null }[] }),
@@ -278,6 +278,8 @@ export async function GET(
     lesson_kind: string | null;
     status: string;
     per_session_won: number;
+    /** 이 수업이 속한 수강권의 커미션 요율 override(%). null=강사 기본요율 */
+    override_rate: number | null;
   }[] = [];
   let sessionRevenue = 0;
   let sessionCount = 0;
@@ -298,6 +300,10 @@ export async function GET(
       lesson_kind: p.lesson_kind ?? null,
       status: rr.status,
       per_session_won: per,
+      override_rate:
+        (p as { commission_rate?: number | null }).commission_rate != null
+          ? Number((p as { commission_rate?: number | null }).commission_rate)
+          : null,
     });
   }
 
@@ -309,7 +315,7 @@ export async function GET(
   for (const l of rawSessionLines) {
     const mym = kstYmdOf(l.starts_at).slice(0, 7);
     const list = sessionsByMonth.get(mym) ?? [];
-    list.push({ at: l.starts_at, fee: l.per_session_won });
+    list.push({ at: l.starts_at, fee: l.per_session_won, overrideRate: l.override_rate });
     sessionsByMonth.set(mym, list);
   }
   const monthCalc = new Map<string, MonthlyCommission>();
@@ -342,8 +348,9 @@ export async function GET(
 
   // 라인별 수업료 = 회당 수업료 × 그 수업일에 유효한 요율
   const sessionLines = rawSessionLines.map((l) => {
+    // 수강권 override 요율이 있으면 그 요율, 없으면 그 수업일의 기본요율.
     const mc = monthCalc.get(kstYmdOf(l.starts_at).slice(0, 7));
-    const r = mc ? mc.rateAt(l.starts_at) : 0;
+    const r = l.override_rate != null ? l.override_rate : mc ? mc.rateAt(l.starts_at) : 0;
     return { ...l, rate: r, fee_won: Math.round((l.per_session_won * r) / 100) };
   });
   const sessionFeeTotal = sessionLines.reduce((s, l) => s + l.fee_won, 0);
