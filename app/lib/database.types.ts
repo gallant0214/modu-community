@@ -2479,6 +2479,7 @@ export type Database = {
           label: string
           amount_won: number
           memo: string | null
+          vat_deductible: boolean
           created_at: string
           updated_at: string
         }
@@ -2489,6 +2490,7 @@ export type Database = {
           label: string
           amount_won?: number
           memo?: string | null
+          vat_deductible?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -2499,6 +2501,7 @@ export type Database = {
           label?: string
           amount_won?: number
           memo?: string | null
+          vat_deductible?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -2545,6 +2548,7 @@ export type Database = {
           amount_won: number
           billing_day: number | null
           memo: string | null
+          vat_deductible: boolean
           sort_order: number
           status: string
           created_at: string
@@ -2557,6 +2561,7 @@ export type Database = {
           amount_won?: number
           billing_day?: number | null
           memo?: string | null
+          vat_deductible?: boolean
           sort_order?: number
           status?: string
           created_at?: string
@@ -2569,6 +2574,7 @@ export type Database = {
           amount_won?: number
           billing_day?: number | null
           memo?: string | null
+          vat_deductible?: boolean
           sort_order?: number
           status?: string
           created_at?: string

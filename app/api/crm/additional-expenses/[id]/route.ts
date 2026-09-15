@@ -18,7 +18,7 @@ export async function PATCH(
   const expenseId = Number(id);
   if (!expenseId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
-  let body: { label?: string; amount_won?: number; memo?: string };
+  let body: { label?: string; amount_won?: number; memo?: string; vat_deductible?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -34,6 +34,9 @@ export async function PATCH(
   }
   if (body.amount_won !== undefined) {
     patch.amount_won = Math.max(0, Math.floor(Number(body.amount_won) || 0));
+  }
+  if (body.vat_deductible !== undefined) {
+    patch.vat_deductible = body.vat_deductible === true;
   }
   if (body.memo !== undefined) {
     patch.memo = body.memo?.trim() || null;

@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("crm_fixed_expenses")
-    .select("id, label, amount_won, billing_day, memo, sort_order")
+    .select("id, label, amount_won, billing_day, memo, sort_order, vat_deductible")
     .eq("center_id", ctx.centerId)
     .eq("status", "active")
     .order("sort_order", { ascending: true })
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   const ctx = await requireCrmContext(request, { needRole: "admin" });
   if (isCrmError(ctx)) return ctx;
 
-  let body: { label?: string; amount_won?: number; billing_day?: number | null; memo?: string };
+  let body: { label?: string; amount_won?: number; billing_day?: number | null; memo?: string; vat_deductible?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -62,9 +62,11 @@ export async function POST(request: Request) {
       amount_won: amount,
       billing_day: normalizeBillingDay(body.billing_day),
       memo: body.memo?.trim() || null,
+      // 세금계산서를 받는 지출이면 매입세액 공제 대상 → 부가세 계산에서 차감
+      vat_deductible: body.vat_deductible === true,
       status: "active",
     })
-    .select("id, label, amount_won, billing_day, memo, sort_order")
+    .select("id, label, amount_won, billing_day, memo, sort_order, vat_deductible")
     .single();
 
   if (error) {

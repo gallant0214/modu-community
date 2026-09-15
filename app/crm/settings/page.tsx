@@ -2289,7 +2289,31 @@ interface FixedExpense {
   billing_day: number | null;
   memo: string | null;
   sort_order: number;
+  /** 세금계산서를 받는 지출 = 매입세액 공제 대상 */
+  vat_deductible?: boolean;
 }
+
+/**
+ * 헬스장에서 흔히 빠뜨리는 월 고정 지출 프리셋.
+ * 누르면 항목명과 세금계산서 여부가 채워지고 금액만 입력하면 된다.
+ * vat: 보통 세금계산서(사업자 명의 전자세금계산서)가 발행되는 항목.
+ */
+const FIXED_EXPENSE_PRESETS: { label: string; vat: boolean }[] = [
+  { label: "월세", vat: true },
+  { label: "관리비", vat: true },
+  { label: "전기요금", vat: true },
+  { label: "수도요금", vat: false },
+  { label: "가스요금", vat: true },
+  { label: "인터넷·통신비", vat: true },
+  { label: "정수기·공기청정기 렌탈", vat: true },
+  { label: "화재·배상책임 보험", vat: false },
+  { label: "음악 저작권료", vat: true },
+  { label: "CRM·프로그램 사용료", vat: true },
+  { label: "청소 용역", vat: true },
+  { label: "세무 기장료", vat: true },
+  { label: "소모품(휴지·세제 등)", vat: true },
+  { label: "기구 렌탈·유지보수", vat: true },
+];
 
 function FixedExpensesPanel() {
   const { getIdToken } = useAuth();
@@ -2303,6 +2327,7 @@ function FixedExpensesPanel() {
   const [nAmount, setNAmount] = useState("");
   const [nDay, setNDay] = useState("");
   const [nMemo, setNMemo] = useState("");
+  const [nVat, setNVat] = useState(false);
 
   // 편집 상태
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -2310,6 +2335,7 @@ function FixedExpensesPanel() {
   const [eAmount, setEAmount] = useState("");
   const [eDay, setEDay] = useState("");
   const [eMemo, setEMemo] = useState("");
+  const [eVat, setEVat] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -2336,6 +2362,12 @@ function FixedExpensesPanel() {
   }, [load]);
 
   const total = list.reduce((s, x) => s + (x.amount_won ?? 0), 0);
+  // 세금계산서 받는 지출 합계(부가세 포함가) → 매입세액 = 합계 ÷ 11
+  const deductibleTotal = list
+    .filter((x) => x.vat_deductible)
+    .reduce((s, x) => s + (x.amount_won ?? 0), 0);
+  const inputVatMonthly = Math.round(deductibleTotal / 11);
+  const registered = new Set(list.map((x) => x.label.trim()));
 
   const add = async () => {
     setError("");
@@ -2352,6 +2384,7 @@ function FixedExpensesPanel() {
           amount_won: parseWon(nAmount),
           billing_day: nDay ? Number(nDay) : null,
           memo: nMemo.trim() || null,
+          vat_deductible: nVat,
         }),
       });
       const data = await res.json();
@@ -2360,6 +2393,7 @@ function FixedExpensesPanel() {
       setNAmount("");
       setNDay("");
       setNMemo("");
+      setNVat(false);
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
@@ -2374,6 +2408,7 @@ function FixedExpensesPanel() {
     setEAmount(String(x.amount_won ?? 0));
     setEDay(x.billing_day ? String(x.billing_day) : "");
     setEMemo(x.memo ?? "");
+    setEVat(x.vat_deductible === true);
   };
   const cancelEdit = () => {
     setEditingId(null);
@@ -2391,6 +2426,7 @@ function FixedExpensesPanel() {
         amount_won: parseWon(eAmount),
         billing_day: eDay ? Number(eDay) : null,
         memo: eMemo.trim() || null,
+        vat_deductible: eVat,
       }),
     });
     const data = await res.json();
@@ -2414,9 +2450,43 @@ function FixedExpensesPanel() {
 
   return (
     <div className="space-y-4">
-      <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400">
-        가게 월세, 관리비, 기타 정기 결제 등 매월 고정으로 나가는 지출을 등록해요. 결제일은 선택 사항이에요.
+      <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
+        매월 고정으로 나가는 지출을 <strong>빠짐없이</strong> 등록해 주세요. 여기 합계가 통계의
+        순이익·손익분기점 계산에 그대로 쓰여서, 빠진 항목이 있으면 이익이 실제보다 크게 보입니다.
       </p>
+
+      {/* 자주 빠뜨리는 항목 — 눌러서 항목명 채우기 */}
+      <div>
+        <div className="mb-1.5 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400">
+          자주 빠뜨리는 항목 <span className="font-normal text-[#A89B80]">· 눌러서 채우고 금액만 입력하세요</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {FIXED_EXPENSE_PRESETS.map((p) => {
+            const done = registered.has(p.label);
+            return (
+              <button
+                key={p.label}
+                type="button"
+                disabled={done}
+                onClick={() => {
+                  setNLabel(p.label);
+                  setNVat(p.vat);
+                }}
+                className={`px-2.5 py-1 rounded-full text-[12px] font-medium border transition-colors ${
+                  done
+                    ? "border-[#6B7B3A]/30 bg-[#6B7B3A]/10 text-[#6B7B3A] cursor-default dark:text-[#A8B87A]"
+                    : nLabel === p.label
+                      ? "border-[#6B7B3A] bg-[#6B7B3A] text-white"
+                      : "border-[#E8E0D0] bg-white text-[#3A342A] hover:bg-[#F5F0E5] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                }`}
+              >
+                {done ? "✓ " : "+ "}
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* 신규 입력 */}
       <div className="p-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 space-y-2.5">
@@ -2443,6 +2513,16 @@ function FixedExpensesPanel() {
             placeholder="결제일"
           />
         </div>
+        <label className="flex items-center gap-2 text-[12.5px] text-[#3A342A] dark:text-zinc-300 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={nVat}
+            onChange={(e) => setNVat(e.target.checked)}
+            className="h-4 w-4 accent-[#6B7B3A]"
+          />
+          세금계산서를 받는 지출이에요
+          <span className="text-[11.5px] text-[#A89B80]">(부가세 신고 때 매입세액으로 공제)</span>
+        </label>
         <div className="flex gap-2">
           <input
             className={`${crmInputClass} flex-1`}
@@ -2513,6 +2593,15 @@ function FixedExpensesPanel() {
                         placeholder="결제일"
                       />
                     </div>
+                    <label className="flex items-center gap-2 text-[12.5px] text-[#3A342A] dark:text-zinc-300 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={eVat}
+                        onChange={(e) => setEVat(e.target.checked)}
+                        className="h-4 w-4 accent-[#6B7B3A]"
+                      />
+                      세금계산서를 받는 지출이에요
+                    </label>
                     <div className="flex gap-2">
                       <input
                         className={`${crmInputClass} flex-1`}
@@ -2552,6 +2641,11 @@ function FixedExpensesPanel() {
                         {x.billing_day != null && (
                           <span className="text-[11.5px] text-[#A89B80]">매월 {x.billing_day}일</span>
                         )}
+                        {x.vat_deductible && (
+                          <span className="rounded-full border border-[#5A8BB0]/40 bg-[#5A8BB0]/10 px-1.5 py-0.5 text-[10.5px] font-semibold text-[#487596] dark:text-[#8FB7D4]">
+                            세금계산서
+                          </span>
+                        )}
                       </div>
                       {x.memo && (
                         <div className="mt-0.5 text-[11.5px] text-[#8C8270] truncate">{x.memo}</div>
@@ -2578,13 +2672,25 @@ function FixedExpensesPanel() {
             ))}
           </ul>
 
-          <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-[#6B7B3A]/8 dark:bg-[#6B7B3A]/15 border border-[#6B7B3A]/25">
-            <span className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">
-              월 고정 지출 합계
-            </span>
-            <span className="text-[16px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] tabular-nums">
-              {formatWon(total)}원
-            </span>
+          <div className="rounded-xl bg-[#6B7B3A]/8 dark:bg-[#6B7B3A]/15 border border-[#6B7B3A]/25 px-4 py-3 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                월 고정 지출 합계
+              </span>
+              <span className="text-[16px] font-bold text-[#6B7B3A] dark:text-[#A8B87A] tabular-nums">
+                {formatWon(total)}원
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[12px] text-[#6B5D47] dark:text-zinc-400">
+              <span>└ 세금계산서 받는 지출</span>
+              <span className="tabular-nums">{formatWon(deductibleTotal)}원</span>
+            </div>
+            <div className="flex items-center justify-between text-[12px] text-[#6B5D47] dark:text-zinc-400">
+              <span>└ 월 매입세액(공제 예상)</span>
+              <span className="tabular-nums font-semibold text-[#487596] dark:text-[#8FB7D4]">
+                {formatWon(inputVatMonthly)}원
+              </span>
+            </div>
           </div>
         </>
       )}

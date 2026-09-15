@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("crm_additional_expenses")
-    .select("id, ym, label, amount_won, memo")
+    .select("id, ym, label, amount_won, memo, vat_deductible")
     .eq("center_id", ctx.centerId)
     .eq("ym", ym)
     .order("created_at", { ascending: true });
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   const ctx = await requireCrmContext(request, { needRole: "admin" });
   if (isCrmError(ctx)) return ctx;
 
-  let body: { ym?: string; label?: string; amount_won?: number; memo?: string };
+  let body: { ym?: string; label?: string; amount_won?: number; memo?: string; vat_deductible?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -63,8 +63,9 @@ export async function POST(request: Request) {
       label,
       amount_won: amount,
       memo: body.memo?.trim() || null,
+      vat_deductible: body.vat_deductible === true,
     })
-    .select("id, ym, label, amount_won, memo")
+    .select("id, ym, label, amount_won, memo, vat_deductible")
     .single();
 
   if (error) {
