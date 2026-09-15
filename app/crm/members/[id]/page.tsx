@@ -421,23 +421,23 @@ export default function CrmMemberDetailPage() {
                 </h1>
                 {member.linked_firebase_uid ? (
                   <span
-                    className="px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11.5px] font-semibold dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60"
+                    className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11.5px] font-semibold dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60"
                     title="회원앱에 로그인해 CRM 레코드와 계정이 연결된 상태예요."
                   >
                     앱 연동
                   </span>
                 ) : (
                   <span
-                    className="px-2 py-1 rounded-full bg-zinc-100 text-zinc-500 border border-zinc-200 text-[11.5px] font-semibold dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
+                    className="px-2.5 py-0.5 rounded-full bg-zinc-50 text-zinc-500 border border-zinc-200 text-[11.5px] font-semibold dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
                     title="회원앱 계정과 아직 연결되지 않았어요. 회원이 앱에서 셀프 가입하면 자동 연동됩니다."
                   >
                     앱 미연동
                   </span>
                 )}
-                <span className={`px-2 py-1 rounded-full text-[11.5px] font-semibold ${
+                <span className={`px-2.5 py-0.5 rounded-full border text-[11.5px] font-semibold ${
                   isMemberActive(member)
-                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-                    : "bg-[#F5F0E5] text-[#8C8270] dark:bg-zinc-800 dark:text-zinc-400"
+                    ? "bg-[#6B7B3A]/10 text-[#5a6932] border-[#6B7B3A]/25 dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A] dark:border-[#6B7B3A]/40"
+                    : "bg-[#F5F0E5] text-[#8C8270] border-[#E8E0D0] dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"
                 }`}>
                   {isMemberActive(member) ? "이용중" : "확인 필요"}
                 </span>
@@ -473,8 +473,8 @@ export default function CrmMemberDetailPage() {
                     className="tabular-nums"
                   />
                 </div>
-                {/* 출석 처리 · 앱 연동 해지는 같은 줄에 나란히 */}
-                <div className="flex flex-wrap items-start gap-2">
+                {/* 액션 버튼 — 높이·모양 통일해 한 줄에 정렬(좁으면 자동 줄바꿈) */}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <CheckInButton
                     memberId={member.id}
                     centerId={foreignCenter ? Number(foreignCenter) : undefined}
@@ -483,13 +483,13 @@ export default function CrmMemberDetailPage() {
                   {member.linked_firebase_uid && (
                     <UnlinkAppButton memberId={member.id} canEdit={canEditBasic} onDone={load} />
                   )}
+                  <MemberMessageButton
+                    memberId={member.id}
+                    memberName={member.name}
+                    memberPhone={member.phone}
+                    linked={!!member.linked_firebase_uid}
+                  />
                 </div>
-                <MemberMessageButton
-                  memberId={member.id}
-                  memberName={member.name}
-                  memberPhone={member.phone}
-                  linked={!!member.linked_firebase_uid}
-                />
               </div>
             </div>
           </div>
@@ -1232,17 +1232,24 @@ function CheckInButton({
   const attended = todayAttId != null;
 
   return (
-    <div className="mt-2 flex items-center gap-2 flex-wrap">
+    <div className="flex items-center gap-2 flex-wrap">
       <button
         type="button"
         onClick={attended ? cancel : run}
         disabled={busy || checking}
-        className={`inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg text-white text-[12.5px] font-semibold disabled:opacity-60 ${
+        className={`inline-flex h-9 items-center gap-1.5 px-3.5 rounded-lg text-white text-[12.5px] font-semibold shadow-sm transition-colors disabled:opacity-60 ${
           attended
             ? "bg-[#C0392B] hover:bg-[#a93226]"
             : "bg-[#6B7B3A] hover:bg-[#5a6932]"
         }`}
       >
+        <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+          {attended ? (
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+          ) : (
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          )}
+        </svg>
         {busy ? "처리 중…" : checking ? "확인 중…" : attended ? "출석취소" : "출석 처리"}
       </button>
       {msg && (
@@ -1394,13 +1401,17 @@ function MemberMessageButton({
   const bytes = smsByteLen(text);
 
   return (
-    <div className="mt-2">
+    <div>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/8"
+        className="inline-flex h-9 items-center gap-1.5 px-3.5 rounded-lg border border-[#6B7B3A]/60 text-[#6B7B3A] dark:border-[#A8B87A]/60 dark:text-[#A8B87A] text-[12.5px] font-semibold bg-white dark:bg-zinc-900 hover:bg-[#6B7B3A]/8 transition-colors"
       >
-        ✉️ 메세지 전송
+        <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <rect x="3" y="5" width="18" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 7l8.5 6 8.5-6" />
+        </svg>
+        메세지 전송
       </button>
 
       <CrmModal open={open} onClose={() => setOpen(false)} title={`메세지 전송 · ${memberName}`} size="lg">
@@ -1595,13 +1606,16 @@ function UnlinkAppButton({
   if (!canEdit) return null;
 
   return (
-    <div className="mt-2 flex items-center gap-2 flex-wrap">
+    <div className="flex items-center gap-2 flex-wrap">
       <button
         type="button"
         onClick={run}
         disabled={busy}
-        className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-[12.5px] font-semibold hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-60"
+        className="inline-flex h-9 items-center gap-1.5 px-3.5 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-[12.5px] font-semibold bg-white dark:bg-zinc-900 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-60"
       >
+        <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5L21 3m-5 0h5v5M10.5 13.5L3 21m5 0H3v-5" />
+        </svg>
         {busy ? "해제 중…" : "앱 연동 해지"}
       </button>
       {msg && (
@@ -1887,7 +1901,7 @@ function FacePhotoUpload({
   };
 
   return (
-    <div className="flex flex-col items-center gap-1 shrink-0 min-w-[7rem]">
+    <div className="flex flex-col items-center gap-1.5 shrink-0 min-w-[7rem]">
       {current ? (
         <button
           type="button"
@@ -1931,13 +1945,14 @@ function FacePhotoUpload({
               e.target.value = "";
             }}
           />
-          {/* 기본 버튼 2개가 사진 박스 폭을 결정 → 사진 유무와 무관하게 동일 크기 유지 */}
+          {/* 기본 버튼들이 사진 박스 폭을 결정 → 사진 유무와 무관하게 동일 크기 유지.
+              변경·촬영·삭제를 같은 높이 한 줄로 묶어 정돈된 느낌을 유지한다. */}
           <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
             disabled={busy}
-            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold shadow-sm border transition-colors disabled:opacity-50 ${
+            className={`inline-flex h-[26px] items-center gap-1 px-2.5 rounded-full text-[11px] font-semibold shadow-sm border transition-colors disabled:opacity-50 ${
               current
                 ? "border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
                 : "border-[#6B7B3A] bg-[#6B7B3A] text-white hover:bg-[#5a6932]"
@@ -1960,7 +1975,7 @@ function FacePhotoUpload({
             onClick={openCamera}
             disabled={busy}
             title="카메라로 촬영"
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold shadow-sm border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
+            className="inline-flex h-[26px] items-center gap-1 px-2.5 rounded-full text-[11px] font-semibold shadow-sm border border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
           >
             <svg
               className="w-3 h-3"
@@ -1973,19 +1988,23 @@ function FacePhotoUpload({
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 7l1.2-2h5.6L16 7" />
               <circle cx="12" cy="13.5" r="3.2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            얼굴 촬영
+            촬영
           </button>
-          </div>
           {current && (
             <button
               type="button"
               onClick={remove}
               disabled={busy}
-              className="px-2 py-0.5 rounded-full text-[11px] font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+              title="사진 삭제"
+              aria-label="사진 삭제"
+              className="inline-flex items-center justify-center w-[26px] h-[26px] rounded-full border border-red-200 dark:border-red-900 text-red-600 dark:text-red-300 bg-white dark:bg-zinc-900 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50 shrink-0"
             >
-              삭제
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M9 7V5h6v2m-8 0l1 12h8l1-12" />
+              </svg>
             </button>
           )}
+          </div>
         </div>
       )}
       {camOpen && (
