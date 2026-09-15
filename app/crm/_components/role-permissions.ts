@@ -80,6 +80,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "sales.payroll_view", label: "직원 급여 정책 보기",       defaults: D_ADMIN },
       { key: "sales.commission_edit", label: "강사 수업료·정산(커미션) 설정", defaults: D_ADMIN },
       { key: "stats.view",         label: "통계 화면 보기 — 매출·재무 전체", defaults: D_ADMIN },
+      // 경영 요약은 기본 대표자만 (관리자 포함 다른 직급은 직급 권한에서 켜야 보임)
+      { key: "stats.business_summary", label: "통계 경영 요약 보기 — 손익분기점·안정성 등급·12개월 순이익", defaults: { owner: true, admin: false, manager: false, trainer: false, fc: false, alba: false } },
     ],
   },
   {

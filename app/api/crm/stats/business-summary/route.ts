@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { computeSettlement, monthPeriod, type SettlementResult } from "@/app/lib/crm-settlement";
 import { computeLiabilitySnapshot } from "@/app/lib/crm-liability";
 import { cached, crmCacheKey } from "@/app/lib/cache";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * GET /api/crm/stats/business-summary — 경영 요약 (admin 이상)
+ * GET /api/crm/stats/business-summary — 경영 요약 (직급 권한 stats.business_summary)
  *
  * 최근 12개월(이번 달 포함) 월별 정산을 계산해
  *  - 매출 대비 지출 구성, 손익분기점(BEP) 달성률
@@ -57,8 +58,12 @@ function bepOf(fixedCosts: number, variableRatio: number | null): number | null 
 }
 
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // 직급 권한 stats.business_summary (기본 대표자·관리자). owner 는 항상 허용.
+  if (!(await ctxHasPermission(ctx, "stats.business_summary"))) {
+    return NextResponse.json({ error: "경영 요약을 볼 권한이 없습니다" }, { status: 403 });
+  }
 
   const kst = new Date(Date.now() + 9 * 3600 * 1000);
   const y = kst.getUTCFullYear();

@@ -150,6 +150,34 @@ export default function CrmStatsPage() {
     load();
   }, [load]);
 
+  // 직급 권한 — 경영 요약 탭 노출 여부 (stats.business_summary). null = 확인 중
+  const [canSummary, setCanSummary] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/bootstrap", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const j = await res.json();
+        const allowed = j?.permissions?.["stats.business_summary"] === true;
+        if (cancelled) return;
+        setCanSummary(allowed);
+        // 권한 없는데 ?tab=summary 로 들어온 경우 센터 매출로 돌려보냄
+        if (!allowed) setTab((t) => (t === "summary" ? "center" : t));
+      } catch {
+        /* 확인 실패 시 탭을 숨긴 상태 유지 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getIdToken]);
+
   // 현재 탭을 URL(?tab=)에 반영 → 강사 급여 상세에서 뒤로가기 시 같은 탭으로 복귀
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -251,9 +279,11 @@ export default function CrmStatsPage() {
       </header>
 
       <div className="mb-5 flex gap-1.5 overflow-x-auto border-b border-[#E8E0D0] dark:border-zinc-800">
-        <TabBtn active={tab === "summary"} onClick={() => setTab("summary")}>
-          경영 요약
-        </TabBtn>
+        {canSummary && (
+          <TabBtn active={tab === "summary"} onClick={() => setTab("summary")}>
+            경영 요약
+          </TabBtn>
+        )}
         <TabBtn active={tab === "center"} onClick={() => setTab("center")}>
           센터 매출
         </TabBtn>
@@ -291,7 +321,13 @@ export default function CrmStatsPage() {
       {tab === "market" ? (
         <MarketTrend />
       ) : tab === "summary" ? (
-        <BusinessSummary />
+        canSummary ? (
+          <BusinessSummary />
+        ) : (
+          <div className="text-[13px] text-[#8C8270]">
+            {canSummary === null ? "권한 확인 중…" : "경영 요약을 볼 권한이 없어요."}
+          </div>
+        )
       ) : tab === "payroll" ? (
         <PayrollList />
       ) : tab === "saleslist" ? (
