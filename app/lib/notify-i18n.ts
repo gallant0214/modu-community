@@ -145,6 +145,15 @@ const NOTIF: Record<string, NotifTpl> = {
       zh: "您已完成课程券的全部课程 🎉",
     },
   },
+  purchaseDone: {
+    title: { ko: "결제가 완료됐어요 🎉", en: "Payment complete 🎉", ja: "決済が完了しました 🎉", zh: "支付已完成 🎉" },
+    body: {
+      ko: "{product} 결제가 완료되어 바로 이용하실 수 있어요.",
+      en: "{product} is paid and ready to use.",
+      ja: "{product} のお支払いが完了し、すぐにご利用いただけます。",
+      zh: "{product} 支付完成，可立即使用。",
+    },
+  },
   mileageEarn: {
     title: { ko: "포인트 적립", en: "Points earned", ja: "ポイント積立", zh: "积分到账" },
     body: {

@@ -1798,6 +1798,8 @@ export type Database = {
           status: string
           created_at: string
           updated_at: string
+          order_id: number | null
+          source: string
         }
         Insert: {
           id?: number
@@ -1815,6 +1817,8 @@ export type Database = {
           status?: string
           created_at?: string
           updated_at?: string
+          order_id?: number | null
+          source?: string
         }
         Update: {
           id?: number
@@ -1832,6 +1836,8 @@ export type Database = {
           status?: string
           created_at?: string
           updated_at?: string
+          order_id?: number | null
+          source?: string
         }
         Relationships: []
       }
@@ -2272,6 +2278,81 @@ export type Database = {
           role_key?: string
           permission_key?: string
           enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_orders: {
+        Row: {
+          id: number
+          center_id: number
+          member_id: number
+          product_id: number | null
+          product_name: string
+          product_type: string
+          amount_won: number
+          status: string
+          order_uid: string
+          pg_provider: string
+          pg_payment_key: string | null
+          pg_approved_at: string | null
+          pg_method: string | null
+          pg_receipt_url: string | null
+          pg_raw: Json | null
+          fail_reason: string | null
+          issued_kind: string | null
+          issued_id: number | null
+          issued_extra: Json | null
+          payment_id: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          member_id: number
+          product_id?: number | null
+          product_name: string
+          product_type: string
+          amount_won: number
+          status?: string
+          order_uid: string
+          pg_provider?: string
+          pg_payment_key?: string | null
+          pg_approved_at?: string | null
+          pg_method?: string | null
+          pg_receipt_url?: string | null
+          pg_raw?: Json | null
+          fail_reason?: string | null
+          issued_kind?: string | null
+          issued_id?: number | null
+          issued_extra?: Json | null
+          payment_id?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          member_id?: number
+          product_id?: number | null
+          product_name?: string
+          product_type?: string
+          amount_won?: number
+          status?: string
+          order_uid?: string
+          pg_provider?: string
+          pg_payment_key?: string | null
+          pg_approved_at?: string | null
+          pg_method?: string | null
+          pg_receipt_url?: string | null
+          pg_raw?: Json | null
+          fail_reason?: string | null
+          issued_kind?: string | null
+          issued_id?: number | null
+          issued_extra?: Json | null
+          payment_id?: number | null
+          created_at?: string
           updated_at?: string
         }
         Relationships: []
