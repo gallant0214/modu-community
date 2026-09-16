@@ -303,17 +303,42 @@ export async function computeSettlement(
   }
 
   // ── 고정 지출 ──
+  // 🚨 고정지출은 '적용 기간(effective_from ~ effective_to)' 이 있는 달에만 반영한다.
+  //   등록·수정·삭제를 해도 과거 달 정산이 다시 계산되지 않게 하기 위함
+  //   (직원 수업료 설정 이력과 같은 원칙).
   const { data: fixedRows } = await supabase
     .from("crm_fixed_expenses")
-    .select("amount_won, vat_deductible")
+    .select("amount_won, vat_deductible, effective_from, effective_to")
     .eq("center_id", centerId)
-    .eq("status", "active");
+    .neq("status", "inactive");
   const fixedList = fixedRows ?? [];
-  const fixedMonthly = fixedList.reduce((s, x) => s + (x.amount_won ?? 0), 0);
-  const fixedDeductibleMonthly = fixedList
-    .filter((x) => x.vat_deductible)
-    .reduce((s, x) => s + (x.amount_won ?? 0), 0);
-  const fixedTotal = fixedMonthly * monthsInPeriod;
+  /** 그 달(YYYY-MM)에 유효한 항목만 */
+  const fixedOfMonth = (mym: string) => {
+    const monthStart = `${mym}-01`;
+    const endDate = new Date(`${monthStart}T00:00:00Z`);
+    endDate.setUTCMonth(endDate.getUTCMonth() + 1);
+    endDate.setUTCDate(0);
+    const monthEnd = endDate.toISOString().slice(0, 10);
+    return fixedList.filter(
+      (x) =>
+        String(x.effective_from ?? "0000-01-01") <= monthEnd &&
+        (!x.effective_to || String(x.effective_to) >= monthStart)
+    );
+  };
+  let fixedTotal = 0;
+  let fixedDeductibleTotal = 0;
+  for (const mym of monthsList) {
+    const rows = fixedOfMonth(mym);
+    fixedTotal += rows.reduce((s, x) => s + (x.amount_won ?? 0), 0);
+    fixedDeductibleTotal += rows
+      .filter((x) => x.vat_deductible)
+      .reduce((s, x) => s + (x.amount_won ?? 0), 0);
+  }
+  // 표시용 월 평균 (단일 월이면 그 달 금액과 같다)
+  const fixedMonthly = Math.round(fixedTotal / monthsInPeriod);
+  const fixedDeductibleMonthly = Math.round(fixedDeductibleTotal / monthsInPeriod);
+  // 항목 수는 기간의 마지막 달 기준 (현재 나가고 있는 항목 수)
+  const fixedItemsCount = fixedOfMonth(monthsList[monthsList.length - 1] ?? ym).length;
 
   // ── 직원 급여 ──
   // 🚨 수업료 설정 이력(crm_staff_pay_history) 기준 — 설정을 바꿔도 과거 달이 다시 계산되지 않게.
@@ -388,7 +413,7 @@ export async function computeSettlement(
   const cardFee = Math.round((Math.max(0, cardSales) * cardFeePercent) / 100);
 
   // ── 부가세: 매출세액 − 매입세액 ──
-  const inputVat = Math.round((fixedDeductibleMonthly * monthsInPeriod + additionalDeductibleTotal) / 11);
+  const inputVat = Math.round((fixedDeductibleTotal + additionalDeductibleTotal) / 11);
   const vatPayable = Math.max(0, outputVat - inputVat);
 
   const totalExpense = fixedTotal + vatPayable + salaryTotal + additionalTotal + cardFee;
@@ -410,7 +435,7 @@ export async function computeSettlement(
     card_fee: cardFee,
     fixed_monthly: fixedMonthly,
     fixed_total: fixedTotal,
-    fixed_items: fixedList.length,
+    fixed_items: fixedItemsCount,
     fixed_deductible_monthly: fixedDeductibleMonthly,
     salary_total: salaryTotal,
     salary_fixed: salaryFixed,

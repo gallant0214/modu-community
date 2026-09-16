@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { kstMonthStart } from "@/app/lib/crm-fixed-expenses";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +22,11 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("crm_fixed_expenses")
-    .select("id, label, amount_won, billing_day, memo, sort_order, vat_deductible")
+    .select("id, label, amount_won, billing_day, memo, sort_order, vat_deductible, effective_from")
     .eq("center_id", ctx.centerId)
     .eq("status", "active")
+    // 종료된 항목(effective_to 있음)은 목록에서 숨긴다. 과거 정산에는 계속 반영됨.
+    .is("effective_to", null)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
@@ -58,6 +61,8 @@ export async function POST(request: Request) {
     .from("crm_fixed_expenses")
     .insert({
       center_id: ctx.centerId,
+      // 등록한 달부터 적용 — 과거 달 정산은 손대지 않는다
+      effective_from: kstMonthStart(),
       label,
       amount_won: amount,
       billing_day: normalizeBillingDay(body.billing_day),

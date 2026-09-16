@@ -1581,7 +1581,7 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
       {/* 계산 상세 */}
       <section className="mb-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden">
         <SettleRow label="총 매출 (부가세 포함)" value={data?.total_revenue ?? 0} sign="" strong />
-        <SettleRow label="− 고정 지출" value={-(data?.fixed_total ?? 0)} sub={multiMonth ? `월 ${formatWon(data?.fixed_monthly ?? 0)}원 × ${data?.months_in_period}개월` : undefined} />
+        <SettleRow label="− 고정 지출" value={-(data?.fixed_total ?? 0)} sub={multiMonth ? `월 평균 ${formatWon(data?.fixed_monthly ?? 0)}원 · ${data?.months_in_period}개월 합계 (등록·종료 시점 반영)` : undefined} />
         <SettleRow
           label="− 부가세 (납부 예상)"
           value={-(data?.vat_payable ?? data?.vat_amount ?? 0)}

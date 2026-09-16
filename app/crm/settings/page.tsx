@@ -2291,6 +2291,8 @@ interface FixedExpense {
   sort_order: number;
   /** 세금계산서를 받는 지출 = 매입세액 공제 대상 */
   vat_deductible?: boolean;
+  /** 적용 시작월 (이 달부터 정산 반영) */
+  effective_from?: string | null;
 }
 
 /**
@@ -2439,7 +2441,12 @@ function FixedExpensesPanel() {
   };
 
   const remove = async (id: number) => {
-    if (!window.confirm("이 고정 지출 항목을 삭제할까요?")) return;
+    if (
+      !window.confirm(
+        "이 고정 지출 항목을 삭제할까요?\n이번 달까지는 정산에 반영되고 다음 달부터 빠집니다. (지난 달 정산은 그대로)"
+      )
+    )
+      return;
     const token = await getIdToken();
     const res = await fetch(`/api/crm/fixed-expenses/${id}`, {
       method: "DELETE",
@@ -2451,7 +2458,8 @@ function FixedExpensesPanel() {
   return (
     <div className="space-y-4">
       <p className="text-[13px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed">
-        매월 고정으로 나가는 지출을 <strong>빠짐없이</strong> 등록해 주세요. 여기 합계가 통계의
+        매월 고정으로 나가는 지출을 <strong>빠짐없이</strong> 등록해 주세요. 등록한 <strong>이번 달부터</strong> 정산에 반영되고,
+        지난 달 정산은 그대로 유지돼요. 여기 합계가 통계의
         순이익·손익분기점 계산에 그대로 쓰여서, 빠진 항목이 있으면 이익이 실제보다 크게 보입니다.
       </p>
 
@@ -2646,6 +2654,15 @@ function FixedExpensesPanel() {
                         {x.vat_deductible && (
                           <span className="rounded-full border border-[#5A8BB0]/40 bg-[#5A8BB0]/10 px-1.5 py-0.5 text-[10.5px] font-semibold text-[#487596] dark:text-[#8FB7D4]">
                             세금계산서
+                          </span>
+                        )}
+                        {/* 언제부터 정산에 반영되는지 — 그 이전 달은 영향 없음 */}
+                        {x.effective_from && (
+                          <span
+                            className="rounded-full border border-[#E8E0D0] dark:border-zinc-700 px-1.5 py-0.5 text-[10.5px] font-medium text-[#8C8270] dark:text-zinc-400"
+                            title="이 달부터 정산에 반영돼요. 이전 달 정산은 영향을 받지 않아요."
+                          >
+                            {String(x.effective_from).slice(0, 7).replace("-", ".")}부터
                           </span>
                         )}
                       </div>

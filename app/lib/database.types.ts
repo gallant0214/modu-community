@@ -2602,6 +2602,10 @@ export type Database = {
           vat_deductible: boolean
           sort_order: number
           status: string
+          /** 적용 시작월 1일 (이 달부터 정산에 반영) */
+          effective_from: string
+          /** 적용 종료월 말일 (null = 진행 중) */
+          effective_to: string | null
           created_at: string
           updated_at: string
         }
@@ -2615,6 +2619,8 @@ export type Database = {
           vat_deductible?: boolean
           sort_order?: number
           status?: string
+          effective_from?: string
+          effective_to?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -2628,6 +2634,8 @@ export type Database = {
           vat_deductible?: boolean
           sort_order?: number
           status?: string
+          effective_from?: string
+          effective_to?: string | null
           created_at?: string
           updated_at?: string
         }
