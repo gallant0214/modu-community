@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { perSessionFee } from "@/app/lib/crm-commission";
+import { rateOf } from "@/app/lib/crm-pay-history";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,16 @@ export async function GET(
   if (!isAdmin && !isSelf && !(await ctxHasPermission(ctx, "sales.payroll_view"))) {
     return NextResponse.json({ error: "본인 담당 회원만 조회할 수 있습니다" }, { status: 403 });
   }
+
+  // 강사에게 설정된 기본 급여 % — 수강권별 요율 입력칸의 기본값으로 화면에 보여준다.
+  // (구간제면 첫 구간 요율. 개별 지정이 없는 수강권은 실제로 이 요율이 적용된다)
+  const { data: trainerCfg } = await supabase
+    .from("crm_center_members")
+    .select("commission_type, commission_rate, commission_tiers")
+    .eq("id", trainerId)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+  const defaultCommissionRate = trainerCfg ? rateOf(trainerCfg as never, 0) : 0;
 
   // 담당 수강권(주강사 또는 추가강사) — 회원 집계용
   const { data: passes, error } = await supabase
@@ -118,7 +129,7 @@ export async function GET(
 
   const memberIds = Array.from(agg.keys());
   if (memberIds.length === 0) {
-    return NextResponse.json({ members: [] });
+    return NextResponse.json({ members: [], default_commission_rate: defaultCommissionRate });
   }
 
   // 최근 수강권의 상품 유형 → 종류(개인레슨/그룹레슨/클래스수업)
@@ -202,5 +213,5 @@ export async function GET(
       return ax < ay ? 1 : ax > ay ? -1 : 0;
     });
 
-  return NextResponse.json({ members: rows });
+  return NextResponse.json({ members: rows, default_commission_rate: defaultCommissionRate });
 }

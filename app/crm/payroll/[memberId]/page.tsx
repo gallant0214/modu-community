@@ -463,6 +463,8 @@ function MembersTab({ memberId }: { memberId: number }) {
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null); // 요율 편집 펼친 회원
   const [savingPass, setSavingPass] = useState<number | null>(null);
+  // 강사에게 설정된 기본 급여 % — 수강권별 요율 입력칸의 기본값으로 쓴다
+  const [defaultRate, setDefaultRate] = useState<number>(0);
 
   // 수강권 요율 override 저장 (비우면 강사 기본요율). 대표자/관리자만.
   const saveRate = async (memberIdRow: number, passId: number, raw: string) => {
@@ -506,7 +508,11 @@ function MembersTab({ memberId }: { memberId: number }) {
           headers: { authorization: `Bearer ${token}` },
           cache: "no-store",
         });
-        if (res.ok) setRows((await res.json()).members ?? []);
+        if (res.ok) {
+          const json = await res.json();
+          setRows(json.members ?? []);
+          setDefaultRate(Number(json.default_commission_rate ?? 0));
+        }
       } finally {
         setLoading(false);
       }
@@ -648,13 +654,16 @@ function MembersTab({ memberId }: { memberId: number }) {
                     <td colSpan={15} className="px-3 py-3">
                       <div className="text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300 mb-2">
                         {r.name} · 발급 수강권별 커미션 요율{" "}
-                        <span className="font-normal text-[#A89B80]">(비우면 강사 기본요율 적용)</span>
+                        <span className="font-normal text-[#A89B80]">
+                          (강사 기본 {defaultRate}% 가 기본값 · 바꾼 수강권만 따로 적용돼요)
+                        </span>
                       </div>
                       <div className="space-y-1.5 max-w-[720px]">
                         {r.passes.map((p) => (
                           <PassRateRow
-                            key={p.id}
+                            key={`${p.id}:${p.commission_rate ?? "base"}:${defaultRate}`}
                             pass={p}
+                            defaultRate={defaultRate}
                             saving={savingPass === p.id}
                             onSave={(raw) => saveRate(r.id, p.id, raw)}
                           />
@@ -673,23 +682,30 @@ function MembersTab({ memberId }: { memberId: number }) {
   );
 }
 
-/** 수강권 1건의 커미션 요율(%) 편집 행 — 비우면 강사 기본요율 */
+/**
+ * 수강권 1건의 커미션 요율(%) 편집 행.
+ * 입력칸은 강사에게 설정된 기본 급여 %로 채워두고(개별 지정이 있으면 그 값),
+ * 사용자가 값을 바꿨을 때만 저장이 활성화된다. '기본값' 버튼으로 개별 지정을 지울 수 있다.
+ */
 function PassRateRow({
   pass,
+  defaultRate,
   saving,
   onSave,
 }: {
   pass: PassLite;
+  /** 강사 기본 급여 % (개별 지정이 없을 때 실제 적용되는 값) */
+  defaultRate: number;
   saving: boolean;
   onSave: (raw: string) => void;
 }) {
-  const [val, setVal] = useState(pass.commission_rate != null ? String(pass.commission_rate) : "");
-  useEffect(() => {
-    setVal(pass.commission_rate != null ? String(pass.commission_rate) : "");
-  }, [pass.commission_rate]);
-  const dirty =
-    (val.trim() === "") !== (pass.commission_rate == null) ||
-    (val.trim() !== "" && Number(val) !== pass.commission_rate);
+  // 개별 지정이 있으면 그 값, 없으면 강사 기본값을 보여준다.
+  // (저장 등으로 값이 바뀌면 부모가 key 를 바꿔 이 행을 새로 마운트한다 → effect 동기화 불필요)
+  const shown = pass.commission_rate != null ? pass.commission_rate : defaultRate;
+  const [val, setVal] = useState(String(shown));
+  const overridden = pass.commission_rate != null;
+  // 지금 실제 적용 중인 값과 달라졌을 때만 저장 가능
+  const dirty = val.trim() !== "" && Number(val) !== shown;
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px]">
       <span className="min-w-[150px] font-medium text-[#3A342A] dark:text-zinc-200">
@@ -700,6 +716,7 @@ function PassRateRow({
         회당 {formatWon(pass.per_session_won)}원 · 잔여 {pass.remaining_sessions}/{pass.total_sessions}
       </span>
       <span className="flex items-center gap-1 ml-auto">
+        {!overridden && <span className="text-[11px] text-[#A89B80]">기본</span>}
         <input
           type="number"
           min={0}
@@ -707,7 +724,7 @@ function PassRateRow({
           step="0.1"
           value={val}
           onChange={(e) => setVal(e.target.value)}
-          placeholder="기본"
+          placeholder={String(defaultRate)}
           className="w-20 px-2 py-1 rounded-lg border border-[#D9CDB8] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-right text-[12.5px] focus:outline-none focus:border-[#6B7B3A]"
         />
         <span className="text-[#8C8270]">%</span>
@@ -719,6 +736,17 @@ function PassRateRow({
         >
           {saving ? "저장 중" : "저장"}
         </button>
+        {overridden && (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => onSave("")}
+            title={`강사 기본요율(${defaultRate}%)을 따르도록 되돌려요`}
+            className="px-2 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[11.5px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] disabled:opacity-40"
+          >
+            기본값
+          </button>
+        )}
       </span>
     </div>
   );
