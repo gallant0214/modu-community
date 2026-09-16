@@ -158,10 +158,12 @@ export default function CrmAttendancesPage() {
     loadPeakPredict();
   }, [loadPeakPredict]);
 
-  // 요일별(이번주/지난주) 출석 — 일요일 시작, KST 기준
+  // 요일별 출석 — 이번주 vs 최근 6개월 요일별 평균 (일요일 시작, KST 기준)
   interface WeekDay { date: string; dow: number; total: number; unique: number }
   interface WeekBlock { start: string; end: string; days: WeekDay[] }
-  const [weekData, setWeekData] = useState<{ thisWeek: WeekBlock; lastWeek: WeekBlock } | null>(null);
+  interface AvgDay { dow: number; avg: number; avgUnique: number }
+  interface AvgBlock { from: string; to: string; weeks: number; partial: boolean; days: AvgDay[] }
+  const [weekData, setWeekData] = useState<{ thisWeek: WeekBlock; average: AvgBlock } | null>(null);
 
   const loadWeekday = useCallback(async () => {
     try {
@@ -172,7 +174,7 @@ export default function CrmAttendancesPage() {
         cache: "no-store",
       });
       const data = await res.json();
-      if (res.ok) setWeekData({ thisWeek: data.thisWeek, lastWeek: data.lastWeek });
+      if (res.ok) setWeekData({ thisWeek: data.thisWeek, average: data.average });
     } catch {
       // 보조 그래프 — 실패해도 상세 조회는 유지
     }
@@ -507,7 +509,7 @@ export default function CrmAttendancesPage() {
             </div>
           )}
 
-          {/* 요일별 출석 그래프 — 이번주 vs 지난주 (일요일 시작, 위 달력과 같은 기준) */}
+          {/* 요일별 출석 그래프 — 이번주 vs 최근 6개월 요일별 평균 (일요일 시작, 위 달력과 같은 기준) */}
           <div className="mt-5 pt-4 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
             <div className="mb-3 flex items-start justify-between gap-2 flex-wrap">
               <div>
@@ -516,7 +518,11 @@ export default function CrmAttendancesPage() {
                 </h3>
                 <p className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
                   {weekData
-                    ? `이번주 ${fmtMd(weekData.thisWeek.start)}~${fmtMd(weekData.thisWeek.end)} · 지난주 ${fmtMd(weekData.lastWeek.start)}~${fmtMd(weekData.lastWeek.end)}`
+                    ? `이번주 ${fmtMd(weekData.thisWeek.start)}~${fmtMd(weekData.thisWeek.end)} · 평균 ${
+                        weekData.average.weeks > 0
+                          ? `최근 ${weekData.average.weeks}주(${fmtMd(weekData.average.from)}~${fmtMd(weekData.average.to)})`
+                          : "데이터 없음"
+                      }`
                     : "KST 기준 요일별 체크인 비교"}
                 </p>
               </div>
@@ -525,7 +531,7 @@ export default function CrmAttendancesPage() {
                   <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#6B7B3A]" /> 이번주
                 </span>
                 <span className="inline-flex items-center gap-1.5 text-[11.5px] text-[#6B5D47] dark:text-zinc-400">
-                  <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#C9BEA6] dark:bg-zinc-600" /> 지난주
+                  <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#C9BEA6] dark:bg-zinc-600" /> 평균
                 </span>
               </div>
             </div>
@@ -533,15 +539,22 @@ export default function CrmAttendancesPage() {
             {!weekData ? (
               <div className="py-12 text-center text-[12.5px] text-[#8C8270]">불러오는 중…</div>
             ) : (() => {
+              const today = todayKst();
               const thisTotal = weekData.thisWeek.days.reduce((sum, d) => sum + d.total, 0);
-              const lastTotal = weekData.lastWeek.days.reduce((sum, d) => sum + d.total, 0);
-              const diff = thisTotal - lastTotal;
+              const avgWeekTotal = weekData.average.days.reduce((sum, d) => sum + d.avg, 0);
+              // 진행 중인 주를 '한 주 평균' 과 통째로 비교하면 항상 모자라 보인다.
+              // → 이번주에 지나온 요일까지의 평균 누적과 비교한다.
+              const elapsed = weekData.thisWeek.days.filter((d) => d.date <= today).length;
+              const avgSoFar = weekData.average.days
+                .slice(0, elapsed || 7)
+                .reduce((sum, d) => sum + d.avg, 0);
+              const diff = Math.round(thisTotal - avgSoFar);
+              const isPartialWeek = elapsed > 0 && elapsed < 7;
               const max = Math.max(
                 1,
                 ...weekData.thisWeek.days.map((d) => d.total),
-                ...weekData.lastWeek.days.map((d) => d.total)
+                ...weekData.average.days.map((d) => d.avg)
               );
-              const today = todayKst();
               const bestDow = weekData.thisWeek.days.reduce(
                 (best, d) => (d.total > best.total ? d : best),
                 weekData.thisWeek.days[0]
@@ -555,7 +568,11 @@ export default function CrmAttendancesPage() {
                     </span>
                     <span className="inline-flex items-center gap-1.5 text-[#6B5D47] dark:text-zinc-400">
                       <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#C9BEA6] dark:bg-zinc-600" />
-                      지난주 <strong className="text-[#3A342A] dark:text-zinc-100 tabular-nums">{lastTotal.toLocaleString()}회</strong>
+                      평균{" "}
+                      <strong className="text-[#3A342A] dark:text-zinc-100 tabular-nums">
+                        {avgWeekTotal.toLocaleString(undefined, { maximumFractionDigits: 1 })}회
+                      </strong>
+                      <span className="text-[11px] text-[#A89B80]">/주</span>
                     </span>
                     <span
                       className={`font-semibold tabular-nums ${
@@ -566,7 +583,10 @@ export default function CrmAttendancesPage() {
                             : "text-[#A89B80]"
                       }`}
                     >
-                      {diff > 0 ? `▲ ${diff}회` : diff < 0 ? `▼ ${Math.abs(diff)}회` : "지난주와 동일"}
+                      {diff > 0 ? `▲ ${diff}회` : diff < 0 ? `▼ ${Math.abs(diff)}회` : "평균과 동일"}
+                      <span className="ml-1 font-normal text-[11px] text-[#A89B80]">
+                        {isPartialWeek ? `평균 대비(${DOW_LABEL[elapsed - 1]}요일까지)` : "평균 대비"}
+                      </span>
                     </span>
                     {thisTotal > 0 && (
                       <span className="text-[11.5px] text-[#8C8270] dark:text-zinc-500">
@@ -579,7 +599,7 @@ export default function CrmAttendancesPage() {
                     <div className="min-w-[420px]">
                       <div className="flex items-end gap-2 h-32">
                         {weekData.thisWeek.days.map((d, i) => {
-                          const last = weekData.lastWeek.days[i];
+                          const avgDay = weekData.average.days[i];
                           const isFuture = d.date > today;
                           const isSelected = d.date === date;
                           return (
@@ -600,16 +620,16 @@ export default function CrmAttendancesPage() {
                                 </div>
                                 <div
                                   className={`flex-1 rounded-t flex items-center justify-center transition-all ${
-                                    last.total === 0
+                                    avgDay.avg === 0
                                       ? "bg-[#EDE4D4] dark:bg-zinc-800"
                                       : "bg-[#C9BEA6] dark:bg-zinc-600"
                                   }`}
-                                  style={{ height: `${last.total > 0 ? Math.max(16, (last.total / max) * 100) : 3}%` }}
-                                  title={`지난주 ${fmtMd(last.date)}(${DOW_LABEL[last.dow]}) ${last.total}건 · ${last.unique}명`}
+                                  style={{ height: `${avgDay.avg > 0 ? Math.max(16, (avgDay.avg / max) * 100) : 3}%` }}
+                                  title={`평균 ${DOW_LABEL[avgDay.dow]}요일 ${avgDay.avg}건 · ${avgDay.avgUnique}명 (최근 ${weekData.average.weeks}주)`}
                                 >
-                                  {last.total > 0 && (
+                                  {avgDay.avg > 0 && (
                                     <span className="text-[9.5px] font-bold leading-none text-white tabular-nums select-none">
-                                      {last.total}
+                                      {Math.round(avgDay.avg)}
                                     </span>
                                   )}
                                 </div>
