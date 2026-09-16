@@ -5,7 +5,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/crm/additional-expenses?ym=YYYY-MM — 해당 월의 추가 지출 목록. admin.
+ * GET /api/crm/additional-expenses?ym=YYYY-MM 또는 ?months=YYYY-MM,YYYY-MM — 해당 기간의 추가 지출 목록. admin.
  */
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request, { needRole: "admin" });
@@ -16,18 +16,27 @@ export async function GET(request: Request) {
   const ym = /^\d{4}-\d{2}$/.test(ymRaw || "")
     ? (ymRaw as string)
     : new Date().toISOString().slice(0, 7);
+  // months=YYYY-MM,YYYY-MM … : 정산 기간이 여러 달일 때 그 기간 전체를 한 번에 조회
+  const monthsRaw = url.searchParams.get("months") ?? "";
+  const months = monthsRaw
+    .split(",")
+    .map((m) => m.trim())
+    .filter((m) => /^\d{4}-\d{2}$/.test(m))
+    .slice(0, 36);
+  const targetMonths = months.length > 0 ? months : [ym];
 
   const { data, error } = await supabase
     .from("crm_additional_expenses")
     .select("id, ym, label, amount_won, memo, vat_deductible")
     .eq("center_id", ctx.centerId)
-    .eq("ym", ym)
+    .in("ym", targetMonths)
+    .order("ym", { ascending: true })
     .order("created_at", { ascending: true });
 
   if (error) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ym, items: data ?? [] });
+  return NextResponse.json({ ym, months: targetMonths, items: data ?? [] });
 }
 
 /**

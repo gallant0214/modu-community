@@ -81,6 +81,32 @@ export default function CrmStatsPage() {
     return `ym=${appliedYm}`;
   })();
 
+  // 적용된 기간에 포함되는 월 목록 (추가 지출·수입 패널이 이 기준을 따른다)
+  const appliedMonths = (() => {
+    const push = (out: string[], y: number, m: number) => out.push(`${y}-${String(m).padStart(2, "0")}`);
+    const out: string[] = [];
+    if (appliedDateMode === "year") {
+      for (let m = 1; m <= 12; m++) push(out, appliedYear, m);
+      return out;
+    }
+    if (appliedDateMode === "range" && appliedFrom && appliedTo && appliedTo >= appliedFrom) {
+      const [fy, fm] = appliedFrom.split("-").map(Number);
+      const [ty, tm] = appliedTo.split("-").map(Number);
+      let y = fy;
+      let m = fm;
+      while ((y < ty || (y === ty && m <= tm)) && out.length < 36) {
+        push(out, y, m);
+        m += 1;
+        if (m > 12) {
+          m = 1;
+          y += 1;
+        }
+      }
+      return out;
+    }
+    return [appliedYm];
+  })();
+
   // 화면에 크게 띄울 기간 라벨 — 예: '9월 전체' / '8~9월 전체' / '2025년 전체'
   const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
   const thisYear = nowKst.getUTCFullYear();
@@ -339,7 +365,7 @@ export default function CrmStatsPage() {
       ) : tab === "center" ? (
         <CenterTab rangeQs={rangeQs} />
       ) : (
-        <SettlementTab rangeQs={rangeQs} defaultYm={appliedYm} />
+        <SettlementTab rangeQs={rangeQs} defaultYm={appliedYm} periodMonths={appliedMonths} />
       )}
     </div>
   );
@@ -1409,13 +1435,29 @@ interface AdditionalExpense {
   memo: string | null;
 }
 
-function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: string }) {
+function SettlementTab({
+  rangeQs,
+  defaultYm,
+  periodMonths,
+}: {
+  rangeQs: string;
+  defaultYm: string;
+  /** 상단에서 고른 정산 기간에 포함된 월 목록 — 추가 지출·수입도 이 기준을 따른다 */
+  periodMonths: string[];
+}) {
   const { getIdToken } = useAuth();
   const [data, setData] = useState<SettlementResp | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 추가 지출 관리 (귀속 월 단위)
-  const [expenseYm, setExpenseYm] = useState(defaultYm);
+  // 추가 지출·수입은 별도 월 선택 없이 상단 정산 기간을 그대로 사용한다.
+  //   목록 = 기간 전체 / 새로 등록하는 건 = 기간의 마지막 달에 귀속
+  const ledgerMonths = periodMonths.length > 0 ? periodMonths : [defaultYm];
+  const entryYm = ledgerMonths[ledgerMonths.length - 1];
+  const multiMonthLedger = ledgerMonths.length > 1;
+  const ledgerRangeText = multiMonthLedger
+    ? `${ledgerMonths[0]} ~ ${ledgerMonths[ledgerMonths.length - 1]}`
+    : entryYm;
+  const ledgerMonthsKey = ledgerMonths.join(",");
   const [addList, setAddList] = useState<AdditionalExpense[]>([]);
   const [nLabel, setNLabel] = useState("");
   const [nAmount, setNAmount] = useState("");
@@ -1446,7 +1488,7 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
   const loadAddList = useCallback(async () => {
     const token = await getIdToken();
     if (!token) return;
-    const res = await fetch(`/api/crm/additional-expenses?ym=${expenseYm}`, {
+    const res = await fetch(`/api/crm/additional-expenses?months=${ledgerMonthsKey}`, {
       headers: { authorization: `Bearer ${token}` },
       cache: "no-store",
     });
@@ -1454,7 +1496,7 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
       const j = await res.json();
       setAddList(j.items ?? []);
     }
-  }, [getIdToken, expenseYm]);
+  }, [getIdToken, ledgerMonthsKey]);
 
   useEffect(() => {
     loadSettlement();
@@ -1496,7 +1538,7 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
       const res = await fetch("/api/crm/additional-expenses", {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ ym: expenseYm, label, amount_won: parseWon(nAmount), memo: nMemo.trim() || null, vat_deductible: nVat }),
+        body: JSON.stringify({ ym: entryYm, label, amount_won: parseWon(nAmount), memo: nMemo.trim() || null, vat_deductible: nVat }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || "추가 실패");
@@ -1662,14 +1704,12 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
       )}
 
       {/* 추가 지출 관리 */}
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">추가 지출 관리 (월별)</span>
-        <input
-          type="month"
-          value={expenseYm}
-          onChange={(e) => setExpenseYm(e.target.value)}
-          className="px-2.5 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[12.5px] text-[#2A251D] dark:text-zinc-100"
-        />
+      <div className="mb-2 flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">추가 지출 관리</span>
+        <span className="text-[11.5px] text-[#A89B80]">
+          {ledgerRangeText}
+          {multiMonthLedger && ` · 새 항목은 ${entryYm}에 등록`}
+        </span>
       </div>
       <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-3.5 space-y-2.5">
         {/* 입력 */}
@@ -1727,7 +1767,7 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
 
         {addList.length === 0 ? (
           <div className="px-4 py-6 text-center text-[12.5px] text-[#8C8270]">
-            {expenseYm} 에 등록된 추가 지출이 없어요.
+            {ledgerRangeText} 에 등록된 추가 지출이 없어요.
           </div>
         ) : (
           <ul className="space-y-1.5">
@@ -1768,6 +1808,11 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
                 ) : (
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
+                      {multiMonthLedger && (
+                        <span className="mr-2 rounded-full border border-[#E8E0D0] dark:border-zinc-700 px-1.5 py-0.5 text-[10.5px] font-medium text-[#8C8270] dark:text-zinc-400">
+                          {x.ym}
+                        </span>
+                      )}
                       <span className="text-[13px] font-medium text-[#2A251D] dark:text-zinc-100">{x.label}</span>
                       {x.memo && <span className="ml-2 text-[11.5px] text-[#8C8270]">{x.memo}</span>}
                       {x.vat_deductible && (
@@ -1793,25 +1838,25 @@ function SettlementTab({ rangeQs, defaultYm }: { rangeQs: string; defaultYm: str
       {/* 추가 수입 관리 */}
       <AdditionalLedgerPanel
         endpoint="additional-incomes"
-        title="추가 수입 관리 (월별)"
+        title="추가 수입 관리"
         placeholder="내용 (예: 자판기 수익, 협찬)"
         footnote="여기서 등록한 추가 수입은 해당 월이 정산 기간에 포함될 때 순이익에 더해져요."
         emptyText="에 등록된 추가 수입이 없어요."
-        defaultYm={defaultYm}
+        months={ledgerMonths}
         onChanged={loadSettlement}
       />
     </>
   );
 }
 
-/** 추가 지출/수입 공용 관리 패널 (월별 CRUD). endpoint = additional-expenses | additional-incomes */
+/** 추가 지출/수입 공용 관리 패널. 월 선택은 없고 상단 정산 기간(months)을 그대로 따른다. */
 function AdditionalLedgerPanel({
   endpoint,
   title,
   placeholder,
   footnote,
   emptyText,
-  defaultYm,
+  months,
   onChanged,
 }: {
   endpoint: string;
@@ -1819,11 +1864,16 @@ function AdditionalLedgerPanel({
   placeholder: string;
   footnote: string;
   emptyText: string;
-  defaultYm: string;
+  /** 상단에서 고른 정산 기간의 월 목록 */
+  months: string[];
   onChanged: () => void;
 }) {
   const { getIdToken } = useAuth();
-  const [ym, setYm] = useState(defaultYm);
+  const ledgerMonths = months.length > 0 ? months : [new Date().toISOString().slice(0, 7)];
+  const ym = ledgerMonths[ledgerMonths.length - 1]; // 새 항목 귀속월 = 기간의 마지막 달
+  const multiMonth = ledgerMonths.length > 1;
+  const rangeText = multiMonth ? `${ledgerMonths[0]} ~ ${ym}` : ym;
+  const monthsKey = ledgerMonths.join(",");
   const [list, setList] = useState<AdditionalExpense[]>([]);
   const [nLabel, setNLabel] = useState("");
   const [nAmount, setNAmount] = useState("");
@@ -1838,12 +1888,12 @@ function AdditionalLedgerPanel({
   const load = useCallback(async () => {
     const token = await getIdToken();
     if (!token) return;
-    const res = await fetch(`/api/crm/${endpoint}?ym=${ym}`, {
+    const res = await fetch(`/api/crm/${endpoint}?months=${monthsKey}`, {
       headers: { authorization: `Bearer ${token}` },
       cache: "no-store",
     });
     if (res.ok) setList((await res.json()).items ?? []);
-  }, [getIdToken, endpoint, ym]);
+  }, [getIdToken, endpoint, monthsKey]);
   useEffect(() => {
     load();
   }, [load]);
@@ -1910,14 +1960,12 @@ function AdditionalLedgerPanel({
 
   return (
     <>
-      <div className="mb-2 mt-5 flex items-center justify-between gap-2">
+      <div className="mb-2 mt-5 flex items-center justify-between gap-2 flex-wrap">
         <span className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">{title}</span>
-        <input
-          type="month"
-          value={ym}
-          onChange={(e) => setYm(e.target.value)}
-          className="px-2.5 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[12.5px] text-[#2A251D] dark:text-zinc-100"
-        />
+        <span className="text-[11.5px] text-[#A89B80]">
+          {rangeText}
+          {multiMonth && ` · 새 항목은 ${ym}에 등록`}
+        </span>
       </div>
       <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-3.5 space-y-2.5">
         <div className="flex flex-wrap gap-2">
@@ -1963,7 +2011,7 @@ function AdditionalLedgerPanel({
 
         {list.length === 0 ? (
           <div className="px-4 py-6 text-center text-[12.5px] text-[#8C8270]">
-            {ym} {emptyText}
+            {rangeText} {emptyText}
           </div>
         ) : (
           <ul className="space-y-1.5">
