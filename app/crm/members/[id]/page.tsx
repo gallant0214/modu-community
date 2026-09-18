@@ -521,34 +521,44 @@ export default function CrmMemberDetailPage() {
         </div>
       </header>
 
-      {/* 탭: 정보 / 예약내역 / 출석내역 / 결제내역 / 강사기록 / 회원공유기록 / 로그 */}
-      <div className="mb-4 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800 overflow-x-auto">
-        {(["info", "reservations", "attendance", "payments", "workout", "shared", "logs"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 -mb-px text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap
-              ${tab === t
-                ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] dark:border-[#A8B87A]"
-                : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
-              }`}
-          >
-            {t === "info"
-              ? "정보"
-              : t === "reservations"
-                ? "예약내역"
-                : t === "attendance"
-                  ? "출석내역"
-                  : t === "payments"
-                    ? "결제내역"
-                    : t === "workout"
-                      ? "강사기록"
-                      : t === "shared"
-                        ? "회원공유기록"
-                        : "로그"}
-          </button>
-        ))}
+      {/* 탭: 정보 / 예약내역 / 출석내역 / 결제내역 / 강사기록 / 회원공유기록 / 로그
+          — 세그먼트형 탭 바: 트레이 안에서 선택된 탭이 흰 카드처럼 떠올라 '탭'임이 분명하게 보인다 */}
+      <div className="mb-5 -mx-1 px-1 overflow-x-auto">
+        <div
+          role="tablist"
+          aria-label="회원 상세 메뉴"
+          className="inline-flex min-w-full sm:min-w-0 gap-1 p-1 rounded-2xl bg-[#F3EDE0] dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-800"
+        >
+          {MEMBER_TABS.map((t) => {
+            const active = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(t.key)}
+                className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-[13px] whitespace-nowrap transition-all ${
+                  active
+                    ? "bg-white dark:bg-zinc-800 text-[#3A342A] dark:text-zinc-100 font-semibold shadow-[0_1px_3px_rgba(58,52,42,0.12)] ring-1 ring-[#E8E0D0] dark:ring-zinc-700"
+                    : "text-[#8C8270] dark:text-zinc-400 font-medium hover:text-[#3A342A] dark:hover:text-zinc-200 hover:bg-white/60 dark:hover:bg-zinc-800/50"
+                }`}
+              >
+                <svg
+                  className={`w-4 h-4 shrink-0 ${active ? "text-[#6B7B3A] dark:text-[#A8B87A]" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.8}
+                  viewBox="0 0 24 24"
+                  aria-hidden
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d={t.icon} />
+                </svg>
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {tab === "logs" ? (
@@ -2381,6 +2391,17 @@ const STATUS_LABEL_R: Record<string, string> = {
   noshow: "노쇼",
 };
 /** 요일 라벨 (0=일) */
+/** 회원 상세 탭 — 라벨 + 선 아이콘(path) */
+const MEMBER_TABS = [
+  { key: "info", label: "정보", icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM4 21a8 8 0 0116 0" },
+  { key: "reservations", label: "예약내역", icon: "M8 3v3m8-3v3M4 9h16M5 6h14a1 1 0 011 1v12a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1z" },
+  { key: "attendance", label: "출석내역", icon: "M9 12l2 2 4-4M12 21a9 9 0 110-18 9 9 0 010 18z" },
+  { key: "payments", label: "결제내역", icon: "M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7zm0 3h18M7 15h3" },
+  { key: "workout", label: "강사기록", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12h6M9 16h4" },
+  { key: "shared", label: "회원공유기록", icon: "M8 10h8M8 14h5M21 12a8 8 0 01-11.6 7.1L4 20l1-4.2A8 8 0 1121 12z" },
+  { key: "logs", label: "로그", icon: "M12 8v4l3 2M3 12a9 9 0 109-9 9.7 9.7 0 00-6.7 2.8L3 8M3 3v5h5" },
+] as const;
+
 const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
 const STATUS_STYLE_R: Record<string, string> = {
