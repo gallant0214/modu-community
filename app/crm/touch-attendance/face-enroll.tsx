@@ -180,11 +180,24 @@ export default function FaceEnroll({
           </div>
           <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-black">
             {captured ? (
+              // 확인 화면도 촬영 때 본 모습(거울)과 같게 보여준다. 저장 파일은 원본 방향 유지(얼굴 인식 일관성)
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={captured} alt="촬영본" className="w-full h-full object-cover" />
+              <img
+                src={captured}
+                alt="촬영본"
+                className="w-full h-full object-cover"
+                style={{ transform: "scaleX(-1)" }}
+              />
             ) : (
               <>
-                <video ref={videoRef} muted playsInline className="w-full h-full object-cover scale-x-[-1]" />
+                {/* 거울 모드 — Tailwind scale-x 는 구형 브라우저(@property 미지원)에서 무시돼 인라인 transform 사용 */}
+                <video
+                  ref={videoRef}
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover"
+                  style={{ transform: "scaleX(-1)" }}
+                />
                 {/* 얼굴 가이드 */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="w-[62%] h-[78%] rounded-[50%] border-2 border-white/70" />

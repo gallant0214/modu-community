@@ -403,7 +403,8 @@ export default function FaceAttendance({
         ref={videoRef}
         muted
         playsInline
-        className="w-full h-full object-cover scale-x-[-1]"
+        className="w-full h-full object-cover"
+        style={{ transform: "scaleX(-1)" }}
       />
       {!camError && stage !== "ready" && stage !== "error" && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white text-center px-6">
