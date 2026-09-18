@@ -148,7 +148,7 @@ export function NavBar() {
         <Link href="/" className="flex items-center gap-2 mr-4 shrink-0 group">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <Image src="/logo.png" alt="로고" width={28} height={28} className="rounded-lg" priority />
-          <span className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 whitespace-nowrap tracking-tight">모두의 지도사 커뮤니티</span>
+          <span className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 whitespace-nowrap tracking-tight">모두의 지도사</span>
         </Link>
 
         {/* 데스크톱 메뉴 */}
