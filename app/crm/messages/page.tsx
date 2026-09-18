@@ -57,6 +57,8 @@ export default function CrmMessagesPage() {
   const [searching, setSearching] = useState(false);
 
   const [previewCount, setPreviewCount] = useState<number | null>(null);
+  /** 발송 수단 — 푸시(앱 알림) / 문자 / 둘 다 */
+  const [channel, setChannel] = useState<"push" | "sms" | "both">("push");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
@@ -224,7 +226,10 @@ export default function CrmMessagesPage() {
       return setError("받을 회원을 최소 1명 선택해 주세요");
     if (previewCount === 0) return setError("받을 회원이 없어요");
 
-    if (!window.confirm(`${previewCount ?? "?"}명에게 발송할까요?`)) return;
+    const channels = channel === "both" ? ["push", "sms"] : [channel];
+    const howLabel = channel === "push" ? "푸시" : channel === "sms" ? "문자" : "푸시 + 문자";
+    const warn = channels.includes("sms") ? "\n문자는 실제 발송되며 건당 요금이 부과됩니다." : "";
+    if (!window.confirm(`${previewCount ?? "?"}명에게 ${howLabel}로 발송할까요?${warn}`)) return;
 
     setSending(true);
     try {
@@ -236,6 +241,7 @@ export default function CrmMessagesPage() {
           title: title.trim(),
           body: body.trim(),
           audience_kind: audience,
+          channels,
           member_ids: selectedMembers.map((m) => m.id),
           within_days: withinDays,
           inactive_days: inactiveDays,
@@ -243,7 +249,13 @@ export default function CrmMessagesPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "발송 실패");
-      setOkMsg(`${data.recipient_count}명에게 발송했어요.`);
+      setOkMsg(
+        data.sms
+          ? `${data.recipient_count}명에게 발송했어요. (문자 성공 ${data.sms.sent}건${
+              data.sms.failed > 0 ? ` · 실패 ${data.sms.failed}건` : ""
+            })`
+          : `${data.recipient_count}명에게 발송했어요.`
+      );
       setTitle("");
       setBody("");
       if (audience === "individual") setSelectedMembers([]);
@@ -485,8 +497,47 @@ export default function CrmMessagesPage() {
         </div>
       </Section>
 
+      {/* 발송 방법 */}
+      <Section title="2. 발송 방법">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {([
+            { key: "push", label: "푸시", desc: "회원용 앱 알림으로 전송" },
+            { key: "sms", label: "문자", desc: "휴대폰 문자로 전송 (과금)" },
+            { key: "both", label: "푸시 + 문자", desc: "앱 알림과 문자 모두 전송" },
+          ] as const).map((opt) => {
+            const needsSms = opt.key !== "push";
+            const disabled = needsSms && smsLocked;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                disabled={disabled}
+                onClick={() => setChannel(opt.key)}
+                title={disabled ? "이 센터는 문자 발송을 사용할 수 없어요" : undefined}
+                className={`text-left px-3 py-2.5 rounded-xl border transition-colors
+                  ${channel === opt.key
+                    ? "border-[#6B7B3A] bg-[#6B7B3A]/10 dark:bg-[#6B7B3A]/20"
+                    : "border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/40"
+                  } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                <div className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+                  {opt.label}
+                  {disabled && <span className="ml-1 text-[11px] font-normal text-[#A89B80]">잠금</span>}
+                </div>
+                <div className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">{opt.desc}</div>
+              </button>
+            );
+          })}
+        </div>
+        {channel !== "push" && (
+          <div className="mt-2 px-3 py-2 rounded-lg bg-[#B47B2A]/10 border border-[#B47B2A]/30 text-[12px] text-[#8a5c1f] dark:text-amber-300">
+            문자는 <strong>실제 발송되며 건당 요금이 부과</strong>돼요. 받을 회원 수를 확인하고 보내주세요.
+          </div>
+        )}
+      </Section>
+
       {/* 메시지 작성 */}
-      <Section title="2. 메시지">
+      <Section title="3. 메시지">
         <FieldLabel>제목</FieldLabel>
         <input
           type="text"

@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import {
@@ -9,6 +8,7 @@ import {
   inferMsgType,
   normalizePhone,
 } from "@/app/lib/solapi";
+import { logSmsSend } from "@/app/lib/crm-sms-log";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +59,19 @@ export async function POST(request: Request) {
   // 테스트(검증) 모드: 실제 발송 없이 인증만 확인
   if (testmode) {
     const bal = await solapiBalance();
-    await logSms(ctx, receivers, msg, msgType, title, true, bal.ok ? 0 : -1, bal.ok ? "검증 완료" : bal.message ?? "검증 실패", 0, 0, null);
+    await logSmsSend({
+      centerId: ctx.centerId,
+      uid: ctx.uid,
+      receivers,
+      msg,
+      msgType,
+      title,
+      testmode: true,
+      resultCode: bal.ok ? 0 : -1,
+      resultMsg: bal.ok ? "검증 완료" : bal.message ?? "검증 실패",
+      successCnt: 0,
+      errorCnt: 0,
+    });
     if (!bal.ok) {
       return NextResponse.json({ error: `인증 확인 실패: ${bal.message || "설정 확인 필요"}` }, { status: 502 });
     }
@@ -75,19 +87,20 @@ export async function POST(request: Request) {
 
   const result = await solapiSend({ receivers, msg, subject: title, msgType });
 
-  await logSms(
-    ctx,
+  await logSmsSend({
+    centerId: ctx.centerId,
+    uid: ctx.uid,
     receivers,
     msg,
     msgType,
     title,
-    false,
-    result.ok ? 1 : -1,
-    result.message,
-    result.success,
-    result.failed,
-    result.groupId ?? null
-  );
+    testmode: false,
+    resultCode: result.ok ? 1 : -1,
+    resultMsg: result.message,
+    successCnt: result.success,
+    errorCnt: result.failed,
+    groupId: result.groupId ?? null,
+  });
 
   if (!result.ok) {
     return NextResponse.json(
@@ -105,34 +118,3 @@ export async function POST(request: Request) {
   });
 }
 
-async function logSms(
-  ctx: { centerId: number; uid: string },
-  receivers: string[],
-  msg: string,
-  msgType: string,
-  title: string | undefined,
-  testmode: boolean,
-  resultCode: number,
-  resultMsg: string,
-  successCnt: number,
-  errorCnt: number,
-  groupId: string | null
-) {
-  await supabase.from("crm_sms_logs").insert({
-    center_id: ctx.centerId,
-    sender: process.env.SOLAPI_SENDER ?? "",
-    receivers:
-      receivers.slice(0, 50).join(",") + (receivers.length > 50 ? ` 외 ${receivers.length - 50}` : ""),
-    receiver_cnt: receivers.length,
-    msg,
-    msg_type: msgType,
-    title: title ?? null,
-    testmode,
-    result_code: resultCode,
-    result_msg: resultMsg,
-    success_cnt: successCnt,
-    error_cnt: errorCnt,
-    aligo_msg_id: groupId,
-    sent_by_uid: ctx.uid,
-  } as never);
-}

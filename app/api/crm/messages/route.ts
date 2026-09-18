@@ -3,6 +3,13 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { notifyMembersByIds } from "@/app/lib/member-notify";
+import { inferMsgType, normalizePhone, solapiConfigured, solapiSend } from "@/app/lib/solapi";
+import { logSmsSend } from "@/app/lib/crm-sms-log";
+
+/** 문자 발송 허용 센터 (스페셜바디 범어점) — 화면 잠금 규칙과 동일 */
+const SMS_ALLOWED_CENTER = 1;
+/** 솔라피 1회 요청 수신자 상한 */
+const SMS_CHUNK = 1000;
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +119,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "대상 유형이 잘못됨" }, { status: 400 });
   }
 
+  // 발송 수단 — push(앱 알림) / sms(문자). 미지정이면 기존 동작(푸시)과 동일.
+  const rawChannels = Array.isArray((body as { channels?: unknown }).channels)
+    ? ((body as { channels: unknown[] }).channels.map(String))
+    : ["push"];
+  const channels = Array.from(new Set(rawChannels.filter((c) => c === "push" || c === "sms")));
+  if (channels.length === 0) {
+    return NextResponse.json({ error: "발송 방법을 선택해 주세요" }, { status: 400 });
+  }
+  const wantsPush = channels.includes("push");
+  const wantsSms = channels.includes("sms");
+  if (wantsSms && ctx.centerId !== SMS_ALLOWED_CENTER) {
+    return NextResponse.json({ error: "이 센터는 문자 발송을 사용할 수 없어요" }, { status: 403 });
+  }
+  if (wantsSms && !solapiConfigured()) {
+    return NextResponse.json({ error: "문자 발송 설정이 완료되지 않았어요" }, { status: 400 });
+  }
+
   const withinDays = Math.max(1, Math.min(60, body.within_days ?? 7));
   const inactiveDays = Math.max(1, Math.min(365, body.inactive_days ?? 14));
   const memberIds = await resolveAudience(ctx.centerId, kind, {
@@ -200,20 +224,69 @@ export async function POST(request: Request) {
     payload: {
       audience_kind: kind,
       recipient_count: memberIds.length,
+      channels,
     } as never,
   });
 
   // 회원 앱 알림(푸시 + 알림함) — 백그라운드 발송
-  after(async () => {
-    await notifyMembersByIds(ctx.centerId, memberIds, "message", title, bodyText, {
-      broadcastId: String(broadcast.id),
+  if (wantsPush) {
+    after(async () => {
+      await notifyMembersByIds(ctx.centerId, memberIds, "message", title, bodyText, {
+        broadcastId: String(broadcast.id),
+      });
     });
-  });
+  }
+
+  // 문자 — 전화번호는 서버에서만 조회한다(클라이언트로 내보내지 않음).
+  // 솔라피 1회 상한(1,000명)에 맞춰 나눠 보내고 건수를 합산해 돌려준다.
+  let smsResult: { sent: number; failed: number; receivers: number } | null = null;
+  if (wantsSms) {
+    const phones: string[] = [];
+    const ID_CHUNK = 500;
+    for (let i = 0; i < memberIds.length; i += ID_CHUNK) {
+      const { data } = await supabase
+        .from("crm_members")
+        .select("phone")
+        .eq("center_id", ctx.centerId)
+        .in("id", memberIds.slice(i, i + ID_CHUNK));
+      for (const r of data ?? []) {
+        const p = normalizePhone(String((r as { phone?: string | null }).phone ?? ""));
+        if (p) phones.push(p);
+      }
+    }
+    const receivers = Array.from(new Set(phones));
+    const msgType = inferMsgType(bodyText);
+    let sent = 0;
+    let failed = 0;
+    for (let i = 0; i < receivers.length; i += SMS_CHUNK) {
+      const chunk = receivers.slice(i, i + SMS_CHUNK);
+      const r = await solapiSend({ receivers: chunk, msg: bodyText, subject: title, msgType });
+      sent += r.success;
+      failed += r.failed + (r.ok ? 0 : chunk.length - r.success - r.failed);
+      await logSmsSend({
+        centerId: ctx.centerId,
+        uid: ctx.uid,
+        receivers: chunk,
+        msg: bodyText,
+        msgType,
+        title,
+        testmode: false,
+        resultCode: r.ok ? 1 : -1,
+        resultMsg: r.message,
+        successCnt: r.success,
+        errorCnt: r.failed,
+        groupId: r.groupId ?? null,
+      });
+    }
+    smsResult = { sent, failed, receivers: receivers.length };
+  }
 
   return NextResponse.json({
     ok: true,
     broadcast_id: broadcast.id,
     recipient_count: memberIds.length,
+    channels,
+    sms: smsResult,
   });
 }
 
