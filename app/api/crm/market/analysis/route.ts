@@ -44,7 +44,7 @@ interface Row {
 }
 
 /**
- * GET /api/crm/market/analysis?radius=3&type=gym
+ * GET /api/crm/market/analysis?radius=1&type=gym
  * 자영업자 관점의 상권 지표 묶음.
  *   - 경쟁 밀도(거리대별) / 폐업률 / 연도별 폐업 추이
  *   - 업종 구성(대체재 포함) / 동별 밀집 / 규모 분포 / 가까운 경쟁 목록
@@ -68,7 +68,7 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const radiusKm = Math.min(10, Math.max(0.5, Number(url.searchParams.get("radius")) || 3));
+  const radiusKm = Math.min(10, Math.max(0.5, Number(url.searchParams.get("radius")) || 1));
   const bizType = url.searchParams.get("type") || PRIMARY_BIZ_TYPE;
   if (!bizTypeOf(bizType)) {
     return NextResponse.json({ error: "알 수 없는 업종" }, { status: 400 });
@@ -138,6 +138,15 @@ export async function GET(request: Request) {
   // ── 폐업률: 이 상권에서 문 닫은 비율 (영업+폐업 중 폐업)
   const closedCount = mine.length - mineOpen.length;
   const closureRate = mine.length > 0 ? Math.round((closedCount / mine.length) * 1000) / 10 : 0;
+  // 폐업률은 기간 제한 없이 '원본에 남아있는 전체 이력' 기준이다.
+  // 사용자가 몇 년치인지 알 수 있도록 실제 폐업일의 연도 범위를 함께 내려준다.
+  const closedYears = mine
+    .map((r) => r.closed_on?.slice(0, 4))
+    .filter((y): y is string => !!y && /^\d{4}$/.test(y))
+    .map(Number)
+    .sort((a, b) => a - b);
+  const closureFromYear = closedYears.length > 0 ? closedYears[0] : null;
+  const closureToYear = closedYears.length > 0 ? closedYears[closedYears.length - 1] : null;
 
   // ── 시군구 전체 평균과 비교 (내 반경이 과밀인지)
   const sigungu = center.sigungu;
@@ -224,6 +233,8 @@ export async function GET(request: Request) {
       within1km: withDist.filter((r) => r.biz_type === bizType && r.is_open && r.km <= 1).length,
       closed: closedCount,
       closureRate,
+      closureFromYear,
+      closureToYear,
       sigunguOpen,
       /** 반경 면적당 밀도 ÷ 시군구 밀도는 시군구 면적을 몰라 못 구한다 → 점유 비중으로 대체 */
       shareOfSigungu:

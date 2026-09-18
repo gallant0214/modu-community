@@ -14,7 +14,7 @@ import { ensureCenterCoords } from "@/app/lib/market-sync";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/crm/market/nearby?radius=3&months=12&type=gym
+ * GET /api/crm/market/nearby?radius=1&months=12&type=gym
  * 센터 반경 내 경쟁 체육시설 현황.
  *
  * 🚨 출처(전국체육시설 정보)에 **개업일이 없다.** 그래서 '신규'는 개업일이 아니라
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const radiusKm = Math.min(20, Math.max(0.5, Number(url.searchParams.get("radius")) || 3));
+  const radiusKm = Math.min(20, Math.max(0.5, Number(url.searchParams.get("radius")) || 1));
   const months = Math.min(60, Math.max(3, Math.floor(Number(url.searchParams.get("months")) || 12)));
   const bizType = url.searchParams.get("type") || PRIMARY_BIZ_TYPE;
   if (!bizTypeOf(bizType)) {

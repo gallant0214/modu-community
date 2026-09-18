@@ -18,6 +18,9 @@ interface Analysis {
     within1km: number;
     closed: number;
     closureRate: number;
+    /** 폐업률 집계에 포함된 실제 폐업 연도 범위 (누적 기준) */
+    closureFromYear: number | null;
+    closureToYear: number | null;
     sigunguOpen: number;
     shareOfSigungu: number;
     medianGfa: number | null;
@@ -44,7 +47,7 @@ const RADIUS_OPTIONS = [1, 3, 5];
 
 export default function MarketAnalysisPage() {
   const { getIdToken } = useAuth();
-  const [radius, setRadius] = useState(3);
+  const [radius, setRadius] = useState(1); // 기본 반경 1km
   const [bizType, setBizType] = useState("gym");
   const [data, setData] = useState<Analysis | null>(null);
   const [locked, setLocked] = useState(false);
@@ -214,7 +217,11 @@ export default function MarketAnalysisPage() {
               value={s.closureRate}
               unit="%"
               decimals={1}
-              sub={`등록 ${s.operating + s.closed}곳 중 ${s.closed}곳 폐업`}
+              sub={`등록 ${s.operating + s.closed}곳 중 ${s.closed}곳 폐업${
+                s.closureFromYear && s.closureToYear
+                  ? ` · ${s.closureFromYear}~${s.closureToYear}년 누적`
+                  : ""
+              }`}
               warn={s.closureRate >= 30}
             />
             <Tile
@@ -235,7 +242,7 @@ export default function MarketAnalysisPage() {
               <VBar data={data.byDistance} />
             </ChartCard>
             <ChartCard
-              title="연도별 폐업 수"
+              title="연도별 폐업 수 (최근 6년)"
               hint="문 닫은 곳이 늘면 상권이 어려워진다는 신호예요"
             >
               <VBar data={data.closureByYear} />
