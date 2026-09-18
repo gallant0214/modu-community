@@ -153,8 +153,13 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
     setVoiceGenderState(getVoiceGender());
   }, []);
 
-  // 가로/세로 레이아웃 기억
+  // 가로/세로 레이아웃 기억 (URL ?mode=portrait|landscape 가 있으면 그 값 우선)
   useEffect(() => {
+    const qsMode = new URLSearchParams(window.location.search).get("mode");
+    if (qsMode === "landscape" || qsMode === "portrait") {
+      setMode(qsMode); // 미리보기 링크로 배치를 바로 지정. 저장값은 덮어쓰지 않는다.
+      return;
+    }
     const saved = localStorage.getItem("crm_touch_orientation");
     if (saved === "landscape" || saved === "portrait") setMode(saved);
   }, []);
@@ -551,6 +556,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         <CheckinResultScreen
           data={result}
           preview={previewMode}
+          portrait={!landscape}
           onClose={() => {
             setResult(null);
             reset();
@@ -926,6 +932,7 @@ function CheckinResultScreen({
   data,
   onClose,
   preview,
+  portrait,
 }: {
   data: {
     kind: "success";
@@ -939,6 +946,7 @@ function CheckinResultScreen({
   };
   onClose: () => void;
   preview?: boolean; // true 면 자동 닫힘 없이 화면 유지(디자인 미리보기용)
+  portrait?: boolean; // 세로형 — 화면 폭과 관계없이 1단으로 배치(태블릿 세로 거치 기준)
 }) {
   const [remain, setRemain] = useState(3);
   useEffect(() => {
@@ -1012,7 +1020,11 @@ function CheckinResultScreen({
         </svg>
       </button>
 
-      <div className="w-full max-w-[1180px] grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+      <div
+        className={`w-full grid gap-4 md:gap-6 ${
+          portrait ? "max-w-[640px] grid-cols-1" : "max-w-[1180px] grid-cols-1 md:grid-cols-2"
+        }`}
+      >
         {/* 좌측: 상태 + 회원 카드 + 이번 주 출석 */}
         <div className="rounded-2xl bg-[#1E2024] p-5 md:p-7 space-y-5">
           {/* 상태 표시 */}
@@ -1081,12 +1093,12 @@ function CheckinResultScreen({
                 </div>
               </div>
             </div>
-            <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-2.5">
-              <span className="text-white/60 text-[15px]">누적 마일리지</span>
-              <span className="text-[24px] font-bold text-white tabular-nums leading-none">
+            <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-3">
+              <span className="text-white/60 text-[16px]">누적 마일리지</span>
+              <span className="text-[34px] md:text-[38px] font-bold text-white tabular-nums leading-none">
                 {(s?.mileage ?? 0).toLocaleString()}
               </span>
-              <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
+              <span className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-amber-500 text-white text-[17px] md:text-[19px] font-extrabold flex items-center justify-center shrink-0">
                 M
               </span>
             </div>
@@ -1132,7 +1144,7 @@ function CheckinResultScreen({
           </div>
 
           {/* 세로 화면: 보유 이용권을 '출석 현황' 바로 아래에 표시 (가로에서는 우측에 표시) */}
-          <div className="md:hidden">{holdingsCard}</div>
+          <div className={portrait ? "" : "md:hidden"}>{holdingsCard}</div>
         </div>
 
         {/* 우측: 이용권/락커/대여권 */}
@@ -1163,7 +1175,7 @@ function CheckinResultScreen({
           </div>
 
           {/* 가로(태블릿)에서만 우측에 표시 — 세로에서는 '출석 현황' 아래로 이동 */}
-          <div className="hidden md:block">{holdingsCard}</div>
+          <div className={portrait ? "hidden" : "hidden md:block"}>{holdingsCard}</div>
 
           {/* 카운트다운 처음으로 */}
           <button
