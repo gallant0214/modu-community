@@ -148,10 +148,9 @@ export async function POST(request: Request) {
 
   // 결제내역(crm_payments)에 기록 — 회원권·수강권과 동일하게 결제내역 탭에 표시.
   // 0원(예: 재등록 무료 이어붙이기)도 구매 이벤트로 기록해 결제내역에 남긴다.
-  const paidWon = Math.max(
-    0,
-    (Number(body.price_won) || 0) - Math.max(0, Math.floor(Number(body.discount_won) || 0))
-  );
+  // 🚨 price_won 은 이미 할인 후 실결제액이다(발급창이 정가-할인으로 계산해 보냄 — 회원권·수강권과 동일).
+  //    예전엔 여기서 discount_won 을 한 번 더 빼서 부분 할인 시 결제내역이 할인만큼 적게 잡혔다.
+  const paidWon = Math.max(0, Number(body.price_won) || 0);
   // 결제일(paid_at) 기준 = 구매일(purchased_at) 우선, 없으면 시작일(백데이트 하위호환).
   // 시작일은 '이용 시작'일 뿐 실제 구매/결제일과 다를 수 있어(이어붙이기 등) 구매일을 우선한다.
   // 당일 구매면 실제 결제 시각, 과거 구매일이면 그 날 정오.
