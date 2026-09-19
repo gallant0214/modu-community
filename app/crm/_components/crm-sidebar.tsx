@@ -35,7 +35,7 @@ const MENU: MenuItem[] = [
   { href: "/crm/passes",      label: "수강권 관리",   group: "sales", icon: IconPass },
   { href: "/crm/consultations", label: "PT 상담",       group: "sales", icon: IconConsult },
   { href: "/crm/messages",    label: "메세지 전송",   group: "engage", perm: "messages.send", icon: IconMessage },
-  { href: "/crm/coupons",     label: "쿠폰",          group: "engage", perm: "coupons.view", icon: IconCoupon },
+  { href: "/crm/coupons",     label: "쿠폰 관리",     group: "engage", perm: "coupons.view", icon: IconCoupon },
   { href: "/crm/stats",       label: "통계",          group: "admin", perm: "stats.view", icon: IconStats },
   { href: "/crm/settings",    label: "센터설정",       group: "admin", staffOnly: true, icon: IconSettings },
   { href: "/crm/market",      label: "상권분석",       group: "admin", perm: "stats.view", restricted: "market", icon: IconMarket },
