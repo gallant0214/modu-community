@@ -112,7 +112,7 @@ export async function POST(request: Request) {
 
   const { data: pending } = await supabase
     .from("crm_auto_message_queue")
-    .select("id, member_id, message, methods")
+    .select("id, member_id, message, methods, trigger_key")
     .eq("center_id", ctx.centerId)
     .eq("status", "pending")
     .eq("scheduled_for", today)
@@ -123,6 +123,7 @@ export async function POST(request: Request) {
     member_id: number;
     message: string;
     methods: unknown;
+    trigger_key: string | null;
   }[]).map((q) => ({ ...q, methods: Array.isArray(q.methods) ? (q.methods as string[]) : [] }));
 
   let skipped = 0;

@@ -16,6 +16,7 @@ import {
   type ExpiryBasis,
 } from "@/app/lib/auto-message-triggers";
 import { formatPhone } from "../_components/crm-labels";
+import { benefitText, issueExpiryYmd, type CouponDef } from "@/app/lib/crm-coupons";
 
 interface CouponAttach {
   name: string;
@@ -399,8 +400,36 @@ function AutoMessageEditor({
   );
   const [methods, setMethods] = useState<string[]>(base.methods ?? []);
   const [attachments, setAttachments] = useState<string[]>(base.config?.attachments ?? []);
-  const [couponName, setCouponName] = useState(base.config?.coupon?.name ?? "");
-  const [couponLink, setCouponLink] = useState(base.config?.coupon?.link ?? "");
+  // 06 쿠폰 첨부 — 사이드바 '쿠폰' 에서 만든 쿠폰 중 선택 (발송 때 회원마다 1장씩 발급)
+  const [couponId, setCouponId] = useState<number | null>(base.coupon_id ?? null);
+  const [coupons, setCoupons] = useState<(CouponDef & { sendable?: boolean })[]>([]);
+  const [couponsState, setCouponsState] = useState<"loading" | "ok" | "denied" | "error">("loading");
+  const { getIdToken: getToken } = useAuth();
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/coupons?status=active", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!alive) return;
+        if (res.status === 403) return setCouponsState("denied");
+        const data = await res.json();
+        if (!res.ok) return setCouponsState("error");
+        setCoupons(data.coupons ?? []);
+        setCouponsState("ok");
+      } catch {
+        if (alive) setCouponsState("error");
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [getToken]);
+  const selectedCoupon = coupons.find((c) => Number(c.id) === couponId) ?? null;
   const [body, setBody] = useState(base.message_body ?? "");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -474,9 +503,10 @@ function AutoMessageEditor({
         methods,
         audience: [], // 수신 대상은 트리거 조건이 자동 결정 (수동 세그먼트 미사용)
         message_body: body,
+        coupon_id: couponId,
         config: {
           attachments,
-          coupon: couponName.trim() ? { name: couponName.trim(), link: couponLink.trim() } : null,
+          coupon: null, // (구) 이름·링크 직접 입력 방식은 폐기 — coupon_id 로 연동
           send_days_dir: sendDaysDir,
           // '즉시'는 발송 시각 개념이 없어 저장하지 않는다.
           send_hour: sendBasis === "immediate" ? null : sendHour,
@@ -508,8 +538,7 @@ function AutoMessageEditor({
       kind={kind}
       methods={methods}
       attachments={attachments}
-      couponName={couponName}
-      couponLink={couponLink}
+      coupon={selectedCoupon}
       sendBasis={sendBasis}
       sendDays={sendDays}
       sendDaysDir={sendDaysDir}
@@ -520,7 +549,7 @@ function AutoMessageEditor({
   );
 
   // 미리보기 아래 테스트 발송 — 저장 전 문구를 한 명에게 실제 문자로 보내본다.
-  const testPanel = <TestSendPanel body={body} methods={methods} />;
+  const testPanel = <TestSendPanel body={body} methods={methods} couponId={couponId} />;
 
   const inputCls =
     "w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-[#2A251D] dark:text-zinc-100";
@@ -817,38 +846,74 @@ function AutoMessageEditor({
               </div>
             </NumberedField>
 
-            {/* 06 쿠폰 첨부 */}
+            {/* 06 쿠폰 첨부 — 사이드바 '쿠폰' 과 연동 */}
             <NumberedField
               no="06"
               title="쿠폰 첨부"
-              preparing
-              hint="쿠폰 시스템 연동 후 사용할 수 있어요. 지금 쿠폰 링크를 보내시려면 07 메세지 본문에 직접 적어 주세요."
+              hint="선택한 쿠폰이 발송할 때 회원마다 1장씩 발급돼 회원 쿠폰함에 들어가요. 본문에 쿠폰 변수를 넣지 않으면 메세지 끝에 쿠폰 안내가 자동으로 붙어요."
             >
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  value={couponName}
-                  onChange={(e) => setCouponName(e.target.value.slice(0, 60))}
-                  placeholder="쿠폰명 (예: 재등록 5% 할인)"
-                  className={inputCls}
-                />
-                <input
-                  type="text"
-                  value={couponLink}
-                  onChange={(e) => setCouponLink(e.target.value.slice(0, 300))}
-                  placeholder="쿠폰 링크 (선택)"
-                  className={inputCls}
-                />
-                {(couponName.trim() || couponLink.trim()) && (
-                  <button
-                    type="button"
-                    onClick={() => { setCouponName(""); setCouponLink(""); }}
-                    className="px-2 py-0.5 rounded-md border border-red-200 dark:border-red-900/60 text-[11.5px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
+              {couponsState === "loading" ? (
+                <div className="text-[12.5px] text-[#8C8270]">쿠폰 목록을 불러오는 중…</div>
+              ) : couponsState === "denied" ? (
+                <div className="text-[12.5px] text-[#8C8270]">쿠폰 조회 권한이 없어 쿠폰을 첨부할 수 없어요.</div>
+              ) : couponsState === "error" ? (
+                <div className="text-[12.5px] text-red-600">쿠폰 목록을 불러오지 못했어요.</div>
+              ) : (
+                <div className="space-y-2">
+                  <select
+                    value={couponId ?? ""}
+                    onChange={(e) => setCouponId(e.target.value ? Number(e.target.value) : null)}
+                    className={inputCls}
                   >
-                    쿠폰 제거
-                  </button>
-                )}
-              </div>
+                    <option value="">쿠폰 없음</option>
+                    {coupons.map((c) => (
+                      <option key={c.id} value={c.id} disabled={c.sendable === false}>
+                        {c.name} · {benefitText(c)}
+                        {c.sendable === false ? " (기한 지남)" : ""}
+                      </option>
+                    ))}
+                    {/* 보관 등으로 목록에 없는 쿠폰이 설정돼 있으면 그대로 보이게 */}
+                    {couponId != null && !selectedCoupon && (
+                      <option value={couponId}>선택된 쿠폰(보관됨 · 발송 안 됨)</option>
+                    )}
+                  </select>
+                  {coupons.length === 0 && (
+                    <div className="text-[12px] text-[#8C8270]">
+                      발송할 수 있는 쿠폰이 없어요.{" "}
+                      <a href="/crm/coupons" className="text-[#6B7B3A] dark:text-[#A8B87A] underline">
+                        쿠폰 만들기
+                      </a>
+                    </div>
+                  )}
+                  {selectedCoupon && (
+                    <div className="rounded-lg border border-[#B47B2A]/30 bg-[#F5E4C8]/25 px-3 py-2 text-[12px] text-[#7a5518] dark:text-amber-300 space-y-1">
+                      <div>
+                        혜택 <strong>{benefitText(selectedCoupon)}</strong>
+                        {selectedCoupon.one_per_member && " · 1인 1장"}
+                      </div>
+                      <div>
+                        사용 기한:{" "}
+                        {selectedCoupon.valid_mode === "days"
+                          ? `발급일부터 ${selectedCoupon.valid_days ?? 0}일`
+                          : `${(selectedCoupon.valid_until ?? "").replace(/-/g, ".")}까지`}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        <span className="text-[11px] text-[#8C8270]">본문에 넣기</span>
+                        {COUPON_VARS.map((v) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => insertVar(v)}
+                            className="px-2 py-0.5 rounded-md border border-[#B47B2A]/40 bg-white dark:bg-zinc-900 text-[11.5px] font-semibold text-[#7a5518] dark:text-amber-300 hover:bg-[#F5E4C8]/40"
+                          >
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </NumberedField>
 
             {/* 07 메세지 입력 */}
@@ -935,7 +1000,16 @@ const TEST_METHODS: { key: "sms" | "push" | "smart"; label: string }[] = [
   { key: "smart", label: "스마트 전송" },
 ];
 
-function TestSendPanel({ body, methods }: { body: string; methods: string[] }) {
+function TestSendPanel({
+  body,
+  methods,
+  couponId,
+}: {
+  body: string;
+  methods: string[];
+  /** 06 쿠폰 첨부 — 테스트는 실제 발급 없이 예시 코드로 보낸다 */
+  couponId: number | null;
+}) {
   const { getIdToken } = useAuth();
   // 기본 채널 = 04 전송 방법에서 고른 것 중 발송 가능한 첫 채널
   const [method, setMethod] = useState<"sms" | "push" | "smart">(
@@ -1000,7 +1074,7 @@ function TestSendPanel({ body, methods }: { body: string; methods: string[] }) {
       const res = await fetch("/api/crm/auto-messages/test-send", {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ member_id: picked.id, body, method }),
+        body: JSON.stringify({ member_id: picked.id, body, method, coupon_id: couponId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "발송 실패");
@@ -1134,6 +1208,24 @@ function TestSendPanel({ body, methods }: { body: string; methods: string[] }) {
   );
 }
 
+/** 쿠폰 변수 — 서버(app/lib/crm-auto-coupon.ts)와 같은 목록 */
+const COUPON_VARS = ["#쿠폰명#", "#쿠폰혜택#", "#쿠폰코드#", "#쿠폰기한#"] as const;
+
+/** 미리보기용 쿠폰 치환 — 서버 applyCouponVars 와 같은 규칙(변수 없으면 끝에 안내 블록) */
+function previewWithCoupon(body: string, c: CouponDef): string {
+  const exp = issueExpiryYmd(c);
+  const expires = exp ? `${exp.replace(/-/g, ".")}까지` : "기한 없음";
+  const benefit = benefitText(c);
+  const hasVar = COUPON_VARS.some((k) => body.includes(k));
+  const replaced = body
+    .replaceAll("#쿠폰명#", c.name)
+    .replaceAll("#쿠폰혜택#", benefit)
+    .replaceAll("#쿠폰코드#", "ABCD-1234")
+    .replaceAll("#쿠폰기한#", expires);
+  if (hasVar) return replaced;
+  return `${replaced.trimEnd()}\n\n🎫 쿠폰이 발급됐어요\n${c.name} (${benefit})\n쿠폰코드 ABCD-1234 · ${expires}`;
+}
+
 /* ─── 메세지 미리보기 (문자 발송 형태) ─────────────── */
 function MessagePreview({
   name,
@@ -1142,8 +1234,7 @@ function MessagePreview({
   kind,
   methods,
   attachments,
-  couponName,
-  couponLink,
+  coupon,
   sendBasis,
   sendDays,
   sendDaysDir,
@@ -1157,8 +1248,7 @@ function MessagePreview({
   kind: string;
   methods: string[];
   attachments: string[];
-  couponName: string;
-  couponLink: string;
+  coupon: CouponDef | null;
   sendBasis: SendBasis;
   sendDays: number;
   sendDaysDir: "before" | "after";
@@ -1182,29 +1272,29 @@ function MessagePreview({
         </div>
         <div className="px-3.5 py-3">
           <div className="rounded-xl bg-[#FBF7EB] dark:bg-zinc-800 px-3 py-2.5 text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-200 whitespace-pre-wrap break-words min-h-[64px]">
-            {body.trim() ? body : <span className="text-[#A89B80]">메세지 내용이 여기에 표시됩니다.</span>}
+            {body.trim() ? (
+              coupon ? previewWithCoupon(body, coupon) : body
+            ) : (
+              <span className="text-[#A89B80]">메세지 내용이 여기에 표시됩니다.</span>
+            )}
           </div>
-          {/* 첨부·쿠폰은 아직 실제 발송에 포함되지 않는다 — 미리보기에서도 '준비중'으로 구분 표시 */}
-          {(attachments.length > 0 || couponName.trim()) && (
+          {coupon && (
+            <div className="mt-1.5 text-[10.5px] text-[#A89B80]">
+              🎫 쿠폰코드는 예시예요. 실제로는 회원마다 다른 코드가 발급돼요.
+            </div>
+          )}
+          {/* 이미지 첨부는 아직 실제 발송에 포함되지 않는다 — '준비중'으로 구분 표시 */}
+          {attachments.length > 0 && (
             <div className="mt-2 rounded-lg border border-dashed border-[#E8E0D0] bg-[#F5F0E5]/40 p-2 dark:border-zinc-700 dark:bg-zinc-800/30">
               <div className="mb-1.5 text-[10.5px] font-semibold text-[#A89B80]">
-                🚧 준비중 · 실제 발송에는 포함되지 않아요
+                🚧 이미지 첨부 준비중 · 실제 발송에는 포함되지 않아요
               </div>
-              {attachments.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 opacity-60">
-                  {attachments.map((src, i) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img key={i} src={src} alt="첨부" className="w-16 h-16 rounded-lg object-cover border border-[#E8E0D0] dark:border-zinc-700" />
-                  ))}
-                </div>
-              )}
-              {couponName.trim() && (
-                <div className="mt-1.5 px-3 py-2 rounded-lg border border-[#B47B2A]/30 bg-[#F5E4C8]/25 text-[11.5px] leading-relaxed text-[#7a5518] opacity-70">
-                  🎫 쿠폰이 발급되었습니다
-                  <div className="font-semibold">{couponName}</div>
-                  {couponLink.trim() && <div className="text-[#6B7B3A] break-all">{couponLink}</div>}
-                </div>
-              )}
+              <div className="flex flex-wrap gap-1.5 opacity-60">
+                {attachments.map((src, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={i} src={src} alt="첨부" className="w-16 h-16 rounded-lg object-cover border border-[#E8E0D0] dark:border-zinc-700" />
+                ))}
+              </div>
             </div>
           )}
         </div>

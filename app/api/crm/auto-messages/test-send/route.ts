@@ -5,6 +5,7 @@ import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { sendCrmSms, loadPushableMembers, smsAllowedForCenter } from "@/app/lib/crm-sms";
 import { sendPushToMember } from "@/app/lib/member-notify";
 import { renderMessage, loadCenterName, loadJoinLink, kstYmd } from "../_engine";
+import { sampleCouponMessage } from "@/app/lib/crm-auto-coupon";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "메세지 전송 권한이 없습니다" }, { status: 403 });
   }
 
-  let body: { member_id?: number; body?: string; method?: string };
+  let body: { member_id?: number; body?: string; method?: string; coupon_id?: number | null };
   try {
     body = await request.json();
   } catch {
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
   const center = await loadCenterName(ctx.centerId);
   const appLink = await loadJoinLink(ctx.centerId);
   // 트리거 실행 없이 보내는 미리보기라, 조건에서 정해지는 값은 예시로 채운다.
-  const msg = renderMessage(template, {
+  const rendered = renderMessage(template, {
     center,
     name: member.name,
     product: "(예시) 헬스 3개월",
@@ -64,6 +65,8 @@ export async function POST(request: Request) {
     basis: "(예시) 만료 7일 전",
     lastVisit: kstYmd(),
   });
+  // 06 쿠폰 첨부 — 테스트는 실제 발급 없이 예시 코드(TEST-0000)로 보여준다
+  const msg = await sampleCouponMessage(ctx.centerId, Number(body.coupon_id) || null, rendered);
 
   // 스마트 전송은 실제 자동 발송과 동일하게 앱 설치 여부로 채널을 가른다.
   const pushable = (await loadPushableMembers(ctx.centerId, [memberId])).has(memberId);

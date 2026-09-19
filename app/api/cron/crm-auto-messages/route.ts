@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { notifyMembersByIds } from "@/app/lib/member-notify";
 import { solapiConfigured, solapiSend } from "@/app/lib/solapi";
+import { attachAutoCoupon } from "@/app/lib/crm-auto-coupon";
 import {
   SCAN_TRIGGERS,
   computeMatches,
@@ -39,7 +40,7 @@ export async function GET(request: Request) {
 
   const { data: settings } = await supabase
     .from("crm_auto_message_settings")
-    .select("center_id, trigger_key, send_basis, send_days, send_count, methods, message_body, config")
+    .select("center_id, trigger_key, send_basis, send_days, send_count, methods, message_body, coupon_id, config")
     .eq("enabled", true);
 
   const centerCache = new Map<number, { name: string; appLink: string }>();
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
     send_count: number | null;
     methods: unknown;
     message_body: string;
+    coupon_id: number | null;
     config: {
       send_hour?: number;
       send_days_dir?: "before" | "after";
@@ -105,7 +107,7 @@ export async function GET(request: Request) {
     for (const m of matches) {
       if (processed >= MAX_SENDS) break;
       const dedupeKey = `${s.trigger_key}:${m.member_id}:${today}`;
-      const message = renderMessage(s.message_body, {
+      const rendered = renderMessage(s.message_body, {
         center: meta.name,
         name: m.name,
         product: m.product,
@@ -116,13 +118,13 @@ export async function GET(request: Request) {
       });
 
       // 대기열에 pending 적재 시도 — (center_id, dedupe_key) 유니크 위반이면 이미 처리됨 → 건너뜀
-      const { error: insErr } = await supabase
+      const { data: queued, error: insErr } = await supabase
         .from("crm_auto_message_queue")
         .insert({
           center_id: s.center_id,
           trigger_key: s.trigger_key,
           member_id: m.member_id,
-          message,
+          message: rendered,
           methods: methods as never,
           status: "pending",
           dedupe_key: dedupeKey,
@@ -135,6 +137,15 @@ export async function GET(request: Request) {
         continue;
       }
       processed += 1;
+
+      // 06 쿠폰 첨부 — 설정돼 있으면 회원마다 쿠폰 1장 발급 후 메세지에 쿠폰 정보 삽입
+      const message = await attachAutoCoupon({
+        centerId: s.center_id,
+        queueId: (queued as { id: number }).id,
+        memberId: m.member_id,
+        couponId: s.coupon_id,
+        message: rendered,
+      });
 
       let ok = false;
       // 앱 푸시 (연동 회원만 수신 — 미연동은 기기토큰 없어 자동 무시)

@@ -6,6 +6,7 @@ import {
   smsAllowedForCenter,
 } from "@/app/lib/crm-sms";
 import { sendPushToMember } from "@/app/lib/member-notify";
+import { attachAutoCoupon, loadTriggerCoupons } from "@/app/lib/crm-auto-coupon";
 
 /**
  * 자동 메세지 발송 공용 로직.
@@ -27,6 +28,8 @@ export interface QueuedRow {
   member_id: number;
   message: string;
   methods: string[];
+  /** 트리거 키 — 06 쿠폰 첨부 설정을 찾는 데 쓴다 */
+  trigger_key?: string | null;
 }
 
 export interface DispatchResult {
@@ -59,6 +62,22 @@ export async function dispatchQueued(opts: {
     r.methods.some((m) => m === "sms" || m === "push" || m === "smart")
   );
   if (targets.length === 0) return result;
+
+  // 06 쿠폰 첨부 — 설정된 트리거면 회원마다 쿠폰 1장 발급 후 메세지에 쿠폰 정보를 넣는다
+  const triggerCoupons = await loadTriggerCoupons(opts.centerId);
+  if (triggerCoupons.size > 0) {
+    for (const t of targets) {
+      const couponId = t.trigger_key ? triggerCoupons.get(t.trigger_key) : undefined;
+      if (!couponId) continue;
+      t.message = await attachAutoCoupon({
+        centerId: opts.centerId,
+        queueId: t.id,
+        memberId: t.member_id,
+        couponId,
+        message: t.message,
+      });
+    }
+  }
 
   const memberIds = targets.map((t) => t.member_id);
   const [phones, pushable] = await Promise.all([
@@ -218,7 +237,7 @@ export async function fireAutoMessage(opts: {
       centerId: opts.centerId,
       uid: opts.uid,
       centerName: center,
-      rows: [{ id: row.id, member_id: opts.memberId, message, methods }],
+      rows: [{ id: row.id, member_id: opts.memberId, message, methods, trigger_key: opts.triggerKey }],
       smsAllowed: smsAllowedForCenter(opts.centerId),
     });
   } catch (e) {
