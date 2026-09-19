@@ -34,8 +34,38 @@ export interface CouponRow extends CouponDef {
 interface ProductOpt {
   id: number;
   type: string;
+  category: string | null;
   name: string;
   price_won: number;
+}
+
+/** 한글 가나다 + 숫자는 크기순(PT 2회 → PT 10회) */
+const koCompare = (a: string, b: string) => a.localeCompare(b, "ko", { numeric: true, sensitivity: "base" });
+
+/**
+ * 증정 상품 선택지 묶음: 상품 유형 순서 → 카테고리 가나다 → 상품명 가나다.
+ * 카테고리가 없는 상품은 그 유형의 맨 끝 '기타' 묶음으로 보낸다.
+ */
+function groupGiftProducts(products: ProductOpt[]): { key: string; label: string; items: ProductOpt[] }[] {
+  const groups: { key: string; label: string; items: ProductOpt[] }[] = [];
+  for (const t of TYPE_KEYS) {
+    const ofType = products.filter((p) => p.type === t);
+    if (ofType.length === 0) continue;
+    const typeLabel = PRODUCT_TYPE_LABEL[t] ?? t;
+    const cats = Array.from(new Set(ofType.map((p) => (p.category ?? "").trim()).filter(Boolean))).sort(koCompare);
+    for (const cat of cats) {
+      groups.push({
+        key: `${t}:${cat}`,
+        label: `${typeLabel} · ${cat}`,
+        items: ofType.filter((p) => (p.category ?? "").trim() === cat).sort((a, b) => koCompare(a.name, b.name)),
+      });
+    }
+    const uncategorized = ofType.filter((p) => !(p.category ?? "").trim()).sort((a, b) => koCompare(a.name, b.name));
+    if (uncategorized.length) {
+      groups.push({ key: `${t}:`, label: cats.length ? `${typeLabel} · 기타` : typeLabel, items: uncategorized });
+    }
+  }
+  return groups;
 }
 
 /**
@@ -399,19 +429,15 @@ function CouponEditor({
             <FieldLabel hint="발급창에서 이 상품을 고르면 0원으로 발급돼요">증정 상품</FieldLabel>
             <select className={crmInputClass} disabled={locked} value={giftProductId} onChange={(e) => setGiftProductId(e.target.value ? Number(e.target.value) : "")}>
               <option value="">상품 선택</option>
-              {TYPE_KEYS.map((t) => {
-                const list = products.filter((p) => p.type === t);
-                if (list.length === 0) return null;
-                return (
-                  <optgroup key={t} label={PRODUCT_TYPE_LABEL[t] ?? t}>
-                    {list.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({won(p.price_won)})
-                      </option>
-                    ))}
-                  </optgroup>
-                );
-              })}
+              {groupGiftProducts(products).map((g) => (
+                <optgroup key={g.key} label={g.label}>
+                  {g.items.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({won(p.price_won)})
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
             </select>
           </>
         )}
