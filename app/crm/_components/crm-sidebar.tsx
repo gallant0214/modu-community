@@ -35,6 +35,7 @@ const MENU: MenuItem[] = [
   { href: "/crm/passes",      label: "수강권 관리",   group: "sales", icon: IconPass },
   { href: "/crm/consultations", label: "PT 상담",       group: "sales", icon: IconConsult },
   { href: "/crm/messages",    label: "메세지 전송",   group: "engage", perm: "messages.send", icon: IconMessage },
+  { href: "/crm/coupons",     label: "쿠폰",          group: "engage", perm: "coupons.view", icon: IconCoupon },
   { href: "/crm/stats",       label: "통계",          group: "admin", perm: "stats.view", icon: IconStats },
   { href: "/crm/settings",    label: "센터설정",       group: "admin", staffOnly: true, icon: IconSettings },
   { href: "/crm/market",      label: "상권분석",       group: "admin", perm: "stats.view", restricted: "market", icon: IconMarket },
@@ -736,6 +737,19 @@ function IconLock({ className }: { className?: string }) {
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
       <rect x="5" y="10.5" width="14" height="9" rx="2" />
       <path strokeLinecap="round" d="M8.5 10.5V7.5a3.5 3.5 0 1 1 7 0v3" />
+    </svg>
+  );
+}
+
+/** 쿠폰 — 양옆이 파인 티켓 */
+function IconCoupon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path
+        strokeLinejoin="round"
+        d="M4 7a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2.5a2.5 2.5 0 0 0 0 5V17a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.5a2.5 2.5 0 0 0 0-5V7Z"
+      />
+      <path strokeLinecap="round" strokeDasharray="1.5 2.5" d="M14.5 6.5v11" />
     </svg>
   );
 }

@@ -15,6 +15,7 @@ import {
   parseWon,
   formatPhone,
 } from "../../_components/crm-labels";
+import { CouponPicker, type AppliedCoupon } from "../../_components/coupon-picker";
 import { CrmModal, CrmField, crmInputClass } from "../../_components/crm-modal";
 import BirthDateInput from "@/app/crm/_components/birth-date-input";
 import { LockerPickerModal } from "../../_components/locker-picker-modal";
@@ -6520,6 +6521,8 @@ function UsageIssueModal({
   const [attendanceMileageEarn, setAttendanceMileageEarn] = useState(0);
   const [mileageUse, setMileageUse] = useState(0);
   const [discountWon, setDiscountWon] = useState(0);
+  // 적용한 쿠폰 — 할인 금액 칸을 채우고, 결제 시 서버가 사용 처리
+  const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
   const [vatIncluded, setVatIncluded] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "etc">("card");
   const [paymentCustom, setPaymentCustom] = useState("");
@@ -6574,6 +6577,10 @@ function UsageIssueModal({
     memo: string;
     // 묶음 구성 상품 — 이 라인 발급 시 함께 발급될 상품들
     components?: BundleComp[];
+    // 쿠폰 — 이 라인에 적용한 쿠폰(발급 시 서버가 사용 처리)
+    productId?: number | null;
+    couponIssueId?: number;
+    couponLabel?: string;
   }
   const [cart, setCart] = useState<CartLine[]>([]);
   // 시작일 일괄변경 모달
@@ -6636,6 +6643,7 @@ function UsageIssueModal({
     setName("");
     setPriceWon(0);
     setDiscountWon(0);
+    setCoupon(null);
     setMileageEarn(0);
     setMileageUsable(true);
     setMileageUse(0);
@@ -6691,6 +6699,9 @@ function UsageIssueModal({
       paymentCustom: paymentMethod === "etc" ? paymentCustom : undefined,
       sellerId: Number(sellerId),
       memo,
+      productId: pickedProductId,
+      couponIssueId: coupon?.issueId,
+      couponLabel: coupon?.label,
       components: pickedComponents.length ? pickedComponents : undefined,
     };
     const nextCart = [...cart, line];
@@ -6726,6 +6737,7 @@ function UsageIssueModal({
       setName("");
       setPriceWon(0);
       setDiscountWon(0);
+      setCoupon(null);
       setMileageEarn(0);
       setMileageUsable(true);
       setMileageUse(0);
@@ -6765,6 +6777,7 @@ function UsageIssueModal({
     setName("");
     setPriceWon(0);
     setDiscountWon(0);
+    setCoupon(null);
     setMileageEarn(0);
     setMileageUsable(true);
     setMileageUse(0);
@@ -6852,6 +6865,11 @@ function UsageIssueModal({
   };
 
   const applyProduct = (p: UsageProduct) => {
+    // 상품이 바뀌면 쿠폰 적용 조건도 달라진다 → 붙어 있던 쿠폰과 그 할인은 떼어낸다
+    if (coupon) {
+      setCoupon(null);
+      setDiscountWon(0);
+    }
     setName(p.name);
     setPriceWon(p.price_won ?? 0);
     setMileageEarn(p.mileage_earn ?? 0);
@@ -6904,6 +6922,9 @@ function UsageIssueModal({
             duration_days: line.durationDays,
             price_won: linePriceNet,
             discount_won: line.discountWon,
+            coupon_issue_id: line.couponIssueId,
+            coupon_product_type: line.type,
+            coupon_product_id: line.productId ?? undefined,
             mileage_earned: line.mileageEarn,
             mileage_used: line.mileageUse,
             attendance_mileage_earn: line.attendanceMileageEarn,
@@ -6926,6 +6947,9 @@ function UsageIssueModal({
             item_name: line.name,
             price_won: linePriceNet,
             discount_won: line.discountWon,
+            coupon_issue_id: line.couponIssueId,
+            coupon_product_type: line.type,
+            coupon_product_id: line.productId ?? undefined,
             mileage_earned: line.mileageEarn,
             mileage_used: line.mileageUse,
             vat_included: line.vatIncluded,
@@ -6973,6 +6997,9 @@ function UsageIssueModal({
             item_name: line.name,
             price_won: linePriceNet,
             discount_won: line.discountWon,
+            coupon_issue_id: line.couponIssueId,
+            coupon_product_type: line.type,
+            coupon_product_id: line.productId ?? undefined,
             mileage_earned: line.mileageEarn,
             mileage_used: line.mileageUse,
             vat_included: line.vatIncluded,
@@ -7045,6 +7072,9 @@ function UsageIssueModal({
           paymentCustom: paymentMethod === "etc" ? paymentCustom : undefined,
           sellerId: Number(sellerId),
           memo,
+          productId: pickedProductId,
+          couponIssueId: coupon?.issueId,
+          couponLabel: coupon?.label,
           components: pickedComponents.length ? pickedComponents : undefined,
         },
       ];
@@ -7439,6 +7469,18 @@ function UsageIssueModal({
           />
           <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">부가세 포함 금액</span>
         </label>
+        <CouponPicker
+          memberId={memberId}
+          priceWon={priceWon}
+          productType={type}
+          productId={pickedProductId}
+          applied={coupon}
+          excludeIssueIds={cart.map((c) => c.couponIssueId)}
+          onApply={(c) => {
+            setCoupon(c);
+            setDiscountWon(c ? c.discountWon : 0);
+          }}
+        />
         {discountWon > 0 && (
           <div className="text-[11.5px] text-[#6B5D47] dark:text-zinc-400 -mt-1">
             정가 {formatWon(priceWon)}원 · 할인 {formatWon(discountWon)}원 → 실결제{" "}
@@ -7610,7 +7652,7 @@ function UsageIssueModal({
                       <div className="mt-1 flex items-baseline justify-between">
                         <span className="text-[10.5px] text-[#A89B80]">
                           {c.discountWon > 0
-                            ? `${formatWon(c.priceWon + c.discountWon)}원 - ${formatWon(c.discountWon)}원`
+                            ? `${formatWon(c.priceWon)}원 - ${formatWon(c.discountWon)}원${c.couponLabel ? ` (🎟 ${c.couponLabel})` : ""}`
                             : ""}
                         </span>
                         <span className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100 tabular-nums">
@@ -7929,6 +7971,8 @@ function PassIssueModal({
   const [sessionMinutes, setSessionMinutes] = useState(50);
   const [priceWon, setPriceWon] = useState(0);
   const [discountWon, setDiscountWon] = useState(0);
+  // 적용한 쿠폰 — 할인 금액 칸을 채우고, 발급 시 서버가 사용 처리
+  const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
   const [vatIncluded, setVatIncluded] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "etc">("card");
   const [paymentCustom, setPaymentCustom] = useState("");
@@ -8022,6 +8066,7 @@ function PassIssueModal({
     if (p.session_minutes && p.session_minutes > 0) setSessionMinutes(p.session_minutes);
     setPriceWon(p.price_won ?? 0);
     setDiscountWon(0);
+    setCoupon(null);
     if (p.service_days && p.service_days > 0) {
       // service_days = 일수 기준 유효기간 → 달력계산 제외(unit=day)
       setDurationDays(p.service_days);
@@ -8065,6 +8110,8 @@ function PassIssueModal({
           // price_won = 할인 적용 후 실결제가, discount_won = 할인액(기록용)
           price_won: Math.max(0, priceWon - discountWon),
           discount_won: discountWon,
+          coupon_issue_id: coupon?.issueId,
+          coupon_product_type: passProducts.find((pp) => pp.id === pickedProductId)?.type ?? "personal",
           vat_included: vatIncluded,
           payment_method: paymentMethod,
           payment_method_custom: paymentMethod === "etc" ? paymentCustom : undefined,
@@ -8377,6 +8424,17 @@ function PassIssueModal({
             placeholder="0"
           />
         </CrmField>
+        <CouponPicker
+          memberId={memberId}
+          priceWon={priceWon}
+          productType={passProducts.find((pp) => pp.id === pickedProductId)?.type ?? "personal"}
+          productId={pickedProductId}
+          applied={coupon}
+          onApply={(c) => {
+            setCoupon(c);
+            setDiscountWon(c ? c.discountWon : 0);
+          }}
+        />
         <div className="grid grid-cols-2 gap-2">
           <CrmField label="발급일" required>
             <input

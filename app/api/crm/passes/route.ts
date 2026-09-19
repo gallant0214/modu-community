@@ -1,4 +1,10 @@
 import { NextResponse, after } from "next/server";
+import {
+  claimCoupon,
+  finalizeCouponUse,
+  releaseCoupon,
+  staffDisplayName,
+} from "@/app/lib/crm-coupons-server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
@@ -118,6 +124,10 @@ export async function POST(request: Request) {
   }
 
   let body: {
+    /** 쿠폰 적용(선택) — crm_coupon_issues.id */
+    coupon_issue_id?: number;
+    coupon_product_type?: string;
+    coupon_product_id?: number;
     member_id?: number;
     trainer_member_id?: number;
     seller_member_id?: number;
@@ -229,6 +239,7 @@ export async function POST(request: Request) {
 
   // 상품(선택 시) → 그룹 정원 · 출석 마일리지 스냅샷. 개인 레슨/유형 없음 = 1.
   let productId: number | null = null;
+  let productType: string | null = null;
   let groupCapacity = 1;
   let productAttendanceMileage = 0;
   if (body.product_id) {
@@ -240,6 +251,7 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (prod) {
       productId = prod.id;
+      productType = (prod as { type: string }).type;
       if ((prod as { type: string }).type === "group") {
         const cap = Number((prod as { capacity: number | null }).capacity ?? 0);
         groupCapacity = cap > 1 ? Math.min(cap, 999) : 1;
@@ -264,6 +276,27 @@ export async function POST(request: Request) {
       : Math.max(0, Math.min(Math.floor(Number(body.paid_amount_won) || 0), priceWon));
   const outstanding = priceWon - paidAmount;
   const paymentStatus = outstanding <= 0 ? "paid" : paidAmount > 0 ? "partial" : "unpaid";
+
+  // 쿠폰(선택) — INSERT 전에 먼저 '사용'으로 잠가 이중 사용을 막는다
+  let couponIssueId: number | null = null;
+  if (body.coupon_issue_id) {
+    const claim = await claimCoupon({
+      centerId: ctx.centerId,
+      memberId,
+      issueId: Number(body.coupon_issue_id),
+      // 클라이언트는 price_won=할인 후 실결제, discount_won=할인액 으로 보낸다 → 정가 = 둘의 합
+      originalPriceWon:
+        (Number(body.price_won) || 0) + Math.max(0, Math.floor(Number(body.discount_won) || 0)),
+      totalDiscountWon: Math.max(0, Math.floor(Number(body.discount_won) || 0)),
+      productType: productType ?? body.coupon_product_type ?? "personal",
+      productId: productId,
+      actor: { uid: ctx.uid, name: await staffDisplayName(ctx.centerMemberId) },
+    });
+    if (!claim.ok) {
+      return NextResponse.json({ error: claim.error ?? "쿠폰을 적용할 수 없어요" }, { status: 400 });
+    }
+    couponIssueId = claim.issueId ?? null;
+  }
 
   const { data: created, error } = await supabase
     .from("crm_passes")
@@ -298,8 +331,10 @@ export async function POST(request: Request) {
     .single();
 
   if (error || !created) {
+    if (couponIssueId) await releaseCoupon(couponIssueId);
     return NextResponse.json({ error: "발급 실패", detail: error?.message }, { status: 500 });
   }
+  if (couponIssueId) await finalizeCouponUse(couponIssueId, "pass", created.id);
 
   // 결제일(paid_at): 당일 발급이면 실제 결제 시각, 과거 날짜(백데이트)면 그 발급일(정오).
   const todayKstYmd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);

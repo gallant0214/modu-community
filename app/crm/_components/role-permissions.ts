@@ -164,6 +164,15 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    key: "coupons",
+    label: "쿠폰",
+    items: [
+      { key: "coupons.view", label: "쿠폰 발송 기록·사용 이력 보기", defaults: D_MGR },
+      { key: "coupons.send", label: "회원에게 쿠폰 발송", defaults: D_MGR },
+      { key: "coupons.manage", label: "쿠폰 만들기·수정·회수", defaults: D_ADMIN },
+    ],
+  },
+  {
     key: "staff",
     label: "직원 · 권한 관리",
     items: [

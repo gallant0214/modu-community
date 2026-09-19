@@ -1,4 +1,10 @@
 import { NextResponse, after } from "next/server";
+import {
+  claimCoupon,
+  finalizeCouponUse,
+  releaseCoupon,
+  staffDisplayName,
+} from "@/app/lib/crm-coupons-server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
@@ -53,6 +59,10 @@ export async function POST(request: Request) {
   if (isCrmError(ctx)) return ctx;
 
   let body: {
+    /** 쿠폰 적용(선택) — crm_coupon_issues.id */
+    coupon_issue_id?: number;
+    coupon_product_type?: string;
+    coupon_product_id?: number;
     member_id?: number;
     seller_member_id?: number;
     item_name?: string;
@@ -119,6 +129,27 @@ export async function POST(request: Request) {
     }
   }
 
+  // 쿠폰(선택) — INSERT 전에 먼저 '사용'으로 잠가 이중 사용을 막는다
+  let couponIssueId: number | null = null;
+  if (body.coupon_issue_id) {
+    const claim = await claimCoupon({
+      centerId: ctx.centerId,
+      memberId,
+      issueId: Number(body.coupon_issue_id),
+      // 클라이언트는 price_won=할인 후 실결제, discount_won=할인액 으로 보낸다 → 정가 = 둘의 합
+      originalPriceWon:
+        (Number(body.price_won) || 0) + Math.max(0, Math.floor(Number(body.discount_won) || 0)),
+      totalDiscountWon: Math.max(0, Math.floor(Number(body.discount_won) || 0)),
+      productType: body.coupon_product_type === "locker" ? "locker" : "apparel",
+      productId: Number(body.coupon_product_id) || null,
+      actor: { uid: ctx.uid, name: await staffDisplayName(ctx.centerMemberId) },
+    });
+    if (!claim.ok) {
+      return NextResponse.json({ error: claim.error ?? "쿠폰을 적용할 수 없어요" }, { status: 400 });
+    }
+    couponIssueId = claim.issueId ?? null;
+  }
+
   const { data: created, error } = await supabase
     .from("crm_rentals")
     .insert({
@@ -143,8 +174,10 @@ export async function POST(request: Request) {
     .single();
 
   if (error || !created) {
+    if (couponIssueId) await releaseCoupon(couponIssueId);
     return NextResponse.json({ error: "발급 실패", detail: error?.message }, { status: 500 });
   }
+  if (couponIssueId) await finalizeCouponUse(couponIssueId, "rental", created.id);
 
   // 결제내역(crm_payments)에 기록 — 회원권·수강권과 동일하게 결제내역 탭에 표시.
   // 0원(예: 재등록 무료 이어붙이기)도 구매 이벤트로 기록해 결제내역에 남긴다.

@@ -2522,6 +2522,204 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_coupons: {
+        Row: {
+          id: number
+          center_id: number
+          name: string
+          description: string | null
+          benefit_type: string
+          amount_won: number | null
+          percent: number | null
+          max_discount_won: number | null
+          min_purchase_won: number
+          gift_product_id: number | null
+          applicable_types: string[] | null
+          valid_mode: string
+          valid_days: number | null
+          valid_until: string | null
+          one_per_member: boolean
+          status: string
+          created_by_uid: string | null
+          created_by_name: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          name: string
+          description?: string | null
+          benefit_type: string
+          amount_won?: number | null
+          percent?: number | null
+          max_discount_won?: number | null
+          min_purchase_won?: number
+          gift_product_id?: number | null
+          applicable_types?: string[] | null
+          valid_mode?: string
+          valid_days?: number | null
+          valid_until?: string | null
+          one_per_member?: boolean
+          status?: string
+          created_by_uid?: string | null
+          created_by_name?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          name?: string
+          description?: string | null
+          benefit_type?: string
+          amount_won?: number | null
+          percent?: number | null
+          max_discount_won?: number | null
+          min_purchase_won?: number
+          gift_product_id?: number | null
+          applicable_types?: string[] | null
+          valid_mode?: string
+          valid_days?: number | null
+          valid_until?: string | null
+          one_per_member?: boolean
+          status?: string
+          created_by_uid?: string | null
+          created_by_name?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crm_coupon_sends: {
+        Row: {
+          id: number
+          center_id: number
+          coupon_id: number
+          channel: string
+          message: string | null
+          recipient_count: number
+          skipped_count: number
+          push_sent: number
+          sms_sent: number
+          sms_failed: number
+          audience_kind: string | null
+          audience_filter: Json | null
+          sent_by_uid: string | null
+          sent_by_name: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          coupon_id: number
+          channel: string
+          message?: string | null
+          recipient_count?: number
+          skipped_count?: number
+          push_sent?: number
+          sms_sent?: number
+          sms_failed?: number
+          audience_kind?: string | null
+          audience_filter?: Json | null
+          sent_by_uid?: string | null
+          sent_by_name?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          coupon_id?: number
+          channel?: string
+          message?: string | null
+          recipient_count?: number
+          skipped_count?: number
+          push_sent?: number
+          sms_sent?: number
+          sms_failed?: number
+          audience_kind?: string | null
+          audience_filter?: Json | null
+          sent_by_uid?: string | null
+          sent_by_name?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      crm_coupon_issues: {
+        Row: {
+          id: number
+          center_id: number
+          coupon_id: number
+          member_id: number
+          send_id: number | null
+          code: string
+          status: string
+          issued_at: string
+          expires_at: string | null
+          used_at: string | null
+          used_by_uid: string | null
+          used_by_name: string | null
+          used_ref_kind: string | null
+          used_ref_id: number | null
+          original_price_won: number | null
+          discount_applied_won: number | null
+          revoked_at: string | null
+          revoked_by_uid: string | null
+          revoked_by_name: string | null
+          revoke_reason: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          coupon_id: number
+          member_id: number
+          send_id?: number | null
+          code: string
+          status?: string
+          issued_at?: string
+          expires_at?: string | null
+          used_at?: string | null
+          used_by_uid?: string | null
+          used_by_name?: string | null
+          used_ref_kind?: string | null
+          used_ref_id?: number | null
+          original_price_won?: number | null
+          discount_applied_won?: number | null
+          revoked_at?: string | null
+          revoked_by_uid?: string | null
+          revoked_by_name?: string | null
+          revoke_reason?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          coupon_id?: number
+          member_id?: number
+          send_id?: number | null
+          code?: string
+          status?: string
+          issued_at?: string
+          expires_at?: string | null
+          used_at?: string | null
+          used_by_uid?: string | null
+          used_by_name?: string | null
+          used_ref_kind?: string | null
+          used_ref_id?: number | null
+          original_price_won?: number | null
+          discount_applied_won?: number | null
+          revoked_at?: string | null
+          revoked_by_uid?: string | null
+          revoked_by_name?: string | null
+          revoke_reason?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_additional_expenses: {
         Row: {
           id: number
