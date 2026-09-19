@@ -37,14 +37,32 @@ export async function GET(request: Request) {
     amount_won: number | null;
     percent: number | null;
     max_discount_won: number | null;
+    gift_product_id: number | null;
   };
   const defMap = new Map<number, Def>();
   if (couponIds.length) {
     const { data: defs } = await supabase
       .from("crm_coupons")
-      .select("id, name, description, benefit_type, amount_won, percent, max_discount_won")
+      .select("id, name, description, benefit_type, amount_won, percent, max_discount_won, gift_product_id")
       .in("id", couponIds);
     for (const d of (defs ?? []) as Def[]) defMap.set(d.id, d);
+  }
+
+  // 증정 쿠폰 상품명 (gift_product_id → crm_products.name) — 회원앱에 "무엇을 무료로 받는지" 표시
+  const giftProductIds = Array.from(
+    new Set(
+      Array.from(defMap.values())
+        .map((d) => d.gift_product_id)
+        .filter((v): v is number => !!v)
+    )
+  );
+  const giftNameMap = new Map<number, string>();
+  if (giftProductIds.length) {
+    const { data: prods } = await supabase
+      .from("crm_products")
+      .select("id, name")
+      .in("id", giftProductIds);
+    for (const p of (prods ?? []) as { id: number; name: string }[]) giftNameMap.set(p.id, p.name);
   }
 
   const rank: Record<string, number> = { active: 0, used: 1, expired: 2 };
@@ -63,6 +81,7 @@ export async function GET(request: Request) {
         amountWon: d.amount_won ?? null,
         percent: d.percent ?? null,
         maxDiscountWon: d.max_discount_won ?? null,
+        giftProductName: d.gift_product_id ? giftNameMap.get(d.gift_product_id) ?? null : null,
         expiresAt: i.expires_at,
         status,
         usedAt: i.used_at ?? null,
