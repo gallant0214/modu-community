@@ -981,6 +981,16 @@ function CheckinResultScreen({
   // 입장 가능 판정: summary 없으면 성공 자체를 가능으로 간주 (하위 호환)
   const canEnter = s ? s.can_enter : true;
 
+  // 이번 출석으로 적립된 마일리지 → 가운데에 '+150P' 를 잠깐 띄운다.
+  // 미리보기에서는 한 번만 보면 확인이 어려우니 반복 재생한다.
+  const award = data.mileageAwarded ?? 0;
+  const [awardPlay, setAwardPlay] = useState(0);
+  useEffect(() => {
+    if (award <= 0 || !preview) return;
+    const t = setInterval(() => setAwardPlay((n) => n + 1), 2600);
+    return () => clearInterval(t);
+  }, [award, preview]);
+
   // 보유 상품 — 회원권(+대여권·락커) 과 수강권을 구분선으로 분리 표시. 만료일 대신 D-day 를 크게.
   const membershipCard = (
     <div className="rounded-2xl bg-[#1E2024] p-5 md:p-7">
@@ -1074,6 +1084,19 @@ function CheckinResultScreen({
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
+
+      {/* 적립 마일리지 팝 — 누적 마일리지 숫자와 같은 크기/굵기, 금색 */}
+      {award > 0 && (
+        <div
+          key={awardPlay}
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center"
+        >
+          <span className="crm-award-pop text-[52px] md:text-[60px] font-extrabold tabular-nums leading-none">
+            +{award.toLocaleString()}P
+          </span>
+        </div>
+      )}
 
       <div
         className={`w-full grid gap-4 md:gap-6 ${
