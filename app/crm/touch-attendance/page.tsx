@@ -985,7 +985,7 @@ function CheckinResultScreen({
   const membershipCard = (
     <div className="rounded-2xl bg-[#1E2024] p-5 md:p-7">
       <div className="text-[13px] text-white/60 mb-3 font-semibold">보유 회원권</div>
-      {!s || s.memberships.length === 0 ? (
+      {!s || (s.memberships.length === 0 && s.rentals.length === 0 && s.lockers.length === 0) ? (
         <div className="py-5 text-center text-white/50 text-[14.5px]">보유하신 회원권이 없습니다</div>
       ) : (
         <ul className="space-y-2">
@@ -1000,36 +1000,28 @@ function CheckinResultScreen({
               </div>
             </li>
           ))}
+          {/* 대여권·락커도 회원권과 같은 형식으로 바로 아래에 이어 붙인다. */}
+          {s.rentals.map((r) => (
+            <li key={`r${r.id}`} className="px-3.5 py-3 rounded-lg bg-white/[0.04] border border-white/10">
+              <div className="text-[16px] font-bold truncate">👕 {r.item_name}</div>
+              <div className="mt-1 text-[22px] font-extrabold text-emerald-300 leading-none tabular-nums">
+                {ddayLabel(r.expires_at)}
+              </div>
+            </li>
+          ))}
+          {s.lockers.map((l) => (
+            <li key={`l${l.id}`} className="px-3.5 py-3 rounded-lg bg-white/[0.04] border border-white/10">
+              <div className="text-[16px] font-bold truncate">
+                🔒 락커 {l.number}번
+                {l.zone_name && <span className="ml-2 text-[13px] font-normal text-white/50">{l.zone_name}</span>}
+              </div>
+              <div className="mt-1 text-[22px] font-extrabold text-emerald-300 leading-none tabular-nums">
+                {ddayLabel(l.expires_at)}
+              </div>
+            </li>
+          ))}
         </ul>
       )}
-    </div>
-  );
-
-  // 대여권·락커 — 회원권에 딸린 부가 상품이라 회원권 카드 바로 아래에 둔다.
-  const rentalLockerRow = (
-    <div className="grid grid-cols-2 gap-3">
-      <SummaryCard
-        icon="👕"
-        title="대여권"
-        value={
-          s && s.rentals.length > 0
-            ? ddayLabel(s.rentals.reduce((a, x) => (x.expires_at > a ? x.expires_at : a), ""))
-            : "사용 안 함"
-        }
-        muted={!s || s.rentals.length === 0}
-        strong={!!s && s.rentals.length > 0}
-      />
-      <SummaryCard
-        icon="🔒"
-        title="락커"
-        value={
-          s && s.lockers.length > 0
-            ? ddayLabel(s.lockers.reduce((a, x) => (x.expires_at > a ? x.expires_at : a), ""))
-            : "사용 안 함"
-        }
-        muted={!s || s.lockers.length === 0}
-        strong={!!s && s.lockers.length > 0}
-      />
     </div>
   );
 
@@ -1065,7 +1057,6 @@ function CheckinResultScreen({
   const holdingsGroup = (
     <div className="space-y-4">
       {membershipCard}
-      {rentalLockerRow}
       <div className="h-px bg-white/15" />
       {passCard}
     </div>
@@ -1189,40 +1180,6 @@ function CheckinResultScreen({
             처음으로 돌아가기
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function SummaryCard({
-  icon,
-  title,
-  value,
-  muted,
-  strong,
-}: {
-  icon: string;
-  title: string;
-  value: string;
-  muted?: boolean;
-  strong?: boolean; // true 면 이용권 D-day 와 동일 스타일(22px, emerald, extrabold)
-}) {
-  return (
-    <div className="rounded-2xl bg-[#1E2024] px-4 py-4 md:px-5 md:py-5 min-h-[104px]">
-      <div className="flex items-center gap-1.5 text-[13px] text-white/70">
-        <span>{icon}</span>
-        <span className="font-semibold">{title}</span>
-      </div>
-      <div
-        className={`mt-2 truncate ${
-          muted
-            ? "text-[18px] md:text-[20px] font-bold text-white/50"
-            : strong
-              ? "text-[22px] font-extrabold text-emerald-300 tabular-nums"
-              : "text-[18px] md:text-[20px] font-bold text-white"
-        }`}
-      >
-        {value}
       </div>
     </div>
   );
