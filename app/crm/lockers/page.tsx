@@ -2517,16 +2517,32 @@ function LockerActionModal({
               </div>
             )}
 
-            {/* 비밀번호·메모 */}
+            {/* 비밀번호·메모 — 비밀번호는 입력칸 옆에서 바로 저장 (아래 저장 버튼까지 안 내려가도 됨) */}
             <CrmField label="비밀번호">
-              <input
-                type="text"
-                inputMode="numeric"
-                className={crmInputClass}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="0000"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className={`${crmInputClass} flex-1`}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      callAction("update", { password: password || null });
+                    }
+                  }}
+                  placeholder="0000"
+                />
+                <button
+                  type="button"
+                  onClick={() => callAction("update", { password: password || null })}
+                  disabled={submitting}
+                  className="shrink-0 px-4 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932] disabled:opacity-60"
+                >
+                  {submitting ? "저장 중…" : "저장"}
+                </button>
+              </div>
             </CrmField>
             <CrmField label="메모">
               <textarea
