@@ -8,7 +8,6 @@ import {
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
-import { syncRegistrationType } from "@/app/lib/crm-registration-type";
 
 export const dynamic = "force-dynamic";
 
@@ -257,7 +256,6 @@ export async function POST(request: Request) {
   }
 
   // 신규/재등록 구분 자동 갱신 (구매 이력 2건 이상 → 재등록)
-  await syncRegistrationType(ctx.centerId, memberId);
 
   return NextResponse.json({ ok: true, rentalId: created.id });
 }
