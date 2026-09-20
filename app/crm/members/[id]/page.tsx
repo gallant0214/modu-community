@@ -4424,6 +4424,8 @@ function MemberMileageSection({ memberId, reloadKey }: { memberId: number; reloa
     };
   }, [memberId, getIdToken, reloadKey]);
 
+  const [filter, setFilter] = useState<"all" | "earn" | "use">("all");
+
   if (loading) return <div className="text-[13px] text-[#8C8270] py-6 text-center">불러오는 중…</div>;
   if (error)
     return (
@@ -4432,6 +4434,10 @@ function MemberMileageSection({ memberId, reloadKey }: { memberId: number; reloa
       </div>
     );
   if (!data) return null;
+
+  const shown = data.entries.filter((e) =>
+    filter === "all" ? true : filter === "earn" ? e.delta > 0 : e.delta < 0
+  );
 
   return (
     <div className="space-y-4">
@@ -4457,16 +4463,34 @@ function MemberMileageSection({ memberId, reloadKey }: { memberId: number; reloa
       </section>
 
       <div>
-        <div className="mb-2 text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
-          마일리지 내역 ({data.entries.length}건, 최신순)
+        <div className="mb-2 flex items-center justify-between gap-2 flex-wrap">
+          <div className="text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            마일리지 내역 ({shown.length}건, 최신순)
+          </div>
+          <div className="inline-flex rounded-lg border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
+            {([["all", "전체"], ["earn", "적립"], ["use", "사용"]] as const).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setFilter(k)}
+                className={`px-3 py-1 text-[12px] font-medium ${
+                  filter === k
+                    ? "bg-[#6B7B3A] text-white"
+                    : "bg-[#FEFCF7] dark:bg-zinc-900 text-[#6B5D47] dark:text-zinc-400"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-        {data.entries.length === 0 ? (
+        {shown.length === 0 ? (
           <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
             마일리지 기록이 없습니다.
           </div>
         ) : (
           <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800 max-h-[560px] overflow-y-auto">
-            {data.entries.map((e) => {
+            {shown.map((e) => {
               const d = new Date(e.at);
               const k = new Date(d.getTime() + 9 * 3600 * 1000);
               const dateStr = `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")} (${DOW_KO[k.getUTCDay()]})`;
