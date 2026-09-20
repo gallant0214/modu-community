@@ -147,7 +147,8 @@ export async function buildCheckinSummary(centerId: number, memberId: number) {
     await Promise.all([
       supabase
         .from("crm_members")
-        .select("mileage")
+        // attendance_no = 회원이 터치출석에서 누르는 번호. 확인창에 '회원번호' 로 표시한다.
+        .select("mileage, attendance_no")
         .eq("center_id", centerId)
         .eq("id", memberId)
         .maybeSingle(),
@@ -241,6 +242,7 @@ export async function buildCheckinSummary(centerId: number, memberId: number) {
 
   return {
     mileage: memberRow.data?.mileage ?? 0,
+    attendance_no: memberRow.data?.attendance_no ?? null,
     coupon_count: 0,
     can_enter: canEnter,
     not_started: notStarted,

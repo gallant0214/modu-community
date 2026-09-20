@@ -33,6 +33,8 @@ interface MemberLite {
 
 interface CheckinSummary {
   mileage: number;
+  /** 회원번호 = 터치출석 출석번호(crm_members.attendance_no) */
+  attendance_no?: string | null;
   coupon_count: number;
   can_enter: boolean;
   not_started?: boolean;
@@ -113,6 +115,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
       mileageAwarded: 150,
       summary: {
         mileage: 3200,
+        attendance_no: "1234",
         coupon_count: 1,
         can_enter: true,
         not_started: false,
@@ -927,31 +930,11 @@ function KeyBtn({
   );
 }
 
-/** 뒷자리만 노출: 010-1234-**** */
-function maskPhone(phone: string): string {
-  const f = formatPhone(phone);
-  const parts = f.split("-");
-  if (parts.length === 3) return `${parts[0]}-${parts[1]}-****`;
-  return f;
-}
-
 function maskName(name: string): string {
   if (!name) return "";
   if (name.length <= 1) return name;
   if (name.length === 2) return `${name[0]}*`;
   return `${name[0]}*${name.slice(-1)}`;
-}
-
-function maskPhoneMiddle(phone: string | null): string {
-  if (!phone) return "-";
-  const f = formatPhone(phone);
-  const parts = f.split("-");
-  if (parts.length !== 3) return f;
-  const mid = parts[1];
-  const last = parts[2];
-  const midMasked = mid.length >= 4 ? mid.slice(0, 2) + "*".repeat(mid.length - 2) : mid;
-  const lastMasked = last.length >= 4 ? last.slice(0, 2) + "*".repeat(last.length - 2) : last;
-  return `${parts[0]}-${midMasked}-${lastMasked}`;
 }
 
 
@@ -1162,15 +1145,12 @@ function CheckinResultScreen({
               </div>
               <div className="flex-1 min-w-0 space-y-1">
                 <div className="text-[24px] font-bold">{maskName(data.name)}</div>
-                <div className="flex gap-x-4 text-[13px] text-white/60">
-                  <span>생년월일</span>
-                  <span className="text-white/90 tabular-nums">
-                    {data.birth ? data.birth : "-"}
+                <div className="flex items-baseline gap-2 text-[15px] text-white/60">
+                  <span>회원번호</span>
+                  <span className="text-white/35">:</span>
+                  <span className="text-[22px] font-bold text-white tabular-nums leading-none">
+                    {s?.attendance_no || "-"}
                   </span>
-                </div>
-                <div className="flex gap-x-4 text-[13px] text-white/60">
-                  <span>연락처</span>
-                  <span className="text-white/90 tabular-nums">{maskPhoneMiddle(data.phone)}</span>
                 </div>
               </div>
             </div>
