@@ -2176,7 +2176,13 @@ function LockerActionModal({
   };
 
   const handleAssign = async () => {
-    if (!pickedMember) return setError("회원을 선택해 주세요");
+    // 회원을 고르지 않았으면 배정이 아니라 비밀번호·메모만 저장한다.
+    // (빈 락커의 비밀번호만 바꾸려는 경우 — 회원을 고르라는 에러로 막히지 않게)
+    if (!pickedMember) {
+      if (!password && !memo) return setError("회원을 선택하거나 비밀번호·메모를 입력해 주세요");
+      await callAction("update", { password: password || null, memo: memo || null });
+      return;
+    }
     if (!startDate || !expiresAt) return setError("시작일과 만료일을 입력해 주세요");
     await callAction("assign", {
       member_id: pickedMember.id,
@@ -2482,7 +2488,7 @@ function LockerActionModal({
                 disabled={submitting}
                 className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold disabled:opacity-60"
               >
-                {submitting ? "배정 중…" : "배정하기"}
+                {submitting ? "저장 중…" : "저장하기"}
               </button>
             </div>
           </>
