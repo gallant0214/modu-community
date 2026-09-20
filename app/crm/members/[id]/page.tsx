@@ -7180,7 +7180,8 @@ function UsageIssueModal({
           label={type === "membership" ? "회원권 상품" : type === "locker" ? "락커 상품" : "대여 상품"}
           required
         >
-          <div className="relative">
+          <div className="flex gap-2">
+          <div className="relative flex-1">
             <input
               value={name}
               onChange={(e) => {
@@ -7233,6 +7234,19 @@ function UsageIssueModal({
                   </ul>
                 );
               })()}
+          </div>
+            {/* 초기화 — 고른 상품·금액·기간·쿠폰 등 이 폼 입력을 모두 처음 상태로 */}
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                resetFormOnly();
+                setShowProducts(false);
+              }}
+              className="shrink-0 px-3.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] font-semibold text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+            >
+              초기화
+            </button>
           </div>
           {products.length === 0 && (
             <p className="mt-1 text-[11px] text-[#A89B80]">
