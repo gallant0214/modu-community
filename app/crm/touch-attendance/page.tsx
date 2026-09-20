@@ -954,7 +954,6 @@ function maskPhoneMiddle(phone: string | null): string {
   return `${parts[0]}-${midMasked}-${lastMasked}`;
 }
 
-const DOW_KOR = ["일", "월", "화", "수", "목", "금", "토"];
 
 /**
  * 체크인 성공 시 회원과 함께 있는 자리에서 보여주는 전체화면 결과 카드.
@@ -998,8 +997,6 @@ function CheckinResultScreen({
   const s = data.summary;
   // 입장 가능 판정: summary 없으면 성공 자체를 가능으로 간주 (하위 호환)
   const canEnter = s ? s.can_enter : true;
-  const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
-  const todayDow = nowKst.getUTCDay();
 
   // 보유 이용권 카드 — 만료일 대신 D-day 를 크게 표시. 세로/가로 배치에 재사용.
   const holdingsCard = (
@@ -1129,53 +1126,21 @@ function CheckinResultScreen({
                 </div>
               </div>
             </div>
-            <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-3">
-              <span className="text-white/60 text-[16px]">누적 마일리지</span>
-              <span className="text-[34px] md:text-[38px] font-bold text-white tabular-nums leading-none">
-                {(s?.mileage ?? 0).toLocaleString()}
-              </span>
-              <span className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-amber-500 text-white text-[17px] md:text-[19px] font-extrabold flex items-center justify-center shrink-0">
-                M
-              </span>
-            </div>
           </div>
 
-          {/* 이번 주 출석 */}
-          <div className="rounded-xl bg-white/[0.03] border border-white/10 p-4">
-            <div className="flex items-center gap-2 text-[13px] text-white/70 mb-3">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M8 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2h-3M8 3v4h8V3M8 3h8" />
-              </svg>
-              <span className="font-semibold">출석 현황</span>
+          {/* 누적 마일리지 — 출석하자마자 바로 보이도록 크게 표시 */}
+          <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 px-5 py-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="w-12 h-12 rounded-full bg-amber-500 text-white text-[24px] font-extrabold flex items-center justify-center shrink-0">
+                M
+              </span>
+              <span className="text-[18px] font-semibold text-white/80 truncate">누적 마일리지</span>
             </div>
-            <div className="grid grid-cols-7 gap-1.5 md:gap-2">
-              {DOW_KOR.map((d, i) => {
-                const present = s?.week_present[i] ?? false;
-                const isToday = i === todayDow;
-                return (
-                  <div key={d} className="flex flex-col items-center gap-1.5">
-                    <div
-                      className={`w-10 h-10 md:w-11 md:h-11 rounded-full flex items-center justify-center text-[11px] font-bold border-2 ${
-                        present
-                          ? "bg-emerald-500/20 border-emerald-500 text-emerald-300"
-                          : "bg-white/5 border-white/15 text-white/40"
-                      }`}
-                    >
-                      {present ? "✓" : "·"}
-                    </div>
-                    <div
-                      className={`text-[12px] ${
-                        i === 0 ? "text-red-400" : i === 6 ? "text-sky-400" : "text-white/60"
-                      } ${isToday ? "font-bold" : ""}`}
-                    >
-                      {isToday ? "Today" : d}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-3 text-[11px] text-white/40 text-right">
-              (주간) 매주 월요일 · (월간) 매월 1일 초기화
+            <div className="flex items-baseline gap-1.5 shrink-0">
+              <span className="text-[52px] md:text-[60px] font-extrabold text-amber-300 tabular-nums leading-none">
+                {(s?.mileage ?? 0).toLocaleString()}
+              </span>
+              <span className="text-[22px] font-bold text-amber-300/70">P</span>
             </div>
           </div>
 
