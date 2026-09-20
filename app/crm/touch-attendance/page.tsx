@@ -998,14 +998,12 @@ function CheckinResultScreen({
   // 입장 가능 판정: summary 없으면 성공 자체를 가능으로 간주 (하위 호환)
   const canEnter = s ? s.can_enter : true;
 
-  // 보유 이용권 카드 — 만료일 대신 D-day 를 크게 표시. 세로/가로 배치에 재사용.
-  const holdingsCard = (
-    <div className="rounded-2xl bg-[#1E2024] p-5 md:p-7 min-h-[180px] flex flex-col">
-      <div className="text-[13px] text-white/60 mb-3 font-semibold">보유 이용권</div>
-      {!s || (s.memberships.length === 0 && s.passes.length === 0) ? (
-        <div className="flex-1 flex items-center justify-center text-white/50 text-[14.5px]">
-          보유하신 이용권이 없습니다
-        </div>
+  // 보유 상품 — 회원권(+대여권·락커) 과 수강권을 구분선으로 분리 표시. 만료일 대신 D-day 를 크게.
+  const membershipCard = (
+    <div className="rounded-2xl bg-[#1E2024] p-5 md:p-7">
+      <div className="text-[13px] text-white/60 mb-3 font-semibold">보유 회원권</div>
+      {!s || s.memberships.length === 0 ? (
+        <div className="py-5 text-center text-white/50 text-[14.5px]">보유하신 회원권이 없습니다</div>
       ) : (
         <ul className="space-y-2">
           {s.memberships.map((m) => (
@@ -1019,6 +1017,46 @@ function CheckinResultScreen({
               </div>
             </li>
           ))}
+        </ul>
+      )}
+    </div>
+  );
+
+  // 대여권·락커 — 회원권에 딸린 부가 상품이라 회원권 카드 바로 아래에 둔다.
+  const rentalLockerRow = (
+    <div className="grid grid-cols-2 gap-3">
+      <SummaryCard
+        icon="👕"
+        title="대여권"
+        value={
+          s && s.rentals.length > 0
+            ? ddayLabel(s.rentals.reduce((a, x) => (x.expires_at > a ? x.expires_at : a), ""))
+            : "사용 안 함"
+        }
+        muted={!s || s.rentals.length === 0}
+        strong={!!s && s.rentals.length > 0}
+      />
+      <SummaryCard
+        icon="🔒"
+        title="락커"
+        value={
+          s && s.lockers.length > 0
+            ? ddayLabel(s.lockers.reduce((a, x) => (x.expires_at > a ? x.expires_at : a), ""))
+            : "사용 안 함"
+        }
+        muted={!s || s.lockers.length === 0}
+        strong={!!s && s.lockers.length > 0}
+      />
+    </div>
+  );
+
+  const passCard = (
+    <div className="rounded-2xl bg-[#1E2024] p-5 md:p-7">
+      <div className="text-[13px] text-white/60 mb-3 font-semibold">보유 수강권</div>
+      {!s || s.passes.length === 0 ? (
+        <div className="py-5 text-center text-white/50 text-[14.5px]">보유하신 수강권이 없습니다</div>
+      ) : (
+        <ul className="space-y-2">
           {s.passes.map((p) => (
             <li key={`p${p.id}`} className="px-3.5 py-3 rounded-lg bg-white/[0.04] border border-white/10">
               <div className="text-[16px] font-bold truncate">
@@ -1037,6 +1075,16 @@ function CheckinResultScreen({
           ))}
         </ul>
       )}
+    </div>
+  );
+
+  // 회원권 / ──── / 수강권 순서
+  const holdingsGroup = (
+    <div className="space-y-4">
+      {membershipCard}
+      {rentalLockerRow}
+      <div className="h-px bg-white/15" />
+      {passCard}
     </div>
   );
 
@@ -1143,40 +1191,11 @@ function CheckinResultScreen({
               <span className="text-[22px] font-bold text-amber-300/70">P</span>
             </div>
           </div>
-
-          {/* 세로 화면: 보유 이용권을 '출석 현황' 바로 아래에 표시 (가로에서는 우측에 표시) */}
-          <div className={portrait ? "" : "md:hidden"}>{holdingsCard}</div>
         </div>
 
-        {/* 우측: 이용권/락커/대여권 */}
+        {/* 우측(세로에서는 아래): 보유 회원권 · 대여권/락커 ── 수강권 */}
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <SummaryCard
-              icon="👕"
-              title="대여권"
-              value={
-                s && s.rentals.length > 0
-                  ? ddayLabel(s.rentals.reduce((a, x) => (x.expires_at > a ? x.expires_at : a), ""))
-                  : "사용 안 함"
-              }
-              muted={!s || s.rentals.length === 0}
-              strong={!!s && s.rentals.length > 0}
-            />
-            <SummaryCard
-              icon="🔒"
-              title="락커"
-              value={
-                s && s.lockers.length > 0
-                  ? ddayLabel(s.lockers.reduce((a, x) => (x.expires_at > a ? x.expires_at : a), ""))
-                  : "사용 안 함"
-              }
-              muted={!s || s.lockers.length === 0}
-              strong={!!s && s.lockers.length > 0}
-            />
-          </div>
-
-          {/* 가로(태블릿)에서만 우측에 표시 — 세로에서는 '출석 현황' 아래로 이동 */}
-          <div className={portrait ? "hidden" : "hidden md:block"}>{holdingsCard}</div>
+          {holdingsGroup}
 
           {/* 카운트다운 처음으로 */}
           <button
