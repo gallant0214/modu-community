@@ -53,10 +53,24 @@ type Stage = "init" | "models" | "faces" | "ready" | "error";
  * @param fill true 이면 부모 flex 컨테이너를 꽉 채우도록 내부 max-width 를 해제.
  * '번호+얼굴' 모드처럼 카메라를 다른 UI와 나란히 놓을 때 사용.
  */
+/** 체크인 API 응답 중 결과창 표시에 필요한 부분 */
+export interface FaceCheckinPayload {
+  member?: { name?: string; birth?: string | null; phone?: string | null; face_thumb?: string | null };
+  duplicate?: boolean;
+  mileage_awarded?: number;
+  summary?: unknown;
+}
+
 export default function FaceAttendance({
   fill = false,
   kioskToken,
-}: { fill?: boolean; kioskToken?: string } = {}) {
+  onCheckin,
+}: {
+  fill?: boolean;
+  kioskToken?: string;
+  /** 체크인 성공 시 부모가 결과창을 띄울 수 있게 응답을 넘긴다(소리·음성은 여기서 이미 처리). */
+  onCheckin?: (data: FaceCheckinPayload, fallbackName: string) => void;
+} = {}) {
   const kiosk = !!kioskToken;
   const { getIdToken } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -122,6 +136,7 @@ export default function FaceAttendance({
         const data = await res.json();
         if (res.ok) {
           const who = data.member?.name ?? name;
+          onCheckin?.(data as FaceCheckinPayload, who);
           if (data.duplicate) {
             // 2시간 이내 이미 출석 → 재출석 불인정, 안내만.
             // 단, 만료 회원 등 서버가 준 안내 음성은 중복이어도 재생(경고음+음성).
@@ -144,7 +159,7 @@ export default function FaceAttendance({
         /* 무시 - 다음 프레임에 재시도 */
       }
     },
-    [getIdToken]
+    [getIdToken, kiosk, kioskToken, onCheckin]
   );
 
   // 인식 루프

@@ -578,7 +578,32 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
       {/* 콘텐츠 영역: 남은 화면을 꽉 채우고 창 크기에 맞춰 자동 정렬(가로/세로) */}
       <div className="flex-1 min-h-0 w-full flex flex-col items-center justify-center overflow-y-auto pb-3">
       {recogMode === "face" ? (
-        <FaceAttendance kioskToken={kioskToken} />
+        <>
+          {/* 얼굴 전용 모드도 번호 출석과 동일한 확인창을 띄운다(회원번호·마일리지·보유상품). */}
+          <FaceAttendance
+            kioskToken={kioskToken}
+            onCheckin={(d, who) =>
+              setResult({
+                kind: "success",
+                name: d.member?.name ?? who,
+                birth: d.member?.birth ?? null,
+                phone: d.member?.phone ?? null,
+                photo: d.member?.face_thumb ?? null,
+                duplicate: d.duplicate,
+                mileageAwarded: d.mileage_awarded ?? 0,
+                summary: d.summary as CheckinSummary | undefined,
+              })
+            }
+          />
+          {result && result.kind === "success" && (
+            <CheckinResultScreen
+              data={result}
+              preview={previewMode}
+              portrait={!landscape}
+              onClose={() => setResult(null)}
+            />
+          )}
+        </>
       ) : (
         <>
       {/* 결과 화면 (에러는 상단 토스트, 성공은 전체 화면 카드) */}
