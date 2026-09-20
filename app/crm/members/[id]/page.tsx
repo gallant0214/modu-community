@@ -130,7 +130,7 @@ export default function CrmMemberDetailPage() {
   const [bodyReload, setBodyReload] = useState(0);
   // 탭: 정보 / 예약내역 / 출석내역 / 결제내역 / 강사기록 / 회원공유기록 / 로그
   const [tab, setTab] = useState<
-    "info" | "reservations" | "attendance" | "payments" | "workout" | "shared" | "logs"
+    "info" | "reservations" | "attendance" | "payments" | "workout" | "shared" | "mileage" | "logs"
   >("info");
   // 현재 유저 권한 (members.edit_basic / members.edit_usage / members.delete)
   const [perms, setPerms] = useState<Record<string, boolean>>({});
@@ -524,7 +524,7 @@ export default function CrmMemberDetailPage() {
 
       {/* 탭: 정보 / 예약내역 / 출석내역 / 결제내역 / 강사기록 / 회원공유기록 / 로그 */}
       <div className="mb-4 flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800 overflow-x-auto">
-        {(["info", "reservations", "attendance", "payments", "workout", "shared", "logs"] as const).map((t) => (
+        {(["info", "reservations", "attendance", "payments", "workout", "shared", "mileage", "logs"] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -547,7 +547,9 @@ export default function CrmMemberDetailPage() {
                       ? "강사기록"
                       : t === "shared"
                         ? "회원공유기록"
-                        : "로그"}
+                        : t === "mileage"
+                          ? "마일리지"
+                          : "로그"}
           </button>
         ))}
       </div>
@@ -582,6 +584,8 @@ export default function CrmMemberDetailPage() {
         <MemberWorkoutLogsSection memberId={member.id} canEdit={canEditUsage} kind="trainer" />
       ) : tab === "shared" ? (
         <MemberWorkoutLogsSection memberId={member.id} canEdit={canEditUsage} kind="shared" />
+      ) : tab === "mileage" ? (
+        <MemberMileageSection memberId={member.id} reloadKey={usageReload} />
       ) : (
       <>
       {(hasHoldings || !readOnly) && (
@@ -4367,6 +4371,161 @@ function MileageAdjustCard({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── 마일리지 탭 — 적립·사용·센터 지급 전체 기록 ───────── */
+interface MileageEntry {
+  id: string;
+  delta: number;
+  reason: string;
+  label: string;
+  at: string;
+  balanceAfter: number | null;
+  by: string | null;
+  memo: string | null;
+}
+
+function MemberMileageSection({ memberId, reloadKey }: { memberId: number; reloadKey: number }) {
+  const { getIdToken } = useAuth();
+  const [data, setData] = useState<{
+    balance: number;
+    earned: number;
+    used: number;
+    entries: MileageEntry[];
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`/api/crm/members/${memberId}/mileage-history`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const d = await res.json();
+        if (!alive) return;
+        if (!res.ok) throw new Error(d?.error || "조회 실패");
+        setData(d);
+      } catch (e) {
+        if (alive) setError(e instanceof Error ? e.message : "네트워크 오류");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [memberId, getIdToken, reloadKey]);
+
+  if (loading) return <div className="text-[13px] text-[#8C8270] py-6 text-center">불러오는 중…</div>;
+  if (error)
+    return (
+      <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[13px] text-red-700 dark:text-red-300">
+        {error}
+      </div>
+    );
+  if (!data) return null;
+
+  return (
+    <div className="space-y-4">
+      <section className="grid grid-cols-3 gap-2">
+        <div className="px-4 py-3 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900">
+          <div className="text-[12px] text-[#8C8270] dark:text-zinc-500">현재 보유</div>
+          <div className="mt-0.5 text-[20px] font-extrabold text-[#6B7B3A] dark:text-[#A8B87A] tabular-nums">
+            {data.balance.toLocaleString()}P
+          </div>
+        </div>
+        <div className="px-4 py-3 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900">
+          <div className="text-[12px] text-[#8C8270] dark:text-zinc-500">총 적립</div>
+          <div className="mt-0.5 text-[20px] font-bold text-[#3A342A] dark:text-zinc-100 tabular-nums">
+            +{data.earned.toLocaleString()}P
+          </div>
+        </div>
+        <div className="px-4 py-3 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900">
+          <div className="text-[12px] text-[#8C8270] dark:text-zinc-500">총 사용</div>
+          <div className="mt-0.5 text-[20px] font-bold text-[#B47B2A] dark:text-amber-300 tabular-nums">
+            −{data.used.toLocaleString()}P
+          </div>
+        </div>
+      </section>
+
+      <div>
+        <div className="mb-2 text-[12.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
+          마일리지 내역 ({data.entries.length}건, 최신순)
+        </div>
+        {data.entries.length === 0 ? (
+          <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
+            마일리지 기록이 없습니다.
+          </div>
+        ) : (
+          <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800 max-h-[560px] overflow-y-auto">
+            {data.entries.map((e) => {
+              const d = new Date(e.at);
+              const k = new Date(d.getTime() + 9 * 3600 * 1000);
+              const dateStr = `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, "0")}-${String(k.getUTCDate()).padStart(2, "0")} (${DOW_KO[k.getUTCDay()]})`;
+              const hm = `${String(k.getUTCHours()).padStart(2, "0")}:${String(k.getUTCMinutes()).padStart(2, "0")}`;
+              const plus = e.delta > 0;
+              return (
+                <li key={e.id} className="px-4 py-2.5">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10.5px] font-semibold ${
+                          plus
+                            ? "bg-[#6B7B3A]/10 text-[#4d5a29] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]"
+                            : "bg-[#B47B2A]/10 text-[#8a5c1f] dark:bg-[#B47B2A]/25 dark:text-amber-300"
+                        }`}
+                      >
+                        {e.label}
+                      </span>
+                      <span className="text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
+                        {dateStr} {hm}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 shrink-0">
+                      <span
+                        className={`text-[14px] font-bold tabular-nums ${
+                          plus ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#B47B2A] dark:text-amber-300"
+                        }`}
+                      >
+                        {plus ? "+" : "−"}
+                        {Math.abs(e.delta).toLocaleString()}P
+                      </span>
+                      {e.balanceAfter != null && (
+                        <span className="text-[11.5px] text-[#A89B80] tabular-nums">
+                          잔여 {e.balanceAfter.toLocaleString()}P
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {(e.by || e.memo) && (
+                    <div className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+                      {[e.by ? `처리: ${e.by}` : "", e.memo ?? ""].filter(Boolean).join(" · ")}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <p className="mt-2 text-[11px] text-[#A89B80]">
+          최근 300건까지 표시돼요. 출석 적립은 출석 기록에서, 나머지는 마일리지 원장에서 가져옵니다.
+        </p>
+        {data.earned - data.used !== data.balance && (
+          <p className="mt-1 text-[11px] text-[#B47B2A] dark:text-amber-300">
+            기록 합계({(data.earned - data.used).toLocaleString()}P)와 현재 보유(
+            {data.balance.toLocaleString()}P)가 달라요 — 기존 데이터 이관 전 적립분은 기록이 남아 있지
+            않을 수 있어요.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
