@@ -95,10 +95,14 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   const [result, setResult] = useState<Result | null>(null);
   // 디자인 미리보기: /crm/touch-attendance?preview=1 → 출석 확인창을 가짜 데이터로 바로 표시(자동 닫힘 없음)
   const [previewMode, setPreviewMode] = useState(false);
+  // 미리보기를 태블릿 화면 틀 안에 넣어 표시(PC 에서도 실제 기기 비율로 확인). ?frame=0 이면 창 전체 사용.
+  const [framePreview, setFramePreview] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!new URLSearchParams(window.location.search).get("preview")) return;
+    const qs = new URLSearchParams(window.location.search);
+    if (!qs.get("preview")) return;
     setPreviewMode(true);
+    setFramePreview(qs.get("frame") !== "0");
     setResult({
       kind: "success",
       name: "홍길동",
@@ -175,9 +179,13 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   // 실제 '보이는' 높이에 정확히 맞춤. 태블릿 크롬 앱은 주소창 때문에 100dvh 가
   // 실제 표시 영역보다 커져 하단(QR·출석 버튼)이 잘리므로, visualViewport 로 측정.
   const [vpH, setVpH] = useState<number | null>(null);
+  const [vpW, setVpW] = useState<number | null>(null);
   useEffect(() => {
     const vv = typeof window !== "undefined" ? window.visualViewport : null;
-    const update = () => setVpH(vv?.height ?? window.innerHeight);
+    const update = () => {
+      setVpH(vv?.height ?? window.innerHeight);
+      setVpW(vv?.width ?? window.innerWidth);
+    };
     update();
     vv?.addEventListener("resize", update);
     window.addEventListener("resize", update);
@@ -188,6 +196,15 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
       window.removeEventListener("orientationchange", update);
     };
   }, []);
+
+  // 미리보기 기기 틀 — 태블릿 해상도로 고정하고 창 크기에 맞춰 축소해서 전체가 보이게 한다.
+  const framed = previewMode && framePreview;
+  const frameW = landscape ? 1280 : 800;
+  const frameH = landscape ? 800 : 1280;
+  const frameScale =
+    framed && vpW && vpH
+      ? Math.max(0.2, Math.min(1, (vpW - 48) / frameW, (vpH - 48) / frameH))
+      : 1;
 
   // 센터명 로드 (상단 표시용)
   useEffect(() => {
@@ -482,13 +499,32 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
 
   return (
     <div
-      className="h-[100dvh] overflow-hidden flex flex-col items-center px-5 bg-[#FEFCF7] dark:bg-zinc-950"
+      className={`overflow-hidden flex flex-col items-center px-5 bg-[#FEFCF7] dark:bg-zinc-950 ${
+        framed
+          ? "rounded-[22px] ring-1 ring-black/20 shadow-[0_24px_70px_rgba(0,0,0,0.35)]"
+          : "h-[100dvh]"
+      }`}
       // 루트 레이아웃 body 의 상단 NavBar 여백(56px) 상쇄 - 상단부터 센터명만 표시.
       // height 는 측정된 visualViewport 높이로 덮어써 실제 표시 영역에 정확히 맞춤(100dvh 폴백).
-      style={{
-        marginTop: "calc(-1 * (env(safe-area-inset-top, 0px) + 56px))",
-        ...(vpH ? { height: `${vpH}px` } : null),
-      }}
+      // 미리보기 틀 모드: 태블릿 해상도로 고정 + 창에 맞게 축소. transform 이 걸리면 내부
+      // fixed 요소(출석 확인창)도 이 틀을 기준으로 배치돼 함께 축소된다.
+      style={
+        framed
+          ? {
+              position: "fixed",
+              top: 24,
+              left: "50%",
+              width: `${frameW}px`,
+              height: `${frameH}px`,
+              transform: `translateX(-50%) scale(${frameScale})`,
+              transformOrigin: "top center",
+              zIndex: 60,
+            }
+          : {
+              marginTop: "calc(-1 * (env(safe-area-inset-top, 0px) + 56px))",
+              ...(vpH ? { height: `${vpH}px` } : null),
+            }
+      }
     >
       {/* 센터명 상단바 + 가로/세로 전환 */}
       <div
