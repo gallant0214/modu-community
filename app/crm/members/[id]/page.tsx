@@ -4375,6 +4375,13 @@ function MileageAdjustCard({
   );
 }
 
+/** 마일리지 내역 칩 색 — 출석 적립=초록 / 퇴실 적립=주황 / 사용(차감)=빨강 */
+function mileageChipClass(reason: string, delta: number): string {
+  if (delta < 0) return "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
+  if (reason === "checkout") return "bg-[#B47B2A]/12 text-[#8a5c1f] dark:bg-[#B47B2A]/25 dark:text-amber-300";
+  return "bg-[#6B7B3A]/10 text-[#4d5a29] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]";
+}
+
 /* ─── 마일리지 탭 — 적립·사용·센터 지급 전체 기록 ───────── */
 interface MileageEntry {
   id: string;
@@ -4501,11 +4508,10 @@ function MemberMileageSection({ memberId, reloadKey }: { memberId: number; reloa
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 min-w-0">
                       <span
-                        className={`px-1.5 py-0.5 rounded text-[10.5px] font-semibold ${
-                          plus
-                            ? "bg-[#6B7B3A]/10 text-[#4d5a29] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]"
-                            : "bg-[#B47B2A]/10 text-[#8a5c1f] dark:bg-[#B47B2A]/25 dark:text-amber-300"
-                        }`}
+                        className={`px-1.5 py-0.5 rounded text-[10.5px] font-semibold ${mileageChipClass(
+                          e.reason,
+                          e.delta
+                        )}`}
                       >
                         {e.label}
                       </span>
@@ -4516,7 +4522,7 @@ function MemberMileageSection({ memberId, reloadKey }: { memberId: number; reloa
                     <div className="flex items-baseline gap-2 shrink-0">
                       <span
                         className={`text-[14px] font-bold tabular-nums ${
-                          plus ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#B47B2A] dark:text-amber-300"
+                          plus ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#C0392B] dark:text-red-300"
                         }`}
                       >
                         {plus ? "+" : "−"}
