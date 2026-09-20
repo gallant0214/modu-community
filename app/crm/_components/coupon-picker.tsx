@@ -71,7 +71,28 @@ export function CouponPicker({
 
   if (!coupons) return null;
   const usable = coupons.filter((c) => c.status === "issued" && !excludeIssueIds.includes(c.issueId));
-  if (usable.length === 0 && !applied) return null; // 쓸 쿠폰이 없으면 자리 차지 안 함
+  // 쓸 쿠폰이 없어도 항목은 남긴다 — 줄이 통째로 사라지면 '쿠폰 적용' 기능이 없는 것처럼 보인다
+  if (usable.length === 0 && !applied) {
+    const held = coupons.length;
+    return (
+      <div className="rounded-xl border border-dashed border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5]/40 dark:bg-zinc-900/40 px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-[12.5px] font-semibold text-[#8C8270] dark:text-zinc-400">🎟 쿠폰 적용</span>
+          <span className="text-[11.5px] text-[#A89B80]">
+            {held > 0
+              ? "지금 쓸 수 있는 쿠폰이 없어요 (사용·만료됨)"
+              : "이 회원이 가진 쿠폰이 없어요"}
+          </span>
+          <a
+            href="/crm/coupons"
+            className="ml-auto text-[11.5px] text-[#6B7B3A] dark:text-[#A8B87A] underline"
+          >
+            쿠폰 발급하기
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   const target = { priceWon, productType, productId };
   const appliedCoupon = applied ? coupons.find((c) => c.issueId === applied.issueId) : null;
