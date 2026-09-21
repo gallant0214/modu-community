@@ -9,6 +9,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
+import { syncRegistrationType } from "@/app/lib/crm-registration-type";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
@@ -334,6 +335,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "발급 실패", detail: error?.message }, { status: 500 });
   }
   if (couponIssueId) await finalizeCouponUse(couponIssueId, "pass", created.id);
+
+  // 신규/재등록 자동 갱신 — 회원권·수강권 등록 횟수 기준
+  await syncRegistrationType(ctx.centerId, memberId);
 
   // 결제일(paid_at): 당일 발급이면 실제 결제 시각, 과거 날짜(백데이트)면 그 발급일(정오).
   const todayKstYmd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
