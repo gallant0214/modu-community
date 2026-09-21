@@ -963,6 +963,9 @@ function maskName(name: string): string {
 }
 
 
+/** 출석 확인창 자동 닫힘(초). 회원이 마일리지·보유 상품을 읽을 시간. */
+const AUTO_CLOSE_SEC = 5;
+
 /**
  * 체크인 성공 시 회원과 함께 있는 자리에서 보여주는 전체화면 결과 카드.
  * - 입장 가/불가 시각적 구분
@@ -991,16 +994,22 @@ function CheckinResultScreen({
   preview?: boolean; // true 면 자동 닫힘 없이 화면 유지(디자인 미리보기용)
   portrait?: boolean; // 세로형 — 화면 폭과 관계없이 1단으로 배치(태블릿 세로 거치 기준)
 }) {
-  const [remain, setRemain] = useState(3);
+  const [remain, setRemain] = useState(AUTO_CLOSE_SEC);
+  // onClose 를 의존성에 두면 부모가 다시 그려질 때마다 1초 타이머가 재시작돼
+  // 실제 닫히는 시점이 들쭉날쭉해진다 → ref 로 고정해 정확히 1초씩 센다.
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
   useEffect(() => {
     if (preview) return; // 미리보기 모드에서는 카운트다운/자동닫힘 안 함
     if (remain <= 0) {
-      onClose();
+      closeRef.current();
       return;
     }
     const t = setTimeout(() => setRemain((n) => n - 1), 1000);
     return () => clearTimeout(t);
-  }, [remain, onClose, preview]);
+  }, [remain, preview]);
 
   const s = data.summary;
   // 입장 가능 판정: summary 없으면 성공 자체를 가능으로 간주 (하위 호환)
