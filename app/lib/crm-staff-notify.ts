@@ -83,12 +83,14 @@ export async function notifyStaffMember(params: {
     const rows = (tokens ?? []) as { token: string; platform: string | null }[];
     if (rows.length === 0) return true;
 
-    // iOS 는 APNs 원시 토큰(64 hex)이라 FCM 으로 못 보냄 → APNs 직접 발송.
-    // 안드로이드는 FCM 토큰 → 기존 Firebase Admin 멀티캐스트.
-    const isIosToken = (r: { token: string; platform: string | null }) =>
-      r.platform === "ios" || (/^[0-9a-fA-F]{64}$/.test(r.token) && r.platform !== "android");
-    const iosTokens = rows.filter(isIosToken).map((r) => r.token);
-    const fcmTokens = rows.filter((r) => !isIosToken(r)).map((r) => r.token);
+    // 토큰 '형식' 기준으로 분기(platform 값이 아니라):
+    //  - 원시 APNs 토큰(64 hex) = 구 iOS 빌드(getDevicePushTokenAsync) → APNs 직접 발송.
+    //  - 그 외(FCM 등록 토큰) = 신 iOS(@react-native-firebase/messaging) + 안드로이드 → FCM.
+    // 신빌드는 iOS 도 FCM 토큰을 platform='ios' 로 저장하므로, platform 기준으로 나누면
+    // FCM 토큰을 APNs 로 보내 실패·삭제된다. 형식 기준이면 구·신 빌드 모두 정상 도달.
+    const isApnsRawToken = (r: { token: string }) => /^[0-9a-fA-F]{64}$/.test(r.token);
+    const iosTokens = rows.filter(isApnsRawToken).map((r) => r.token); // APNs 대상
+    const fcmTokens = rows.filter((r) => !isApnsRawToken(r)).map((r) => r.token); // FCM 대상
 
     // Android/FCM
     if (fcmTokens.length > 0) {
