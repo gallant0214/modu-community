@@ -3656,6 +3656,14 @@ function MemberPaymentsSection({
       <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
         {payments.map((p) => {
           const productLabel = p.product_name || "기타 결제";
+          // 상품 종류 칩 — 수강권 / 회원권 / 대여권(운동복·락커) / 기타(상품 링크 없는 수기 결제)
+          const kindChip = p.pass_id
+            ? { label: "수강권", cls: "bg-[#6B7B3A]/12 text-[#55632E] dark:bg-[#6B7B3A]/30 dark:text-[#C3D191]" }
+            : p.membership_id
+              ? { label: "회원권", cls: "bg-[#5A8BB0]/12 text-[#3F6A8C] dark:bg-[#5A8BB0]/30 dark:text-[#A8CBE4]" }
+              : p.rental_id
+                ? { label: "대여권", cls: "bg-[#C76C8E]/12 text-[#9C4B6C] dark:bg-[#C76C8E]/30 dark:text-[#E9AFC3]" }
+                : { label: "기타", cls: "bg-[#E8E0D0] text-[#6B5D47] dark:bg-zinc-800 dark:text-zinc-400" };
           const methodLabel =
             p.method === "etc" && p.method_custom
               ? p.method_custom
@@ -3668,8 +3676,15 @@ function MemberPaymentsSection({
             <li key={p.id} className="px-4 py-3">
               {/* 1줄: 결제 상품 + 금액 */}
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 truncate">
-                  {productLabel}
+                <span className="min-w-0 flex items-baseline gap-1.5">
+                  <span
+                    className={`shrink-0 px-1.5 py-0.5 rounded text-[11px] font-bold ${kindChip.cls}`}
+                  >
+                    {kindChip.label}
+                  </span>
+                  <span className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 truncate">
+                    {productLabel}
+                  </span>
                 </span>
                 <span
                   className={`text-[14px] font-bold shrink-0 ${
