@@ -187,6 +187,59 @@ export async function GET(request: Request) {
     }
   }
 
+  // ── 묶음 상품 판정 ──────────────────────────────────────────────
+  // '상품 관리'에서 구성 상품(components)을 달아둔 상품만 묶음으로 본다.
+  // 장바구니에 여러 개 담아 한 번에 결제한 건은 묶음이 아니다.
+  // 구성 상품은 발급 시 별도 마커가 없어 '부모 상품과 같은 시각(±3초) + 구성 상품명 일치'로 연결한다.
+  const { data: bundleProducts } = await supabase
+    .from("crm_products")
+    .select("name, components")
+    .eq("center_id", ctx.centerId)
+    .not("components", "is", null);
+  /** 이름 정규화 — 수강권은 발급 시 뒤에 '(N회)' 가 붙는다 */
+  const normName = (v: string | null | undefined) =>
+    (v ?? "").replace(/\s*\(\d+\s*회\)\s*$/, "").trim();
+  const componentsByParent = new Map<string, Set<string>>();
+  for (const bp of (bundleProducts ?? []) as { name: string; components: unknown }[]) {
+    const comps = Array.isArray(bp.components) ? (bp.components as { name?: string }[]) : [];
+    const names = comps.map((c) => normName(c?.name)).filter(Boolean);
+    if (names.length === 0) continue;
+    const key = normName(bp.name);
+    const set = componentsByParent.get(key) ?? new Set<string>();
+    names.forEach((n) => set.add(n));
+    componentsByParent.set(key, set);
+  }
+
+  const nameOf = (r: (typeof rows)[number]): string =>
+    normName(
+      r.pass_id
+        ? passNameMap.get(r.pass_id)
+        : r.membership_id
+          ? membershipNameMap.get(r.membership_id)
+          : r.rental_id
+            ? rentalNameMap.get(r.rental_id)
+            : null
+    );
+
+  const bundleIds = new Set<number>();
+  if (componentsByParent.size > 0) {
+    for (const parent of rows) {
+      const comps = componentsByParent.get(nameOf(parent));
+      if (!comps) continue;
+      const pt = Date.parse(parent.created_at);
+      const children = rows.filter(
+        (c) =>
+          c.id !== parent.id &&
+          c.member_id === parent.member_id &&
+          Math.abs(Date.parse(c.created_at) - pt) <= 3000 &&
+          comps.has(nameOf(c))
+      );
+      if (children.length === 0) continue; // 구성 상품이 함께 발급되지 않았으면 묶음 표시 안 함
+      bundleIds.add(parent.id);
+      children.forEach((c) => bundleIds.add(c.id));
+    }
+  }
+
   const payments = rows.map((r) => {
     const sellerId = r.pass_id
       ? passSellerMap.get(r.pass_id) ?? null
@@ -209,6 +262,8 @@ export async function GET(request: Request) {
             ? rentalNameMap.get(r.rental_id) ?? "대여"
             : null,
       handler_name: handlerName,
+      /** 상품 관리의 묶음 상품(부모 또는 그 구성 상품)으로 결제된 건 */
+      bundle: bundleIds.has(r.id),
     };
   });
 
