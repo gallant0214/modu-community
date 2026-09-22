@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
@@ -3630,6 +3630,28 @@ function MemberPaymentsSection({
   // 누적 = 환불 제외한 유효 결제 합계
   const total = payments.reduce((s, p) => s + (p.status === "refunded" ? 0 : p.amount_won ?? 0), 0);
 
+  // 묶음 상품·장바구니로 함께 결제된 건 — created_at 3초 이내를 한 묶음으로 본다
+  // (결제 삭제·쿠폰 등 다른 묶음 판정과 같은 기준)
+  const bundledIds = useMemo(() => {
+    const sorted = [...payments].sort(
+      (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)
+    );
+    const out = new Set<number>();
+    let i = 0;
+    while (i < sorted.length) {
+      let j = i + 1;
+      while (
+        j < sorted.length &&
+        Date.parse(sorted[j].created_at) - Date.parse(sorted[j - 1].created_at) <= 3000
+      ) {
+        j += 1;
+      }
+      if (j - i >= 2) for (let k = i; k < j; k++) out.add(sorted[k].id);
+      i = j;
+    }
+    return out;
+  }, [payments]);
+
   if (loading) return <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>;
   if (error)
     return (
@@ -3688,6 +3710,14 @@ function MemberPaymentsSection({
                   >
                     {kindChip.label}
                   </span>
+                  {bundledIds.has(p.id) && (
+                    <span
+                      className="shrink-0 px-1.5 py-0.5 rounded text-[11px] font-bold bg-[#B47B2A]/12 text-[#8a5c1f] dark:bg-[#B47B2A]/30 dark:text-amber-300"
+                      title="같은 결제로 함께 구매된 상품이에요"
+                    >
+                      묶음 상품
+                    </span>
+                  )}
                   <span className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 truncate">
                     {productLabel}
                   </span>
