@@ -117,6 +117,8 @@ interface Product {
   price_won: number;
   vat_included?: boolean;
   mileage_earn?: number;
+  /** 출석 시 적립 마일리지 (구매 적립과 별개) */
+  attendance_mileage_earn?: number;
   pause_enabled?: boolean;
   capacity: number;
   session_minutes?: number;
@@ -470,6 +472,22 @@ export default function CrmProductsPage() {
                     {Array.isArray(p.components) && p.components.length > 0 && (
                       <span className="inline-flex items-center px-2 py-1 rounded-md text-[11px] font-bold border border-[#B47B2A]/30 bg-[#B47B2A]/12 text-[#B47B2A] dark:bg-amber-900/30 dark:text-amber-300">
                         🎁 묶음 상품
+                      </span>
+                    )}
+                    {/* 구매 적립 또는 출석 적립 마일리지가 설정된 상품 */}
+                    {((p.mileage_earn ?? 0) > 0 || (p.attendance_mileage_earn ?? 0) > 0) && (
+                      <span
+                        className="inline-flex items-center px-2 py-1 rounded-md text-[11px] font-bold border border-amber-500/40 bg-amber-500/12 text-[#9A6B12] dark:bg-amber-500/20 dark:text-amber-300"
+                        title={[
+                          (p.mileage_earn ?? 0) > 0 ? `구매 시 ${(p.mileage_earn ?? 0).toLocaleString()}P 적립` : null,
+                          (p.attendance_mileage_earn ?? 0) > 0
+                            ? `출석 시 ${(p.attendance_mileage_earn ?? 0).toLocaleString()}P 적립`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      >
+                        마일리지
                       </span>
                     )}
                   </div>

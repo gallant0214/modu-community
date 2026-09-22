@@ -24,6 +24,10 @@ interface Product {
   duration_unit: string | null;
   total_sessions: number | null;
   price_won: number;
+  /** 구매 시 적립 마일리지 */
+  mileage_earn?: number;
+  /** 출석 시 적립 마일리지 */
+  attendance_mileage_earn?: number;
   session_minutes?: number;
   service_days?: number;
   status?: string;
@@ -171,6 +175,12 @@ export default function CrmPersonalProductsPage() {
                 {Array.isArray(p.components) && p.components.length > 0 && (
                   <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold border border-[#B47B2A]/30 bg-[#B47B2A]/12 text-[#B47B2A] dark:bg-amber-900/30 dark:text-amber-300">
                     🎁 묶음
+                  </span>
+                )}
+                {/* 구매 적립 또는 출석 적립 마일리지가 설정된 상품 */}
+                {((p.mileage_earn ?? 0) > 0 || (p.attendance_mileage_earn ?? 0) > 0) && (
+                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold border border-amber-500/40 bg-amber-500/12 text-[#9A6B12] dark:bg-amber-500/20 dark:text-amber-300">
+                    마일리지
                   </span>
                 )}
               </div>
