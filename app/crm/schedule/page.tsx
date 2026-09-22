@@ -2555,9 +2555,35 @@ function ReservationDialog({
   /** 같은 시간대에 일정을 하나 더 잡기 — 칸이 이미 차 있어 슬롯 클릭이 안 될 때의 우회 경로 */
   onAddSchedule: () => void;
 }) {
+  const { getIdToken } = useAuth();
   const [reason, setReason] = useState<string>("");
   const [reasonNote, setReasonNote] = useState<string>("");
   const [reasonMode, setReasonMode] = useState<null | "cancelled" | "noshow">(null);
+  // 이름만으로는 누군지 알기 어려워 얼굴 썸네일을 함께 보여준다.
+  // 목록 응답을 무겁게 하지 않으려고 상세를 열 때 그 회원 것만 따로 불러온다.
+  const [face, setFace] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/members/thumbs", {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({ ids: [reservation.member_id] }),
+          cache: "no-store",
+        });
+        const d = await res.json();
+        if (alive && res.ok) setFace(d?.thumbs?.[reservation.member_id] ?? null);
+      } catch {
+        /* 사진은 보조 정보 — 실패해도 상세는 그대로 */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [reservation.member_id, getIdToken]);
   const cancelMode = reasonMode === "cancelled";
   const noshowMode = reasonMode === "noshow";
   // ESC 로 창 닫기
@@ -2586,16 +2612,28 @@ function ReservationDialog({
       <div className="relative w-full max-w-sm rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-xl p-5">
         <h2 className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">예약 상세</h2>
         <div className="mt-2 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-          <div>
-            <button
-              type="button"
-              onClick={openMemberDetail}
-              className="font-medium text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
-              title="회원 상세 열기"
-            >
+          <button
+            type="button"
+            onClick={openMemberDetail}
+            className="flex items-center gap-2 text-left group"
+            title="회원 상세 열기"
+          >
+            {face ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={face}
+                alt=""
+                className="w-8 h-8 rounded-full object-cover border border-[#E8E0D0] dark:border-zinc-700 shrink-0"
+              />
+            ) : (
+              <span className="w-8 h-8 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 border border-[#E8E0D0] dark:border-zinc-700 flex items-center justify-center text-[11px] text-[#A89B80] shrink-0">
+                {(reservation.member_name || "?").slice(0, 1)}
+              </span>
+            )}
+            <span className="text-[19px] font-bold text-[#2A251D] dark:text-zinc-100 group-hover:underline truncate">
               {reservation.member_name || "회원"}
-            </button>
-          </div>
+            </span>
+          </button>
           {reservation.pass_id ? (
             <div className="text-[12px] mt-0.5">
               <span className="text-[#A89B80]">수강권명 : </span>
