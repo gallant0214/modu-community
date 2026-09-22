@@ -3655,7 +3655,11 @@ function MemberPaymentsSection({
       </div>
       <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
         {payments.map((p) => {
-          const productLabel = p.product_name || "기타 결제";
+          // 수강권 이름 뒤에 붙는 세션 수 표기는 결제내역에서 생략 — '10회 이벤트(10회)' → '10회 이벤트'
+          const rawProductLabel = p.product_name || "기타 결제";
+          const productLabel = p.pass_id
+            ? rawProductLabel.replace(/\s*\(\d+회\)\s*$/, "").trim() || rawProductLabel
+            : rawProductLabel;
           // 상품 종류 칩 — 수강권 / 회원권 / 대여권(운동복·락커) / 기타(상품 링크 없는 수기 결제)
           const kindChip = p.pass_id
             ? { label: "수강권", cls: "bg-[#6B7B3A]/12 text-[#55632E] dark:bg-[#6B7B3A]/30 dark:text-[#C3D191]" }
