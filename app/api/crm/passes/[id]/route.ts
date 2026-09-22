@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
+import { syncProductPaymentAmount } from "@/app/lib/crm-payment-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -116,7 +117,7 @@ export async function PATCH(
   // 현재 값 로드 (센터 격리 검증 + status 재계산용)
   const { data: current } = await supabase
     .from("crm_passes")
-    .select("status, expires_at, remaining_sessions, total_sessions")
+    .select("status, expires_at, remaining_sessions, total_sessions, price_won")
     .eq("id", passId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -273,6 +274,18 @@ export async function PATCH(
     entity_id: passId,
     payload: patch as never,
   });
+
+  // 가격을 바꿨으면 연결된 결제내역 금액도 맞춘다(단일 전액 결제만 — 분할/부분입금은 보존).
+  if (patch.price_won !== undefined) {
+    await syncProductPaymentAmount({
+      centerId: ctx.centerId,
+      actorUid: ctx.uid,
+      link: "pass_id",
+      productId: passId,
+      oldPrice: (current as { price_won?: number | null }).price_won ?? -1,
+      newPrice: patch.price_won as number,
+    });
+  }
 
   // 새로 배정된 강사(주강사/추가강사, 본인 제외)에게 배정 알림
   if (trainerFieldsTouched && prevAssign) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { syncProductPaymentAmount } from "@/app/lib/crm-payment-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function PATCH(
   // 현재 값 로드 (센터 격리 + status 재계산용)
   const { data: current } = await supabase
     .from("crm_memberships")
-    .select("status, expires_at")
+    .select("status, expires_at, price_won")
     .eq("id", mid)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -123,6 +124,18 @@ export async function PATCH(
     entity_id: mid,
     payload: patch as never,
   });
+
+  // 가격을 바꿨으면 연결된 결제내역 금액도 맞춘다(단일 전액 결제만 — 분할/부분입금은 보존).
+  if (patch.price_won !== undefined) {
+    await syncProductPaymentAmount({
+      centerId: ctx.centerId,
+      actorUid: ctx.uid,
+      link: "membership_id",
+      productId: mid,
+      oldPrice: (current as { price_won?: number | null }).price_won ?? -1,
+      newPrice: patch.price_won as number,
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }
