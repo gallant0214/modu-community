@@ -595,6 +595,30 @@ export default function CrmMemberDetailPage() {
             if (m) setPaymentDetail({ ...membershipToDetail(m, staffName), startInEdit: true });
             else alert("회원권 정보를 불러오지 못했어요. 새로고침 후 다시 시도해 주세요.");
           }}
+          onEditRental={async (rentalId) => {
+            // 운동복·락커·기타 대여권도 회원권·수강권과 같은 방식으로 상품 편집 창을 연다.
+            let r = holdRs.find((x) => x.id === rentalId);
+            if (!r) {
+              try {
+                const token = await getIdToken();
+                if (token) {
+                  const res = await fetch(`/api/crm/rentals?member_id=${memberId}`, {
+                    headers: { authorization: `Bearer ${token}` },
+                    cache: "no-store",
+                  });
+                  if (res.ok) {
+                    const list = ((await res.json()).rentals ?? []) as RentalRow[];
+                    setHoldRs(list);
+                    r = list.find((x) => x.id === rentalId);
+                  }
+                }
+              } catch {
+                /* 아래 안내로 처리 */
+              }
+            }
+            if (r) setPaymentDetail({ ...rentalToDetail(r, staffName), startInEdit: true });
+            else alert("대여권 정보를 불러오지 못했어요. 새로고침 후 다시 시도해 주세요.");
+          }}
         />
       ) : tab === "reservations" ? (
         <MemberReservationsSection memberId={member.id} />
@@ -3124,6 +3148,7 @@ interface PaymentRow {
   member_id: number;
   pass_id: number | null;
   membership_id: number | null;
+  rental_id: number | null; // 운동복·락커·기타 대여권
   amount_won: number;
   method: string;
   method_custom: string | null;
@@ -3458,15 +3483,17 @@ function MemberPaymentsSection({
   onChanged,
   onEditPass,
   onEditMembership,
+  onEditRental,
 }: {
   memberId: number;
   canEdit?: boolean;
   canRefund?: boolean;
   canDelete?: boolean;
   onChanged?: () => void;
-  // 결제항목 '수정' → 수강권/회원권 발급 창(편집 모드)으로 열기
+  // 결제항목 '수정' → 해당 상품 발급 창(편집 모드)으로 열기
   onEditPass?: (passId: number) => void;
   onEditMembership?: (membershipId: number) => void;
+  onEditRental?: (rentalId: number) => void; // 운동복·락커·기타
 }) {
   const { getIdToken } = useAuth();
   const [payments, setPayments] = useState<PaymentRow[]>([]);
@@ -3762,9 +3789,11 @@ function MemberPaymentsSection({
                   {canEdit && (
                     <button
                       onClick={() => {
-                        // 수강권/회원권 결제는 해당 발급 창(편집 모드)으로, 그 외엔 인라인 수정
+                        // 상품이 연결된 결제(수강권·회원권·대여권)는 모두 해당 상품 편집 창으로,
+                        // 상품 링크가 없는 수기 결제만 인라인 수정.
                         if (p.pass_id && onEditPass) onEditPass(p.pass_id);
                         else if (p.membership_id && onEditMembership) onEditMembership(p.membership_id);
+                        else if (p.rental_id && onEditRental) onEditRental(p.rental_id);
                         else startEdit(p);
                       }}
                       disabled={busy}
