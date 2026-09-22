@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
-import { syncProductPaymentAmount } from "@/app/lib/crm-payment-sync";
+import { syncProductPaymentAmount, syncProductPaymentDate } from "@/app/lib/crm-payment-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +36,7 @@ export async function PATCH(
     expires_at?: string;
     start_date?: string;
     purchased_at?: string;
+    paid_at?: string; // 결제내역의 결제일 동기화 + purchased_at 기본값
     memo?: string;
     price_won?: number;
     discount_won?: number;
@@ -59,7 +60,8 @@ export async function PATCH(
     body.payment_method !== undefined ||
     body.seller_member_id !== undefined ||
     body.start_date !== undefined ||
-    body.purchased_at !== undefined;
+    body.purchased_at !== undefined ||
+    body.paid_at !== undefined;
   if (touchesPayment) {
     const perms = await loadPermissionsForContext(ctx);
     if (!perms["sales.edit"]) {
@@ -70,6 +72,10 @@ export async function PATCH(
   const patch: Record<string, unknown> = {};
   if (body.expires_at) patch.expires_at = body.expires_at;
   if (body.start_date) patch.start_date = body.start_date;
+  // 결제일만 보낸 경우에도 구매일(purchased_at)을 같은 날로 맞춘다 — '마지막 구매일' 표시 기준.
+  if (!body.purchased_at && body.paid_at && /^\d{4}-\d{2}-\d{2}$/.test(body.paid_at)) {
+    patch.purchased_at = body.paid_at;
+  }
   if (body.purchased_at && /^\d{4}-\d{2}-\d{2}$/.test(body.purchased_at)) {
     patch.purchased_at = body.purchased_at;
   }
@@ -103,6 +109,8 @@ export async function PATCH(
     patch.status = !eff || String(eff).slice(0, 10) >= today ? "valid" : "expired";
   }
 
+  // 결제일만 바꾸는 요청(상품 컬럼 변화 없음)도 허용 — 결제내역 동기화가 실제 변경이다.
+  if (body.paid_at) patch.updated_at = new Date().toISOString();
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
   }
@@ -124,6 +132,17 @@ export async function PATCH(
     entity_id: mid,
     payload: patch as never,
   });
+
+  // 결제일을 바꿨으면 연결된 결제내역의 결제일도 맞춘다(단일 결제만).
+  if (body.paid_at) {
+    await syncProductPaymentDate({
+      centerId: ctx.centerId,
+      actorUid: ctx.uid,
+      link: "membership_id",
+      productId: mid,
+      paidYmd: body.paid_at,
+    });
+  }
 
   // 가격을 바꿨으면 연결된 결제내역 금액도 맞춘다(단일 전액 결제만 — 분할/부분입금은 보존).
   if (patch.price_won !== undefined) {

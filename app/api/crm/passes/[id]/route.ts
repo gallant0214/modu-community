@@ -3,7 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
-import { syncProductPaymentAmount } from "@/app/lib/crm-payment-sync";
+import { syncProductPaymentAmount, syncProductPaymentDate } from "@/app/lib/crm-payment-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -127,6 +127,7 @@ export async function PATCH(
     memo?: string;
     expires_at?: string;
     issued_at?: string;
+    paid_at?: string; // 결제내역의 결제일(crm_payments.paid_at) 동기화용
     start_date?: string;
     price_won?: number;
     vat_included?: boolean;
@@ -232,6 +233,8 @@ export async function PATCH(
     patch.status = dateOk && sessionsOk ? "valid" : "expired";
   }
 
+  // 결제일만 바꾸는 요청도 허용 — 결제내역 동기화가 실제 변경이다.
+  if (body.paid_at) patch.updated_at = new Date().toISOString();
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
   }
@@ -274,6 +277,17 @@ export async function PATCH(
     entity_id: passId,
     payload: patch as never,
   });
+
+  // 결제일을 바꿨으면 연결된 결제내역의 결제일도 맞춘다(단일 결제만).
+  if (body.paid_at) {
+    await syncProductPaymentDate({
+      centerId: ctx.centerId,
+      actorUid: ctx.uid,
+      link: "pass_id",
+      productId: passId,
+      paidYmd: body.paid_at,
+    });
+  }
 
   // 가격을 바꿨으면 연결된 결제내역 금액도 맞춘다(단일 전액 결제만 — 분할/부분입금은 보존).
   if (patch.price_won !== undefined) {

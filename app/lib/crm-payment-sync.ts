@@ -4,6 +4,7 @@ export type ProductLink = "pass_id" | "membership_id" | "rental_id";
 
 export type PaymentSyncReason =
   | "same_price"
+  | "same_date"
   | "no_payment"
   | "multiple_payments"
   | "amount_mismatch"
@@ -73,6 +74,64 @@ export async function syncProductPaymentAmount(opts: {
       amount_won: newPrice,
       before_amount_won: oldPrice,
       source: "product_price_sync",
+      [link]: productId,
+    } as never,
+  });
+
+  return { synced: true, paymentId: row.id };
+}
+
+/**
+ * 상품의 '결제일' 을 바꿨을 때 연결된 결제내역의 paid_at 을 맞춘다.
+ *
+ * - 동기화 범위는 금액과 동일: **완료 결제행이 정확히 1건일 때만**(분할 결제는 건드리지 않음).
+ * - 날짜만 바꾸고 **시각은 유지**한다 — 당일 결제의 실제 시각과 이관분 00:00 을 보존하기 위함.
+ *   (crm_rentals 는 구매일 컬럼이 없어 결제일의 단일 원본이 crm_payments.paid_at 이다)
+ */
+export async function syncProductPaymentDate(opts: {
+  centerId: number;
+  actorUid: string;
+  link: ProductLink;
+  productId: number;
+  paidYmd: string;
+}): Promise<PaymentSyncResult> {
+  const { centerId, actorUid, link, productId, paidYmd } = opts;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paidYmd)) return { synced: false, reason: "error" };
+
+  const { data: rows, error } = await supabase
+    .from("crm_payments")
+    .select("id, paid_at")
+    .eq("center_id", centerId)
+    .eq(link, productId)
+    .eq("status", "completed");
+  if (error) return { synced: false, reason: "error" };
+
+  const list = rows ?? [];
+  if (list.length === 0) return { synced: false, reason: "no_payment" };
+  if (list.length > 1) return { synced: false, reason: "multiple_payments" };
+
+  const row = list[0];
+  const kstIso = new Date(new Date(row.paid_at as string).getTime() + 9 * 3600 * 1000).toISOString();
+  if (kstIso.slice(0, 10) === paidYmd) return { synced: false, reason: "same_date" };
+  const nextIso = new Date(`${paidYmd}T${kstIso.slice(11, 19)}+09:00`).toISOString();
+
+  const { error: upErr } = await supabase
+    .from("crm_payments")
+    .update({ paid_at: nextIso, updated_at: new Date().toISOString() } as never)
+    .eq("id", row.id)
+    .eq("center_id", centerId);
+  if (upErr) return { synced: false, reason: "error" };
+
+  await supabase.from("crm_audit_logs").insert({
+    center_id: centerId,
+    actor_uid: actorUid,
+    action: "payment.update",
+    entity_type: "crm_payments",
+    entity_id: row.id,
+    payload: {
+      paid_at: nextIso,
+      before_paid_at: row.paid_at,
+      source: "product_paid_date_sync",
       [link]: productId,
     } as never,
   });

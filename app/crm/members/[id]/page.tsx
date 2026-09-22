@@ -5674,6 +5674,7 @@ function HoldingDetailModal({
   const [eMethod, setEMethod] = useState<string>("card");
   const [eMethodCustom, setEMethodCustom] = useState("");
   const [eSeller, setESeller] = useState<number | "">("");
+  const [ePaidAt, setEPaidAt] = useState(""); // 결제일(결제내역 paid_at · 회원권은 구매일까지 동기화)
   const [eStart, setEStart] = useState("");
   const [eExpires, setEExpires] = useState("");
   const [eMemo, setEMemo] = useState("");
@@ -5921,6 +5922,7 @@ function HoldingDetailModal({
     setEMethod(detail.paymentMethod || "card");
     setEMethodCustom(detail.paymentCustom || "");
     setESeller(detail.sellerMemberId ?? "");
+    setEPaidAt((detail.paidAt ?? "").slice(0, 10));
     setEStart(detail.startDate ?? "");
     setEExpires(detail.expiresAt ?? "");
     setEMemo(detail.memo ?? "");
@@ -5953,6 +5955,7 @@ function HoldingDetailModal({
           payment_method: eMethod,
           payment_method_custom: eMethod === "etc" ? eMethodCustom : undefined,
           seller_member_id: eSeller || undefined,
+          paid_at: ePaidAt || undefined,
           start_date: eStart || undefined,
           expires_at: eExpires || undefined,
           memo: eMemo,
@@ -6175,6 +6178,14 @@ function HoldingDetailModal({
                     />
                   </CrmField>
                 )}
+                <CrmField label="결제일">
+                  <input
+                    type="date"
+                    className={crmInputClass}
+                    value={ePaidAt}
+                    onChange={(e) => setEPaidAt(e.target.value)}
+                  />
+                </CrmField>
                 <CrmField label="시작일">
                   <input
                     type="date"
@@ -9388,6 +9399,8 @@ function PassDetailModal({
           remaining_sessions: Math.min(editRemaining, editTotal),
           service_sessions: editService,
           issued_at: editIssuedAt || undefined,
+          // 발급일을 바꾸면 결제내역의 결제일도 같은 날로 맞춘다(단일 결제 건).
+          paid_at: editIssuedAt || undefined,
           start_date: editStartDate || undefined,
           expires_at: editExpires || undefined,
           price_won: editPriceWon,
@@ -9630,7 +9643,7 @@ function PassDetailModal({
                   />
                   <p className="mt-1 text-[11.5px] text-[#A89B80]">무료 보너스 세션 · 수업료 미포함</p>
                 </CrmField>
-                <CrmField label="발급일">
+                <CrmField label="발급일 · 결제일">
                   <input
                     type="date"
                     value={editIssuedAt}

@@ -3,7 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { syncLockerDatesFromRental } from "@/app/lib/crm-locker-sync";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
-import { syncProductPaymentAmount } from "@/app/lib/crm-payment-sync";
+import { syncProductPaymentAmount, syncProductPaymentDate } from "@/app/lib/crm-payment-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +38,7 @@ export async function PATCH(
     start_date?: string;
     memo?: string;
     price_won?: number;
+    paid_at?: string; // crm_rentals 에는 구매일 컬럼이 없어 결제내역 paid_at 만 갱신
     discount_won?: number;
     vat_included?: boolean;
     payment_method?: string;
@@ -56,7 +57,8 @@ export async function PATCH(
     body.vat_included !== undefined ||
     body.payment_method !== undefined ||
     body.seller_member_id !== undefined ||
-    body.start_date !== undefined;
+    body.start_date !== undefined ||
+    body.paid_at !== undefined;
   if (touchesPayment) {
     const perms = await loadPermissionsForContext(ctx);
     if (!perms["sales.edit"]) {
@@ -90,6 +92,8 @@ export async function PATCH(
     patch.status = !eff || String(eff).slice(0, 10) >= today ? "valid" : "expired";
   }
 
+  // 결제일만 바꾸는 요청도 허용 — 대여권엔 구매일 컬럼이 없어 결제내역 동기화가 실제 변경이다.
+  if (body.paid_at) patch.updated_at = new Date().toISOString();
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
   }
@@ -118,6 +122,17 @@ export async function PATCH(
     entity_id: rid,
     payload: patch as never,
   });
+
+  // 결제일을 바꿨으면 연결된 결제내역의 결제일도 맞춘다(단일 결제만).
+  if (body.paid_at) {
+    await syncProductPaymentDate({
+      centerId: ctx.centerId,
+      actorUid: ctx.uid,
+      link: "rental_id",
+      productId: rid,
+      paidYmd: body.paid_at,
+    });
+  }
 
   // 가격을 바꿨으면 연결된 결제내역 금액도 맞춘다(단일 전액 결제만 — 분할/부분입금은 보존).
   if (patch.price_won !== undefined) {
