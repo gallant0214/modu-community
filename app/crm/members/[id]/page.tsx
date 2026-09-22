@@ -916,6 +916,14 @@ export default function CrmMemberDetailPage() {
         onOpenLocker={() => setLockerOpen(true)}
       />
 
+      <SignedContractsSection memberId={member.id} />
+
+      <BodyMeasurementSection memberId={member.id} onOpen={() => setBodyChooserOpen(true)} reloadKey={bodyReload} />
+      </>
+      )}
+
+      {/* 🚨 상세/홀딩 모달은 탭 조건 밖에 둔다 — '정보' 탭 JSX 안에 있으면
+          결제내역 탭에서 '수정' 을 눌러도 모달이 마운트돼 있지 않아 아무 일도 일어나지 않는다. */}
       <HoldingDetailModal
         detail={paymentDetail}
         memberId={member.id}
@@ -951,12 +959,6 @@ export default function CrmMemberDetailPage() {
           setUsageReload((n) => n + 1);
         }}
       />
-
-      <SignedContractsSection memberId={member.id} />
-
-      <BodyMeasurementSection memberId={member.id} onOpen={() => setBodyChooserOpen(true)} reloadKey={bodyReload} />
-      </>
-      )}
 
       {/* +측정기록 → 직접 입력 / 인바디 사진 등록 선택 */}
       <CrmModal open={bodyChooserOpen} onClose={() => setBodyChooserOpen(false)} title="측정 기록 추가" size="sm">
