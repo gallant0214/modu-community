@@ -6050,7 +6050,7 @@ function HoldingDetailModal({
             rows={[
               ["회원", memberName],
               ["판매 직원", detail.sellerName ?? "—"],
-              ["발급일", detail.paidAt ? new Date(detail.paidAt).toISOString().slice(0, 10) : "—"],
+              ["결제일", detail.paidAt ? new Date(detail.paidAt).toISOString().slice(0, 10) : "—"],
               ...(detail.startDate
                 ? ([["시작일", detail.startDate]] as [string, React.ReactNode][])
                 : []),
@@ -8720,7 +8720,7 @@ function PassIssueModal({
           }}
         />
         <div className="grid grid-cols-2 gap-2">
-          <CrmField label="발급일" required>
+          <CrmField label="결제일" required>
             <input
               type="date"
               className={crmInputClass}
@@ -9399,7 +9399,7 @@ function PassDetailModal({
           remaining_sessions: Math.min(editRemaining, editTotal),
           service_sessions: editService,
           issued_at: editIssuedAt || undefined,
-          // 발급일을 바꾸면 결제내역의 결제일도 같은 날로 맞춘다(단일 결제 건).
+          // 결제일을 바꾸면 결제내역의 결제일(paid_at)도 같은 날로 맞춘다(단일 결제 건).
           paid_at: editIssuedAt || undefined,
           start_date: editStartDate || undefined,
           expires_at: editExpires || undefined,
@@ -9513,7 +9513,7 @@ function PassDetailModal({
               ["담당 강사", trainerName],
               ...(coTrainerNames ? [["추가 강사", coTrainerNames] as [string, string]] : []),
               ["판매 직원", sellerName],
-              ["발급일", pass.issued_at],
+              ["결제일", pass.issued_at],
               [
                 "시작일",
                 (pass as Pass & { start_date?: string }).start_date ?? pass.issued_at,
@@ -9643,7 +9643,7 @@ function PassDetailModal({
                   />
                   <p className="mt-1 text-[11.5px] text-[#A89B80]">무료 보너스 세션 · 수업료 미포함</p>
                 </CrmField>
-                <CrmField label="발급일 · 결제일">
+                <CrmField label="결제일">
                   <input
                     type="date"
                     value={editIssuedAt}

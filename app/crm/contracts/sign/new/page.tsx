@@ -549,7 +549,7 @@ export default function CrmContractSignNewPage() {
               ["상품", pass.lesson_kind],
               ["총 세션", `${pass.total_sessions}회 (잔여 ${pass.remaining_sessions}회)`],
               ["세션 시간", `${pass.session_minutes}분`],
-              ["발급일 ~ 만료일", `${pass.issued_at} ~ ${pass.expires_at}`],
+              ["결제일 ~ 만료일", `${pass.issued_at} ~ ${pass.expires_at}`],
             ]}
           />
         ) : membership ? (

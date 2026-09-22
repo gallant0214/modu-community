@@ -153,7 +153,7 @@ export const LOG_FIELD_LABEL: Record<string, string> = {
   face_image_data: "얼굴 사진", face_image_thumb: "얼굴 사진",
   price_won: "금액", amount_won: "금액", discount_won: "할인", expires_at: "만료일",
   start_date: "시작일", start: "시작일", end: "종료일", end_date: "종료일", purchased_at: "구매일",
-  issued_at: "발급일", vat_included: "부가세", days: "홀딩 일수", extended_days: "연장 일수",
+  issued_at: "결제일", vat_included: "부가세", days: "홀딩 일수", extended_days: "연장 일수",
   reverted_days: "원복 일수", payment_method: "결제 수단", payment_method_custom: "결제 수단(기타)",
   seller_member_id: "판매자", trainer_member_id: "담당 강사", plan_name: "상품명",
   duration_days: "기간", item_name: "상품", total_sessions: "총 세션", remaining_sessions: "잔여 세션",
