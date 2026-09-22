@@ -401,8 +401,15 @@ export default function CrmAttendancesPage() {
             }
             tone="blue"
           />
-          <KpiCard label="터치/QR" value={`${stats.sources.touch + stats.sources.kiosk}회`} hint={`터치 ${stats.sources.touch} · QR ${stats.sources.kiosk}`} tone="olive" />
-          <KpiCard label="수동/앱" value={`${stats.sources.manual + stats.sources.app}회`} hint={`수동 ${stats.sources.manual} · 앱 ${stats.sources.app}`} tone="amber" />
+          {/* 손으로 번호를 눌러서 하는 터치 출석(터치·번호)·회원상세 출석처리 = '수동' 으로 집계.
+              얼굴 인식만 '얼굴' 로 분리, QR(kiosk)은 그대로. */}
+          <KpiCard label="얼굴/QR" value={`${stats.sources.touch_face + stats.sources.kiosk}회`} hint={`얼굴 ${stats.sources.touch_face} · QR ${stats.sources.kiosk}`} tone="olive" />
+          <KpiCard
+            label="수동/앱"
+            value={`${stats.sources.manual + stats.sources.touch - stats.sources.touch_face + stats.sources.app}회`}
+            hint={`수동 ${stats.sources.manual + stats.sources.touch - stats.sources.touch_face} · 앱 ${stats.sources.app}`}
+            tone="amber"
+          />
         </div>
         {refreshedAt && (
           <div className="mt-3 text-right text-[11.5px] text-[#A89B80] dark:text-zinc-500">
