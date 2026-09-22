@@ -92,7 +92,7 @@ const METHOD_OPTIONS: { key: string; label: string }[] = [
  * 여기 없는 즉시 트리거는 켜 두어도 발송되지 않으므로 설정 화면에서 안내한다.
  * (연결 위치: POST /api/crm/memberships → fireAutoMessage)
  */
-const IMMEDIATE_WIRED = new Set<string>(["membership_new", "membership_renew"]);
+const IMMEDIATE_WIRED = new Set<string>(["membership_new", "membership_renew", "first_purchase"]);
 
 const METHOD_LABEL: Record<string, string> = Object.fromEntries(METHOD_OPTIONS.map((m) => [m.key, m.label]));
 
@@ -668,7 +668,7 @@ function AutoMessageEditor({
               {sendBasis === "immediate" && !IMMEDIATE_WIRED.has(trigger.key) && (
                 <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#B47B2A] dark:text-amber-300">
                   ⚠️ 이 알림은 아직 발송을 시작하는 연결이 없어, 켜 두어도 자동으로 나가지 않아요.
-                  현재 즉시 발송되는 알림은 <strong>이용권 신규 등록 / 이용권 재등록</strong> 입니다.
+                  현재 즉시 발송되는 알림은 <strong>이용권 신규 등록 / 이용권 재등록 / 신규등록 후 첫 상품구매</strong> 입니다.
                 </p>
               )}
               {sendBasis !== "immediate" && (

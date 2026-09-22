@@ -244,3 +244,62 @@ export async function fireAutoMessage(opts: {
     console.error("[auto-message] fire error", opts.triggerKey, e);
   }
 }
+
+/**
+ * '신규등록 후 첫 상품구매 시' 자동 메세지 — 회원권·수강권 발급 직후 호출.
+ *
+ * 첫 구매 판정: 이 회원의 회원권 + 수강권을 통틀어 **이번 건이 생애 첫 상품**일 때만.
+ *   - 🚨 과거에 0원(무료 체험·이벤트) 이용권을 받은 적이 있으면 보내지 않는다(사용자 결정 2026-09-22).
+ *     이미 상품 이력이 있는 오래된 회원에게 '첫 등록 환영'이 가는 일을 막기 위함.
+ *   - 이번 건 자체가 0원이면 '구매'가 아니므로 보내지 않는다.
+ *   - 서비스 수강권(issue_type='service')은 이력에서 제외.
+ *   - 운동복·락커(대여권)는 대상이 아니다.
+ * 두 번째 구매부터는 나가지 않는다. 중복 방지는 두 겹:
+ *   ① 위 판정, ② dedupe_key 를 회원당 고정("first")으로 둬서 대기열이 한 번만 적재되게.
+ */
+export async function fireFirstPurchaseMessage(opts: {
+  centerId: number;
+  uid: string;
+  memberId: number;
+  /** 이번에 발급한 상품 이름 */
+  product: string;
+  /** 이번 건 실결제 금액(0원이면 발송 안 함) */
+  price: number;
+  expiry?: string;
+}): Promise<void> {
+  try {
+    if (!opts.price || opts.price <= 0) return;
+
+    const [{ count: membershipCount }, { count: passCount }, { data: mem }] = await Promise.all([
+      supabase
+        .from("crm_memberships")
+        .select("id", { count: "exact", head: true })
+        .eq("center_id", opts.centerId)
+        .eq("member_id", opts.memberId),
+      supabase
+        .from("crm_passes")
+        .select("id", { count: "exact", head: true })
+        .eq("center_id", opts.centerId)
+        .eq("member_id", opts.memberId)
+        .neq("issue_type", "service"),
+      supabase.from("crm_members").select("name").eq("id", opts.memberId).maybeSingle(),
+    ]);
+
+    // 방금 넣은 건까지 포함해 딱 1건이어야 '생애 첫 상품'
+    if ((membershipCount ?? 0) + (passCount ?? 0) !== 1) return;
+
+    await fireAutoMessage({
+      centerId: opts.centerId,
+      uid: opts.uid,
+      triggerKey: "first_purchase",
+      memberId: opts.memberId,
+      memberName: (mem as { name?: string } | null)?.name ?? "",
+      dedupeSuffix: "first", // 회원당 평생 1회
+      product: opts.product,
+      expiry: opts.expiry,
+      price: opts.price,
+    });
+  } catch (e) {
+    console.error("[auto-message] first purchase error", e);
+  }
+}

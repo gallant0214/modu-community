@@ -9,7 +9,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 
-import { fireAutoMessage } from "@/app/lib/crm-auto-message";
+import { fireAutoMessage, fireFirstPurchaseMessage } from "@/app/lib/crm-auto-message";
 import { syncRegistrationType } from "@/app/lib/crm-registration-type";
 
 export const dynamic = "force-dynamic";
@@ -291,6 +291,16 @@ export async function POST(request: Request) {
   } catch {
     /* 자동 메세지 실패가 발급 자체를 막지 않도록 무시 */
   }
+
+  // 자동 메세지 '신규등록 후 첫 상품구매 시' — 회원권·수강권 통틀어 첫 유료 구매일 때만
+  await fireFirstPurchaseMessage({
+    centerId: ctx.centerId,
+    uid: ctx.uid,
+    memberId,
+    product: plan,
+    price: priceWon,
+    expiry: body.expires_at,
+  });
 
   // 가입 및 등록 알림 — 상품 구매(회원권). 실결제(paidAmount>0)만 '구매' 알림.
   if (paidAmount > 0) {

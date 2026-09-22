@@ -35,6 +35,14 @@ export const AUTO_MESSAGE_CATEGORIES: AutoMsgCategory[] = [
       { key: "birthday", label: "생일자 고객", bases: ["schedule"], recipient: "생일이 다가온 회원", basisNoun: "생일" },
       { key: "membership_new", label: "이용권 신규 등록 시", bases: ["immediate"], recipient: "이용권을 신규 등록한 회원" },
       { key: "membership_renew", label: "이용권 재등록 시", bases: ["immediate"], recipient: "이용권을 재등록한 회원" },
+      {
+        key: "first_purchase",
+        label: "신규등록 후 첫 상품구매 시",
+        bases: ["immediate"],
+        recipient: "가입 후 처음으로 회원권·수강권을 구매한 회원",
+        defaultBody:
+          "#회원명#님, #센터명#의 첫 등록을 환영합니다! 🎉\n#결제내역# 결제가 완료되었어요.\n궁금한 점은 언제든 데스크에 말씀해 주세요.",
+      },
       { key: "long_absence", label: "장기 미출석 시", bases: ["schedule", "count"], recipient: "장기 미출석(휴면) 회원", basisNoun: "마지막 출석일" },
       { key: "coupon_expired", label: "쿠폰 만료", bases: ["immediate", "schedule"], recipient: "쿠폰이 만료된 회원", basisNoun: "쿠폰 만료일" },
     ],

@@ -10,6 +10,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { syncRegistrationType } from "@/app/lib/crm-registration-type";
+import { fireFirstPurchaseMessage } from "@/app/lib/crm-auto-message";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
 
 export const dynamic = "force-dynamic";
@@ -372,6 +373,16 @@ export async function POST(request: Request) {
       total_sessions: totalSessions,
       price_won: Number(body.price_won) || 0,
     } as never,
+  });
+
+  // 자동 메세지 '신규등록 후 첫 상품구매 시' — 회원권·수강권 통틀어 첫 유료 구매일 때만
+  await fireFirstPurchaseMessage({
+    centerId: ctx.centerId,
+    uid: ctx.uid,
+    memberId,
+    product: body.lesson_kind.trim(),
+    price: priceWon,
+    expiry: body.expires_at,
   });
 
   // 가입 및 등록 알림 — 상품 구매(수강권). 실결제(paidAmount>0)만.
