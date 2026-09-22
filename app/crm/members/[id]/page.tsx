@@ -804,7 +804,7 @@ export default function CrmMemberDetailPage() {
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
-            수강권 ({passes.length})
+            수강권 ({passes.filter((p) => !isPassExpired(p)).length})
           </h2>
         </div>
         {passes.length === 0 ? (
@@ -5499,7 +5499,7 @@ function UsageSection({
   return (
     <section className="mt-6 mb-2">
       <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
-        회원권 · 대여권 · 락커 ({total})
+        회원권 · 대여권 · 락커 ({validNodes.length})
       </h2>
       {loading && total === 0 ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
