@@ -570,8 +570,28 @@ export default function CrmMemberDetailPage() {
             setPassStartEdit(true);
             setDetailPassId(passId);
           }}
-          onEditMembership={(membershipId) => {
-            const m = holdMs.find((x) => x.id === membershipId);
+          onEditMembership={async (membershipId) => {
+            // 미리 불러둔 목록(holdMs)에만 의존하면 목록이 아직 안 왔거나 빠진 건은
+            // '수정' 을 눌러도 아무 일도 일어나지 않는다 → 없으면 그 자리에서 다시 조회.
+            let m = holdMs.find((x) => x.id === membershipId);
+            if (!m) {
+              try {
+                const token = await getIdToken();
+                if (token) {
+                  const res = await fetch(`/api/crm/memberships?member_id=${memberId}`, {
+                    headers: { authorization: `Bearer ${token}` },
+                    cache: "no-store",
+                  });
+                  if (res.ok) {
+                    const list = ((await res.json()).memberships ?? []) as MembershipRow[];
+                    setHoldMs(list);
+                    m = list.find((x) => x.id === membershipId);
+                  }
+                }
+              } catch {
+                /* 아래 안내로 처리 */
+              }
+            }
             if (m) setPaymentDetail({ ...membershipToDetail(m, staffName), startInEdit: true });
             else alert("회원권 정보를 불러오지 못했어요. 새로고침 후 다시 시도해 주세요.");
           }}
