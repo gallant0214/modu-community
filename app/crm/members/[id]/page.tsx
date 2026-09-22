@@ -5242,6 +5242,8 @@ type MergedLocker = {
   exp: string | null;
   assign: LockerAssignRow | null; // null = 미배정
   rental: RentalRow | null;
+  /** 이 카드가 '지금 그 자리를 실제로 쓰고 있는' 배정인지 (배지를 받은 카드) */
+  assignCurrent?: boolean;
 };
 function mergeLockerItems(
   lockers: LockerAssignRow[],
@@ -5313,6 +5315,7 @@ function mergeLockerItems(
       exp: x.expires_at,
       assign: l,
       rental: x,
+      assignCurrent: badgeByRental.get(x.id) != null,
     });
   }
   // 대여권 없이 물리로만 배정된 자리 = 카드 1개
@@ -5325,6 +5328,7 @@ function mergeLockerItems(
       exp: l.expires_at,
       assign: l,
       rental: null,
+      assignCurrent: true,
     });
   }
   return { cards, usedRentalIds: used };
@@ -5449,7 +5453,16 @@ function UsageSection({
       ),
     })),
     ...lockerCards.map((c) => {
-      const valid = c.assign ? !c.exp || c.exp >= todayStr : !!c.rental && isValid(c.rental.status, c.rental.expires_at);
+      // 🚨 지금 그 자리를 쓰고 있는 카드는 '물리 배정 기간' 이 실제 이용 기간이다.
+      //    (대여권은 예전에 끝났는데 배정만 연장된 경우 — 현재 보유 표시와 판정이 어긋나지 않게)
+      const useAssign = !!c.assignCurrent && !!c.assign;
+      const effStart = useAssign ? c.assign!.start_date ?? c.start : c.start;
+      const effExp = useAssign ? c.assign!.expires_at ?? c.exp : c.exp;
+      const valid = useAssign
+        ? !effExp || effExp >= todayStr
+        : c.rental
+          ? isValid(c.rental.status, c.rental.expires_at)
+          : !!c.exp && c.exp >= todayStr;
       return {
         valid,
         node: (
@@ -5458,7 +5471,7 @@ function UsageSection({
             tag="락커"
             name={c.name}
             price={c.price}
-            period={fmtPeriod(c.start, c.exp)}
+            period={fmtPeriod(effStart, effExp)}
             valid={valid}
             holdState={chipStateFor("rental", c.rental?.id, c.start)}
             lockerAssign={c.assign ? { zone_name: c.assign.zone_name, number: c.assign.number } : "unassigned"}
