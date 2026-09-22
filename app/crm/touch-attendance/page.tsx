@@ -200,6 +200,13 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
     };
   }, []);
 
+  // 키오스크 전체화면 잠금 — 태블릿 WebView 에서 터치가 미끄러질 때 화면이 함께 밀리는 현상 차단.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add("crm-kiosk-lock");
+    return () => root.classList.remove("crm-kiosk-lock");
+  }, []);
+
   // 미리보기 기기 틀 — 태블릿 해상도로 고정하고 창 크기에 맞춰 축소해서 전체가 보이게 한다.
   const framed = previewMode && framePreview;
   const frameW = landscape ? 1280 : 800;
@@ -1107,7 +1114,7 @@ function CheckinResultScreen({
   );
 
   return (
-    <div className="fixed inset-0 z-40 bg-[#111214] text-white flex items-center justify-center px-4 py-6 overflow-y-auto">
+    <div className="fixed inset-0 z-40 bg-[#111214] text-white flex items-center justify-center px-4 py-6 overflow-y-auto overscroll-contain">
       <button
         type="button"
         onClick={onClose}

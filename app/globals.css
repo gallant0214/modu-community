@@ -251,6 +251,25 @@ summary {
 .animate-fade-in { animation: navFadeIn 180ms ease-out; }
 .animate-slide-down { animation: navSlideDown 220ms cubic-bezier(0.16, 1, 0.3, 1); }
 
+/* 터치출석(키오스크) 전체화면 잠금 — 태블릿 WebView 에서 터치가 미끄러질 때
+   문서가 따라 움직이거나(스크롤) 고무줄처럼 튕기는(overscroll) 현상 차단.
+   화면이 떠 있는 동안에만 <html> 에 이 클래스가 붙는다. */
+html.crm-kiosk-lock,
+html.crm-kiosk-lock body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation; /* 더블탭 확대 차단, 탭/스크롤은 유지 */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+html.crm-kiosk-lock body {
+  position: fixed; /* 드래그로 문서가 밀리지 않도록 고정 */
+  inset: 0;
+  width: 100%;
+}
+
 /* 터치출석 적립 마일리지 '+150P' — 화면 가운데에서 빠르게 떠올랐다 사라진다 */
 @keyframes crmAwardPop {
   0%   { opacity: 0; transform: scale(0.6) translateY(12px); }
