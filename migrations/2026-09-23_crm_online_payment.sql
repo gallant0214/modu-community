@@ -61,3 +61,16 @@ ALTER TABLE crm_centers
   ADD COLUMN IF NOT EXISTS mail_order_no  text,   -- 통신판매업 신고번호
   ADD COLUMN IF NOT EXISTS support_email  text,   -- 고객 문의 이메일
   ADD COLUMN IF NOT EXISTS refund_policy  text;   -- 환불·해지 규정 (판매 페이지에 노출)
+
+/* ── 센터별 공개 판매 페이지 주소 /shop/[slug] ──────────────
+   추측이 어려운 랜덤 문자열. 센터가 늘어나도 주소가 겹치지 않는다. */
+ALTER TABLE crm_centers ADD COLUMN IF NOT EXISTS shop_slug text;
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_crm_centers_shop_slug
+  ON crm_centers (shop_slug) WHERE shop_slug IS NOT NULL;
+
+/* ── 온라인 판매 스위치 (상품별) ─────────────────────────────
+   🚨 sale_enabled(직원 발급창 판매 여부)와 **별개 컬럼**이다.
+   기본값 false — 센터가 온라인에 올릴 상품만 명시적으로 켠다.
+   같이 쓰면 테스트 상품·직원 단가·바우처 상품이 전부 홈페이지에 노출된다. */
+ALTER TABLE crm_products
+  ADD COLUMN IF NOT EXISTS online_sale_enabled boolean NOT NULL DEFAULT false;

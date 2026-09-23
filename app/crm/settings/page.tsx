@@ -810,6 +810,8 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [ownerName, setOwnerName] = useState("");
   const [businessNo, setBusinessNo] = useState("");
+  const [shopPath, setShopPath] = useState<string | null>(null);
+  const [shopBusy, setShopBusy] = useState(false);
   const [mailOrderNo, setMailOrderNo] = useState("");
   const [supportEmail, setSupportEmail] = useState("");
   const [refundPolicy, setRefundPolicy] = useState("");
@@ -846,6 +848,15 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       setOwnerName(c.owner_name ?? "");
       setBusinessNo(formatBusinessNo(c.business_no ?? ""));
       setMailOrderNo(c.mail_order_no ?? "");
+      // 공개 판매 페이지 주소 — 없으면 서버가 즉석 발급해 돌려준다
+      try {
+        const linkRes = await fetch("/api/crm/shop-link", {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        if (linkRes.ok) setShopPath(((await linkRes.json()) as { path: string }).path);
+      } catch {
+        /* 링크 조회 실패는 센터 정보 표시를 막지 않는다 */
+      }
       setSupportEmail(c.support_email ?? "");
       setRefundPolicy(c.refund_policy ?? "");
     } catch (e) {
@@ -1097,6 +1108,75 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
               홈페이지·회원앱 결제 페이지 하단에 표기됩니다. 전자상거래법상 의무 항목이라
               비어 있으면 PG(토스페이먼츠) 심사에서 반려될 수 있어요.
             </p>
+
+            {/* 센터 전용 판매 페이지 주소 — 인스타·QR·PG 심사에 쓰는 값 */}
+            {shopPath && (
+              <div className="mt-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/50 dark:bg-zinc-900/50 p-3">
+                <div className="text-[12px] font-semibold text-[#3A342A] dark:text-zinc-200">
+                  우리 센터 판매 페이지 주소
+                </div>
+                <div className="mt-1.5 break-all text-[13px] font-medium text-[#3B6BA5] dark:text-[#8FB4DE] tabular-nums">
+                  {typeof window !== "undefined" ? window.location.origin : ""}
+                  {shopPath}
+                </div>
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(`${window.location.origin}${shopPath}`);
+                      toast.show("주소를 복사했어요");
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-[#E8E0D0] dark:border-zinc-700 text-[#3A342A] dark:text-zinc-200"
+                  >
+                    주소 복사
+                  </button>
+                  <a
+                    href={shopPath}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-[#E8E0D0] dark:border-zinc-700 text-[#3A342A] dark:text-zinc-200"
+                  >
+                    열어보기
+                  </a>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      disabled={shopBusy}
+                      onClick={async () => {
+                        if (
+                          !window.confirm(
+                            "주소를 새로 만들까요?\n\n기존 주소로 만든 QR·링크는 즉시 열리지 않게 됩니다."
+                          )
+                        )
+                          return;
+                        setShopBusy(true);
+                        try {
+                          const token = await getIdToken();
+                          const res = await fetch("/api/crm/shop-link", {
+                            method: "POST",
+                            headers: { authorization: `Bearer ${token}` },
+                          });
+                          const data = await res.json();
+                          if (!res.ok) throw new Error(data?.error || "재발급 실패");
+                          setShopPath(data.path);
+                        } catch (e) {
+                          window.alert(e instanceof Error ? e.message : "재발급에 실패했어요");
+                        } finally {
+                          setShopBusy(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 disabled:opacity-50"
+                    >
+                      주소 새로 만들기
+                    </button>
+                  )}
+                </div>
+                <p className="mt-2 text-[11px] text-[#A89B80] leading-relaxed">
+                  이 주소에는 <b>상품관리에서 &lsquo;온라인 판매중&rsquo;으로 켠 상품만</b> 올라갑니다.
+                  기본은 꺼져 있어요.
+                </p>
+              </div>
+            )}
           </div>
 
           <ProfileField

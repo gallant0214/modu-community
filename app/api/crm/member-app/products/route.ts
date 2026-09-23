@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
-import { PRODUCT_SELECT, isSellable, type SellableProduct } from "@/app/lib/member-purchase";
+import { PRODUCT_SELECT, type SellableProduct } from "@/app/lib/member-purchase";
+import { isOnlineSellable } from "@/app/lib/member-checkout";
 import { tossClientKey, tossIsLive } from "@/app/lib/toss-payments";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export async function GET(request: Request) {
     .eq("center_id", centerId)
     .eq("status", "active")
     .eq("sale_enabled", true)
+    .eq("online_sale_enabled", true)
     .is("trainer_member_id", null) // 강사 개인 상품은 앱 판매 대상이 아님
     .order("type")
     .order("price_won");
@@ -31,7 +33,7 @@ export async function GET(request: Request) {
   }
 
   const products = ((data ?? []) as unknown as SellableProduct[])
-    .filter(isSellable)
+    .filter(isOnlineSellable)
     .map((p) => ({
       id: p.id,
       type: p.type,

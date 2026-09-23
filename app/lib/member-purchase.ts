@@ -44,12 +44,15 @@ export interface SellableProduct {
   attendance_mileage_earn: number;
   status: string;
   sale_enabled: boolean;
+  /** 온라인(홈페이지·회원앱) 판매 허용. sale_enabled 와 별개이고 기본은 꺼짐 */
+  online_sale_enabled: boolean;
+  mileage_usable: boolean;
 }
 
 export const PRODUCT_SELECT =
   "id, center_id, type, billing_mode, name, description, price_won, vat_included, " +
   "duration_value, duration_unit, total_sessions, session_minutes, capacity, " +
-  "mileage_earn, attendance_mileage_earn, status, sale_enabled";
+  "mileage_earn, attendance_mileage_earn, status, sale_enabled, online_sale_enabled, mileage_usable";
 
 /** 앱에서 발급 처리가 구현된 유형만 판매한다 */
 const APP_SELLABLE_TYPES = new Set([

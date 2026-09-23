@@ -126,6 +126,7 @@ interface Product {
   status?: string;
   /** 판매 on/off. false 면 회원권·수강권 발급 목록에서 제외 */
   sale_enabled?: boolean;
+  online_sale_enabled?: boolean;
   created_at?: string;
   updated_at?: string;
   components?: unknown[] | null;
@@ -208,21 +209,24 @@ export default function CrmProductsPage() {
     BUILT_IN_BADGE[key] ?? CUSTOM_BADGE;
 
   /** 판매 on/off 토글 — 낙관적 반영 후 PATCH, 실패 시 롤백 */
-  const [saleBusy, setSaleBusy] = useState<number | null>(null);
-  const toggleSale = async (p: Product) => {
-    const next = p.sale_enabled === false; // 현재 OFF 면 켜기
-    setSaleBusy(p.id);
-    setList((prev) => prev.map((x) => (x.id === p.id ? { ...x, sale_enabled: next } : x)));
+  const [saleBusy, setSaleBusy] = useState<string | null>(null);
+  const toggleSale = async (p: Product, field: "sale_enabled" | "online_sale_enabled") => {
+    // sale_enabled 는 기본 ON(undefined=켜짐), online_sale_enabled 는 기본 OFF
+    const cur = field === "sale_enabled" ? p.sale_enabled !== false : p.online_sale_enabled === true;
+    const next = !cur;
+    const key = `${p.id}:${field}`;
+    setSaleBusy(key);
+    setList((prev) => prev.map((x) => (x.id === p.id ? { ...x, [field]: next } : x)));
     try {
       const token = await getIdToken();
       const res = await fetch(`/api/crm/products/${p.id}`, {
         method: "PATCH",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ sale_enabled: next }),
+        body: JSON.stringify({ [field]: next }),
       });
       if (!res.ok) throw new Error();
     } catch {
-      setList((prev) => prev.map((x) => (x.id === p.id ? { ...x, sale_enabled: !next } : x)));
+      setList((prev) => prev.map((x) => (x.id === p.id ? { ...x, [field]: cur } : x)));
       window.alert("판매 설정을 바꾸지 못했어요. 권한을 확인해 주세요.");
     } finally {
       setSaleBusy(null);
@@ -499,44 +503,38 @@ export default function CrmProductsPage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5" onClick={(e) => e.stopPropagation()}>
                     {/* 판매 on/off — OFF 면 회원권·수강권 발급 목록에서 제외된다 */}
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={p.sale_enabled !== false}
-                      disabled={saleBusy === p.id}
-                      onClick={() => toggleSale(p)}
+                    <FlagSwitch
+                      on={p.sale_enabled !== false}
+                      busy={saleBusy === `${p.id}:sale_enabled`}
+                      onToggle={() => toggleSale(p, "sale_enabled")}
+                      onLabel="판매중"
+                      offLabel="판매중지"
                       title={
                         p.sale_enabled === false
                           ? "판매 중지됨 — 회원권·수강권 발급 목록에 나오지 않아요. 누르면 다시 판매합니다."
                           : "판매 중 — 발급 목록에 표시됩니다. 누르면 판매를 중지합니다."
                       }
-                      className="mr-auto inline-flex items-center gap-1.5 disabled:opacity-50"
-                    >
-                      <span
-                        className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
-                          p.sale_enabled === false
-                            ? "bg-[#D9CDB8] dark:bg-zinc-700"
-                            : "bg-[#6B7B3A]"
-                        }`}
-                      >
-                        <span
-                          className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
-                            p.sale_enabled === false ? "left-0.5" : "left-3.5"
-                          }`}
-                        />
-                      </span>
-                      <span
-                        className={`text-[11.5px] font-semibold ${
-                          p.sale_enabled === false
-                            ? "text-[#A89B80] dark:text-zinc-500"
-                            : "text-[#6B7B3A] dark:text-[#A8B87A]"
-                        }`}
-                      >
-                        {p.sale_enabled === false ? "판매중지" : "판매중"}
-                      </span>
-                    </button>
+                    />
+                    {/* 온라인 판매 — 홈페이지·회원앱에서 회원이 직접 결제할 수 있는 상품.
+                        기본 꺼짐이라 켠 것만 노출된다(테스트·직원단가·바우처 상품 보호) */}
+                    {ONLINE_SELLABLE_TYPES.has(p.type) && (
+                      <FlagSwitch
+                        on={p.online_sale_enabled === true}
+                        busy={saleBusy === `${p.id}:online_sale_enabled`}
+                        onToggle={() => toggleSale(p, "online_sale_enabled")}
+                        onLabel="온라인 판매중"
+                        offLabel="온라인 판매안함"
+                        tone="blue"
+                        title={
+                          p.online_sale_enabled === true
+                            ? "홈페이지·회원앱에서 회원이 직접 결제할 수 있어요. 누르면 내립니다."
+                            : "온라인에 올라가지 않은 상품이에요. 누르면 홈페이지·회원앱에서 판매합니다."
+                        }
+                      />
+                    )}
+                    <span className="mr-auto" />
                     <button
                       type="button"
                       onClick={async () => {
@@ -938,5 +936,58 @@ function Msg({ children }: { children: React.ReactNode }) {
     <div className="px-4 py-10 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] rounded-xl">
       {children}
     </div>
+  );
+}
+
+/** 온라인(홈페이지·회원앱)에서 팔 수 있는 상품 유형 — app/lib/member-checkout.ts 와 같은 목록 */
+const ONLINE_SELLABLE_TYPES = new Set(["membership", "personal", "group", "class"]);
+
+/** 상품 카드의 on/off 스위치 (판매 / 온라인 판매 공용) */
+function FlagSwitch({
+  on,
+  busy,
+  onToggle,
+  onLabel,
+  offLabel,
+  title,
+  tone = "olive",
+}: {
+  on: boolean;
+  busy: boolean;
+  onToggle: () => void;
+  onLabel: string;
+  offLabel: string;
+  title: string;
+  tone?: "olive" | "blue";
+}) {
+  const onBg = tone === "blue" ? "bg-[#3B6BA5]" : "bg-[#6B7B3A]";
+  const onText = tone === "blue" ? "text-[#3B6BA5] dark:text-[#8FB4DE]" : "text-[#6B7B3A] dark:text-[#A8B87A]";
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={busy}
+      onClick={onToggle}
+      title={title}
+      className="inline-flex items-center gap-1.5 disabled:opacity-50"
+    >
+      <span
+        className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
+          on ? onBg : "bg-[#D9CDB8] dark:bg-zinc-700"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
+            on ? "left-3.5" : "left-0.5"
+          }`}
+        />
+      </span>
+      <span
+        className={`text-[11.5px] font-semibold ${on ? onText : "text-[#A89B80] dark:text-zinc-500"}`}
+      >
+        {on ? onLabel : offLabel}
+      </span>
+    </button>
   );
 }

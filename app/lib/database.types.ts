@@ -1299,6 +1299,7 @@ export type Database = {
           mail_order_no: string | null
           support_email: string | null
           refund_policy: string | null
+          shop_slug: string | null
           created_at: string
           updated_at: string
           lat: number | null
@@ -1334,6 +1335,7 @@ export type Database = {
           mail_order_no?: string | null
           support_email?: string | null
           refund_policy?: string | null
+          shop_slug?: string | null
           created_at?: string
           updated_at?: string
           lat?: number | null
@@ -1369,6 +1371,7 @@ export type Database = {
           mail_order_no?: string | null
           support_email?: string | null
           refund_policy?: string | null
+          shop_slug?: string | null
           created_at?: string
           updated_at?: string
           lat?: number | null
@@ -1632,6 +1635,7 @@ export type Database = {
           components: Json
           status: string
           sale_enabled: boolean
+          online_sale_enabled: boolean
           created_at: string
           updated_at: string
         }
@@ -1668,6 +1672,7 @@ export type Database = {
           components?: Json
           status?: string
           sale_enabled?: boolean
+          online_sale_enabled?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -1704,6 +1709,7 @@ export type Database = {
           components?: Json
           status?: string
           sale_enabled?: boolean
+          online_sale_enabled?: boolean
           created_at?: string
           updated_at?: string
         }

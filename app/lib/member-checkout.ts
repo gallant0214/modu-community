@@ -41,6 +41,10 @@ export const ONLINE_SELLABLE_TYPES = new Set(["membership", "personal", "group",
 
 export function isOnlineSellable(p: SellableProduct): boolean {
   return (
+    // 🚨 온라인 전용 스위치. 기본 꺼짐이라 센터가 켠 상품만 노출된다.
+    //    이게 없으면 테스트 상품·직원 단가·바우처 상품까지 홈페이지에 다 걸린다.
+    p.online_sale_enabled === true &&
+    // 상품관리에서 '판매중지'한 상품은 온라인에서도 팔지 않는다
     p.sale_enabled === true &&
     p.status === "active" &&
     Number(p.price_won) > 0 &&
@@ -224,7 +228,7 @@ export async function quoteOrder(opts: {
   const available = Math.max(0, mileageBalance - mileageHeld);
 
   // 상품 설정에서 마일리지 사용을 막아둔 경우 0
-  const mileageAllowed = (product as SellableProduct & { mileage_usable?: boolean }).mileage_usable !== false;
+  const mileageAllowed = product.mileage_usable !== false;
   const mileageMax = mileageAllowed ? Math.min(available, afterCoupon) : 0;
   const mileageUsedWon = Math.max(0, Math.min(Math.floor(opts.mileageUse || 0), mileageMax));
 
