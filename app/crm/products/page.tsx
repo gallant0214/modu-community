@@ -127,6 +127,7 @@ interface Product {
   /** 판매 on/off. false 면 회원권·수강권 발급 목록에서 제외 */
   sale_enabled?: boolean;
   online_sale_enabled?: boolean;
+  online_eligibility?: string;
   created_at?: string;
   updated_at?: string;
   components?: unknown[] | null;
@@ -230,6 +231,27 @@ export default function CrmProductsPage() {
       window.alert("판매 설정을 바꾸지 못했어요. 권한을 확인해 주세요.");
     } finally {
       setSaleBusy(null);
+    }
+  };
+
+  /** 온라인 구매 자격 변경 — 낙관적 반영 후 PATCH, 실패 시 롤백 */
+  const setEligibility = async (p: Product, next: string) => {
+    const prevVal = p.online_eligibility || "any";
+    if (next === prevVal) return;
+    setList((prev) => prev.map((x) => (x.id === p.id ? { ...x, online_eligibility: next } : x)));
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/products/${p.id}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ online_eligibility: next }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setList((prev) =>
+        prev.map((x) => (x.id === p.id ? { ...x, online_eligibility: prevVal } : x))
+      );
+      window.alert("구매 자격을 바꾸지 못했어요. 권한을 확인해 주세요.");
     }
   };
 
@@ -533,6 +555,35 @@ export default function CrmProductsPage() {
                             : "온라인에 올라가지 않은 상품이에요. 누르면 홈페이지·회원앱에서 판매합니다."
                         }
                       />
+                    )}
+                    {/* 온라인 구매 자격 — 현장과 달리 온라인은 직원이 자격을 못 보므로
+                        서버가 회원의 신규/재등록 구분과 대조해 막는다 */}
+                    {ONLINE_SELLABLE_TYPES.has(p.type) && p.online_sale_enabled === true && (
+                      <div className="inline-flex overflow-hidden rounded-lg border border-[#E8E0D0] dark:border-zinc-700">
+                        {(
+                          [
+                            ["any", "누구나"],
+                            ["new", "신규만"],
+                            ["rejoin", "재등록만"],
+                          ] as const
+                        ).map(([val, label]) => {
+                          const on = (p.online_eligibility || "any") === val;
+                          return (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setEligibility(p, val)}
+                              className={`px-2 py-1 text-[11px] font-semibold transition-colors ${
+                                on
+                                  ? "bg-[#3B6BA5] text-white"
+                                  : "text-[#A89B80] dark:text-zinc-500 hover:bg-[#F3EDE0] dark:hover:bg-zinc-800"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
                     <span className="mr-auto" />
                     <button

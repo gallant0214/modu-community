@@ -66,7 +66,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("crm_products")
     .select(
-      "id, type, billing_mode, category, name, description, open_time, close_time, operating_days, duration_value, duration_unit, service_days, total_sessions, pause_enabled, pause_days, pause_count, price_won, vat_included, mileage_earn, mileage_usable, attendance_mileage_earn, capacity, class_cancel_before_min, class_book_before_min, session_minutes, daily_check_in_limit, daily_time_limit_enabled, components, trainer_member_id, status, sale_enabled, online_sale_enabled, created_at, updated_at"
+      "id, type, billing_mode, category, name, description, open_time, close_time, operating_days, duration_value, duration_unit, service_days, total_sessions, pause_enabled, pause_days, pause_count, price_won, vat_included, mileage_earn, mileage_usable, attendance_mileage_earn, capacity, class_cancel_before_min, class_book_before_min, session_minutes, daily_check_in_limit, daily_time_limit_enabled, components, trainer_member_id, status, sale_enabled, online_sale_enabled, online_eligibility, created_at, updated_at"
     )
     .eq("center_id", ctx.centerId)
     .eq("status", "active")

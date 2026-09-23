@@ -39,6 +39,32 @@ export const SALES_DISABLED_MESSAGE = "온라인 결제는 준비 중이에요. 
  */
 export const ONLINE_SELLABLE_TYPES = new Set(["membership", "personal", "group", "class"]);
 
+/** crm_members.registration_type 값 — 한글로 저장된다 */
+export type RegistrationType = "신규" | "재등록" | null;
+
+/**
+ * 이 회원이 이 상품을 살 수 있는가.
+ *
+ * 현장에서는 직원이 신규·재등록을 보고 발급하지만 온라인은 확인하는 사람이 없다.
+ * 안 막으면 신규 회원이 더 싼 재등록가로 결제해 간다.
+ * 구분이 아직 없는 회원(null)은 신규로 본다 — 등록 이력이 없다는 뜻이므로.
+ */
+export function eligibilityError(
+  p: SellableProduct,
+  regType: RegistrationType
+): string | null {
+  const want = p.online_eligibility || "any";
+  if (want === "any") return null;
+  const isRejoin = regType === "재등록";
+  if (want === "new" && isRejoin) {
+    return "신규 회원 전용 상품이에요";
+  }
+  if (want === "rejoin" && !isRejoin) {
+    return "재등록 회원 전용 상품이에요. 처음 등록이시면 신규 상품을 선택해주세요";
+  }
+  return null;
+}
+
 export function isOnlineSellable(p: SellableProduct): boolean {
   return (
     // 🚨 온라인 전용 스위치. 기본 꺼짐이라 센터가 켠 상품만 노출된다.
@@ -151,6 +177,20 @@ export async function quoteOrder(opts: {
 
   if (!isOnlineSellable(product)) {
     return { ...base, ok: false, error: "지금은 구매할 수 없는 상품이에요" };
+  }
+
+  // 신규/재등록 자격 — 금액을 계산하기 전에 막는다
+  const { data: memRow } = await supabase
+    .from("crm_members")
+    .select("registration_type")
+    .eq("id", memberId)
+    .eq("center_id", centerId)
+    .maybeSingle();
+  const regType = ((memRow as { registration_type?: string | null } | null)?.registration_type ??
+    null) as RegistrationType;
+  const eligErr = eligibilityError(product, regType);
+  if (eligErr) {
+    return { ...base, ok: false, error: eligErr };
   }
 
   /* ── 쿠폰 ───────────────────────────────────────────── */

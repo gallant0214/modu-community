@@ -16,6 +16,8 @@ export interface ShopProduct {
   durationUnit: string | null;
   mileageEarn: number;
   billingMode: string;
+  /** any(누구나) | new(신규만) | rejoin(재등록만) */
+  eligibility: string;
 }
 
 interface Coupon {
@@ -58,22 +60,70 @@ export default function ShopClient(props: {
 }) {
   const { user, loading, signInWithGoogle, signInWithApple, getIdToken } = useAuth();
   const [picked, setPicked] = useState<ShopProduct | null>(null);
+  const [regType, setRegType] = useState<string | null | undefined>(undefined);
 
-  const grouped = props.products.reduce<Record<string, ShopProduct[]>>((acc, p) => {
+  /**
+   * 내 신규/재등록 구분을 받아, 살 수 없는 상품은 아예 보여주지 않는다.
+   * 로그인 전에는 전부 보여준다 — 가격표 역할도 해야 하고 PG 심사원도 열어본다.
+   * 🚨 화면에서 거르는 건 편의일 뿐, 실제 차단은 서버(quoteOrder)가 한다.
+   */
+  useEffect(() => {
+    if (!user) {
+      setRegType(undefined);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`/api/crm/member-app/me?centerId=${props.centerId}`, {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        if (!res.ok || !alive) return;
+        const data = await res.json();
+        setRegType(data?.member?.registrationType ?? null);
+      } catch {
+        /* 실패하면 전부 보여준다 — 서버가 어차피 막는다 */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [user, getIdToken, props.centerId]);
+
+  const visible =
+    regType === undefined
+      ? props.products
+      : props.products.filter((p) => {
+          if (p.eligibility === "new") return regType !== "재등록";
+          if (p.eligibility === "rejoin") return regType === "재등록";
+          return true;
+        });
+
+  const grouped = visible.reduce<Record<string, ShopProduct[]>>((acc, p) => {
     (acc[p.typeLabel] ||= []).push(p);
     return acc;
   }, {});
 
-  if (props.products.length === 0) {
+  if (visible.length === 0) {
     return (
-      <p className="mt-6 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-500">
-        지금 온라인으로 구매할 수 있는 상품이 없어요.
+      <p className="mt-6 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm leading-relaxed text-gray-500">
+        {regType !== undefined && props.products.length > 0
+          ? "회원님이 지금 온라인으로 구매할 수 있는 상품이 없어요. 센터로 문의해주세요."
+          : "지금 온라인으로 구매할 수 있는 상품이 없어요."}
       </p>
     );
   }
 
   return (
     <>
+      {!!regType && (
+        <p className="mt-5 rounded-lg bg-gray-50 px-3.5 py-2.5 text-xs text-gray-600">
+          {regType} 회원 기준 가격으로 보여드리고 있어요.
+        </p>
+      )}
+
       <div className="mt-6 space-y-6">
         {Object.entries(grouped).map(([label, list]) => (
           <section key={label}>

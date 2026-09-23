@@ -74,3 +74,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_crm_centers_shop_slug
    같이 쓰면 테스트 상품·직원 단가·바우처 상품이 전부 홈페이지에 노출된다. */
 ALTER TABLE crm_products
   ADD COLUMN IF NOT EXISTS online_sale_enabled boolean NOT NULL DEFAULT false;
+
+/* ── 온라인 구매 자격 (상품별) ───────────────────────────────
+   현장에서는 직원이 신규·재등록을 보고 발급하지만 온라인은 확인하는 사람이 없다.
+   서버가 crm_members.registration_type 과 대조해 막는다.
+     any    누구나
+     new    신규 회원만
+     rejoin 재등록 회원만                                      */
+ALTER TABLE crm_products
+  ADD COLUMN IF NOT EXISTS online_eligibility text NOT NULL DEFAULT 'any';
+ALTER TABLE crm_products DROP CONSTRAINT IF EXISTS crm_products_online_eligibility_check;
+ALTER TABLE crm_products ADD  CONSTRAINT crm_products_online_eligibility_check
+  CHECK (online_eligibility IN ('any', 'new', 'rejoin'));

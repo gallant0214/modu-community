@@ -20,6 +20,44 @@ function getAdmin() {
 }
 
 /**
+ * FCM 멀티캐스트 발송 + 무효 토큰 자동 정리(프루닝).
+ * 500개씩 나눠 보내고, FCM 이 '미등록/무효' 로 판정한 토큰은 DB 에서 삭제한다.
+ * (구 iOS APNs 원시토큰 등 FCM 으로 전달 불가한 토큰이 쌓이지 않도록)
+ */
+async function sendMulticastPrune(
+  messaging: ReturnType<typeof getMessaging>,
+  tokenList: string[],
+  payload: { title: string; body: string; data: Record<string, string> }
+) {
+  const toDelete: string[] = [];
+  for (let i = 0; i < tokenList.length; i += 500) {
+    const batch = tokenList.slice(i, i + 500);
+    try {
+      const result = await messaging.sendEachForMulticast({
+        notification: { title: payload.title, body: payload.body },
+        data: payload.data,
+        apns: { payload: { aps: { sound: "default", badge: 1 } } },
+        tokens: batch,
+      });
+      result.responses.forEach((r, idx) => {
+        if (!r.success) {
+          const code = (r.error as { code?: string } | undefined)?.code;
+          if (
+            code === "messaging/invalid-registration-token" ||
+            code === "messaging/registration-token-not-registered"
+          ) {
+            toDelete.push(batch[idx]);
+          }
+        }
+      });
+    } catch {}
+  }
+  if (toDelete.length > 0) {
+    await supabase.from("crm_member_device_tokens").delete().in("token", toDelete).then(() => {}, () => {});
+  }
+}
+
+/**
  * 센터의 전체 연동 회원에게 알림 발송(알림함 저장 + 푸시). 공지 등록 등 브로드캐스트용.
  */
 export async function notifyCenterMembers(
@@ -59,18 +97,7 @@ export async function notifyCenterMembers(
     const tokenList = (tokens ?? []).map((t) => t.token);
     if (tokenList.length === 0) return;
     const messaging = getMessaging(getAdmin());
-    // FCM 멀티캐스트는 최대 500개/콜
-    for (let i = 0; i < tokenList.length; i += 500) {
-      const batch = tokenList.slice(i, i + 500);
-      await messaging
-        .sendEachForMulticast({
-          notification: { title, body },
-          data: { type, ...data },
-          apns: { payload: { aps: { sound: "default", badge: 1 } } },
-          tokens: batch,
-        })
-        .catch(() => {});
-    }
+    await sendMulticastPrune(messaging, tokenList, { title, body, data: { type, ...data } });
   } catch (e) {
     console.error("[member-notify] broadcast error", e);
   }
@@ -155,19 +182,9 @@ export async function notifyMembersByIds(
     const tokenList = Array.from(tokenSet).filter(Boolean);
     if (tokenList.length === 0) return;
 
-    // 푸시 멀티캐스트 (FCM 500개/콜)
+    // 푸시 멀티캐스트 + 무효 토큰 정리
     const messaging = getMessaging(getAdmin());
-    for (let i = 0; i < tokenList.length; i += 500) {
-      const batch = tokenList.slice(i, i + 500);
-      await messaging
-        .sendEachForMulticast({
-          notification: { title, body },
-          data: { type, ...data },
-          apns: { payload: { aps: { sound: "default", badge: 1 } } },
-          tokens: batch,
-        })
-        .catch(() => {});
-    }
+    await sendMulticastPrune(messaging, tokenList, { title, body, data: { type, ...data } });
   } catch (e) {
     console.error("[member-notify] notifyMembersByIds error", e);
   }

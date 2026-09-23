@@ -81,6 +81,7 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
       durationUnit: p.duration_unit,
       mileageEarn: p.mileage_earn,
       billingMode: p.billing_mode,
+      eligibility: p.online_eligibility || "any",
     }));
 
   const seller = await loadSellerInfo(center.id);
