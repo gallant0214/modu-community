@@ -4,6 +4,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { cached, crmCacheKey } from "@/app/lib/cache";
 import { fetchSales, saleCategory } from "@/app/lib/crm-sales";
+import { fetchIssuanceSales } from "@/app/lib/crm-sales-issuance";
 
 export const dynamic = "force-dynamic";
 
@@ -348,15 +349,24 @@ export async function GET(request: Request) {
 
   // 매출 통계 (period 내 실제 거래) — 실매출 원장 crm_sales 기준
   // 회원권=멤버십 / 수강권(lesson)=이용권+예약권 / 대여권 / 락커 / 일반(goods). 환불은 음수.
-  const salesInPeriod = await fetchSales(ctx.centerId, from, toExcl);
+  // 원장은 BROJ 이관 시점까지만 채워져 있어, 그 이후 CRM 발급분은 발급 테이블에서 더한다
+  // (컷오프 다음날부터만 집계 → 이중집계 없음). 정산·통계와 같은 규칙.
+  const [salesInPeriod, issuanceInPeriod] = await Promise.all([
+    fetchSales(ctx.centerId, from, toExcl),
+    fetchIssuanceSales(ctx.centerId, from, toExcl),
+  ]);
   let membershipRevenue = 0;
   let lessonRevenue = 0;
   let lockerRevenue = 0;
   let goodsRevenue = 0;
   let rentalRevenue = 0;
   const lessonRevenueByGender: GenderRevenue = { male: 0, female: 0 };
-  for (const s of salesInPeriod) {
-    const cat = saleCategory(s.product_type);
+  const revenueRows = [
+    ...salesInPeriod.map((s) => ({ cat: saleCategory(s.product_type), amount_won: s.amount_won, member_id: s.member_id })),
+    ...issuanceInPeriod.map((s) => ({ cat: s.category, amount_won: s.amount_won, member_id: s.member_id })),
+  ];
+  for (const s of revenueRows) {
+    const cat = s.cat;
     if (cat === "membership") membershipRevenue += s.amount_won;
     else if (cat === "lesson") {
       lessonRevenue += s.amount_won;
