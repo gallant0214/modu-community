@@ -1296,6 +1296,9 @@ export type Database = {
           owner_birth: string | null
           owner_gender: string | null
           owner_phone: string | null
+          mail_order_no: string | null
+          support_email: string | null
+          refund_policy: string | null
           created_at: string
           updated_at: string
           lat: number | null
@@ -1328,6 +1331,9 @@ export type Database = {
           owner_birth?: string | null
           owner_gender?: string | null
           owner_phone?: string | null
+          mail_order_no?: string | null
+          support_email?: string | null
+          refund_policy?: string | null
           created_at?: string
           updated_at?: string
           lat?: number | null
@@ -1360,6 +1366,9 @@ export type Database = {
           owner_birth?: string | null
           owner_gender?: string | null
           owner_phone?: string | null
+          mail_order_no?: string | null
+          support_email?: string | null
+          refund_policy?: string | null
           created_at?: string
           updated_at?: string
           lat?: number | null
@@ -2355,6 +2364,16 @@ export type Database = {
           issued_id: number | null
           issued_extra: Json | null
           payment_id: number | null
+          channel: string
+          list_price_won: number
+          coupon_issue_id: number | null
+          coupon_discount_won: number
+          mileage_used: number
+          mileage_earned: number
+          expires_at: string | null
+          refunded_at: string | null
+          refund_amount: number | null
+          refund_reason: string | null
           created_at: string
           updated_at: string
         }
@@ -2379,6 +2398,16 @@ export type Database = {
           issued_id?: number | null
           issued_extra?: Json | null
           payment_id?: number | null
+          channel?: string
+          list_price_won?: number
+          coupon_issue_id?: number | null
+          coupon_discount_won?: number
+          mileage_used?: number
+          mileage_earned?: number
+          expires_at?: string | null
+          refunded_at?: string | null
+          refund_amount?: number | null
+          refund_reason?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -2403,6 +2432,16 @@ export type Database = {
           issued_id?: number | null
           issued_extra?: Json | null
           payment_id?: number | null
+          channel?: string
+          list_price_won?: number
+          coupon_issue_id?: number | null
+          coupon_discount_won?: number
+          mileage_used?: number
+          mileage_earned?: number
+          expires_at?: string | null
+          refunded_at?: string | null
+          refund_amount?: number | null
+          refund_reason?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -3322,6 +3361,8 @@ export type Database = {
           product_id: number | null
           group_capacity: number
           attendance_mileage_earn: number
+          mileage_earned: number
+          mileage_used: number
           commission_rate: number | null
           created_at: string
           updated_at: string
@@ -3355,6 +3396,8 @@ export type Database = {
           product_id?: number | null
           group_capacity?: number
           attendance_mileage_earn?: number
+          mileage_earned?: number
+          mileage_used?: number
           commission_rate?: number | null
           created_at?: string
           updated_at?: string
@@ -3388,6 +3431,8 @@ export type Database = {
           product_id?: number | null
           group_capacity?: number
           attendance_mileage_earn?: number
+          mileage_earned?: number
+          mileage_used?: number
           commission_rate?: number | null
           created_at?: string
           updated_at?: string

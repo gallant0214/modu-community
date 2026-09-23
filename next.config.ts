@@ -10,7 +10,9 @@ const cspReportOnly =
     // Google AdSense
     "https://pagead2.googlesyndication.com https://*.googlesyndication.com " +
     "https://*.googleadservices.com https://*.doubleclick.net https://tpc.googlesyndication.com " +
-    "https://adservice.google.com https://adservice.google.co.kr; " +
+    "https://adservice.google.com https://adservice.google.co.kr " +
+    // 토스페이먼츠 결제위젯
+    "https://js.tosspayments.com https://*.tosspayments.com; " +
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
   "img-src 'self' data: blob: https:; " +
   "font-src 'self' data: https://fonts.gstatic.com; " +
@@ -20,11 +22,15 @@ const cspReportOnly =
     "https://*.neon.tech https://firebasestorage.googleapis.com " +
     // Google AdSense
     "https://pagead2.googlesyndication.com https://*.googlesyndication.com " +
-    "https://*.doubleclick.net https://*.google.com; " +
+    "https://*.doubleclick.net https://*.google.com " +
+    // 토스페이먼츠 결제 API·이벤트 수집
+    "https://api.tosspayments.com https://*.tosspayments.com; " +
   "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://appleid.apple.com " +
     // Google AdSense iframe
     "https://googleads.g.doubleclick.net https://tpc.googlesyndication.com " +
-    "https://*.googlesyndication.com; " +
+    "https://*.googlesyndication.com " +
+    // 결제위젯 iframe — 카드사 인증창이 토스 도메인 안에서 열린다
+    "https://*.tosspayments.com; " +
   "object-src 'none'; " +
   "base-uri 'self'; " +
   "form-action 'self'; " +

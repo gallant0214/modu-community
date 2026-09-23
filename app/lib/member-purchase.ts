@@ -94,14 +94,26 @@ export async function fulfillPurchase(opts: {
   centerId: number;
   memberId: number;
   product: SellableProduct;
-  /** 결제 금액(원) — 상품 정가와 같아야 한다 */
+  /** 실제 결제된 금액(원) — 쿠폰·마일리지를 뺀 최종가 */
   amountWon: number;
+  /** 쿠폰 할인액 — 상품 행의 discount_won 에 남긴다 */
+  discountWon?: number;
+  /** 마일리지 사용액 — 잔고 반영은 settleOrderMileage() 가 따로 한다 */
+  mileageUsed?: number;
+  /** 구매 적립 마일리지 — 잔고 반영은 settleOrderMileage() 가 따로 한다 */
+  mileageEarn?: number;
   /** PG 가 알려준 결제 수단 문구 (메모용) */
   pgMethod?: string | null;
 }): Promise<FulfillOutcome> {
   const { centerId, memberId, product } = opts;
   const today = kstToday();
   const isCount = product.billing_mode === "count";
+  const discountWon = Math.max(0, Math.floor(opts.discountWon || 0));
+  const mileageUsed = Math.max(0, Math.floor(opts.mileageUsed || 0));
+  const mileageEarned = Math.max(
+    0,
+    Math.floor(opts.mileageEarn ?? product.mileage_earn ?? 0)
+  );
 
   // 회원권/운동복/락커는 기존 이용권 뒤로 이어붙인다(수강권은 이어붙이기 대상 아님)
   const chainType =
@@ -132,9 +144,9 @@ export async function fulfillPurchase(opts: {
         plan_name: product.name,
         duration_days: unitToDays(product.duration_value, product.duration_unit) || 30,
         price_won: opts.amountWon,
-        discount_won: 0,
-        mileage_earned: Math.max(0, Math.floor(product.mileage_earn || 0)),
-        mileage_used: 0,
+        discount_won: discountWon,
+        mileage_earned: mileageEarned,
+        mileage_used: mileageUsed,
         attendance_mileage_earn: Math.max(0, Math.floor(product.attendance_mileage_earn || 0)),
         vat_included: !!product.vat_included,
         payment_method: "card",
@@ -181,9 +193,9 @@ export async function fulfillPurchase(opts: {
         seller_member_id: null,
         item_name: product.name,
         price_won: opts.amountWon,
-        discount_won: 0,
-        mileage_earned: Math.max(0, Math.floor(product.mileage_earn || 0)),
-        mileage_used: 0,
+        discount_won: discountWon,
+        mileage_earned: mileageEarned,
+        mileage_used: mileageUsed,
         vat_included: !!product.vat_included,
         payment_method: "card",
         start_date: startDate,
@@ -237,7 +249,9 @@ export async function fulfillPurchase(opts: {
       remaining_sessions: totalSessions,
       session_minutes: Math.max(0, Math.floor(product.session_minutes ?? 50)),
       price_won: opts.amountWon,
-      discount_won: 0,
+      discount_won: discountWon,
+      mileage_earned: mileageEarned,
+      mileage_used: mileageUsed,
       payment_method: "card",
       vat_included: !!product.vat_included,
       issued_at: today,

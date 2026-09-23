@@ -136,7 +136,8 @@ export function NavBar() {
   const userDisplayName = nickname || user?.displayName || "사용자";
 
   // 터치출석 화면(새 창)·공개 터치출석 링크(/touch/…)는 상단바 없이 센터명만 — NavBar 숨김
-  if (pathname === "/crm/touch-attendance" || pathname?.startsWith("/touch/")) return null;
+  // 결제 페이지는 회원앱 WebView 로도 열린다 — 커뮤니티 네비를 띄우지 않는다
+  if (pathname === "/crm/touch-attendance" || pathname?.startsWith("/touch/") || pathname?.startsWith("/pay/")) return null;
 
   return (
     <nav
