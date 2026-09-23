@@ -15,9 +15,9 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
-  if (!(await ctxHasPermission(ctx, "settings.edit"))) {
-    return NextResponse.json({ error: "센터 설정 권한이 없습니다" }, { status: 403 });
-  }
+  // 공개 판매 페이지 주소는 비밀이 아니다(인스타·QR 로 뿌리는 값). 센터 구성원이면 조회 가능.
+  // 다만 아직 없을 때 '발급'하는 건 쓰기이므로 설정 권한이 있을 때만 한다.
+  const canIssue = await ctxHasPermission(ctx, "settings.edit");
 
   const { data } = await supabase
     .from("crm_centers")
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     .maybeSingle();
   let slug = (data as { shop_slug: string | null } | null)?.shop_slug ?? null;
 
-  if (!slug) {
+  if (!slug && canIssue) {
     const fresh = generateShopSlug();
     // 동시 요청 레이스 방지 — 여전히 비어 있을 때만 기록한다
     await supabase
@@ -42,7 +42,8 @@ export async function GET(request: Request) {
     slug = (re as { shop_slug: string | null } | null)?.shop_slug ?? fresh;
   }
 
-  return NextResponse.json({ slug, path: `/shop/${slug}` });
+  // 아직 발급 전이고 발급 권한도 없으면 주소가 없다 — 호출 측이 버튼을 숨길 수 있게 null 로
+  return NextResponse.json({ slug, path: slug ? `/shop/${slug}` : null });
 }
 
 export async function POST(request: Request) {

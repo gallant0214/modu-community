@@ -155,6 +155,29 @@ export default function CrmProductsPage() {
   const [editProduct, setEditProduct] = useState<ProductDetail | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<number | null>(null);
   const [typeManagerOpen, setTypeManagerOpen] = useState(false);
+  /** 우리 센터 공개 판매 페이지 경로 (/shop/[slug]) — 헤더의 '온라인 스토어' 버튼용 */
+  const [shopPath, setShopPath] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/shop-link", {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        if (!res.ok || !alive) return;
+        const data = (await res.json()) as { path?: string | null };
+        if (data.path) setShopPath(data.path);
+      } catch {
+        /* 실패하면 버튼을 숨긴다 — 상품 관리 자체에는 영향 없음 */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [getIdToken]);
 
   const load = useCallback(async () => {
     setError("");
@@ -322,6 +345,23 @@ export default function CrmProductsPage() {
             </h1>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {/* 우리 센터 공개 판매 페이지 — 회원에게 보이는 그대로 새 창에서 확인 */}
+            {shopPath && (
+              <a
+                href={shopPath}
+                target="_blank"
+                rel="noreferrer"
+                title="회원에게 보이는 판매 페이지를 새 창으로 엽니다"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#C3D2E6] dark:border-zinc-700 bg-white/80 dark:bg-zinc-950 text-[13px] font-semibold text-[#3B6BA5] dark:text-[#8FB4DE] hover:bg-[#EEF4FB] dark:hover:bg-zinc-800 whitespace-nowrap"
+              >
+                온라인 스토어
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </a>
+            )}
             <button
               type="button"
               onClick={() => setTypeManagerOpen(true)}
