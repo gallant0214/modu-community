@@ -18,10 +18,10 @@ export default async function PayPage({
   searchParams,
 }: {
   params: Promise<{ orderUid: string }>;
-  searchParams: Promise<{ t?: string }>;
+  searchParams: Promise<{ t?: string; rn?: string }>;
 }) {
   const { orderUid } = await params;
-  const { t } = await searchParams;
+  const { t, rn } = await searchParams;
 
   if (!onlineSalesEnabled()) {
     return <Notice title="준비 중이에요" body={SALES_DISABLED_MESSAGE} />;
@@ -121,6 +121,7 @@ export default async function PayPage({
         customerName={(mem as { name?: string } | null)?.name ?? ""}
         customerKey={`m_${order.center_id}_${order.member_id}`}
         clientKey={tossClientKey()}
+        returnToApp={rn === "1"}
       />
 
       <SellerInfo seller={seller} />

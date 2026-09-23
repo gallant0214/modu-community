@@ -4,13 +4,26 @@ import { useEffect, useRef, useState } from "react";
 
 type Phase = "confirming" | "done" | "failed";
 
-/** 회원앱 WebView 에 결과를 알린다 — 앱이 창을 닫고 보유 이용권을 새로고침하도록 */
-function notifyApp(payload: Record<string, unknown>) {
+/** 회원앱 딥링크 스킴 — 시스템 브라우저에서 앱으로 되돌아가는 주소 */
+const APP_RETURN_SCHEME = "moducmmember://pay-done";
+
+/**
+ * 회원앱에 결과를 알린다.
+ *  · 시스템 브라우저(expo-web-browser)로 열렸으면 딥링크로 복귀 → 앱이 창을 닫는다
+ *  · WebView 로 열렸으면 postMessage (앞으로 쓸 일은 없지만 남겨둔다)
+ */
+function notifyApp(payload: { ok: boolean; [k: string]: unknown }, returnToApp?: boolean) {
   try {
     const w = window as unknown as { ReactNativeWebView?: { postMessage: (s: string) => void } };
     w.ReactNativeWebView?.postMessage(JSON.stringify(payload));
   } catch {
     /* 웹 브라우저면 무시 */
+  }
+  if (returnToApp) {
+    // 결과 화면을 잠깐 보여준 뒤 앱으로 — 바로 닫으면 뭐가 됐는지 못 본다
+    setTimeout(() => {
+      window.location.href = `${APP_RETURN_SCHEME}?ok=${payload.ok ? 1 : 0}`;
+    }, 1200);
   }
 }
 
@@ -22,6 +35,8 @@ export default function DoneClient(props: {
   amount: number;
   failCode: string;
   failMessage: string;
+  /** 회원앱이 시스템 브라우저로 연 결제인지 — 끝나면 딥링크로 앱에 돌려준다 */
+  returnToApp?: boolean;
 }) {
   const [phase, setPhase] = useState<Phase>(props.paymentKey ? "confirming" : "failed");
   const [message, setMessage] = useState(props.failMessage || "결제가 취소됐어요");
@@ -30,7 +45,7 @@ export default function DoneClient(props: {
 
   useEffect(() => {
     if (!props.paymentKey) {
-      notifyApp({ type: "payment", ok: false, reason: props.failCode || "canceled" });
+      notifyApp({ type: "payment", ok: false, reason: props.failCode || "canceled" }, props.returnToApp);
       return;
     }
     if (ran.current) return; // StrictMode 이중 실행 방지 (승인은 한 번만)
@@ -53,16 +68,19 @@ export default function DoneClient(props: {
         if (!res.ok) {
           setPhase("failed");
           setMessage(data?.error || "결제 승인에 실패했어요");
-          notifyApp({ type: "payment", ok: false, reason: data?.error });
+          notifyApp({ type: "payment", ok: false, reason: data?.error }, props.returnToApp);
           return;
         }
         setPhase("done");
         setReceiptUrl(data?.receiptUrl ?? null);
-        notifyApp({ type: "payment", ok: true, orderId: data?.orderId, issued: data?.issued });
+        notifyApp(
+          { type: "payment", ok: true, orderId: data?.orderId, issued: data?.issued },
+          props.returnToApp
+        );
       } catch {
         setPhase("failed");
         setMessage("네트워크 오류로 결제 확인을 못 했어요. 잠시 후 주문 내역을 확인해주세요.");
-        notifyApp({ type: "payment", ok: false, reason: "network" });
+        notifyApp({ type: "payment", ok: false, reason: "network" }, props.returnToApp);
       }
     })();
   }, [props]);

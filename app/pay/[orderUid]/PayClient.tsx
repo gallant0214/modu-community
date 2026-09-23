@@ -16,6 +16,8 @@ export default function PayClient(props: {
   customerName: string;
   customerKey: string;
   clientKey: string;
+  /** 회원앱이 연 결제창인지 — 끝나면 앱으로 되돌려보낸다 */
+  returnToApp?: boolean;
 }) {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -59,7 +61,9 @@ export default function PayClient(props: {
     setError(null);
 
     const base = `${window.location.origin}/pay/${props.orderUid}/done`;
-    const q = `t=${encodeURIComponent(props.token)}&centerId=${props.centerId}`;
+    const q =
+      `t=${encodeURIComponent(props.token)}&centerId=${props.centerId}` +
+      (props.returnToApp ? "&rn=1" : "");
     try {
       await widgets.requestPayment({
         orderId: props.orderUid,
