@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { PRODUCT_SELECT, type SellableProduct } from "@/app/lib/member-purchase";
-import { quoteOrder, expireStaleOrders } from "@/app/lib/member-checkout";
+import {
+  quoteOrder,
+  expireStaleOrders,
+  onlineSalesEnabled,
+  SALES_DISABLED_MESSAGE,
+} from "@/app/lib/member-checkout";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +38,10 @@ export async function POST(request: Request) {
   const productId = Number(body.productId);
   if (!productId) {
     return NextResponse.json({ error: "상품을 선택해주세요" }, { status: 400 });
+  }
+
+  if (!onlineSalesEnabled()) {
+    return NextResponse.json({ error: SALES_DISABLED_MESSAGE }, { status: 503 });
   }
 
   // 시한 지난 주문이 잡고 있던 마일리지를 풀어야 가용액이 정확해진다

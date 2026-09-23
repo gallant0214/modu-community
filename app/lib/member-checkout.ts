@@ -15,6 +15,24 @@ import type { SellableProduct } from "@/app/lib/member-purchase";
 export const ORDER_TTL_MINUTES = 30;
 
 /**
+ * 온라인 판매 스위치.
+ *
+ * 🚨 기본은 **꺼짐**이다. PG 계약 전에는 토스 공개 테스트 키로 동작하는데,
+ *    그 상태로 열어두면 가짜 결제로 진짜 이용권이 발급된다.
+ *
+ *   ONLINE_SALES_ENABLED=1  → 테스트 키로도 판매 허용 (운영 DB 로 리허설할 때만)
+ *   실계약 키(TOSS_SECRET_KEY=live_...)가 꽂히면 자동으로 열린다
+ */
+export function onlineSalesEnabled(): boolean {
+  if (process.env.ONLINE_SALES_ENABLED === "1") return true;
+  const k = process.env.TOSS_SECRET_KEY;
+  return !!k && !k.startsWith("test_");
+}
+
+/** 판매가 꺼져 있을 때 회원에게 보여줄 문구 */
+export const SALES_DISABLED_MESSAGE = "온라인 결제는 준비 중이에요. 센터로 문의해주세요.";
+
+/**
  * 온라인(홈페이지·회원앱)에서 팔 수 있는 상품 유형 — 1차 오픈 범위.
  * 락커는 자리 배정이 수동이라, 운동복·물품은 재고 개념이 없어 제외했다.
  * 넓힐 때는 member-purchase.ts 의 발급 분기가 그 유형을 처리하는지 먼저 확인할 것.

@@ -3,7 +3,13 @@ import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { PRODUCT_SELECT, type SellableProduct } from "@/app/lib/member-purchase";
 import { tossClientKey } from "@/app/lib/toss-payments";
-import { quoteOrder, expireStaleOrders, ORDER_TTL_MINUTES } from "@/app/lib/member-checkout";
+import {
+  quoteOrder,
+  expireStaleOrders,
+  ORDER_TTL_MINUTES,
+  onlineSalesEnabled,
+  SALES_DISABLED_MESSAGE,
+} from "@/app/lib/member-checkout";
 import { claimCoupon, releaseCoupon } from "@/app/lib/crm-coupons-server";
 import { completeOrder, type OrderRow } from "@/app/lib/member-order-complete";
 import { signOrderToken } from "@/app/lib/order-token";
@@ -53,6 +59,10 @@ export async function POST(request: Request) {
   const productId = Number(body.productId);
   if (!productId) {
     return NextResponse.json({ error: "상품을 선택해주세요" }, { status: 400 });
+  }
+
+  if (!onlineSalesEnabled()) {
+    return NextResponse.json({ error: SALES_DISABLED_MESSAGE }, { status: 503 });
   }
   const channel = body.channel === "web" ? "web" : "app";
 

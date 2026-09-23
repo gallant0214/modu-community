@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { verifyOrderToken } from "@/app/lib/order-token";
 import { tossClientKey } from "@/app/lib/toss-payments";
+import { onlineSalesEnabled, SALES_DISABLED_MESSAGE } from "@/app/lib/member-checkout";
 import PayClient from "./PayClient";
 import SellerInfo, { loadSellerInfo } from "../SellerInfo";
 
@@ -21,6 +22,10 @@ export default async function PayPage({
 }) {
   const { orderUid } = await params;
   const { t } = await searchParams;
+
+  if (!onlineSalesEnabled()) {
+    return <Notice title="준비 중이에요" body={SALES_DISABLED_MESSAGE} />;
+  }
 
   if (!verifyOrderToken(t, orderUid)) {
     return (

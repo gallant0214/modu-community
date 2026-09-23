@@ -714,6 +714,12 @@ interface CenterProfile {
   instagram_id: string | null;
   youtube_url: string | null;
   operating_hours: string | null;
+  /* 온라인 판매(PG 결제) 페이지 표기 — 전자상거래법 의무 항목 */
+  business_no: string | null;
+  owner_name: string | null;
+  mail_order_no: string | null;
+  support_email: string | null;
+  refund_policy: string | null;
 }
 
 // 운영 시간: 요일 선택 + 시간대 항목 배열을 JSON 으로 operating_hours(text)에 저장.
@@ -800,6 +806,9 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
   const [googleUrl, setGoogleUrl] = useState("");
   const [instagramId, setInstagramId] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [mailOrderNo, setMailOrderNo] = useState("");
+  const [supportEmail, setSupportEmail] = useState("");
+  const [refundPolicy, setRefundPolicy] = useState("");
   // 운영 시간: 확정 항목 목록 + 현재 입력 중인 요일/시간
   const [hoursEntries, setHoursEntries] = useState<HoursEntry[]>([]);
   const [hoursSelDays, setHoursSelDays] = useState<number[]>([]);
@@ -830,6 +839,9 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       setInstagramId(c.instagram_id ?? "");
       setYoutubeUrl(c.youtube_url ?? "");
       setHoursEntries(parseHours(c.operating_hours));
+      setMailOrderNo(c.mail_order_no ?? "");
+      setSupportEmail(c.support_email ?? "");
+      setRefundPolicy(c.refund_policy ?? "");
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -850,7 +862,10 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       googleUrl !== (profile.google_url ?? "") ||
       instagramId !== (profile.instagram_id ?? "") ||
       youtubeUrl !== (profile.youtube_url ?? "") ||
-      hoursSerialized !== (profile.operating_hours ?? ""));
+      hoursSerialized !== (profile.operating_hours ?? "") ||
+      mailOrderNo !== (profile.mail_order_no ?? "") ||
+      supportEmail !== (profile.support_email ?? "") ||
+      refundPolicy !== (profile.refund_policy ?? ""));
 
   const save = async () => {
     if (!canEdit || !dirty || saving) return;
@@ -871,6 +886,9 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
           instagram_id: instagramId.trim().replace(/^@/, ""),
           youtube_url: youtubeUrl.trim(),
           operating_hours: hoursSerialized,
+          mail_order_no: mailOrderNo.trim(),
+          support_email: supportEmail.trim(),
+          refund_policy: refundPolicy.trim(),
         }),
       });
       const data = await res.json();
@@ -1061,6 +1079,62 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
           <ProfileField label="구글 링크" value={googleUrl} onChange={setGoogleUrl} disabled={!canEdit} placeholder="https://g.co/kgs/..." type="url" />
           <ProfileField label="인스타 아이디" value={instagramId} onChange={setInstagramId} disabled={!canEdit} placeholder="moducm_gangnam (@ 제외)" />
           <ProfileField label="유튜브 링크" value={youtubeUrl} onChange={setYoutubeUrl} disabled={!canEdit} placeholder="https://youtube.com/@..." type="url" />
+
+          {/* 온라인 판매(홈페이지·회원앱 결제) 표기 항목 — 비어 있으면 PG 심사에서 반려된다 */}
+          <div className="md:col-span-2 pt-3 mt-1 border-t border-[#E8E0D0] dark:border-zinc-700">
+            <div className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">온라인 판매 정보</div>
+            <p className="mt-1 text-[12px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">
+              홈페이지·회원앱 결제 페이지 하단에 표기됩니다. 전자상거래법상 의무 항목이라
+              비어 있으면 PG(토스페이먼츠) 심사에서 반려될 수 있어요.
+            </p>
+          </div>
+
+          <ProfileField
+            label="통신판매업 신고번호"
+            value={mailOrderNo}
+            onChange={setMailOrderNo}
+            disabled={!canEdit}
+            placeholder="제2026-대구수성-0000호"
+          />
+          <ProfileField
+            label="고객 문의 이메일"
+            value={supportEmail}
+            onChange={setSupportEmail}
+            disabled={!canEdit}
+            placeholder="center@example.com"
+            type="email"
+          />
+
+          <div className="md:col-span-2">
+            <ProfileField
+              label="환불·해지 규정"
+              value={refundPolicy}
+              onChange={setRefundPolicy}
+              disabled={!canEdit}
+              multiline
+              rows={6}
+              placeholder="센터 규정이 다르면 여기에 직접 입력하세요."
+            />
+            <p className="mt-1 text-[11px] text-[#A89B80]">
+              비워두면 기본 문구(이용 개시 전 전액 환불 / 개시 후 이용일수 차감 + 위약금 10%)가 결제 페이지에 표시됩니다.
+            </p>
+          </div>
+
+          {/* 사업자 정보는 본인확인이 필요해 여기서 못 고친다 — 어디서 바꾸는지 알려준다 */}
+          <div className="md:col-span-2 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 px-3 py-2.5">
+            <div className="text-[12px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">
+              결제 페이지에는 <b>상호 · 대표자 · 사업자등록번호 · 사업장 주소 · 연락처</b>도 함께 표기됩니다.
+              {(!profile.owner_name || !profile.business_no) && (
+                <span className="text-red-600 dark:text-red-400">
+                  {" "}지금 {[!profile.owner_name && "대표자", !profile.business_no && "사업자등록번호"]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  가 비어 있어요.
+                </span>
+              )}{" "}
+              이 항목은 본인확인이 필요해 <b>센터 관리 → 사업자 정보</b>에서 수정합니다.
+            </div>
+          </div>
         </div>
 
         {error && <div className="text-[12.5px] text-red-600">{error}</div>}
