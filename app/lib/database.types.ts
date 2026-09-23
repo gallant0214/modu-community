@@ -2351,6 +2351,42 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_pg_webhook_logs: {
+        Row: {
+          id: number
+          provider: string
+          event_type: string | null
+          payment_key: string | null
+          order_uid: string | null
+          handled: boolean
+          note: string | null
+          raw: Json | null
+          received_at: string
+        }
+        Insert: {
+          id?: number
+          provider?: string
+          event_type?: string | null
+          payment_key?: string | null
+          order_uid?: string | null
+          handled?: boolean
+          note?: string | null
+          raw?: Json | null
+          received_at?: string
+        }
+        Update: {
+          id?: number
+          provider?: string
+          event_type?: string | null
+          payment_key?: string | null
+          order_uid?: string | null
+          handled?: boolean
+          note?: string | null
+          raw?: Json | null
+          received_at?: string
+        }
+        Relationships: []
+      }
       crm_orders: {
         Row: {
           id: number

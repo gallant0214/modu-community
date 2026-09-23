@@ -31,6 +31,7 @@ const MENU: MenuItem[] = [
   { href: "/crm/attendances", label: "출석 현황",     group: "main", icon: IconAttendance },
   { href: "/crm/lockers",     label: "락커 관리",     group: "sales", icon: IconLocker },
   { href: "/crm/products",    label: "상품 관리",     group: "sales", perm: "products.view", icon: IconProduct },
+  { href: "/crm/orders",      label: "온라인 주문",   group: "sales", perm: "sales.view", icon: IconProduct },
   { href: "/crm/memberships", label: "회원권 관리",   group: "sales", perm: "sales.view", icon: IconMembership },
   { href: "/crm/passes",      label: "수강권 관리",   group: "sales", icon: IconPass },
   { href: "/crm/consultations", label: "PT 상담",       group: "sales", icon: IconConsult },

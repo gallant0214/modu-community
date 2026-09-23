@@ -139,3 +139,42 @@ export async function cancelTossPayment(opts: {
     return { ok: false, error: e instanceof Error ? e.message : "결제 서버 통신 실패" };
   }
 }
+
+/**
+ * 결제 단건 조회. **웹훅 본문을 믿지 않기 위해** 쓴다.
+ * 토스 웹훅은 서명이 없으므로, 알림을 받으면 우리가 토스에 직접 물어 확인한다.
+ */
+export async function fetchTossPayment(
+  paymentKey: string
+): Promise<{ ok: boolean; json?: Record<string, unknown>; error?: string }> {
+  const auth = Buffer.from(`${tossSecretKey()}:`).toString("base64");
+  try {
+    const res = await fetch(
+      `https://api.tosspayments.com/v1/payments/${encodeURIComponent(paymentKey)}`,
+      { headers: { Authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(15000) }
+    );
+    const json = (await res.json()) as Record<string, unknown>;
+    if (!res.ok) return { ok: false, error: String(json.message ?? `조회 실패 (${res.status})`) };
+    return { ok: true, json };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "결제 서버 통신 실패" };
+  }
+}
+
+/** 주문번호(orderId)로 결제 조회 — 웹훅이 paymentKey 를 안 줄 때 */
+export async function fetchTossPaymentByOrderId(
+  orderId: string
+): Promise<{ ok: boolean; json?: Record<string, unknown>; error?: string }> {
+  const auth = Buffer.from(`${tossSecretKey()}:`).toString("base64");
+  try {
+    const res = await fetch(
+      `https://api.tosspayments.com/v1/payments/orders/${encodeURIComponent(orderId)}`,
+      { headers: { Authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(15000) }
+    );
+    const json = (await res.json()) as Record<string, unknown>;
+    if (!res.ok) return { ok: false, error: String(json.message ?? `조회 실패 (${res.status})`) };
+    return { ok: true, json };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "결제 서버 통신 실패" };
+  }
+}
