@@ -4614,11 +4614,19 @@ function MemberMileageSection({ memberId, reloadKey }: { memberId: number; reloa
                       )}
                     </div>
                   </div>
-                  {(e.by || e.memo) && (
-                    <div className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
-                      {[e.by ? `처리: ${e.by}` : "", e.memo ?? ""].filter(Boolean).join(" · ")}
-                    </div>
-                  )}
+                  {(() => {
+                    // 센터(직원)가 손으로 넣고 뺀 건은 누가 했는지 분명히 남긴다
+                    const manual = e.reason === "center_add" || e.reason === "center_deduct" || e.reason === "adjust";
+                    const who = manual
+                      ? `${e.by ? `${e.by} ` : ""}직원이 ${plus ? "지급" : "차감"}`
+                      : e.by
+                        ? `처리: ${e.by}`
+                        : "";
+                    const line = [who, e.memo ?? ""].filter(Boolean).join(" · ");
+                    return line ? (
+                      <div className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">{line}</div>
+                    ) : null;
+                  })()}
                 </li>
               );
             })}
