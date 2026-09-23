@@ -59,6 +59,9 @@ export async function PATCH(request: Request) {
     mail_order_no?: string | null;
     support_email?: string | null;
     refund_policy?: string | null;
+    owner_name?: string | null;
+    /** 🚨 센터 양도·탈퇴 본인확인의 대조 항목 → 대표자만 수정 가능 */
+    business_no?: string | null;
   };
   try {
     body = await request.json();
@@ -86,6 +89,29 @@ export async function PATCH(request: Request) {
   setNullable("youtube_url", body.youtube_url ?? undefined);
   setNullable("operating_hours", body.operating_hours ?? undefined);
   setNullable("mail_order_no", body.mail_order_no ?? undefined);
+  setNullable("owner_name", body.owner_name ?? undefined);
+  /**
+   * 사업자등록번호는 센터 양도·탈퇴 본인확인에서 대조하는 값이다
+   * ([[crm-center-verify]]). 관리자가 바꿔치울 수 없도록 대표자만 허용한다.
+   */
+  if (body.business_no !== undefined) {
+    if (ctx.role !== "owner") {
+      return NextResponse.json(
+        { error: "사업자등록번호는 대표자만 수정할 수 있습니다" },
+        { status: 403 }
+      );
+    }
+    const digits = String(body.business_no ?? "").replace(/[^0-9]/g, "");
+    if (digits && digits.length !== 10) {
+      return NextResponse.json(
+        { error: "사업자등록번호는 숫자 10자리로 입력해 주세요" },
+        { status: 400 }
+      );
+    }
+    patch.business_no = digits
+      ? `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`
+      : null;
+  }
   setNullable("refund_policy", body.refund_policy ?? undefined);
   // 문의 이메일은 결제 페이지에 그대로 노출되므로 형식을 확인한다
   if (body.support_email !== undefined) {

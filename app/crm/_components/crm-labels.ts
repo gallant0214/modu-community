@@ -33,6 +33,17 @@ export function formatPhone(value: string): string {
   return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
 }
 
+/**
+ * 사업자등록번호 자동 하이픈 (000-00-00000).
+ * 입력 화면(센터 설정·온보딩)이 같은 규칙을 쓰도록 여기 한 곳에 둔다.
+ */
+export function formatBusinessNo(value: string): string {
+  const d = value.replace(/\D/g, "").slice(0, 10);
+  if (d.length < 4) return d;
+  if (d.length < 6) return `${d.slice(0, 3)}-${d.slice(3)}`;
+  return `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}`;
+}
+
 export const ROLE_LABEL: Record<string, string> = {
   owner: "대표자",
   admin: "관리자",

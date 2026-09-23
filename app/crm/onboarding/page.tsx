@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
-import { formatPhone } from "../_components/crm-labels";
+import { formatPhone, formatBusinessNo } from "../_components/crm-labels";
 
 type Mode = "solo" | "center";
 type Step = "mode" | "center-search" | "center-register" | "requested";
@@ -166,13 +166,6 @@ export default function CrmOnboardingPage() {
     }
   };
 
-  // 사업자등록번호 자동 하이픈 (000-00-00000)
-  const formatBizNo = (v: string) => {
-    const d = v.replace(/\D/g, "").slice(0, 10);
-    if (d.length < 4) return d;
-    if (d.length < 6) return `${d.slice(0, 3)}-${d.slice(3)}`;
-    return `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}`;
-  };
 
   // 파일 → base64 dataURL 변환 (2MB 상한, 이미지 정사각형 검사는 로고에만)
   const readFileAsDataUrl = (
@@ -396,7 +389,7 @@ export default function CrmOnboardingPage() {
                 type="text"
                 inputMode="numeric"
                 value={businessNo}
-                onChange={(e) => setBusinessNo(formatBizNo(e.target.value))}
+                onChange={(e) => setBusinessNo(formatBusinessNo(e.target.value))}
                 placeholder="000-00-00000"
                 maxLength={12}
                 className={inputClass}

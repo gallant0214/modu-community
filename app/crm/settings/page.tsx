@@ -5,7 +5,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { actionLabel } from "@/app/lib/crm-audit-format";
 import { CrmModal } from "../_components/crm-modal";
 import { crmInputClass } from "../_components/crm-modal";
-import { formatWon, parseWon, formatPhone } from "../_components/crm-labels";
+import { formatWon, parseWon, formatPhone, formatBusinessNo } from "../_components/crm-labels";
 import {
   PERMISSION_GROUPS,
   buildGradePermissionMatrix,
@@ -798,6 +798,8 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
   const canEdit = role === "owner" || role === "admin";
+  // 사업자등록번호는 센터 양도·탈퇴 본인확인 대조 항목 → 대표자만 수정
+  const isOwner = role === "owner";
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -806,6 +808,8 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
   const [googleUrl, setGoogleUrl] = useState("");
   const [instagramId, setInstagramId] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [ownerName, setOwnerName] = useState("");
+  const [businessNo, setBusinessNo] = useState("");
   const [mailOrderNo, setMailOrderNo] = useState("");
   const [supportEmail, setSupportEmail] = useState("");
   const [refundPolicy, setRefundPolicy] = useState("");
@@ -839,6 +843,8 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       setInstagramId(c.instagram_id ?? "");
       setYoutubeUrl(c.youtube_url ?? "");
       setHoursEntries(parseHours(c.operating_hours));
+      setOwnerName(c.owner_name ?? "");
+      setBusinessNo(formatBusinessNo(c.business_no ?? ""));
       setMailOrderNo(c.mail_order_no ?? "");
       setSupportEmail(c.support_email ?? "");
       setRefundPolicy(c.refund_policy ?? "");
@@ -863,6 +869,8 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       instagramId !== (profile.instagram_id ?? "") ||
       youtubeUrl !== (profile.youtube_url ?? "") ||
       hoursSerialized !== (profile.operating_hours ?? "") ||
+      ownerName !== (profile.owner_name ?? "") ||
+      businessNo !== formatBusinessNo(profile.business_no ?? "") ||
       mailOrderNo !== (profile.mail_order_no ?? "") ||
       supportEmail !== (profile.support_email ?? "") ||
       refundPolicy !== (profile.refund_policy ?? ""));
@@ -886,6 +894,8 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
           instagram_id: instagramId.trim().replace(/^@/, ""),
           youtube_url: youtubeUrl.trim(),
           operating_hours: hoursSerialized,
+          owner_name: ownerName.trim(),
+          ...(isOwner ? { business_no: businessNo.trim() } : {}),
           mail_order_no: mailOrderNo.trim(),
           support_email: supportEmail.trim(),
           refund_policy: refundPolicy.trim(),
@@ -1090,6 +1100,28 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
           </div>
 
           <ProfileField
+            label="대표자명"
+            value={ownerName}
+            onChange={setOwnerName}
+            disabled={!canEdit}
+            placeholder="홍길동"
+          />
+          <div>
+            <ProfileField
+              label="사업자등록번호"
+              value={businessNo}
+              onChange={(v) => setBusinessNo(formatBusinessNo(v))}
+              disabled={!isOwner}
+              placeholder="000-00-00000"
+              inputMode="numeric"
+            />
+            {!isOwner && (
+              <p className="mt-1 text-[11px] text-[#A89B80]">
+                센터 양도·탈퇴 본인확인에 쓰이는 값이라 대표자만 수정할 수 있어요.
+              </p>
+            )}
+          </div>
+          <ProfileField
             label="통신판매업 신고번호"
             value={mailOrderNo}
             onChange={setMailOrderNo}
@@ -1120,19 +1152,29 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
             </p>
           </div>
 
-          {/* 사업자 정보는 본인확인이 필요해 여기서 못 고친다 — 어디서 바꾸는지 알려준다 */}
+          {/* 결제 페이지에 무엇이 표기되는지 + 아직 빈 항목 알림 */}
           <div className="md:col-span-2 rounded-lg border border-dashed border-[#E8E0D0] dark:border-zinc-700 px-3 py-2.5">
             <div className="text-[12px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">
-              결제 페이지에는 <b>상호 · 대표자 · 사업자등록번호 · 사업장 주소 · 연락처</b>도 함께 표기됩니다.
-              {(!profile.owner_name || !profile.business_no) && (
-                <span className="text-red-600 dark:text-red-400">
-                  {" "}지금 {[!profile.owner_name && "대표자", !profile.business_no && "사업자등록번호"]
-                    .filter(Boolean)
-                    .join(" · ")}
-                  가 비어 있어요.
-                </span>
-              )}{" "}
-              이 항목은 본인확인이 필요해 <b>센터 관리 → 사업자 정보</b>에서 수정합니다.
+              결제 페이지 하단에 <b>상호 · 대표자 · 사업자등록번호 · 통신판매업신고번호 · 사업장 주소 · 연락처 · 이메일</b>이 표기됩니다.
+              {(() => {
+                const missing = [
+                  !name.trim() && "상호",
+                  !ownerName.trim() && "대표자명",
+                  !businessNo.trim() && "사업자등록번호",
+                  !mailOrderNo.trim() && "통신판매업 신고번호",
+                  !address.trim() && "사업장 주소",
+                  !phone.trim() && "연락처",
+                  !supportEmail.trim() && "문의 이메일",
+                ].filter(Boolean);
+                if (missing.length === 0) {
+                  return <span className="text-[#6B7B3A] dark:text-[#A8B87A]"> 필요한 항목이 모두 채워졌어요.</span>;
+                }
+                return (
+                  <span className="text-red-600 dark:text-red-400">
+                    {" "}아직 {missing.join(" · ")}이(가) 비어 있어요.
+                  </span>
+                );
+              })()}
             </div>
           </div>
         </div>
