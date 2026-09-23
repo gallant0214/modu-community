@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
-import { fetchTossPaymentByOrderId } from "@/app/lib/toss-payments";
+import { fetchTossPayment, fetchTossPaymentByOrderId } from "@/app/lib/toss-payments";
 import { completeOrder, type OrderRow } from "@/app/lib/member-order-complete";
 import { refundOrderMileage } from "@/app/lib/member-checkout";
 import { releaseCoupon } from "@/app/lib/crm-coupons-server";
@@ -74,12 +74,25 @@ export async function POST(request: Request) {
     | null;
   if (!order) return finish("우리 주문이 아님", false);
 
-  /* ── 토스에 직접 확인 ─────────────────────────────── */
-  const look = await fetchTossPaymentByOrderId(orderUid);
+  /* ── 토스에 직접 확인 ───────────────────────────────
+     🚨 paymentKey 조회를 먼저 쓴다.
+        주문번호 조회(/v1/payments/orders/{orderId})는 **결제위젯 키로는 동작하지 않는다**
+        (NOT_FOUND_MERCHANT). 토스 공개 문서 키로도 같아서 우리 상점 문제가 아니다.
+        paymentKey 가 없을 때만 주문번호 조회를 마지막 수단으로 쓴다.               */
+  const webhookPaymentKey = String(data.paymentKey ?? "").trim();
+  const knownPaymentKey = webhookPaymentKey || order.pg_payment_key || "";
+
+  const look = knownPaymentKey
+    ? await fetchTossPayment(knownPaymentKey)
+    : await fetchTossPaymentByOrderId(orderUid);
   if (!look.ok || !look.json) {
     return finish(`토스 조회 실패: ${look.error ?? "알 수 없음"}`, false);
   }
   const pay = look.json;
+  // paymentKey 로 조회했을 수 있으니, 돌아온 결제가 정말 이 주문인지 대조한다
+  if (String(pay.orderId ?? "") !== orderUid) {
+    return finish(`주문번호 불일치 (토스 ${String(pay.orderId ?? "")})`, false);
+  }
   const status = String(pay.status ?? "");
   const approvedAmount = Number(pay.totalAmount ?? 0);
 
@@ -92,8 +105,22 @@ export async function POST(request: Request) {
       // 금액이 다르면 손대지 않는다 — 사람이 봐야 하는 상황
       return finish(`금액 불일치 (토스 ${approvedAmount} / 주문 ${order.amount_won})`, false);
     }
-    if (order.status !== "pending") {
+    /**
+     * 🚨 시한이 지나 취소된 주문이라도 **토스가 DONE 이라면 발급한다.**
+     *    가상계좌처럼 입금이 나중에 들어오는 수단은 주문 시한(30분)을 넘기기 쉽고,
+     *    그때 막아버리면 "돈은 들어왔는데 이용권이 없는" 회원이 생긴다.
+     *    돈이 실제로 들어온 쪽을 언제나 우선한다.
+     */
+    if (!["pending", "canceled", "failed"].includes(order.status)) {
       return finish(`발급 대상 아님 (status=${order.status})`, false);
+    }
+    if (order.status !== "pending" && order.coupon_issue_id) {
+      // 시한 초과로 풀어줬던 쿠폰을 다시 사용 처리 — 이 주문이 그 할인으로 결제됐으므로
+      await supabase
+        .from("crm_coupon_issues")
+        .update({ status: "used", used_at: new Date().toISOString() } as never)
+        .eq("id", order.coupon_issue_id)
+        .eq("status", "issued");
     }
 
     const { data: mem } = await supabase

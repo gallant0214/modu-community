@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { verifyOrderToken } from "@/app/lib/order-token";
-import { tossClientKey } from "@/app/lib/toss-payments";
+import { tossClientKey, tossKeysMatch } from "@/app/lib/toss-payments";
 import { onlineSalesEnabled, SALES_DISABLED_MESSAGE } from "@/app/lib/member-checkout";
 import PayClient from "./PayClient";
 import SellerInfo, { loadSellerInfo } from "../SellerInfo";
@@ -25,6 +25,15 @@ export default async function PayPage({
 
   if (!onlineSalesEnabled()) {
     return <Notice title="준비 중이에요" body={SALES_DISABLED_MESSAGE} />;
+  }
+  // 클라이언트 키와 시크릿 키의 종류가 다르면 결제창은 떠도 승인에서 반드시 실패한다
+  if (!tossKeysMatch()) {
+    return (
+      <Notice
+        title="결제 설정에 문제가 있어요"
+        body="센터로 문의해주세요. (결제 키 설정 오류)"
+      />
+    );
   }
 
   if (!verifyOrderToken(t, orderUid)) {

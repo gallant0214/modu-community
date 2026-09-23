@@ -10,8 +10,15 @@
  * 미설정이면 토스 공개 테스트 키로 동작한다 → PG 계약 전에도 전 과정을 시험할 수 있다.
  */
 
-const TEST_SECRET = "test_sk_zXLkKEypNArWmo50nX3lmeaxYG5R";
-const TEST_CLIENT = "test_ck_D5GePWvyJnrK0W0k6q8gLzN97Eoq";
+/**
+ * 토스 공개 테스트 키 — 키를 설정하기 전에도 전 과정을 시험할 수 있게.
+ *
+ * 🚨 반드시 **결제위젯(주문서형·결제창형) 키**여야 한다(gck/gsk).
+ *    우리는 widgets() SDK 를 쓰는데 일반결제 키(ck/sk)를 넣으면 결제창이 뜨지 않는다.
+ *    두 종류는 MID 가 달라 클라이언트 키와 시크릿 키를 섞어 쓰면 승인에서 실패한다.
+ */
+const TEST_SECRET = "test_gsk_docs_OaPz8L5KdmQXkzRz3y47BMw6";
+const TEST_CLIENT = "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
 
 export function tossSecretKey(): string {
   return process.env.TOSS_SECRET_KEY || TEST_SECRET;
@@ -19,6 +26,15 @@ export function tossSecretKey(): string {
 
 export function tossClientKey(): string {
   return process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || TEST_CLIENT;
+}
+
+/**
+ * 클라이언트 키와 시크릿 키가 같은 종류(=같은 MID)인지.
+ * 어긋나면 결제창은 떠도 승인에서 반드시 실패한다 — 미리 잡는다.
+ */
+export function tossKeysMatch(): boolean {
+  const isWidget = (k: string) => /^(test|live)_g[cs]k_/.test(k);
+  return isWidget(tossClientKey()) === isWidget(tossSecretKey());
 }
 
 /** 실제 계약 키가 설정돼 있는지 (테스트 키로 도는 중이면 false) */
