@@ -4139,7 +4139,7 @@ function MemberPaymentsSection({
                       수정
                     </button>
                   )}
-                  {canRefund && !isRefunded && (
+                  {canRefund && !isRefunded && !p.pg && (
                     <button
                       onClick={() => refund(p.id)}
                       disabled={busy}
@@ -4147,6 +4147,15 @@ function MemberPaymentsSection({
                     >
                       환불
                     </button>
+                  )}
+                  {/* 🚨 PG 결제는 CRM 에서 환불하지 않는다 — 장부만 정리되고 돈은 토스에 남는다 */}
+                  {!isRefunded && !!p.pg && (
+                    <span
+                      className="px-2.5 py-1 rounded-lg text-[12px] font-semibold text-[#8C8270] dark:text-zinc-400 bg-[#F0EAD9] dark:bg-zinc-800 cursor-help"
+                      title="온라인 결제는 토스에서 취소해야 대금이 실제로 돌아갑니다. 취소하면 이용권 회수까지 자동으로 처리됩니다."
+                    >
+                      환불은 토스에서
+                    </span>
                   )}
                 </div>
               )}

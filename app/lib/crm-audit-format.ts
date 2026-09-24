@@ -34,6 +34,7 @@ export const ACTION_LABEL: Record<string, string> = {
   "payment.delete": "결제 삭제(구매취소)",
   "payment.refund": "결제 환불 · 이용권 회수",
   "payment.refund_pg": "PG 결제 취소 · 이용권 회수",
+  "order.pg_resync": "PG 상태 다시 확인",
   // 홀딩(일시정지)
   "pause.create": "홀딩 시작",
   "pause.update": "홀딩 수정",

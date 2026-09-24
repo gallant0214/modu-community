@@ -6,10 +6,7 @@ import {
   claimOrderForFulfillment,
   type OrderRow,
 } from "@/app/lib/member-order-complete";
-import { refundOrderMileage } from "@/app/lib/member-checkout";
-import { restoreCouponAfterRefund } from "@/app/lib/crm-coupons-server";
-import { retireIssuedForPayment, RETIRE_KIND_LABEL } from "@/app/lib/crm-retire-issued";
-import { matchItemsByRefundAmount, syncOrderRefundState } from "@/app/lib/crm-order-refund";
+import { applyPgCancel } from "@/app/lib/crm-pg-cancel";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -173,162 +170,9 @@ export async function POST(request: Request) {
 
   /* ── 토스 쪽에서 취소됨 ──────────────────────────── */
   if (status === "CANCELED" || status === "PARTIAL_CANCELED") {
-    if (order.status === "refunded") return finish("이미 환불 처리됨", true);
-
-    type TossCancel = {
-      cancelAmount?: number;
-      canceledAt?: string;
-      cancelReason?: string;
-      transactionKey?: string;
-    };
-    const cancels: TossCancel[] = Array.isArray(pay.cancels) ? (pay.cancels as TossCancel[]) : [];
-    const canceledAmount = cancels.reduce((sum, c) => sum + Number(c.cancelAmount ?? 0), 0);
-    const latest = cancels[cancels.length - 1];
-    const refundedAt = latest?.canceledAt || new Date().toISOString();
-    const reason = latest?.cancelReason || "PG 에서 취소됨";
-    /** 멱등 키 — 같은 취소가 여러 번 와도 항목마다 한 번만 기록된다 */
-    const txKey = latest?.transactionKey || null;
-
-    await supabase
-      .from("crm_orders")
-      .update({ refund_reason: reason, updated_at: new Date().toISOString() } as never)
-      .eq("id", order.id);
-
-    /* 🚨 취소된 금액에 해당하는 **항목**을 찾는다.
-          묶음 결제는 항목마다 금액이 다르므로, 환불 이력도 항목별로 남겨야 한다.
-          주문 단위로 한 건만 남기면 모든 항목에 같은 금액이 붙어 버린다.
-          애매하면 손대지 않고 직원이 보게 남긴다 — 엉뚱한 이용권을 회수하는 것보다 낫다. */
-    const matched = await matchItemsByRefundAmount({
-      orderId: order.id,
-      amountWon: canceledAmount || order.amount_won,
-    });
-
-    const notes: string[] = [];
-    let refundedMileageUsed = 0;
-    let refundedMileageEarned = 0;
-
-    if (matched.itemIds.length === 0) {
-      // 항목을 특정 못 했다 — 사실만 기록하고 이용권은 그대로 둔다
-      const { error: refErr } = await supabase.from("crm_payment_refunds").insert({
-        center_id: order.center_id,
-        member_id: order.member_id,
-        order_id: order.id,
-        amount_won: canceledAmount || order.amount_won,
-        refunded_at: refundedAt,
-        source: "pg",
-        provider: "toss",
-        is_partial: status !== "CANCELED",
-        reason,
-        pg_transaction_key: txKey,
-      } as never);
-      if (refErr && !String(refErr.message).includes("duplicate")) {
-        return finish(`환불 이력 기록 실패: ${refErr.message}`, false);
-      }
-      await syncOrderRefundState(order.id, refundedAt);
-      return finish(
-        "환불 처리 — 어느 항목이 취소됐는지 금액으로 특정할 수 없어 이용권을 회수하지 않음. 직원 확인 필요",
-        false
-      );
-    }
-
-    for (const itemId of matched.itemIds) {
-      const { data: itRow } = await supabase
-        .from("crm_order_items")
-        .select("id, payment_id, amount_won, product_name, mileage_used, mileage_earned, refunded_at")
-        .eq("id", itemId)
-        .maybeSingle();
-      const it = itRow as {
-        id: number;
-        payment_id: number | null;
-        amount_won: number;
-        product_name: string;
-        mileage_used: number | null;
-        mileage_earned: number | null;
-        refunded_at: string | null;
-      } | null;
-      if (!it || it.refunded_at) continue;
-
-      /* 항목별 환불 이력 — 금액은 **그 항목의 금액**이다.
-         멱등 키에 항목 id 를 붙여, 웹훅이 여러 번 와도 항목마다 한 번만 들어간다. */
-      const { error: refErr } = await supabase.from("crm_payment_refunds").insert({
-        center_id: order.center_id,
-        member_id: order.member_id,
-        payment_id: it.payment_id,
-        order_id: order.id,
-        amount_won: it.amount_won,
-        refunded_at: refundedAt,
-        source: "pg",
-        provider: "toss",
-        is_partial: status !== "CANCELED",
-        reason,
-        pg_transaction_key: txKey ? `${txKey}:${it.id}` : null,
-      } as never);
-      if (refErr && !String(refErr.message).includes("duplicate")) {
-        notes.push(`'${it.product_name}' 환불 이력 기록 실패(${refErr.message})`);
-        continue;
-      }
-
-      await supabase
-        .from("crm_order_items")
-        .update({ refunded_at: refundedAt, refund_amount: it.amount_won, updated_at: refundedAt } as never)
-        .eq("id", it.id);
-
-      refundedMileageUsed += Math.max(0, it.mileage_used ?? 0);
-      refundedMileageEarned += Math.max(0, it.mileage_earned ?? 0);
-
-      if (!it.payment_id) continue;
-      await supabase
-        .from("crm_payments")
-        .update({ status: "refunded", updated_at: refundedAt } as never)
-        .eq("id", it.payment_id);
-
-      const r = await retireIssuedForPayment({
-        centerId: order.center_id,
-        paymentId: it.payment_id,
-      });
-      if (!r.ok) {
-        notes.push(`'${it.product_name}' 이용권 회수 실패(${r.error ?? "알 수 없음"}) — 직원 확인 필요`);
-        continue;
-      }
-      if (!r.kind) continue;
-      notes.push(`${RETIRE_KIND_LABEL[r.kind] ?? r.kind} '${r.label ?? ""}' 회수`);
-      await supabase.from("crm_audit_logs").insert({
-        center_id: order.center_id,
-        actor_uid: "system:toss-webhook",
-        action: "payment.refund_pg",
-        entity_type: "crm_payments",
-        entity_id: it.payment_id,
-        payload: {
-          member_id: order.member_id,
-          환불금액: it.amount_won,
-          회수항목: RETIRE_KIND_LABEL[r.kind] ?? r.kind,
-          상품명: r.label,
-          처리경로: "PG(토스)에서 결제 취소 — 대금이 회원에게 반환됨",
-          ...(r.locker
-            ? { 락커: `반납 ${r.locker.returned}건 · 기간원복 ${r.locker.reverted}건` }
-            : {}),
-        } as never,
-      });
-    }
-
-    /* 마일리지도 **환불된 항목 몫만** 되돌린다.
-       주문 전체로 돌려주면 아직 살아있는 항목의 마일리지까지 돌려주게 된다. */
-    await refundOrderMileage({
-      centerId: order.center_id,
-      memberId: order.member_id,
-      used: refundedMileageUsed,
-      earned: refundedMileageEarned,
-    });
-
-    const state = await syncOrderRefundState(order.id, refundedAt);
-
-    /* 쿠폰은 **전부 환불됐을 때만** 돌려준다.
-       일부 항목이 살아있으면 그 항목이 쿠폰 할인을 이미 받은 상태다. */
-    if (state.allRefunded && order.coupon_issue_id) {
-      await restoreCouponAfterRefund(order.coupon_issue_id);
-    }
-
-    return finish(`환불 처리 완료${notes.length ? " · " + notes.join(" · ") : ""}`, true);
+    // 처리는 공용 함수가 한다 — '＄PG 상태 다시 확인'(수동)도 같은 함수를 쓴다
+    const res = await applyPgCancel({ order, pay });
+    return finish(res.note, res.ok && !res.needsStaff);
   }
 
   return finish(`처리 대상 아닌 상태 (${status})`, true);

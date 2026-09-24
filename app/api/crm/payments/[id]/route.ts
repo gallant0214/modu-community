@@ -112,6 +112,22 @@ export async function PATCH(
   /* 환불로 바뀐 순간을 이력에 남기고, 발급된 이용권을 회수한다.
      결제내역은 원장이라 결제 행의 status 만 바꾸면 "결제했다"는 사실이 사라진다.
      source='center' = 장부상 처리. PG 대금은 따로 취소해야 한다. */
+  /**
+   * 🚨 PG(토스)로 받은 결제는 CRM 에서 환불하지 못한다 (2026-09-24 사용자 확정).
+   *    CRM 환불은 장부만 정리하고 돈은 토스에 그대로 남아 두 곳이 어긋난다.
+   *    토스에서 취소해야 대금이 실제로 돌아가고, 그 알림(웹훅)으로 CRM 이 반영된다.
+   */
+  if (patch.status === "refunded" && before.order_id) {
+    return NextResponse.json(
+      {
+        error:
+          "온라인(토스) 결제는 여기서 환불할 수 없어요. 토스에서 결제를 취소하면 이용권 회수까지 자동으로 처리됩니다.",
+        code: "PG_REFUND_ONLY",
+      },
+      { status: 409 }
+    );
+  }
+
   let retired: { kind: string | null; label: string | null } | null = null;
   if (patch.status === "refunded" && before.status !== "refunded") {
     const { error: refErr } = await supabase.from("crm_payment_refunds").insert({
