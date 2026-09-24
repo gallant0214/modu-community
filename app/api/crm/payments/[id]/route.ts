@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
+import { retireIssuedForPayment, RETIRE_KIND_LABEL } from "@/app/lib/crm-retire-issued";
 
 export const dynamic = "force-dynamic";
 
@@ -106,11 +107,12 @@ export async function PATCH(
     .eq("center_id", ctx.centerId);
   if (error) return NextResponse.json({ error: "수정 실패", detail: error.message }, { status: 500 });
 
-  /* 환불로 바뀐 순간을 이력에 남긴다 — 결제내역은 원장이라
-     결제 행의 status 만 바꾸면 "결제했다"는 사실이 사라진다.
+  /* 환불로 바뀐 순간을 이력에 남기고, 발급된 이용권을 회수한다.
+     결제내역은 원장이라 결제 행의 status 만 바꾸면 "결제했다"는 사실이 사라진다.
      source='center' = 장부상 처리. PG 대금은 따로 취소해야 한다. */
+  let retired: { kind: string | null; label: string | null } | null = null;
   if (patch.status === "refunded" && before.status !== "refunded") {
-    await supabase.from("crm_payment_refunds").insert({
+    const { error: refErr } = await supabase.from("crm_payment_refunds").insert({
       center_id: ctx.centerId,
       member_id: before.member_id,
       payment_id: before.id,
@@ -121,6 +123,46 @@ export async function PATCH(
       reason: (body.note?.trim() || null) ?? null,
       actor_uid: ctx.uid,
     } as never);
+    if (refErr) {
+      return NextResponse.json(
+        { error: "환불 이력 기록 실패", detail: refErr.message },
+        { status: 500 }
+      );
+    }
+
+    // 🚨 환불하면 발급된 이용권도 회수한다 (2026-09-24 확정)
+    const r = await retireIssuedForPayment({
+      centerId: ctx.centerId,
+      paymentId: before.id,
+      actorUid: ctx.uid,
+    });
+    if (!r.ok) {
+      return NextResponse.json(
+        { error: r.error ?? "이용권 회수에 실패했어요" },
+        { status: 500 }
+      );
+    }
+    retired = { kind: r.kind, label: r.label };
+
+    if (r.kind) {
+      await supabase.from("crm_audit_logs").insert({
+        center_id: ctx.centerId,
+        actor_uid: ctx.uid,
+        action: "payment.refund",
+        entity_type: "crm_payments",
+        entity_id: before.id,
+        payload: {
+          member_id: before.member_id,
+          환불금액: (patch.amount_won as number | undefined) ?? before.amount_won,
+          회수항목: RETIRE_KIND_LABEL[r.kind] ?? r.kind,
+          상품명: r.label,
+          처리경로: "센터에서 환불 처리(장부) · PG 대금은 별도 취소 필요",
+          ...(r.locker
+            ? { 락커: `반납 ${r.locker.returned}건 · 기간원복 ${r.locker.reverted}건` }
+            : {}),
+        } as never,
+      });
+    }
   }
 
   await supabase.from("crm_audit_logs").insert({
@@ -131,7 +173,7 @@ export async function PATCH(
     entity_id: paymentId,
     payload: patch as never,
   });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, retired });
 }
 
 export async function DELETE(

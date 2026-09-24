@@ -32,6 +32,8 @@ export const ACTION_LABEL: Record<string, string> = {
   "payment.add": "결제 추가",
   "payment.update": "결제 수정",
   "payment.delete": "결제 삭제(구매취소)",
+  "payment.refund": "결제 환불 · 이용권 회수",
+  "payment.refund_pg": "PG 결제 취소 · 이용권 회수",
   // 홀딩(일시정지)
   "pause.create": "홀딩 시작",
   "pause.update": "홀딩 수정",
@@ -160,6 +162,8 @@ export const LOG_FIELD_LABEL: Record<string, string> = {
   session_minutes: "수업 시간", issue_type: "발급 유형", lesson_kind: "수업 종류",
   mileage_earned: "적립 마일리지", mileage_used: "사용 마일리지", co_trainer_ids: "추가 강사",
   reason: "사유", requested_by: "요청자", count: "대상", commission_rate: "커미션 요율",
+  // 환불·회수 로그는 payload 키를 한글로 넣으므로 그대로 노출된다
+  product_label: "상품명",
 };
 
 const LOG_MONEY_FIELDS = new Set(["price_won", "amount_won", "discount_won", "total_paid_won"]);

@@ -8,6 +8,7 @@ import {
 } from "@/app/lib/member-order-complete";
 import { refundOrderMileage } from "@/app/lib/member-checkout";
 import { releaseCoupon } from "@/app/lib/crm-coupons-server";
+import { retireIssuedForPayment, RETIRE_KIND_LABEL } from "@/app/lib/crm-retire-issued";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -256,17 +257,43 @@ export async function POST(request: Request) {
     });
     if (order.coupon_issue_id) await releaseCoupon(order.coupon_issue_id);
 
-    /**
-     * 🚨 발급된 이용권은 여기서 지우지 않는다.
-     *    남은 횟수를 이미 썼을 수도 있고, 되돌리는 방식(회수/일할 차감)은
-     *    센터가 판단할 일이다. 주문에 환불 표시만 남기고 직원이 처리하게 한다.
-     */
-    return finish(
-      order.issued_id
-        ? `환불 처리 — 발급된 ${order.issued_kind} #${order.issued_id} 는 직원 확인 필요`
-        : "환불 처리 완료",
-      true
-    );
+    /* 🚨 전액 취소면 발급된 이용권도 회수한다 (2026-09-24 확정).
+          부분 취소는 남은 금액이 있으므로 이용권을 건드리지 않는다. */
+    let retiredNote = "";
+    if (fullyCanceled && order.payment_id) {
+      const r = await retireIssuedForPayment({
+        centerId: order.center_id,
+        paymentId: order.payment_id,
+      });
+      if (!r.ok) {
+        retiredNote = ` · 이용권 회수 실패(${r.error ?? "알 수 없음"}) — 직원 확인 필요`;
+      } else if (r.kind) {
+        retiredNote = ` · ${RETIRE_KIND_LABEL[r.kind] ?? r.kind} '${r.label ?? ""}' 회수`;
+        await supabase.from("crm_orders")
+          .update({ issued_kind: null, issued_id: null, updated_at: new Date().toISOString() } as never)
+          .eq("id", order.id);
+        await supabase.from("crm_audit_logs").insert({
+          center_id: order.center_id,
+          // 사람이 아니라 PG 알림이 일으킨 처리 — 로그에서 구분되도록 표식을 남긴다
+          actor_uid: "system:toss-webhook",
+          action: "payment.refund_pg",
+          entity_type: "crm_payments",
+          entity_id: order.payment_id,
+          payload: {
+            member_id: order.member_id,
+            환불금액: canceledAmount || order.amount_won,
+            회수항목: RETIRE_KIND_LABEL[r.kind] ?? r.kind,
+            상품명: r.label,
+            처리경로: "PG(토스)에서 결제 취소 — 대금이 회원에게 반환됨",
+            ...(r.locker
+              ? { 락커: `반납 ${r.locker.returned}건 · 기간원복 ${r.locker.reverted}건` }
+              : {}),
+          } as never,
+        });
+      }
+    }
+
+    return finish(`환불 처리 완료${retiredNote}`, true);
   }
 
   return finish(`처리 대상 아닌 상태 (${status})`, true);

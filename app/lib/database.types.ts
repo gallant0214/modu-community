@@ -1869,6 +1869,7 @@ export type Database = {
           updated_at: string
           order_id: number | null
           source: string
+          product_label: string | null
         }
         Insert: {
           id?: number
@@ -1888,6 +1889,7 @@ export type Database = {
           updated_at?: string
           order_id?: number | null
           source?: string
+          product_label?: string | null
         }
         Update: {
           id?: number
@@ -1907,6 +1909,7 @@ export type Database = {
           updated_at?: string
           order_id?: number | null
           source?: string
+          product_label?: string | null
         }
         Relationships: []
       }

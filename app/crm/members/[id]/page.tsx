@@ -3606,7 +3606,19 @@ function MemberPaymentsSection({
   }
 
   async function refund(id: number) {
-    if (!window.confirm("이 결제를 환불 처리할까요?\n환불하면 누적 결제 합계에서 제외됩니다.")) return;
+    const p = payments.find((x) => x.id === id);
+    const productName = p?.product_name ? `'${p.product_name}' ` : "";
+    if (
+      !window.confirm(
+        `이 결제를 환불 처리할까요?\n\n` +
+          `· 결제내역에는 결제와 환불이 모두 기록으로 남습니다\n` +
+          `· ${productName}이용권이 회수되어 회원 보유에서 사라집니다\n` +
+          `· 락커 대여권이면 그 락커는 이전 상태로 돌아갑니다\n` +
+          `· 누적 결제 합계에서 제외됩니다\n\n` +
+          `⚠️ 카드 대금은 자동으로 돌아가지 않습니다. PG(토스)에서 따로 취소해 주세요.`
+      )
+    )
+      return;
     setBusyId(id);
     try {
       const token = await getIdToken();
@@ -3627,31 +3639,6 @@ function MemberPaymentsSection({
     }
   }
 
-  async function remove(id: number) {
-    if (
-      !window.confirm(
-        "이 결제내역 1건을 삭제(구매 취소)할까요?\n이 결제에 연결된 상품 하나만 삭제됩니다. 묶음으로 함께 구매한 다른 상품(회원권·수강권·대여권·락커)은 각각 결제내역이 따로 있으니, 필요하면 따로 삭제해 주세요.\n락커 대여권이면 그 락커는 이전 상태로 되돌아갑니다.\n되돌릴 수 없습니다."
-      )
-    )
-      return;
-    setBusyId(id);
-    try {
-      const token = await getIdToken();
-      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch(`/api/crm/payments/${id}`, {
-        method: "DELETE",
-        headers: { authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "삭제 실패");
-      await load();
-      onChanged?.();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "네트워크 오류");
-    } finally {
-      setBusyId(null);
-    }
-  }
 
   // 누적 = 환불 제외한 유효 결제 합계
   /* 누적 = 결제액에서 환불액을 뺀 실매출.
@@ -3919,8 +3906,10 @@ function MemberPaymentsSection({
                 </div>
               )}
 
-              {/* 액션 버튼: 수정 / 환불 / 삭제 */}
-              {!isEditing && (canEdit || canRefund || canDelete) && (
+              {/* 액션 버튼: 수정 / 환불
+                  🚨 '삭제' 는 없앴다(2026-09-24). 결제 기록까지 통째로 지워 원장이 사라졌고,
+                     환불이 이용권 회수까지 해주므로 존재 이유가 없다. */}
+              {!isEditing && (canEdit || canRefund) && (
                 <div className="mt-2 flex items-center gap-1.5">
                   {canEdit && (
                     <button
@@ -3945,15 +3934,6 @@ function MemberPaymentsSection({
                       className="px-2.5 py-1 rounded-lg text-[12px] font-semibold text-[#B47B2A] bg-[#B47B2A]/10 dark:bg-amber-900/30 dark:text-amber-300 disabled:opacity-50"
                     >
                       환불
-                    </button>
-                  )}
-                  {canDelete && (
-                    <button
-                      onClick={() => remove(p.id)}
-                      disabled={busy}
-                      className="px-2.5 py-1 rounded-lg text-[12px] font-semibold text-red-700 bg-red-50 dark:bg-red-950/40 dark:text-red-300 disabled:opacity-50"
-                    >
-                      삭제
                     </button>
                   )}
                 </div>

@@ -88,7 +88,7 @@ export async function GET(request: Request) {
     .from("crm_payments")
     // ⚠️ 한 줄 리터럴로 유지 — 문자열을 이어붙이면 Supabase 타입 추론이 깨진다
     .select(
-      "id, member_id, pass_id, membership_id, rental_id, amount_won, method, method_custom, paid_at, note, status, created_at, recorded_by_uid, source, order_id"
+      "id, member_id, pass_id, membership_id, rental_id, amount_won, method, method_custom, paid_at, note, status, created_at, recorded_by_uid, source, order_id, product_label"
     )
     .eq("center_id", ctx.centerId)
     .order("paid_at", { ascending: false })
@@ -375,8 +375,8 @@ export async function GET(request: Request) {
           ? membershipNameMap.get(r.membership_id) ?? "회원권"
           : r.rental_id
             ? rentalNameMap.get(r.rental_id) ?? "대여"
-            : // 환불로 상품이 회수된 온라인 결제 — 주문에 남은 이름을 쓴다
-              ord?.product_name ?? null,
+            : // 환불로 상품이 회수된 결제 — 회수 시 남긴 스냅샷, 없으면 주문에 남은 이름
+              r.product_label ?? ord?.product_name ?? null,
       handler_name: handlerName,
       /** 온라인 결제면 어디서 결제됐는지. 직원 발급이면 null */
       pg: ord
