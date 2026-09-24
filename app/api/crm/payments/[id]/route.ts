@@ -4,6 +4,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 import { retireIssuedForPayment, RETIRE_KIND_LABEL } from "@/app/lib/crm-retire-issued";
+import { restoreCouponAfterRefund, findCouponIssueForPayment } from "@/app/lib/crm-coupons-server";
 
 export const dynamic = "force-dynamic";
 
@@ -130,6 +131,19 @@ export async function PATCH(
       );
     }
 
+    // 회수하면 연결이 끊기므로, 쿠폰을 찾을 때 쓸 상품 id 를 미리 확보한다
+    const { data: linkRow } = await supabase
+      .from("crm_payments")
+      .select("pass_id, membership_id, rental_id")
+      .eq("id", before.id)
+      .maybeSingle();
+    const link = (linkRow ?? {}) as { pass_id?: number | null; membership_id?: number | null; rental_id?: number | null };
+    const retiredProductId = {
+      pass: link.pass_id ?? null,
+      membership: link.membership_id ?? null,
+      rental: link.rental_id ?? null,
+    };
+
     // 🚨 환불하면 발급된 이용권도 회수한다 (2026-09-24 확정)
     const r = await retireIssuedForPayment({
       centerId: ctx.centerId,
@@ -143,6 +157,20 @@ export async function PATCH(
       );
     }
     retired = { kind: r.kind, label: r.label };
+
+    // 이 결제에 쓴 쿠폰이 있으면 회원에게 돌려준다
+    const couponIssueId = await findCouponIssueForPayment({
+      centerId: ctx.centerId,
+      orderId: before.order_id,
+      productKind: r.kind,
+      productId:
+        r.kind === "membership"
+          ? retiredProductId.membership
+          : r.kind === "pass"
+            ? retiredProductId.pass
+            : retiredProductId.rental,
+    });
+    if (couponIssueId) await restoreCouponAfterRefund(couponIssueId);
 
     if (r.kind) {
       await supabase.from("crm_audit_logs").insert({

@@ -125,6 +125,68 @@ export async function releaseCoupon(issueId: number) {
     .is("used_ref_id", null);
 }
 
+/**
+ * 환불로 결제가 되돌아갔을 때 쿠폰을 다시 쓸 수 있게 돌려준다.
+ *
+ * releaseCoupon() 과 달리 **이미 결제에 연결된(used_ref_id 가 있는) 쿠폰도** 푼다.
+ * releaseCoupon 은 "발급하다 실패해서 롤백" 용이라 연결된 건을 일부러 건드리지 않는데,
+ * 환불은 그 결제 자체가 없어진 것이라 쿠폰을 회원에게 돌려주는 게 맞다.
+ * (2026-09-24: 환불 후에도 쿠폰이 '사용 완료' 로 남아 못 쓰게 되던 문제)
+ */
+export async function restoreCouponAfterRefund(issueId: number): Promise<boolean> {
+  const { data } = await supabase
+    .from("crm_coupon_issues")
+    .update({
+      status: "issued",
+      used_at: null,
+      used_by_uid: null,
+      used_by_name: null,
+      used_ref_kind: null,
+      used_ref_id: null,
+      original_price_won: null,
+      discount_applied_won: null,
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq("id", issueId)
+    .eq("status", "used")
+    .select("id");
+  return (data ?? []).length > 0;
+}
+
+/**
+ * 이 결제에 쓰인 쿠폰을 찾는다.
+ *  · 온라인 주문이면 주문에 기록된 쿠폰
+ *  · 직원 발급이면 발급된 상품(수강권/회원권/대여권)에 연결된 쿠폰
+ */
+export async function findCouponIssueForPayment(opts: {
+  centerId: number;
+  orderId: number | null;
+  productKind: string | null;
+  productId: number | null;
+}): Promise<number | null> {
+  if (opts.orderId) {
+    const { data } = await supabase
+      .from("crm_orders")
+      .select("coupon_issue_id")
+      .eq("id", opts.orderId)
+      .maybeSingle();
+    const id = (data as { coupon_issue_id: number | null } | null)?.coupon_issue_id ?? null;
+    if (id) return id;
+  }
+  if (opts.productKind && opts.productId) {
+    const { data } = await supabase
+      .from("crm_coupon_issues")
+      .select("id")
+      .eq("center_id", opts.centerId)
+      .eq("used_ref_kind", opts.productKind)
+      .eq("used_ref_id", opts.productId)
+      .eq("status", "used")
+      .maybeSingle();
+    return (data as { id: number } | null)?.id ?? null;
+  }
+  return null;
+}
+
 /** 사용/회수 기록에 남길 직원 표시 이름 */
 export async function staffDisplayName(centerMemberId: number | null | undefined): Promise<string | null> {
   if (!centerMemberId) return null;

@@ -7,7 +7,7 @@ import {
   type OrderRow,
 } from "@/app/lib/member-order-complete";
 import { refundOrderMileage } from "@/app/lib/member-checkout";
-import { releaseCoupon } from "@/app/lib/crm-coupons-server";
+import { releaseCoupon, restoreCouponAfterRefund } from "@/app/lib/crm-coupons-server";
 import { retireIssuedForPayment, RETIRE_KIND_LABEL } from "@/app/lib/crm-retire-issued";
 
 export const dynamic = "force-dynamic";
@@ -255,7 +255,8 @@ export async function POST(request: Request) {
       used: order.mileage_used ?? 0,
       earned: order.mileage_earned ?? 0,
     });
-    if (order.coupon_issue_id) await releaseCoupon(order.coupon_issue_id);
+    // 환불이면 이미 결제에 연결된 쿠폰도 돌려준다 (releaseCoupon 은 연결된 건을 건드리지 않는다)
+    if (order.coupon_issue_id) await restoreCouponAfterRefund(order.coupon_issue_id);
 
     /* 🚨 전액 취소면 발급된 이용권도 회수한다 (2026-09-24 확정).
           부분 취소는 남은 금액이 있으므로 이용권을 건드리지 않는다. */

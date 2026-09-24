@@ -486,13 +486,14 @@ export default function CrmMemberDetailPage() {
                     <UnlinkAppButton memberId={member.id} canEdit={canEditBasic} onDone={load} />
                   )}
                 </div>
-                <div className="mt-2">
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                   <MemberMessageButton
                     memberId={member.id}
                     memberName={member.name}
                     memberPhone={member.phone}
                     linked={!!member.linked_firebase_uid}
                   />
+                  <MemberCouponsButton memberId={member.id} memberName={member.name} />
                 </div>
               </div>
             </div>
@@ -1315,6 +1316,146 @@ function CheckInButton({
           {msg.text}
         </span>
       )}
+    </div>
+  );
+}
+
+/* 회원 상세 헤더 — 보유 쿠폰 (사용 가능 개수 표시 + 목록 창) */
+interface MemberCouponRow {
+  issueId: number;
+  code: string;
+  status: "issued" | "used" | "revoked" | "expired";
+  issuedAt: string;
+  expiresAt: string | null;
+  usedAt: string | null;
+  discountWon: number | null;
+  name: string;
+  benefit: string;
+  condition: string;
+}
+
+function MemberCouponsButton({ memberId, memberName }: { memberId: number; memberName: string }) {
+  const { getIdToken } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<MemberCouponRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch(`/api/crm/coupons/member/${memberId}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setRows((data.coupons ?? []) as MemberCouponRow[]);
+    } catch {
+      /* 쿠폰 조회 실패가 회원 상세를 막지 않는다 */
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken, memberId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  /** 버튼에는 지금 쓸 수 있는 장수만 센다 — 사용·만료된 건 세면 오해를 만든다 */
+  const usable = rows.filter((r) => r.status === "issued").length;
+
+  const STATUS_META: Record<string, { label: string; cls: string }> = {
+    issued: { label: "사용 가능", cls: "bg-[#6B7B3A]/12 text-[#4F5C2A] dark:bg-[#6B7B3A]/30 dark:text-[#A8B87A]" },
+    used: { label: "사용 완료", cls: "bg-[#E8E0D0] text-[#6B5D47] dark:bg-zinc-800 dark:text-zinc-400" },
+    expired: { label: "기간 만료", cls: "bg-[#E8E0D0] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500" },
+    revoked: { label: "회수됨", cls: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300" },
+  };
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(true);
+          load();
+        }}
+        className="inline-flex h-9 items-center gap-1.5 px-3.5 rounded-lg border border-[#B47B2A]/60 text-[#B47B2A] dark:border-amber-500/50 dark:text-amber-300 text-[12.5px] font-semibold bg-white dark:bg-zinc-900 hover:bg-[#B47B2A]/8 transition-colors"
+      >
+        <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V6a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 000 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2a2 2 0 000-4z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13 5v14" strokeDasharray="2 2" />
+        </svg>
+        보유 쿠폰{loading ? "" : ` (${usable})`}
+      </button>
+
+      <CrmModal open={open} onClose={() => setOpen(false)} title={`보유 쿠폰 · ${memberName}`} size="md">
+        {loading ? (
+          <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
+        ) : rows.length === 0 ? (
+          <div className="py-10 text-center">
+            <p className="text-[13px] text-[#8C8270] dark:text-zinc-500">보유한 쿠폰이 없어요.</p>
+            <a
+              href="/crm/coupons"
+              className="mt-2 inline-block text-[12.5px] text-[#6B7B3A] dark:text-[#A8B87A] underline"
+            >
+              쿠폰 발급하러 가기
+            </a>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {rows.map((r) => {
+              const meta = STATUS_META[r.status] ?? STATUS_META.issued;
+              const dim = r.status !== "issued";
+              return (
+                <li
+                  key={r.issueId}
+                  className={`rounded-xl border px-3.5 py-3 ${
+                    dim
+                      ? "border-[#E8E0D0] dark:border-zinc-800 opacity-70"
+                      : "border-[#B47B2A]/35 dark:border-amber-500/30 bg-[#B47B2A]/[0.04] dark:bg-amber-950/10"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[13.5px] font-bold text-[#2A251D] dark:text-zinc-100">
+                          {r.name}
+                        </span>
+                        <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${meta.cls}`}>
+                          {meta.label}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[12.5px] text-[#6B5D47] dark:text-zinc-300">
+                        {r.benefit}
+                      </p>
+                      {!!r.condition && (
+                        <p className="mt-0.5 text-[11.5px] text-[#A89B80]">{r.condition}</p>
+                      )}
+                    </div>
+                    <span className="shrink-0 text-[11px] text-[#A89B80] tabular-nums">{r.code}</span>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] text-[#A89B80]">
+                    <span>발급 {String(r.issuedAt).slice(0, 10).replace(/-/g, ".")}</span>
+                    {r.expiresAt && (
+                      <span>
+                        {r.status === "expired" ? "만료" : "사용 기한"}{" "}
+                        {r.expiresAt.replace(/-/g, ".")}까지
+                      </span>
+                    )}
+                    {r.status === "used" && r.usedAt && (
+                      <span>
+                        사용 {String(r.usedAt).slice(0, 10).replace(/-/g, ".")}
+                        {r.discountWon ? ` · ${formatWon(r.discountWon)} 할인` : ""}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CrmModal>
     </div>
   );
 }
