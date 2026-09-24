@@ -213,3 +213,69 @@ async function failOrder(
       : "상품 발급에 실패했어요. 잠시 후 다시 시도해주세요.",
   };
 }
+
+/** 주문 조회에 쓰는 컬럼 — 발급에 필요한 것 전부 */
+export const ORDER_FULL_SELECT =
+  "id, center_id, member_id, product_id, product_name, amount_won, list_price_won, " +
+  "coupon_issue_id, coupon_discount_won, mileage_used, mileage_earned, channel, status, " +
+  "issued_kind, issued_id, pg_payment_key, pg_receipt_url";
+
+/** 발급에 필요한 컬럼이 모두 채워진 주문 */
+export interface FullOrder extends OrderRow {
+  issued_kind: string | null;
+  issued_id: number | null;
+  pg_receipt_url: string | null;
+}
+
+export type ClaimOutcome =
+  | { won: true; order: FullOrder }
+  | { won: false; reason: "already_done" | "in_progress" | "not_claimable"; order: FullOrder | null };
+
+/**
+ * 발급 권한을 **원자적으로 선점**한다.
+ *
+ * 🚨 이게 없으면 이중 발급이 난다.
+ *    2026-09-24 사고: 브라우저 승인과 웹훅이 0.03초 차로 동시에 들어와
+ *    둘 다 주문을 pending 으로 읽고 각자 발급 → 회원권·결제원장이 2건씩 생겼다.
+ *    "읽어서 확인하고 쓴다"는 동시 실행에 무력하다. 조건부 UPDATE 로 한쪽만 이기게 한다.
+ *    (쿠폰 claimCoupon 과 같은 방식)
+ *
+ * @param allowStale 시한이 지나 취소된 주문도 선점 허용(웹훅의 늦은 입금 구제용)
+ */
+export async function claimOrderForFulfillment(
+  orderId: number,
+  allowStale = false
+): Promise<ClaimOutcome> {
+  const claimable = allowStale ? ["pending", "canceled", "failed"] : ["pending"];
+
+  const { data: claimed } = await supabase
+    .from("crm_orders")
+    .update({ status: "processing", updated_at: new Date().toISOString() } as never)
+    .eq("id", orderId)
+    .in("status", claimable)
+    .select(ORDER_FULL_SELECT);
+
+  const won = ((claimed ?? [])[0] ?? null) as unknown as FullOrder | null;
+  if (won) return { won: true, order: won };
+
+  // 못 잡았다 — 왜인지 알려줘야 호출 측이 알맞게 응답한다
+  const { data: cur } = await supabase
+    .from("crm_orders")
+    .select(ORDER_FULL_SELECT)
+    .eq("id", orderId)
+    .maybeSingle();
+  const order = (cur ?? null) as unknown as FullOrder | null;
+  if (!order) return { won: false, reason: "not_claimable", order: null };
+  if (order.status === "paid" && order.issued_id) return { won: false, reason: "already_done", order };
+  if (order.status === "processing") return { won: false, reason: "in_progress", order };
+  return { won: false, reason: "not_claimable", order };
+}
+
+/** 선점만 하고 발급을 못 한 경우 — 원래 상태로 되돌린다 */
+export async function releaseOrderClaim(orderId: number, backTo: string) {
+  await supabase
+    .from("crm_orders")
+    .update({ status: backTo, updated_at: new Date().toISOString() } as never)
+    .eq("id", orderId)
+    .eq("status", "processing");
+}

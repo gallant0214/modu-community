@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { fetchTossPayment, fetchTossPaymentByOrderId } from "@/app/lib/toss-payments";
-import { completeOrder, type OrderRow } from "@/app/lib/member-order-complete";
+import {
+  completeOrder,
+  claimOrderForFulfillment,
+  type OrderRow,
+} from "@/app/lib/member-order-complete";
 import { refundOrderMileage } from "@/app/lib/member-checkout";
 import { releaseCoupon } from "@/app/lib/crm-coupons-server";
 
@@ -123,6 +127,16 @@ export async function POST(request: Request) {
         .eq("status", "issued");
     }
 
+    /* 🚨 브라우저 승인이 같은 주문을 동시에 발급할 수 있다. 한쪽만 이기게 한다.
+          (2026-09-24 이중 발급 사고) */
+    const claim = await claimOrderForFulfillment(order.id, true);
+    if (!claim.won) {
+      return finish(
+        claim.reason === "already_done" ? "이미 발급됨(중복 방지)" : "다른 요청이 처리 중",
+        true
+      );
+    }
+
     const { data: mem } = await supabase
       .from("crm_members")
       .select("name")
@@ -130,7 +144,7 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     const done = await completeOrder({
-      order,
+      order: claim.order,
       memberName: (mem as { name?: string } | null)?.name ?? "",
       pg: {
         paymentKey: String(pay.paymentKey ?? ""),

@@ -30,6 +30,7 @@ interface Order {
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "결제 대기",
+  processing: "처리 중",
   paid: "결제 완료",
   failed: "결제 실패",
   canceled: "시간 초과",

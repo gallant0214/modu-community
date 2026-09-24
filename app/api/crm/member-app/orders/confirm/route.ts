@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { confirmTossPayment } from "@/app/lib/toss-payments";
-import { completeOrder, type OrderRow } from "@/app/lib/member-order-complete";
+import {
+  completeOrder,
+  claimOrderForFulfillment,
+  releaseOrderClaim,
+  type OrderRow,
+} from "@/app/lib/member-order-complete";
 import { releaseCoupon } from "@/app/lib/crm-coupons-server";
 import { verifyOrderToken } from "@/app/lib/order-token";
 
@@ -95,6 +100,13 @@ export async function POST(request: Request) {
       issued: { kind: order.issued_kind, id: order.issued_id },
     });
   }
+  if (order.status === "processing") {
+    // 웹훅이 먼저 잡아 발급 중 — 잠깐 뒤 주문 내역에서 확인된다
+    return NextResponse.json(
+      { ok: true, pending: true, orderId: order.id, message: "결제를 처리하고 있어요" },
+      { status: 202 }
+    );
+  }
   if (order.status !== "pending") {
     return NextResponse.json({ error: "이미 종료된 주문이에요" }, { status: 409 });
   }
@@ -121,9 +133,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: confirm.error ?? "결제 승인에 실패했어요" }, { status: 402 });
   }
 
-  /* ── 3) 발급 · 마일리지 · 원장 · 쿠폰 · 알림 ──────────── */
+  /* ── 3) 발급 권한을 원자적으로 선점 ────────────────────
+     🚨 웹훅이 같은 주문을 동시에 발급할 수 있다. 조건부 UPDATE 로 한쪽만 이긴다.
+        (2026-09-24 이중 발급 사고 — 읽고 나서 쓰는 방식은 동시 실행을 못 막는다) */
+  const claim = await claimOrderForFulfillment(order.id);
+  if (!claim.won) {
+    if (claim.reason === "already_done" && claim.order) {
+      return NextResponse.json({
+        ok: true,
+        alreadyDone: true,
+        orderId: claim.order.id,
+        amount: claim.order.amount_won,
+        receiptUrl: claim.order.pg_receipt_url ?? undefined,
+        issued: { kind: claim.order.issued_kind, id: claim.order.issued_id },
+      });
+    }
+    // 웹훅이 처리 중 — 승인은 이미 끝났으니 회원에게는 성공으로 알린다
+    return NextResponse.json(
+      { ok: true, pending: true, orderId: order.id, message: "결제를 처리하고 있어요" },
+      { status: 202 }
+    );
+  }
+
+  /* ── 4) 발급 · 마일리지 · 원장 · 쿠폰 · 알림 ──────────── */
   const done = await completeOrder({
-    order,
+    order: claim.order,
     memberName,
     pg: {
       paymentKey: confirm.paymentKey,
@@ -136,6 +170,7 @@ export async function POST(request: Request) {
   if (!done.ok) {
     return NextResponse.json({ error: done.error }, { status: done.status });
   }
+  void releaseOrderClaim; // 발급 실패 시 상태는 completeOrder 가 직접 정리한다
 
   return NextResponse.json({
     ok: true,

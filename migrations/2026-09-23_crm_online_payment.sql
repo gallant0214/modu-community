@@ -86,3 +86,9 @@ ALTER TABLE crm_products
 ALTER TABLE crm_products DROP CONSTRAINT IF EXISTS crm_products_online_eligibility_check;
 ALTER TABLE crm_products ADD  CONSTRAINT crm_products_online_eligibility_check
   CHECK (online_eligibility IN ('any', 'new', 'rejoin'));
+
+/* ── 이중 발급 방지 (2026-09-24 사고 대응) ──────────────────
+   웹훅과 브라우저 승인이 0.03초 차로 동시에 발급해 회원권·결제원장이 2건씩 생겼다.
+   주문 1건당 결제원장은 반드시 1건 — DB 가 마지막 방어선이 된다. */
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_crm_payments_order
+  ON crm_payments (order_id) WHERE order_id IS NOT NULL;

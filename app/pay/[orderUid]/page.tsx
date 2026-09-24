@@ -71,7 +71,13 @@ export default async function PayPage({
   if (order.status !== "pending") {
     return (
       <Notice
-        title={order.status === "paid" ? "이미 결제가 끝난 주문이에요" : "종료된 주문이에요"}
+        title={
+          order.status === "paid"
+            ? "이미 결제가 끝난 주문이에요"
+            : order.status === "processing"
+              ? "결제를 처리하고 있어요"
+              : "종료된 주문이에요"
+        }
         body="주문 내역에서 확인해주세요."
       />
     );

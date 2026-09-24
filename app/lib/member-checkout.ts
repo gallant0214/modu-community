@@ -377,6 +377,7 @@ export async function expireStaleOrders(opts: {
   memberId?: number;
   limit?: number;
 }): Promise<number> {
+  // 🚨 pending 만 정리한다. processing 은 지금 발급 중이라 건드리면 이중 발급·유실이 난다.
   let q = supabase
     .from("crm_orders")
     .select("id, coupon_issue_id")
