@@ -121,7 +121,14 @@ export async function POST(request: Request) {
      *    돈이 실제로 들어온 쪽을 언제나 우선한다.
      */
     if (!["pending", "canceled", "failed"].includes(order.status)) {
-      return finish(`발급 대상 아님 (status=${order.status})`, false);
+      // processing = 브라우저 승인이 지금 처리 중. 양보하는 게 정상 동작이라 실패로 남기지 않는다
+      const normal = order.status === "processing" || order.status === "paid";
+      return finish(
+        normal
+          ? `브라우저 승인이 처리 중이라 양보 (status=${order.status})`
+          : `발급 대상 아님 (status=${order.status})`,
+        normal
+      );
     }
     if (order.status !== "pending" && order.coupon_issue_id) {
       // 시한 초과로 풀어줬던 쿠폰을 다시 사용 처리 — 이 주문이 그 할인으로 결제됐으므로

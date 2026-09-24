@@ -99,6 +99,7 @@ export async function completeOrder(opts: {
       mileageUsed: order.mileage_used ?? 0,
       mileageEarn: order.mileage_earned ?? 0,
       pgMethod: pg?.method ?? (order.amount_won === 0 ? "쿠폰·마일리지" : null),
+      channel: order.channel,
     });
   } catch (e) {
     return failOrder(

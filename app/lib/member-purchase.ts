@@ -110,6 +110,8 @@ export async function fulfillPurchase(opts: {
   mileageEarn?: number;
   /** PG 가 알려준 결제 수단 문구 (메모용) */
   pgMethod?: string | null;
+  /** 어디서 구매했는지 — 메모에 남긴다. web=홈페이지 / app=회원앱 */
+  channel?: string | null;
 }): Promise<FulfillOutcome> {
   const { centerId, memberId, product } = opts;
   const today = kstToday();
@@ -132,7 +134,8 @@ export async function fulfillPurchase(opts: {
     ? UNLIMITED_EXPIRY
     : computeExpiryYmd(startDate, product.duration_value ?? 0, product.duration_unit ?? "day");
 
-  const memo = `회원앱 구매${opts.pgMethod ? ` (${opts.pgMethod})` : ""}`;
+  const where = opts.channel === "web" ? "홈페이지 구매" : "회원앱 구매";
+  const memo = `${where}${opts.pgMethod ? ` (${opts.pgMethod})` : ""}`;
 
   /* ── 물품 — 발급물 없이 판매 기록만 ─────────── */
   if (NO_ISSUE_TYPES.has(product.type)) {
