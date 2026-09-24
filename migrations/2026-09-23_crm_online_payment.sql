@@ -92,3 +92,11 @@ ALTER TABLE crm_products ADD  CONSTRAINT crm_products_online_eligibility_check
    주문 1건당 결제원장은 반드시 1건 — DB 가 마지막 방어선이 된다. */
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_crm_payments_order
   ON crm_payments (order_id) WHERE order_id IS NOT NULL;
+
+/* ── 결제 상태에 refunded 허용 (2026-09-24) ──────────────────
+   코드는 처음부터 'refunded' 를 쓰는데(회원 상세 환불 버튼, 매출 합계 제외 로직,
+   PG 웹훅) DB 제약은 completed/cancelled 만 허용해 UPDATE 가 조용히 실패했다.
+   환불 처리된 결제가 2,661건 중 0건이었던 이유. 제약을 코드 의미에 맞춘다. */
+ALTER TABLE crm_payments DROP CONSTRAINT IF EXISTS crm_payments_status_check;
+ALTER TABLE crm_payments ADD  CONSTRAINT crm_payments_status_check
+  CHECK (status IN ('completed', 'cancelled', 'refunded'));

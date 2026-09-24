@@ -168,7 +168,7 @@ export async function POST(request: Request) {
       )
     );
 
-    await supabase
+    const { error: ordErr } = await supabase
       .from("crm_orders")
       .update({
         status: "refunded",
@@ -178,12 +178,18 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString(),
       } as never)
       .eq("id", order.id);
+    if (ordErr) return finish(`주문 환불 처리 실패: ${ordErr.message}`, false);
 
-    // 결제 원장도 환불로 — 매출 합계에서 빠지도록
-    await supabase
+    /* 결제 원장도 환불로 — 매출 합계에서 빠지도록.
+       🚨 결과를 반드시 확인한다. 2026-09-24 에 여기서 제약 위반(status 에 refunded 불가)이
+          조용히 묻혀 주문만 환불되고 매출은 그대로 잡혀 있었다. */
+    const { error: payErr } = await supabase
       .from("crm_payments")
       .update({ status: "refunded", updated_at: new Date().toISOString() } as never)
       .eq("order_id", order.id);
+    if (payErr) {
+      return finish(`주문은 환불 처리했지만 결제 원장 반영 실패: ${payErr.message}`, false);
+    }
 
     // 썼던 마일리지는 돌려주고, 구매 적립분은 회수한다
     await refundOrderMileage({
