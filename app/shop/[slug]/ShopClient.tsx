@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 
 export interface ShopProduct {
@@ -72,7 +73,17 @@ export default function ShopClient(props: {
   salesEnabled: boolean;
 }) {
   const { user, loading, signInWithGoogle, signInWithApple, getIdToken } = useAuth();
+  const searchParams = useSearchParams();
   const [picked, setPicked] = useState<ShopProduct | null>(null);
+
+  // 상품 지정 링크(?product=<id>) — 해당 상품 결제 시트를 바로 연다 (최초 1회)
+  useEffect(() => {
+    const pid = Number(searchParams.get("product"));
+    if (!pid) return;
+    const p = props.products.find((x) => x.id === pid && !x.addon);
+    if (p) setPicked(p);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   /** 함께 담은 곁들임 상품(운동복) — 이용권을 고를 때 같이 결제된다 */
   const [addons, setAddons] = useState<number[]>([]);
   const [regType, setRegType] = useState<string | null | undefined>(undefined);
