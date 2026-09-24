@@ -3162,6 +3162,18 @@ interface PaymentRow {
   handler_name?: string | null;
   /** 상품 관리의 묶음 상품(부모/구성)으로 결제된 건 — 서버 판정 */
   bundle?: boolean;
+  /** 이 결제에 발생한 환불 이벤트들 (시간 오름차순) */
+  refunds?: {
+    id: number;
+    amount_won: number;
+    refunded_at: string;
+    /** pg = PG 에서 취소(대금 반환) / center = 센터 장부 처리 */
+    source: string;
+    provider: string | null;
+    is_partial: boolean;
+    reason: string | null;
+    actor_name: string | null;
+  }[];
   /** 온라인(PG) 결제면 어디서 결제·환불됐는지. 직원 발급이면 null */
   pg?: {
     provider: string;
@@ -3642,7 +3654,14 @@ function MemberPaymentsSection({
   }
 
   // 누적 = 환불 제외한 유효 결제 합계
-  const total = payments.reduce((s, p) => s + (p.status === "refunded" ? 0 : p.amount_won ?? 0), 0);
+  /* 누적 = 결제액에서 환불액을 뺀 실매출.
+     전액 환불(status='refunded')은 0, 부분 환불은 남은 금액만 더한다.
+     환불 이력이 없는 과거 데이터는 status 만으로 판단한다. */
+  const total = payments.reduce((s, p) => {
+    if (p.status === "refunded") return s;
+    const refunded = (p.refunds ?? []).reduce((a, r) => a + (r.amount_won ?? 0), 0);
+    return s + Math.max(0, (p.amount_won ?? 0) - refunded);
+  }, 0);
   if (loading) return <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>;
   if (error)
     return (
@@ -3689,6 +3708,8 @@ function MemberPaymentsSection({
               : PAYMENT_METHOD_KO[p.method] ?? p.method;
           const statusLabel = PAYMENT_STATUS_KO[p.status];
           const isRefunded = p.status === "refunded";
+          const hasRefunds = (p.refunds?.length ?? 0) > 0;
+          const refundedSum = (p.refunds ?? []).reduce((s2, r) => s2 + (r.amount_won ?? 0), 0);
           const isEditing = editingId === p.id;
           const busy = busyId === p.id;
           return (
@@ -3719,30 +3740,13 @@ function MemberPaymentsSection({
                       {p.pg.channel === "app" ? " · 앱" : p.pg.channel === "web" ? " · 홈" : ""}
                     </span>
                   )}
-                  {/* 환불 출처 — PG 취소와 센터 처리를 구분해야 책임 소재가 분명해진다 */}
-                  {isRefunded && (
-                    <span
-                      className="shrink-0 px-1.5 py-0.5 rounded text-[11px] font-bold bg-red-500/12 text-red-700 dark:bg-red-500/25 dark:text-red-300"
-                      title={
-                        p.pg?.refundedAt
-                          ? "PG(토스) 쪽에서 취소된 건이에요. 실제 대금이 회원에게 돌아갔습니다."
-                          : "센터에서 장부상 환불 처리한 건이에요. PG 대금은 따로 확인이 필요합니다."
-                      }
-                    >
-                      {p.pg?.refundedAt
-                        ? `${PG_LABEL[p.pg.provider] ?? p.pg.provider} 환불`
-                        : "센터 환불"}
-                    </span>
-                  )}
                   <span className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 truncate">
                     {productLabel}
                   </span>
                 </span>
                 <span
                   className={`text-[14px] font-bold shrink-0 ${
-                    isRefunded
-                      ? "text-[#A89B80] line-through"
-                      : "text-[#6B7B3A] dark:text-[#A8B87A]"
+                    isRefunded ? "text-[#A89B80]" : "text-[#6B7B3A] dark:text-[#A8B87A]"
                   }`}
                 >
                   {p.amount_won.toLocaleString()}원
@@ -3758,7 +3762,7 @@ function MemberPaymentsSection({
                     결제자 {p.handler_name}
                   </span>
                 )}
-                {statusLabel && (
+                {statusLabel && !hasRefunds && (
                   <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300">
                     {statusLabel}
                   </span>
@@ -3771,6 +3775,71 @@ function MemberPaymentsSection({
               {p.note && (
                 <div className="mt-1 text-[12px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap">
                   {p.note}
+                </div>
+              )}
+
+              {/* 환불 이력 — 결제 아래에 시간순으로 붙인다.
+                  결제했다는 사실과 환불됐다는 사실을 둘 다 남기는 게 원장이다. */}
+              {hasRefunds && (
+                <div className="mt-2 space-y-1.5">
+                  {p.refunds!.map((rf) => {
+                    const byPg = rf.source === "pg";
+                    return (
+                      <div
+                        key={rf.id}
+                        className="flex items-start gap-2 rounded-lg border-l-[3px] border-red-400 dark:border-red-800 bg-red-50/60 dark:bg-red-950/20 pl-2.5 pr-3 py-2"
+                      >
+                        <span className="shrink-0 text-red-500 dark:text-red-400 text-[13px] leading-5">
+                          ↩
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="flex items-baseline gap-1.5 flex-wrap">
+                              <span className="text-[13px] font-bold text-red-700 dark:text-red-300">
+                                {rf.is_partial ? "부분 환불" : "환불"}
+                              </span>
+                              <span
+                                className="px-1.5 py-0.5 rounded text-[10.5px] font-bold bg-white/70 dark:bg-zinc-900/60 text-red-700 dark:text-red-300"
+                                title={
+                                  byPg
+                                    ? "PG(토스)에서 취소돼 실제 대금이 회원에게 돌아갔습니다."
+                                    : "센터가 장부상 처리한 환불입니다. PG 대금은 따로 취소해야 합니다."
+                                }
+                              >
+                                {byPg
+                                  ? `${PG_LABEL[rf.provider ?? ""] ?? rf.provider ?? "PG"} 취소 · 대금 반환`
+                                  : "센터 처리 · 장부만"}
+                              </span>
+                            </span>
+                            <span className="shrink-0 text-[13.5px] font-bold text-red-700 dark:text-red-300">
+                              -{rf.amount_won.toLocaleString()}원
+                            </span>
+                          </div>
+                          <div className="mt-0.5 text-[12px] text-[#8C7A6B] dark:text-zinc-400">
+                            {fmtPaidAt(rf.refunded_at)}
+                            {rf.actor_name ? ` · ${rf.actor_name}` : ""}
+                            {rf.reason ? ` · ${rf.reason}` : ""}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* 이 결제에서 최종적으로 남은 금액 — 헷갈릴 여지를 없앤다 */}
+                  <div className="flex items-baseline justify-between gap-2 pl-2.5 pr-3">
+                    <span className="text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                      {refundedSum >= p.amount_won ? "전액 환불 · 실매출" : "환불 후 실매출"}
+                    </span>
+                    <span
+                      className={`text-[13.5px] font-bold ${
+                        p.amount_won - refundedSum <= 0
+                          ? "text-[#A89B80]"
+                          : "text-[#6B7B3A] dark:text-[#A8B87A]"
+                      }`}
+                    >
+                      {Math.max(0, p.amount_won - refundedSum).toLocaleString()}원
+                    </span>
+                  </div>
                 </div>
               )}
 

@@ -15,7 +15,7 @@ export const maxDuration = 60;
 const ORDER_SELECT =
   "id, center_id, member_id, product_id, product_name, amount_won, list_price_won, " +
   "coupon_issue_id, coupon_discount_won, mileage_used, mileage_earned, channel, status, " +
-  "issued_kind, issued_id, pg_payment_key";
+  "issued_kind, issued_id, pg_payment_key, payment_id";
 
 /**
  * POST /api/pg/toss/webhook — 토스페이먼츠 결제 상태 알림.
@@ -74,7 +74,12 @@ export async function POST(request: Request) {
     .eq("order_uid", orderUid)
     .maybeSingle();
   const order = orderRow as unknown as
-    | (OrderRow & { issued_kind: string | null; issued_id: number | null; pg_payment_key: string | null })
+    | (OrderRow & {
+        issued_kind: string | null;
+        issued_id: number | null;
+        pg_payment_key: string | null;
+        payment_id: number | null;
+      })
     | null;
   if (!order) return finish("우리 주문이 아님", false);
 
@@ -161,17 +166,17 @@ export async function POST(request: Request) {
   if (status === "CANCELED" || status === "PARTIAL_CANCELED") {
     if (order.status === "refunded") return finish("이미 환불 처리됨", true);
 
-    const canceledAmount = Number(
-      (Array.isArray(pay.cancels) ? pay.cancels : []).reduce(
-        (sum: number, c: unknown) => sum + Number((c as { cancelAmount?: number })?.cancelAmount ?? 0),
-        0
-      )
-    );
+    /* 토스가 알려준 취소 건들. 부분 취소가 여러 번일 수 있어 각각을 이력으로 남긴다.
+       transactionKey 를 멱등 키로 써서 웹훅이 여러 번 와도 한 번만 기록된다. */
+    type TossCancel = { cancelAmount?: number; canceledAt?: string; cancelReason?: string; transactionKey?: string };
+    const cancels: TossCancel[] = Array.isArray(pay.cancels) ? (pay.cancels as TossCancel[]) : [];
+    const canceledAmount = cancels.reduce((sum, c) => sum + Number(c.cancelAmount ?? 0), 0);
+    const fullyCanceled = status === "CANCELED";
 
     const { error: ordErr } = await supabase
       .from("crm_orders")
       .update({
-        status: "refunded",
+        status: fullyCanceled ? "refunded" : "paid",
         refunded_at: new Date().toISOString(),
         refund_amount: canceledAmount || order.amount_won,
         refund_reason: "PG 에서 취소됨",
@@ -183,12 +188,49 @@ export async function POST(request: Request) {
     /* 결제 원장도 환불로 — 매출 합계에서 빠지도록.
        🚨 결과를 반드시 확인한다. 2026-09-24 에 여기서 제약 위반(status 에 refunded 불가)이
           조용히 묻혀 주문만 환불되고 매출은 그대로 잡혀 있었다. */
-    const { error: payErr } = await supabase
-      .from("crm_payments")
-      .update({ status: "refunded", updated_at: new Date().toISOString() } as never)
-      .eq("order_id", order.id);
-    if (payErr) {
-      return finish(`주문은 환불 처리했지만 결제 원장 반영 실패: ${payErr.message}`, false);
+    // 부분 취소면 결제 행은 그대로 둔다 — 아직 남은 금액이 있다
+    if (fullyCanceled) {
+      const { error: payErr } = await supabase
+        .from("crm_payments")
+        .update({ status: "refunded", updated_at: new Date().toISOString() } as never)
+        .eq("order_id", order.id);
+      if (payErr) {
+        return finish(`주문은 환불 처리했지만 결제 원장 반영 실패: ${payErr.message}`, false);
+      }
+    }
+
+    /* 환불 이력 — 결제내역에 "결제"와 "환불"이 각각 남도록.
+       결제 행의 status 만 바꾸면 결제했다는 사실이 사라진다. */
+    if (cancels.length > 0) {
+      await supabase.from("crm_payment_refunds").upsert(
+        cancels.map((c) => ({
+          center_id: order.center_id,
+          member_id: order.member_id,
+          payment_id: order.payment_id ?? null,
+          order_id: order.id,
+          amount_won: Math.max(0, Math.floor(Number(c.cancelAmount ?? 0))),
+          refunded_at: c.canceledAt || new Date().toISOString(),
+          source: "pg",
+          provider: "toss",
+          is_partial: !fullyCanceled,
+          reason: c.cancelReason || null,
+          pg_transaction_key: c.transactionKey || null,
+        })) as never,
+        { onConflict: "pg_transaction_key", ignoreDuplicates: true }
+      );
+    } else {
+      // 취소 내역을 못 받은 경우에도 사실은 남긴다
+      await supabase.from("crm_payment_refunds").insert({
+        center_id: order.center_id,
+        member_id: order.member_id,
+        payment_id: order.payment_id ?? null,
+        order_id: order.id,
+        amount_won: canceledAmount || order.amount_won,
+        source: "pg",
+        provider: "toss",
+        is_partial: !fullyCanceled,
+        reason: "PG 에서 취소됨",
+      } as never);
     }
 
     // 썼던 마일리지는 돌려주고, 구매 적립분은 회수한다

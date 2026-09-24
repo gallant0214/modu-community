@@ -221,6 +221,86 @@ export async function GET(request: Request) {
     }
   }
 
+  /* ── 환불 이력 ───────────────────────────────────────────────────
+     결제내역은 원장이다. 결제 행 하나의 상태만 보여주면 언제 얼마가 어떻게
+     돌아갔는지 알 수 없다. 결제 행 아래에 환불 이벤트를 붙여 보여준다.
+     결제원장이 지워진 환불(상품 회수 등)도 order_id 로 이어붙인다. */
+  const refundsByPayment = new Map<number, RefundRow[]>();
+  const refundsByOrder = new Map<number, RefundRow[]>();
+  type RefundRow = {
+    id: number;
+    amount_won: number;
+    refunded_at: string;
+    source: string;
+    provider: string | null;
+    is_partial: boolean;
+    reason: string | null;
+    actor_name: string | null;
+  };
+  {
+    const paymentIds = rows.map((r) => r.id);
+    const ordIds = rows.map((r) => r.order_id).filter((v): v is number => !!v);
+    if (paymentIds.length > 0) {
+      const { data: refunds } = await supabase
+        .from("crm_payment_refunds")
+        .select("id, payment_id, order_id, amount_won, refunded_at, source, provider, is_partial, reason, actor_uid")
+        .eq("center_id", ctx.centerId)
+        .or(
+          [
+            `payment_id.in.(${paymentIds.join(",")})`,
+            ordIds.length ? `order_id.in.(${ordIds.join(",")})` : "",
+          ]
+            .filter(Boolean)
+            .join(",")
+        )
+        .order("refunded_at", { ascending: true });
+
+      const list = (refunds ?? []) as unknown as (RefundRow & {
+        payment_id: number | null;
+        order_id: number | null;
+        actor_uid: string | null;
+      })[];
+
+      // 센터 환불을 누른 직원 이름
+      const actorUids = Array.from(
+        new Set(list.map((r) => r.actor_uid).filter((v): v is string => !!v))
+      );
+      const actorMap = new Map<string, string>();
+      if (actorUids.length > 0) {
+        const { data: staff } = await supabase
+          .from("crm_center_members")
+          .select("firebase_uid, display_name")
+          .eq("center_id", ctx.centerId)
+          .in("firebase_uid", actorUids);
+        for (const st of (staff ?? []) as { firebase_uid: string; display_name: string }[]) {
+          actorMap.set(st.firebase_uid, st.display_name);
+        }
+      }
+
+      for (const r of list) {
+        const item: RefundRow = {
+          id: r.id,
+          amount_won: r.amount_won,
+          refunded_at: r.refunded_at,
+          source: r.source,
+          provider: r.provider,
+          is_partial: r.is_partial,
+          reason: r.reason,
+          actor_name: r.actor_uid ? actorMap.get(r.actor_uid) ?? null : null,
+        };
+        if (r.payment_id) {
+          const arr = refundsByPayment.get(r.payment_id) ?? [];
+          arr.push(item);
+          refundsByPayment.set(r.payment_id, arr);
+        } else if (r.order_id) {
+          const arr = refundsByOrder.get(r.order_id) ?? [];
+          arr.push(item);
+          refundsByOrder.set(r.order_id, arr);
+        }
+      }
+    }
+  }
+
   // ── 묶음 상품 판정 ──────────────────────────────────────────────
   // '상품 관리'에서 구성 상품(components)을 달아둔 상품만 묶음으로 본다.
   // 장바구니에 여러 개 담아 한 번에 결제한 건은 묶음이 아니다.
@@ -309,6 +389,11 @@ export async function GET(request: Request) {
         : null,
       /** 상품 관리의 묶음 상품(부모 또는 그 구성 상품)으로 결제된 건 */
       bundle: bundleIds.has(r.id),
+      /** 이 결제에 발생한 환불 이벤트들 (시간 오름차순) */
+      refunds: [
+        ...(refundsByPayment.get(r.id) ?? []),
+        ...(r.order_id ? refundsByOrder.get(r.order_id) ?? [] : []),
+      ].sort((a, b) => a.refunded_at.localeCompare(b.refunded_at)),
     };
   });
 

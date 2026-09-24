@@ -1799,6 +1799,57 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_payment_refunds: {
+        Row: {
+          id: number
+          center_id: number
+          member_id: number
+          payment_id: number | null
+          order_id: number | null
+          amount_won: number
+          refunded_at: string
+          source: string
+          provider: string | null
+          is_partial: boolean
+          reason: string | null
+          actor_uid: string | null
+          pg_transaction_key: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          member_id: number
+          payment_id?: number | null
+          order_id?: number | null
+          amount_won: number
+          refunded_at?: string
+          source: string
+          provider?: string | null
+          is_partial?: boolean
+          reason?: string | null
+          actor_uid?: string | null
+          pg_transaction_key?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          member_id?: number
+          payment_id?: number | null
+          order_id?: number | null
+          amount_won?: number
+          refunded_at?: string
+          source?: string
+          provider?: string | null
+          is_partial?: boolean
+          reason?: string | null
+          actor_uid?: string | null
+          pg_transaction_key?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       crm_payments: {
         Row: {
           id: number

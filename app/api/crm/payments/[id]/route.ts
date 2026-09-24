@@ -57,11 +57,18 @@ export async function PATCH(
 
   const { data: cur } = await supabase
     .from("crm_payments")
-    .select("id")
+    .select("id, member_id, amount_won, status, order_id")
     .eq("id", paymentId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
   if (!cur) return NextResponse.json({ error: "결제내역을 찾을 수 없어요" }, { status: 404 });
+  const before = cur as {
+    id: number;
+    member_id: number;
+    amount_won: number;
+    status: string;
+    order_id: number | null;
+  };
 
   const patch: Record<string, unknown> = {};
   if (body.amount_won !== undefined) {
@@ -98,6 +105,23 @@ export async function PATCH(
     .eq("id", paymentId)
     .eq("center_id", ctx.centerId);
   if (error) return NextResponse.json({ error: "수정 실패", detail: error.message }, { status: 500 });
+
+  /* 환불로 바뀐 순간을 이력에 남긴다 — 결제내역은 원장이라
+     결제 행의 status 만 바꾸면 "결제했다"는 사실이 사라진다.
+     source='center' = 장부상 처리. PG 대금은 따로 취소해야 한다. */
+  if (patch.status === "refunded" && before.status !== "refunded") {
+    await supabase.from("crm_payment_refunds").insert({
+      center_id: ctx.centerId,
+      member_id: before.member_id,
+      payment_id: before.id,
+      order_id: before.order_id,
+      amount_won: (patch.amount_won as number | undefined) ?? before.amount_won,
+      source: "center",
+      is_partial: false,
+      reason: (body.note?.trim() || null) ?? null,
+      actor_uid: ctx.uid,
+    } as never);
+  }
 
   await supabase.from("crm_audit_logs").insert({
     center_id: ctx.centerId,
