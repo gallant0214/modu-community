@@ -48,6 +48,23 @@ export async function GET(request: Request) {
   }
 
   const rows = (data ?? []) as unknown as Record<string, unknown>[];
+
+  // 묶음 결제면 무엇이 담겼는지 보여줘야 한다 — 합계만 보이면 확인이 안 된다
+  const orderIds = rows.map((r) => Number(r.id));
+  const itemsByOrder = new Map<number, Record<string, unknown>[]>();
+  if (orderIds.length > 0) {
+    const { data: items } = await supabase
+      .from("crm_order_items")
+      .select("id, order_id, product_name, product_type, list_price_won, coupon_discount_won, mileage_used, amount_won, issued_kind, issued_id, refunded_at, refund_amount")
+      .in("order_id", orderIds)
+      .order("id");
+    for (const it of (items ?? []) as unknown as Record<string, unknown>[]) {
+      const key = Number(it.order_id);
+      const arr = itemsByOrder.get(key) ?? [];
+      arr.push(it);
+      itemsByOrder.set(key, arr);
+    }
+  }
   const memberIds = Array.from(new Set(rows.map((r) => Number(r.member_id)).filter(Boolean)));
   const nameMap = new Map<number, string>();
   if (memberIds.length) {
@@ -66,7 +83,11 @@ export async function GET(request: Request) {
     .or("and(status.eq.paid,fail_reason.not.is.null),status.eq.refunded");
 
   return NextResponse.json({
-    orders: rows.map((r) => ({ ...r, member_name: nameMap.get(Number(r.member_id)) ?? "-" })),
+    orders: rows.map((r) => ({
+      ...r,
+      member_name: nameMap.get(Number(r.member_id)) ?? "-",
+      items: itemsByOrder.get(Number(r.id)) ?? [],
+    })),
     attentionCount: attention ?? 0,
   });
 }

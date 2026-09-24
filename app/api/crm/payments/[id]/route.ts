@@ -5,6 +5,7 @@ import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 import { retireIssuedForPayment, RETIRE_KIND_LABEL } from "@/app/lib/crm-retire-issued";
 import { restoreCouponAfterRefund, findCouponIssueForPayment } from "@/app/lib/crm-coupons-server";
+import { markOrderItemRefunded } from "@/app/lib/crm-order-refund";
 
 export const dynamic = "force-dynamic";
 
@@ -171,6 +172,13 @@ export async function PATCH(
             : retiredProductId.rental,
     });
     if (couponIssueId) await restoreCouponAfterRefund(couponIssueId);
+
+    // 묶음 결제면 이 항목만 환불로 표시하고, 전부 환불됐을 때만 주문도 환불로 바꾼다
+    await markOrderItemRefunded({
+      centerId: ctx.centerId,
+      paymentId: before.id,
+      amountWon: (patch.amount_won as number | undefined) ?? before.amount_won,
+    });
 
     if (r.kind) {
       await supabase.from("crm_audit_logs").insert({

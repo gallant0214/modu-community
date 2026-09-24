@@ -290,6 +290,8 @@ export async function recordPayment(opts: {
   centerId: number;
   memberId: number;
   orderId: number;
+  /** 묶음 결제의 항목 id — 항목별 환불이 가능하도록 원장을 항목에 건다 */
+  orderItemId?: number | null;
   amountWon: number;
   outcome: FulfillOutcome;
   note?: string;
@@ -309,6 +311,7 @@ export async function recordPayment(opts: {
       note: opts.note ?? "회원앱 구매",
       status: "completed",
       order_id: opts.orderId,
+      order_item_id: opts.orderItemId ?? null,
       source: "member_app",
     } as never)
     .select("id")

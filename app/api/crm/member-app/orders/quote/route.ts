@@ -3,7 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { PRODUCT_SELECT, type SellableProduct } from "@/app/lib/member-purchase";
 import {
-  quoteOrder,
+  quoteCart,
   expireStaleOrders,
   onlineSalesEnabled,
   SALES_DISABLED_MESSAGE,
@@ -16,13 +16,15 @@ export const dynamic = "force-dynamic";
  *   { centerId, productId, couponIssueId?, mileageUse? }
  *
  * 결제 버튼을 누르기 전, 화면에 보여줄 **최종 금액을 서버가 계산해 준다.**
- * 주문 생성과 똑같은 함수(quoteOrder)를 쓰므로 "화면 금액과 실제 결제액이 다른" 일이 없다.
+ * 주문 생성과 똑같은 함수(quoteCart)를 쓰므로 "화면 금액과 실제 결제액이 다른" 일이 없다.
  * 쿠폰을 잠그지 않는다 — 회원이 이것저것 바꿔보는 단계이기 때문.
  */
 export async function POST(request: Request) {
   let body: {
     centerId?: number;
     productId?: number;
+    /** 묶음 — 회원권·수강권 + 운동복 */
+    productIds?: number[];
     couponIssueId?: number | null;
     mileageUse?: number | null;
   };
@@ -35,8 +37,16 @@ export async function POST(request: Request) {
   const ctx = await requireMemberForCenter(request, centerId);
   if (isMemberError(ctx)) return ctx;
 
-  const productId = Number(body.productId);
-  if (!productId) {
+  const productIds = (
+    Array.isArray(body.productIds) && body.productIds.length > 0
+      ? body.productIds
+      : body.productId
+        ? [body.productId]
+        : []
+  )
+    .map(Number)
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (productIds.length === 0) {
     return NextResponse.json({ error: "상품을 선택해주세요" }, { status: 400 });
   }
 
@@ -50,18 +60,20 @@ export async function POST(request: Request) {
   const { data } = await supabase
     .from("crm_products")
     .select(PRODUCT_SELECT)
-    .eq("id", productId)
-    .eq("center_id", centerId)
-    .maybeSingle();
-  const product = data as unknown as SellableProduct | null;
-  if (!product) {
-    return NextResponse.json({ error: "지금은 구매할 수 없는 상품이에요" }, { status: 400 });
+    .in("id", productIds)
+    .eq("center_id", centerId);
+  const found = (data ?? []) as unknown as SellableProduct[];
+  const products = productIds
+    .map((id) => found.find((p) => Number(p.id) === id))
+    .filter((p): p is SellableProduct => !!p);
+  if (products.length !== productIds.length) {
+    return NextResponse.json({ error: "지금은 구매할 수 없는 상품이 있어요" }, { status: 400 });
   }
 
-  const quote = await quoteOrder({
+  const quote = await quoteCart({
     centerId,
     memberId: ctx.memberId,
-    product,
+    products,
     couponIssueId: body.couponIssueId ?? null,
     mileageUse: body.mileageUse ?? null,
   });
@@ -70,8 +82,7 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({
-    productId: product.id,
-    productName: product.name,
+    lines: quote.lines,
     listPrice: quote.listPriceWon,
     couponDiscount: quote.couponDiscountWon,
     mileageUsed: quote.mileageUsedWon,

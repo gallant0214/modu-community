@@ -9,6 +9,7 @@ import {
 import { refundOrderMileage } from "@/app/lib/member-checkout";
 import { releaseCoupon, restoreCouponAfterRefund } from "@/app/lib/crm-coupons-server";
 import { retireIssuedForPayment, RETIRE_KIND_LABEL } from "@/app/lib/crm-retire-issued";
+import { matchItemsByRefundAmount, syncOrderRefundState } from "@/app/lib/crm-order-refund";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -181,32 +182,15 @@ export async function POST(request: Request) {
     const canceledAmount = cancels.reduce((sum, c) => sum + Number(c.cancelAmount ?? 0), 0);
     const fullyCanceled = status === "CANCELED";
 
-    const { error: ordErr } = await supabase
+    // 주문의 status·환불금액은 항목 상태를 보고 아래에서 다시 계산한다
+    await supabase
       .from("crm_orders")
-      .update({
-        status: fullyCanceled ? "refunded" : "paid",
-        refunded_at: new Date().toISOString(),
-        refund_amount: canceledAmount || order.amount_won,
-        refund_reason: "PG 에서 취소됨",
-        updated_at: new Date().toISOString(),
-      } as never)
+      .update({ refund_reason: "PG 에서 취소됨", updated_at: new Date().toISOString() } as never)
       .eq("id", order.id);
-    if (ordErr) return finish(`주문 환불 처리 실패: ${ordErr.message}`, false);
 
     /* 결제 원장도 환불로 — 매출 합계에서 빠지도록.
        🚨 결과를 반드시 확인한다. 2026-09-24 에 여기서 제약 위반(status 에 refunded 불가)이
           조용히 묻혀 주문만 환불되고 매출은 그대로 잡혀 있었다. */
-    // 부분 취소면 결제 행은 그대로 둔다 — 아직 남은 금액이 있다
-    if (fullyCanceled) {
-      const { error: payErr } = await supabase
-        .from("crm_payments")
-        .update({ status: "refunded", updated_at: new Date().toISOString() } as never)
-        .eq("order_id", order.id);
-      if (payErr) {
-        return finish(`주문은 환불 처리했지만 결제 원장 반영 실패: ${payErr.message}`, false);
-      }
-    }
-
     /* 환불 이력 — 결제내역에 "결제"와 "환불"이 각각 남도록.
        결제 행의 status 만 바꾸면 결제했다는 사실이 사라진다. */
     if (cancels.length > 0) {
@@ -258,43 +242,82 @@ export async function POST(request: Request) {
     // 환불이면 이미 결제에 연결된 쿠폰도 돌려준다 (releaseCoupon 은 연결된 건을 건드리지 않는다)
     if (order.coupon_issue_id) await restoreCouponAfterRefund(order.coupon_issue_id);
 
-    /* 🚨 전액 취소면 발급된 이용권도 회수한다 (2026-09-24 확정).
-          부분 취소는 남은 금액이 있으므로 이용권을 건드리지 않는다. */
-    let retiredNote = "";
-    if (fullyCanceled && order.payment_id) {
-      const r = await retireIssuedForPayment({
-        centerId: order.center_id,
-        paymentId: order.payment_id,
-      });
-      if (!r.ok) {
-        retiredNote = ` · 이용권 회수 실패(${r.error ?? "알 수 없음"}) — 직원 확인 필요`;
-      } else if (r.kind) {
-        retiredNote = ` · ${RETIRE_KIND_LABEL[r.kind] ?? r.kind} '${r.label ?? ""}' 회수`;
-        await supabase.from("crm_orders")
-          .update({ issued_kind: null, issued_id: null, updated_at: new Date().toISOString() } as never)
-          .eq("id", order.id);
-        await supabase.from("crm_audit_logs").insert({
-          center_id: order.center_id,
-          // 사람이 아니라 PG 알림이 일으킨 처리 — 로그에서 구분되도록 표식을 남긴다
-          actor_uid: "system:toss-webhook",
-          action: "payment.refund_pg",
-          entity_type: "crm_payments",
-          entity_id: order.payment_id,
-          payload: {
-            member_id: order.member_id,
-            환불금액: canceledAmount || order.amount_won,
-            회수항목: RETIRE_KIND_LABEL[r.kind] ?? r.kind,
-            상품명: r.label,
-            처리경로: "PG(토스)에서 결제 취소 — 대금이 회원에게 반환됨",
-            ...(r.locker
-              ? { 락커: `반납 ${r.locker.returned}건 · 기간원복 ${r.locker.reverted}건` }
-              : {}),
-          } as never,
-        });
-      }
+    /* 🚨 취소된 금액에 해당하는 항목의 이용권을 회수한다 (2026-09-24 확정).
+          묶음 결제면 어느 항목이 취소됐는지 금액으로 찾는다.
+          애매하면 손대지 않고 직원이 보게 남긴다 — 엉뚱한 이용권을 회수하는 것보다 낫다. */
+    const matched = await matchItemsByRefundAmount({
+      orderId: order.id,
+      amountWon: canceledAmount || order.amount_won,
+    });
+
+    const notes: string[] = [];
+    if (matched.ambiguous) {
+      notes.push("어느 항목이 취소됐는지 금액으로 특정할 수 없어 이용권을 회수하지 않음 — 직원 확인 필요");
     }
 
-    return finish(`환불 처리 완료${retiredNote}`, true);
+    for (const itemId of matched.itemIds) {
+      const { data: itRow } = await supabase
+        .from("crm_order_items")
+        .select("id, payment_id, amount_won, product_name")
+        .eq("id", itemId)
+        .maybeSingle();
+      const it = itRow as {
+        id: number;
+        payment_id: number | null;
+        amount_won: number;
+        product_name: string;
+      } | null;
+      if (!it) continue;
+
+      const nowIso = new Date().toISOString();
+      await supabase
+        .from("crm_order_items")
+        .update({ refunded_at: nowIso, refund_amount: it.amount_won, updated_at: nowIso } as never)
+        .eq("id", it.id);
+
+      if (!it.payment_id) continue;
+      const { error: payErr } = await supabase
+        .from("crm_payments")
+        .update({ status: "refunded", updated_at: nowIso } as never)
+        .eq("id", it.payment_id);
+      if (payErr) {
+        notes.push(`'${it.product_name}' 결제원장 반영 실패(${payErr.message})`);
+        continue;
+      }
+
+      const r = await retireIssuedForPayment({
+        centerId: order.center_id,
+        paymentId: it.payment_id,
+      });
+      if (!r.ok) {
+        notes.push(`'${it.product_name}' 이용권 회수 실패(${r.error ?? "알 수 없음"}) — 직원 확인 필요`);
+        continue;
+      }
+      if (!r.kind) continue;
+      notes.push(`${RETIRE_KIND_LABEL[r.kind] ?? r.kind} '${r.label ?? ""}' 회수`);
+      await supabase.from("crm_audit_logs").insert({
+        center_id: order.center_id,
+        actor_uid: "system:toss-webhook",
+        action: "payment.refund_pg",
+        entity_type: "crm_payments",
+        entity_id: it.payment_id,
+        payload: {
+          member_id: order.member_id,
+          환불금액: it.amount_won,
+          회수항목: RETIRE_KIND_LABEL[r.kind] ?? r.kind,
+          상품명: r.label,
+          처리경로: "PG(토스)에서 결제 취소 — 대금이 회원에게 반환됨",
+          ...(r.locker
+            ? { 락커: `반납 ${r.locker.returned}건 · 기간원복 ${r.locker.reverted}건` }
+            : {}),
+        } as never,
+      });
+    }
+
+    // 항목 상태를 보고 주문의 환불 상태를 다시 계산한다
+    await syncOrderRefundState(order.id);
+
+    return finish(`환불 처리 완료${notes.length ? " · " + notes.join(" · ") : ""}`, true);
   }
 
   return finish(`처리 대상 아닌 상태 (${status})`, true);

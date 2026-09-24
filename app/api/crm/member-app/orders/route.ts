@@ -4,7 +4,7 @@ import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { PRODUCT_SELECT, type SellableProduct } from "@/app/lib/member-purchase";
 import { tossClientKey } from "@/app/lib/toss-payments";
 import {
-  quoteOrder,
+  quoteCart,
   expireStaleOrders,
   ORDER_TTL_MINUTES,
   onlineSalesEnabled,
@@ -27,7 +27,7 @@ const ORDER_SELECT =
  *
  * 결제창을 띄우기 전에 주문을 먼저 만든다.
  *
- * 🚨 금액은 **앱/웹이 보낸 값을 쓰지 않고 서버가 다시 계산**한다(quoteOrder).
+ * 🚨 금액은 **앱/웹이 보낸 값을 쓰지 않고 서버가 다시 계산**한다(quoteCart).
  *    클라이언트에서 받는 건 "무엇을 쓰겠다"는 의사뿐 — 상품·쿠폰·마일리지 희망액.
  *    승인 단계에서 이 주문에 저장된 금액을 PG 에 그대로 넘겨 위변조를 막는다.
  *
@@ -42,7 +42,10 @@ const ORDER_SELECT =
 export async function POST(request: Request) {
   let body: {
     centerId?: number;
+    /** 단품 구매 (이전 방식 — 계속 지원) */
     productId?: number;
+    /** 묶음 구매 — 회원권·수강권 + 운동복 */
+    productIds?: number[];
     couponIssueId?: number | null;
     mileageUse?: number | null;
     channel?: string;
@@ -56,9 +59,20 @@ export async function POST(request: Request) {
   const ctx = await requireMemberForCenter(request, centerId);
   if (isMemberError(ctx)) return ctx;
 
-  const productId = Number(body.productId);
-  if (!productId) {
+  const productIds = (
+    Array.isArray(body.productIds) && body.productIds.length > 0
+      ? body.productIds
+      : body.productId
+        ? [body.productId]
+        : []
+  )
+    .map(Number)
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (productIds.length === 0) {
     return NextResponse.json({ error: "상품을 선택해주세요" }, { status: 400 });
+  }
+  if (productIds.length > 10) {
+    return NextResponse.json({ error: "한 번에 최대 10개까지 담을 수 있어요" }, { status: 400 });
   }
 
   if (!onlineSalesEnabled()) {
@@ -72,19 +86,22 @@ export async function POST(request: Request) {
   const { data } = await supabase
     .from("crm_products")
     .select(PRODUCT_SELECT)
-    .eq("id", productId)
-    .eq("center_id", centerId)
-    .maybeSingle();
-  const product = data as unknown as SellableProduct | null;
-  if (!product) {
-    return NextResponse.json({ error: "지금은 구매할 수 없는 상품이에요" }, { status: 400 });
+    .in("id", productIds)
+    .eq("center_id", centerId);
+  const found = (data ?? []) as unknown as SellableProduct[];
+  // 화면이 보낸 순서를 지킨다 (요약·영수증에 담은 순서대로 보이도록)
+  const products = productIds
+    .map((id) => found.find((p) => Number(p.id) === id))
+    .filter((p): p is SellableProduct => !!p);
+  if (products.length !== productIds.length) {
+    return NextResponse.json({ error: "지금은 구매할 수 없는 상품이 있어요" }, { status: 400 });
   }
 
   /* ── 금액 확정 ────────────────────────────────────────── */
-  const quote = await quoteOrder({
+  const quote = await quoteCart({
     centerId,
     memberId: ctx.memberId,
-    product,
+    products,
     couponIssueId: body.couponIssueId ?? null,
     mileageUse: body.mileageUse ?? null,
   });
@@ -116,9 +133,9 @@ export async function POST(request: Request) {
       issueId: quote.coupon.issueId,
       originalPriceWon: quote.listPriceWon,
       totalDiscountWon: quote.couponDiscountWon,
-      productType: product.type,
-      productId: product.id,
-      vatIncluded: product.vat_included,
+      productType: products[0].type,
+      productId: products[0].id,
+      vatIncluded: products.every((p) => p.vat_included !== false),
       actor: { uid: ctx.uid, name: ctx.name },
     });
     if (!claim.ok) {
@@ -133,14 +150,18 @@ export async function POST(request: Request) {
   const orderUid = `mo_${centerId}_${ctx.memberId}_${Date.now().toString(36)}_${rand}`;
   const expiresAt = new Date(Date.now() + ORDER_TTL_MINUTES * 60 * 1000).toISOString();
 
+  // 주문 이름 — 묶음이면 "회원권 외 1건" 처럼 (PG 결제창·영수증에 그대로 보인다)
+  const orderName =
+    products.length === 1 ? products[0].name : `${products[0].name} 외 ${products.length - 1}건`;
+
   const { data: inserted, error } = await supabase
     .from("crm_orders")
     .insert({
       center_id: centerId,
       member_id: ctx.memberId,
-      product_id: product.id,
-      product_name: product.name,
-      product_type: product.type,
+      product_id: products[0].id,
+      product_name: orderName,
+      product_type: products[0].type,
       list_price_won: quote.listPriceWon,
       coupon_issue_id: couponIssueId,
       coupon_discount_won: quote.couponDiscountWon,
@@ -166,6 +187,32 @@ export async function POST(request: Request) {
   }
   const order = inserted as unknown as OrderRow & { order_uid?: string };
 
+  /* ── 주문 항목 저장 ───────────────────────────────────
+     금액은 quoteCart 가 배분한 값을 그대로 쓴다 — 항목 합계 = 주문 총액 */
+  const { error: itemErr } = await supabase.from("crm_order_items").insert(
+    quote.lines.map((l) => ({
+      order_id: order.id,
+      center_id: centerId,
+      member_id: ctx.memberId,
+      product_id: l.productId,
+      product_name: l.name,
+      product_type: l.type,
+      list_price_won: l.listPriceWon,
+      coupon_discount_won: l.couponDiscountWon,
+      mileage_used: l.mileageUsedWon,
+      mileage_earned: l.mileageEarn,
+      amount_won: l.amountWon,
+    })) as never
+  );
+  if (itemErr) {
+    if (couponIssueId) await releaseCoupon(couponIssueId);
+    await supabase.from("crm_orders").delete().eq("id", order.id);
+    return NextResponse.json(
+      { error: "주문 생성에 실패했어요", detail: itemErr.message },
+      { status: 500 }
+    );
+  }
+
   /* ── 0원 주문 — PG 를 거칠 수 없으니 바로 발급 ─────────── */
   if (quote.amountWon === 0) {
     const done = await completeOrder({ order, memberName: ctx.name });
@@ -178,6 +225,7 @@ export async function POST(request: Request) {
       orderUid,
       amount: 0,
       issued: done.issued,
+      items: done.items ?? [],
     });
   }
 
@@ -191,7 +239,8 @@ export async function POST(request: Request) {
     listPrice: quote.listPriceWon,
     couponDiscount: quote.couponDiscountWon,
     mileageUsed: quote.mileageUsedWon,
-    orderName: order.product_name,
+    orderName,
+    lines: quote.lines,
     customerName: ctx.name || undefined,
     // 토스 결제위젯이 요구하는 고객 식별자 — 회원별로 항상 같은 값
     customerKey: `m_${centerId}_${ctx.memberId}`,

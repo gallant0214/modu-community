@@ -37,7 +37,22 @@ export const SALES_DISABLED_MESSAGE = "온라인 결제는 준비 중이에요. 
  * 락커는 자리 배정이 수동이라, 운동복·물품은 재고 개념이 없어 제외했다.
  * 넓힐 때는 member-purchase.ts 의 발급 분기가 그 유형을 처리하는지 먼저 확인할 것.
  */
-export const ONLINE_SELLABLE_TYPES = new Set(["membership", "personal", "group", "class"]);
+export const ONLINE_SELLABLE_TYPES = new Set([
+  "membership",
+  "personal",
+  "group",
+  "class",
+  "apparel", // 운동복 — 재고 개념이 없어 온라인 판매에 문제가 없다
+]);
+
+/**
+ * 🚨 락커는 온라인에서 팔지 않는다 (2026-09-24 사용자 확정).
+ *    남은 자리가 탈의실 기준 5~7개뿐이라 돈을 받고도 줄 자리가 없는 상황이 생긴다.
+ *    자리 배정은 직원이 회원과 상담해 처리한다.
+ */
+
+/** 장바구니에 곁들여 담을 수 있는 유형 — 단독 구매는 막고 회원권·수강권에 붙여 판다 */
+export const ADDON_TYPES = new Set(["apparel"]);
 
 /** crm_members.registration_type 값 — 한글로 저장된다 */
 export type RegistrationType = "신규" | "재등록" | null;
@@ -87,27 +102,6 @@ export interface QuoteCoupon {
   isGift: boolean;
 }
 
-export interface CheckoutQuote {
-  ok: boolean;
-  error?: string;
-  /** 쿠폰만 적용 불가한 경우 — 결제 자체는 가능하므로 ok=true 와 함께 온다 */
-  couponError?: string;
-  listPriceWon: number;
-  couponDiscountWon: number;
-  mileageUsedWon: number;
-  /** 최종 결제액. 0 이면 PG 를 거치지 않고 바로 발급한다 */
-  amountWon: number;
-  /** 구매 적립 예정 마일리지 */
-  mileageEarn: number;
-  /** 회원 보유 마일리지 */
-  mileageBalance: number;
-  /** 결제 대기중인 다른 주문이 잡고 있는 마일리지 */
-  mileageHeld: number;
-  /** 이 주문에 쓸 수 있는 최대 마일리지 */
-  mileageMax: number;
-  coupon?: QuoteCoupon;
-}
-
 /**
  * 아직 결제되지 않은 내 주문들이 선점하고 있는 마일리지 합.
  * 결제창을 두 개 띄워 같은 마일리지를 두 번 쓰는 걸 막는다.
@@ -144,150 +138,6 @@ async function loadCouponDef(couponId: number): Promise<CouponDef | null> {
     coupon.gift_product_name = (gp as { name?: string } | null)?.name ?? null;
   }
   return coupon;
-}
-
-/**
- * 결제 견적. 쿠폰이 적용 불가여도 **결제 자체는 막지 않고** couponError 로 알려준다
- * (화면에서 쿠폰만 빼고 계속 진행할 수 있게).
- */
-export async function quoteOrder(opts: {
-  centerId: number;
-  memberId: number;
-  product: SellableProduct;
-  couponIssueId?: number | null;
-  /** 회원이 쓰겠다고 한 마일리지(희망액). 한도를 넘으면 한도로 깎인다 */
-  mileageUse?: number | null;
-  /** 재견적 시 자기 자신의 hold 는 제외 */
-  excludeOrderId?: number;
-}): Promise<CheckoutQuote> {
-  const { centerId, memberId, product } = opts;
-  const listPriceWon = Math.max(0, Math.floor(product.price_won || 0));
-
-  const base: CheckoutQuote = {
-    ok: true,
-    listPriceWon,
-    couponDiscountWon: 0,
-    mileageUsedWon: 0,
-    amountWon: listPriceWon,
-    mileageEarn: Math.max(0, Math.floor(product.mileage_earn || 0)),
-    mileageBalance: 0,
-    mileageHeld: 0,
-    mileageMax: 0,
-  };
-
-  if (!isOnlineSellable(product)) {
-    return { ...base, ok: false, error: "지금은 구매할 수 없는 상품이에요" };
-  }
-
-  // 신규/재등록 자격 — 금액을 계산하기 전에 막는다
-  const { data: memRow } = await supabase
-    .from("crm_members")
-    .select("registration_type")
-    .eq("id", memberId)
-    .eq("center_id", centerId)
-    .maybeSingle();
-  const regType = ((memRow as { registration_type?: string | null } | null)?.registration_type ??
-    null) as RegistrationType;
-  const eligErr = eligibilityError(product, regType);
-  if (eligErr) {
-    return { ...base, ok: false, error: eligErr };
-  }
-
-  /* ── 쿠폰 ───────────────────────────────────────────── */
-  let coupon: QuoteCoupon | undefined;
-  let couponError: string | undefined;
-  if (opts.couponIssueId) {
-    const { data: issueRow } = await supabase
-      .from("crm_coupon_issues")
-      .select("id, center_id, member_id, coupon_id, status, expires_at")
-      .eq("id", opts.couponIssueId)
-      .maybeSingle();
-    const issue = issueRow as {
-      id: number;
-      center_id: number;
-      member_id: number;
-      coupon_id: number;
-      status: string;
-      expires_at: string | null;
-    } | null;
-
-    if (!issue || issue.center_id !== centerId || issue.member_id !== memberId) {
-      couponError = "쿠폰을 찾을 수 없어요";
-    } else if (effectiveStatus(issue) !== "issued") {
-      const st = effectiveStatus(issue);
-      couponError = st === "used" ? "이미 사용된 쿠폰이에요" : st === "revoked" ? "회수된 쿠폰이에요" : "기간이 지난 쿠폰이에요";
-    } else {
-      const def = await loadCouponDef(issue.coupon_id);
-      if (!def) {
-        couponError = "쿠폰 정보를 찾을 수 없어요";
-      } else {
-        const check = computeCouponDiscount(def, {
-          priceWon: listPriceWon,
-          productType: product.type,
-          productId: product.id,
-          vatIncluded: product.vat_included,
-        });
-        if (!check.ok) {
-          couponError = check.reason ?? "적용할 수 없는 쿠폰이에요";
-        } else {
-          // 다른 살아있는 주문이 이미 이 쿠폰을 물고 있으면 중복 적용 금지
-          const { data: taken } = await supabase
-            .from("crm_orders")
-            .select("id")
-            .eq("coupon_issue_id", issue.id)
-            .in("status", ["pending", "paid"])
-            .limit(1);
-          const takenId = (taken ?? [])[0] as { id: number } | undefined;
-          if (takenId && takenId.id !== opts.excludeOrderId) {
-            couponError = "결제 진행 중인 다른 주문에 쓰인 쿠폰이에요";
-          } else {
-            coupon = {
-              issueId: issue.id,
-              name: def.name,
-              benefit: benefitText(def),
-              discountWon: check.discountWon,
-              isGift: def.benefit_type === "gift",
-            };
-          }
-        }
-      }
-    }
-  }
-
-  const couponDiscountWon = coupon?.discountWon ?? 0;
-  const afterCoupon = Math.max(0, listPriceWon - couponDiscountWon);
-
-  /* ── 마일리지 ───────────────────────────────────────── */
-  const { data: mem } = await supabase
-    .from("crm_members")
-    .select("mileage")
-    .eq("id", memberId)
-    .eq("center_id", centerId)
-    .maybeSingle();
-  const mileageBalance = Math.max(0, Math.floor((mem as { mileage?: number } | null)?.mileage ?? 0));
-  const mileageHeld = await heldMileage({ centerId, memberId, excludeOrderId: opts.excludeOrderId });
-  const available = Math.max(0, mileageBalance - mileageHeld);
-
-  // 상품 설정에서 마일리지 사용을 막아둔 경우 0
-  const mileageAllowed = product.mileage_usable !== false;
-  const mileageMax = mileageAllowed ? Math.min(available, afterCoupon) : 0;
-  const mileageUsedWon = Math.max(0, Math.min(Math.floor(opts.mileageUse || 0), mileageMax));
-
-  const amountWon = Math.max(0, afterCoupon - mileageUsedWon);
-
-  return {
-    ok: true,
-    couponError,
-    listPriceWon,
-    couponDiscountWon,
-    mileageUsedWon,
-    amountWon,
-    mileageEarn: base.mileageEarn,
-    mileageBalance,
-    mileageHeld,
-    mileageMax,
-    coupon,
-  };
 }
 
 /**
@@ -411,4 +261,306 @@ export async function expireStaleOrders(opts: {
     if (o.coupon_issue_id) await releaseCoupon(o.coupon_issue_id);
   }
   return stale.length;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   장바구니 견적 — 회원권·수강권에 운동복을 곁들여 한 번에 결제
+   ═══════════════════════════════════════════════════════════ */
+
+export interface CartLineInput {
+  productId: number;
+  /** 같은 상품을 여러 개 담는 건 지금 지원하지 않는다 (이용권은 1개씩) */
+}
+
+export interface CartLine {
+  productId: number;
+  name: string;
+  type: string;
+  typeLabel: string;
+  listPriceWon: number;
+  couponDiscountWon: number;
+  mileageUsedWon: number;
+  amountWon: number;
+  mileageEarn: number;
+  /** 이 항목이 쿠폰 적용 대상인지 */
+  couponTarget: boolean;
+}
+
+export interface CartQuote {
+  ok: boolean;
+  error?: string;
+  couponError?: string;
+  lines: CartLine[];
+  listPriceWon: number;
+  couponDiscountWon: number;
+  mileageUsedWon: number;
+  amountWon: number;
+  mileageEarn: number;
+  mileageBalance: number;
+  mileageHeld: number;
+  mileageMax: number;
+  coupon?: QuoteCoupon;
+}
+
+const TYPE_LABEL: Record<string, string> = {
+  membership: "회원권",
+  personal: "개인 레슨",
+  group: "그룹 레슨",
+  class: "클래스",
+  apparel: "운동복",
+};
+
+/**
+ * 금액을 항목에 비례 배분한다. **합이 총액과 정확히 일치**하도록
+ * 마지막 남은 1원까지 큰 항목부터 채운다(반올림 오차가 돈으로 새면 안 된다).
+ */
+function allocate(total: number, weights: number[]): number[] {
+  const sum = weights.reduce((a, b) => a + b, 0);
+  if (total <= 0 || sum <= 0) return weights.map(() => 0);
+  const raw = weights.map((w) => (total * w) / sum);
+  const out = raw.map((v) => Math.floor(v));
+  let rest = total - out.reduce((a, b) => a + b, 0);
+  // 소수부가 큰 순서로 1원씩 나눠준다
+  const order = raw
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac);
+  for (const { i } of order) {
+    if (rest <= 0) break;
+    out[i] += 1;
+    rest -= 1;
+  }
+  return out;
+}
+
+/**
+ * 장바구니 견적. 단품 주문도 항목 1개짜리 장바구니로 다룬다 — 경로를 하나로 유지한다.
+ *
+ * 쿠폰: 적용 가능한 유형의 항목들 **합계**에 대해 계산하고 그 항목들에 비례 배분한다.
+ *       (증정 쿠폰은 지정 상품이 담겨 있을 때 그 항목만 0원)
+ * 마일리지: 쿠폰 적용 후 총액에 쓰고, 전 항목에 비례 배분한다.
+ *       배분해 두는 이유는 **항목별 환불** 때문이다 — 운동복만 환불하면
+ *       그 항목 몫의 마일리지만 돌려줘야 한다.
+ */
+export async function quoteCart(opts: {
+  centerId: number;
+  memberId: number;
+  products: SellableProduct[];
+  couponIssueId?: number | null;
+  mileageUse?: number | null;
+  excludeOrderId?: number;
+}): Promise<CartQuote> {
+  const { centerId, memberId, products } = opts;
+
+  const empty: CartQuote = {
+    ok: true,
+    lines: [],
+    listPriceWon: 0,
+    couponDiscountWon: 0,
+    mileageUsedWon: 0,
+    amountWon: 0,
+    mileageEarn: 0,
+    mileageBalance: 0,
+    mileageHeld: 0,
+    mileageMax: 0,
+  };
+  if (products.length === 0) return { ...empty, ok: false, error: "상품을 선택해주세요" };
+
+  for (const p of products) {
+    if (!isOnlineSellable(p)) {
+      return { ...empty, ok: false, error: `'${p.name}' 은 지금 구매할 수 없어요` };
+    }
+  }
+  // 곁들이는 상품만 담고 이용권이 없으면 막는다
+  if (products.every((p) => ADDON_TYPES.has(p.type))) {
+    return { ...empty, ok: false, error: "회원권이나 수강권을 함께 선택해주세요" };
+  }
+
+  /* ── 신규/재등록 자격 ─────────────────────────────── */
+  const { data: memRow } = await supabase
+    .from("crm_members")
+    .select("registration_type, mileage")
+    .eq("id", memberId)
+    .eq("center_id", centerId)
+    .maybeSingle();
+  const mem = memRow as { registration_type: string | null; mileage: number | null } | null;
+  const regType = (mem?.registration_type ?? null) as RegistrationType;
+  for (const p of products) {
+    const err = eligibilityError(p, regType);
+    if (err) return { ...empty, ok: false, error: `'${p.name}': ${err}` };
+  }
+
+  const listPriceWon = products.reduce((s, p) => s + Math.max(0, Math.floor(p.price_won || 0)), 0);
+
+  /* ── 쿠폰 ─────────────────────────────────────────── */
+  let coupon: QuoteCoupon | undefined;
+  let couponError: string | undefined;
+  let couponTargetIdx: number[] = [];
+  let couponDiscountWon = 0;
+
+  if (opts.couponIssueId) {
+    const loaded = await loadCouponForMember(centerId, memberId, opts.couponIssueId, opts.excludeOrderId);
+    if (loaded.error) {
+      couponError = loaded.error;
+    } else if (loaded.def) {
+      const def = loaded.def;
+      if (def.benefit_type === "gift") {
+        // 증정 쿠폰 — 지정 상품이 담겨 있어야 하고 그 항목만 0원
+        const idx = products.findIndex((p) => Number(p.id) === Number(def.gift_product_id));
+        if (idx < 0) {
+          couponError = `이 쿠폰은 '${def.gift_product_name || "지정 상품"}'을(를) 담아야 쓸 수 있어요`;
+        } else {
+          couponTargetIdx = [idx];
+          couponDiscountWon = Math.max(0, Math.floor(products[idx].price_won || 0));
+        }
+      } else {
+        // 적용 대상 유형의 항목들만 모아 합계 기준으로 계산
+        const allowed = def.applicable_types;
+        couponTargetIdx = products
+          .map((p, i) => ({ p, i }))
+          .filter(({ p }) => !allowed || allowed.length === 0 || allowed.includes(p.type))
+          .map(({ i }) => i);
+        if (couponTargetIdx.length === 0) {
+          const labels = (allowed ?? []).map((t) => TYPE_LABEL[t] ?? t).join("·");
+          couponError = `${labels} 상품에만 쓸 수 있는 쿠폰이에요`;
+        } else {
+          const targetSum = couponTargetIdx.reduce(
+            (s, i) => s + Math.max(0, Math.floor(products[i].price_won || 0)),
+            0
+          );
+          // 대상 항목이 모두 부가세 포함가일 때만 공급가 기준을 적용한다
+          const allVatIncluded = couponTargetIdx.every((i) => products[i].vat_included !== false);
+          const check = computeCouponDiscount(def, {
+            priceWon: targetSum,
+            productType: products[couponTargetIdx[0]].type,
+            productId: products[couponTargetIdx[0]].id,
+            vatIncluded: allVatIncluded,
+          });
+          if (!check.ok) couponError = check.reason ?? "적용할 수 없는 쿠폰이에요";
+          else couponDiscountWon = check.discountWon;
+        }
+      }
+      if (!couponError) {
+        coupon = {
+          issueId: opts.couponIssueId,
+          name: def.name,
+          benefit: benefitText(def),
+          discountWon: couponDiscountWon,
+          isGift: def.benefit_type === "gift",
+        };
+      }
+    }
+  }
+
+  // 쿠폰 할인을 대상 항목에 비례 배분
+  const perLineCoupon = products.map(() => 0);
+  if (couponDiscountWon > 0 && couponTargetIdx.length > 0) {
+    const weights = couponTargetIdx.map((i) => Math.max(0, Math.floor(products[i].price_won || 0)));
+    const parts = allocate(couponDiscountWon, weights);
+    couponTargetIdx.forEach((lineIdx, k) => {
+      perLineCoupon[lineIdx] = parts[k];
+    });
+  }
+
+  const afterCoupon = Math.max(0, listPriceWon - couponDiscountWon);
+
+  /* ── 마일리지 ─────────────────────────────────────── */
+  const mileageBalance = Math.max(0, Math.floor(mem?.mileage ?? 0));
+  const mileageHeld = await heldMileage({ centerId, memberId, excludeOrderId: opts.excludeOrderId });
+  const available = Math.max(0, mileageBalance - mileageHeld);
+  // 마일리지 사용이 막힌 상품의 몫은 한도에서 뺀다
+  const mileageEligible = products.reduce(
+    (s, p, i) =>
+      p.mileage_usable === false
+        ? s
+        : s + Math.max(0, Math.floor(p.price_won || 0) - perLineCoupon[i]),
+    0
+  );
+  const mileageMax = Math.min(available, mileageEligible);
+  const mileageUsedWon = Math.max(0, Math.min(Math.floor(opts.mileageUse || 0), mileageMax));
+
+  const perLineMileage = products.map(() => 0);
+  if (mileageUsedWon > 0) {
+    const weights = products.map((p, i) =>
+      p.mileage_usable === false ? 0 : Math.max(0, Math.floor(p.price_won || 0) - perLineCoupon[i])
+    );
+    const parts = allocate(mileageUsedWon, weights);
+    parts.forEach((v, i) => (perLineMileage[i] = v));
+  }
+
+  /* ── 항목 확정 ────────────────────────────────────── */
+  const lines: CartLine[] = products.map((p, i) => {
+    const list = Math.max(0, Math.floor(p.price_won || 0));
+    const amount = Math.max(0, list - perLineCoupon[i] - perLineMileage[i]);
+    return {
+      productId: p.id,
+      name: p.name,
+      type: p.type,
+      typeLabel: TYPE_LABEL[p.type] ?? p.type,
+      listPriceWon: list,
+      couponDiscountWon: perLineCoupon[i],
+      mileageUsedWon: perLineMileage[i],
+      amountWon: amount,
+      mileageEarn: Math.max(0, Math.floor(p.mileage_earn || 0)),
+      couponTarget: couponTargetIdx.includes(i),
+    };
+  });
+
+  return {
+    ok: true,
+    couponError,
+    lines,
+    listPriceWon,
+    couponDiscountWon,
+    mileageUsedWon,
+    amountWon: Math.max(0, afterCoupon - mileageUsedWon),
+    mileageEarn: lines.reduce((s, l) => s + l.mileageEarn, 0),
+    mileageBalance,
+    mileageHeld,
+    mileageMax,
+    coupon,
+  };
+}
+
+/** 쿠폰 발급건을 읽고 지금 쓸 수 있는지까지 본다 */
+async function loadCouponForMember(
+  centerId: number,
+  memberId: number,
+  issueId: number,
+  excludeOrderId?: number
+): Promise<{ def?: CouponDef; error?: string }> {
+  const { data: issueRow } = await supabase
+    .from("crm_coupon_issues")
+    .select("id, center_id, member_id, coupon_id, status, expires_at")
+    .eq("id", issueId)
+    .maybeSingle();
+  const issue = issueRow as {
+    id: number;
+    center_id: number;
+    member_id: number;
+    coupon_id: number;
+    status: string;
+    expires_at: string | null;
+  } | null;
+  if (!issue || issue.center_id !== centerId || issue.member_id !== memberId) {
+    return { error: "쿠폰을 찾을 수 없어요" };
+  }
+  const st = effectiveStatus(issue);
+  if (st !== "issued") {
+    return {
+      error: st === "used" ? "이미 사용된 쿠폰이에요" : st === "revoked" ? "회수된 쿠폰이에요" : "기간이 지난 쿠폰이에요",
+    };
+  }
+  const def = await loadCouponDef(issue.coupon_id);
+  if (!def) return { error: "쿠폰 정보를 찾을 수 없어요" };
+
+  const { data: taken } = await supabase
+    .from("crm_orders")
+    .select("id")
+    .eq("coupon_issue_id", issue.id)
+    .in("status", ["pending", "processing", "paid"])
+    .limit(1);
+  const t = (taken ?? [])[0] as { id: number } | undefined;
+  if (t && t.id !== excludeOrderId) return { error: "결제 진행 중인 다른 주문에 쓰인 쿠폰이에요" };
+
+  return { def };
 }

@@ -1868,6 +1868,7 @@ export type Database = {
           created_at: string
           updated_at: string
           order_id: number | null
+          order_item_id: number | null
           source: string
           product_label: string | null
         }
@@ -1888,6 +1889,7 @@ export type Database = {
           created_at?: string
           updated_at?: string
           order_id?: number | null
+          order_item_id?: number | null
           source?: string
           product_label?: string | null
         }
@@ -1908,6 +1910,7 @@ export type Database = {
           created_at?: string
           updated_at?: string
           order_id?: number | null
+          order_item_id?: number | null
           source?: string
           product_label?: string | null
         }
@@ -2438,6 +2441,72 @@ export type Database = {
           note?: string | null
           raw?: Json | null
           received_at?: string
+        }
+        Relationships: []
+      }
+      crm_order_items: {
+        Row: {
+          id: number
+          order_id: number
+          center_id: number
+          member_id: number
+          product_id: number | null
+          product_name: string
+          product_type: string
+          list_price_won: number
+          coupon_discount_won: number
+          mileage_used: number
+          mileage_earned: number
+          amount_won: number
+          issued_kind: string | null
+          issued_id: number | null
+          payment_id: number | null
+          refunded_at: string | null
+          refund_amount: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          order_id: number
+          center_id: number
+          member_id: number
+          product_id?: number | null
+          product_name: string
+          product_type: string
+          list_price_won?: number
+          coupon_discount_won?: number
+          mileage_used?: number
+          mileage_earned?: number
+          amount_won?: number
+          issued_kind?: string | null
+          issued_id?: number | null
+          payment_id?: number | null
+          refunded_at?: string | null
+          refund_amount?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          order_id?: number
+          center_id?: number
+          member_id?: number
+          product_id?: number | null
+          product_name?: string
+          product_type?: string
+          list_price_won?: number
+          coupon_discount_won?: number
+          mileage_used?: number
+          mileage_earned?: number
+          amount_won?: number
+          issued_kind?: string | null
+          issued_id?: number | null
+          payment_id?: number | null
+          refunded_at?: string | null
+          refund_amount?: number | null
+          created_at?: string
+          updated_at?: string
         }
         Relationships: []
       }

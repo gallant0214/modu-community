@@ -15,6 +15,7 @@ const TYPE_LABEL: Record<string, string> = {
   personal: "개인 레슨",
   group: "그룹 레슨",
   class: "클래스",
+  apparel: "운동복",
 };
 
 async function loadCenter(slug: string) {
@@ -82,6 +83,8 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
       mileageEarn: p.mileage_earn,
       billingMode: p.billing_mode,
       eligibility: p.online_eligibility || "any",
+      /** 단독 구매 불가 — 이용권에 곁들여 담는 상품 */
+      addon: p.type === "apparel",
     }));
 
   const seller = await loadSellerInfo(center.id);

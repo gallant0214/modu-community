@@ -26,6 +26,20 @@ interface Order {
   refunded_at: string | null;
   refund_amount: number | null;
   created_at: string;
+  /** 묶음 결제의 항목들 (단품이면 1개) */
+  items?: {
+    id: number;
+    product_name: string;
+    product_type: string;
+    list_price_won: number;
+    coupon_discount_won: number;
+    mileage_used: number;
+    amount_won: number;
+    issued_kind: string | null;
+    issued_id: number | null;
+    refunded_at: string | null;
+    refund_amount: number | null;
+  }[];
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -165,6 +179,28 @@ export default function CrmOrdersPage() {
                     <p className="mt-1 text-[13.5px] text-[#3A342A] dark:text-zinc-200">
                       {o.product_name}
                     </p>
+                    {/* 묶음이면 항목별로 — 무엇이 환불됐는지까지 한눈에 */}
+                    {(o.items?.length ?? 0) > 1 && (
+                      <ul className="mt-1.5 space-y-0.5">
+                        {o.items!.map((it) => (
+                          <li
+                            key={it.id}
+                            className={`flex items-baseline gap-1.5 text-[12px] ${
+                              it.refunded_at ? "text-[#A89B80]" : "text-[#6B5D47] dark:text-zinc-400"
+                            }`}
+                          >
+                            <span className="text-[#A89B80]">·</span>
+                            <span className="min-w-0 truncate">{it.product_name}</span>
+                            <span className="tabular-nums">{formatWon(it.amount_won)}</span>
+                            {it.refunded_at && (
+                              <span className="shrink-0 px-1 rounded text-[10.5px] font-bold bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                                환불
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     <p className="mt-0.5 text-[11.5px] text-[#A89B80] tabular-nums">
                       정가 {formatWon(o.list_price_won)}
                       {o.coupon_discount_won > 0 && ` · 쿠폰 -${formatWon(o.coupon_discount_won)}`}

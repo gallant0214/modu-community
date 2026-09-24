@@ -42,6 +42,24 @@ export interface OrderRow {
   status: string;
 }
 
+export interface OrderItemRow {
+  id: number;
+  order_id: number;
+  center_id: number;
+  member_id: number;
+  product_id: number | null;
+  product_name: string;
+  product_type: string;
+  list_price_won: number;
+  coupon_discount_won: number;
+  mileage_used: number;
+  mileage_earned: number;
+  amount_won: number;
+  issued_kind: string | null;
+  issued_id: number | null;
+  payment_id: number | null;
+}
+
 export interface PgResult {
   paymentKey?: string;
   approvedAt?: string;
@@ -51,7 +69,13 @@ export interface PgResult {
 }
 
 export type CompleteResult =
-  | { ok: true; issued: { kind: string; id: number; summary?: Record<string, unknown> }; receiptUrl?: string }
+  | {
+      ok: true;
+      issued: { kind: string; id: number; summary?: Record<string, unknown> };
+      /** 묶음 결제면 발급된 항목 전부 */
+      items?: { kind: string; id: number; name: string }[];
+      receiptUrl?: string;
+    }
   | { ok: false; error: string; status: number };
 
 export async function completeOrder(opts: {
@@ -75,42 +99,87 @@ export async function completeOrder(opts: {
       }
     : {};
 
-  /* ── 1) 상품 조회 ─────────────────────────────────────── */
-  const { data: pData } = await supabase
-    .from("crm_products")
-    .select(PRODUCT_SELECT)
-    .eq("id", order.product_id ?? 0)
-    .maybeSingle();
-  const product = pData as unknown as SellableProduct | null;
-
-  if (!product) {
-    return failOrder(order, pgFields, paidViaPg, "상품 정보를 찾을 수 없어 발급 보류");
+  /* ── 주문 항목 ─────────────────────────────────────────
+     단품 주문도 항목 1개짜리로 저장돼 있어 경로가 하나다. */
+  const { data: itemRows } = await supabase
+    .from("crm_order_items")
+    .select("*")
+    .eq("order_id", order.id)
+    .order("id");
+  const items = (itemRows ?? []) as unknown as OrderItemRow[];
+  if (items.length === 0) {
+    return failOrder(order, pgFields, paidViaPg, "주문 항목이 없어 발급할 수 없음");
   }
 
-  /* ── 2) 발급 ─────────────────────────────────────────── */
-  let issued;
-  try {
-    issued = await fulfillPurchase({
+  const channelLabel = order.channel === "web" ? "홈페이지 구매" : "회원앱 구매";
+  const issued: { kind: string; id: number; name: string; summary?: Record<string, unknown> }[] = [];
+
+  /* ── 항목별 발급 + 결제원장 ────────────────────────── */
+  for (const item of items) {
+    if (item.issued_id) continue; // 이미 처리된 항목 (재시도 안전)
+
+    const { data: pData } = await supabase
+      .from("crm_products")
+      .select(PRODUCT_SELECT)
+      .eq("id", item.product_id ?? 0)
+      .maybeSingle();
+    const product = pData as unknown as SellableProduct | null;
+    if (!product) {
+      return failOrder(order, pgFields, paidViaPg, `'${item.product_name}' 상품 정보를 찾을 수 없어 발급 보류`);
+    }
+
+    let outcome;
+    try {
+      outcome = await fulfillPurchase({
+        centerId,
+        memberId,
+        product,
+        amountWon: item.amount_won,
+        discountWon: item.coupon_discount_won ?? 0,
+        mileageUsed: item.mileage_used ?? 0,
+        mileageEarn: item.mileage_earned ?? 0,
+        pgMethod: pg?.method ?? (order.amount_won === 0 ? "쿠폰·마일리지" : null),
+        channel: order.channel,
+      });
+    } catch (e) {
+      return failOrder(
+        order,
+        pgFields,
+        paidViaPg,
+        `'${item.product_name}' 발급 실패: ${e instanceof Error ? e.message : "알 수 없음"}`
+      );
+    }
+
+    // 항목마다 결제원장을 따로 남긴다 — 항목별 환불이 가능한 이유
+    const paymentId = await recordPayment({
       centerId,
       memberId,
-      product,
-      amountWon: order.amount_won,
-      discountWon: order.coupon_discount_won ?? 0,
-      mileageUsed: order.mileage_used ?? 0,
-      mileageEarn: order.mileage_earned ?? 0,
-      pgMethod: pg?.method ?? (order.amount_won === 0 ? "쿠폰·마일리지" : null),
-      channel: order.channel,
+      orderId: order.id,
+      orderItemId: item.id,
+      amountWon: item.amount_won,
+      outcome,
+      note: `${channelLabel} · ${item.product_name}`,
     });
-  } catch (e) {
-    return failOrder(
-      order,
-      pgFields,
-      paidViaPg,
-      `발급 실패: ${e instanceof Error ? e.message : "알 수 없음"}`
-    );
+
+    await supabase
+      .from("crm_order_items")
+      .update({
+        issued_kind: outcome.kind,
+        issued_id: outcome.id,
+        payment_id: paymentId,
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("id", item.id);
+
+    issued.push({
+      kind: outcome.kind,
+      id: outcome.id,
+      name: item.product_name,
+      summary: outcome.summary as unknown as Record<string, unknown>,
+    });
   }
 
-  /* ── 3) 마일리지 정산 (사용 차감 + 구매 적립, 원장 포함) ── */
+  /* ── 마일리지 정산 (주문 단위 1회) ─────────────────── */
   await settleOrderMileage({
     centerId,
     memberId,
@@ -118,44 +187,35 @@ export async function completeOrder(opts: {
     used: order.mileage_used ?? 0,
   });
 
-  /* ── 4) 결제 원장 ────────────────────────────────────── */
-  const channelLabel = order.channel === "web" ? "홈페이지 구매" : "회원앱 구매";
-  const paymentId = await recordPayment({
-    centerId,
-    memberId,
-    orderId: order.id,
-    amountWon: order.amount_won,
-    outcome: issued,
-    note: `${channelLabel} · ${order.product_name}`,
-  });
-
-  /* ── 5) 쿠폰 확정 연결 ───────────────────────────────── */
+  /* ── 쿠폰 확정 연결 ───────────────────────────────── */
   if (order.coupon_issue_id) {
     await finalizeCouponUse(order.coupon_issue_id, "order", order.id);
   }
 
-  /* ── 6) 주문 갱신 ────────────────────────────────────── */
+  /* ── 주문 갱신 ────────────────────────────────────── */
+  const head = issued[0] ?? null;
   await supabase
     .from("crm_orders")
     .update({
       status: "paid",
       ...pgFields,
-      issued_kind: issued.kind,
-      issued_id: issued.id,
-      issued_extra: (issued.extra ?? null) as never,
-      payment_id: paymentId,
+      issued_kind: head?.kind ?? null,
+      issued_id: head?.id ?? null,
+      issued_extra: (issued.length > 1 ? issued : null) as never,
+      payment_id: items[0]?.payment_id ?? null,
       fail_reason: null,
       updated_at: new Date().toISOString(),
     } as never)
     .eq("id", order.id);
 
-  /* ── 7) 알림 ─────────────────────────────────────────── */
+  /* ── 알림 ─────────────────────────────────────────── */
+  const productNames = items.map((i) => i.product_name).join(", ");
   try {
     await sendLocalizedPushToMember(
       memberId,
       "purchase_done",
       "purchaseDone",
-      { product: order.product_name },
+      { product: productNames },
       {}
     );
   } catch {
@@ -167,7 +227,7 @@ export async function completeOrder(opts: {
       kind: "purchase",
       memberId,
       memberName: opts.memberName,
-      productName: order.product_name,
+      productName: productNames,
       amountWon: order.amount_won,
     });
   } catch {
@@ -176,7 +236,10 @@ export async function completeOrder(opts: {
 
   return {
     ok: true,
-    issued: { kind: issued.kind, id: issued.id, summary: issued.summary as unknown as Record<string, unknown> },
+    issued: head
+      ? { kind: head.kind, id: head.id, summary: head.summary }
+      : { kind: "none", id: 0 },
+    items: issued,
     receiptUrl: pg?.receiptUrl,
   };
 }
