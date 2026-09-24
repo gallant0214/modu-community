@@ -389,11 +389,18 @@ export async function GET(request: Request) {
         : null,
       /** 상품 관리의 묶음 상품(부모 또는 그 구성 상품)으로 결제된 건 */
       bundle: bundleIds.has(r.id),
-      /** 이 결제에 발생한 환불 이벤트들 (시간 오름차순) */
-      refunds: [
-        ...(refundsByPayment.get(r.id) ?? []),
-        ...(r.order_id ? refundsByOrder.get(r.order_id) ?? [] : []),
-      ].sort((a, b) => a.refunded_at.localeCompare(b.refunded_at)),
+      /** 이 결제에 발생한 환불 이벤트들 (시간 오름차순).
+          🚨 결제에 직접 걸린 이력이 있으면 주문 단위 이력은 붙이지 않는다.
+             둘 다 붙이면 묶음 결제에서 같은 환불이 항목마다 중복으로 보인다. */
+      refunds: (() => {
+        const mine = refundsByPayment.get(r.id) ?? [];
+        if (mine.length > 0) return [...mine].sort((a, b) => a.refunded_at.localeCompare(b.refunded_at));
+        const byOrder = r.order_id ? refundsByOrder.get(r.order_id) ?? [] : [];
+        // 항목이 여럿인 주문의 주문단위 이력은 특정 항목의 것이 아니므로 붙이지 않는다
+        const siblings = rows.filter((x) => x.order_id && x.order_id === r.order_id).length;
+        if (siblings > 1) return [];
+        return [...byOrder].sort((a, b) => a.refunded_at.localeCompare(b.refunded_at));
+      })(),
     };
   });
 
