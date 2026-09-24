@@ -31,6 +31,7 @@ export function CouponPicker({
   priceWon,
   productType,
   productId,
+  vatIncluded = true,
   applied,
   onApply,
   excludeIssueIds = [],
@@ -40,6 +41,8 @@ export function CouponPicker({
   priceWon: number;
   productType: string | null;
   productId: number | null;
+  /** 상품 가격이 부가세 포함가인지 — 정률 쿠폰을 공급가 기준으로 계산할 때 필요 */
+  vatIncluded?: boolean;
   applied: AppliedCoupon | null;
   onApply: (c: AppliedCoupon | null) => void;
   /** 장바구니 다른 줄에 이미 붙인 쿠폰 (한 장을 두 번 못 쓰게) */
@@ -94,7 +97,7 @@ export function CouponPicker({
     );
   }
 
-  const target = { priceWon, productType, productId };
+  const target = { priceWon, productType, productId, vatIncluded };
   const appliedCoupon = applied ? coupons.find((c) => c.issueId === applied.issueId) : null;
   // 상품·금액을 바꾼 뒤 할인액이 달라졌으면 알려준다 (자동으로 바꾸지 않음 — 직원이 확인하고 다시 적용)
   const recheck = appliedCoupon ? computeCouponDiscount(appliedCoupon.coupon, target) : null;

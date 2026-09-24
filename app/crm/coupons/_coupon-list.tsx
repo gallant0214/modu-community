@@ -299,6 +299,8 @@ function CouponEditor({
   const [benefitType, setBenefitType] = useState<BenefitType>(initial?.benefit_type ?? "amount");
   const [amountWon, setAmountWon] = useState(initial?.amount_won ?? 10000);
   const [percent, setPercent] = useState<number>(Number(initial?.percent ?? 10));
+  // 정률 할인을 공급가액(부가세 제외) 기준으로 계산 — "부가세를 받지 않는" 운영을 쿠폰으로 표현
+  const [vatExclusive, setVatExclusive] = useState<boolean>(initial?.vat_exclusive_base ?? false);
   const [maxDiscount, setMaxDiscount] = useState(initial?.max_discount_won ?? 0);
   const [minPurchase, setMinPurchase] = useState(initial?.min_purchase_won ?? 0);
   const [giftProductId, setGiftProductId] = useState<number | "">(initial?.gift_product_id ?? "");
@@ -327,6 +329,7 @@ function CouponEditor({
       benefit_type: benefitType,
       amount_won: amountWon,
       percent,
+      vat_exclusive_base: vatExclusive,
       max_discount_won: maxDiscount || null,
       min_purchase_won: minPurchase,
       gift_product_id: giftProductId ? Number(giftProductId) : null,
@@ -336,7 +339,7 @@ function CouponEditor({
       valid_days: validDays,
       valid_until: validUntil || null,
     }),
-    [name, benefitType, amountWon, percent, maxDiscount, minPurchase, giftProductId, products, types, validMode, validDays, validUntil]
+    [name, benefitType, amountWon, percent, vatExclusive, maxDiscount, minPurchase, giftProductId, products, types, validMode, validDays, validUntil]
   );
 
   const save = async () => {
@@ -348,6 +351,7 @@ function CouponEditor({
       benefit_type: benefitType,
       amount_won: amountWon,
       percent,
+      vat_exclusive_base: vatExclusive,
       max_discount_won: maxDiscount || null,
       min_purchase_won: minPurchase,
       gift_product_id: giftProductId || null,
@@ -407,6 +411,25 @@ function CouponEditor({
               <input className={crmInputClass} inputMode="numeric" disabled={locked} value={minPurchase ? formatWon(minPurchase) : ""} onChange={(e) => setMinPurchase(parseWon(e.target.value))} placeholder="0" />
             </div>
           </div>
+        )}
+        {benefitType === "percent" && (
+          <label className="flex items-start gap-2 mt-1 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={vatExclusive}
+              disabled={locked}
+              onChange={(e) => setVatExclusive(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-[#6B7B3A]"
+            />
+            <span className="text-[12.5px] leading-relaxed text-[#3A342A] dark:text-zinc-200">
+              부가세 제외 금액 기준으로 할인
+              <span className="block text-[11.5px] text-[#A89B80]">
+                부가세 포함가 77,000원에 10% 쿠폰 →{" "}
+                {vatExclusive ? "7,000원 할인 (공급가 70,000 기준)" : "7,700원 할인 (정가 기준)"}.
+                부가세를 받지 않는 회원권에 쓰세요.
+              </span>
+            </span>
+          </label>
         )}
         {benefitType === "percent" && (
           <div className="grid grid-cols-3 gap-2">

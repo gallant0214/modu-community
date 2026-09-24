@@ -118,6 +118,7 @@ export async function POST(request: Request) {
       totalDiscountWon: quote.couponDiscountWon,
       productType: product.type,
       productId: product.id,
+      vatIncluded: product.vat_included,
       actor: { uid: ctx.uid, name: ctx.name },
     });
     if (!claim.ok) {

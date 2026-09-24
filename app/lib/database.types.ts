@@ -2677,6 +2677,7 @@ export type Database = {
           valid_days: number | null
           valid_until: string | null
           one_per_member: boolean
+          vat_exclusive_base: boolean
           status: string
           created_by_uid: string | null
           created_by_name: string | null
@@ -2699,6 +2700,7 @@ export type Database = {
           valid_days?: number | null
           valid_until?: string | null
           one_per_member?: boolean
+          vat_exclusive_base?: boolean
           status?: string
           created_by_uid?: string | null
           created_by_name?: string | null
@@ -2721,6 +2723,7 @@ export type Database = {
           valid_days?: number | null
           valid_until?: string | null
           one_per_member?: boolean
+          vat_exclusive_base?: boolean
           status?: string
           created_by_uid?: string | null
           created_by_name?: string | null

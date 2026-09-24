@@ -225,6 +225,7 @@ export async function quoteOrder(opts: {
           priceWon: listPriceWon,
           productType: product.type,
           productId: product.id,
+          vatIncluded: product.vat_included,
         });
         if (!check.ok) {
           couponError = check.reason ?? "적용할 수 없는 쿠폰이에요";

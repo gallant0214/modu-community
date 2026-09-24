@@ -83,12 +83,16 @@ export function validateCouponInput(b: Record<string, unknown>): { error?: strin
         ? (b.applicable_types as unknown[]).map(String).filter((t) => t in PRODUCT_TYPE_LABEL)
         : null,
     one_per_member: !!b.one_per_member,
+    /* 정률 할인을 공급가액(부가세 제외) 기준으로 계산할지.
+       "부가세를 받지 않는" 운영을 쿠폰으로 표현할 때 쓴다. 정률에만 의미가 있다. */
+    vat_exclusive_base: false,
   };
 
   if (type === "amount") {
     row.amount_won = int(b.amount_won);
     if (!row.amount_won) return { error: "할인 금액을 입력해 주세요" };
   } else if (type === "percent") {
+    row.vat_exclusive_base = !!b.vat_exclusive_base;
     const p = Number(b.percent);
     if (!Number.isFinite(p) || p <= 0 || p > 100) return { error: "할인율은 1~100% 사이로 입력해 주세요" };
     row.percent = Math.round(p * 100) / 100;

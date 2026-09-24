@@ -26,6 +26,12 @@ export interface CouponDef {
   valid_days: number | null;
   valid_until: string | null;
   one_per_member?: boolean;
+  /**
+   * 정률 할인을 **공급가액(부가세 제외)** 기준으로 계산할지.
+   * 헬스 회원권처럼 "부가세를 받지 않는" 운영을 쿠폰으로 표현할 때 쓴다.
+   * 77,000(부가세 포함)의 10% → 정가 기준 7,700 / 공급가 기준 7,000
+   */
+  vat_exclusive_base?: boolean;
   status?: string;
   /** 증정 상품 이름(조인해서 채움) */
   gift_product_name?: string | null;
@@ -63,7 +69,8 @@ export function benefitText(c: CouponDef): string {
   if (c.benefit_type === "percent") {
     const p = Number(c.percent ?? 0);
     const pct = Number.isInteger(p) ? String(p) : p.toFixed(1);
-    return `${pct}% 할인${c.max_discount_won ? ` (최대 ${won(c.max_discount_won)})` : ""}`;
+    const base = c.vat_exclusive_base ? " (부가세 제외 금액 기준)" : "";
+    return `${pct}% 할인${c.max_discount_won ? ` (최대 ${won(c.max_discount_won)})` : ""}${base}`;
   }
   return `${c.gift_product_name || "지정 상품"} 증정`;
 }
@@ -108,15 +115,26 @@ export interface DiscountCheck {
   reason?: string;
 }
 
+/** 부가세 포함가 → 공급가액 (10% 기준, 원 단위 반올림) */
+export function supplyAmount(priceWon: number): number {
+  return Math.round(priceWon / 1.1);
+}
+
 /**
  * 쿠폰을 특정 상품 결제에 적용했을 때의 할인액.
  * @param priceWon     쿠폰 적용 전 정가
  * @param productType  crm_products.type (membership/personal/…)
  * @param productId    선택된 상품 id (증정 쿠폰 판정용)
+ * @param vatIncluded  상품 가격이 부가세 포함가인지 (crm_products.vat_included)
  */
 export function computeCouponDiscount(
   c: CouponDef,
-  target: { priceWon: number; productType?: string | null; productId?: number | null }
+  target: {
+    priceWon: number;
+    productType?: string | null;
+    productId?: number | null;
+    vatIncluded?: boolean;
+  }
 ): DiscountCheck {
   const price = Math.max(0, Math.floor(target.priceWon || 0));
 
@@ -147,7 +165,12 @@ export function computeCouponDiscount(
   if (c.benefit_type === "amount") {
     discount = Math.floor(c.amount_won ?? 0);
   } else {
-    discount = Math.floor((price * Number(c.percent ?? 0)) / 100);
+    /* 정률 할인 기준액.
+       vat_exclusive_base 면 공급가액(부가세 제외)에 퍼센트를 매긴다.
+       부가세 포함가가 아닌 상품(vat_included=false)은 이미 공급가이므로 그대로 쓴다. */
+    const base =
+      c.vat_exclusive_base && target.vatIncluded !== false ? supplyAmount(price) : price;
+    discount = Math.floor((base * Number(c.percent ?? 0)) / 100);
     if (c.max_discount_won) discount = Math.min(discount, Math.floor(c.max_discount_won));
   }
   discount = Math.max(0, Math.min(discount, price)); // 결제 금액보다 크게 깎지 않는다

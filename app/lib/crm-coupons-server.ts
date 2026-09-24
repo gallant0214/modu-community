@@ -27,6 +27,8 @@ export async function claimCoupon(opts: {
   totalDiscountWon: number;
   productType?: string | null;
   productId?: number | null;
+  /** 상품 가격이 부가세 포함가인지 — 정률 쿠폰 기준액 계산에 쓴다 */
+  vatIncluded?: boolean;
   actor: { uid?: string | null; name?: string | null };
 }): Promise<ClaimResult> {
   const { data: issue } = await supabase
@@ -71,6 +73,7 @@ export async function claimCoupon(opts: {
     priceWon: opts.originalPriceWon,
     productType: opts.productType,
     productId: opts.productId,
+    vatIncluded: opts.vatIncluded,
   });
   if (!check.ok) return { ok: false, error: check.reason ?? "적용할 수 없는 쿠폰이에요" };
 

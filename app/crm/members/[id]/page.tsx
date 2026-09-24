@@ -7874,6 +7874,7 @@ function UsageIssueModal({
           priceWon={priceWon}
           productType={type}
           productId={pickedProductId}
+          vatIncluded={vatIncluded}
           applied={coupon}
           excludeIssueIds={cart.map((c) => c.couponIssueId)}
           onApply={(c) => {
@@ -8829,6 +8830,7 @@ function PassIssueModal({
           priceWon={priceWon}
           productType={passProducts.find((pp) => pp.id === pickedProductId)?.type ?? "personal"}
           productId={pickedProductId}
+          vatIncluded={vatIncluded}
           applied={coupon}
           onApply={(c) => {
             setCoupon(c);

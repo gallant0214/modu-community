@@ -160,6 +160,7 @@ export async function POST(request: Request) {
       totalDiscountWon: Math.max(0, Math.floor(Number(body.discount_won) || 0)),
       productType: "membership",
       productId: Number(body.coupon_product_id) || null,
+      vatIncluded: !!body.vat_included,
       actor: { uid: ctx.uid, name: await staffDisplayName(ctx.centerMemberId) },
     });
     if (!claim.ok) {

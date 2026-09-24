@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
-import { effectiveStatus } from "@/app/lib/crm-coupons";
+import { effectiveStatus, computeCouponDiscount, type CouponDef } from "@/app/lib/crm-coupons";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +14,23 @@ export const dynamic = "force-dynamic";
  *  - 정렬: 사용가능(만료 임박순) → 사용완료 → 만료(최신 발급순).
  */
 export async function GET(request: Request) {
-  const centerId = Number(new URL(request.url).searchParams.get("centerId"));
+  const url = new URL(request.url);
+  const centerId = Number(url.searchParams.get("centerId"));
+  const productId = Number(url.searchParams.get("productId")) || null; // 있으면 상품별 사용가능 여부 계산
   const ctx = await requireMemberForCenter(request, centerId);
   if (isMemberError(ctx)) return ctx;
+
+  // 상품별 쿠폰 사용가능 판정용 — 선택 상품의 정가/유형
+  let product: { price_won: number; type: string | null; vat_included: boolean } | null = null;
+  if (productId) {
+    const { data: p } = await supabase
+      .from("crm_products")
+      .select("price_won, type, vat_included")
+      .eq("id", productId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    product = (p as { price_won: number; type: string | null; vat_included: boolean } | null) ?? null;
+  }
 
   const { data: issues } = await supabase
     .from("crm_coupon_issues")
@@ -37,13 +51,15 @@ export async function GET(request: Request) {
     amount_won: number | null;
     percent: number | null;
     max_discount_won: number | null;
+    min_purchase_won: number | null;
+    applicable_types: string[] | null;
     gift_product_id: number | null;
   };
   const defMap = new Map<number, Def>();
   if (couponIds.length) {
     const { data: defs } = await supabase
       .from("crm_coupons")
-      .select("id, name, description, benefit_type, amount_won, percent, max_discount_won, gift_product_id")
+      .select("id, name, description, benefit_type, amount_won, percent, max_discount_won, min_purchase_won, applicable_types, gift_product_id")
       .in("id", couponIds);
     for (const d of (defs ?? []) as Def[]) defMap.set(d.id, d);
   }
@@ -73,6 +89,38 @@ export async function GET(request: Request) {
       const eff = effectiveStatus({ status: i.status, expires_at: i.expires_at });
       if (eff === "revoked") return null;
       const status = eff === "used" ? "used" : eff === "expired" ? "expired" : "active";
+
+      // 상품 선택 시(productId) 이 상품에 이 쿠폰을 쓸 수 있는지 판정
+      let usable: boolean | undefined;
+      let usableReason: string | undefined;
+      let discountWon: number | undefined;
+      if (product && status === "active") {
+        const def: CouponDef = {
+          id: d.id,
+          name: d.name,
+          benefit_type: d.benefit_type as CouponDef["benefit_type"],
+          amount_won: d.amount_won,
+          percent: d.percent,
+          max_discount_won: d.max_discount_won,
+          min_purchase_won: d.min_purchase_won ?? 0,
+          gift_product_id: d.gift_product_id,
+          applicable_types: d.applicable_types,
+          valid_mode: "until",
+          valid_days: null,
+          valid_until: null,
+          gift_product_name: d.gift_product_id ? giftNameMap.get(d.gift_product_id) ?? null : null,
+        };
+        const chk = computeCouponDiscount(def, {
+          priceWon: product.price_won,
+          productType: product.type,
+          productId,
+          vatIncluded: product.vat_included,
+        });
+        usable = chk.ok;
+        usableReason = chk.ok ? undefined : chk.reason;
+        discountWon = chk.ok ? chk.discountWon : 0;
+      }
+
       return {
         id: i.id,
         name: d.name,
@@ -86,6 +134,7 @@ export async function GET(request: Request) {
         status,
         usedAt: i.used_at ?? null,
         issuedAt: i.issued_at,
+        ...(product ? { usable: usable ?? false, usableReason: usableReason ?? null, discountWon: discountWon ?? 0 } : {}),
       };
     })
     .filter((c): c is NonNullable<typeof c> => c !== null)
