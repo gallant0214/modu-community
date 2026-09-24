@@ -22,6 +22,7 @@ const REASON_LABEL: Record<string, string> = {
   checkout: "퇴실 적립",
   attendance: "출석 적립",
   broj_import: "이관 전 누적",
+  order_refund: "환불 정산", // 방향에 따라 아래에서 더 정확한 문구로 바꾼다
 };
 
 /** 직원이 손으로 넣고 뺀 건 — 담당자·메모를 활동 로그에서 붙인다 */
@@ -29,6 +30,8 @@ const MANUAL_REASONS = new Set(["center_add", "center_deduct", "adjust"]);
 
 function reasonLabel(reason: string, delta: number): string {
   if (MANUAL_REASONS.has(reason)) return delta < 0 ? "센터 차감" : "센터 지급";
+  // 환불 정산은 방향이 곧 의미다 — 쓴 마일리지를 돌려받은 건지, 적립분을 회수당한 건지
+  if (reason === "order_refund") return delta < 0 ? "환불로 적립 회수" : "환불로 반환";
   return REASON_LABEL[reason] ?? reason;
 }
 
