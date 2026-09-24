@@ -92,21 +92,46 @@ export default function ShopClient(props: {
     };
   }, [user, getIdToken, props.centerId]);
 
-  const visible =
-    regType === undefined
-      ? props.products
-      : props.products.filter((p) => {
-          if (p.eligibility === "new") return regType !== "재등록";
-          if (p.eligibility === "rejoin") return regType === "재등록";
-          return true;
-        });
+  /**
+   * 신규 / 재등록 탭.
+   * 둘 다 보여주는 게 맞다 — 숨기면 가격표 구실을 못 하고, 비로그인 방문자에게도
+   * 보여야 한다. 대신 내가 살 수 없는 쪽은 구매 버튼을 잠그고 이유를 적는다.
+   * (결제 단계에서 에러가 나는 것보다, 누르기 전에 알려주는 게 낫다)
+   */
+  const hasNew = props.products.some((p) => p.eligibility === "new");
+  const hasRejoin = props.products.some((p) => p.eligibility === "rejoin");
+  const showTabs = hasNew && hasRejoin;
+  const myTab: "new" | "rejoin" = regType === "재등록" ? "rejoin" : "new";
+  const [tab, setTab] = useState<"new" | "rejoin">(myTab);
+
+  // 로그인해서 내 구분을 알게 되면 내 탭으로 맞춰준다
+  useEffect(() => {
+    if (regType !== undefined) setTab(regType === "재등록" ? "rejoin" : "new");
+  }, [regType]);
+
+  /** 이 상품을 지금 살 수 있는가 — 서버 판정과 같은 규칙 */
+  const buyable = (p: ShopProduct): boolean => {
+    if (regType === undefined) return true; // 로그인 전에는 잠그지 않는다
+    if (p.eligibility === "new") return regType !== "재등록";
+    if (p.eligibility === "rejoin") return regType === "재등록";
+    return true;
+  };
+
+  // 탭은 고른 조건의 상품만 보여준다 (재등록 탭 = 재등록 상품만)
+  const visible = showTabs ? props.products.filter((p) => p.eligibility === tab) : props.products;
+  // 신규·재등록 구분이 없는 상품은 탭과 무관하게 항상 보여준다 (탭에서 사라지면 안 된다)
+  const common = showTabs ? props.products.filter((p) => p.eligibility === "any") : [];
 
   const grouped = visible.reduce<Record<string, ShopProduct[]>>((acc, p) => {
     (acc[p.typeLabel] ||= []).push(p);
     return acc;
   }, {});
+  const groupedCommon = common.reduce<Record<string, ShopProduct[]>>((acc, p) => {
+    (acc[p.typeLabel] ||= []).push(p);
+    return acc;
+  }, {});
 
-  if (visible.length === 0) {
+  if (props.products.length === 0) {
     return (
       <p className="mt-6 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm leading-relaxed text-gray-500">
         {regType !== undefined && props.products.length > 0
@@ -118,14 +143,65 @@ export default function ShopClient(props: {
 
   return (
     <>
-      {!!regType && (
-        <p className="mt-5 rounded-lg bg-gray-50 px-3.5 py-2.5 text-xs text-gray-600">
-          {regType} 회원 기준 가격으로 보여드리고 있어요.
-        </p>
+      {showTabs && (
+        <div className="mt-6">
+          <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+            {([
+              ["new", "신규 등록"],
+              ["rejoin", "재등록"],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className={`flex-1 rounded-lg py-2.5 text-sm font-bold transition-colors ${
+                  tab === key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+                }`}
+              >
+                {label}
+                {!!regType && myTab === key && (
+                  <span className="ml-1 text-[11px] font-semibold text-blue-600">내 조건</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {!regType ? (
+            <p className="mt-2.5 text-xs leading-relaxed text-gray-500">
+              처음 등록하시면 <b>신규 등록</b>, 이용하신 적이 있으면 <b>재등록</b> 가격입니다.
+              로그인하시면 회원님께 맞는 가격이 자동으로 선택됩니다.
+            </p>
+          ) : tab !== myTab ? (
+            <p className="mt-2.5 rounded-lg bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-800">
+              회원님은 <b>{regType}</b> 조건이라 이 탭의 상품은 구매하실 수 없어요.
+              {myTab === "new" ? " 신규 등록" : " 재등록"} 탭에서 선택해주세요.
+            </p>
+          ) : (
+            <p className="mt-2.5 text-xs text-gray-500">
+              {regType} 회원 기준 가격으로 보여드리고 있어요.
+            </p>
+          )}
+        </div>
       )}
 
       <div className="mt-6 space-y-6">
-        {Object.entries(grouped).map(([label, list]) => (
+        {renderGroups(grouped)}
+        {Object.keys(groupedCommon).length > 0 && renderGroups(groupedCommon)}
+      </div>
+
+      {picked && (
+        <CheckoutSheet
+          product={picked}
+          centerId={props.centerId}
+          onClose={() => setPicked(null)}
+          auth={{ user, loading, signInWithGoogle, signInWithApple, getIdToken }}
+        />
+      )}
+    </>
+  );
+
+  function renderGroups(groups: Record<string, ShopProduct[]>) {
+    return Object.entries(groups).map(([label, list]) => (
           <section key={label}>
             <h2 className="mb-2 text-sm font-bold text-gray-900">{label}</h2>
             <ul className="space-y-2">
@@ -156,11 +232,16 @@ export default function ShopClient(props: {
                       </div>
                       <button
                         type="button"
-                        disabled={!props.salesEnabled}
+                        disabled={!props.salesEnabled || !buyable(p)}
                         onClick={() => setPicked(p)}
+                        title={
+                          !buyable(p)
+                            ? `${regType} 회원은 구매하실 수 없는 상품이에요`
+                            : undefined
+                        }
                         className="shrink-0 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:bg-gray-300"
                       >
-                        구매하기
+                        {buyable(p) ? "구매하기" : "구매 불가"}
                       </button>
                     </div>
                   </li>
@@ -168,19 +249,8 @@ export default function ShopClient(props: {
               })}
             </ul>
           </section>
-        ))}
-      </div>
-
-      {picked && (
-        <CheckoutSheet
-          product={picked}
-          centerId={props.centerId}
-          onClose={() => setPicked(null)}
-          auth={{ user, loading, signInWithGoogle, signInWithApple, getIdToken }}
-        />
-      )}
-    </>
-  );
+    ));
+  }
 }
 
 /* ─────────────────────────────────────────────────────────
