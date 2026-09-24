@@ -6,6 +6,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { formatWon } from "../_components/crm-labels";
 import { DualLineChart } from "./_components/dual-line-chart";
 import { JoinLinkModal } from "./_components/join-link-modal";
+import { PayLinkButton } from "./_components/pay-link-button";
 
 interface Sess {
   reservationId: number;
@@ -168,6 +169,8 @@ export function TrainerDashboard({
               {displayName ? " · " : ""}내가 담당·등록한 회원과 내 수업료 중심
             </p>
           </div>
+          {/* 결제링크 — 판매 페이지가 있는 센터에서만 보인다 */}
+          <PayLinkButton />
           {/* 신규 회원 가입 안내용 QR — 직급과 무관하게 항상 노출 */}
           <button
             type="button"

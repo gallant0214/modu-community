@@ -10,6 +10,7 @@ import { CustomerStatusView } from "./_components/customer-status-view";
 import { MemberConversionCard } from "./_components/member-conversion-card";
 import { WeeklyAttendanceChart } from "./_components/weekly-attendance-chart";
 import { JoinLinkModal } from "./_components/join-link-modal";
+import { PayLinkButton } from "./_components/pay-link-button";
 import { DualLineChart } from "./_components/dual-line-chart";
 
 interface TrendPoint {
@@ -245,8 +246,9 @@ export default function CrmDashboardPage() {
                 </button>
               ))}
             </div>
-            {/* 센터 연결 QR 생성 */}
+            {/* 결제링크 · 센터 연결 QR 생성 */}
             <div className="flex flex-wrap gap-1.5">
+              <PayLinkButton />
               <button
                 type="button"
                 onClick={() => setJoinModal("qr")}
