@@ -3162,7 +3162,19 @@ interface PaymentRow {
   handler_name?: string | null;
   /** 상품 관리의 묶음 상품(부모/구성)으로 결제된 건 — 서버 판정 */
   bundle?: boolean;
+  /** 온라인(PG) 결제면 어디서 결제·환불됐는지. 직원 발급이면 null */
+  pg?: {
+    provider: string;
+    /** web = 홈페이지, app = 회원앱 */
+    channel: string;
+    /** PG 쪽에서 취소된 시각. 값이 있으면 센터 환불이 아니라 PG 환불 */
+    refundedAt: string | null;
+  } | null;
 }
+
+/** PG 결제 출처 표시 — 어디서 결제됐는지 한눈에 */
+const PG_LABEL: Record<string, string> = { toss: "토스" };
+const PG_CHANNEL_LABEL: Record<string, string> = { web: "홈페이지", app: "회원앱" };
 
 const PAYMENT_METHOD_KO: Record<string, string> = {
   cash: "현금",
@@ -3695,6 +3707,31 @@ function MemberPaymentsSection({
                       title="같은 결제로 함께 구매된 상품이에요"
                     >
                       묶음 상품
+                    </span>
+                  )}
+                  {/* 온라인 결제 출처 — 회원이 직접 결제한 건임을 구분 */}
+                  {p.pg && (
+                    <span
+                      className="shrink-0 px-1.5 py-0.5 rounded text-[11px] font-bold bg-[#3B6BA5]/12 text-[#2F5580] dark:bg-[#3B6BA5]/30 dark:text-[#9FC3E8]"
+                      title={`회원이 ${PG_CHANNEL_LABEL[p.pg.channel] ?? p.pg.channel}에서 직접 결제한 건이에요`}
+                    >
+                      {PG_LABEL[p.pg.provider] ?? p.pg.provider} 결제
+                      {p.pg.channel === "app" ? " · 앱" : p.pg.channel === "web" ? " · 홈" : ""}
+                    </span>
+                  )}
+                  {/* 환불 출처 — PG 취소와 센터 처리를 구분해야 책임 소재가 분명해진다 */}
+                  {isRefunded && (
+                    <span
+                      className="shrink-0 px-1.5 py-0.5 rounded text-[11px] font-bold bg-red-500/12 text-red-700 dark:bg-red-500/25 dark:text-red-300"
+                      title={
+                        p.pg?.refundedAt
+                          ? "PG(토스) 쪽에서 취소된 건이에요. 실제 대금이 회원에게 돌아갔습니다."
+                          : "센터에서 장부상 환불 처리한 건이에요. PG 대금은 따로 확인이 필요합니다."
+                      }
+                    >
+                      {p.pg?.refundedAt
+                        ? `${PG_LABEL[p.pg.provider] ?? p.pg.provider} 환불`
+                        : "센터 환불"}
                     </span>
                   )}
                   <span className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100 truncate">

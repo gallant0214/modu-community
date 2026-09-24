@@ -86,8 +86,9 @@ export async function GET(request: Request) {
 
   let q = supabase
     .from("crm_payments")
+    // ⚠️ 한 줄 리터럴로 유지 — 문자열을 이어붙이면 Supabase 타입 추론이 깨진다
     .select(
-      "id, member_id, pass_id, membership_id, rental_id, amount_won, method, method_custom, paid_at, note, status, created_at, recorded_by_uid"
+      "id, member_id, pass_id, membership_id, rental_id, amount_won, method, method_custom, paid_at, note, status, created_at, recorded_by_uid, source, order_id"
     )
     .eq("center_id", ctx.centerId)
     .order("paid_at", { ascending: false })
@@ -187,6 +188,39 @@ export async function GET(request: Request) {
     }
   }
 
+  /* ── 온라인(PG) 결제 정보 ────────────────────────────────────────
+     어디서 결제됐고 어디서 환불됐는지 구분해 보여주기 위해 주문을 함께 읽는다.
+     환불로 상품이 회수되면 payments 의 상품 연결이 끊겨 상품명이 비는데,
+     주문에 남은 스냅샷 이름을 대신 쓴다. */
+  const orderIds = Array.from(
+    new Set(rows.map((r) => r.order_id).filter((v): v is number => !!v))
+  );
+  const orderMap = new Map<
+    number,
+    { product_name: string; channel: string; pg_provider: string; refunded_at: string | null }
+  >();
+  if (orderIds.length > 0) {
+    const { data: orders } = await supabase
+      .from("crm_orders")
+      .select("id, product_name, channel, pg_provider, refunded_at")
+      .eq("center_id", ctx.centerId)
+      .in("id", orderIds);
+    for (const o of (orders ?? []) as {
+      id: number;
+      product_name: string;
+      channel: string;
+      pg_provider: string;
+      refunded_at: string | null;
+    }[]) {
+      orderMap.set(o.id, {
+        product_name: o.product_name,
+        channel: o.channel,
+        pg_provider: o.pg_provider,
+        refunded_at: o.refunded_at,
+      });
+    }
+  }
+
   // ── 묶음 상품 판정 ──────────────────────────────────────────────
   // '상품 관리'에서 구성 상품(components)을 달아둔 상품만 묶음으로 본다.
   // 장바구니에 여러 개 담아 한 번에 결제한 건은 묶음이 아니다.
@@ -252,6 +286,7 @@ export async function GET(request: Request) {
       (sellerId ? staffByIdMap.get(sellerId) : null) ??
       (r.recorded_by_uid ? staffByUidMap.get(r.recorded_by_uid) : null) ??
       null;
+    const ord = r.order_id ? orderMap.get(r.order_id) ?? null : null;
     return {
       ...r,
       product_name: r.pass_id
@@ -260,8 +295,18 @@ export async function GET(request: Request) {
           ? membershipNameMap.get(r.membership_id) ?? "회원권"
           : r.rental_id
             ? rentalNameMap.get(r.rental_id) ?? "대여"
-            : null,
+            : // 환불로 상품이 회수된 온라인 결제 — 주문에 남은 이름을 쓴다
+              ord?.product_name ?? null,
       handler_name: handlerName,
+      /** 온라인 결제면 어디서 결제됐는지. 직원 발급이면 null */
+      pg: ord
+        ? {
+            provider: ord.pg_provider,
+            channel: ord.channel, // web | app
+            /** PG 쪽에서 취소된 시각. 값이 있으면 '센터 환불' 이 아니라 'PG 환불' */
+            refundedAt: ord.refunded_at,
+          }
+        : null,
       /** 상품 관리의 묶음 상품(부모 또는 그 구성 상품)으로 결제된 건 */
       bundle: bundleIds.has(r.id),
     };
