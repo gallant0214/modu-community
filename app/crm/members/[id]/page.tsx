@@ -1487,6 +1487,10 @@ function MemberMessageButton({
   const [sending, setSending] = useState(false);
   const [savingPhrase, setSavingPhrase] = useState(false);
   const [result, setResult] = useState<{ text: string; tone: "ok" | "warn" } | null>(null);
+  // 결제 링크 삽입 (웹 결제 페이지 /shop/[slug])
+  const [shopSlug, setShopSlug] = useState<string | null>(null);
+  const [linkProducts, setLinkProducts] = useState<{ id: number; name: string }[]>([]);
+  const [linkOpen, setLinkOpen] = useState(false);
 
   const smsLocked = centerId !== null && centerId !== 1;
   const smsAvailable = !smsLocked && !!memberPhone;
@@ -1525,7 +1529,36 @@ function MemberMessageButton({
         /* ignore */
       }
     })();
+    // 결제 링크용 — 센터 판매 페이지 slug + 온라인 판매 상품
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const [linkRes, prodRes] = await Promise.all([
+          fetch("/api/crm/shop-link", { headers: { authorization: `Bearer ${token}` }, cache: "no-store" }),
+          fetch("/api/crm/products?sellable=1", { headers: { authorization: `Bearer ${token}` }, cache: "no-store" }),
+        ]);
+        if (linkRes.ok) setShopSlug((await linkRes.json())?.slug ?? null);
+        if (prodRes.ok) {
+          const list = ((await prodRes.json())?.products ?? []) as any[];
+          setLinkProducts(
+            list
+              .filter((p) => p.online_sale_enabled && p.status === "active" && !p.trainer_member_id)
+              .map((p) => ({ id: p.id, name: p.name }))
+          );
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
   }, [open, getIdToken, loadPhrases]);
+
+  const insertPayLink = (productId?: number) => {
+    if (!shopSlug) return;
+    const url = `https://moducm.com/shop/${shopSlug}${productId ? `?product=${productId}` : ""}`;
+    setText((t) => (t.trim() ? `${t.trimEnd()}\n\n▶ 결제하기: ${url}` : `▶ 결제하기: ${url}`));
+    setLinkOpen(false);
+  };
 
   const savePhrase = async () => {
     const t = text.trim();
@@ -1699,6 +1732,44 @@ function MemberMessageButton({
               </div>
             )}
           </div>
+
+          {/* 결제 링크 삽입 (웹 결제 페이지) */}
+          {shopSlug && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-300">결제 링크</div>
+                <button
+                  type="button"
+                  onClick={() => setLinkOpen((v) => !v)}
+                  className="text-[11.5px] px-2 py-1 rounded border border-[#6B7B3A]/50 text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/8"
+                >
+                  {linkOpen ? "닫기" : "+ 결제 링크 삽입"}
+                </button>
+              </div>
+              {linkOpen && (
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => insertPayLink()}
+                    className="text-[12px] px-2.5 py-1 rounded-full bg-[#6B7B3A]/12 text-[#4F5B2A] dark:text-[#A8B87A] font-semibold hover:bg-[#6B7B3A]/20"
+                  >
+                    범용(상품 목록)
+                  </button>
+                  {linkProducts.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => insertPayLink(p.id)}
+                      className="text-[12px] px-2.5 py-1 rounded-full bg-[#F5F0E5] dark:bg-zinc-800 text-[#3A342A] dark:text-zinc-200 hover:bg-[#EDE6D6] max-w-[220px] truncate"
+                      title={p.name}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 메세지 입력 */}
           <div>
