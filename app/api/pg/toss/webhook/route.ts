@@ -209,7 +209,7 @@ export async function POST(request: Request) {
     /* 환불 이력 — 결제내역에 "결제"와 "환불"이 각각 남도록.
        결제 행의 status 만 바꾸면 결제했다는 사실이 사라진다. */
     if (cancels.length > 0) {
-      await supabase.from("crm_payment_refunds").upsert(
+      const { error: refErr } = await supabase.from("crm_payment_refunds").upsert(
         cancels.map((c) => ({
           center_id: order.center_id,
           member_id: order.member_id,
@@ -225,9 +225,15 @@ export async function POST(request: Request) {
         })) as never,
         { onConflict: "pg_transaction_key", ignoreDuplicates: true }
       );
+      /* 🚨 결과를 반드시 확인한다. 2026-09-24 에 이 자리에서 upsert 가 통째로 실패했는데
+            (멱등 인덱스를 부분 인덱스로 만들어 onConflict 가 못 찾음) 그냥 넘어가서
+            주문만 환불되고 환불 이력이 비어 있었다. */
+      if (refErr) {
+        return finish(`환불 이력 기록 실패: ${refErr.message}`, false);
+      }
     } else {
       // 취소 내역을 못 받은 경우에도 사실은 남긴다
-      await supabase.from("crm_payment_refunds").insert({
+      const { error: refErr2 } = await supabase.from("crm_payment_refunds").insert({
         center_id: order.center_id,
         member_id: order.member_id,
         payment_id: order.payment_id ?? null,
@@ -238,6 +244,7 @@ export async function POST(request: Request) {
         is_partial: !fullyCanceled,
         reason: "PG 에서 취소됨",
       } as never);
+      if (refErr2) return finish(`환불 이력 기록 실패: ${refErr2.message}`, false);
     }
 
     // 썼던 마일리지는 돌려주고, 구매 적립분은 회수한다

@@ -38,5 +38,8 @@ CREATE INDEX IF NOT EXISTS idx_payment_refunds_member
   ON crm_payment_refunds (center_id, member_id, refunded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_payment_refunds_payment
   ON crm_payment_refunds (payment_id);
+-- 🚨 부분 인덱스(WHERE ... IS NOT NULL)로 만들면 안 된다.
+--    PostgREST 의 onConflict 가 부분 인덱스를 찾지 못해 upsert 가 통째로 실패한다.
+--    Postgres 는 NULL 을 서로 다른 값으로 보므로 부분 조건 없이도 NULL 은 여러 개 들어간다.
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_payment_refunds_pg_tx
-  ON crm_payment_refunds (pg_transaction_key) WHERE pg_transaction_key IS NOT NULL;
+  ON crm_payment_refunds (pg_transaction_key);
