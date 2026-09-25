@@ -471,9 +471,8 @@ export default function CrmMemberDetailPage() {
                     className="tabular-nums"
                   />
                 </div>
-                {/* 액션 버튼 — 높이·모양은 통일, 배치는 2줄
-                    (1줄: 출석 처리·앱 연동 해지 / 2줄: 메세지 전송) */}
-                <div className="mt-3 flex flex-wrap items-center gap-2">
+                {/* 액션 버튼 — 2열 격자. 칸 크기가 같아 위·아래 줄의 좌우 끝이 맞는다. */}
+                <div className="mt-3 grid grid-cols-2 gap-2 w-full max-w-[340px]">
                   <CheckInButton
                     memberId={member.id}
                     centerId={foreignCenter ? Number(foreignCenter) : undefined}
@@ -482,8 +481,6 @@ export default function CrmMemberDetailPage() {
                   {member.linked_firebase_uid && (
                     <UnlinkAppButton memberId={member.id} canEdit={canEditBasic} onDone={load} />
                   )}
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
                   <MemberMessageButton
                     memberId={member.id}
                     memberName={member.name}
@@ -1284,12 +1281,12 @@ function CheckInButton({
   const attended = todayAttId != null;
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className="relative w-full">
       <button
         type="button"
         onClick={attended ? cancel : run}
         disabled={busy || checking}
-        className={`inline-flex h-9 items-center gap-1.5 px-3.5 rounded-lg text-white text-[12.5px] font-semibold shadow-sm transition-colors disabled:opacity-60 ${
+        className={`inline-flex h-9 w-full items-center justify-center gap-1.5 px-3 rounded-lg text-white text-[12.5px] font-semibold shadow-sm transition-colors disabled:opacity-60 ${
           attended
             ? "bg-[#C0392B] hover:bg-[#a93226]"
             : "bg-[#6B7B3A] hover:bg-[#5a6932]"
@@ -1306,7 +1303,7 @@ function CheckInButton({
       </button>
       {msg && (
         <span
-          className={`text-[12px] font-medium ${
+          className={`absolute left-0 top-full mt-1 whitespace-nowrap text-[12px] font-medium ${
             msg.tone === "ok" ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#B47B2A]"
           }`}
         >
@@ -1376,7 +1373,7 @@ function MemberCouponsButton({ memberId, memberName }: { memberId: number; membe
           setOpen(true);
           load();
         }}
-        className="inline-flex h-9 items-center gap-1.5 px-3.5 rounded-lg border border-[#B47B2A]/60 text-[#B47B2A] dark:border-amber-500/50 dark:text-amber-300 text-[12.5px] font-semibold bg-white dark:bg-zinc-900 hover:bg-[#B47B2A]/8 transition-colors"
+        className="inline-flex h-9 w-full items-center justify-center gap-1.5 px-3 rounded-lg border border-[#B47B2A]/60 text-[#B47B2A] dark:border-amber-500/50 dark:text-amber-300 text-[12.5px] font-semibold bg-white dark:bg-zinc-900 hover:bg-[#B47B2A]/8 transition-colors"
       >
         <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V6a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 000 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2a2 2 0 000-4z" />
@@ -1630,7 +1627,7 @@ function MemberMessageButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-9 items-center gap-1.5 px-3.5 rounded-lg border border-[#6B7B3A]/60 text-[#6B7B3A] dark:border-[#A8B87A]/60 dark:text-[#A8B87A] text-[12.5px] font-semibold bg-white dark:bg-zinc-900 hover:bg-[#6B7B3A]/8 transition-colors"
+        className="inline-flex h-9 w-full items-center justify-center gap-1.5 px-3 rounded-lg border border-[#6B7B3A]/60 text-[#6B7B3A] dark:border-[#A8B87A]/60 dark:text-[#A8B87A] text-[12.5px] font-semibold bg-white dark:bg-zinc-900 hover:bg-[#6B7B3A]/8 transition-colors"
       >
         <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <rect x="3" y="5" width="18" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -1869,12 +1866,12 @@ function UnlinkAppButton({
   if (!canEdit) return null;
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className="relative w-full">
       <button
         type="button"
         onClick={run}
         disabled={busy}
-        className="inline-flex h-9 items-center gap-1.5 px-3.5 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-[12.5px] font-semibold bg-white dark:bg-zinc-900 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-60"
+        className="inline-flex h-9 w-full items-center justify-center gap-1.5 px-3 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-[12.5px] font-semibold bg-white dark:bg-zinc-900 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-60"
       >
         <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5L21 3m-5 0h5v5M10.5 13.5L3 21m5 0H3v-5" />
@@ -1883,7 +1880,7 @@ function UnlinkAppButton({
       </button>
       {msg && (
         <span
-          className={`text-[12px] font-medium ${
+          className={`absolute left-0 top-full mt-1 whitespace-nowrap text-[12px] font-medium ${
             msg.tone === "ok" ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#B47B2A]"
           }`}
         >
