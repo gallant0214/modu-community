@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://moducm.com"),
   openGraph: {
     title: "모두의 지도사",
-    description: "회원관리부터 센터운영·중고거래·소통까지",
+    description: "회원관리부터 센터운영·중고거래·소통까지 — 스포츠 센터 운영에 필요한 모든 것",
     url: "https://moducm.com",
     siteName: "모두의 지도사",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "모두의 지도사" }],
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "모두의 지도사",
-    description: "회원관리부터 센터운영·중고거래·소통까지",
+    description: "회원관리부터 센터운영·중고거래·소통까지 — 스포츠 센터 운영에 필요한 모든 것",
     images: ["/og-image.png"],
   },
   icons: {
