@@ -240,8 +240,46 @@ export async function GET(
     ? kstYmd((lastAtt as { checked_in_at: string }).checked_in_at)
     : null;
 
+  // 이용 시작일 = 회원권·수강권 중 가장 이른 시작일(환불 건 제외). 만료된 이용권도 포함해
+  // '언제부터 다니기 시작했나'를 본다.
+  // 🚨 저장된 컬럼값과 계산값 중 **더 이른 날짜**를 쓴다. 이관 데이터에는 이용권 기록보다
+  //    앞선 최초 이용일이 컬럼에만 남아 있는 회원이 있어(센터1 기준 70명), 계산값으로
+  //    덮으면 그 날짜가 뒤로 밀린다.
+  const [msFirst, psFirst] = await Promise.all([
+    supabase
+      .from("crm_memberships")
+      .select("start_date")
+      .eq("center_id", targetCenterId)
+      .eq("member_id", memberId)
+      .neq("status", "refunded")
+      .not("start_date", "is", null)
+      .order("start_date", { ascending: true })
+      .limit(1),
+    supabase
+      .from("crm_passes")
+      .select("start_date")
+      .eq("center_id", targetCenterId)
+      .eq("member_id", memberId)
+      .neq("status", "refunded")
+      .not("start_date", "is", null)
+      .order("start_date", { ascending: true })
+      .limit(1),
+  ]);
+  const firstUseCandidates = [
+    (msFirst.data?.[0] as { start_date?: string } | undefined)?.start_date,
+    (psFirst.data?.[0] as { start_date?: string } | undefined)?.start_date,
+  ]
+    .filter((d): d is string => !!d)
+    .map((d) => d.slice(0, 10));
+  const storedFirstUse = (member.first_use_at ?? null) as string | null;
+  if (storedFirstUse) firstUseCandidates.push(storedFirstUse.slice(0, 10));
+  const firstUse = firstUseCandidates.length
+    ? firstUseCandidates.reduce((a, b) => (a < b ? a : b))
+    : null;
+
   const memberOut = {
     ...member,
+    first_use_at: firstUse ?? member.first_use_at,
     // 결제 실측(원장+컷오프후 결제) 우선. 계산이 0 이하면 stored 스냅샷 폴백.
     total_paid_won: totalPaid > 0 ? totalPaid : (member.total_paid_won ?? 0),
     last_purchase_at: lastPaid ?? member.last_purchase_at,

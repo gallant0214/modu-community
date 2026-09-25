@@ -195,7 +195,7 @@ export async function GET(request: Request) {
   };
 
   // 활성 수강권 + 활성 회원권 + 락커 배정 + 최근 출석
-  const [passesData, mbData, lockersData, attData] = await Promise.all([
+  const [passesData, mbData, lockersData, msStartData, psStartData, attData] = await Promise.all([
     gather<{
       member_id: number;
       lesson_kind: string;
@@ -238,6 +238,25 @@ export async function GET(request: Request) {
           .select("assigned_member_id, number, zone_id, crm_locker_zones(name)")
           .in("center_id", centerIds)
           .in("assigned_member_id", c)
+    ),
+    // 이용 시작일 실측용 — 만료분까지 포함한 모든 회원권·수강권의 시작일(환불 제외)
+    gather<{ member_id: number; start_date: string | null }>((c) =>
+      supabase
+        .from("crm_memberships")
+        .select("member_id, start_date")
+        .in("center_id", centerIds)
+        .in("member_id", c)
+        .neq("status", "refunded")
+        .not("start_date", "is", null)
+    ),
+    gather<{ member_id: number; start_date: string | null }>((c) =>
+      supabase
+        .from("crm_passes")
+        .select("member_id, start_date")
+        .in("center_id", centerIds)
+        .in("member_id", c)
+        .neq("status", "refunded")
+        .not("start_date", "is", null)
     ),
     gather<{ member_id: number; checked_in_at: string }>((c) =>
       supabase
@@ -380,6 +399,15 @@ export async function GET(request: Request) {
     paidAfterCutoffMap.set(p.member_id, (paidAfterCutoffMap.get(p.member_id) ?? 0) + (p.amount_won ?? 0));
   }
 
+  // 회원별 가장 이른 이용 시작일
+  const firstUseMap = new Map<number, string>();
+  for (const r of [...(msStartData ?? []), ...(psStartData ?? [])]) {
+    if (!r.start_date) continue;
+    const ymd = r.start_date.slice(0, 10);
+    const prev = firstUseMap.get(r.member_id);
+    if (!prev || ymd < prev) firstUseMap.set(r.member_id, ymd);
+  }
+
   const enriched = members.map((m) => {
     const items = passMap.get(m.id) ?? [];
     const maxExpires = items.reduce<string | null>(
@@ -401,6 +429,14 @@ export async function GET(request: Request) {
       })(),
       // 결제 기록 기반 최근 구매일(없으면 기존 컬럼값)
       last_purchase_at: lastPurchaseMap.get(m.id) ?? m.last_purchase_at,
+      // 이용 시작일 = 회원권·수강권 중 가장 이른 시작일과 저장된 컬럼값 중 **더 이른 날짜**.
+      // (이관 회원은 이용권 기록보다 앞선 최초 이용일이 컬럼에만 있어 덮으면 밀린다) 상세와 동일 규칙.
+      first_use_at: (() => {
+        const calc = firstUseMap.get(m.id) ?? null;
+        const stored = m.first_use_at ? m.first_use_at.slice(0, 10) : null;
+        if (calc && stored) return calc < stored ? calc : stored;
+        return calc ?? stored;
+      })(),
       // 누적 결제: 원장 순액 + 컷오프 이후 결제(계산값). 계산이 0 이하이면 스냅샷 컬럼 폴백.
       total_paid_won: (() => {
         const computed = (salesNetMap.get(m.id) ?? 0) + (paidAfterCutoffMap.get(m.id) ?? 0);
