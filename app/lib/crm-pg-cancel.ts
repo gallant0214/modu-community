@@ -4,6 +4,7 @@ import { retireIssuedForPayment, RETIRE_KIND_LABEL } from "@/app/lib/crm-retire-
 import { matchItemsByRefundAmount, syncOrderRefundState } from "@/app/lib/crm-order-refund";
 import { refundOrderMileage } from "@/app/lib/member-checkout";
 import { restoreCouponAfterRefund } from "@/app/lib/crm-coupons-server";
+import { notifyMembersByIds } from "@/app/lib/member-notify";
 
 /**
  * PG(토스)에서 취소된 결제를 CRM 에 반영한다.
@@ -98,6 +99,7 @@ export async function applyPgCancel(opts: {
   }
 
   const notes: string[] = [];
+  const retiredLabels: string[] = []; // 회수된 이용권 이름 — 회원 알림 문구용
   let refundedMileageUsed = 0;
   let refundedMileageEarned = 0;
   let retired = 0;
@@ -159,6 +161,7 @@ export async function applyPgCancel(opts: {
     }
     if (!r.kind) continue;
     retired += 1;
+    if (r.label || it.product_name) retiredLabels.push(r.label || it.product_name);
     notes.push(`${RETIRE_KIND_LABEL[r.kind] ?? r.kind} '${r.label ?? ""}' 회수`);
     await supabase.from("crm_audit_logs").insert({
       center_id: order.center_id,
@@ -190,6 +193,24 @@ export async function applyPgCancel(opts: {
   // 쿠폰은 전부 환불됐을 때만 — 살아있는 항목이 이미 할인을 받았다
   if (state.allRefunded && order.coupon_issue_id) {
     await restoreCouponAfterRefund(order.coupon_issue_id);
+  }
+
+  // 이용권이 실제로 회수된 경우, 회원 앱에 취소 완료 알림(푸시 + 알림함)
+  if (retired > 0) {
+    try {
+      const names = retiredLabels.filter(Boolean);
+      const nameStr = names.length ? `‘${names.join(", ")}’ ` : "";
+      await notifyMembersByIds(
+        order.center_id,
+        [order.member_id],
+        "payment_refund",
+        "결제 취소 안내",
+        `${nameStr}결제가 정상적으로 취소되었어요. 결제 금액은 결제하신 수단으로 환불되며, 해당 이용권은 회수되었습니다. 궁금한 점은 센터로 문의해 주세요.`,
+        {}
+      );
+    } catch {
+      /* 알림 실패가 환불 처리를 막지 않도록 무시 */
+    }
   }
 
   return {
