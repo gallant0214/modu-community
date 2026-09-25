@@ -1,4 +1,5 @@
 import { supabase } from "@/app/lib/supabase";
+import { SMS_NOT_READY_MESSAGE } from "@/app/lib/crm-sms-availability";
 import {
   sendCrmSms,
   loadMemberPhones,
@@ -130,7 +131,7 @@ export async function dispatchQueued(opts: {
     if (!opts.smsAllowed) {
       result.sms.message = smsAllowedForCenter(opts.centerId)
         ? "문자 발송 권한이 없어 큐에만 적재했어요"
-        : "이 센터는 문자 발송이 잠금 상태예요 (큐에만 적재)";
+        : `${SMS_NOT_READY_MESSAGE} (큐에만 적재)`;
     } else {
       for (const [message, g] of smsGroups) {
         const r = await sendCrmSms({

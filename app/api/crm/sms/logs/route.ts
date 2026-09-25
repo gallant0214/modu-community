@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SMS_NOT_READY_MESSAGE, smsAllowedForCenter } from "@/app/lib/crm-sms-availability";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
@@ -34,6 +35,9 @@ function hyphenate(d: string): string {
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!smsAllowedForCenter(ctx.centerId)) {
+    return NextResponse.json({ error: SMS_NOT_READY_MESSAGE }, { status: 403 });
+  }
   const perms = await loadPermissionsForContext(ctx);
   if (perms["messages.send"] === false) {
     return NextResponse.json({ error: "메세지 전송 권한이 없습니다" }, { status: 403 });

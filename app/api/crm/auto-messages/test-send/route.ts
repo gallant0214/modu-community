@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SMS_NOT_READY_MESSAGE } from "@/app/lib/crm-sms-availability";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
@@ -100,7 +101,7 @@ export async function POST(request: Request) {
 
   // 문자
   if (!smsAllowedForCenter(ctx.centerId)) {
-    return NextResponse.json({ error: "이 센터는 문자 발송이 잠금 상태예요." }, { status: 403 });
+    return NextResponse.json({ error: SMS_NOT_READY_MESSAGE }, { status: 403 });
   }
   if (!member.phone) {
     return NextResponse.json({ error: `${member.name} 님은 연락처가 없어요` }, { status: 400 });

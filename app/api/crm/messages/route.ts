@@ -1,4 +1,5 @@
 import { NextResponse, after } from "next/server";
+import { SMS_NOT_READY_MESSAGE, smsAllowedForCenter } from "@/app/lib/crm-sms-availability";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
@@ -6,8 +7,6 @@ import { notifyMembersByIds } from "@/app/lib/member-notify";
 import { inferMsgType, normalizePhone, solapiConfigured, solapiSend } from "@/app/lib/solapi";
 import { logSmsSend } from "@/app/lib/crm-sms-log";
 
-/** 문자 발송 허용 센터 (스페셜바디 범어점) — 화면 잠금 규칙과 동일 */
-const SMS_ALLOWED_CENTER = 1;
 /** 솔라피 1회 요청 수신자 상한 */
 const SMS_CHUNK = 1000;
 
@@ -129,8 +128,8 @@ export async function POST(request: Request) {
   }
   const wantsPush = channels.includes("push");
   const wantsSms = channels.includes("sms");
-  if (wantsSms && ctx.centerId !== SMS_ALLOWED_CENTER) {
-    return NextResponse.json({ error: "이 센터는 문자 발송을 사용할 수 없어요" }, { status: 403 });
+  if (wantsSms && !smsAllowedForCenter(ctx.centerId)) {
+    return NextResponse.json({ error: SMS_NOT_READY_MESSAGE }, { status: 403 });
   }
   if (wantsSms && !solapiConfigured()) {
     return NextResponse.json({ error: "문자 발송 설정이 완료되지 않았어요" }, { status: 400 });

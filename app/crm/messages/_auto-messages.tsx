@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SMS_NOT_READY_MESSAGE } from "@/app/lib/crm-sms-availability";
 import { useAuth } from "@/app/components/auth-provider";
 import {
   AUTO_MESSAGE_CATEGORIES,
@@ -96,7 +97,7 @@ const IMMEDIATE_WIRED = new Set<string>(["membership_new", "membership_renew", "
 
 const METHOD_LABEL: Record<string, string> = Object.fromEntries(METHOD_OPTIONS.map((m) => [m.key, m.label]));
 
-export function AutoMessagesTab() {
+export function AutoMessagesTab({ smsAllowed = true }: { smsAllowed?: boolean }) {
   const { getIdToken } = useAuth();
   const [rows, setRows] = useState<Record<string, SettingRow>>({});
   const [loading, setLoading] = useState(true);
@@ -315,6 +316,7 @@ export function AutoMessagesTab() {
       {editKey && (
         <AutoMessageEditor
           triggerKey={editKey}
+          smsAllowed={smsAllowed}
           initial={rows[editKey] ?? null}
           onClose={() => setEditKey(null)}
           onSave={async (payload) => {
@@ -369,11 +371,14 @@ function Switch({ on, busy, onChange }: { on: boolean; busy?: boolean; onChange:
 /* ─── 자동알림 설정 편집 모달 ─────────────────────── */
 function AutoMessageEditor({
   triggerKey,
+  smsAllowed,
   initial,
   onClose,
   onSave,
 }: {
   triggerKey: string;
+  /** 문자 발송 가능 센터인지 — 아니면 '문자메시지' 선택을 막는다 */
+  smsAllowed: boolean;
   initial: SettingRow | null;
   onClose: () => void;
   onSave: (payload: Partial<SettingRow> & { trigger_key: string }) => Promise<void>;
@@ -500,7 +505,7 @@ function AutoMessageEditor({
         send_basis: sendBasis,
         send_days: sendBasis === "schedule" ? sendDays : null,
         send_count: sendBasis === "count" ? sendCount : null,
-        methods,
+        methods: smsAllowed ? methods : methods.filter((m) => m !== "sms"),
         audience: [], // 수신 대상은 트리거 조건이 자동 결정 (수동 세그먼트 미사용)
         message_body: body,
         coupon_id: couponId,
@@ -760,23 +765,36 @@ function AutoMessageEditor({
               <div className="flex flex-wrap gap-2">
                 {METHOD_OPTIONS.map((m) => {
                   const active = methods.includes(m.key);
+                  // 문자는 사용 가능 센터가 아니면 선택 자체를 막고 준비중 안내
+                  const locked = m.key === "sms" && !smsAllowed;
                   return (
                     <button
                       key={m.key}
                       type="button"
-                      onClick={() => toggleMethod(m.key)}
+                      onClick={() => (locked ? alert(SMS_NOT_READY_MESSAGE) : toggleMethod(m.key))}
+                      aria-disabled={locked}
+                      title={locked ? SMS_NOT_READY_MESSAGE : undefined}
                       className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
-                        active
-                          ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#4d5a29] dark:text-[#A8B87A]"
-                          : "border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-white dark:bg-zinc-900"
+                        locked
+                          ? "border-[#E8E0D0] dark:border-zinc-800 text-[#A89B80] dark:text-zinc-600 bg-[#F5F0E5]/60 dark:bg-zinc-900/60 cursor-not-allowed"
+                          : active
+                            ? "border-[#6B7B3A] bg-[#6B7B3A]/10 text-[#4d5a29] dark:text-[#A8B87A]"
+                            : "border-[#E8E0D0] dark:border-zinc-700 text-[#6B5D47] dark:text-zinc-300 bg-white dark:bg-zinc-900"
                       }`}
                     >
-                      {active ? "✓ " : ""}{m.label}
+                      {locked ? "🔒 " : active ? "✓ " : ""}
+                      {m.label}
+                      {locked && " (준비중)"}
                     </button>
                   );
                 })}
               </div>
-              {methods.includes("sms") && (
+              {!smsAllowed && (
+                <p className="mt-2 text-[11.5px] leading-relaxed text-[#B47B2A] dark:text-amber-300">
+                  🔒 {SMS_NOT_READY_MESSAGE} — 지금은 <strong>앱 푸시</strong>로만 보낼 수 있어요.
+                </p>
+              )}
+              {smsAllowed && methods.includes("sms") && (
                 <p className="mt-2 text-[11.5px] leading-relaxed text-[#B47B2A] dark:text-amber-300">
                   ⚠️ 이 알림은 &lsquo;지금 실행&rsquo; 시 조건에 맞는 회원에게 <strong>실제 문자가 발송</strong>되고
                   건당 요금이 발생합니다. 한 번 실행에 최대 200명까지 발송돼요.
@@ -786,6 +804,12 @@ function AutoMessageEditor({
                 <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#6B5D47] dark:text-zinc-400">
                   📱 <strong>스마트 전송</strong> — 회원 앱이 설치된 회원에게는 <strong>앱 푸시</strong>로,
                   앱이 없는 회원에게는 <strong>문자</strong>로 자동 분기해 보냅니다. (문자로 나간 건만 요금 발생)
+                  {!smsAllowed && (
+                    <>
+                      <br />
+                      🔒 {SMS_NOT_READY_MESSAGE} — 지금은 앱이 있는 회원에게 푸시만 나갑니다.
+                    </>
+                  )}
                 </p>
               )}
               {methods.includes("push") && (

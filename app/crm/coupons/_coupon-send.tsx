@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SMS_NOT_READY_MESSAGE } from "@/app/lib/crm-sms-availability";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../_components/crm-modal";
 import { formatPhone } from "../_components/crm-labels";
@@ -289,10 +290,18 @@ export function CouponSendTab({
             <input type="checkbox" className="w-4 h-4 accent-[#6B7B3A]" checked={push} onChange={(e) => setPush(e.target.checked)} />
             <span className="text-[13px] text-[#3A342A] dark:text-zinc-200">앱 알림 <span className="text-[11.5px] text-[#A89B80]">(앱 연결 회원만 받음)</span></span>
           </label>
-          <label className={`flex items-center gap-2 ${smsAllowed ? "cursor-pointer" : "opacity-50 cursor-not-allowed"}`}>
+          <label
+            className={`flex items-center gap-2 ${smsAllowed ? "cursor-pointer" : "opacity-60 cursor-not-allowed"}`}
+            title={smsAllowed ? undefined : SMS_NOT_READY_MESSAGE}
+          >
             <input type="checkbox" className="w-4 h-4 accent-[#6B7B3A]" disabled={!smsAllowed} checked={sms && smsAllowed} onChange={(e) => setSms(e.target.checked)} />
             <span className="text-[13px] text-[#3A342A] dark:text-zinc-200">
-              문자 {smsAllowed ? <span className="text-[11.5px] text-[#A89B80]">(건당 요금 발생)</span> : "🔒"}
+              문자{" "}
+              {smsAllowed ? (
+                <span className="text-[11.5px] text-[#A89B80]">(건당 요금 발생)</span>
+              ) : (
+                <span className="text-[11.5px] text-[#A89B80]">🔒 {SMS_NOT_READY_MESSAGE}</span>
+              )}
             </span>
           </label>
         </div>

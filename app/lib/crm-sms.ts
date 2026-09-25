@@ -7,12 +7,13 @@ import { solapiConfigured, solapiSend, inferMsgType, normalizePhone } from "@/ap
  * 발송 결과는 항상 crm_sms_logs 에 남긴다.
  */
 
-/** 문자 발송은 스페셜바디(center 1) 전용 — 발신번호·크레딧 보호 */
-export const SMS_ENABLED_CENTER_IDS = new Set<number>([1]);
-
-export function smsAllowedForCenter(centerId: number): boolean {
-  return SMS_ENABLED_CENTER_IDS.has(centerId);
-}
+// 문자 발송 가능 센터·잠금 문구는 화면과 공유하려고 crm-sms-availability.ts 에 있다.
+export {
+  SMS_ENABLED_CENTER_IDS,
+  smsAllowedForCenter,
+  SMS_NOT_READY_MESSAGE,
+} from "@/app/lib/crm-sms-availability";
+import { smsAllowedForCenter } from "@/app/lib/crm-sms-availability";
 
 export interface CrmSmsResult {
   ok: boolean;

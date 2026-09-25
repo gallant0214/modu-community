@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SMS_NOT_READY_MESSAGE, smsAllowedForCenter } from "@/app/lib/crm-sms-availability";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass, CrmModal } from "../_components/crm-modal";
 import { formatPhone } from "../_components/crm-labels";
@@ -88,9 +89,8 @@ export default function CrmMessagesPage() {
     })();
   }, [getIdToken]);
 
-  // 문자 메세지 전송 잠금 여부: 스페셜바디(center 1) 외 잠금
-  const SMS_ALLOWED_CENTER = 1;
-  const smsLocked = centerId !== SMS_ALLOWED_CENTER;
+  // 문자 관련 기능 잠금 — 스페셜바디 범어점 외 센터는 준비중 (푸시·앱 알림은 그대로 사용)
+  const smsLocked = !smsAllowedForCenter(centerId);
 
   // 수신자 확인 모달
   const [recipientModal, setRecipientModal] = useState<{
@@ -301,7 +301,7 @@ export default function CrmMessagesPage() {
                 alert(
                   centerId == null
                     ? "권한 확인 중입니다. 잠시 후 다시 시도해 주세요."
-                    : "현재 잠금 기능입니다."
+                    : SMS_NOT_READY_MESSAGE
                 );
                 return;
               }
@@ -315,17 +315,17 @@ export default function CrmMessagesPage() {
           >
             {tab.label}
             {(tab.key === "sms" || tab.key === "sms_logs") && smsLocked && (
-              <span className="ml-1 text-[11px]">잠금</span>
+              <span className="ml-1 text-[11px]">준비중</span>
             )}
           </button>
         ))}
       </div>
 
-      {activeTab === "auto" && <AutoMessagesTab />}
+      {activeTab === "auto" && <AutoMessagesTab smsAllowed={!smsLocked} />}
 
       {activeTab === "sms" && smsLocked && (
         <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-          🔒 현재 잠금 기능입니다.
+          🔒 {SMS_NOT_READY_MESSAGE}
         </div>
       )}
       {activeTab === "sms" && !smsLocked && canSend === false && (
@@ -337,7 +337,7 @@ export default function CrmMessagesPage() {
 
       {activeTab === "sms_logs" && smsLocked && (
         <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
-          현재 잠금 기능입니다.
+          🔒 {SMS_NOT_READY_MESSAGE}
         </div>
       )}
       {activeTab === "sms_logs" && !smsLocked && canSend === false && (
@@ -511,9 +511,10 @@ export default function CrmMessagesPage() {
               <button
                 key={opt.key}
                 type="button"
-                disabled={disabled}
-                onClick={() => setChannel(opt.key)}
-                title={disabled ? "이 센터는 문자 발송을 사용할 수 없어요" : undefined}
+                aria-disabled={disabled}
+                // 잠긴 센터에서도 클릭은 받아 '준비중' 안내를 띄운다(눌렀는데 아무 반응 없으면 혼란)
+                onClick={() => (disabled ? alert(SMS_NOT_READY_MESSAGE) : setChannel(opt.key))}
+                title={disabled ? SMS_NOT_READY_MESSAGE : undefined}
                 className={`text-left px-3 py-2.5 rounded-xl border transition-colors
                   ${channel === opt.key
                     ? "border-[#6B7B3A] bg-[#6B7B3A]/10 dark:bg-[#6B7B3A]/20"
@@ -522,17 +523,23 @@ export default function CrmMessagesPage() {
               >
                 <div className="text-[13.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
                   {opt.label}
-                  {disabled && <span className="ml-1 text-[11px] font-normal text-[#A89B80]">잠금</span>}
+                  {disabled && <span className="ml-1 text-[11px] font-normal text-[#A89B80]">준비중</span>}
                 </div>
                 <div className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">{opt.desc}</div>
               </button>
             );
           })}
         </div>
-        {channel !== "push" && (
+        {smsLocked ? (
           <div className="mt-2 px-3 py-2 rounded-lg bg-[#B47B2A]/10 border border-[#B47B2A]/30 text-[12px] text-[#8a5c1f] dark:text-amber-300">
-            문자는 <strong>실제 발송되며 건당 요금이 부과</strong>돼요. 받을 회원 수를 확인하고 보내주세요.
+            🔒 {SMS_NOT_READY_MESSAGE} — 지금은 <strong>푸시(앱 알림)</strong>로만 보낼 수 있어요.
           </div>
+        ) : (
+          channel !== "push" && (
+            <div className="mt-2 px-3 py-2 rounded-lg bg-[#B47B2A]/10 border border-[#B47B2A]/30 text-[12px] text-[#8a5c1f] dark:text-amber-300">
+              문자는 <strong>실제 발송되며 건당 요금이 부과</strong>돼요. 받을 회원 수를 확인하고 보내주세요.
+            </div>
+          )
         )}
       </Section>
 

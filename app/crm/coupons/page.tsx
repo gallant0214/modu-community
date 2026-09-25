@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { smsAllowedForCenter } from "@/app/lib/crm-sms-availability";
 import { useAuth } from "@/app/components/auth-provider";
 import { CouponListTab } from "./_coupon-list";
 import { CouponSendTab } from "./_coupon-send";
@@ -17,9 +18,6 @@ const TABS: { key: Tab; label: string; perm: "view" | "send" }[] = [
   { key: "usage", label: "사용 이력", perm: "view" },
   { key: "issues", label: "발급 내역·회수", perm: "view" },
 ];
-
-/** 문자 발송 허용 센터 — 메세지 전송과 동일 */
-const SMS_ALLOWED_CENTER = 1;
 
 export default function CrmCouponsPage() {
   const { getIdToken } = useAuth();
@@ -122,7 +120,7 @@ export default function CrmCouponsPage() {
           {tab === "send" && (
             <CouponSendTab
               centerName={centerName}
-              smsAllowed={centerId === SMS_ALLOWED_CENTER}
+              smsAllowed={smsAllowedForCenter(centerId)}
               initialCouponId={sendCouponId}
               onSent={() => setRefreshKey((k) => k + 1)}
             />

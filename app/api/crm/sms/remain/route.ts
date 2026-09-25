@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SMS_NOT_READY_MESSAGE, smsAllowedForCenter } from "@/app/lib/crm-sms-availability";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { solapiConfigured, solapiBalance, solapiPricing } from "@/app/lib/solapi";
@@ -11,7 +12,7 @@ export async function GET(request: Request) {
   if (isCrmError(ctx)) return ctx;
   // 문자 발송은 스페셜바디(center 1) 전용
   if (ctx.centerId !== 1) {
-    return NextResponse.json({ error: "현재 잠금 기능입니다." }, { status: 403 });
+    return NextResponse.json({ error: SMS_NOT_READY_MESSAGE }, { status: 403 });
   }
   const perms = await loadPermissionsForContext(ctx);
   if (perms["messages.send"] === false) {
