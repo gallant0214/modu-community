@@ -456,9 +456,6 @@ export default function CrmMemberDetailPage() {
                     onSaved={load}
                     className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100"
                   />
-                  {member.email && (
-                    <span className="text-[13px] text-[#6B5D47] dark:text-zinc-400">{member.email}</span>
-                  )}
                 </div>
                 <div className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
                   <span className="text-[13.5px] text-[#8C8270] dark:text-zinc-500 mr-1">출석번호</span>
