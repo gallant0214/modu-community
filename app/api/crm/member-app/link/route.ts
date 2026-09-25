@@ -110,5 +110,12 @@ export async function POST(request: Request) {
   if (updErr) {
     return NextResponse.json({ error: "연동 실패", detail: updErr.message }, { status: 500 });
   }
+
+  // 앱 계정 이메일을 CRM 기본정보에 채운다 — 비어 있는 회원만(직원이 적어둔 값은 건드리지 않음)
+  if (user.email) {
+    await supabase.from("crm_members").update({ email: user.email } as never).in("id", ids).is("email", null);
+    await supabase.from("crm_members").update({ email: user.email } as never).in("id", ids).eq("email", "");
+  }
+
   return NextResponse.json({ ok: true, linked: ids.length });
 }

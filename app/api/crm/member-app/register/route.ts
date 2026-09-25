@@ -84,7 +84,7 @@ export async function POST(request: Request) {
   const last4 = phoneDigits.slice(-4);
   const { data: candidates } = await supabase
     .from("crm_members")
-    .select("id, name, phone, linked_firebase_uid, birth, gender, address, attendance_no")
+    .select("id, name, phone, linked_firebase_uid, birth, gender, address, attendance_no, email")
     .eq("center_id", centerId)
     .eq("status", "active")
     .ilike("phone", `%${last4}%`);
@@ -98,6 +98,8 @@ export async function POST(request: Request) {
     const linkPatch: Record<string, unknown> = {
       linked_firebase_uid: user.uid,
       member_type: "matched",
+      // 앱 계정 이메일 — CRM 에 입력돼 있지 않을 때만 채운다(직원이 적어둔 값은 보존)
+      ...(user.email && !(match as { email?: string | null }).email ? { email: user.email } : {}),
       birth: match.birth ?? birth,
       gender: match.gender ?? gender,
       address: match.address ?? address,
@@ -127,6 +129,7 @@ export async function POST(request: Request) {
       birth,
       gender,
       address,
+      email: user.email ?? null, // 앱 계정 이메일
       linked_firebase_uid: user.uid,
       privacy_agreed_at: nowIso,
       status: "active",
