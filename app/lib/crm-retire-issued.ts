@@ -7,12 +7,15 @@ import { supabase } from "@/app/lib/supabase";
  * 결제내역의 '삭제' 버튼을 없애고 '환불'로 일원화하면서 생긴 함수다.
  * 삭제는 결제 기록까지 통째로 지워 원장이 사라졌다. 여기서는 기록을 남기고 이용권만 회수한다.
  *
- * 순서가 중요하다:
- *   1) 상품명을 결제원장에 스냅샷 (회수 후에도 무엇에 대한 결제였는지 남도록)
+ * 🚨 2026-09-26 변경: 상품을 **지우지 않고** `status='refunded'` 로 남긴다 (사용자 확정).
+ *    - 회원 상세에 "환불된 상품" 이력이 남아 추적된다 (상품 상세에서 환불한 건과 동일한 모습).
+ *    - 통계·정산이 "결제한 달 매출은 그대로, 환불한 달에 마이너스" 로 계산할 수 있다.
+ *      (지우면 결제월 매출이 통째로 사라져 환불월 차감과 이중 반영이 된다)
+ *
+ * 순서:
+ *   1) 상품명을 결제원장에 스냅샷 (상품이 바뀌어도 무엇에 대한 결제였는지 남도록)
  *   2) 락커 대여권이면 락커를 이전 상태로 원복
- *   3) 결제원장에서 상품 연결을 **먼저 끊는다**
- *      — 안 끊고 지우면 crm_payments 가 ON DELETE CASCADE 로 함께 사라진다
- *   4) 상품 삭제
+ *   3) 상품 status='refunded' — 결제↔상품 연결은 그대로 둔다(카테고리 집계에 쓰인다)
  */
 
 export type RetireKind = "membership" | "pass" | "rental" | null;
@@ -197,28 +200,22 @@ export async function retireIssuedForPayment(opts: {
     }
   }
 
-  /* ── 3) 연결을 먼저 끊는다 (안 끊으면 결제원장이 CASCADE 로 사라진다) ── */
-  const { error: detachErr } = await supabase
+  /* ── 3) 상품명 스냅샷 (연결은 유지) ────────────────────── */
+  await supabase
     .from("crm_payments")
     .update({
-      pass_id: null,
-      membership_id: null,
-      rental_id: null,
       product_label: pay.product_label ?? label,
       updated_at: new Date().toISOString(),
     } as never)
     .eq("id", pay.id)
     .eq("center_id", opts.centerId);
-  if (detachErr) {
-    return { ok: false, kind, label, error: `결제 연결 해제 실패: ${detachErr.message}` };
-  }
 
-  /* ── 4) 상품 삭제 ──────────────────────────────────────── */
+  /* ── 4) 상품 회수 = 환불 상태로 (삭제하지 않는다) ───────── */
   const table = kind === "membership" ? "crm_memberships" : kind === "pass" ? "crm_passes" : "crm_rentals";
   const targetId = kind === "membership" ? pay.membership_id! : kind === "pass" ? pay.pass_id! : pay.rental_id!;
   const { error: delErr } = await supabase
     .from(table)
-    .delete()
+    .update({ status: "refunded" } as never)
     .eq("id", targetId)
     .eq("center_id", opts.centerId);
   if (delErr) {

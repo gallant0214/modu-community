@@ -4,6 +4,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { fetchSales, saleCategory, buildRegistrationClassifier } from "@/app/lib/crm-sales";
 import { cached, crmCacheKey } from "@/app/lib/cache";
+import { fetchRefundSales } from "@/app/lib/crm-sales-issuance";
 
 export const dynamic = "force-dynamic";
 
@@ -253,6 +254,19 @@ export async function GET(request: Request) {
       applyIssuance(r.price_won ?? 0, r.payment_method, key, "membership");
     }
   }
+  // ── 환불: '환불한 달' 에 마이너스로 반영 (결제한 달 매출은 건드리지 않는다) ──
+  // 원장(crm_sales)에는 이관분 환불이 이미 음수로 들어 있어 컷오프 이후만 집계된다.
+  for (const rf of await fetchRefundSales(ctx.centerId, startDate, nextMonth)) {
+    const isPass = rf.category === "lesson";
+    if (isPass) passRevenue += rf.amount_won;
+    else membershipRevenue += rf.amount_won; // 대여권·락커도 회원권 버킷에 합산(발급분과 동일 기준)
+    const key: "cash" | "card" | "transfer" | "other" =
+      rf.method === "cash" ? "cash" : rf.method === "card" ? "card" : rf.method === "transfer" ? "transfer" : "other";
+    const payBucket = isPass ? payPass : payMembership;
+    payBucket[key] += rf.amount_won;
+    payTotal[key] += rf.amount_won;
+  }
+
   const lockerRevenue = 0;
   const etcRevenue = 0;
   const total = membershipRevenue + passRevenue + lockerRevenue + goodsRevenue + etcRevenue;

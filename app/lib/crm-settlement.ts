@@ -1,4 +1,5 @@
 import { supabase } from "@/app/lib/supabase";
+import { fetchRefundSales } from "@/app/lib/crm-sales-issuance";
 import { fetchSales, saleCategory, type SalesCategory } from "@/app/lib/crm-sales";
 import { perSessionFee } from "@/app/lib/crm-commission";
 import {
@@ -50,6 +51,8 @@ export interface SettlementResult {
   months: string[];
   months_in_period: number;
   total_revenue: number;
+  /** 이 기간에 환불한 금액(양수). 총매출에서는 이미 빠져 있다. */
+  refund_total: number;
   total_ex_vat: number;
   /** 매출세액 (기존 필드명 유지, = output_vat) */
   vat_amount: number;
@@ -260,6 +263,16 @@ export async function computeSettlement(
     for (const c of cardPays) cardSales += c.amount_won ?? 0;
   }
 
+  // ── 환불: '환불한 달' 에 마이너스로 반영 (결제한 달 매출은 건드리지 않는다) ──
+  const refunds = await fetchRefundSales(centerId, startDate, nextMonth);
+  let refundTotal = 0;
+  for (const r of refunds) {
+    totalRevenue += r.amount_won; // 음수
+    revenueMix[r.category] += r.amount_won;
+    refundTotal += Math.abs(r.amount_won);
+    if (r.method === "card") cardSales += r.amount_won; // 카드 수수료도 환불분만큼 줄어든다
+  }
+
   const totalExVat = Math.round(totalRevenue / (1 + VAT_RATE));
   const outputVat = totalRevenue - totalExVat;
 
@@ -425,6 +438,7 @@ export async function computeSettlement(
     months: monthsList,
     months_in_period: monthsInPeriod,
     total_revenue: totalRevenue,
+    refund_total: refundTotal,
     total_ex_vat: totalExVat,
     vat_amount: outputVat,
     output_vat: outputVat,

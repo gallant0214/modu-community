@@ -4,7 +4,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { cached, crmCacheKey } from "@/app/lib/cache";
 import { fetchSales, saleCategory } from "@/app/lib/crm-sales";
-import { fetchIssuanceSales } from "@/app/lib/crm-sales-issuance";
+import { fetchIssuanceSales, fetchRefundSales } from "@/app/lib/crm-sales-issuance";
 
 export const dynamic = "force-dynamic";
 
@@ -351,9 +351,11 @@ export async function GET(request: Request) {
   // 회원권=멤버십 / 수강권(lesson)=이용권+예약권 / 대여권 / 락커 / 일반(goods). 환불은 음수.
   // 원장은 BROJ 이관 시점까지만 채워져 있어, 그 이후 CRM 발급분은 발급 테이블에서 더한다
   // (컷오프 다음날부터만 집계 → 이중집계 없음). 정산·통계와 같은 규칙.
-  const [salesInPeriod, issuanceInPeriod] = await Promise.all([
+  // 환불은 '환불한 달' 에 마이너스로 반영한다 (결제한 달 매출은 그대로 둔다)
+  const [salesInPeriod, issuanceInPeriod, refundsInPeriod] = await Promise.all([
     fetchSales(ctx.centerId, from, toExcl),
     fetchIssuanceSales(ctx.centerId, from, toExcl),
+    fetchRefundSales(ctx.centerId, from, toExcl),
   ]);
   let membershipRevenue = 0;
   let lessonRevenue = 0;
@@ -364,6 +366,7 @@ export async function GET(request: Request) {
   const revenueRows = [
     ...salesInPeriod.map((s) => ({ cat: saleCategory(s.product_type), amount_won: s.amount_won, member_id: s.member_id })),
     ...issuanceInPeriod.map((s) => ({ cat: s.category, amount_won: s.amount_won, member_id: s.member_id })),
+    ...refundsInPeriod.map((s) => ({ cat: s.category, amount_won: s.amount_won, member_id: s.member_id })),
   ];
   for (const s of revenueRows) {
     const cat = s.cat;

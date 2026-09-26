@@ -109,6 +109,8 @@ export default function CrmMemberDetailPage() {
   const [showExpiredPasses, setShowExpiredPasses] = useState(false); // 만료 수강권 펼치기
   const [usageOpen, setUsageOpen] = useState(false);
   const [usageReload, setUsageReload] = useState(0);
+  // 수강권 카드에 '환불' 상세를 붙이기 위한 상품별 환불 요약
+  const passRefundMap = useRefundMap(memberId, usageReload);
   const [paymentDetail, setPaymentDetail] = useState<PaymentDetail | null>(null);
   const [lockerOpen, setLockerOpen] = useState(false);
   const [holdTarget, setHoldTarget] = useState<{ kind: "membership" | "rental"; id: number } | null>(null);
@@ -840,7 +842,9 @@ export default function CrmMemberDetailPage() {
           )
         ) : (
           (() => {
-            const renderPass = (p: Pass) => (
+            const renderPass = (p: Pass) => {
+              const rf = passRefundMap[`p${p.id}`] ?? null;
+              return (
               <li key={p.id}>
                 <button
                   onClick={() => { setPassStartEdit(false); setDetailPassId(p.id); }}
@@ -868,9 +872,11 @@ export default function CrmMemberDetailPage() {
                     발급 {p.issued_at} · 만료{" "}
                     {p.expires_at === "9999-12-31" ? "무기한" : p.expires_at}
                   </div>
+                  {rf && <RefundNote info={rf} />}
                 </button>
               </li>
-            );
+              );
+            };
             const validPasses = passes.filter((p) => !isPassExpired(p));
             const expiredPasses = passes.filter((p) => isPassExpired(p));
             return (
@@ -5669,6 +5675,97 @@ function mergeLockerItems(
   return { cards, usedRentalIds: used };
 }
 
+/** 환불 표시용 — 상품(회원권·수강권·대여권)별 환불 요약 */
+interface RefundInfo {
+  /** 환불 합계(양수) */
+  amountWon: number;
+  /** 마지막 환불 시각 */
+  at: string;
+  reason: string | null;
+  /** 결제액보다 적게 돌려준 건 */
+  isPartial: boolean;
+  /** 원결제액 */
+  paidWon: number;
+}
+
+/**
+ * 결제내역에서 상품별 환불 요약을 만든다.
+ * 키는 `m{회원권id}` / `p{수강권id}` / `r{대여권id}`.
+ * (환불 금액·사유는 결제 원장에만 있으므로 상품 목록 API 가 아니라 결제내역에서 가져온다)
+ */
+function useRefundMap(memberId: number, reloadKey: number): Record<string, RefundInfo> {
+  const { getIdToken } = useAuth();
+  const [map, setMap] = useState<Record<string, RefundInfo>>({});
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`/api/crm/payments?member_id=${memberId}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const rows = ((await res.json()).payments ?? []) as {
+          amount_won: number;
+          pass_id: number | null;
+          membership_id: number | null;
+          rental_id: number | null;
+          refunds?: { amount_won: number; refunded_at: string; reason: string | null }[];
+        }[];
+        const out: Record<string, RefundInfo> = {};
+        for (const r of rows) {
+          const rfs = r.refunds ?? [];
+          if (rfs.length === 0) continue;
+          const key = r.membership_id
+            ? `m${r.membership_id}`
+            : r.pass_id
+              ? `p${r.pass_id}`
+              : r.rental_id
+                ? `r${r.rental_id}`
+                : null;
+          if (!key) continue;
+          const sum = rfs.reduce((a, x) => a + Math.abs(x.amount_won ?? 0), 0);
+          const last = rfs[rfs.length - 1];
+          out[key] = {
+            amountWon: sum,
+            at: last.refunded_at,
+            reason: last.reason ?? null,
+            isPartial: sum < (r.amount_won ?? 0),
+            paidWon: r.amount_won ?? 0,
+          };
+        }
+        if (alive) setMap(out);
+      } catch {
+        /* 표시용이라 실패해도 조용히 넘어간다 */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [memberId, reloadKey, getIdToken]);
+  return map;
+}
+
+/** 환불 상세 한 줄 — 만료 목록에서 '환불 처리됨' 을 금액·날짜·사유까지 보여준다 */
+function RefundNote({ info }: { info: RefundInfo }) {
+  const d = new Date(new Date(info.at).getTime() + 9 * 3600 * 1000);
+  const ymd = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  return (
+    <div className="mt-1 rounded-lg border-l-[3px] border-red-400 dark:border-red-800 bg-red-50/60 dark:bg-red-950/20 pl-2 pr-2.5 py-1.5 text-[11.5px] text-red-700 dark:text-red-300">
+      <span className="font-bold">{info.isPartial ? "부분 환불" : "환불"}</span> {ymd} · -
+      {info.amountWon.toLocaleString()}원
+      {info.reason ? ` · ${info.reason}` : ""}
+      {info.isPartial && (
+        <span className="ml-1 text-[#8C7A6B] dark:text-zinc-400">
+          (실매출 {Math.max(0, info.paidWon - info.amountWon).toLocaleString()}원)
+        </span>
+      )}
+    </div>
+  );
+}
+
 function UsageSection({
   memberId,
   reloadKey,
@@ -5720,6 +5817,7 @@ function UsageSection({
     })();
   }, [memberId, reloadKey, getIdToken]);
 
+  const refundMap = useRefundMap(memberId, reloadKey);
   const todayStr = new Date().toISOString().slice(0, 10);
   const isValid = (s: string, exp: string) => s === "valid" && exp >= todayStr;
   // 상품별 홀딩 상태(오늘이 홀딩 기간 내=hold / 시작 전=scheduled). is_paused 플래그가 아니라 실제 기간으로 판정.
@@ -5767,6 +5865,8 @@ function UsageSection({
           price={m.price_won}
           period={fmtPeriod(m.start_date, m.expires_at)}
           valid={isValid(m.status, m.expires_at)}
+          status={m.status}
+          refund={refundMap[`m${m.id}`] ?? null}
           holdState={chipStateFor("membership", m.id, m.start_date)}
           onClick={() => onOpenDetail(membershipToDetail(m, sellerName))}
         />
@@ -5782,6 +5882,8 @@ function UsageSection({
           price={r.price_won}
           period={fmtPeriod(r.start_date, r.expires_at)}
           valid={isValid(r.status, r.expires_at)}
+          status={r.status}
+          refund={refundMap[`r${r.id}`] ?? null}
           holdState={chipStateFor("rental", r.id, r.start_date)}
           onClick={() => onOpenDetail(rentalToDetail(r, sellerName))}
         />
@@ -5808,6 +5910,8 @@ function UsageSection({
             price={c.price}
             period={fmtPeriod(effStart, effExp)}
             valid={valid}
+            status={c.rental?.status}
+            refund={c.rental ? refundMap[`r${c.rental.id}`] ?? null : null}
             holdState={chipStateFor("rental", c.rental?.id, c.start)}
             lockerAssign={c.assign ? { zone_name: c.assign.zone_name, number: c.assign.number } : "unassigned"}
             onClick={
@@ -5879,6 +5983,8 @@ function UsageCard({
   price,
   period,
   valid,
+  status,
+  refund,
   holdState,
   lockerAssign,
   onClick,
@@ -5888,6 +5994,10 @@ function UsageCard({
   price: number;
   period: string;
   valid: boolean;
+  /** 상품 상태 — 'refunded' 면 만료가 아니라 '환불' 로 표시한다 */
+  status?: string | null;
+  /** 환불 요약 (있으면 상세 줄을 함께 보여준다) */
+  refund?: RefundInfo | null;
   // 홀딩 상태 칩: "hold"=현재 홀딩 기간(빨강 [홀딩]) / "scheduled"=홀딩 시작 전(파랑 [예정]) / null=없음
   holdState?: "hold" | "scheduled" | null;
   // 락커 배정 상태 칩: 배정됨(구역·번호) / "unassigned"(미배정) / 없음
@@ -5937,12 +6047,14 @@ function UsageCard({
           </span>
           <span
             className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-              valid
-                ? "bg-[#22C55E] text-white shadow-sm"
-                : "bg-[#F5F0E5] dark:bg-zinc-800 text-[#A89B80]"
+              status === "refunded"
+                ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                : valid
+                  ? "bg-[#22C55E] text-white shadow-sm"
+                  : "bg-[#F5F0E5] dark:bg-zinc-800 text-[#A89B80]"
             }`}
           >
-            {valid ? "유효" : "만료"}
+            {status === "refunded" ? "환불" : valid ? "유효" : "종료"}
           </span>
         </div>
         <div className="mt-1 text-[11.5px] text-[#A89B80]">
@@ -5950,6 +6062,7 @@ function UsageCard({
           {price > 0 && ` · ${formatWon(price)}원`}
           <span className="ml-1 text-[#6B7B3A] dark:text-[#A8B87A]">· 결제 상세 ›</span>
         </div>
+        {refund && <RefundNote info={refund} />}
       </button>
     </li>
   );

@@ -4,6 +4,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { syncProductPaymentAmount, syncProductPaymentDate } from "@/app/lib/crm-payment-sync";
 import { findProductPayment, parseRefundWon, readRefundBody, recordRefund } from "@/app/lib/crm-refund";
+import { retireIssuedForPayment } from "@/app/lib/crm-retire-issued";
 
 export const dynamic = "force-dynamic";
 
@@ -195,11 +196,24 @@ export async function DELETE(
   const parsed = parseRefundWon(body.refund_won, paidWon);
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-  const { error } = await supabase
-    .from("crm_memberships")
-    .update({ status: "refunded" } as never)
-    .eq("id", mid)
-    .eq("center_id", ctx.centerId);
+  // 회수는 결제내역 탭 환불과 같은 경로를 쓴다 — 락커 원복·상품명 스냅샷까지 동일하게 처리된다.
+  let error: { message: string } | null = null;
+  if (payment) {
+    const r = await retireIssuedForPayment({
+      centerId: ctx.centerId,
+      paymentId: payment.id,
+      actorUid: ctx.uid,
+    });
+    if (!r.ok) error = { message: r.error ?? "이용권 회수 실패" };
+  } else {
+    // 결제행이 없는 건(0원 발급·이관분) — 상태만 바꾼다
+    const { error: e } = await supabase
+      .from("crm_memberships")
+      .update({ status: "refunded" } as never)
+      .eq("id", mid)
+      .eq("center_id", ctx.centerId);
+    error = e;
+  }
   if (error) {
     return NextResponse.json({ error: "환불 실패", detail: error.message }, { status: 500 });
   }
