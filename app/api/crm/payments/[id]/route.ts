@@ -36,6 +36,10 @@ export async function PATCH(
     paid_at?: string;
     note?: string | null;
     status?: string;
+    /** 환불 처리 시 실제로 돌려준 금액(직원 입력). 없으면 결제 전액. */
+    refund_won?: number;
+    /** 환불 사유 */
+    refund_reason?: string | null;
   };
   try {
     body = await request.json();
@@ -128,6 +132,23 @@ export async function PATCH(
     );
   }
 
+  // 환불 금액 검증 — 결제액을 넘을 수 없다. 미지정이면 전액.
+  const paidWon = Math.max(0, before.amount_won ?? 0);
+  let refundWon = paidWon;
+  if (patch.status === "refunded" && body.refund_won !== undefined) {
+    const n = Math.trunc(Number(body.refund_won));
+    if (!Number.isFinite(n) || n < 0) {
+      return NextResponse.json({ error: "환불 금액이 올바르지 않아요" }, { status: 400 });
+    }
+    if (n > paidWon) {
+      return NextResponse.json(
+        { error: `결제 금액(${paidWon.toLocaleString()}원)보다 많이 환불할 수 없어요` },
+        { status: 400 }
+      );
+    }
+    refundWon = n;
+  }
+
   let retired: { kind: string | null; label: string | null } | null = null;
   if (patch.status === "refunded" && before.status !== "refunded") {
     const { error: refErr } = await supabase.from("crm_payment_refunds").insert({
@@ -135,10 +156,10 @@ export async function PATCH(
       member_id: before.member_id,
       payment_id: before.id,
       order_id: before.order_id,
-      amount_won: (patch.amount_won as number | undefined) ?? before.amount_won,
+      amount_won: refundWon,
       source: "center",
-      is_partial: false,
-      reason: (body.note?.trim() || null) ?? null,
+      is_partial: refundWon < (before.amount_won ?? 0),
+      reason: body.refund_reason?.trim() || body.note?.trim() || null,
       actor_uid: ctx.uid,
     } as never);
     if (refErr) {
@@ -193,7 +214,7 @@ export async function PATCH(
     await markOrderItemRefunded({
       centerId: ctx.centerId,
       paymentId: before.id,
-      amountWon: (patch.amount_won as number | undefined) ?? before.amount_won,
+      amountWon: refundWon,
     });
 
     if (r.kind) {
@@ -205,7 +226,7 @@ export async function PATCH(
         entity_id: before.id,
         payload: {
           member_id: before.member_id,
-          환불금액: (patch.amount_won as number | undefined) ?? before.amount_won,
+          환불금액: refundWon,
           회수항목: RETIRE_KIND_LABEL[r.kind] ?? r.kind,
           상품명: r.label,
           처리경로: "센터에서 환불 처리(장부) · PG 대금은 별도 취소 필요",

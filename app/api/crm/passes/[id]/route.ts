@@ -4,6 +4,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
 import { syncProductPaymentAmount, syncProductPaymentDate } from "@/app/lib/crm-payment-sync";
+import { findProductPayment, parseRefundWon, readRefundBody, recordRefund } from "@/app/lib/crm-refund";
 
 export const dynamic = "force-dynamic";
 
@@ -364,6 +365,21 @@ export async function DELETE(
   const passId = Number(id);
   if (!passId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
+  // 환불 금액(직원 입력). 본문이 없으면 결제 전액.
+  const body = await readRefundBody(request);
+  const { data: passRow } = await supabase
+    .from("crm_passes")
+    .select("member_id, price_won")
+    .eq("id", passId)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+  if (!passRow) return NextResponse.json({ error: "수강권을 찾을 수 없어요" }, { status: 404 });
+  const pass = passRow as { member_id: number; price_won: number | null };
+  const payment = await findProductPayment(ctx.centerId, "pass", passId);
+  const paidWon = payment?.amount_won ?? pass.price_won ?? 0;
+  const parsed = parseRefundWon(body.refund_won, paidWon);
+  if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
+
   const { error } = await supabase
     .from("crm_passes")
     .update({ status: "refunded" } as never)
@@ -374,14 +390,29 @@ export async function DELETE(
     return NextResponse.json({ error: "환불 처리 실패", detail: error.message }, { status: 500 });
   }
 
+  // 결제내역에도 환불 기록을 남긴다 (결제내역 탭·누적 결제 금액과 숫자가 맞아야 한다)
+  const rec = await recordRefund({
+    centerId: ctx.centerId,
+    memberId: pass.member_id,
+    actorUid: ctx.uid,
+    refundWon: parsed.won,
+    paidWon,
+    reason: body.reason ?? null,
+    payment,
+    product: { kind: "pass", id: passId },
+  });
+  if (rec.error) {
+    return NextResponse.json({ error: "환불 이력 기록 실패", detail: rec.error }, { status: 500 });
+  }
+
   await supabase.from("crm_audit_logs").insert({
     center_id: ctx.centerId,
     actor_uid: ctx.uid,
     action: "pass.refund",
     entity_type: "pass",
     entity_id: passId,
-    payload: null,
+    payload: { refund_won: parsed.won, paid_won: paidWon, reason: body.reason ?? null } as never,
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, refund_won: parsed.won });
 }

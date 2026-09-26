@@ -18,6 +18,7 @@ import {
 import { CouponPicker, type AppliedCoupon } from "../../_components/coupon-picker";
 import { CrmModal, CrmField, crmInputClass } from "../../_components/crm-modal";
 import BirthDateInput from "@/app/crm/_components/birth-date-input";
+import { RefundDialog } from "@/app/crm/_components/refund-dialog";
 import { LockerPickerModal } from "../../_components/locker-picker-modal";
 import { CrmLineChart } from "../../_components/crm-line-chart";
 import { unitToDays, formatDuration, computeExpiryYmd } from "@/app/lib/duration-convert";
@@ -3811,35 +3812,28 @@ function MemberPaymentsSection({
     }
   }
 
-  async function refund(id: number) {
-    const p = payments.find((x) => x.id === id);
-    const productName = p?.product_name ? `'${p.product_name}' ` : "";
-    if (
-      !window.confirm(
-        `이 결제를 환불 처리할까요?\n\n` +
-          `· 결제내역에는 결제와 환불이 모두 기록으로 남습니다\n` +
-          `· ${productName}이용권이 회수되어 회원 보유에서 사라집니다\n` +
-          `· 락커 대여권이면 그 락커는 이전 상태로 돌아갑니다\n` +
-          `· 누적 결제 합계에서 제외됩니다\n\n` +
-          `⚠️ 카드 대금은 자동으로 돌아가지 않습니다. PG(토스)에서 따로 취소해 주세요.`
-      )
-    )
-      return;
+  // 환불 창 대상(결제 id) — 금액·사유를 입력받아 처리한다
+  const [refundTarget, setRefundTarget] = useState<number | null>(null);
+  const [refundError, setRefundError] = useState("");
+
+  async function refund(id: number, refundWon: number, reason: string) {
     setBusyId(id);
+    setRefundError("");
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
       const res = await fetch(`/api/crm/payments/${id}`, {
         method: "PATCH",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ status: "refunded" }),
+        body: JSON.stringify({ status: "refunded", refund_won: refundWon, refund_reason: reason }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "환불 실패");
+      setRefundTarget(null);
       await load();
       onChanged?.();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "네트워크 오류");
+      setRefundError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
       setBusyId(null);
     }
@@ -3851,8 +3845,11 @@ function MemberPaymentsSection({
      전액 환불(status='refunded')은 0, 부분 환불은 남은 금액만 더한다.
      환불 이력이 없는 과거 데이터는 status 만으로 판단한다. */
   const total = payments.reduce((s, p) => {
-    if (p.status === "refunded") return s;
-    const refunded = (p.refunds ?? []).reduce((a, r) => a + (r.amount_won ?? 0), 0);
+    const refunds = p.refunds ?? [];
+    // 환불 이력이 있으면 실제 환불액만 뺀다(부분 환불 대응).
+    // 이력이 없는 과거 데이터는 status 만으로 전액 환불로 본다.
+    if (refunds.length === 0) return p.status === "refunded" ? s : s + (p.amount_won ?? 0);
+    const refunded = refunds.reduce((a, r) => a + (r.amount_won ?? 0), 0);
     return s + Math.max(0, (p.amount_won ?? 0) - refunded);
   }, 0);
   if (loading) return <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>;
@@ -4135,7 +4132,7 @@ function MemberPaymentsSection({
                   )}
                   {canRefund && !isRefunded && !p.pg && (
                     <button
-                      onClick={() => refund(p.id)}
+                      onClick={() => setRefundTarget(p.id)}
                       disabled={busy}
                       className="px-2.5 py-1 rounded-lg text-[12px] font-semibold text-[#B47B2A] bg-[#B47B2A]/10 dark:bg-amber-900/30 dark:text-amber-300 disabled:opacity-50"
                     >
@@ -4157,6 +4154,26 @@ function MemberPaymentsSection({
           );
         })}
       </ul>
+      <RefundDialog
+        open={refundTarget != null}
+        productName={payments.find((x) => x.id === refundTarget)?.product_name ?? "결제 건"}
+        paidWon={payments.find((x) => x.id === refundTarget)?.amount_won ?? 0}
+        busy={busyId === refundTarget}
+        error={refundError}
+        notice={[
+          "결제내역에는 결제와 환불이 모두 기록으로 남습니다",
+          "이용권이 회수되어 회원 보유에서 사라집니다",
+          "락커 대여권이면 그 락커는 이전 상태로 돌아갑니다",
+          "⚠️ 카드 대금은 자동으로 돌아가지 않습니다 — PG(토스)에서 따로 취소해 주세요",
+        ]}
+        onClose={() => {
+          setRefundTarget(null);
+          setRefundError("");
+        }}
+        onSubmit={(won, reason) => {
+          if (refundTarget != null) void refund(refundTarget, won, reason);
+        }}
+      />
     </div>
   );
 }
@@ -5972,6 +5989,7 @@ function HoldingDetailModal({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [refunding, setRefunding] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
   const [unholding, setUnholding] = useState(false);
   const [error, setError] = useState("");
 
@@ -6221,21 +6239,22 @@ function HoldingDetailModal({
     })();
   }, [open, getIdToken]);
 
-  const refund = async () => {
+  const refund = async (refundWon: number, reason: string) => {
     if (!detail?.id || !detail.kind || refunding) return;
-    const label = detail.kind === "rental" ? "대여권" : "회원권";
-    if (!window.confirm(`이 ${label}을 환불 처리할까요? 환불 후에는 유효 상품 목록에서 제외됩니다.`)) return;
     setRefunding(true);
     setError("");
     try {
       const token = await getIdToken();
       const path = detail.kind === "rental" ? "rentals" : "memberships";
-      const res = await fetch(`/api/crm/${path}/${detail.id}`, {
+      const qs = `?refund_won=${refundWon}&reason=${encodeURIComponent(reason)}`;
+      const res = await fetch(`/api/crm/${path}/${detail.id}${qs}`, {
         method: "DELETE",
-        headers: { authorization: `Bearer ${token}` },
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ refund_won: refundWon, reason }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "환불 실패");
+      setRefundOpen(false);
       onSaved();
       onClose();
     } catch (e) {
@@ -6834,7 +6853,7 @@ function HoldingDetailModal({
                 )}
                 {editable && canRefund && detail.status === "valid" && (
                   <button
-                    onClick={refund}
+                    onClick={() => setRefundOpen(true)}
                     disabled={refunding}
                     className="flex-1 px-4 py-2.5 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-[13.5px] font-semibold hover:bg-red-50 disabled:opacity-60"
                   >
@@ -6858,6 +6877,20 @@ function HoldingDetailModal({
       memberId={memberId}
       membershipId={detail?.kind === "membership" ? detail.id : undefined}
       onClose={() => setContractPickerOpen(false)}
+    />
+    <RefundDialog
+      open={refundOpen}
+      productName={detail?.name ?? (detail?.kind === "rental" ? "대여권" : "회원권")}
+      paidWon={detail?.priceWon ?? 0}
+      busy={refunding}
+      error={error}
+      notice={[
+        "결제내역에 환불 이력이 남고, 누적 결제에서 환불액만큼 빠집니다",
+        "환불 후에는 유효 상품 목록에서 제외됩니다",
+        "⚠️ 카드 대금은 자동으로 돌아가지 않습니다 — PG(토스)에서 따로 취소해 주세요",
+      ]}
+      onClose={() => setRefundOpen(false)}
+      onSubmit={(won, reason) => void refund(won, reason)}
     />
     </>
   );
@@ -9541,6 +9574,7 @@ function PassDetailModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [refunding, setRefunding] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
   const [holdOpen, setHoldOpen] = useState(false);
   // 이 수강권의 진행 중(active) 홀딩 기록 — is_paused 플래그가 아니라 crm_pauses 로 판정.
   const [activePause, setActivePause] = useState<{ id: number; start_date: string; end_date: string } | null>(null);
@@ -9659,21 +9693,21 @@ function PassDetailModal({
     }
   };
 
-  const refund = async () => {
+  const refund = async (refundWon: number, reason: string) => {
     if (!detail || refunding) return;
-    if (!window.confirm("이 수강권을 환불 처리할까요? 잔여 세션은 자동 정리되지 않으니 필요하면 따로 예약을 정리해 주세요.")) {
-      return;
-    }
     setRefunding(true);
     setError("");
     try {
       const token = await getIdToken();
-      const res = await fetch(`/api/crm/passes/${detail.pass.id}`, {
+      const qs = `?refund_won=${refundWon}&reason=${encodeURIComponent(reason)}`;
+      const res = await fetch(`/api/crm/passes/${detail.pass.id}${qs}`, {
         method: "DELETE",
-        headers: { authorization: `Bearer ${token}` },
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ refund_won: refundWon, reason }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "환불 실패");
+      setRefundOpen(false);
       onRefunded();
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
@@ -10203,7 +10237,7 @@ function PassDetailModal({
               ))}
             {pass.status === "valid" && canRefund && (
               <button
-                onClick={refund}
+                onClick={() => setRefundOpen(true)}
                 disabled={refunding}
                 className="flex-1 min-w-[100px] px-4 py-2.5 rounded-lg border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-[13.5px] font-semibold hover:bg-red-50 disabled:opacity-60"
               >
@@ -10221,6 +10255,21 @@ function PassDetailModal({
           </div>
         </div>
       )}
+
+      <RefundDialog
+        open={refundOpen}
+        productName={pass ? stripPassCountSuffix(pass.lesson_kind) : "수강권"}
+        paidWon={pass?.price_won ?? 0}
+        busy={refunding}
+        error={error}
+        notice={[
+          "결제내역에 환불 이력이 남고, 누적 결제에서 환불액만큼 빠집니다",
+          "잔여 세션은 자동 정리되지 않으니 필요하면 예약을 따로 정리해 주세요",
+          "⚠️ 카드 대금은 자동으로 돌아가지 않습니다 — PG(토스)에서 따로 취소해 주세요",
+        ]}
+        onClose={() => setRefundOpen(false)}
+        onSubmit={(won, reason) => void refund(won, reason)}
+      />
 
       <HoldModal
         open={holdOpen}

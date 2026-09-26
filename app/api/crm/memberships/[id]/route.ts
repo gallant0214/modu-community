@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { syncProductPaymentAmount, syncProductPaymentDate } from "@/app/lib/crm-payment-sync";
+import { findProductPayment, parseRefundWon, readRefundBody, recordRefund } from "@/app/lib/crm-refund";
 
 export const dynamic = "force-dynamic";
 
@@ -179,6 +180,21 @@ export async function DELETE(
   const mid = Number(id);
   if (!mid) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
+  // 환불 금액(직원 입력). 본문이 없으면 결제 전액.
+  const body = await readRefundBody(request);
+  const { data: msRow } = await supabase
+    .from("crm_memberships")
+    .select("member_id, price_won")
+    .eq("id", mid)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+  if (!msRow) return NextResponse.json({ error: "회원권을 찾을 수 없어요" }, { status: 404 });
+  const ms = msRow as { member_id: number; price_won: number | null };
+  const payment = await findProductPayment(ctx.centerId, "membership", mid);
+  const paidWon = payment?.amount_won ?? ms.price_won ?? 0;
+  const parsed = parseRefundWon(body.refund_won, paidWon);
+  if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
+
   const { error } = await supabase
     .from("crm_memberships")
     .update({ status: "refunded" } as never)
@@ -188,14 +204,29 @@ export async function DELETE(
     return NextResponse.json({ error: "환불 실패", detail: error.message }, { status: 500 });
   }
 
+  // 결제내역에도 환불 기록을 남긴다 (결제내역 탭·누적 결제 금액과 숫자가 맞아야 한다)
+  const rec = await recordRefund({
+    centerId: ctx.centerId,
+    memberId: ms.member_id,
+    actorUid: ctx.uid,
+    refundWon: parsed.won,
+    paidWon,
+    reason: body.reason ?? null,
+    payment,
+    product: { kind: "membership", id: mid },
+  });
+  if (rec.error) {
+    return NextResponse.json({ error: "환불 이력 기록 실패", detail: rec.error }, { status: 500 });
+  }
+
   await supabase.from("crm_audit_logs").insert({
     center_id: ctx.centerId,
     actor_uid: ctx.uid,
     action: "membership.refund",
     entity_type: "crm_memberships",
     entity_id: mid,
-    payload: null,
+    payload: { refund_won: parsed.won, paid_won: paidWon, reason: body.reason ?? null } as never,
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, refund_won: parsed.won });
 }

@@ -4,6 +4,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { syncLockerDatesFromRental } from "@/app/lib/crm-locker-sync";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { syncProductPaymentAmount, syncProductPaymentDate } from "@/app/lib/crm-payment-sync";
+import { findProductPayment, parseRefundWon, readRefundBody, recordRefund } from "@/app/lib/crm-refund";
 
 export const dynamic = "force-dynamic";
 
@@ -169,6 +170,21 @@ export async function DELETE(
   const rid = Number(id);
   if (!rid) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
+  // 환불 금액(직원 입력). 본문이 없으면 결제 전액.
+  const body = await readRefundBody(request);
+  const { data: rRow } = await supabase
+    .from("crm_rentals")
+    .select("member_id, price_won")
+    .eq("id", rid)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+  if (!rRow) return NextResponse.json({ error: "대여권을 찾을 수 없어요" }, { status: 404 });
+  const rental = rRow as { member_id: number; price_won: number | null };
+  const payment = await findProductPayment(ctx.centerId, "rental", rid);
+  const paidWon = payment?.amount_won ?? rental.price_won ?? 0;
+  const parsed = parseRefundWon(body.refund_won, paidWon);
+  if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
+
   const { error } = await supabase
     .from("crm_rentals")
     .update({ status: "refunded" } as never)
@@ -178,14 +194,29 @@ export async function DELETE(
     return NextResponse.json({ error: "환불 실패", detail: error.message }, { status: 500 });
   }
 
+  // 결제내역에도 환불 기록을 남긴다 (결제내역 탭·누적 결제 금액과 숫자가 맞아야 한다)
+  const rec = await recordRefund({
+    centerId: ctx.centerId,
+    memberId: rental.member_id,
+    actorUid: ctx.uid,
+    refundWon: parsed.won,
+    paidWon,
+    reason: body.reason ?? null,
+    payment,
+    product: { kind: "rental", id: rid },
+  });
+  if (rec.error) {
+    return NextResponse.json({ error: "환불 이력 기록 실패", detail: rec.error }, { status: 500 });
+  }
+
   await supabase.from("crm_audit_logs").insert({
     center_id: ctx.centerId,
     actor_uid: ctx.uid,
     action: "rental.refund",
     entity_type: "crm_rentals",
     entity_id: rid,
-    payload: null,
+    payload: { refund_won: parsed.won, paid_won: paidWon, reason: body.reason ?? null } as never,
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, refund_won: parsed.won });
 }
