@@ -1120,8 +1120,8 @@ export default function CrmMembersPage() {
         <StatCard label={`수강권 임박 (${EXPIRING_DAYS}일)`} value={totals.expiringPass} tone="warn" active={fStatus === "expiring_pass"} onClick={() => setFStatus("expiring_pass")} />
       </div>
 
-      {/* 검색 + 엑셀 다운로드 (양쪽 끝으로 분리) */}
-      <div className="mb-3 flex items-center justify-between gap-3">
+      {/* 검색 */}
+      <div className="mb-3 flex items-center gap-3">
         <input
           type="text"
           value={query}
@@ -1129,13 +1129,6 @@ export default function CrmMembersPage() {
           placeholder="이름 및 연락처로 검색"
           className={`${crmInputClass} flex-1 max-w-[440px]`}
         />
-        <button
-          onClick={() => downloadExcel()}
-          disabled={filtered.length === 0}
-          className="shrink-0 px-3.5 py-2 rounded-lg border border-[#6B7B3A] text-[12.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/5 disabled:opacity-50 whitespace-nowrap"
-        >
-          엑셀로 다운로드
-        </button>
       </div>
 
       {/* 필터 */}
@@ -1237,15 +1230,13 @@ export default function CrmMembersPage() {
             { value: "none", label: "미보유" },
           ]}
         />
+        {/* 조건에 걸린 인원수 — 필터 바로 옆에 있어야 방금 바꾼 조건의 결과임이 분명하다 */}
+        <span className="ml-auto text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200 tabular-nums whitespace-nowrap">
+          {filtered.length.toLocaleString()}명
+        </span>
       </div>
 
-      <div className="mb-3 flex items-center justify-between text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
-        <span className="flex items-center gap-2">
-          <span>{filtered.length}명</span>
-          <span className="hidden md:inline text-[11.5px] text-[#A89B80]">
-            · 헤더 클릭=정렬, ⠿ 드래그=순서, 오른쪽 끝 드래그=너비
-          </span>
-        </span>
+      <div className="mb-3 flex items-center justify-between gap-3 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
         <span className="flex items-center gap-3">
           {(orderChanged || widthsChanged || sortChanged) && (
             <button
@@ -1268,6 +1259,13 @@ export default function CrmMembersPage() {
             필터 초기화
           </button>
         </span>
+        <button
+          onClick={() => downloadExcel()}
+          disabled={filtered.length === 0}
+          className="shrink-0 px-3.5 py-2 rounded-lg border border-[#6B7B3A] text-[12.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/5 disabled:opacity-50 whitespace-nowrap"
+        >
+          엑셀로 다운로드
+        </button>
       </div>
 
       {error && (
