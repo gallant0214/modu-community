@@ -5602,6 +5602,13 @@ type MergedLocker = {
   /** 이 카드가 '지금 그 자리를 실제로 쓰고 있는' 배정인지 (배지를 받은 카드) */
   assignCurrent?: boolean;
 };
+/** YYYY-MM-DD 하루 전 */
+function prevYmdOf(ymd: string): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 function mergeLockerItems(
   lockers: LockerAssignRow[],
   rentals: RentalRow[]
@@ -5683,6 +5690,39 @@ function mergeLockerItems(
       price: 0,
       start: l.start_date,
       exp: l.expires_at,
+      assign: l,
+      rental: null,
+      assignCurrent: true,
+    });
+  }
+
+  /* 🚨 지금 쓰는 자리인데 그 기간을 덮는 대여권이 없는 경우 (센터1 기준 67명)
+     BROJ 이관 때 락커는 자리 배정만 넘어오고 구매(대여권) 레코드는 안 만들었다.
+     그래서 이관 이후 재등록한 대여권(예: 10/03~) 하나만 카드가 되고, 그게 '예정'이라
+     정작 지금 쓰고 있는 락커가 '현재 보유'에서 사라져 보인다.
+     → 배정 기간 기준 '현재' 카드를 한 장 만들어 준다(DB 는 건드리지 않는다). */
+  const coversToday = (x: RentalRow) =>
+    x.status === "valid" && x.start_date <= todayStr && (x.expires_at ?? "") >= todayStr;
+  for (const l of lockers) {
+    if (slotsWithoutRental.includes(l)) continue; // 위에서 이미 카드가 됐다
+    const assignCoversToday =
+      (!l.start_date || l.start_date <= todayStr) && (!l.expires_at || l.expires_at >= todayStr);
+    if (!assignCoversToday) continue;
+    const label = `${l.zone_name} ${l.number}번`;
+    const mine = lockerRentals.filter((x) => (x.memo ?? "").includes(label));
+    const related = mine.length > 0 ? mine : lockerRentals;
+    if (related.some(coversToday)) continue; // 지금 기간을 덮는 구매가 있으면 그 카드로 충분
+    cards.push({
+      key: `lnow${l.id}`,
+      name: "락커",
+      price: 0,
+      start: l.start_date,
+      // 이어서 산 대여권이 있으면 그 시작 전날까지가 '지금 쓰는 기간'
+      exp:
+        [...related]
+          .filter((x) => x.start_date > todayStr)
+          .sort((a, b) => a.start_date.localeCompare(b.start_date))
+          .map((x) => prevYmdOf(x.start_date))[0] ?? l.expires_at,
       assign: l,
       rental: null,
       assignCurrent: true,
