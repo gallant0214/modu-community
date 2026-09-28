@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { sanitizeComponents } from "../route";
+import { isOnlineOrderCenter, ONLINE_ORDER_LOCKED_MESSAGE } from "@/app/lib/online-order-access";
 
 export const dynamic = "force-dynamic";
 
@@ -109,6 +110,10 @@ export async function PATCH(
     if (k in body) patch[k] = body[k];
   }
   if ("components" in body) patch.components = sanitizeComponents(body.components);
+  // 온라인 판매(홈페이지·회원앱 결제)는 스페셜바디 범어점 전용(파일럿) — 켜는 것만 막는다
+  if (patch.online_sale_enabled === true && !isOnlineOrderCenter(ctx.centerName)) {
+    return NextResponse.json({ error: ONLINE_ORDER_LOCKED_MESSAGE, code: "ONLINE_ORDER_LOCKED" }, { status: 403 });
+  }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
   }

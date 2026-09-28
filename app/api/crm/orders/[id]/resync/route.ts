@@ -4,6 +4,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { fetchTossPayment } from "@/app/lib/toss-payments";
 import { applyPgCancel } from "@/app/lib/crm-pg-cancel";
+import { isOnlineOrderCenter, ONLINE_ORDER_LOCKED_MESSAGE } from "@/app/lib/online-order-access";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -18,6 +19,10 @@ export const maxDuration = 60;
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // 온라인 주문은 스페셜바디 범어점 전용(파일럿)
+  if (!isOnlineOrderCenter(ctx.centerName)) {
+    return NextResponse.json({ error: ONLINE_ORDER_LOCKED_MESSAGE, code: "ONLINE_ORDER_LOCKED" }, { status: 403 });
+  }
   if (!(await ctxHasPermission(ctx, "sales.refund")) && !(await ctxHasPermission(ctx, "sales.edit"))) {
     return NextResponse.json({ error: "환불 권한이 없습니다" }, { status: 403 });
   }

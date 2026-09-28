@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { clearCenterCookie } from "./crm-center-cookie";
 import { isMarketAnalysisCenter } from "@/app/lib/market-access";
+import { isOnlineOrderCenter } from "@/app/lib/online-order-access";
 
 type Role = "owner" | "admin" | "manager" | "trainer";
 
@@ -167,6 +168,8 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
   // 센터 소속 강사(개인 센터가 아닌 실제 센터의 trainer): 출석 현황·터치출석 추가 노출.
   const isCenterTrainer = role === "trainer" && centerKind !== "solo";
   const specialBody = isSpecialBodyCenter(centerName);
+  // 온라인 주문은 스페셜바디 범어점 전용 — 다른 센터에는 메뉴 자체를 숨긴다
+  const onlineOrderAllowed = isOnlineOrderCenter(centerName);
   // 상권분석은 스페셜바디 범어점 전용 — 다른 센터에는 잠금 표시만 남긴다
   const marketAllowed = isMarketAnalysisCenter(centerName);
   const isLocked = (item: MenuItem) => item.restricted === "market" && !marketAllowed;
@@ -179,6 +182,7 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
       : MENU.filter((m) => !m.staffOnly || isStaffLevel)
   )
     .filter((m) => (SPECIAL_BODY_ONLY_HREFS.has(m.href) ? specialBody : true))
+    .filter((m) => m.href !== "/crm/orders" || onlineOrderAllowed)
     // 직급권한: perm 이 지정된 메뉴는 해당 권한이 명시적으로 false 면 숨김
     // (permissions 미로딩 시엔 그대로 노출 → 깜빡임 방지, 서버가 최종 차단)
     .filter((m) => !m.perm || !permissions || permissions[m.perm] !== false);

@@ -811,6 +811,8 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
   const [ownerName, setOwnerName] = useState("");
   const [businessNo, setBusinessNo] = useState("");
   const [shopPath, setShopPath] = useState<string | null>(null);
+  // 온라인 판매 사용 가능 센터인지 — 서버(shop-link)가 403 이면 숨긴다 (스페셜바디 범어점 전용 파일럿)
+  const [onlineAllowed, setOnlineAllowed] = useState(false);
   const [shopBusy, setShopBusy] = useState(false);
   const [mailOrderNo, setMailOrderNo] = useState("");
   const [supportEmail, setSupportEmail] = useState("");
@@ -853,6 +855,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
         const linkRes = await fetch("/api/crm/shop-link", {
           headers: { authorization: `Bearer ${token}` },
         });
+        setOnlineAllowed(linkRes.ok);
         if (linkRes.ok) setShopPath(((await linkRes.json()) as { path: string }).path);
       } catch {
         /* 링크 조회 실패는 센터 정보 표시를 막지 않는다 */
@@ -1101,7 +1104,9 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
           <ProfileField label="인스타 아이디" value={instagramId} onChange={setInstagramId} disabled={!canEdit} placeholder="moducm_gangnam (@ 제외)" />
           <ProfileField label="유튜브 링크" value={youtubeUrl} onChange={setYoutubeUrl} disabled={!canEdit} placeholder="https://youtube.com/@..." type="url" />
 
-          {/* 온라인 판매(홈페이지·회원앱 결제) 표기 항목 — 비어 있으면 PG 심사에서 반려된다 */}
+          {/* 온라인 판매(홈페이지·회원앱 결제) 표기 항목 — 비어 있으면 PG 심사에서 반려된다.
+              🚨 스페셜바디 범어점 전용 파일럿이라 다른 센터에는 아예 숨긴다. */}
+          {onlineAllowed && (
           <div className="md:col-span-2 pt-3 mt-1 border-t border-[#E8E0D0] dark:border-zinc-700">
             <div className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">온라인 판매 정보</div>
             <p className="mt-1 text-[12px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">
@@ -1178,6 +1183,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
               </div>
             )}
           </div>
+          )}
 
           <ProfileField
             label="대표자명"

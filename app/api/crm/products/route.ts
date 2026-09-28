@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
+import { isOnlineOrderCenter } from "@/app/lib/online-order-access";
 
 export const dynamic = "force-dynamic";
 
@@ -93,7 +94,11 @@ export async function GET(request: Request) {
   if (error) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
-  return NextResponse.json({ products: data ?? [] });
+  // 온라인 판매 스위치를 화면에 띄울지 — 스페셜바디 범어점 전용(파일럿)
+  return NextResponse.json({
+    products: data ?? [],
+    onlineSaleAllowed: isOnlineOrderCenter(ctx.centerName),
+  });
 }
 
 /**

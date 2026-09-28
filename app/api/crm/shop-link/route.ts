@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { generateShopSlug } from "@/app/lib/shop-slug";
+import { isOnlineOrderCenter, ONLINE_ORDER_LOCKED_MESSAGE } from "@/app/lib/online-order-access";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,9 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!isOnlineOrderCenter(ctx.centerName)) {
+    return NextResponse.json({ error: ONLINE_ORDER_LOCKED_MESSAGE, code: "ONLINE_ORDER_LOCKED" }, { status: 403 });
+  }
   // 공개 판매 페이지 주소는 비밀이 아니다(인스타·QR 로 뿌리는 값). 센터 구성원이면 조회 가능.
   // 다만 아직 없을 때 '발급'하는 건 쓰기이므로 설정 권한이 있을 때만 한다.
   const canIssue = await ctxHasPermission(ctx, "settings.edit");
@@ -49,6 +53,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!isOnlineOrderCenter(ctx.centerName)) {
+    return NextResponse.json({ error: ONLINE_ORDER_LOCKED_MESSAGE, code: "ONLINE_ORDER_LOCKED" }, { status: 403 });
+  }
   if (!(await ctxHasPermission(ctx, "settings.edit"))) {
     return NextResponse.json({ error: "센터 설정 권한이 없습니다" }, { status: 403 });
   }

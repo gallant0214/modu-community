@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
+import { isOnlineOrderCenter, ONLINE_ORDER_LOCKED_MESSAGE } from "@/app/lib/online-order-access";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,10 @@ export async function GET(request: Request) {
   if (isCrmError(ctx)) return ctx;
   if (!(await ctxHasPermission(ctx, "sales.view"))) {
     return NextResponse.json({ error: "매출 조회 권한이 없습니다" }, { status: 403 });
+  }
+  // 온라인 주문은 스페셜바디 범어점 전용(파일럿)
+  if (!isOnlineOrderCenter(ctx.centerName)) {
+    return NextResponse.json({ error: ONLINE_ORDER_LOCKED_MESSAGE, code: "ONLINE_ORDER_LOCKED" }, { status: 403 });
   }
 
   const url = new URL(request.url);

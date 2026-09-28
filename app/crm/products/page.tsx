@@ -142,6 +142,8 @@ interface CustomType {
 export default function CrmProductsPage() {
   const { getIdToken } = useAuth();
   const [list, setList] = useState<Product[]>([]);
+  // 온라인 판매 스위치 노출 여부(스페셜바디 범어점 전용 파일럿). 서버가 알려준다.
+  const [onlineSaleAllowed, setOnlineSaleAllowed] = useState(false);
   const [customTypes, setCustomTypes] = useState<CustomType[]>([]);
   const [type, setType] = useState<string>("");
   const [query, setQuery] = useState("");
@@ -194,6 +196,7 @@ export default function CrmProductsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "조회 실패");
       setList(data.products ?? []);
+      setOnlineSaleAllowed(data.onlineSaleAllowed !== false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -581,7 +584,7 @@ export default function CrmProductsPage() {
                     />
                     {/* 온라인 판매 — 홈페이지·회원앱에서 회원이 직접 결제할 수 있는 상품.
                         기본 꺼짐이라 켠 것만 노출된다(테스트·직원단가·바우처 상품 보호) */}
-                    {ONLINE_SELLABLE_TYPES.has(p.type) && (
+                    {onlineSaleAllowed && ONLINE_SELLABLE_TYPES.has(p.type) && (
                       <FlagSwitch
                         on={p.online_sale_enabled === true}
                         busy={saleBusy === `${p.id}:online_sale_enabled`}
@@ -598,7 +601,7 @@ export default function CrmProductsPage() {
                     )}
                     {/* 온라인 구매 자격 — 현장과 달리 온라인은 직원이 자격을 못 보므로
                         서버가 회원의 신규/재등록 구분과 대조해 막는다 */}
-                    {ONLINE_SELLABLE_TYPES.has(p.type) && p.online_sale_enabled === true && (
+                    {onlineSaleAllowed && ONLINE_SELLABLE_TYPES.has(p.type) && p.online_sale_enabled === true && (
                       <div className="inline-flex overflow-hidden rounded-lg border border-[#E8E0D0] dark:border-zinc-700">
                         {(
                           [
