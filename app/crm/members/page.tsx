@@ -1055,10 +1055,6 @@ export default function CrmMembersPage() {
     URL.revokeObjectURL(url);
   };
 
-  const showNotReady = (label: string) => {
-    window.alert(`"${label}" 기능은 준비 중입니다.`);
-  };
-
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-7xl mx-auto">
       <header className="mb-4 flex items-start justify-between gap-4 flex-wrap">
@@ -1080,7 +1076,6 @@ export default function CrmMembersPage() {
         >
           + 회원 추가
         </button>
-        <ActionBtn onClick={() => showNotReady("미수 관리")}>미수 관리</ActionBtn>
         <ActionBtn onClick={() => setLogOpen(true)}>수정 기록</ActionBtn>
       </div>
 
