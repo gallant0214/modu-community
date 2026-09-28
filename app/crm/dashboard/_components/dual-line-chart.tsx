@@ -17,12 +17,27 @@ const PAD_B = 26;
 const PRIMARY_COLOR = "#6B7B3A";
 const SECONDARY_COLOR = "#B8AC93";
 
+/**
+ * Y축 최대값 — **실제 최고값 바로 위의 반올림 눈금**으로 잡는다.
+ * 예전엔 자릿수 기준(1/2/5/10)으로 올려서 2,100만원 매출이 5,000만원 축에 그려져
+ * 선이 바닥에 깔려 보였다. 이제 10% 여유만 두고 그 자릿수의 0.5/1 단위로 올린다.
+ *   2,000만 → 3,000만 · 1,200만 → 1,500만 · 850만 → 1,000만
+ */
 function niceMax(v: number): number {
+  if (v <= 0) return 1;
+  const target = v * 1.1; // 선이 천장에 닿지 않도록 최소 여유
+  const p = Math.pow(10, Math.floor(Math.log10(target)));
+  const step = Math.max(target / p >= 1.5 ? p : p / 2, 1);
+  return Math.ceil(target / step) * step;
+}
+
+/** 눈금 간격 — 0~max 를 4칸 정도로 나누되 읽기 좋은 숫자로 */
+function niceTick(v: number): number {
   if (v <= 0) return 1;
   const p = Math.pow(10, Math.floor(Math.log10(v)));
   const n = v / p;
-  const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
-  return step * p;
+  const m = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+  return m * p;
 }
 
 /**
@@ -59,7 +74,14 @@ export function DualLineChart({
   const areaPath = (vals: number[]) =>
     `${linePath(vals)} L${x(n - 1).toFixed(1)},${y(0).toFixed(1)} L${x(0).toFixed(1)},${y(0).toFixed(1)} Z`;
 
-  const gridVals = [0, 0.25, 0.5, 0.75, 1].map((r) => Math.round(yMax * r));
+  // 눈금은 반올림 값으로만 찍는다 (375만·1,125만 처럼 어중간한 라벨 방지)
+  const gridVals: number[] = (() => {
+    const tick = niceTick(yMax / 4);
+    const out: number[] = [];
+    for (let g = 0; g <= yMax + 0.5; g += tick) out.push(Math.round(g));
+    if (out[out.length - 1] !== Math.round(yMax)) out.push(Math.round(yMax));
+    return out;
+  })();
   const sum = (a: number[]) => a.reduce((s, v) => s + v, 0);
 
   const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
