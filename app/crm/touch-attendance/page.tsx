@@ -455,13 +455,13 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   };
 
   const display = (
-    <div className="h-[clamp(66px,11vmin,140px)] rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 flex items-center justify-center leading-none">
+    <div className="h-[clamp(72px,12vmin,150px)] rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 flex items-center justify-center leading-none">
       {num ? (
-        <span className="text-[clamp(32px,6.5vmin,80px)] font-bold tracking-[0.2em] text-[#2A251D] dark:text-zinc-100 leading-none">
+        <span className="text-[clamp(38px,7.6vmin,92px)] font-bold tracking-[0.2em] text-[#2A251D] dark:text-zinc-100 leading-none">
           {num}
         </span>
       ) : (
-        <span className="text-[#C9BEA6] tracking-normal text-[clamp(18px,3vmin,34px)] font-medium leading-none">
+        <span className="text-[#C9BEA6] tracking-normal text-[clamp(20px,3.4vmin,38px)] font-medium leading-none">
           출석번호
         </span>
       )}
@@ -951,9 +951,9 @@ function KeyBtn({
   return (
     <button
       onClick={onClick}
-      className={`h-[clamp(56px,10vmin,128px)] rounded-2xl text-[clamp(22px,4.2vmin,46px)] font-bold select-none active:scale-95 transition-transform
+      className={`h-[clamp(58px,10.5vmin,132px)] rounded-2xl text-[clamp(32px,6.4vmin,64px)] font-bold select-none active:scale-95 transition-transform
         ${variant === "muted"
-          ? "bg-[#F1EADB] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-300 !text-[clamp(15px,2.8vmin,30px)]"
+          ? "bg-[#F1EADB] dark:bg-zinc-800 text-[#6B5D47] dark:text-zinc-300 !text-[clamp(18px,3.6vmin,34px)]"
           : "bg-white dark:bg-zinc-900 border border-[#E8E0D0] dark:border-zinc-700 text-[#2A251D] dark:text-zinc-100 hover:border-[#6B7B3A]"
         }`}
     >
