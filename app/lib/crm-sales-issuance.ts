@@ -13,6 +13,8 @@ export interface IssuanceSale {
   amount_won: number;
   category: SalesCategory;
   member_id: number | null;
+  /** 매출 귀속일(KST, YYYY-MM-DD) — 회원권·대여권=시작일, 수강권=발급일 */
+  ymd: string;
 }
 
 async function pageAll<T>(
@@ -62,29 +64,29 @@ export async function fetchIssuanceSales(
   if (from >= endExclYmd) return [];
 
   const [ms, ps, rs] = await Promise.all([
-    pageAll<{ price_won: number | null; member_id: number | null }>((f, t) =>
+    pageAll<{ price_won: number | null; member_id: number | null; start_date: string }>((f, t) =>
       supabase
         .from("crm_memberships")
-        .select("price_won, member_id")
+        .select("price_won, member_id, start_date")
         .eq("center_id", centerId)
         .gte("start_date", from)
         .lt("start_date", endExclYmd)
         .range(f, t)
     ),
-    pageAll<{ price_won: number | null; member_id: number | null }>((f, t) =>
+    pageAll<{ price_won: number | null; member_id: number | null; issued_at: string }>((f, t) =>
       supabase
         .from("crm_passes")
-        .select("price_won, member_id")
+        .select("price_won, member_id, issued_at")
         .eq("center_id", centerId)
         .gte("issued_at", from)
         .lt("issued_at", endExclYmd)
         .range(f, t)
     ),
-    pageAll<{ price_won: number | null; member_id: number | null; item_name: string | null; memo: string | null }>(
+    pageAll<{ price_won: number | null; member_id: number | null; item_name: string | null; memo: string | null; start_date: string }>(
       (f, t) =>
         supabase
           .from("crm_rentals")
-          .select("price_won, member_id, item_name, memo")
+          .select("price_won, member_id, item_name, memo, start_date")
           .eq("center_id", centerId)
           .gte("start_date", from)
           .lt("start_date", endExclYmd)
@@ -93,8 +95,12 @@ export async function fetchIssuanceSales(
   ]);
 
   const out: IssuanceSale[] = [];
-  for (const m of ms) out.push({ amount_won: m.price_won ?? 0, category: "membership", member_id: m.member_id });
-  for (const p of ps) out.push({ amount_won: p.price_won ?? 0, category: "lesson", member_id: p.member_id });
+  for (const m of ms) {
+    out.push({ amount_won: m.price_won ?? 0, category: "membership", member_id: m.member_id, ymd: m.start_date });
+  }
+  for (const p of ps) {
+    out.push({ amount_won: p.price_won ?? 0, category: "lesson", member_id: p.member_id, ymd: String(p.issued_at).slice(0, 10) });
+  }
   for (const r of rs) {
     // 대여권은 락커/운동복이 섞여 있다 — 대시보드가 둘을 나눠 보여주므로 종류로 가른다.
     const kind = rentalKindKey(r.item_name, r.memo);
@@ -102,6 +108,7 @@ export async function fetchIssuanceSales(
       amount_won: r.price_won ?? 0,
       category: kind === "locker" ? "locker" : "rental",
       member_id: r.member_id,
+      ymd: r.start_date,
     });
   }
   return out;
