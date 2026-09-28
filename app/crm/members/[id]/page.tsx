@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Children, isValidElement, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
@@ -652,7 +652,7 @@ export default function CrmMemberDetailPage() {
             )}
           </div>
           {hasHoldings ? (
-          <div className="flex flex-wrap gap-1.5 px-3.5 py-3 rounded-xl border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
+          <ScheduledLast className="flex flex-wrap gap-1.5 px-3.5 py-3 rounded-xl border border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900/60">
           {/* 회원권: 실제 레코드 우선(편집 가능), 없으면 스냅샷 */}
           {validHoldMs.length > 0
             ? validHoldMs.map((m) => (
@@ -734,7 +734,7 @@ export default function CrmMemberDetailPage() {
                   />
                 );
               })}
-          </div>
+          </ScheduledLast>
           ) : (
             <div className="px-3.5 py-3 rounded-xl border border-dashed border-[#E8E0D0]/70 dark:border-zinc-800 text-[12.5px] text-[#8C8270] dark:text-zinc-500">
               보유 중인 상품이 없어요. 오른쪽 발급 버튼으로 추가해 주세요.
@@ -5003,6 +5003,22 @@ const SNAP_STYLE: Record<string, string> = {
   대여권: "border-[#3E7C8C]/40 bg-[#3E7C8C]/10 text-[#3E7C8C] dark:text-cyan-300",
   락커: "border-[#8B6BB1]/40 bg-[#8B6BB1]/10 text-[#8B6BB1] dark:text-purple-300",
 };
+
+/**
+ * '현재 보유' 카드 정렬 — **예정(아직 시작 전) 카드를 맨 뒤로** 보낸다.
+ * 상품 종류별로 렌더하다 보니 예정/현재가 섞여 보여서(윤다희 회원 사례),
+ * 지금 쓰고 있는 것부터 보이도록 자식 순서만 바꾼다. 같은 그룹 안의 순서는 유지(안정 정렬).
+ */
+function ScheduledLast({ children, className }: { children: React.ReactNode; className?: string }) {
+  const items = Children.toArray(children).filter(Boolean);
+  const isScheduled = (c: unknown) =>
+    isValidElement(c) && (c.props as { holdState?: string | null }).holdState === "scheduled";
+  return (
+    <div className={className}>
+      {[...items.filter((c) => !isScheduled(c)), ...items.filter(isScheduled)]}
+    </div>
+  );
+}
 
 function SnapHoldingCard({
   tag,
