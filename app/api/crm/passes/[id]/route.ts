@@ -5,7 +5,7 @@ import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
 import { syncProductPaymentAmount, syncProductPaymentDate } from "@/app/lib/crm-payment-sync";
 import { findProductPayment, parseRefundWon, readRefundBody, recordRefund } from "@/app/lib/crm-refund";
-import { retireIssuedForPayment } from "@/app/lib/crm-retire-issued";
+import { retireIssuedForPayment, cancelFutureReservationsForPass } from "@/app/lib/crm-retire-issued";
 
 export const dynamic = "force-dynamic";
 
@@ -391,13 +391,20 @@ export async function DELETE(
     });
     if (!r.ok) error = { message: r.error ?? "이용권 회수 실패" };
   } else {
-    // 결제행이 없는 건(0원 발급·이관분) — 상태만 바꾼다
+    // 결제행이 없는 건(0원 발급·이관분) — 상태만 바꾸고 미래 예약은 같이 취소한다
     const { error: e } = await supabase
       .from("crm_passes")
       .update({ status: "refunded" } as never)
       .eq("id", passId)
       .eq("center_id", ctx.centerId);
     error = e;
+    if (!e) {
+      await cancelFutureReservationsForPass({
+        centerId: ctx.centerId,
+        passId,
+        actorUid: ctx.uid,
+      });
+    }
   }
 
   if (error) {

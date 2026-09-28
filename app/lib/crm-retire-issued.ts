@@ -27,6 +27,8 @@ export interface RetireResult {
   label: string | null;
   /** 락커 처리 결과 */
   locker?: { returned: number; reverted: number };
+  /** 함께 취소한 미래 예약 수 (수강권 환불) */
+  cancelledReservations?: number;
   error?: string;
 }
 
@@ -130,6 +132,40 @@ async function revertLockers(opts: {
 }
 
 /**
+ * 환불한 수강권의 **아직 지나지 않은 예약을 취소**한다.
+ * 환불했는데 예약이 살아 있으면 그 날 출석 처리되면서 잔여가 소진되고 강사 수업료까지 발생한다.
+ * 🚨 이미 지나간 수업(출석·노쇼·취소)은 건드리지 않는다 — 진행 이력은 강사 수업료 정산의 근거다.
+ */
+export async function cancelFutureReservationsForPass(opts: {
+  centerId: number;
+  passId: number;
+  actorUid?: string | null;
+  reason?: string;
+}): Promise<number> {
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("crm_reservations")
+    .update({
+      status: "cancelled",
+      consumed: false, // 예약만으로는 잔여가 안 줄어든다(미차감 취소)
+      cancelled_at: nowIso,
+      cancelled_reason: opts.reason ?? "수강권 환불",
+      cancelled_by_uid: opts.actorUid ?? null,
+      updated_at: nowIso,
+    } as never)
+    .eq("center_id", opts.centerId)
+    .eq("pass_id", opts.passId)
+    .eq("status", "booked")
+    .gt("starts_at", nowIso)
+    .select("id");
+  if (error) {
+    console.error("[retire] 미래 예약 취소 실패", opts.passId, error.message);
+    return 0;
+  }
+  return (data ?? []).length;
+}
+
+/**
  * 결제 1건에 연결된 발급물을 회수한다. 결제원장 자체는 남는다.
  * 이미 회수됐거나 연결된 상품이 없으면 ok:true, kind:null 로 조용히 지나간다.
  */
@@ -166,6 +202,7 @@ export async function retireIssuedForPayment(opts: {
   /* ── 1) 상품명 스냅샷 + 락커 원복에 필요한 정보 ─────────── */
   let label: string | null = null;
   let locker: { returned: number; reverted: number } | undefined;
+  let cancelledReservations = 0;
 
   if (kind === "membership") {
     const { data } = await supabase
@@ -181,6 +218,12 @@ export async function retireIssuedForPayment(opts: {
       .eq("id", pay.pass_id!)
       .maybeSingle();
     label = (data as { lesson_kind?: string } | null)?.lesson_kind ?? "수강권";
+    // 환불 시점 이후의 예약만 취소 (지나간 수업 이력은 그대로 남긴다)
+    cancelledReservations = await cancelFutureReservationsForPass({
+      centerId: opts.centerId,
+      passId: pay.pass_id!,
+      actorUid: opts.actorUid ?? null,
+    });
   } else {
     const { data } = await supabase
       .from("crm_rentals")
@@ -222,7 +265,7 @@ export async function retireIssuedForPayment(opts: {
     return { ok: false, kind, label, error: `이용권 회수 실패: ${delErr.message}` };
   }
 
-  return { ok: true, kind, label, locker };
+  return { ok: true, kind, label, locker, cancelledReservations };
 }
 
 /** 로그에 쓰는 한글 상품 구분 */
