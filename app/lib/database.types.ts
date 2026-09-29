@@ -1297,6 +1297,8 @@ export type Database = {
           owner_gender: string | null
           owner_phone: string | null
           mail_order_no: string | null
+          legal_name: string | null
+          policy_contract_template_id: number | null
           support_email: string | null
           refund_policy: string | null
           shop_slug: string | null
@@ -1333,6 +1335,8 @@ export type Database = {
           owner_gender?: string | null
           owner_phone?: string | null
           mail_order_no?: string | null
+          legal_name?: string | null
+          policy_contract_template_id?: number | null
           support_email?: string | null
           refund_policy?: string | null
           shop_slug?: string | null
@@ -1369,6 +1373,8 @@ export type Database = {
           owner_gender?: string | null
           owner_phone?: string | null
           mail_order_no?: string | null
+          legal_name?: string | null
+          policy_contract_template_id?: number | null
           support_email?: string | null
           refund_policy?: string | null
           shop_slug?: string | null

@@ -7,7 +7,7 @@ import { verifyCenterIdentity } from "@/app/lib/crm-center-verify";
 export const dynamic = "force-dynamic";
 
 const PROFILE_COLUMNS =
-  "id, name, kind, region_sido, region_sigungu, phone, business_no, owner_name, address, address_detail, " +
+  "id, name, legal_name, policy_contract_template_id, kind, region_sido, region_sigungu, phone, business_no, owner_name, address, address_detail, " +
   "naver_url, google_url, instagram_id, youtube_url, operating_hours, logo_data_url, status, " +
   // 온라인 판매(PG 결제) 페이지 표기 항목
   "mail_order_no, support_email, refund_policy" as unknown as "*";
@@ -60,6 +60,10 @@ export async function PATCH(request: Request) {
     support_email?: string | null;
     refund_policy?: string | null;
     owner_name?: string | null;
+    /** 사업자등록증상 상호 — 결제 페이지 하단 표기에 쓴다 */
+    legal_name?: string | null;
+    /** 판매 페이지 환불 규정의 출처가 될 전자계약서 */
+    policy_contract_template_id?: number | null;
     /** 🚨 센터 양도·탈퇴 본인확인의 대조 항목 → 대표자만 수정 가능 */
     business_no?: string | null;
   };
@@ -90,6 +94,11 @@ export async function PATCH(request: Request) {
   setNullable("operating_hours", body.operating_hours ?? undefined);
   setNullable("mail_order_no", body.mail_order_no ?? undefined);
   setNullable("owner_name", body.owner_name ?? undefined);
+  setNullable("legal_name", body.legal_name ?? undefined);
+  if (body.policy_contract_template_id !== undefined) {
+    const v = Number(body.policy_contract_template_id);
+    patch.policy_contract_template_id = Number.isFinite(v) && v > 0 ? v : null;
+  }
   /**
    * 사업자등록번호는 센터 양도·탈퇴 본인확인에서 대조하는 값이다
    * ([[crm-center-verify]]). 관리자가 바꿔치울 수 없도록 대표자만 허용한다.

@@ -25,6 +25,14 @@ interface AuthContextType {
   setTermsAgreedLocal: () => void;
   signInWithGoogle: () => Promise<void>;
   signInWithApple: () => Promise<void>;
+  /**
+   * 이메일·비밀번호 로그인.
+   * PG(토스) 카드사 심사는 소셜 로그인 테스트 계정을 받지 않아서,
+   * 심사원이 쓸 수 있는 아이디/비밀번호 방식이 반드시 필요하다.
+   */
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string) => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
   signOutUser: () => Promise<void>;
   getIdToken: () => Promise<string | null>;
   refreshNickname: () => Promise<void>;
@@ -44,6 +52,9 @@ const AuthContext = createContext<AuthContextType>({
   setTermsAgreedLocal: () => {},
   signInWithGoogle: async () => {},
   signInWithApple: async () => {},
+  signInWithEmail: async () => {},
+  signUpWithEmail: async () => {},
+  sendPasswordReset: async () => {},
   signOutUser: async () => {},
   getIdToken: async () => null,
   refreshNickname: async () => {},
@@ -369,6 +380,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  /** Firebase 인증 오류코드를 사람이 읽는 말로 — 인증 실패를 뭉뚱그리지 않는다 */
+  const emailAuthMessage = (code: string): string => {
+    switch (code) {
+      case "auth/invalid-email":
+        return "이메일 형식이 올바르지 않아요.";
+      case "auth/user-not-found":
+      case "auth/wrong-password":
+      case "auth/invalid-credential":
+        return "이메일 또는 비밀번호가 맞지 않아요.";
+      case "auth/email-already-in-use":
+        return "이미 가입된 이메일이에요. 로그인해 주세요.";
+      case "auth/weak-password":
+        return "비밀번호는 6자 이상으로 정해주세요.";
+      case "auth/too-many-requests":
+        return "시도가 너무 많았어요. 잠시 후 다시 해주세요.";
+      case "auth/operation-not-allowed":
+        return "이메일 로그인이 아직 열려 있지 않아요. 센터에 문의해주세요.";
+      default:
+        return "로그인에 실패했어요. 잠시 후 다시 시도해 주세요.";
+    }
+  };
+
+  const signInWithEmail = async (email: string, password: string) => {
+    const { signInWithEmailAndPassword, auth } = await loadFirebase();
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+    } catch (e: unknown) {
+      const msg = emailAuthMessage((e as { code?: string })?.code ?? "");
+      setAuthError(msg);
+      throw new Error(msg);
+    }
+  };
+
+  const signUpWithEmail = async (email: string, password: string) => {
+    const { createUserWithEmailAndPassword, auth } = await loadFirebase();
+    try {
+      await createUserWithEmailAndPassword(auth, email.trim(), password);
+    } catch (e: unknown) {
+      const msg = emailAuthMessage((e as { code?: string })?.code ?? "");
+      setAuthError(msg);
+      throw new Error(msg);
+    }
+  };
+
+  const sendPasswordReset = async (email: string) => {
+    const { sendPasswordResetEmail, auth } = await loadFirebase();
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+    } catch (e: unknown) {
+      const msg = emailAuthMessage((e as { code?: string })?.code ?? "");
+      setAuthError(msg);
+      throw new Error(msg);
+    }
+  };
+
   const signInWithApple = async () => {
     // 인앱 브라우저에서는 자동으로 외부 브라우저로 이동
     if (isInAppBrowser()) {
@@ -462,7 +528,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, nickname, nicknameLoaded, setNicknameLocal: (name: string) => { setNickname(name); setNicknameLoaded(true); }, activeRegionCode, activeRegionName, termsAgreed, termsLoaded, setTermsAgreedLocal, signInWithGoogle, signInWithApple, signOutUser, getIdToken, refreshNickname, setActiveRegionLocal }}>
+    <AuthContext.Provider value={{ user, loading, nickname, nicknameLoaded, setNicknameLocal: (name: string) => { setNickname(name); setNicknameLoaded(true); }, activeRegionCode, activeRegionName, termsAgreed, termsLoaded, setTermsAgreedLocal, signInWithGoogle, signInWithApple, signInWithEmail, signUpWithEmail, sendPasswordReset, signOutUser, getIdToken, refreshNickname, setActiveRegionLocal }}>
       {children}
       {authError && (
         <div className="fixed inset-x-0 bottom-4 z-[9999] flex justify-center px-4 pointer-events-none">

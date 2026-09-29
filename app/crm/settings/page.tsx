@@ -717,6 +717,8 @@ interface CenterProfile {
   /* 온라인 판매(PG 결제) 페이지 표기 — 전자상거래법 의무 항목 */
   business_no: string | null;
   owner_name: string | null;
+  legal_name: string | null;
+  policy_contract_template_id: number | null;
   mail_order_no: string | null;
   support_email: string | null;
   refund_policy: string | null;
@@ -808,6 +810,9 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
   const [googleUrl, setGoogleUrl] = useState("");
   const [instagramId, setInstagramId] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [legalName, setLegalName] = useState("");
+  const [policyTplId, setPolicyTplId] = useState<number | null>(null);
+  const [contractTpls, setContractTpls] = useState<{ id: number; title: string }[]>([]);
   const [ownerName, setOwnerName] = useState("");
   const [businessNo, setBusinessNo] = useState("");
   const [shopPath, setShopPath] = useState<string | null>(null);
@@ -847,6 +852,25 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       setInstagramId(c.instagram_id ?? "");
       setYoutubeUrl(c.youtube_url ?? "");
       setHoursEntries(parseHours(c.operating_hours));
+      setLegalName(c.legal_name ?? "");
+      setPolicyTplId(c.policy_contract_template_id ?? null);
+      // 환불 규정을 가져올 계약서 후보
+      try {
+        const tplRes = await fetch("/api/crm/contracts?status=active", {
+          headers: { authorization: `Bearer ${token}` },
+        });
+        if (tplRes.ok) {
+          const td = await tplRes.json();
+          setContractTpls(
+            ((td.contracts ?? []) as { id: number; title: string }[]).map((t) => ({
+              id: t.id,
+              title: t.title,
+            }))
+          );
+        }
+      } catch {
+        /* 목록을 못 받아도 센터 정보 표시는 막지 않는다 */
+      }
       setOwnerName(c.owner_name ?? "");
       setBusinessNo(formatBusinessNo(c.business_no ?? ""));
       setMailOrderNo(c.mail_order_no ?? "");
@@ -883,6 +907,8 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       instagramId !== (profile.instagram_id ?? "") ||
       youtubeUrl !== (profile.youtube_url ?? "") ||
       hoursSerialized !== (profile.operating_hours ?? "") ||
+      legalName !== (profile.legal_name ?? "") ||
+      policyTplId !== (profile.policy_contract_template_id ?? null) ||
       ownerName !== (profile.owner_name ?? "") ||
       businessNo !== formatBusinessNo(profile.business_no ?? "") ||
       mailOrderNo !== (profile.mail_order_no ?? "") ||
@@ -908,6 +934,8 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
           instagram_id: instagramId.trim().replace(/^@/, ""),
           youtube_url: youtubeUrl.trim(),
           operating_hours: hoursSerialized,
+          legal_name: legalName.trim(),
+          policy_contract_template_id: policyTplId,
           owner_name: ownerName.trim(),
           ...(isOwner ? { business_no: businessNo.trim() } : {}),
           mail_order_no: mailOrderNo.trim(),
@@ -1186,6 +1214,13 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
           )}
 
           <ProfileField
+            label="상호 (사업자등록증)"
+            value={legalName}
+            onChange={setLegalName}
+            disabled={!canEdit}
+            placeholder="스페셜바디"
+          />
+          <ProfileField
             label="대표자명"
             value={ownerName}
             onChange={setOwnerName}
@@ -1224,8 +1259,29 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
           />
 
           <div className="md:col-span-2">
+            <div className="text-[12.5px] text-[#A89B80] mb-1.5">환불 규정 출처 (전자계약서)</div>
+            <select
+              value={policyTplId ?? ""}
+              onChange={(e) => setPolicyTplId(e.target.value ? Number(e.target.value) : null)}
+              disabled={!canEdit}
+              className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 text-[14px] text-[#2A251D] dark:text-zinc-100 disabled:opacity-60"
+            >
+              <option value="">사용 안 함 (아래 직접 입력한 문구 사용)</option>
+              {contractTpls.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-[#A89B80] leading-relaxed">
+              고른 계약서에서 제목에 &lsquo;환불&rsquo; 또는 &lsquo;해지&rsquo;가 들어간 조항을 그대로 결제 페이지에 표시합니다.
+              계약서와 홈페이지 문구가 다르면 분쟁이 생기니 같은 출처를 쓰는 걸 권합니다.
+            </p>
+          </div>
+
+          <div className="md:col-span-2">
             <ProfileField
-              label="환불·해지 규정"
+              label="환불·해지 규정 (직접 입력)"
               value={refundPolicy}
               onChange={setRefundPolicy}
               disabled={!canEdit}
@@ -1234,7 +1290,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
               placeholder="센터 규정이 다르면 여기에 직접 입력하세요."
             />
             <p className="mt-1 text-[11px] text-[#A89B80]">
-              비워두면 기본 문구(이용 개시 전 전액 환불 / 개시 후 이용일수 차감 + 위약금 10%)가 결제 페이지에 표시됩니다.
+              위에서 계약서를 고르면 이 칸은 쓰이지 않습니다. 둘 다 비우면 기본 문구가 표시됩니다.
             </p>
           </div>
 
@@ -1244,7 +1300,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
               결제 페이지 하단에 <b>상호 · 대표자 · 사업자등록번호 · 통신판매업신고번호 · 사업장 주소 · 연락처 · 이메일</b>이 표기됩니다.
               {(() => {
                 const missing = [
-                  !name.trim() && "상호",
+                  !legalName.trim() && "상호(등록증)",
                   !ownerName.trim() && "대표자명",
                   !businessNo.trim() && "사업자등록번호",
                   !mailOrderNo.trim() && "통신판매업 신고번호",
