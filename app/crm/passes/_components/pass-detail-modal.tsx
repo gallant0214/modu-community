@@ -14,6 +14,14 @@ import {
   formatPhone,
 } from "../../_components/crm-labels";
 
+/** UTC 타임스탬프 → KST "2026-09-28 (월) 13:46" */
+function kstDateTime(iso: string): string {
+  const d = new Date(new Date(iso).getTime() + 9 * 3600 * 1000);
+  const dow = ["일", "월", "화", "수", "목", "금", "토"][d.getUTCDay()];
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())} (${dow}) ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`;
+}
+
 export interface PassDetail {
   id: number;
   member_id: number;
@@ -102,6 +110,13 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
     }[]
   >([]);
   const [showHistory, setShowHistory] = useState(false);
+  // 결제·환불 원장 (환불한 수강권도 무슨 일이 있었는지 여기서 바로 보이게)
+  const [payments, setPayments] = useState<
+    { amount_won: number; method: string; method_custom: string | null; paid_at: string; status: string }[]
+  >([]);
+  const [refunds, setRefunds] = useState<
+    { amount_won: number; refunded_at: string; reason: string | null; is_partial: boolean; source: string; actor_name: string | null }[]
+  >([]);
 
   const loadPass = useCallback(async () => {
     if (!passId) return;
@@ -118,6 +133,8 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
       setMember(data.member);
       setCoTrainers(data.co_trainers ?? []);
       setReservations(data.reservations ?? []);
+      setPayments(data.payments ?? []);
+      setRefunds(data.refunds ?? []);
       // 편집 필드 초기화
       const p: PassDetail = data.pass;
       setLessonKind(p.lesson_kind ?? "");
@@ -204,6 +221,8 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
   const remainingPct = pass
     ? Math.max(0, Math.min(100, (Number(pass.remaining_sessions || 0) / Math.max(1, Number(pass.total_sessions || 0))) * 100))
     : 0;
+  const paidSum = payments.reduce((sum, p) => sum + (p.amount_won ?? 0), 0);
+  const refundedSum = refunds.reduce((sum, r) => sum + Math.abs(r.amount_won ?? 0), 0);
 
   const headerActions = (
     <div className="flex items-center gap-1.5">
@@ -317,6 +336,79 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
                 <div className="h-full rounded-full bg-[#6B7B3A]" style={{ width: `${remainingPct}%` }} />
               </div>
             </div>
+
+            {/* 결제·환불 이력 — 환불 건은 얼마를, 언제, 왜 돌려줬는지까지 남긴다 */}
+            {(payments.length > 0 || refunds.length > 0) && (
+              <div className="mt-3 pt-3 border-t border-[#EFE7D5] dark:border-zinc-800">
+                <div className="text-[11.5px] font-semibold text-[#8C8270] dark:text-zinc-500 mb-2">
+                  결제 · 환불 이력
+                </div>
+                <ul className="space-y-1.5">
+                  {payments.map((pay, i) => (
+                    <li
+                      key={`pay${i}`}
+                      className="flex items-start gap-2 rounded-lg border-l-[3px] border-[#6B7B3A] bg-[#6B7B3A]/[0.06] pl-2.5 pr-3 py-2"
+                    >
+                      <span className="shrink-0 text-[#6B7B3A] text-[13px] leading-5">＋</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-[12.5px] font-bold text-[#4d5a29] dark:text-[#A8B87A]">결제</span>
+                          <span className="shrink-0 text-[13px] font-bold text-[#2A251D] dark:text-zinc-100">
+                            {formatWon(pay.amount_won)}원
+                          </span>
+                        </div>
+                        <div className="mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+                          {kstDateTime(pay.paid_at)}
+                          {" · "}
+                          {pay.method === "etc" && pay.method_custom
+                            ? pay.method_custom
+                            : PAYMENT_METHOD_LABEL[pay.method] ?? pay.method}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                  {refunds.map((rf, i) => (
+                    <li
+                      key={`rf${i}`}
+                      className="flex items-start gap-2 rounded-lg border-l-[3px] border-red-400 dark:border-red-800 bg-red-50/60 dark:bg-red-950/20 pl-2.5 pr-3 py-2"
+                    >
+                      <span className="shrink-0 text-red-500 dark:text-red-400 text-[13px] leading-5">↩</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-[12.5px] font-bold text-red-700 dark:text-red-300">
+                            {rf.is_partial ? "부분 환불" : "환불"}
+                          </span>
+                          <span className="shrink-0 text-[13px] font-bold text-red-700 dark:text-red-300">
+                            -{formatWon(rf.amount_won)}원
+                          </span>
+                        </div>
+                        <div className="mt-0.5 text-[11.5px] text-[#8C7A6B] dark:text-zinc-400">
+                          {kstDateTime(rf.refunded_at)}
+                          {rf.actor_name ? ` · ${rf.actor_name}` : ""}
+                          {rf.reason ? ` · ${rf.reason}` : " · 사유 미입력"}
+                          {rf.source === "pg" ? " · PG 취소" : ""}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                {/* 실제로 센터에 남은 금액 — 헷갈릴 여지를 없앤다 */}
+                {refunds.length > 0 && (
+                  <div className="mt-1.5 flex items-baseline justify-between px-2.5 text-[12px]">
+                    <span className="text-[#6B5D47] dark:text-zinc-400">
+                      {refundedSum >= paidSum ? "전액 환불 · 실매출" : "환불 후 실매출"}
+                    </span>
+                    <span
+                      className={`text-[13px] font-bold ${
+                        paidSum - refundedSum <= 0 ? "text-[#A89B80]" : "text-[#6B7B3A] dark:text-[#A8B87A]"
+                      }`}
+                    >
+                      {formatWon(Math.max(0, paidSum - refundedSum))}원
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 예약·출석 현황 */}
             <div className="mt-3 pt-3 border-t border-[#EFE7D5] dark:border-zinc-800">

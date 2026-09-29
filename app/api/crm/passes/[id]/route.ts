@@ -76,6 +76,41 @@ export async function GET(
       : Promise.resolve({ data: [] as { id: number; display_name: string }[] }),
   ]);
 
+  // 결제·환불 이력 — 환불한 수강권도 무슨 일이 있었는지 상세에서 바로 보이게
+  const { data: payRows } = await supabase
+    .from("crm_payments")
+    .select("id, amount_won, method, method_custom, paid_at, status")
+    .eq("center_id", ctx.centerId)
+    .eq("pass_id", passId)
+    .order("paid_at", { ascending: true });
+  const payments = (payRows ?? []) as {
+    id: number; amount_won: number; method: string; method_custom: string | null; paid_at: string; status: string;
+  }[];
+  const payIds = payments.map((p) => p.id);
+  const { data: refundRows } = payIds.length
+    ? await supabase
+        .from("crm_payment_refunds")
+        .select("amount_won, refunded_at, reason, is_partial, source, actor_uid")
+        .eq("center_id", ctx.centerId)
+        .in("payment_id", payIds)
+        .order("refunded_at", { ascending: true })
+    : { data: [] as unknown[] };
+  const refundsRaw = (refundRows ?? []) as {
+    amount_won: number; refunded_at: string; reason: string | null; is_partial: boolean; source: string; actor_uid: string | null;
+  }[];
+  // 환불 처리 직원 이름
+  const refundUids = Array.from(new Set(refundsRaw.map((r) => r.actor_uid).filter((v): v is string => !!v)));
+  const { data: refundStaff } = refundUids.length
+    ? await supabase
+        .from("crm_center_members")
+        .select("firebase_uid, display_name")
+        .eq("center_id", ctx.centerId)
+        .in("firebase_uid", refundUids)
+    : { data: [] as { firebase_uid: string; display_name: string }[] };
+  const staffByUid = new Map(
+    ((refundStaff ?? []) as { firebase_uid: string; display_name: string }[]).map((r) => [r.firebase_uid, r.display_name])
+  );
+
   const nameOf = (mid: number | null | undefined) =>
     mid ? (staffRows ?? []).find((r) => r.id === mid)?.display_name ?? null : null;
   const co_trainers = coIds
@@ -92,6 +127,21 @@ export async function GET(
     co_trainers,
     trainer_name: nameOf(pass.trainer_member_id),
     seller_name: nameOf(pass.seller_member_id),
+    payments: payments.map((p) => ({
+      amount_won: p.amount_won,
+      method: p.method,
+      method_custom: p.method_custom,
+      paid_at: p.paid_at,
+      status: p.status,
+    })),
+    refunds: refundsRaw.map((r) => ({
+      amount_won: r.amount_won,
+      refunded_at: r.refunded_at,
+      reason: r.reason,
+      is_partial: r.is_partial,
+      source: r.source,
+      actor_name: r.actor_uid ? staffByUid.get(r.actor_uid) ?? null : null,
+    })),
   });
 }
 
