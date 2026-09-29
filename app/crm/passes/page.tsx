@@ -191,11 +191,12 @@ export default function CrmPassesPage() {
   }, [periodList, query, staffMap]);
 
   // 컬럼 헤더 클릭 정렬 (회원 관리와 동일 UX). null = 서버 기본 순서.
-  const [sortKey, setSortKey] = useState<PColKey | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  // 기본 정렬 = 구매일(발급일) 최신순. 헤더를 누르면 바뀌고 저장된다.
+  const [sortKey, setSortKey] = useState<PColKey | null>("purchased");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("crm_passes_sort_v1");
+      const saved = localStorage.getItem("crm_passes_sort_v2");
       if (saved) {
         const o = JSON.parse(saved) as { key: PColKey | null; dir: "asc" | "desc" };
         if (o && (o.dir === "asc" || o.dir === "desc")) {
@@ -223,7 +224,7 @@ export default function CrmPassesPage() {
       }
       setSortDir(nextDir);
       try {
-        localStorage.setItem("crm_passes_sort_v1", JSON.stringify({ key: nextKey, dir: nextDir }));
+        localStorage.setItem("crm_passes_sort_v2", JSON.stringify({ key: nextKey, dir: nextDir }));
       } catch {
         /* ignore */
       }
@@ -254,7 +255,7 @@ export default function CrmPassesPage() {
       const vb = sortVal(b, sortKey);
       if (va < vb) return -1 * dir;
       if (va > vb) return 1 * dir;
-      return 0;
+      return b.id - a.id; // 같은 날 발급은 나중에 입력한 건이 위로
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredList, sortKey, sortDir, staffMap]);

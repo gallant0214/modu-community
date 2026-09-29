@@ -154,11 +154,12 @@ export default function CrmMembershipsPage() {
   }, [periodList, paymentFilter, query]);
 
   // 컬럼 헤더 클릭 정렬 (회원 관리와 동일 UX). null = 서버 기본 순서.
-  const [sortKey, setSortKey] = useState<MColKey | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  // 기본 정렬 = 구매일 최신순 (최근 결제한 건이 맨 위). 헤더를 누르면 바뀌고 저장된다.
+  const [sortKey, setSortKey] = useState<MColKey | null>("purchased");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("crm_memberships_sort_v1");
+      const saved = localStorage.getItem("crm_memberships_sort_v2");
       if (saved) {
         const o = JSON.parse(saved) as { key: MColKey | null; dir: "asc" | "desc" };
         if (o && (o.dir === "asc" || o.dir === "desc")) {
@@ -188,7 +189,7 @@ export default function CrmMembershipsPage() {
       }
       setSortDir(nextDir);
       try {
-        localStorage.setItem("crm_memberships_sort_v1", JSON.stringify({ key: nextKey, dir: nextDir }));
+        localStorage.setItem("crm_memberships_sort_v2", JSON.stringify({ key: nextKey, dir: nextDir }));
       } catch {
         /* ignore */
       }
@@ -201,6 +202,7 @@ export default function CrmMembershipsPage() {
       case "member": return (p.member_name || "").toLowerCase();
       case "phone": return p.member_phone || "";
       case "plan": return (p.plan_name || "").toLowerCase();
+      case "purchased": return p.purchased_at || "";
       case "purchased": return p.purchased_at || "";
       case "duration": return p.duration_days ?? 0;
       case "start": return p.start_date || "";
@@ -220,9 +222,8 @@ export default function CrmMembershipsPage() {
       const vb = sortVal(b, sortKey);
       if (va < vb) return -1 * dir;
       if (va > vb) return 1 * dir;
-      return 0;
+      return b.id - a.id; // 같은 날 구매는 나중에 입력한 건이 위로
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredList, sortKey, sortDir]);
 
   const stats = useMemo(() => {
