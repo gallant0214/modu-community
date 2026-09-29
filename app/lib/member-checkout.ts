@@ -10,6 +10,7 @@
 import { supabase } from "@/app/lib/supabase";
 import { computeCouponDiscount, effectiveStatus, benefitText, type CouponDef } from "@/app/lib/crm-coupons";
 import type { SellableProduct } from "@/app/lib/member-purchase";
+import { ONLINE_SELLABLE_TYPES as SELLABLE, ADDON_TYPES as ADDONS } from "@/app/lib/crm-online-sale";
 
 /** pending 주문이 살아있는 시간 — 지나면 쿠폰·마일리지 선점이 풀린다 */
 export const ORDER_TTL_MINUTES = 30;
@@ -32,27 +33,8 @@ export function onlineSalesEnabled(): boolean {
 /** 판매가 꺼져 있을 때 회원에게 보여줄 문구 */
 export const SALES_DISABLED_MESSAGE = "온라인 결제는 준비 중이에요. 센터로 문의해주세요.";
 
-/**
- * 온라인(홈페이지·회원앱)에서 팔 수 있는 상품 유형 — 1차 오픈 범위.
- * 락커는 자리 배정이 수동이라, 운동복·물품은 재고 개념이 없어 제외했다.
- * 넓힐 때는 member-purchase.ts 의 발급 분기가 그 유형을 처리하는지 먼저 확인할 것.
- */
-export const ONLINE_SELLABLE_TYPES = new Set([
-  "membership",
-  "personal",
-  "group",
-  "class",
-  "apparel", // 운동복 — 재고 개념이 없어 온라인 판매에 문제가 없다
-]);
-
-/**
- * 🚨 락커는 온라인에서 팔지 않는다 (2026-09-24 사용자 확정).
- *    남은 자리가 탈의실 기준 5~7개뿐이라 돈을 받고도 줄 자리가 없는 상황이 생긴다.
- *    자리 배정은 직원이 회원과 상담해 처리한다.
- */
-
-/** 장바구니에 곁들여 담을 수 있는 유형 — 단독 구매는 막고 회원권·수강권에 붙여 판다 */
-export const ADDON_TYPES = new Set(["apparel"]);
+// 판매 대상 규칙은 화면과 공유한다 — 두 벌로 두면 한쪽만 고쳐져 어긋난다
+export { ONLINE_SELLABLE_TYPES, ADDON_TYPES } from "@/app/lib/crm-online-sale";
 
 /** crm_members.registration_type 값 — 한글로 저장된다 */
 export type RegistrationType = "신규" | "재등록" | null;
@@ -89,7 +71,7 @@ export function isOnlineSellable(p: SellableProduct): boolean {
     p.sale_enabled === true &&
     p.status === "active" &&
     Number(p.price_won) > 0 &&
-    ONLINE_SELLABLE_TYPES.has(p.type)
+    SELLABLE.has(p.type)
   );
 }
 
@@ -371,7 +353,7 @@ export async function quoteCart(opts: {
     }
   }
   // 곁들이는 상품만 담고 이용권이 없으면 막는다
-  if (products.every((p) => ADDON_TYPES.has(p.type))) {
+  if (products.every((p) => ADDONS.has(p.type))) {
     return { ...empty, ok: false, error: "회원권이나 수강권을 함께 선택해주세요" };
   }
 

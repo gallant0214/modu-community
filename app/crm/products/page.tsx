@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { canSellOnline, hasEligibility } from "@/app/lib/crm-online-sale";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass, CrmModal } from "../_components/crm-modal";
@@ -584,7 +585,7 @@ export default function CrmProductsPage() {
                     />
                     {/* 온라인 판매 — 홈페이지·회원앱에서 회원이 직접 결제할 수 있는 상품.
                         기본 꺼짐이라 켠 것만 노출된다(테스트·직원단가·바우처 상품 보호) */}
-                    {onlineSaleAllowed && ONLINE_SELLABLE_TYPES.has(p.type) && (
+                    {onlineSaleAllowed && canSellOnline(p.type) && (
                       <FlagSwitch
                         on={p.online_sale_enabled === true}
                         busy={saleBusy === `${p.id}:online_sale_enabled`}
@@ -601,7 +602,7 @@ export default function CrmProductsPage() {
                     )}
                     {/* 온라인 구매 자격 — 현장과 달리 온라인은 직원이 자격을 못 보므로
                         서버가 회원의 신규/재등록 구분과 대조해 막는다 */}
-                    {onlineSaleAllowed && ONLINE_SELLABLE_TYPES.has(p.type) && p.online_sale_enabled === true && (
+                    {onlineSaleAllowed && hasEligibility(p.type) && p.online_sale_enabled === true && (
                       <div className="inline-flex overflow-hidden rounded-lg border border-[#E8E0D0] dark:border-zinc-700">
                         {(
                           [
@@ -1032,9 +1033,6 @@ function Msg({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-
-/** 온라인(홈페이지·회원앱)에서 팔 수 있는 상품 유형 — app/lib/member-checkout.ts 와 같은 목록 */
-const ONLINE_SELLABLE_TYPES = new Set(["membership", "personal", "group", "class"]);
 
 /** 상품 카드의 on/off 스위치 (판매 / 온라인 판매 공용) */
 function FlagSwitch({
