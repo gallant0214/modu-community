@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
+import { CrmPagination } from "@/app/crm/_components/crm-pagination";
 import {
   PAYMENT_METHOD_LABEL,
   PASS_STATUS_LABEL,
@@ -29,6 +30,7 @@ const P_COLS = [
   { key: "status", label: "상태" },
 ] as const;
 type PColKey = (typeof P_COLS)[number]["key"];
+const PAGE_SIZE = 25;
 const P_DEFAULT_WIDTHS: Record<PColKey, number> = {
   member: 170,
   phone: 130,
@@ -97,6 +99,7 @@ export default function CrmPassesPage() {
   const [paymentFilter, setPaymentFilter] = useState<string>("");
   const [periodFilter, setPeriodFilter] = useState<string>("all"); // 발급 기간 (기본 전체)
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1); // 한 페이지 25건
   const { widths, startResize, reset, changed, totalWidth } = useColumnWidths<PColKey>(
     "crm_passes_col_widths_v1",
     P_DEFAULT_WIDTHS
@@ -111,6 +114,7 @@ export default function CrmPassesPage() {
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
       const params = new URLSearchParams();
       if (statusFilter) params.set("status", statusFilter);
+      params.set("limit", "5000"); // 전체를 받아 아래에서 25개씩 나눠 보여준다
       if (trainerFilter) params.set("trainer_id", trainerFilter);
       if (paymentFilter) params.set("payment_method", paymentFilter);
       const res = await fetch(`/api/crm/passes?${params}`, {
@@ -209,6 +213,7 @@ export default function CrmPassesPage() {
     }
   }, []);
   const toggleSort = (key: PColKey) => {
+    setPage(1);
     setSortKey((prevKey) => {
       let nextKey: PColKey | null = key;
       let nextDir: "asc" | "desc";
@@ -259,6 +264,11 @@ export default function CrmPassesPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredList, sortKey, sortDir, staffMap]);
+  // 한 페이지 25건 — 필터·정렬로 페이지 수가 줄면 렌더 중 마지막 페이지로 보정
+  const totalPages = Math.max(1, Math.ceil(visibleList.length / PAGE_SIZE));
+  const curPage = Math.min(page, totalPages);
+  const pageList = visibleList.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
+
   const stats = useMemo(() => {
     const valid = periodList.filter((p) => p.status === "valid");
     const expiring = valid.filter((p) => daysUntil(p.expires_at) <= 7).length;
@@ -277,6 +287,7 @@ export default function CrmPassesPage() {
     setPaymentFilter("");
     setPeriodFilter("all");
     setQuery("");
+    setPage(1);
   };
 
   return (
@@ -295,7 +306,7 @@ export default function CrmPassesPage() {
             </p>
           </div>
           <div className="flex flex-col items-end gap-1.5">
-            <PeriodSelect value={periodFilter} onChange={setPeriodFilter} />
+            <PeriodSelect value={periodFilter} onChange={(v) => { setPage(1); setPeriodFilter(v); }} />
             <div className="rounded-lg border border-[#D9CDB8] bg-white/70 px-3 py-2 text-right dark:border-zinc-800 dark:bg-zinc-900">
               <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">현재 결과</div>
               <div className="mt-0.5 text-[18px] font-bold text-[#2F3A2B] dark:text-[#A8B87A]">
@@ -317,7 +328,7 @@ export default function CrmPassesPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <SegmentedFilter
             value={statusFilter}
-            onChange={setStatusFilter}
+            onChange={(v) => { setPage(1); setStatusFilter(v); }}
             options={[
               { value: "", label: "전체" },
               { value: "valid", label: "유효" },
@@ -346,7 +357,7 @@ export default function CrmPassesPage() {
           <select
             className={`${crmInputClass} !w-auto min-w-[150px]`}
             value={paymentFilter}
-            onChange={(e) => setPaymentFilter(e.target.value)}
+            onChange={(e) => { setPage(1); setPaymentFilter(e.target.value); }}
           >
             <option value="">모든 결제 수단</option>
             {Object.entries(PAYMENT_METHOD_LABEL).map(([k, v]) => (
@@ -358,7 +369,7 @@ export default function CrmPassesPage() {
           <input
             className={`${crmInputClass} ml-auto max-w-[280px]`}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setPage(1); setQuery(e.target.value); }}
             placeholder="회원, 연락처, 수강권 검색"
           />
           {filtersActive && (
@@ -419,7 +430,7 @@ export default function CrmPassesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
-              {visibleList.map((p) => (
+              {pageList.map((p) => (
                 <tr
                   key={p.id}
                   className="bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#FAF5EA] dark:hover:bg-zinc-800/55 transition-colors"
@@ -491,6 +502,18 @@ export default function CrmPassesPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {!loading && visibleList.length > 0 && (
+        <div className="mt-3 flex justify-center">
+          <CrmPagination
+            page={curPage}
+            totalPages={totalPages}
+            onChange={setPage}
+            total={visibleList.length}
+            pageSize={PAGE_SIZE}
+          />
         </div>
       )}
 

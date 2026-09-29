@@ -11,14 +11,16 @@ import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 
 import { fireAutoMessage, fireFirstPurchaseMessage } from "@/app/lib/crm-auto-message";
 import { syncRegistrationType } from "@/app/lib/crm-registration-type";
+import { rentalKindKey } from "@/app/lib/crm-locker-sync";
 
 export const dynamic = "force-dynamic";
 
 const PAYMENT_METHODS = ["cash", "card", "transfer", "etc"] as const;
 
 /**
- * GET /api/crm/memberships?status=&q=&member_id=
- * 회원권 목록.
+ * GET /api/crm/memberships?status=&q=&member_id=&include_rentals=1
+ * 회원권 목록. include_rentals=1 이면 대여권(운동복·락커) 결제 이력도 같은 모양으로 합쳐 준다
+ * (회원권 관리 화면 전용 — 회원 상세는 대여권 섹션이 따로 있어 합치지 않는다).
  */
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
@@ -27,7 +29,8 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const status = url.searchParams.get("status");
   const memberId = url.searchParams.get("member_id");
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 100), 1), 500);
+  // 목록 화면은 전체를 받아 클라에서 25개씩 페이징한다(요약 카드가 전체 기준이어야 함)
+  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 100), 1), 5000);
 
   let query = supabase
     .from("crm_memberships")
@@ -54,9 +57,61 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
 
+  type Row = Record<string, unknown> & { member_id: number; purchased_at?: string | null; id: number };
+  const rows: Row[] = (data ?? []).map((p) => ({ ...p, kind: "membership" as const }));
+
+  // 대여권(운동복·락커) 결제 이력 합치기 — 회원권과 같은 열을 쓰도록 모양을 맞춘다
+  if (url.searchParams.get("include_rentals") === "1") {
+    let rq = supabase
+      .from("crm_rentals")
+      .select(
+        "id, member_id, seller_member_id, item_name, price_won, discount_won, mileage_earned, mileage_used, vat_included, payment_method, payment_method_custom, start_date, expires_at, status, memo, is_paused, created_at"
+      )
+      .eq("center_id", ctx.centerId)
+      .neq("status", "deleted")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (status) rq = rq.eq("status", status);
+    if (memberId) rq = rq.eq("member_id", Number(memberId));
+    if ((ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner) {
+      rq = rq.eq("seller_member_id", ctx.centerMemberId);
+    }
+    const { data: rentals } = await rq;
+    const kstYmd = (iso: string) =>
+      new Date(new Date(iso).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const dayDiff = (a: string | null, b: string | null) =>
+      a && b ? Math.max(0, Math.round((Date.parse(b) - Date.parse(a)) / 86400000)) : 0;
+    for (const r of (rentals ?? []) as unknown as {
+      id: number; member_id: number; item_name: string | null; memo: string | null;
+      price_won: number | null; start_date: string; expires_at: string; created_at: string;
+      [k: string]: unknown;
+    }[]) {
+      const rk = rentalKindKey(r.item_name, r.memo);
+      // apparel=운동복 / locker=락커 / 그 외는 일반 대여권
+      const kind = rk === "locker" ? "locker" : rk === "apparel" ? "apparel" : "rental";
+      rows.push({
+        ...r,
+        kind,
+        plan_name: r.item_name ?? (kind === "locker" ? "락커" : "대여권"),
+        // 대여권에는 구매일 칼럼이 없다 → 발급 시각(KST)을 구매일로 쓴다
+        purchased_at: kstYmd(r.created_at),
+        duration_days: dayDiff(r.start_date, r.expires_at),
+        outstanding_won: 0,
+        payment_status: "paid",
+      });
+    }
+    // 구매일 최신순(같은 날은 나중 발급 먼저) — 화면 기본 정렬과 같은 기준
+    rows.sort((a, b) => {
+      const pa = String(a.purchased_at ?? "");
+      const pb = String(b.purchased_at ?? "");
+      if (pa !== pb) return pa < pb ? 1 : -1;
+      return String(b.kind) === String(a.kind) ? b.id - a.id : 0;
+    });
+  }
+
   // 회원 이름 + 얼굴 썸네일 join
   type MemberLite = { id: number; name: string; phone: string | null; face_image_thumb: string | null };
-  const memberIds = Array.from(new Set((data ?? []).map((p) => p.member_id)));
+  const memberIds = Array.from(new Set(rows.map((p) => p.member_id)));
   const membersRes = memberIds.length
     ? await supabase.from("crm_members").select("id, name, phone, face_image_thumb").in("id", memberIds)
     : { data: [] };
@@ -64,7 +119,7 @@ export async function GET(request: Request) {
   const memberMap = new Map(members.map((m) => [m.id, m]));
 
   return NextResponse.json({
-    memberships: (data ?? []).map((p) => ({
+    memberships: rows.map((p) => ({
       ...p,
       member_name: memberMap.get(p.member_id)?.name ?? "",
       member_phone: memberMap.get(p.member_id)?.phone ?? null,

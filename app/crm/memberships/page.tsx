@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
+import { CrmPagination } from "@/app/crm/_components/crm-pagination";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
 import {
   PAYMENT_METHOD_LABEL,
@@ -30,6 +31,7 @@ const M_COLS = [
   { key: "status", label: "상태" },
 ] as const;
 type MColKey = (typeof M_COLS)[number]["key"];
+const PAGE_SIZE = 25;
 const M_DEFAULT_WIDTHS: Record<MColKey, number> = {
   member: 170,
   phone: 130,
@@ -58,6 +60,8 @@ interface Row {
   expires_at: string;
   purchased_at: string | null;
   status: string;
+  /** 'membership'=이용권 / 'apparel'=운동복 / 'locker'=락커 / 'rental'=기타 대여권 */
+  kind?: "membership" | "apparel" | "locker" | "rental";
 }
 
 export default function CrmMembershipsPage() {
@@ -67,6 +71,8 @@ export default function CrmMembershipsPage() {
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("");
+  const [kindFilter, setKindFilter] = useState(""); // "" = 전체(이용권+운동복+락커)
+  const [page, setPage] = useState(1); // 한 페이지 25건
   const [periodFilter, setPeriodFilter] = useState("all"); // 결제 기간 (기본 전체)
   const [query, setQuery] = useState("");
   const [issueOpen, setIssueOpen] = useState(false);
@@ -94,6 +100,8 @@ export default function CrmMembershipsPage() {
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
       const params = new URLSearchParams();
       if (statusFilter) params.set("status", statusFilter);
+      params.set("include_rentals", "1"); // 운동복·락커 결제 이력까지 함께
+      params.set("limit", "5000"); // 전체를 받아 아래에서 25개씩 나눠 보여준다
       const res = await fetch(`/api/crm/memberships?${params}`, {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
@@ -144,14 +152,15 @@ export default function CrmMembershipsPage() {
     const q = query.trim().toLowerCase();
     return periodList.filter((p) => {
       const paymentMatches = paymentFilter ? p.payment_method === paymentFilter : true;
+      const kindMatches = kindFilter ? (p.kind ?? "membership") === kindFilter : true;
       const queryMatches = q
         ? [p.member_name, p.member_phone, p.plan_name]
             .filter(Boolean)
             .some((v) => String(v).toLowerCase().includes(q))
         : true;
-      return paymentMatches && queryMatches;
+      return paymentMatches && kindMatches && queryMatches;
     });
-  }, [periodList, paymentFilter, query]);
+  }, [periodList, paymentFilter, kindFilter, query]);
 
   // 컬럼 헤더 클릭 정렬 (회원 관리와 동일 UX). null = 서버 기본 순서.
   // 기본 정렬 = 구매일 최신순 (최근 결제한 건이 맨 위). 헤더를 누르면 바뀌고 저장된다.
@@ -172,6 +181,7 @@ export default function CrmMembershipsPage() {
     }
   }, []);
   const toggleSort = (key: MColKey) => {
+    setPage(1);
     setSortKey((prevKey) => {
       let nextKey: MColKey | null = key;
       let nextDir: "asc" | "desc";
@@ -226,6 +236,11 @@ export default function CrmMembershipsPage() {
     });
   }, [filteredList, sortKey, sortDir]);
 
+  // 한 페이지 25건 — 필터·정렬이 바뀌어 페이지 수가 줄면 마지막 페이지로 맞춘다(렌더 중 보정)
+  const totalPages = Math.max(1, Math.ceil(visibleList.length / PAGE_SIZE));
+  const curPage = Math.min(page, totalPages);
+  const pageList = visibleList.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
+
   const stats = useMemo(() => {
     const valid = periodList.filter((p) => p.status === "valid");
     const expiring = valid.filter((p) => daysUntil(p.expires_at) <= 7).length;
@@ -242,12 +257,15 @@ export default function CrmMembershipsPage() {
     };
   }, [periodList]);
 
-  const filtersActive = !!statusFilter || !!paymentFilter || !!query.trim() || periodFilter !== "all";
+  const filtersActive =
+    !!statusFilter || !!paymentFilter || !!kindFilter || !!query.trim() || periodFilter !== "all";
   const resetFilters = () => {
     setStatusFilter("");
     setPaymentFilter("");
+    setKindFilter("");
     setPeriodFilter("all");
     setQuery("");
+    setPage(1);
   };
 
   return (
@@ -262,12 +280,12 @@ export default function CrmMembershipsPage() {
               회원권 관리
             </h1>
             <p className="mt-1 text-[13px] text-[#6B5D47] dark:text-zinc-400">
-              기간형 이용권의 결제, 시작일, 만료일을 한 화면에서 확인합니다.
+              이용권·운동복·락커의 결제, 시작일, 만료일을 한 화면에서 확인합니다.
             </p>
           </div>
           <div className="flex items-end gap-2">
             <div className="flex flex-col items-end gap-1.5">
-              <PeriodSelect value={periodFilter} onChange={setPeriodFilter} />
+              <PeriodSelect value={periodFilter} onChange={(v) => { setPage(1); setPeriodFilter(v); }} />
               <div className="rounded-lg border border-[#D9CDB8] bg-white/70 px-3 py-2 text-right dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="text-[11px] font-semibold text-[#8C8270] dark:text-zinc-500">현재 결과</div>
                 <div className="mt-0.5 text-[18px] font-bold text-[#2F3A2B] dark:text-[#A8B87A]">
@@ -285,9 +303,9 @@ export default function CrmMembershipsPage() {
         </div>
         <div className="mt-4 grid grid-cols-2 lg:grid-cols-5 gap-2.5">
           <MetricCard label="전체 회원권" value={`${stats.total.toLocaleString()}건`} hint="조회 결과 기준" />
-          <MetricCard label="유효 회원권" value={`${stats.valid.toLocaleString()}건`} hint="출입 가능한 권한" tone="green" />
+          <MetricCard label="유효 상품" value={`${stats.valid.toLocaleString()}건`} hint="이용권·운동복·락커" tone="green" />
           <MetricCard label="7일 내 만료" value={`${stats.expiring.toLocaleString()}건`} hint="재등록 안내 대상" tone="gold" />
-          <MetricCard label="회원권 매출" value={`${formatWon(stats.revenue)}원`} hint="현재 필터 합계" tone="dark" />
+          <MetricCard label="결제 합계" value={`${formatWon(stats.revenue)}원`} hint="현재 필터 합계" tone="dark" />
           <MetricCard label="평균 기간" value={`${stats.avgDuration.toLocaleString()}일`} hint="상품 기간 평균" tone="blue" />
         </div>
       </header>
@@ -296,7 +314,7 @@ export default function CrmMembershipsPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <SegmentedFilter
             value={statusFilter}
-            onChange={setStatusFilter}
+            onChange={(v) => { setPage(1); setStatusFilter(v); }}
             options={[
               { value: "", label: "전체" },
               { value: "valid", label: "유효" },
@@ -304,10 +322,20 @@ export default function CrmMembershipsPage() {
               { value: "refunded", label: "환불" },
             ]}
           />
+          <SegmentedFilter
+            value={kindFilter}
+            onChange={(v) => { setPage(1); setKindFilter(v); }}
+            options={[
+              { value: "", label: "전체" },
+              { value: "membership", label: "이용권" },
+              { value: "apparel", label: "운동복" },
+              { value: "locker", label: "락커" },
+            ]}
+          />
           <select
             className={`${crmInputClass} !w-auto min-w-[150px]`}
             value={paymentFilter}
-            onChange={(e) => setPaymentFilter(e.target.value)}
+            onChange={(e) => { setPage(1); setPaymentFilter(e.target.value); }}
           >
             <option value="">모든 결제 수단</option>
             {Object.entries(PAYMENT_METHOD_LABEL).map(([k, v]) => (
@@ -319,7 +347,7 @@ export default function CrmMembershipsPage() {
           <input
             className={`${crmInputClass} ml-auto max-w-[280px]`}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setPage(1); setQuery(e.target.value); }}
             placeholder="회원, 연락처, 상품명 검색"
           />
           {filtersActive && (
@@ -380,7 +408,7 @@ export default function CrmMembershipsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
-              {visibleList.map((p) => (
+              {pageList.map((p) => (
                 <tr
                   key={p.id}
                   className="bg-[#FEFCF7] dark:bg-zinc-900 hover:bg-[#FAF5EA] dark:hover:bg-zinc-800/55 transition-colors"
@@ -411,15 +439,26 @@ export default function CrmMembershipsPage() {
                     {p.member_phone ? formatPhone(p.member_phone) : "—"}
                   </Td>
                   <Td>
-                    <button
-                      type="button"
-                      onClick={() => setDetailRow(p)}
-                      title="회원권 상세 보기"
-                      className="group text-left w-full cursor-pointer"
-                    >
-                      <div className="font-semibold text-[#2A251D] dark:text-zinc-100 truncate group-hover:text-[#6B7B3A] group-hover:underline">{p.plan_name}</div>
-                      <div className="mt-0.5 text-[11.5px] text-[#A89B80]">기간 {p.duration_days}일</div>
-                    </button>
+                    {(p.kind ?? "membership") === "membership" ? (
+                      <button
+                        type="button"
+                        onClick={() => setDetailRow(p)}
+                        title="회원권 상세 보기"
+                        className="group text-left w-full cursor-pointer"
+                      >
+                        <div className="font-semibold text-[#2A251D] dark:text-zinc-100 truncate group-hover:text-[#6B7B3A] group-hover:underline">{p.plan_name}</div>
+                        <div className="mt-0.5 text-[11.5px] text-[#A89B80]">기간 {p.duration_days}일</div>
+                      </button>
+                    ) : (
+                      /* 대여권(운동복·락커)은 회원권 상세 모달이 맞지 않아 표시만 — 수정은 회원 상세에서 */
+                      <div className="text-left w-full">
+                        <div className="flex items-center gap-1.5">
+                          <KindChip kind={p.kind ?? "rental"} />
+                          <span className="font-semibold text-[#2A251D] dark:text-zinc-100 truncate">{p.plan_name}</span>
+                        </div>
+                        <div className="mt-0.5 text-[11.5px] text-[#A89B80]">기간 {p.duration_days}일</div>
+                      </div>
+                    )}
                   </Td>
                   <Td className="text-[#8C8270]">{p.purchased_at ? p.purchased_at.slice(0, 10) : "—"}</Td>
                   <Td>
@@ -442,6 +481,18 @@ export default function CrmMembershipsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {!loading && visibleList.length > 0 && (
+        <div className="mt-3 flex justify-center">
+          <CrmPagination
+            page={curPage}
+            totalPages={totalPages}
+            onChange={setPage}
+            total={visibleList.length}
+            pageSize={PAGE_SIZE}
+          />
         </div>
       )}
 
@@ -1211,6 +1262,23 @@ function SegmentedFilter({
         );
       })}
     </div>
+  );
+}
+
+/** 목록에서 이용권과 대여권(운동복·락커)을 한눈에 구분하는 칩 */
+function KindChip({ kind }: { kind: "membership" | "apparel" | "locker" | "rental" }) {
+  if (kind === "membership") return null;
+  const locker = kind === "locker";
+  return (
+    <span
+      className={`shrink-0 px-1.5 py-0.5 rounded text-[10.5px] font-bold ${
+        locker
+          ? "bg-[#8B6BB1]/12 text-[#8B6BB1] dark:bg-purple-900/30 dark:text-purple-300"
+          : "bg-[#3E7C8C]/12 text-[#3E7C8C] dark:bg-cyan-900/30 dark:text-cyan-300"
+      }`}
+    >
+      {locker ? "락커" : kind === "apparel" ? "운동복" : "대여권"}
+    </span>
   );
 }
 

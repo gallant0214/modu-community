@@ -32,7 +32,8 @@ export async function GET(request: Request) {
   const status = url.searchParams.get("status");
   const trainerId = url.searchParams.get("trainer_id");
   const paymentMethod = url.searchParams.get("payment_method");
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 100), 1), 500);
+  // 목록 화면은 전체를 받아 클라에서 25개씩 페이징한다(요약 카드가 전체 기준이어야 함)
+  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 100), 1), 5000);
 
   let query = supabase
     .from("crm_passes")
