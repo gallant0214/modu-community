@@ -69,6 +69,7 @@ export default function CrmContractSignNewPage() {
 
   const [member, setMember] = useState<MemberInfo | null>(null);
   const [pass, setPass] = useState<PassInfo | null>(null);
+  const [passError, setPassError] = useState<string | null>(null);
   const [membership, setMembership] = useState<{
     id: number;
     plan_name: string;
@@ -161,13 +162,16 @@ export default function CrmContractSignNewPage() {
             headers: { authorization: `Bearer ${token}` },
             cache: "no-store",
           });
-          const data = await res.json();
+          const data = await res.json().catch(() => null);
           if (res.ok && data?.pass) {
             setPass(data.pass);
             // 수강권에 등록된 강사를 기본 서명자로 자동 선택
             if (data.pass.trainer_member_id) {
               setSelectedTrainerId(data.pass.trainer_member_id);
             }
+          } else if (!res.ok) {
+            // 권한 없음을 조용히 넘기면 수강권 정보 칸이 빈 이유를 알 수 없다
+            setPassError(data?.error || "이 수강권 정보를 볼 권한이 없어요");
           }
         }
         if (membershipId) {
@@ -560,6 +564,8 @@ export default function CrmContractSignNewPage() {
               ["시작 ~ 만료", `${membership.start_date} ~ ${membership.expires_at}`],
             ]}
           />
+        ) : passError ? (
+          <Hint>{passError} — 담당 강사나 관리자에게 요청해 주세요.</Hint>
         ) : (
           <Hint>
             수강권/회원권 정보가 자동입력되지 않았어요. 발급 후 진입하면

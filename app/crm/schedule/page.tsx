@@ -728,6 +728,8 @@ function EditReservationModal({
   const [error, setError] = useState("");
   // 이 수강권에 등록된 담당·추가강사 id 집합 (담당 강사 후보 제한용)
   const [allowedTrainerIds, setAllowedTrainerIds] = useState<Set<number> | null>(null);
+  // 담당강사 목록을 못 불러온 사유(권한 없음 등) — 드롭다운 아래에 적는다
+  const [trainerLockReason, setTrainerLockReason] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -742,8 +744,16 @@ function EditReservationModal({
           headers: { authorization: `Bearer ${token}` },
           cache: "no-store",
         });
-        const data = await res.json();
-        if (cancelled || !res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (cancelled) return;
+        if (!res.ok) {
+          // 🚨 담당이 아닌 수강권이면 403 → 이전엔 드롭다운이 영구 '잠김' 이라 이유를 알 수 없었다.
+          //    현재 강사만 담은 목록으로 확정해 잠금을 풀고, 사유를 옆에 적는다.
+          setAllowedTrainerIds(new Set<number>(reservation.trainer_member_id ? [reservation.trainer_member_id] : []));
+          setTrainerLockReason(data?.error || "이 수강권의 담당 강사만 바꿀 수 있어요");
+          return;
+        }
+        setTrainerLockReason(null);
         const p = data.pass ?? {};
         const primary = Number(p.trainer_member_id) || 0;
         const co: number[] = Array.isArray(p.co_trainer_ids) ? p.co_trainer_ids : [];
@@ -869,6 +879,9 @@ function EditReservationModal({
             <p className="mt-1 text-[11px] text-[#A89B80]">
               이 수강권에 등록된 담당 강사와 추가 강사만 선택할 수 있어요.
             </p>
+            {trainerLockReason && (
+              <p className="mt-0.5 text-[11px] text-[#B47B2A] dark:text-amber-300">{trainerLockReason}</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-2">

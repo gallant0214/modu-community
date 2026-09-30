@@ -104,7 +104,8 @@ export function AutoMessagesTab({ smsAllowed = true }: { smsAllowed?: boolean })
   const [error, setError] = useState("");
   const [editKey, setEditKey] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
-  const [counts, setCounts] = useState<Record<string, number>>({});
+  // null = 권한 없어 못 불러옴(실제 0건과 구분)
+  const [counts, setCounts] = useState<Record<string, number> | null>({});
   const [scanSet, setScanSet] = useState<Set<string>>(new Set());
   const [running, setRunning] = useState(false);
   const [runMsg, setRunMsg] = useState("");
@@ -116,8 +117,12 @@ export function AutoMessagesTab({ smsAllowed = true }: { smsAllowed?: boolean })
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        // 권한 없으면 '0건' 대신 '—' 로 두어 실제 0건과 구분한다
+        setCounts(null);
+        return;
+      }
       setCounts(data.counts ?? {});
       setScanSet(new Set<string>(data.scanTriggers ?? []));
     } catch {
@@ -292,7 +297,9 @@ export function AutoMessagesTab({ smsAllowed = true }: { smsAllowed?: boolean })
                     <div className="text-[11px] text-[#8C8270] dark:text-zinc-500 mt-0.5">
                       {on ? "사용 중" : "꺼짐"}
                       {scanSet.has(t.key)
-                        ? ` · 대상 ${counts[t.key] ?? 0}명`
+                        ? counts
+                          ? ` · 대상 ${counts[t.key] ?? 0}명`
+                          : " · 대상 —"
                         : " · 이벤트 기반"}
                       {EXPIRY_BASIS_TRIGGERS.has(t.key) &&
                         ` · ${EXPIRY_BASIS_LABEL[row?.config?.expiry_basis === "sessions" ? "sessions" : "period"]}`}

@@ -1960,6 +1960,7 @@ function LockerActionModal({
     }[]
   >([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   // 회원 이름 클릭 시 열리는 회원 상세 미니 모달
   const [quickMemberId, setQuickMemberId] = useState<number | null>(null);
 
@@ -2086,9 +2087,14 @@ function LockerActionModal({
           `/api/crm/lockers/history?action=all&locker_id=${locker.id}`,
           { headers: { authorization: `Bearer ${token}` }, cache: "no-store" }
         );
+        const data = await res.json().catch(() => null);
         if (res.ok) {
-          const data = await res.json();
-          setHistory(data.history ?? []);
+          setHistory(data?.history ?? []);
+          setHistoryError(null);
+        } else {
+          // 이력에 비밀번호 변경값이 있어 lockers.edit 권한이 필요하다 → 이유를 알려준다
+          setHistory([]);
+          setHistoryError(data?.error || "락커 이력을 볼 권한이 없어요");
         }
       } finally {
         setLoadingHistory(false);
@@ -2261,6 +2267,10 @@ function LockerActionModal({
           <div>
             {loadingHistory ? (
               <div className="text-[13px] text-[#8C8270] py-3 text-center">불러오는 중…</div>
+            ) : historyError ? (
+              <div className="px-4 py-6 text-center text-[12.5px] text-[#B47B2A] dark:text-amber-300 border border-dashed border-[#E8D9B8] dark:border-amber-900/50 rounded-lg">
+                {historyError}
+              </div>
             ) : history.length === 0 ? (
               <div className="px-4 py-6 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-lg">
                 이 락커의 기록이 없어요.

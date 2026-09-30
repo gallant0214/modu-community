@@ -97,11 +97,13 @@ export default function CrmMessagesPage() {
     title: string;
     loading: boolean;
     list: { member_id: number; name: string; phone: string | null; read: boolean }[];
+    /** 권한 없음 등 조회 실패 사유 (있으면 '0명' 대신 이 문구를 보여준다) */
+    error?: string | null;
   } | null>(null);
 
   const openRecipients = useCallback(
     async (b: Broadcast) => {
-      setRecipientModal({ title: b.title, loading: true, list: [] });
+      setRecipientModal({ title: b.title, loading: true, list: [], error: null });
       try {
         const token = await getIdToken();
         if (!token) return;
@@ -114,9 +116,11 @@ export default function CrmMessagesPage() {
           title: b.title,
           loading: false,
           list: res.ok ? data.recipients ?? [] : [],
+          // 권한 없음(403)을 '수신자 0명' 으로 보여주면 안 된다
+          error: res.ok ? null : data?.error || "수신자를 볼 권한이 없어요",
         });
       } catch {
-        setRecipientModal({ title: b.title, loading: false, list: [] });
+        setRecipientModal({ title: b.title, loading: false, list: [], error: "네트워크 오류" });
       }
     },
     [getIdToken]
@@ -660,6 +664,10 @@ export default function CrmMessagesPage() {
             </div>
             {recipientModal.loading ? (
               <div className="py-8 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
+            ) : recipientModal.error ? (
+              <div className="px-4 py-8 text-center text-[12.5px] text-[#B47B2A] dark:text-amber-300 border border-dashed border-[#E8D9B8] dark:border-amber-900/50 rounded-xl">
+                {recipientModal.error}
+              </div>
             ) : recipientModal.list.length === 0 ? (
               <div className="px-4 py-8 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
                 수신자 정보가 없어요.

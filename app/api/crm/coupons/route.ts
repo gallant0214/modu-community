@@ -15,7 +15,11 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
-  if (!(await ctxHasPermission(ctx, "coupons.view"))) {
+  // 🚨 '쿠폰 발송' 탭은 coupons.send 만으로 열리는데 그 안의 쿠폰 선택 목록이 이 API 다.
+  //    view 만 요구하면 발송 권한자에게 드롭다운이 빈 채로 떠 발송이 불가능해진다.
+  const canView = await ctxHasPermission(ctx, "coupons.view");
+  const canSend = canView ? true : await ctxHasPermission(ctx, "coupons.send");
+  if (!canView && !canSend) {
     return NextResponse.json({ error: "쿠폰 조회 권한이 없습니다" }, { status: 403 });
   }
   const status = new URL(request.url).searchParams.get("status") || "active";

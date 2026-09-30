@@ -22,9 +22,15 @@ export async function GET(request: Request) {
   // names 모드는 일반 멤버(trainer 포함)도 접근 가능 — PII 제외
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
-  // 전체 직원 PII 목록은 직원 관리 권한(staff.manage) 필요
-  if (!namesOnly && !(await ctxHasPermission(ctx, "staff.manage"))) {
-    return NextResponse.json({ error: "직원 관리 권한이 없습니다" }, { status: 403 });
+  // 전체 직원 목록은 직원 관리 권한(staff.manage) 필요.
+  // 🚨 수업료 관리 화면도 이 목록(직급·근무형태 포함)을 쓰므로 급여 열람 권한(sales.payroll_view)도 허용한다.
+  //    안 그러면 급여 권한만 받은 직원에게 "직원 관리 권한이 없습니다" 라는 엉뚱한 안내가 뜬다.
+  if (
+    !namesOnly &&
+    !(await ctxHasPermission(ctx, "staff.manage")) &&
+    !(await ctxHasPermission(ctx, "sales.payroll_view"))
+  ) {
+    return NextResponse.json({ error: "직원 목록을 볼 권한이 없습니다" }, { status: 403 });
   }
 
   if (namesOnly) {

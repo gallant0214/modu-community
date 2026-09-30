@@ -34,6 +34,7 @@ function formatDateTime(iso: string): string {
 export function SmsLogsTab() {
   const { getIdToken } = useAuth();
   const [logs, setLogs] = useState<MsgLog[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -53,11 +54,17 @@ export function SmsLogsTab() {
           headers: { authorization: `Bearer ${token}` },
           cache: "no-store",
         });
+        const data = await res.json().catch(() => null);
         if (res.ok) {
-          const data = await res.json();
-          const newLogs: MsgLog[] = data.logs ?? [];
+          const newLogs: MsgLog[] = data?.logs ?? [];
           setLogs((prev) => (reset ? newLogs : [...prev, ...newLogs]));
-          setNextCursor(data.next_cursor ?? null);
+          setNextCursor(data?.next_cursor ?? null);
+          setLoadError(null);
+        } else {
+          // 권한 없음·센터 SMS 미설정을 '빈 목록' 으로 보여주면 원인을 알 수 없다
+          if (reset) setLogs([]);
+          setNextCursor(null);
+          setLoadError(data?.error || "발송 기록을 볼 권한이 없어요");
         }
       } finally {
         setLoading(false);
@@ -90,6 +97,10 @@ export function SmsLogsTab() {
 
       {loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : loadError ? (
+        <div className="px-4 py-8 text-center text-[12.5px] text-[#B47B2A] dark:text-amber-300 border border-dashed border-[#E8D9B8] dark:border-amber-900/50 rounded-xl">
+          {loadError}
+        </div>
       ) : logs.length === 0 ? (
         <div className="px-4 py-8 text-center text-[12.5px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
           아직 메세지 전송 기록이 없어요.

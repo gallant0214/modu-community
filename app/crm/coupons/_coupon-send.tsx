@@ -61,10 +61,18 @@ export function CouponSendTab({
   const [messageTouched, setMessageTouched] = useState(false);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       const r = await authedFetch(getIdToken, "/api/crm/coupons?status=active");
+      if (!r.ok) {
+        // 권한 없음을 삼키면 쿠폰 드롭다운이 빈 채로 떠 이유를 알 수 없다
+        setCoupons([]);
+        setLoadError((r.data as { error?: string })?.error || "쿠폰 목록을 볼 권한이 없어요");
+        return;
+      }
+      setLoadError(null);
       const list = ((r.data.coupons as CouponRow[]) ?? []).filter((c) => c.sendable);
       setCoupons(list);
       setCouponId((cur) => cur ?? list[0]?.id ?? null);
@@ -164,6 +172,9 @@ export function CouponSendTab({
     onSent();
   };
 
+  if (loadError) {
+    return <EmptyBox>{loadError}</EmptyBox>;
+  }
   if (coupons.length === 0) {
     return <EmptyBox>발송할 수 있는 쿠폰이 없어요. &lsquo;쿠폰&rsquo; 탭에서 먼저 쿠폰을 만들어 주세요.</EmptyBox>;
   }
