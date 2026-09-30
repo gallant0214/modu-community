@@ -28,7 +28,8 @@ export default function QrDisplay({
 
   const loadQr = useCallback(async () => {
     try {
-      let data: { qr?: string | null; token?: string | null; next_rotate_at?: string | null } = {};
+      let data: { qr?: string | null; token?: string | null; next_rotate_at?: string | null; error?: string } = {};
+      let denied = false;
       if (kioskToken) {
         const res = await fetch(`/api/touch/${kioskToken}/qr`, { cache: "no-store" });
         data = await res.json().catch(() => ({}));
@@ -40,6 +41,8 @@ export default function QrDisplay({
           cache: "no-store",
         });
         data = await res.json().catch(() => ({}));
+        // 🚨 권한 없음(403)을 '링크를 먼저 만들어 주세요' 로 안내하면 원인을 헛짚는다
+        denied = res.status === 403;
       }
       // 회전 토큰(qr) 우선, 없으면 정적 토큰 폴백
       const value = data.qr ?? data.token ?? (kioskToken || null);
@@ -49,9 +52,11 @@ export default function QrDisplay({
       } else {
         setQr(null);
         setErr(
-          kioskToken
-            ? "QR을 표시할 수 없어요."
-            : "공개 터치출석 링크를 먼저 만들어 주세요. (설정 → 터치출석)"
+          denied
+            ? data.error || "출석 관리 권한이 없어 QR을 볼 수 없어요."
+            : kioskToken
+              ? "QR을 표시할 수 없어요."
+              : "공개 터치출석 링크를 먼저 만들어 주세요. (설정 → 터치출석)"
         );
       }
       // 다음 주 경계에 자동 갱신 예약 (탭 절전·시계 오차 대비 최대 1시간마다 재확인)

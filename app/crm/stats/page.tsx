@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
+import { CrmDeniedNotice } from "@/app/crm/_components/crm-denied-notice";
 import { ROLE_LABEL, formatWon, parseWon } from "../_components/crm-labels";
 import { TrainerSessionsChart, TrainerRevenueChart } from "./_components/trainer-sessions-chart";
 import { MarketTrend } from "./_components/market-trend";
@@ -882,6 +883,7 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
   const { getIdToken } = useAuth();
   const [data, setData] = useState<CenterRevenueResp | null>(null);
   const [loading, setLoading] = useState(true);
+  const [denied, setDenied] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -891,7 +893,15 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
-      if (res.ok) setData(await res.json());
+      const body = await res.json().catch(() => null);
+      if (res.ok) {
+        setData(body);
+        setDenied(null);
+      } else {
+        // 🚨 권한 없음을 삼키면 매출이 전부 '0원' 으로 보여 오해한다
+        setData(null);
+        setDenied(body?.error || "센터 매출을 볼 권한이 없어요");
+      }
     } finally {
       setLoading(false);
     }
@@ -980,7 +990,10 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
         </button>
       </div>
 
+      {denied && <CrmDeniedNotice message={denied} what="센터 매출" className="mb-4" />}
+
       {/* 요약 KPI 3종: 부가세 포함 매출 / 부가세 제외 실매출 / 잠재부채 */}
+      {!denied && (
       <section className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
         <Kpi label="센터 매출 합계 (부가세 포함)" value={`${formatWon(data?.total ?? 0)}원`} accent />
         <Kpi
@@ -995,6 +1008,7 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
           sub={`미시작 ${formatWon(data?.liability_breakdown.notStarted ?? 0)}원 · 진행중 ${formatWon(data?.liability_breakdown.inProgress ?? 0)}원`}
         />
       </section>
+      )}
 
       {/* 이번달 활동 건수 */}
       <section className="mb-5 px-4 py-2 rounded-xl border border-[#E8E0D0]/60 dark:border-zinc-800 bg-[#FBF7EB]/40 dark:bg-zinc-900/40 flex items-center justify-between">

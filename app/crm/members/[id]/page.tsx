@@ -19,6 +19,7 @@ import { CouponPicker, type AppliedCoupon } from "../../_components/coupon-picke
 import { CrmModal, CrmField, crmInputClass } from "../../_components/crm-modal";
 import BirthDateInput from "@/app/crm/_components/birth-date-input";
 import { RefundDialog } from "@/app/crm/_components/refund-dialog";
+import { CrmDeniedNotice } from "@/app/crm/_components/crm-denied-notice";
 import { LockerPickerModal } from "../../_components/locker-picker-modal";
 import { CrmLineChart } from "../../_components/crm-line-chart";
 import { unitToDays, formatDuration, computeExpiryYmd } from "@/app/lib/duration-convert";
@@ -11005,6 +11006,7 @@ function WriteContractPickerModal({
 function SignedContractsSection({ memberId }: { memberId: number }) {
   const { getIdToken } = useAuth();
   const [list, setList] = useState<SignedContractRow[]>([]);
+  const [denied, setDenied] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [requestOpen, setRequestOpen] = useState(false);
   const [writeOpen, setWriteOpen] = useState(false);
@@ -11018,8 +11020,15 @@ function SignedContractsSection({ memberId }: { memberId: number }) {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
-      const data = await res.json();
-      if (res.ok) setList(data.contracts ?? []);
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        setList(data?.contracts ?? []);
+        setDenied(null);
+      } else {
+        // 🚨 권한 없음을 '계약서 없음' 으로 보여주면 실제로 있는 계약서를 없다고 판단한다
+        setList([]);
+        setDenied(data?.error || "계약서를 볼 권한이 없어요");
+      }
     } finally {
       setLoading(false);
     }
@@ -11086,6 +11095,8 @@ function SignedContractsSection({ memberId }: { memberId: number }) {
       />
       {loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : denied ? (
+        <CrmDeniedNotice message={denied} what="계약서" />
       ) : list.length === 0 ? (
         <div className="px-4 py-8 text-center text-[13px] text-[#8C8270] border border-dashed border-[#E8E0D0] dark:border-zinc-700 rounded-xl">
           이 회원의 체결된 계약서가 없어요.

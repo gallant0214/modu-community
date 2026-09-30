@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
+import { CrmDeniedNotice } from "@/app/crm/_components/crm-denied-notice";
 import { ROLE_LABEL, formatWon, formatPhone } from "../../_components/crm-labels";
 import { crmInputClass } from "../../_components/crm-modal";
 
@@ -153,6 +154,8 @@ function RevenueTab({ memberId }: { memberId: number }) {
     }[];
     category_totals?: Record<string, number>;
   } | null>(null);
+  // 권한 없음(403) 사유 — 0원으로 오해하지 않게 화면에 그대로 띄운다
+  const [denied, setDenied] = useState<string | null>(null);
   const [productFilter, setProductFilter] = useState<string>("all");
   // 직접 선택(custom) 기간
   const [customFrom, setCustomFrom] = useState(() => periodRange("this_month").from);
@@ -169,9 +172,21 @@ function RevenueTab({ memberId }: { memberId: number }) {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
-      if (res.ok) setData(await res.json());
+      const body = await res.json().catch(() => null);
+      if (res.ok) {
+        setData(body);
+        setDenied(null);
+      } else {
+        // 🚨 권한 없음을 조용히 삼키면 '지급액 0원' 으로 오해한다
+        setData(null);
+        setDenied(body?.error || "수업료를 볼 권한이 없어요");
+      }
     })();
   }, [memberId, from, to, getIdToken]);
+
+  if (denied) {
+    return <CrmDeniedNotice message={denied} what="수업료" className="mb-4" />;
+  }
 
   return (
     <>
@@ -461,6 +476,7 @@ function MembersTab({ memberId }: { memberId: number }) {
   const [rows, setRows] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "expired" | "holding">("all");
+  const [denied, setDenied] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null); // 요율 편집 펼친 회원
   const [savingPass, setSavingPass] = useState<number | null>(null);
@@ -509,10 +525,15 @@ function MembersTab({ memberId }: { memberId: number }) {
           headers: { authorization: `Bearer ${token}` },
           cache: "no-store",
         });
+        const json = await res.json().catch(() => null);
         if (res.ok) {
-          const json = await res.json();
-          setRows(json.members ?? []);
-          setDefaultRate(Number(json.default_commission_rate ?? 0));
+          setRows(json?.members ?? []);
+          setDefaultRate(Number(json?.default_commission_rate ?? 0));
+          setDenied(null);
+        } else {
+          // 권한 없음을 '담당 회원 없음' 으로 보여주면 안 된다
+          setRows([]);
+          setDenied(json?.error || "담당 회원을 볼 권한이 없어요");
         }
       } finally {
         setLoading(false);
@@ -538,6 +559,8 @@ function MembersTab({ memberId }: { memberId: number }) {
       <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
         총 {filtered.length}명
       </h2>
+
+      {denied && <CrmDeniedNotice message={denied} what="담당 회원" className="mb-3" />}
 
       <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-2 mb-3">
         <div>
@@ -600,7 +623,11 @@ function MembersTab({ memberId }: { memberId: number }) {
                 <td colSpan={15} className="px-3 py-12 text-center">
                   <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">데이터가 없어요</div>
                   <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
-                    {rows.length === 0 ? "아직 담당 회원이 없어요." : "조건에 맞는 회원이 없어요."}
+                    {denied
+                      ? "권한이 없어 불러오지 못했어요."
+                      : rows.length === 0
+                        ? "아직 담당 회원이 없어요."
+                        : "조건에 맞는 회원이 없어요."}
                   </div>
                 </td>
               </tr>
@@ -819,6 +846,7 @@ function SessionsTab({ memberId }: { memberId: number }) {
   const [summary, setSummary] = useState<{ total: number; attended: number; noshow: number } | null>(null);
   const [feeTotal, setFeeTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [sessionsDenied, setSessionsDenied] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -832,8 +860,15 @@ function SessionsTab({ memberId }: { memberId: number }) {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
-      if (!res.ok) return;
-      const d = await res.json();
+      const d = await res.json().catch(() => null);
+      if (!res.ok) {
+        setRows([]);
+        setSummary(null);
+        setFeeTotal(0);
+        setSessionsDenied(d?.error || "수업 내역을 볼 권한이 없어요");
+        return;
+      }
+      setSessionsDenied(null);
       const lines: LessonRow[] = d.session_lines ?? [];
       setRows(lines);
       setFeeTotal(Number(d.session_fee_total) || 0);
@@ -928,6 +963,12 @@ function SessionsTab({ memberId }: { memberId: number }) {
             {loading ? (
               <tr>
                 <td colSpan={7} className="px-3 py-12 text-center text-[13px] text-[#8C8270]">불러오는 중…</td>
+              </tr>
+            ) : sessionsDenied ? (
+              <tr>
+                <td colSpan={7} className="px-3 py-6">
+                  <CrmDeniedNotice message={sessionsDenied} what="수업 내역" />
+                </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>

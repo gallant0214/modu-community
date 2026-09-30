@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../_components/crm-modal";
 import { previewSpeak } from "../touch-attendance/_speak";
+import { CrmDeniedNotice } from "@/app/crm/_components/crm-denied-notice";
 
 interface Settings {
   center_id: number;
@@ -404,6 +405,7 @@ export default function TouchAttendanceSettingsPage() {
 function KioskLinkSection() {
   const { getIdToken } = useAuth();
   const [token, setToken] = useState<string | null>(null);
+  const [linkDenied, setLinkDenied] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -418,9 +420,14 @@ function KioskLinkSection() {
           headers: { authorization: `Bearer ${t}` },
           cache: "no-store",
         });
+        const d = await res.json().catch(() => null);
         if (res.ok) {
-          const d = await res.json();
-          setToken(d.token ?? null);
+          setToken(d?.token ?? null);
+          setLinkDenied(null);
+        } else {
+          // 권한 없음을 '링크 미발급' 으로 보여주면 발급하기 버튼을 헛누른다
+          setToken(null);
+          setLinkDenied(d?.error || "출석 관리 권한이 없어 링크를 볼 수 없어요");
         }
       } finally {
         setLoading(false);
@@ -474,6 +481,8 @@ function KioskLinkSection() {
       </p>
       {loading ? (
         <div className="text-[13px] text-[#8C8270]">불러오는 중…</div>
+      ) : linkDenied ? (
+        <CrmDeniedNotice message={linkDenied} what="터치출석 링크" />
       ) : token ? (
         <>
           <div className="px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB] dark:bg-zinc-950 break-all text-[12.5px] font-mono text-[#3A342A] dark:text-zinc-200">
