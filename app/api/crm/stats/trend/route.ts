@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { fetchSales, saleCategory, saleYm } from "@/app/lib/crm-sales";
 import { fetchIssuanceSales, fetchRefundSales } from "@/app/lib/crm-sales-issuance";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
  * 응답: [{ ym, revenue(수강권=PT/예약권), membershipRevenue(회원권=멤버십),
  *          revenuePrev, membershipRevenuePrev(=전년 동월) }, ...] 12개
  *
- * 매출 원장엔 강사 귀속이 없어 재무 권한이 없는 trainer/manager 는 0 반환(데이터 격리).
+ * 매출 원장엔 강사 귀속이 없어 dashboard.finance 권한이 없으면 0 반환(데이터 격리).
  */
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
@@ -37,8 +38,9 @@ export async function GET(request: Request) {
   const empty = () => ({ lesson: 0, membership: 0 });
   const agg = new Map<string, { lesson: number; membership: number }>();
 
-  // 재무 = owner/admin 만 (crm_sales 는 강사 귀속 없음)
-  if (ctx.role === "owner" || ctx.role === "admin") {
+  // 재무 지표 = 직급권한 dashboard.finance (기본 owner·admin).
+  // 🚨 예전엔 role 로만 봤다 → 등급에서 권한을 켜줘도 추이 그래프가 0 으로 내려갔다.
+  if (await ctxHasPermission(ctx, "dashboard.finance")) {
     try {
       // 전년 동월 비교를 위해 24개월(표시 12 + 전년 12) 조회
       const prevStart = `${prevYm(months[0].ym)}-01`;
