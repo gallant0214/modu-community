@@ -56,6 +56,18 @@ const MENU: MenuItem[] = [
  */
 const PERM_UNLOCK_HREFS: Record<string, string> = {
   "/crm/lockers": "lockers.edit",
+  // products.view 는 기본값이 '전 직급 허용' 이라 그걸로 열면 모든 강사에게 메뉴가 생긴다
+  // → 관리 성격 키(상품 유형·설정 보기, 기본 팀장 이상)로 판단한다
+  "/crm/products": "products.settings_view",
+  "/crm/memberships": "sales.view",
+  "/crm/orders": "sales.view",
+  "/crm/messages": "messages.send",
+  "/crm/coupons": "coupons.view",
+  "/crm/stats": "stats.view",
+  "/crm/market": "stats.view",
+  // 센터설정·터치출석 설정은 staffOnly 였다 → settings.edit 를 켜준 등급에는 열어준다
+  "/crm/settings": "settings.edit",
+  "/crm/touch-attendance-settings": "settings.edit",
 };
 
 const SOLO_MENU_HREFS = [
@@ -199,7 +211,13 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
           includeAttendanceTools: isCenterTrainer,
           permissions,
         })
-      : MENU.filter((m) => !m.staffOnly || isStaffLevel)
+      : MENU.filter(
+          (m) =>
+            !m.staffOnly ||
+            isStaffLevel ||
+            // staffOnly 라도 직급권한을 켜준 경우엔 보여준다(예: settings.edit)
+            (PERM_UNLOCK_HREFS[m.href] && permissions?.[PERM_UNLOCK_HREFS[m.href]] === true)
+        )
   )
     .filter((m) => (SPECIAL_BODY_ONLY_HREFS.has(m.href) ? specialBody : true))
     .filter((m) => m.href !== "/crm/orders" || onlineOrderAllowed)

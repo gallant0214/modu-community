@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  const canViewAllStats = (await ctxHasPermission(ctx, "stats.view")) || !!ctx.isSoloOwner;
 
   const url = new URL(request.url);
   const ymd = /^\d{4}-\d{2}-\d{2}$/;
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
     .limit(2000);
 
   // 데이터 격리: trainer/manager 는 본인 담당만
-  if (ctx.role === "trainer" || ctx.role === "manager") {
+  if (!canViewAllStats) {
     query = query.eq("trainer_member_id", ctx.centerMemberId);
   } else if (trainerParam) {
     query = query.eq("trainer_member_id", trainerParam);

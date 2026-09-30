@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { computeSettlement, resolveSettlementPeriod } from "@/app/lib/crm-settlement";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,12 @@ export const dynamic = "force-dynamic";
  * admin 이상만 (재무 정보).
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "admin" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // 🚨 예전엔 needRole(role) 하드코딩이라, 등급에서 '통계 화면 보기' 를 켜줘도 403 이었다.
+  if (!(await ctxHasPermission(ctx, "stats.view"))) {
+    return NextResponse.json({ error: "통계 열람 권한이 없습니다" }, { status: 403 });
+  }
 
   const url = new URL(request.url);
   const period = resolveSettlementPeriod(url.searchParams);

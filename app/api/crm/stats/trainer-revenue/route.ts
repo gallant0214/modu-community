@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -37,8 +38,12 @@ async function paginateAll<T>(
  * 화면에서 체크한 항목만 합산해 표시한다.
  */
 export async function GET(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "manager" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // 🚨 예전엔 needRole(role) 하드코딩이라, 등급에서 '통계 화면 보기' 를 켜줘도 403 이었다.
+  if (!(await ctxHasPermission(ctx, "stats.view"))) {
+    return NextResponse.json({ error: "통계 열람 권한이 없습니다" }, { status: 403 });
+  }
 
   const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
   const months: { ym: string; start: string; endExcl: string }[] = [];

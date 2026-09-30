@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,8 @@ export async function GET(request: Request) {
   const toUtc = toEnd.toISOString();
 
   // 강사 필터 + 격리
-  const isFullView = ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner;
+  // 통계 전체 보기 권한 기준(등급에서 켜주면 전체가 보인다). 예전엔 role 하드코딩.
+  const isFullView = (await ctxHasPermission(ctx, "stats.view")) || !!ctx.isSoloOwner;
   const reqTrainer = Number(url.searchParams.get("trainer_id")) || 0;
   let trainerFilter = 0;
   if (isFullView) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { cached, crmCacheKey } from "@/app/lib/cache";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,9 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // 통계 전체 보기 권한('통계 화면 보기') 이 있으면 센터 전체, 없으면 본인 담당만.
+  // 예전엔 role 로만 봐서 등급에서 권한을 켜줘도 본인 것만 보였다.
+  const canViewAllStats = (await ctxHasPermission(ctx, "stats.view")) || !!ctx.isSoloOwner;
 
   const url = new URL(request.url);
   const ymRaw = url.searchParams.get("ym");
@@ -91,7 +95,7 @@ export async function GET(request: Request) {
     .gte("starts_at", `${startDate}T00:00:00+09:00`)
     .lt("starts_at", `${nextMonth}T00:00:00+09:00`);
 
-  if (ctx.role === "trainer" || ctx.role === "manager") {
+  if (!canViewAllStats) {
     passQuery = passQuery.or(
       `trainer_member_id.eq.${ctx.centerMemberId},seller_member_id.eq.${ctx.centerMemberId}`
     );
@@ -110,7 +114,7 @@ export async function GET(request: Request) {
     .eq("status", "active")
     .in("role", ["owner", "admin", "manager", "trainer"]);
 
-  if (ctx.role === "trainer" || ctx.role === "manager") {
+  if (!canViewAllStats) {
     activeStaffQuery = activeStaffQuery.eq("id", ctx.centerMemberId);
   }
 
