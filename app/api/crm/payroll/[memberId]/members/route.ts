@@ -155,6 +155,20 @@ export async function GET(
     return (a?.latest_group_capacity ?? 1) > 1 ? "그룹레슨" : "개인레슨";
   };
 
+  // 홀딩(일시정지) 중인 회원 — is_paused 플래그가 아니라 실제 홀딩 기간(crm_pauses) 기준.
+  // 대시보드 '홀딩 회원' 카드와 같은 규칙. [[moducm-crm-hold-chips]]
+  const { data: pauseRows } = await supabase
+    .from("crm_pauses")
+    .select("member_id")
+    .eq("center_id", ctx.centerId)
+    .eq("status", "active")
+    .lte("start_date", todayKst)
+    .gte("end_date", todayKst)
+    .in("member_id", memberIds);
+  const holdingIds = new Set<number>(
+    ((pauseRows ?? []) as { member_id: number }[]).map((r) => r.member_id)
+  );
+
   const [{ data: members }, { data: mbs }] = await Promise.all([
     supabase
       .from("crm_members")
@@ -194,6 +208,7 @@ export async function GET(
         current_pass: a?.latest_pass ?? m.current_pass ?? null,
         lesson_type: lessonTypeOf(a),
         status: a?.valid ? "유효" : "만료",
+        holding: holdingIds.has(m.id),
         lesson_experience: a?.lesson_experience ?? false,
         total_paid_won: m.total_paid_won ?? 0,
         outstanding_total: (a?.pass_outstanding ?? 0) + (mbOutstanding.get(m.id) ?? 0),
