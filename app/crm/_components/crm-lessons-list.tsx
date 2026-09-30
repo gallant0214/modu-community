@@ -65,7 +65,7 @@ export function CrmLessonsList() {
       try {
         const token = await getIdToken();
         if (!token) return;
-        const res = await fetch("/api/crm/staff", { headers: { authorization: `Bearer ${token}` } });
+        const res = await fetch("/api/crm/staff?scope=names", { headers: { authorization: `Bearer ${token}` } });
         if (res.ok) {
           const d = await res.json();
           setStaff((d.staff ?? []).filter((s: StaffLite) => s.status === "active"));

@@ -248,7 +248,7 @@ export default function CrmContractSignNewPage() {
       try {
         const token = await getIdToken();
         if (!token) return;
-        const res = await fetch("/api/crm/staff", {
+        const res = await fetch("/api/crm/staff?scope=names", {
           headers: { authorization: `Bearer ${token}` },
         });
         if (!res.ok) return;

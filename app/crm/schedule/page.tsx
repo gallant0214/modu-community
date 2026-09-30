@@ -271,7 +271,7 @@ export default function CrmSchedulePage() {
       const token = await getIdToken();
       if (!token) return;
       const [resStaff, resBoot] = await Promise.all([
-        fetch("/api/crm/staff", { headers: { authorization: `Bearer ${token}` } }),
+        fetch("/api/crm/staff?scope=names", { headers: { authorization: `Bearer ${token}` } }),
         fetch("/api/crm/bootstrap", { headers: { authorization: `Bearer ${token}` }, cache: "no-store" }),
       ]);
       if (resStaff.ok) {

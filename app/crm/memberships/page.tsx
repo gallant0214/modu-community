@@ -755,7 +755,7 @@ function IssueModal({
       if (!token) return;
       const h = { authorization: `Bearer ${token}` };
       const [sRes, bRes] = await Promise.all([
-        fetch("/api/crm/staff", { headers: h }),
+        fetch("/api/crm/staff?scope=names", { headers: h }),
         fetch("/api/crm/bootstrap", { headers: h, cache: "no-store" }),
       ]);
       if (sRes.ok) {

@@ -30,7 +30,7 @@ const MENU: MenuItem[] = [
   { href: "/crm/members",     label: "회원 관리",     group: "main", perm: "members.view", icon: IconMembers },
   { href: "/crm/schedule",    label: "스케줄 관리",   group: "main", icon: IconCalendar },
   { href: "/crm/attendances", label: "출석 현황",     group: "main", icon: IconAttendance },
-  { href: "/crm/lockers",     label: "락커 관리",     group: "sales", icon: IconLocker },
+  { href: "/crm/lockers",     label: "락커 관리",     group: "sales", perm: "lockers.edit", icon: IconLocker },
   { href: "/crm/products",    label: "상품 관리",     group: "sales", perm: "products.view", icon: IconProduct },
   { href: "/crm/orders",      label: "온라인 주문",   group: "sales", perm: "sales.view", icon: IconProduct },
   { href: "/crm/memberships", label: "회원권 관리",   group: "sales", perm: "sales.view", icon: IconMembership },
@@ -50,6 +50,14 @@ const MENU: MenuItem[] = [
  * 헬스장/센터 관리자용 기능(락커·메세지·통계·센터설정·터치출석)은 숨기고
  * 강사 본인에게 유용한 항목(수업료·내 정보)만 제공.
  */
+/**
+ * 축소 메뉴에서도 **직급권한이 켜져 있으면 보여주는** 메뉴.
+ * 센터설정 > 직급권한에서 권한을 줬는데 메뉴가 안 보이면 준 의미가 없다(김민지 강사 사례).
+ */
+const PERM_UNLOCK_HREFS: Record<string, string> = {
+  "/crm/lockers": "lockers.edit",
+};
+
 const SOLO_MENU_HREFS = [
   "/crm/dashboard",
   "/crm/members",
@@ -68,9 +76,20 @@ function isSpecialBodyCenter(centerName: string): boolean {
 
 function buildSoloMenu(
   myMemberId: number | null,
-  opts: { includeCenterInfo: boolean; includeAttendanceTools?: boolean }
+  opts: {
+    includeCenterInfo: boolean;
+    includeAttendanceTools?: boolean;
+    permissions?: Record<string, boolean> | null;
+  }
 ): MenuItem[] {
   const base = MENU.filter((m) => SOLO_MENU_HREFS.includes(m.href));
+  // 직급권한으로 명시적으로 켜준 메뉴 추가 (예: 락커 배정 권한 → 락커 관리)
+  for (const [href, key] of Object.entries(PERM_UNLOCK_HREFS)) {
+    if (opts.permissions?.[key] === true) {
+      const item = MENU.find((m) => m.href === href);
+      if (item && !base.some((b) => b.href === href)) base.push(item);
+    }
+  }
   // 센터 소속 강사(개인 센터 아님): 프런트 운영을 위해 출석 현황 + 터치출석도 노출.
   if (opts.includeAttendanceTools) {
     base.push(
@@ -178,6 +197,7 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
       ? buildSoloMenu(centerMemberId ?? null, {
           includeCenterInfo: centerKind === "solo",
           includeAttendanceTools: isCenterTrainer,
+          permissions,
         })
       : MENU.filter((m) => !m.staffOnly || isStaffLevel)
   )
