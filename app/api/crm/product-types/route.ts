@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,9 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "products.settings_view"))) {
+    return NextResponse.json({ error: "상품 설정 조회 권한이 없습니다" }, { status: 403 });
+  }
 
   const { data, error } = await supabase
     .from("crm_product_types")
@@ -35,6 +39,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "products.settings_edit"))) {
+    return NextResponse.json({ error: "상품 설정 수정 권한이 없습니다" }, { status: 403 });
+  }
 
   let body: { label?: string; key?: string; color?: string };
   try {

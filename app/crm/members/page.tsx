@@ -428,6 +428,30 @@ export default function CrmMembersPage() {
   }, []);
 
   // 페이지 유지: URL ?page= 우선(브라우저 뒤로가기/새로고침 복원) → 없으면 모듈 스코프 memoPage
+  // '회원 목록 엑셀 내보내기'(members.excel) 권한 — 예전엔 어디서도 쓰이지 않던 설정
+  const [canExcel, setCanExcel] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/bootstrap", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const j = await res.json();
+        if (!cancelled) setCanExcel(j?.permissions?.["members.excel"] !== false);
+      } catch {
+        /* 확인 실패 시 기존처럼 노출 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getIdToken]);
+
   const [page, setPageState] = useState(() => {
     const urlPage = Number(searchParamsHook.get("page"));
     if (Number.isInteger(urlPage) && urlPage >= 1) {
@@ -1086,14 +1110,18 @@ export default function CrmMembersPage() {
           onDone={handleBulkDone}
           onCancel={clearSelection}
           onDelete={confirmDelete}
-          onExportExcel={() => {
-            const picked = filtered.filter((m) => selected.has(m.id));
-            if (picked.length === 0) {
-              window.alert("선택한 회원이 없습니다.");
-              return;
-            }
-            downloadExcel(picked);
-          }}
+          onExportExcel={
+            canExcel
+              ? () => {
+                  const picked = filtered.filter((m) => selected.has(m.id));
+                  if (picked.length === 0) {
+                    window.alert("선택한 회원이 없습니다.");
+                    return;
+                  }
+                  downloadExcel(picked);
+                }
+              : undefined
+          }
           onToggleAllOnPage={toggleSelectAllOnPage}
           allOnPageSelected={pageRows.length > 0 && pageRows.every((r) => selected.has(r.id))}
         />
@@ -1261,7 +1289,8 @@ export default function CrmMembersPage() {
         </span>
         <button
           onClick={() => downloadExcel()}
-          disabled={filtered.length === 0}
+          hidden={!canExcel}
+          disabled={filtered.length === 0 || !canExcel}
           className="shrink-0 px-3.5 py-2 rounded-lg border border-[#6B7B3A] text-[12.5px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/5 disabled:opacity-50 whitespace-nowrap"
         >
           엑셀로 다운로드

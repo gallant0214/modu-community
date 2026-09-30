@@ -26,7 +26,7 @@ interface MenuItem {
 }
 
 const MENU: MenuItem[] = [
-  { href: "/crm/dashboard",   label: "대시보드",     group: "main", icon: IconDashboard },
+  { href: "/crm/dashboard",   label: "대시보드",     group: "main", perm: "dashboard.view", icon: IconDashboard },
   { href: "/crm/members",     label: "회원 관리",     group: "main", perm: "members.view", icon: IconMembers },
   { href: "/crm/schedule",    label: "스케줄 관리",   group: "main", icon: IconCalendar },
   { href: "/crm/attendances", label: "출석 현황",     group: "main", icon: IconAttendance },

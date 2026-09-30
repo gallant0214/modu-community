@@ -52,7 +52,8 @@ export function BulkActionBar({
   /** 선택 회원 삭제. */
   onDelete: () => void;
   /** 선택 회원 엑셀(CSV) 다운로드. */
-  onExportExcel: () => void;
+  /** 엑셀 권한(members.excel)이 없으면 넘기지 않는다 → 버튼을 숨긴다 */
+  onExportExcel?: () => void;
   /** 현재 페이지 회원 전체 선택/해제 토글. */
   onToggleAllOnPage: () => void;
   /** 현재 페이지 회원이 모두 선택돼 있는지. */
@@ -77,7 +78,9 @@ export function BulkActionBar({
       <BulkBtn disabled={count === 0} onClick={() => setAction("extend")}>기간 연장</BulkBtn>
       <BulkBtn disabled={count === 0} onClick={() => setAction("message")}>메시지 보내기</BulkBtn>
       <BulkBtn disabled={count === 0} onClick={() => setAction("mileage")}>마일리지</BulkBtn>
-      <BulkBtn disabled={count === 0} onClick={onExportExcel}>엑셀 다운로드</BulkBtn>
+      {onExportExcel && (
+        <BulkBtn disabled={count === 0} onClick={onExportExcel}>엑셀 다운로드</BulkBtn>
+      )}
       {/* 홀딩 해제 — 회원 삭제 왼쪽. 진행 중 홀딩을 풀고 연장분 원복 */}
       <button
         onClick={() => setAction("unhold")}

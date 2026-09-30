@@ -188,6 +188,9 @@ export default function CrmDashboardPage() {
 
   // 재무 지표(매출/결제/랭킹) 가시성 — dashboard.finance 권한 기반 (owner 는 서버측에서 항상 true)
   const canFinance = me?.permissions?.["dashboard.finance"] ?? false;
+  // '대시보드 회원·출석·수업 지표 보기'(dashboard.members) — 예전엔 쓰이지 않던 권한.
+  // 기본값이 전 직급 허용이라 끄지 않는 한 지금과 동일하게 보인다.
+  const canMemberStats = me?.permissions?.["dashboard.members"] !== false;
   // 고객 현황은 전체 센터 집계 → trainer 제외 (데이터 격리)
   const canCustomers = !!me && me.role !== "trainer";
 
@@ -371,8 +374,8 @@ export default function CrmDashboardPage() {
             </>
           )}
 
-          {/* 회원 통계 */}
-          {summary && (
+          {/* 회원 통계 — dashboard.members 권한 */}
+          {summary && canMemberStats && (
             <SectionHeader
               title="회원 통계"
               subtitle={`${summary.range.from === summary.range.to ? summary.range.to : `${summary.range.from} ~ ${summary.range.to}`} · 총 ${summary.members.total.count.toLocaleString()}명`}
@@ -666,8 +669,8 @@ export default function CrmDashboardPage() {
             </>
           )}
 
-          {/* 수업 통계 */}
-          {summary && (
+          {/* 수업 통계 — dashboard.members 권한 */}
+          {summary && canMemberStats && (
             <>
               <SectionHeader title="수업 통계" subtitle="예약 건수 / 신청자 / 미진행(결제했으나 미예약 잔여 세션)" />
               <section className="grid grid-cols-1 md:grid-cols-3 gap-3">

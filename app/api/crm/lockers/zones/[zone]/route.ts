@@ -149,6 +149,10 @@ export async function PATCH(
       }
     }
     if (needed.length > 0) {
+      // 락커 추가 = '락커룸(구역) 추가' 권한
+      if (!(await ctxHasPermission(ctx, "lockers.zone_create"))) {
+        return NextResponse.json({ error: "락커를 추가할 권한이 없습니다" }, { status: 403 });
+      }
       await supabase.from("crm_lockers").insert(needed);
     }
 
@@ -159,6 +163,10 @@ export async function PATCH(
       (l) => !validRange.has(l.number) && l.state === "unassigned"
     );
     if (removable.length > 0) {
+      // 락커 줄이기(삭제) = '락커룸(구역) 삭제' 권한 (기본 대표자만)
+      if (!(await ctxHasPermission(ctx, "lockers.zone_delete"))) {
+        return NextResponse.json({ error: "락커를 삭제할 권한이 없습니다" }, { status: 403 });
+      }
       await supabase
         .from("crm_lockers")
         .delete()

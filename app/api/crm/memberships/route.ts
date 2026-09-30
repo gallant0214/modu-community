@@ -12,6 +12,7 @@ import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 import { fireAutoMessage, fireFirstPurchaseMessage } from "@/app/lib/crm-auto-message";
 import { syncRegistrationType } from "@/app/lib/crm-registration-type";
 import { rentalKindKey } from "@/app/lib/crm-locker-sync";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -136,6 +137,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // '상품 판매·회원에게 발급'(products.sell) 권한 — 끄면 발급이 실제로 막힌다
+  if (!(await ctxHasPermission(ctx, "products.sell"))) {
+    return NextResponse.json({ error: "회원권 발급 권한이 없습니다" }, { status: 403 });
+  }
 
   let body: {
     /** 쿠폰 적용(선택) — crm_coupon_issues.id */

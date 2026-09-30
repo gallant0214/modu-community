@@ -104,7 +104,9 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "products.create",       label: "상품 만들기(추가)",             defaults: D_ADMIN },
       { key: "products.edit",         label: "상품 수정",             defaults: D_ADMIN },
       { key: "products.delete",       label: "상품 삭제",             defaults: D_ADMIN },
-      { key: "products.sell",         label: "상품 판매·회원에게 발급",             defaults: D_MGR_FC },
+      // 강사도 회원에게 발급할 수 있는 게 현재 운영 방식이라 기본값에 trainer 포함.
+      // (이 토글을 끄면 발급이 실제로 막힌다 — 예전엔 아무 효과가 없었다)
+      { key: "products.sell",         label: "상품 판매·회원에게 발급",             defaults: D_STAFF_NO_ALBA },
     ],
   },
   {

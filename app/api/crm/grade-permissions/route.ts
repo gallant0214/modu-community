@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ALL_PERMISSION_KEYS } from "@/app/crm/_components/role-permissions";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -30,8 +31,12 @@ export async function GET(request: Request) {
  * owner base_role 등급은 언제나 true 로 고정 (변경 시도 시 무시).
  */
 export async function PATCH(request: Request) {
-  const ctx = await requireCrmContext(request, { needRole: "owner" });
+  const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // 🚨 예전엔 needRole:"owner" 하드코딩 → '직급 권한·등급 설정 편집' 권한을 켜줘도 403 이었다.
+  if (!(await ctxHasPermission(ctx, "staff.permissions_edit"))) {
+    return NextResponse.json({ error: "직급 권한 편집 권한이 없습니다" }, { status: 403 });
+  }
 
   let body: { grade_id?: number; permission_key?: string; enabled?: boolean };
   try {

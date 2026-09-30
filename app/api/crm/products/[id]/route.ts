@@ -114,6 +114,13 @@ export async function PATCH(
   if (patch.online_sale_enabled === true && !isOnlineOrderCenter(ctx.centerName)) {
     return NextResponse.json({ error: ONLINE_ORDER_LOCKED_MESSAGE, code: "ONLINE_ORDER_LOCKED" }, { status: 403 });
   }
+  // 온라인 마켓 판매 설정 권한 (products.market_edit) — 온라인 노출/자격을 바꾸는 필드
+  if (
+    (patch.online_sale_enabled !== undefined || patch.online_eligibility !== undefined) &&
+    !(await ctxHasPermission(ctx, "products.market_edit"))
+  ) {
+    return NextResponse.json({ error: "온라인 판매 설정 권한이 없습니다" }, { status: 403 });
+  }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
   }

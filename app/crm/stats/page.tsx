@@ -179,6 +179,7 @@ export default function CrmStatsPage() {
 
   // 직급 권한 — 경영 요약 탭 노출 여부 (stats.business_summary). null = 확인 중
   const [canSummary, setCanSummary] = useState<boolean | null>(null);
+  const [canSalesExcel, setCanSalesExcel] = useState(true);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -194,6 +195,8 @@ export default function CrmStatsPage() {
         const allowed = j?.permissions?.["stats.business_summary"] === true;
         if (cancelled) return;
         setCanSummary(allowed);
+        // '매출 내역 엑셀 내보내기'(sales.excel) — 예전엔 어디서도 쓰이지 않던 권한
+        setCanSalesExcel(j?.permissions?.["sales.excel"] !== false);
         // 권한 없는데 ?tab=summary 로 들어온 경우 센터 매출로 돌려보냄
         if (!allowed) setTab((t) => (t === "summary" ? "center" : t));
       } catch {
@@ -364,7 +367,7 @@ export default function CrmStatsPage() {
       ) : tab === "trainer" ? (
         <TrainerTab data={data} />
       ) : tab === "center" ? (
-        <CenterTab rangeQs={rangeQs} />
+        <CenterTab rangeQs={rangeQs} canExcel={canSalesExcel} />
       ) : (
         <SettlementTab rangeQs={rangeQs} defaultYm={appliedYm} periodMonths={appliedMonths} />
       )}
@@ -879,7 +882,7 @@ interface CenterRevenueResp {
   };
 }
 
-function CenterTab({ rangeQs }: { rangeQs: string }) {
+function CenterTab({ rangeQs, canExcel = true }: { rangeQs: string; canExcel?: boolean }) {
   const { getIdToken } = useAuth();
   const [data, setData] = useState<CenterRevenueResp | null>(null);
   const [loading, setLoading] = useState(true);
@@ -983,7 +986,8 @@ function CenterTab({ rangeQs }: { rangeQs: string }) {
         <button
           type="button"
           onClick={exportCsv}
-          disabled={!data}
+          hidden={!canExcel}
+          disabled={!data || !canExcel}
           className="px-3 py-1.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#6B7B3A]/5 disabled:opacity-50"
         >
           📥 엑셀 다운로드

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,9 @@ export async function PATCH(
 ) {
   const ctx = await requireCrmContext(request, { needRole: "admin" });
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "products.settings_edit"))) {
+    return NextResponse.json({ error: "상품 설정 수정 권한이 없습니다" }, { status: 403 });
+  }
 
   const { id } = await params;
   const typeId = Number(id);
@@ -51,6 +55,9 @@ export async function DELETE(
 ) {
   const ctx = await requireCrmContext(request, { needRole: "admin" });
   if (isCrmError(ctx)) return ctx;
+  if (!(await ctxHasPermission(ctx, "products.settings_edit"))) {
+    return NextResponse.json({ error: "상품 설정 수정 권한이 없습니다" }, { status: 403 });
+  }
 
   const { id } = await params;
   const typeId = Number(id);

@@ -119,6 +119,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // '상품 판매·회원에게 발급'(products.sell) 권한 — 끄면 발급이 실제로 막힌다
+  if (!(await ctxHasPermission(ctx, "products.sell"))) {
+    return NextResponse.json({ error: "수강권 발급 권한이 없습니다" }, { status: 403 });
+  }
 
   // 수강권 발급 = passes.issue (직급 권한 일원화, owner/admin/solo 통과)
   if (!(await ctxHasPermission(ctx, "passes.issue"))) {
