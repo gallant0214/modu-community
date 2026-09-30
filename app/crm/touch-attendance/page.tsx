@@ -68,6 +68,8 @@ type Result =
       phone: string | null;
       photo?: string | null; // 회원 얼굴 썸네일(있으면 확인창에 표시)
       duplicate?: boolean;
+      /** 1일 1회 입장 상품인데 같은 날 또 들어옴 */
+      dailyLimitWarn?: boolean;
       mileageAwarded?: number;
       summary?: CheckinSummary;
     }
@@ -305,11 +307,13 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
             phone: c.member?.phone ?? null,
             photo: c.member?.face_thumb ?? null,
             duplicate: !!c.duplicate,
+            dailyLimitWarn: !!c.daily_limit_warn,
             mileageAwarded: c.mileage_awarded ?? 0,
             summary: c.summary as CheckinSummary | undefined,
           });
           if (!c.duplicate) {
-            if (c.summary && c.summary.can_enter === false) playWarningBeep();
+            if (c.daily_limit_warn) playWarningBeep();
+            else if (c.summary && c.summary.can_enter === false) playWarningBeep();
             else playCheckinChime();
           }
           speakMessages(Array.isArray(c.voice_messages) ? c.voice_messages : []);
@@ -381,13 +385,16 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           phone: data.member?.phone ?? member.phone ?? null,
           photo: data.member?.face_thumb ?? member.face_thumb ?? null,
           duplicate: data.duplicate,
+          dailyLimitWarn: !!data.daily_limit_warn,
           mileageAwarded: data.mileage_awarded ?? 0,
           summary: data.summary as CheckinSummary | undefined,
         });
         // 출석 성공 소리: 입장 불가(유효 이용권 없음)=경고음, 정상=확인음. (TTS 무관하게 항상 소리)
         const hasVoice = Array.isArray(data.voice_messages) && data.voice_messages.length > 0;
         if (!data.duplicate) {
-          if (data.summary && data.summary.can_enter === false) playWarningBeep();
+          // 1일 1회 상품인데 같은 날 또 들어왔으면 경고음(삐-삐-삐)
+          if (data.daily_limit_warn) playWarningBeep();
+          else if (data.summary && data.summary.can_enter === false) playWarningBeep();
           else playCheckinChime();
         } else if (hasVoice) {
           // 중복이라도 안내(만료 회원 반복 출석 등)가 있으면 경고음
@@ -994,6 +1001,7 @@ function CheckinResultScreen({
     phone: string | null;
     photo?: string | null;
     duplicate?: boolean;
+    dailyLimitWarn?: boolean;
     mileageAwarded?: number;
     summary?: CheckinSummary;
   };
@@ -1181,6 +1189,12 @@ function CheckinResultScreen({
             {s?.not_started && (
               <div className="mt-3 px-4 py-2 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[15px] md:text-[17px] font-semibold text-center">
                 아직 출석시작일이 아닙니다
+              </div>
+            )}
+            {/* 1일 1회 입장 상품인데 같은 날 또 들어옴 — 경고음과 함께 크게 알린다 */}
+            {data.dailyLimitWarn && (
+              <div className="mt-3 px-4 py-2.5 rounded-lg bg-red-500/15 border border-red-500/50 text-red-300 text-[17px] md:text-[19px] font-bold text-center">
+                1일 1회 입장 가능한 상품입니다
               </div>
             )}
           </div>

@@ -8,6 +8,9 @@ export interface CheckinMember {
   birth: string | null;
 }
 
+/** 1일 1회 입장 상품인데 같은 날 또 들어왔을 때 안내 문구 */
+export const DAILY_ONCE_MESSAGE = "1일 1회 입장 가능한 상품입니다.";
+
 // 출석포인트 적립 대상 source (회원 자가 체크인만). 직원 수동(manual)은 제외.
 const MILEAGE_AWARD_SOURCES = new Set([
   "touch_face",
@@ -16,6 +19,63 @@ const MILEAGE_AWARD_SOURCES = new Set([
   "kiosk",
   "app", // 회원앱 QR 출석도 출석 마일리지 적립 대상
 ]);
+
+/**
+ * 이 회원이 '1일 1회 입장' 제한 대상인지 (상품관리의 하루 출석 가능 횟수 기준).
+ *
+ * 발급 레코드에는 이 설정이 복사돼 있지 않아 **상품명으로 매칭**한다
+ * (회원권=plan_name, 수강권=lesson_kind ↔ crm_products.name).
+ * 보유 상품 중 '무제한(0)' 이 하나라도 있으면 제한하지 않는다. 매칭되는 상품이 없으면
+ * 기본값(1회)을 따른다 — 상품관리 기본이 1회이기 때문.
+ */
+export async function isDailyOnceMember(centerId: number, memberId: number): Promise<boolean> {
+  const ymd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const [{ data: memberships }, { data: passes }, { data: products }] = await Promise.all([
+    supabase
+      .from("crm_memberships")
+      .select("plan_name")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .eq("status", "valid")
+      .eq("is_paused", false)
+      .gte("expires_at", ymd)
+      .or(`start_date.lte.${ymd},start_date.is.null`),
+    supabase
+      .from("crm_passes")
+      .select("lesson_kind")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .eq("status", "valid")
+      .eq("is_paused", false)
+      .gte("expires_at", ymd)
+      .or(`start_date.lte.${ymd},start_date.is.null`),
+    supabase
+      .from("crm_products")
+      .select("name, daily_check_in_limit")
+      .eq("center_id", centerId)
+      .eq("status", "active"),
+  ]);
+
+  // 상품명 정규화 — 발급 시 "(10회)" 같은 꼬리표가 붙는다
+  const norm = (v: string | null | undefined) =>
+    (v ?? "").replace(/\s*\(\d+\s*회\)\s*$/, "").replace(/\s+/g, "").trim();
+  const limitByName = new Map<string, number>();
+  for (const pr of (products ?? []) as { name: string; daily_check_in_limit: number | null }[]) {
+    limitByName.set(norm(pr.name), Number(pr.daily_check_in_limit ?? 1));
+  }
+
+  const heldNames = [
+    ...((memberships ?? []) as { plan_name: string }[]).map((m) => norm(m.plan_name)),
+    ...((passes ?? []) as { lesson_kind: string }[]).map((p) => norm(p.lesson_kind)),
+  ];
+  if (heldNames.length === 0) return false; // 유효 상품이 없으면 이 판정에 걸지 않는다
+
+  // 무제한(0) 상품을 하나라도 들고 있으면 제한 없음
+  for (const n of heldNames) {
+    if (limitByName.get(n) === 0) return false;
+  }
+  return true;
+}
 
 /**
  * 회원 체크인 실행(공유). CRM 로그인 라우트 + 공개 키오스크 라우트 공용.
@@ -44,7 +104,9 @@ export async function runCheckIn(
   } catch {
     /* 설정 조회 실패 시 기본 5분 */
   }
-  const dedupMinutes = source === "touch_face" ? 120 : reentryMin;
+  // '1일 1회 입장' 상품 회원은 2시간 안에 다시 찍으면 '이미 출석하셨습니다'(중복)로 본다.
+  const dailyOnce = await isDailyOnceMember(centerId, member.id);
+  const dedupMinutes = source === "touch_face" ? 120 : dailyOnce ? Math.max(reentryMin, 120) : reentryMin;
   const cutoff = new Date(Date.now() - dedupMinutes * 60 * 1000).toISOString();
   const { data: recent } = await supabase
     .from("crm_attendances")
@@ -79,6 +141,21 @@ export async function runCheckIn(
     };
   }
 
+  // 오늘(KST) 이미 출석한 적이 있는지 — 1일 1회 상품 회원의 재입장 경고 판정용
+  let attendedEarlierToday = false;
+  if (dailyOnce) {
+    const ymdNow = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const dayStart = new Date(`${ymdNow}T00:00:00+09:00`).toISOString();
+    const { data: todayRows } = await supabase
+      .from("crm_attendances")
+      .select("id")
+      .eq("center_id", centerId)
+      .eq("member_id", member.id)
+      .gte("checked_in_at", dayStart)
+      .limit(1);
+    attendedEarlierToday = (todayRows ?? []).length > 0;
+  }
+
   const { data: created, error } = await supabase
     .from("crm_attendances")
     .insert({ center_id: centerId, member_id: member.id, source })
@@ -105,10 +182,15 @@ export async function runCheckIn(
     ? await awardAttendanceMileage(centerId, member.id, created.id)
     : 0;
 
+  // 1일 1회 상품인데 오늘 두 번째 이상(2시간 초과) → 기록은 남기고 경고음 + 안내
+  const dailyLimitWarn = dailyOnce && attendedEarlierToday;
+
   let voiceMessages: string[] = [];
   try {
     const v = await buildAttendanceVoiceMessages(centerId, member);
-    if (v.expired) {
+    if (dailyLimitWarn) {
+      voiceMessages = [DAILY_ONCE_MESSAGE];
+    } else if (v.expired) {
       // 만료(사용 가능 상품 없음) 회원 → 만료 안내 유지
       voiceMessages = v.messages;
     } else {
@@ -128,6 +210,8 @@ export async function runCheckIn(
     attendance: created,
     mileage_awarded: mileageAwarded,
     voice_messages: voiceMessages,
+    /** '1일 1회 입장' 상품인데 같은 날 또 들어옴 → 화면·경고음으로 알린다 */
+    daily_limit_warn: dailyLimitWarn,
     summary,
   };
 }

@@ -57,6 +57,8 @@ type Stage = "init" | "models" | "faces" | "ready" | "error";
 export interface FaceCheckinPayload {
   member?: { name?: string; birth?: string | null; phone?: string | null; face_thumb?: string | null };
   duplicate?: boolean;
+  /** 1일 1회 입장 상품인데 같은 날 또 들어옴 */
+  daily_limit_warn?: boolean;
   mileage_awarded?: number;
   summary?: unknown;
 }
@@ -148,8 +150,9 @@ export default function FaceAttendance({
             }
           } else {
             setLastHit({ name: who, at: Date.now() });
-            // 출석 성공 소리: 입장 불가=경고음, 정상=확인음 (TTS 무관하게 항상 소리)
-            if (data.summary && data.summary.can_enter === false) playWarningBeep();
+            // 출석 성공 소리: 1일 1회 초과·입장 불가=경고음, 정상=확인음 (TTS 무관하게 항상 소리)
+            if (data.daily_limit_warn) playWarningBeep();
+            else if (data.summary && data.summary.can_enter === false) playWarningBeep();
             else playCheckinChime();
             // 서버가 매칭한 안내 음성 재생
             speakMessages(Array.isArray(data.voice_messages) ? data.voice_messages : []);
