@@ -485,11 +485,9 @@ export async function getLatestQrCheckin(centerId: number, sinceId: number | nul
   let voice_messages: string[] = [];
   try {
     const v = await buildAttendanceVoiceMessages(centerId, member as CheckinMember);
-    if (v.expired) {
-      voice_messages = v.messages; // 만료 안내
-    } else {
-      voice_messages = v.greeting; // 유효 회원 = 환영 인사만
-    }
+    // 번호 출석과 동일하게 만들어진 안내를 그대로 재생한다(시작 예정·만료 임박·미수금 등).
+    // '출석 포인트가 적립되었습니다' 는 터치출석 설정(msg_active_entry)으로 제어.
+    voice_messages = v.messages;
   } catch {
     voice_messages = [];
   }
