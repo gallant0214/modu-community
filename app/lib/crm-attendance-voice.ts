@@ -213,7 +213,35 @@ export async function buildAttendanceVoiceMessages(
         (m) => !m.is_paused && !notStarted(m) && (unlimited(m) || daysUntil(m.expires_at) >= 0)
       );
       const hasHolding = valids.some((m) => m.is_paused && !dateExpired(m));
-      const hasScheduled = valids.some((m) => !m.is_paused && notStarted(m));
+      // 예정 = 시작일이 미래인 회원권 또는 수강권(둘 중 하나라도 있으면 '시작 예정' 안내)
+      let hasScheduled = valids.some((m) => !m.is_paused && notStarted(m));
+      // 오늘 시점에 쓸 수 있는 수강권이 있으면 '예정' 안내 대상이 아니다.
+      let hasStartedPass = false;
+      if (on("msg_scheduled_membership") && !hasActive) {
+        const { data: startedPasses } = await supabase
+          .from("crm_passes")
+          .select("start_date")
+          .eq("center_id", centerId)
+          .eq("member_id", member.id)
+          .eq("status", "valid")
+          .eq("is_paused", false)
+          .lte("start_date", todayYmd)
+          .gte("expires_at", todayYmd)
+          .limit(1);
+        hasStartedPass = ((startedPasses ?? []) as unknown[]).length > 0;
+      }
+      if (!hasScheduled && on("msg_scheduled_membership")) {
+        const { data: schedPasses } = await supabase
+          .from("crm_passes")
+          .select("start_date")
+          .eq("center_id", centerId)
+          .eq("member_id", member.id)
+          .eq("status", "valid")
+          .eq("is_paused", false)
+          .gt("start_date", todayYmd)
+          .limit(1);
+        hasScheduled = ((schedPasses ?? []) as unknown[]).length > 0;
+      }
       const hasExpiringSoon = valids.some(
         (m) =>
           !m.is_paused &&
@@ -271,9 +299,12 @@ export async function buildAttendanceVoiceMessages(
       if (on("msg_active_entry") && hasActive) {
         activeEntryMsg = txt("msg_active_entry");
         messages.push(activeEntryMsg);
-      } else if (on("msg_scheduled_membership") && hasScheduled) {
+        // 🚨 '입장 안내'(msg_active_entry)를 끄면 이 분기를 타지 않으므로, 아래 조건에
+        //    !hasActive / !hasStartedPass 를 직접 명시한다. 안 그러면 재등록으로 지금
+        //    이용 중인 회원에게도 '시작 예정일' 안내가 나간다.
+      } else if (on("msg_scheduled_membership") && hasScheduled && !hasActive && !hasStartedPass) {
         messages.push(txt("msg_scheduled_membership"));
-      } else if (on("msg_holding") && hasHolding) {
+      } else if (on("msg_holding") && hasHolding && !hasActive) {
         messages.push(txt("msg_holding"));
       } else if (on("msg_expired_membership") && noUsableMembership && !skipExpiredForClass) {
         // 회원권 없음/만료(활성·예정·홀딩 전무) → 최우선 안내.

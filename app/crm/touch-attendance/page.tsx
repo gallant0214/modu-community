@@ -313,7 +313,9 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           });
           if (!c.duplicate) {
             if (c.daily_limit_warn) playWarningBeep();
-            else if (c.summary && c.summary.can_enter === false) playWarningBeep();
+            // 입장 불가 + '시작 예정일 전' → 경고음(카운터 안내 필요)
+            else if (c.summary && (c.summary.can_enter === false || c.summary.not_started))
+              playWarningBeep();
             else playCheckinChime();
           }
           speakMessages(Array.isArray(c.voice_messages) ? c.voice_messages : []);
@@ -394,7 +396,9 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         if (!data.duplicate) {
           // 1일 1회 상품인데 같은 날 또 들어왔으면 경고음(삐-삐-삐)
           if (data.daily_limit_warn) playWarningBeep();
-          else if (data.summary && data.summary.can_enter === false) playWarningBeep();
+          // 입장 불가 + '시작 예정일 전' → 경고음(카운터 안내 필요)
+          else if (data.summary && (data.summary.can_enter === false || data.summary.not_started))
+            playWarningBeep();
           else playCheckinChime();
         } else if (hasVoice) {
           // 중복이라도 안내(만료 회원 반복 출석 등)가 있으면 경고음

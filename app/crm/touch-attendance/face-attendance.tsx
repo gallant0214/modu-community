@@ -152,7 +152,9 @@ export default function FaceAttendance({
             setLastHit({ name: who, at: Date.now() });
             // 출석 성공 소리: 1일 1회 초과·입장 불가=경고음, 정상=확인음 (TTS 무관하게 항상 소리)
             if (data.daily_limit_warn) playWarningBeep();
-            else if (data.summary && data.summary.can_enter === false) playWarningBeep();
+            // 입장 불가 + '시작 예정일 전' → 경고음(카운터 안내 필요)
+            else if (data.summary && (data.summary.can_enter === false || data.summary.not_started))
+              playWarningBeep();
             else playCheckinChime();
             // 서버가 매칭한 안내 음성 재생
             speakMessages(Array.isArray(data.voice_messages) ? data.voice_messages : []);

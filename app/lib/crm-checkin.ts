@@ -190,13 +190,12 @@ export async function runCheckIn(
     const v = await buildAttendanceVoiceMessages(centerId, member);
     if (dailyLimitWarn) {
       voiceMessages = [DAILY_ONCE_MESSAGE];
-    } else if (v.expired) {
-      // 만료(사용 가능 상품 없음) 회원 → 만료 안내 유지
-      voiceMessages = v.messages;
     } else {
-      // 유효 회원(헬스이용권·수강권) → 환영 인사만 재생.
-      // 마일리지 적립은 계속 되지만 '출석 포인트가 적립되었습니다' 음성은 내보내지 않는다.
-      voiceMessages = v.greeting;
+      // 🚨 예전에는 유효 회원에게 v.greeting(환영 인사)만 재생했는데, 그 때문에
+      //    '시작 예정일' · 만료 임박 · 미수금 · 생일 안내가 전부 버려졌다.
+      //    '출석 포인트가 적립되었습니다' 멘트는 터치출석 설정(msg_active_entry)을 끄면
+      //    애초에 생성되지 않으므로, 여기서는 만들어진 안내를 그대로 재생한다.
+      voiceMessages = v.messages;
     }
   } catch {
     voiceMessages = [];
