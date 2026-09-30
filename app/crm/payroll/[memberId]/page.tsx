@@ -459,7 +459,7 @@ function MembersTab({ memberId }: { memberId: number }) {
   const { getIdToken } = useAuth();
   const [rows, setRows] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "dormant">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "expired">("all");
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null); // 요율 편집 펼친 회원
   const [savingPass, setSavingPass] = useState<number | null>(null);
@@ -521,8 +521,10 @@ function MembersTab({ memberId }: { memberId: number }) {
 
   const today = new Date().toISOString().slice(0, 10);
   const filtered = rows.filter((r) => {
-    if (statusFilter === "active" && !(r.final_expire_at && r.final_expire_at >= today)) return false;
-    if (statusFilter === "dormant" && r.final_expire_at && r.final_expire_at >= today) return false;
+    /* 🚨 최종 만료일(final_expire_at)은 자동 갱신되지 않는 스냅샷이라 담당회원 전원이 비어 있다.
+       서버가 실제 수강권으로 계산해 준 status('유효'/'만료')로 판정한다. */
+    if (statusFilter === "active" && r.status !== "유효") return false;
+    if (statusFilter === "expired" && r.status !== "만료") return false;
     const kw = q.trim().toLowerCase();
     if (kw && !`${r.name} ${r.phone ?? ""}`.toLowerCase().includes(kw)) return false;
     return true;
@@ -540,11 +542,11 @@ function MembersTab({ memberId }: { memberId: number }) {
           <select
             className={crmInputClass}
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "dormant")}
+            onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "expired")}
           >
             <option value="all">회원 전체</option>
             <option value="active">활성</option>
-            <option value="dormant">휴면</option>
+            <option value="expired">만료</option>
           </select>
         </div>
         <div>
