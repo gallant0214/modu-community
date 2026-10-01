@@ -246,11 +246,29 @@ export async function GET(request: Request) {
     // 신규→재등록 전환률: 그 달에 '신규(첫) 회원권이 만료'된 회원 중 재등록한 비율
     //  - expireCohort[M] = 첫 회원권 만료월이 M 인 회원 수 (분모)
     //  - expireConverted[M] = 그 중 재등록한 회원 수 (분자)
+    // 🚨 진행 중인 구간(이번 달)은 아직 만료되지 않은 건까지 분모에 넣으면 전환률이
+    //    구조적으로 바닥으로 깎인다(10/01 에 10월 만료 예정 31명이 분모에 들어감).
+    //    → 구간 끝을 '오늘까지'로 잘라, 이미 만료된 건만 센다.
+    const todayKstYmd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const tomorrowKstYmd = (() => {
+      const d = new Date(`${todayKstYmd}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + 1);
+      return d.toISOString().slice(0, 10);
+    })();
+    const expiryBucket = (ymd: string) =>
+      months.findIndex((mm) => {
+        const end = mm.endExcl < tomorrowKstYmd ? mm.endExcl : tomorrowKstYmd;
+        return ymd >= mm.start && ymd < end;
+      });
+    const inProgressIndex = months.findIndex(
+      (mm) => todayKstYmd >= mm.start && todayKstYmd < mm.endExcl
+    );
+
     const expireCohort = months.map(() => 0);
     const expireConverted = months.map(() => 0);
     for (const [mid, f] of memberFirst) {
       if (!f.expires) continue;
-      const idx = months.findIndex((mm) => f.expires! >= mm.start && f.expires! < mm.endExcl);
+      const idx = expiryBucket(f.expires);
       if (idx < 0) continue;
       expireCohort[idx] += 1;
       if (memberHasLater.get(mid)) expireConverted[idx] += 1;
@@ -273,7 +291,7 @@ export async function GET(request: Request) {
       for (let i = 1; i < arr.length; i++) {
         const e = arr[i].expires;
         if (!e) continue;
-        const idx = months.findIndex((mm) => e >= mm.start && e < mm.endExcl);
+        const idx = expiryBucket(e);
         if (idx < 0) continue;
         reExpireCohort[idx] += 1;
         if (i + 1 < arr.length) reExpireConverted[idx] += 1;
@@ -346,6 +364,8 @@ export async function GET(request: Request) {
       expireConverted,
       reExpireCohort,
       reExpireConverted,
+      // 진행 중 구간 인덱스 — 화면에서 '진행 중' 표시 + 평균 제외에 사용
+      inProgressIndex,
       visited: visitedSets.map((s) => s.size),
       churn,
     };

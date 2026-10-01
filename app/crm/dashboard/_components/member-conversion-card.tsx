@@ -18,6 +18,7 @@ export function MemberConversionCard() {
   const [reRates, setReRates] = useState<number[]>([]);
   const [reCohort, setReCohort] = useState<number[]>([]);
   const [reConverted, setReConverted] = useState<number[]>([]);
+  const [inProgressIndex, setInProgressIndex] = useState(-1);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -36,6 +37,7 @@ export function MemberConversionCard() {
       const rco: number[] = d.reExpireCohort ?? [];
       const rcv: number[] = d.reExpireConverted ?? [];
       setMonths(mo);
+      setInProgressIndex(typeof d.inProgressIndex === "number" ? d.inProgressIndex : -1);
       setCohort(co);
       setConverted(cv);
       setRates(mo.map((_, i) => (co[i] > 0 ? Math.round((cv[i] / co[i]) * 100) : 0)));
@@ -59,12 +61,20 @@ export function MemberConversionCard() {
     );
   }
 
-  const totalCohort = cohort.reduce((s, v) => s + v, 0);
-  const totalConverted = converted.reduce((s, v) => s + v, 0);
+  // 평균은 '완료된 달'만으로 낸다 — 진행 중인 달은 아직 만료가 다 끝나지 않아
+  // 표본이 작고(오늘까지 만료분만) 평균을 끌어내리기 때문.
+  const done = (arr: number[]) => arr.filter((_, i) => i !== inProgressIndex);
+  const sum = (arr: number[]) => arr.reduce((a, v) => a + v, 0);
+  const totalCohort = sum(done(cohort));
+  const totalConverted = sum(done(converted));
   const avg = totalCohort > 0 ? Math.round((totalConverted / totalCohort) * 100) : 0;
-  const reTotalCohort = reCohort.reduce((s, v) => s + v, 0);
-  const reTotalConverted = reConverted.reduce((s, v) => s + v, 0);
+  const reTotalCohort = sum(done(reCohort));
+  const reTotalConverted = sum(done(reConverted));
   const reAvg = reTotalCohort > 0 ? Math.round((reTotalConverted / reTotalCohort) * 100) : 0;
+  const inProgressLabel = inProgressIndex >= 0 ? months[inProgressIndex] : null;
+  const progressNote = inProgressLabel
+    ? ` · ${inProgressLabel.slice(5)}월은 진행 중(오늘까지 만료분만, 평균 제외)`
+    : "";
 
   return (
     <div className="rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-5 py-4 shadow-sm space-y-5">
@@ -80,13 +90,18 @@ export function MemberConversionCard() {
         </div>
         <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-2">
           그 달에 <b>신규 회원권이 만료</b>된 회원 중 재등록한 비율 (월별) · 최근 12개월
+          {progressNote}
         </p>
         <MonthlyStackedBars
           months={months}
           series={[{ label: "전환률", color: "#6B7B3A", values: rates }]}
           mode="count"
           unit="%"
-          hoverNote={(i) => `재등록 ${converted[i] ?? 0}명 / 신규 만료 ${cohort[i] ?? 0}명`}
+          hoverNote={(i) =>
+            `재등록 ${converted[i] ?? 0}명 / 신규 만료 ${cohort[i] ?? 0}명${
+              i === inProgressIndex ? " (진행 중 · 오늘까지)" : ""
+            }`
+          }
         />
       </div>
 
@@ -102,13 +117,18 @@ export function MemberConversionCard() {
         </div>
         <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-2">
           그 달에 <b>재등록 이용권이 만료</b>된 건 중 다시 재등록한 비율 (월별) · 최근 12개월
+          {progressNote}
         </p>
         <MonthlyStackedBars
           months={months}
           series={[{ label: "전환률", color: "#B47B2A", values: reRates }]}
           mode="count"
           unit="%"
-          hoverNote={(i) => `재등록 ${reConverted[i] ?? 0}건 / 재등록 만료 ${reCohort[i] ?? 0}건`}
+          hoverNote={(i) =>
+            `재등록 ${reConverted[i] ?? 0}건 / 재등록 만료 ${reCohort[i] ?? 0}건${
+              i === inProgressIndex ? " (진행 중 · 오늘까지)" : ""
+            }`
+          }
         />
       </div>
 
