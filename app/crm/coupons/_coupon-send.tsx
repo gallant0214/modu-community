@@ -55,6 +55,11 @@ export function CouponSendTab({
   const [results, setResults] = useState<MemberOption[]>([]);
   const [searching, setSearching] = useState(false);
   const [count, setCount] = useState<number | null>(null);
+  // 받을 회원 명단 + 직원이 뺀 회원
+  const [recipients, setRecipients] = useState<{ id: number; name: string; phone: string | null; alreadyHas: boolean }[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [excluded, setExcluded] = useState<Set<number>>(new Set());
+  const [listQuery, setListQuery] = useState("");
   const [push, setPush] = useState(true);
   const [sms, setSms] = useState(false);
   const [message, setMessage] = useState("");
@@ -97,23 +102,41 @@ export function CouponSendTab({
   );
   const shownMessage = messageTouched ? message : defaultMsg;
 
-  // 대상 인원 미리보기 — 메세지 전송과 같은 집계 API 사용
+  // 받을 회원 명단 — 누가 받는지 보여주고, 거기서 뺄 수 있게 한다
   const refreshCount = useCallback(async () => {
+    setListLoading(true);
     try {
-      const r = await authedFetch(getIdToken, "/api/crm/messages/preview", {
+      const r = await authedFetch(getIdToken, "/api/crm/coupons/send-preview", {
         method: "POST",
         body: JSON.stringify({
+          coupon_id: couponId,
           audience_kind: audience,
           member_ids: selected.map((m) => m.id),
           within_days: withinDays,
           inactive_days: inactiveDays,
         }),
       });
-      setCount(r.ok ? Number(r.data.count ?? 0) : null);
+      if (r.ok) {
+        const list = (r.data.recipients as typeof recipients) ?? [];
+        setRecipients(list);
+        setCount(list.length);
+        // 조건이 바뀌면 명단에 없는 회원의 제외 표시는 정리한다
+        setExcluded((prev) => {
+          const ids = new Set(list.map((m) => m.id));
+          const next = new Set(Array.from(prev).filter((id) => ids.has(id)));
+          return next.size === prev.size ? prev : next;
+        });
+      } else {
+        setRecipients([]);
+        setCount(null);
+      }
     } catch {
+      setRecipients([]);
       setCount(null);
+    } finally {
+      setListLoading(false);
     }
-  }, [getIdToken, audience, selected, withinDays, inactiveDays]);
+  }, [getIdToken, couponId, audience, selected, withinDays, inactiveDays]);
   useEffect(() => {
     refreshCount();
   }, [refreshCount]);
@@ -137,12 +160,22 @@ export function CouponSendTab({
     return () => clearTimeout(t);
   }, [query, audience, getIdToken]);
 
+  // 실제 발송 대상 = 명단 − 직원이 뺀 사람 (1인 1장 보유자는 서버가 한 번 더 걸러낸다)
+  const sendTargets = recipients.filter((m) => !excluded.has(m.id));
+  const shownList = listQuery.trim()
+    ? recipients.filter((m) => {
+        const q = listQuery.trim().toLowerCase();
+        return m.name.toLowerCase().includes(q) || (m.phone ?? "").replace(/\D/g, "").includes(q.replace(/\D/g, ""));
+      })
+    : recipients;
+
   const channelsLabel = push && sms ? "앱 알림 + 문자" : push ? "앱 알림" : sms ? "문자" : "알림 없이 쿠폰함에만 발급";
 
   const send = async () => {
     if (!coupon) return;
     if (audience === "individual" && selected.length === 0) return alert("회원을 선택해 주세요");
-    const n = count ?? 0;
+    const n = sendTargets.length;
+    if (n === 0) return alert("보낼 회원이 없어요. 명단에서 한 명 이상 선택해 주세요.");
     if (!confirm(`'${coupon.name}' 쿠폰을 ${n.toLocaleString()}명에게 발급할까요?\n발송 방법: ${channelsLabel}${sms ? "\n※ 문자는 건당 요금이 발생해요" : ""}`))
       return;
     setSending(true);
@@ -158,6 +191,7 @@ export function CouponSendTab({
         inactive_days: inactiveDays,
         channels,
         message: messageTouched ? message : "",
+        exclude_member_ids: Array.from(excluded),
       }),
     });
     setSending(false);
@@ -165,10 +199,12 @@ export function CouponSendTab({
     const smsInfo = r.data.sms as { sent: number; failed: number } | null;
     setResult(
       `✅ ${Number(r.data.issued).toLocaleString()}명에게 발급했어요` +
+        (Number(r.data.excluded) > 0 ? ` · 명단에서 뺀 ${r.data.excluded}명 제외` : "") +
         (Number(r.data.skipped) > 0 ? ` · 이미 보유한 ${r.data.skipped}명은 건너뜀(1인 1장)` : "") +
         (smsInfo ? ` · 문자 성공 ${smsInfo.sent} / 실패 ${smsInfo.failed}` : "")
     );
     setSelected([]);
+    setExcluded(new Set());
     onSent();
   };
 
@@ -291,7 +327,96 @@ export function CouponSendTab({
         )}
         <div className="mt-3 text-[12.5px] text-[#6B5D47] dark:text-zinc-400">
           대상 <b className="text-[#2A251D] dark:text-zinc-100">{count == null ? "…" : `${count.toLocaleString()}명`}</b>
+          {excluded.size > 0 && (
+            <span className="ml-1.5">
+              · 뺀 회원 {excluded.size}명 → 실제 발송{" "}
+              <b className="text-[#4d5a29] dark:text-[#A8B87A]">{sendTargets.length.toLocaleString()}명</b>
+            </span>
+          )}
           {coupon?.one_per_member && <span className="ml-1.5 text-[#A89B80]">(이미 이 쿠폰을 가진 회원은 발송 때 제외돼요)</span>}
+        </div>
+
+        {/* 받을 회원 명단 — 누가 받는지 확인하고, 뺄 사람은 체크를 끈다 */}
+        <div className="mt-2 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 overflow-hidden">
+          <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-[#FBF7EB]/70 dark:bg-zinc-900/70 border-b border-[#E8E0D0] dark:border-zinc-800">
+            <span className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">받을 회원 명단</span>
+            <input
+              type="text"
+              value={listQuery}
+              onChange={(e) => setListQuery(e.target.value)}
+              placeholder="이름·연락처로 찾기"
+              className={`${crmInputClass} !w-40 !py-1 ml-1`}
+            />
+            <div className="ml-auto flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setExcluded(new Set())}
+                disabled={excluded.size === 0}
+                className="px-2 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[11.5px] font-semibold text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40"
+              >
+                전체 선택
+              </button>
+              <button
+                type="button"
+                onClick={() => setExcluded(new Set(recipients.map((m) => m.id)))}
+                disabled={recipients.length === 0 || excluded.size === recipients.length}
+                className="px-2 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[11.5px] font-semibold text-[#6B5D47] dark:text-zinc-300 disabled:opacity-40"
+              >
+                전체 해제
+              </button>
+            </div>
+          </div>
+
+          {listLoading && recipients.length === 0 ? (
+            <div className="px-3 py-6 text-center text-[12.5px] text-[#8C8270]">명단 불러오는 중…</div>
+          ) : recipients.length === 0 ? (
+            <div className="px-3 py-6 text-center text-[12.5px] text-[#8C8270]">조건에 맞는 회원이 없어요.</div>
+          ) : (
+            <>
+              <ul className="max-h-[260px] overflow-y-auto divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
+                {shownList.map((m) => {
+                  const off = excluded.has(m.id);
+                  return (
+                    <li key={m.id}>
+                      <label
+                        className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-[#FBF7EB]/60 dark:hover:bg-zinc-800/60 ${
+                          off ? "opacity-45" : ""
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 accent-[#6B7B3A]"
+                          checked={!off}
+                          onChange={(e) =>
+                            setExcluded((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.delete(m.id);
+                              else next.add(m.id);
+                              return next;
+                            })
+                          }
+                        />
+                        <span className={`text-[13px] text-[#2A251D] dark:text-zinc-100 ${off ? "line-through" : "font-medium"}`}>
+                          {m.name}
+                        </span>
+                        {m.phone && <span className="text-[11.5px] text-[#8C8270]">{formatPhone(m.phone)}</span>}
+                        {m.alreadyHas && (
+                          <span className="ml-auto shrink-0 rounded-full bg-[#B47B2A]/12 px-2 py-0.5 text-[11px] font-semibold text-[#8a5c1f] dark:text-amber-300">
+                            이미 보유 · 발송 제외
+                          </span>
+                        )}
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+              {listQuery.trim() && (
+                <div className="px-3 py-1.5 text-[11.5px] text-[#8C8270] border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+                  검색 결과 {shownList.length.toLocaleString()}명 · 체크 해제는 검색을 지워도 유지돼요
+                </div>
+              )}
+            </>
+          )}
         </div>
       </Section>
 
@@ -341,8 +466,15 @@ export function CouponSendTab({
       </Section>
 
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={send} disabled={sending || !coupon || !count} className={primaryBtn}>
-          {sending ? "발송 중…" : `${count ? count.toLocaleString() + "명에게 " : ""}쿠폰 발송`}
+        <button
+          type="button"
+          onClick={send}
+          disabled={sending || !coupon || sendTargets.length === 0}
+          className={primaryBtn}
+        >
+          {sending
+            ? "발송 중…"
+            : `${sendTargets.length > 0 ? sendTargets.length.toLocaleString() + "명에게 " : ""}쿠폰 발송`}
         </button>
         {result && <span className="text-[12.5px] text-[#4d5a29] dark:text-[#A8B87A]">{result}</span>}
       </div>

@@ -50,6 +50,8 @@ export async function POST(request: Request) {
     inactive_days?: number;
     channels?: string[];
     message?: string;
+    /** 명단에서 직원이 뺀 회원 — 발송 대상에서 제외 */
+    exclude_member_ids?: number[];
   };
   try {
     body = await request.json();
@@ -90,6 +92,17 @@ export async function POST(request: Request) {
   });
   if (memberIds.length === 0) {
     return NextResponse.json({ error: "조건에 맞는 회원이 없어요" }, { status: 400 });
+  }
+
+  // 화면 명단에서 직원이 체크를 해제한 회원 제외
+  const excluded = new Set(
+    (body.exclude_member_ids ?? []).map((n) => Number(n)).filter((n) => Number.isInteger(n) && n > 0)
+  );
+  if (excluded.size > 0) {
+    memberIds = memberIds.filter((id) => !excluded.has(id));
+    if (memberIds.length === 0) {
+      return NextResponse.json({ error: "제외하고 나면 보낼 회원이 없어요" }, { status: 400 });
+    }
   }
 
   // 1인 1장: 이 쿠폰을 아직 쓸 수 있게 들고 있는 회원은 건너뛴다
@@ -138,7 +151,10 @@ export async function POST(request: Request) {
       recipient_count: 0,
       skipped_count: skipped,
       audience_kind: kind,
-      audience_filter: (kind === "individual" ? { member_ids: body.member_ids ?? [] } : null) as never,
+      audience_filter: {
+        ...(kind === "individual" ? { member_ids: body.member_ids ?? [] } : {}),
+        ...(excluded.size > 0 ? { excluded_member_ids: Array.from(excluded) } : {}),
+      } as never,
       sent_by_uid: ctx.uid,
       sent_by_name: sentByName,
     } as never)
@@ -249,6 +265,7 @@ export async function POST(request: Request) {
     send_id: sendId,
     issued,
     skipped,
+    excluded: excluded.size,
     channel,
     sms: wantsSms ? { sent: smsSent, failed: smsFailed } : null,
   });
