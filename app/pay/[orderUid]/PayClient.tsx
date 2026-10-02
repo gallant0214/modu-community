@@ -38,13 +38,22 @@ export default function PayClient(props: {
         widgetsRef.current = widgets as never;
 
         await widgets.setAmount({ currency: "KRW", value: props.amount });
+        /* 🚨 variantKey 는 넘기지 않는다.
+           결제 UI 를 여러 개 만들었을 때 고르는 값이라 선택사항인데, 상점에 그 이름의
+           UI 가 없으면 렌더링이 통째로 실패한다. 기본 UI 를 쓰면 생략이 맞다. */
         await Promise.all([
-          widgets.renderPaymentMethods({ selector: "#toss-payment-method", variantKey: "DEFAULT" }),
-          widgets.renderAgreement({ selector: "#toss-agreement", variantKey: "AGREEMENT" }),
+          widgets.renderPaymentMethods({ selector: "#toss-payment-method" }),
+          widgets.renderAgreement({ selector: "#toss-agreement" }),
         ]);
         if (alive) setReady(true);
       } catch (e) {
-        if (alive) setError(e instanceof Error ? e.message : "결제창을 불러오지 못했어요");
+        /* 실패 원인을 숨기지 않는다 — 결제창이 안 뜨는 이유는 대부분 상점 설정이고,
+           코드를 봐야 어디를 고칠지 알 수 있다. (예: NOT_REGISTERED_PAYMENT_WIDGET
+           = 상점관리자에 결제 UI 가 없음) */
+        const code = (e as { code?: string })?.code ?? "";
+        const msg = e instanceof Error ? e.message : "결제창을 불러오지 못했어요";
+        console.error("[toss] 결제위젯 렌더 실패", code, e);
+        if (alive) setError(code ? `${msg} (${code})` : msg);
       }
     })();
     return () => {
@@ -86,7 +95,13 @@ export default function PayClient(props: {
       <div id="toss-agreement" className="mt-2" />
 
       {error && (
-        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+        <div className="mt-3 rounded-lg bg-red-50 px-3.5 py-3 text-sm leading-relaxed text-red-700">
+          <p className="font-semibold">결제창을 불러오지 못했어요</p>
+          <p className="mt-1 break-all text-[13px]">{error}</p>
+          <p className="mt-2 text-[12.5px] text-red-600/80">
+            잠시 후 다시 시도해 주세요. 계속 같은 화면이면 센터로 알려주세요.
+          </p>
+        </div>
       )}
 
       <button
