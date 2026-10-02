@@ -251,10 +251,12 @@ export async function buildCheckinSummary(centerId: number, memberId: number) {
         .gte("expires_at", todayYmd),
       supabase
         .from("crm_rentals")
+        // 상태값은 valid/expired (active 는 존재하지 않음 — 예전 필터로는 항상 0건이라
+        // 결과창 '보유 회원권'에 운동복이 아예 안 떴다)
         .select("id, item_name, expires_at")
         .eq("center_id", centerId)
         .eq("member_id", memberId)
-        .eq("status", "active")
+        .eq("status", "valid")
         .gte("expires_at", todayYmd),
       supabase
         .from("crm_lockers")
@@ -307,11 +309,12 @@ export async function buildCheckinSummary(centerId: number, memberId: number) {
     weekPresent[dt.getUTCDay()] = true;
   }
 
+  // 🚨 입장 자격 = 유효한 회원권/수강권만. 락커·대여권(운동복)은 부가상품이라 제외한다.
+  //    (예전에는 lockers 를 만료일 필터 없이 세어서, 회원권이 만료돼도 락커가 배정돼
+  //     있으면 can_enter=true → 만료 경고음 대신 정상 확인음이 울렸다.)
   const canEnter =
     memberships.some((m) => !m.is_paused) ||
-    passes.some((p) => !p.is_paused && p.remaining_sessions > 0) ||
-    rentals.length > 0 ||
-    lockers.length > 0;
+    passes.some((p) => !p.is_paused && p.remaining_sessions > 0);
 
   // 출석시작일 전 판정: 유효(미만료) 이용권 중 이미 시작한 것은 없고, 시작일이 미래인 것만 있을 때.
   //  → "아직 출석시작일이 아닙니다" 안내. (start_date 없으면 즉시 시작으로 간주)
