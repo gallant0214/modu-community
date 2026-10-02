@@ -92,19 +92,45 @@ export async function notifyStaffMember(params: {
     const iosTokens = rows.filter(isApnsRawToken).map((r) => r.token); // APNs 대상
     const fcmTokens = rows.filter((r) => !isApnsRawToken(r)).map((r) => r.token); // FCM 대상
 
-    // Android/FCM
+    // Android/FCM (+ 신 iOS 빌드의 FCM 토큰)
     if (fcmTokens.length > 0) {
       const messaging = getMessaging(getAdmin());
+      const deadFcm: string[] = [];
       for (let i = 0; i < fcmTokens.length; i += 500) {
         const batch = fcmTokens.slice(i, i + 500);
-        await messaging
-          .sendEachForMulticast({
+        try {
+          const resp = await messaging.sendEachForMulticast({
             notification: { title, body },
             data: { type, ...(data ?? {}) },
-            apns: { payload: { aps: { sound: "default", badge: 1 } } },
+            // 🚨 high priority 가 없으면 Doze/절전 상태 안드로이드에서 지연·누락됨(간헐 미도달 주원인).
+            android: {
+              priority: "high",
+              notification: { sound: "default", channelId: "default" },
+            },
+            apns: {
+              headers: { "apns-priority": "10", "apns-push-type": "alert" },
+              payload: { aps: { sound: "default", badge: 1 } },
+            },
             tokens: batch,
-          })
-          .catch(() => {});
+          });
+          // 더 이상 유효하지 않은 토큰은 수집 → 삭제(헛발송·누적 방지).
+          resp.responses.forEach((r, idx) => {
+            if (r.success) return;
+            const code = r.error?.code || "";
+            if (
+              code === "messaging/registration-token-not-registered" ||
+              code === "messaging/invalid-registration-token" ||
+              code === "messaging/invalid-argument"
+            ) {
+              deadFcm.push(batch[idx]);
+            }
+          });
+        } catch (e) {
+          console.error("[crm-staff-notify] FCM 발송 오류", e);
+        }
+      }
+      if (deadFcm.length > 0) {
+        await supabase.from("crm_staff_device_tokens").delete().in("token", deadFcm);
       }
     }
 
