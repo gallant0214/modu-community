@@ -271,13 +271,15 @@ export async function GET(request: Request) {
 
   // KST 오늘 (예정 판정용)
   const todayKstYmd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-  const holdSet = new Set<number>(); // 유효 이용권 중 홀딩(정지)중인 회원
+  // 🚨 홀딩 판정은 is_paused 플래그가 아니라 **실제 홀딩 기간(crm_pauses)** 기준.
+  //    회원 상세 칩·대시보드와 같은 규칙으로 맞춘다. 플래그만 남은 이관분 때문에
+  //    목록은 '홀딩' 인데 상세엔 칩이 없는 불일치가 있었다(김민규 회원 사례).
+  const holdSet = new Set<number>(); // 오늘이 홀딩 기간 안인 회원
   const hasActiveSet = new Set<number>(); // 지금 이용중(시작함 & 만료 전)인 이용권 보유 회원
   const hasFutureSet = new Set<number>(); // 시작일이 미래인(아직 시작 안 함) 이용권 보유 회원
 
   // 유효 이용권 1건을 사람별 활성/미래/홀딩 집합에 반영
-  const classify = (memberId: number, startDate: string | null, expires: string, paused: boolean) => {
-    if (paused) holdSet.add(memberId);
+  const classify = (memberId: number, startDate: string | null, expires: string, _paused: boolean) => {
     if (startDate && startDate > todayKstYmd) {
       hasFutureSet.add(memberId); // 아직 시작 안 함
     } else if (!expires || expires >= todayKstYmd) {
@@ -292,6 +294,18 @@ export async function GET(request: Request) {
     if (won <= 0 && paymentStatus !== "unpaid" && paymentStatus !== "partial") return;
     outstandingMap.set(memberId, (outstandingMap.get(memberId) ?? 0) + won);
   };
+  // 오늘이 홀딩 기간 안인 회원 (crm_pauses 기준) — 상세 칩·대시보드와 동일
+  {
+    const { data: activePauses } = await supabase
+      .from("crm_pauses")
+      .select("member_id")
+      .eq("center_id", ctx.centerId)
+      .eq("status", "active")
+      .lte("start_date", todayKstYmd)
+      .gte("end_date", todayKstYmd);
+    for (const r of (activePauses ?? []) as { member_id: number }[]) holdSet.add(r.member_id);
+  }
+
   for (const p of passesData) {
     // 횟수제 수강권이 모두 소진(출석완료)됐으면 '이용 가능 상품'에서 제외.
     // (기간제(total_sessions<=0)는 잔여 개념이 없어 그대로 표시)

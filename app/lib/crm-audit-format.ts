@@ -39,6 +39,8 @@ export const ACTION_LABEL: Record<string, string> = {
   "pause.create": "홀딩 시작",
   "pause.update": "홀딩 수정",
   "pause.cancel": "홀딩 해제",
+  "pause.ended": "홀딩 기간 종료(자동)",
+  "pause.orphan_release": "홀딩 기록 없는 일시정지 해제(자동)",
   // 예약 / 출석
   "reservation.book": "예약 생성",
   "reservation.update": "예약 상태 변경",
