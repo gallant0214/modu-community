@@ -3401,6 +3401,7 @@ export type Database = {
           counselor: string | null
           mileage: number
           marketing_consent: boolean
+          first_registered_at: string | null
           registered_at: string | null
           registration_type: string | null
           first_use_at: string | null
@@ -3442,6 +3443,7 @@ export type Database = {
           counselor?: string | null
           mileage?: number
           marketing_consent?: boolean
+          first_registered_at?: string | null
           registered_at?: string | null
           registration_type?: string | null
           first_use_at?: string | null
@@ -3483,6 +3485,7 @@ export type Database = {
           counselor?: string | null
           mileage?: number
           marketing_consent?: boolean
+          first_registered_at?: string | null
           registered_at?: string | null
           registration_type?: string | null
           first_use_at?: string | null

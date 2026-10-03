@@ -108,13 +108,14 @@ export async function GET(request: Request) {
     gender: Gender;
     created_at: string;
     registered_at: string | null;
+    first_registered_at: string | null;
     final_expire_at: string | null;
     last_attended_at: string | null;
     registration_type: string | null;
   }>((f, t) =>
     supabase
       .from("crm_members")
-      .select("id, gender, created_at, registered_at, final_expire_at, last_attended_at, registration_type")
+      .select("id, gender, created_at, registered_at, first_registered_at, final_expire_at, last_attended_at, registration_type")
       .eq("center_id", ctx.centerId)
       .eq("status", "active")
       .range(f, t)
@@ -243,8 +244,9 @@ export async function GET(request: Request) {
       }
     } else addGender(expiredMembers, m.gender);
 
-    // 신규/재등록: POS registered_at 우선(POS 원본 최초 등록일), 없으면 created_at
-    const anchorYmd = (m.registered_at ?? m.created_at ?? "").slice(0, 10);
+    // 신규/재등록 기준 = 최초 등록일. registered_at 은 '최근 등록일' 로 자동 갱신되므로
+    // 집계에 쓰면 재구매 회원이 매달 신규로 잡힌다 → first_registered_at 우선.
+    const anchorYmd = (m.first_registered_at ?? m.registered_at ?? m.created_at ?? "").slice(0, 10);
     if (anchorYmd >= from && anchorYmd < toExcl) {
       if (m.registration_type === "재등록") addGender(reregisteredMembers, m.gender);
       else addGender(newMembers, m.gender);
@@ -264,7 +266,7 @@ export async function GET(request: Request) {
   );
   const alreadyCounted = new Set<number>();
   for (const m of members) {
-    const anchorYmd = (m.registered_at ?? m.created_at ?? "").slice(0, 10);
+    const anchorYmd = (m.first_registered_at ?? m.registered_at ?? m.created_at ?? "").slice(0, 10);
     if (m.registration_type === "재등록" && anchorYmd >= from && anchorYmd < toExcl) {
       alreadyCounted.add(m.id);
     }

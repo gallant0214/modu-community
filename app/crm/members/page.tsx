@@ -36,6 +36,8 @@ interface MemberRow {
   mileage: number;
   marketing_consent: boolean;
   registered_at: string | null;
+  /** 최초 등록일 — 가입일 필터 기준(registered_at 은 최근 등록일로 갱신됨) */
+  first_registered_at?: string | null;
   registration_type: string | null;
   first_use_at: string | null;
   total_paid_won: number;
@@ -699,15 +701,17 @@ export default function CrmMembersPage() {
       // 상태 (상단 카드 = 상태 필터)
       if (fStatus !== "all" && !matchStatus(m, fStatus, todayStr)) return false;
 
-      // 가입일 (등록일 우선, 없으면 생성일)
+      // 가입일 = 최초 등록일 우선, 없으면 생성일.
+      // (registered_at 은 '최근 등록일' 로 자동 갱신되므로 가입일 필터에 쓰면 재구매로 움직인다)
       if (fSignup !== "all") {
-        const regRaw = m.registered_at ? `${m.registered_at}T00:00:00` : m.created_at;
+        const firstReg = m.first_registered_at ?? m.registered_at;
+        const regRaw = firstReg ? `${firstReg}T00:00:00` : m.created_at;
         const created = new Date(regRaw);
         if (fSignup === "this_week" && (created < startOfWeek || created >= endOfWeek)) return false;
         if (fSignup === "this_month" && (created < startOfMonth || created >= endOfMonth)) return false;
         if (fSignup === "this_year" && created < startOfYear) return false;
         if (fSignup === "custom") {
-          const createdYmd = (m.registered_at ?? m.created_at).slice(0, 10);
+          const createdYmd = (m.first_registered_at ?? m.registered_at ?? m.created_at).slice(0, 10);
           if (fSignupFrom && createdYmd < fSignupFrom) return false;
           if (fSignupTo && createdYmd > fSignupTo) return false;
         }

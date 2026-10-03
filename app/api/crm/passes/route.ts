@@ -9,7 +9,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
-import { syncRegistrationType } from "@/app/lib/crm-registration-type";
+import { syncRegistrationType, syncMemberRegistrationDates } from "@/app/lib/crm-registration-type";
 import { fireFirstPurchaseMessage } from "@/app/lib/crm-auto-message";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
 
@@ -345,6 +345,8 @@ export async function POST(request: Request) {
 
   // 신규/재등록 자동 갱신 — 회원권·수강권 등록 횟수 기준
   await syncRegistrationType(ctx.centerId, memberId);
+  // 최근 등록일·최초 등록일·마지막 구매일 스냅샷 갱신
+  await syncMemberRegistrationDates(ctx.centerId, memberId);
 
   // 결제일(paid_at): 당일 발급이면 실제 결제 시각, 과거 날짜(백데이트)면 그 발급일(정오).
   const todayKstYmd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);

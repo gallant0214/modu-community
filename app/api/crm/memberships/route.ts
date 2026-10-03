@@ -10,7 +10,7 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 
 import { fireAutoMessage, fireFirstPurchaseMessage } from "@/app/lib/crm-auto-message";
-import { syncRegistrationType } from "@/app/lib/crm-registration-type";
+import { syncRegistrationType, syncMemberRegistrationDates } from "@/app/lib/crm-registration-type";
 import { rentalKindKey } from "@/app/lib/crm-locker-sync";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
@@ -372,6 +372,8 @@ export async function POST(request: Request) {
 
   // 신규/재등록 구분 자동 갱신 (구매 이력 2건 이상 → 재등록)
   await syncRegistrationType(ctx.centerId, memberId);
+  // 최근 등록일·최초 등록일·마지막 구매일 스냅샷 갱신
+  await syncMemberRegistrationDates(ctx.centerId, memberId);
 
   return NextResponse.json({ ok: true, membershipId: created.id });
 }

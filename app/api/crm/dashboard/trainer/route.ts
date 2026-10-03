@@ -156,7 +156,7 @@ export async function GET(request: Request) {
   const { data: members } = memberIds.size
     ? await supabase
         .from("crm_members")
-        .select("id, name, last_attended_at, registered_at, registration_type, created_at")
+        .select("id, name, last_attended_at, registered_at, first_registered_at, registration_type, created_at")
         .in("id", Array.from(memberIds))
     : {
         data: [] as {
@@ -164,6 +164,7 @@ export async function GET(request: Request) {
           name: string;
           last_attended_at: string | null;
           registered_at: string | null;
+          first_registered_at: string | null;
           registration_type: string | null;
           created_at: string | null;
         }[],
@@ -353,7 +354,9 @@ export async function GET(request: Request) {
   let renewalThisMonth = 0;
   for (const m of members ?? []) {
     // 등록일 우선, 없으면 생성일 (회원관리 페이지 signup 필터와 동일 기준)
-    const reg = m.registered_at ?? (m.created_at ? m.created_at.slice(0, 10) : null);
+    // 최초 등록일 기준(registered_at 은 최근 등록일로 움직임)
+    const reg =
+      m.first_registered_at ?? m.registered_at ?? (m.created_at ? m.created_at.slice(0, 10) : null);
     if (!reg || reg < monthStart || reg >= nextMonthStart) continue;
     if (m.registration_type === "재등록") renewalThisMonth += 1;
     else if (m.registration_type === "신규") newThisMonth += 1;
