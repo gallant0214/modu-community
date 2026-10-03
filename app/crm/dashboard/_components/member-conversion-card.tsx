@@ -100,20 +100,23 @@ export function MemberConversionCard() {
   const curNew = months.map((_, i) => cur.newReg[i] ?? 0);
   const prevNew = months.map((_, i) => (prev.newReg.length > i ? prev.newReg[i] ?? 0 : null));
 
-  // 평균 — 분모 없는 달(아직 안 온 달)과 진행 중인 달 제외
-  const avgOf = (num: number[], den: number[]) => {
+  // 평균 — 분모 없는 달 제외. 올해는 진행 중인 달도 제외(아직 만료가 다 안 끝남).
+  const avgOf = (num: number[], den: number[], skipInProgress: boolean) => {
     let n = 0;
     let d = 0;
     for (let i = 0; i < months.length; i++) {
-      if (i === ip) continue;
+      if (skipInProgress && i === ip) continue;
       if ((den[i] ?? 0) <= 0) continue;
       n += num[i] ?? 0;
       d += den[i] ?? 0;
     }
     return d > 0 ? Math.round((n / d) * 100) : 0;
   };
-  const avg = avgOf(cur.expireConverted, cur.expireCohort);
-  const reAvg = avgOf(cur.reExpireConverted, cur.reExpireCohort);
+  const avg = avgOf(cur.expireConverted, cur.expireCohort, true);
+  const reAvg = avgOf(cur.reExpireConverted, cur.reExpireCohort, true);
+  // 작년은 12개월이 모두 끝났으므로 전체 달로 평균
+  const prevAvg = avgOf(prev.expireConverted, prev.expireCohort, false);
+  const prevReAvg = avgOf(prev.reExpireConverted, prev.reExpireCohort, false);
   const newTotal = curNew.reduce((s, v) => s + v, 0);
   const prevNewTotal = prev.newReg.reduce((s, v) => s + v, 0);
 
@@ -129,8 +132,10 @@ export function MemberConversionCard() {
           <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
             신규 → 재등록 전환률
           </h3>
-          <span className="text-[12px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">
-            올해 평균 {avg}%
+          <span className="text-[12px] font-semibold">
+            <span className="text-[#C76C8E] dark:text-[#E9AFC3]">작년 평균 {prevAvg}%</span>
+            <span className="mx-1 font-normal text-[#C9BFA8]">·</span>
+            <span className="text-[#6B7B3A] dark:text-[#A8B87A]">올해 평균 {avg}%</span>
           </span>
         </div>
         <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-2">
@@ -157,8 +162,10 @@ export function MemberConversionCard() {
           <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
             재등록 → 재등록 전환률
           </h3>
-          <span className="text-[12px] font-semibold text-[#B47B2A] dark:text-[#D8A24A]">
-            올해 평균 {reAvg}%
+          <span className="text-[12px] font-semibold">
+            <span className="text-[#5A8BB0] dark:text-[#8FC4E8]">작년 평균 {prevReAvg}%</span>
+            <span className="mx-1 font-normal text-[#C9BFA8]">·</span>
+            <span className="text-[#B47B2A] dark:text-[#D8A24A]">올해 평균 {reAvg}%</span>
           </span>
         </div>
         <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-2">
@@ -185,10 +192,13 @@ export function MemberConversionCard() {
           <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
             신규 등록 수
           </h3>
-          <span className="text-[12px] font-semibold text-[#5A8BB0] dark:text-[#8FC4E8]">
-            올해 {newTotal.toLocaleString()}명
-            <span className="ml-1 font-normal text-[#A89B80]">
-              (작년 {prevNewTotal.toLocaleString()}명)
+          <span className="text-[12px] font-semibold">
+            <span className="text-[#C76C8E] dark:text-[#E9AFC3]">
+              작년 {prevNewTotal.toLocaleString()}명
+            </span>
+            <span className="mx-1 font-normal text-[#C9BFA8]">·</span>
+            <span className="text-[#5A8BB0] dark:text-[#8FC4E8]">
+              올해 {newTotal.toLocaleString()}명
             </span>
           </span>
         </div>
