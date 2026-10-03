@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "회원 열람 권한이 없습니다" }, { status: 403 });
   }
 
-  const [{ data: member }, { data: memberships }, { data: passes }] = await Promise.all([
+  const [{ data: member }, { data: memberships }, { data: passes }, { data: pauses }] = await Promise.all([
     supabase
       .from("crm_members")
       .select("id, name, phone, birth, gender, address, status, mileage, face_image_thumb, face_image_data, memo, registered_at, member_type")
@@ -65,13 +65,38 @@ export async function GET(request: Request) {
       .eq("member_id", memberId)
       .neq("status", "deleted")
       .order("expires_at", { ascending: false }),
+    // 홀딩(정지) '기간' 판정용 — is_paused 플래그는 홀딩 취소/종료 후에도 켜진 채로 남는
+    // 경우가 있어 신뢰 불가. 반드시 crm_pauses(status='active')의 start~end 창으로 판정.
+    supabase
+      .from("crm_pauses")
+      .select("membership_id, pass_id, start_date, end_date, status")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .eq("status", "active"),
   ]);
 
   if (!member) return NextResponse.json({ error: "회원을 찾을 수 없습니다" }, { status: 404 });
 
+  // 오늘(KST) 기준 홀딩 상태: 'holding'(기간 내) | 'scheduled'(시작 전) | null(없음/종료)
+  const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const holdStateFor = (field: "membership_id" | "pass_id", id: number): "holding" | "scheduled" | null => {
+    const rows = (pauses ?? []).filter((p) => (p as Record<string, unknown>)[field] === id);
+    let scheduled = false;
+    for (const p of rows) {
+      const s = String(p.start_date ?? "").slice(0, 10);
+      const e = String(p.end_date ?? "").slice(0, 10);
+      if (s && e && s <= todayKst && todayKst <= e) return "holding";
+      if (s && s > todayKst) scheduled = true;
+    }
+    return scheduled ? "scheduled" : null;
+  };
+
+  const membershipsOut = (memberships ?? []).map((m) => ({ ...m, hold_state: holdStateFor("membership_id", m.id) }));
+  const passesOut = (passes ?? []).map((p) => ({ ...p, hold_state: holdStateFor("pass_id", p.id) }));
+
   return NextResponse.json({
     member,
-    memberships: memberships ?? [],
-    passes: passes ?? [],
+    memberships: membershipsOut,
+    passes: passesOut,
   });
 }
