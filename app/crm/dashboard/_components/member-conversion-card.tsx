@@ -4,50 +4,74 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { MonthlyStackedBars } from "./monthly-stacked-bars";
 
+interface YearData {
+  months: string[]; // "YYYY-MM" 1~12월
+  expireCohort: number[];
+  expireConverted: number[];
+  reExpireCohort: number[];
+  reExpireConverted: number[];
+  newReg: number[];
+  inProgressIndex: number; // 진행 중인 달 (올해만 해당, 작년은 -1)
+}
+
+const EMPTY: YearData = {
+  months: [],
+  expireCohort: [],
+  expireConverted: [],
+  reExpireCohort: [],
+  reExpireConverted: [],
+  newReg: [],
+  inProgressIndex: -1,
+};
+
+/** 비율(%) — 분모 0이면 0 */
+function rate(num: number[], den: number[], i: number): number {
+  return (den[i] ?? 0) > 0 ? Math.round(((num[i] ?? 0) / den[i]) * 100) : 0;
+}
+
 /**
- * 신규 → 재등록 전환률 (월별).
- * 그 달에 '신규(첫) 회원권이 만료'된 회원 중, 재등록한 회원의 비율.
- * 회원 통계 섹션에 카드로 표시.
+ * 신규 → 재등록 / 재등록 → 재등록 전환률 + 신규 등록 수 (월별).
+ * 막대 = 올해(1~12월), 꺾은선 = 작년 같은 달 — 한 그래프에 겹쳐 비교.
+ *
+ * 🚨 진행 중인 달은 분모(그 달 만료자)가 '오늘까지 만료된 건'만 잡히므로
+ *    평균에서 제외하고 '진행 중' 으로 표시한다(API inProgressIndex).
  */
 export function MemberConversionCard() {
   const { getIdToken } = useAuth();
-  const [months, setMonths] = useState<string[]>([]);
-  const [rates, setRates] = useState<number[]>([]);
-  const [cohort, setCohort] = useState<number[]>([]);
-  const [converted, setConverted] = useState<number[]>([]);
-  const [reRates, setReRates] = useState<number[]>([]);
-  const [reCohort, setReCohort] = useState<number[]>([]);
-  const [reConverted, setReConverted] = useState<number[]>([]);
-  const [inProgressIndex, setInProgressIndex] = useState(-1);
+  const [years] = useState(() => {
+    const y = new Date().getFullYear();
+    return { thisYear: y, lastYear: y - 1 };
+  });
+  const { thisYear, lastYear } = years;
+  const [cur, setCur] = useState<YearData>(EMPTY);
+  const [prev, setPrev] = useState<YearData>(EMPTY);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
       const token = await getIdToken();
       if (!token) return;
-      const res = await fetch("/api/crm/dashboard/customer-status?period=1y", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      if (!res.ok) return;
-      const d = await res.json();
-      const mo: string[] = d.months ?? [];
-      const co: number[] = d.expireCohort ?? [];
-      const cv: number[] = d.expireConverted ?? [];
-      const rco: number[] = d.reExpireCohort ?? [];
-      const rcv: number[] = d.reExpireConverted ?? [];
-      setMonths(mo);
-      setInProgressIndex(typeof d.inProgressIndex === "number" ? d.inProgressIndex : -1);
-      setCohort(co);
-      setConverted(cv);
-      setRates(mo.map((_, i) => (co[i] > 0 ? Math.round((cv[i] / co[i]) * 100) : 0)));
-      setReCohort(rco);
-      setReConverted(rcv);
-      setReRates(mo.map((_, i) => (rco[i] > 0 ? Math.round((rcv[i] / rco[i]) * 100) : 0)));
+      const h = { authorization: `Bearer ${token}` };
+      const [rc, rp] = await Promise.all([
+        fetch(`/api/crm/dashboard/customer-status?year=${thisYear}`, { headers: h, cache: "no-store" }),
+        fetch(`/api/crm/dashboard/customer-status?year=${lastYear}`, { headers: h, cache: "no-store" }),
+      ]);
+      if (rc.ok) {
+        const d = await rc.json();
+        setCur({
+          ...EMPTY,
+          ...d,
+          inProgressIndex: typeof d.inProgressIndex === "number" ? d.inProgressIndex : -1,
+        });
+      }
+      if (rp.ok) {
+        const d = await rp.json();
+        setPrev({ ...EMPTY, ...d, inProgressIndex: -1 });
+      }
     } finally {
       setLoading(false);
     }
-  }, [getIdToken]);
+  }, [getIdToken, thisYear, lastYear]);
 
   useEffect(() => {
     load();
@@ -61,20 +85,41 @@ export function MemberConversionCard() {
     );
   }
 
-  // 평균은 '완료된 달'만으로 낸다 — 진행 중인 달은 아직 만료가 다 끝나지 않아
-  // 표본이 작고(오늘까지 만료분만) 평균을 끌어내리기 때문.
-  const done = (arr: number[]) => arr.filter((_, i) => i !== inProgressIndex);
-  const sum = (arr: number[]) => arr.reduce((a, v) => a + v, 0);
-  const totalCohort = sum(done(cohort));
-  const totalConverted = sum(done(converted));
-  const avg = totalCohort > 0 ? Math.round((totalConverted / totalCohort) * 100) : 0;
-  const reTotalCohort = sum(done(reCohort));
-  const reTotalConverted = sum(done(reConverted));
-  const reAvg = reTotalCohort > 0 ? Math.round((reTotalConverted / reTotalCohort) * 100) : 0;
-  const inProgressLabel = inProgressIndex >= 0 ? months[inProgressIndex] : null;
-  const progressNote = inProgressLabel
-    ? ` · ${inProgressLabel.slice(5)}월은 진행 중(오늘까지 만료분만, 평균 제외)`
-    : "";
+  const months = cur.months.length > 0 ? cur.months : prev.months;
+  const ip = cur.inProgressIndex;
+
+  // 올해 막대 / 작년 꺾은선 — 작년 분모가 0인 달은 선을 끊는다(null)
+  const curRates = months.map((_, i) => rate(cur.expireConverted, cur.expireCohort, i));
+  const prevRates = months.map((_, i) =>
+    (prev.expireCohort[i] ?? 0) > 0 ? rate(prev.expireConverted, prev.expireCohort, i) : null
+  );
+  const curReRates = months.map((_, i) => rate(cur.reExpireConverted, cur.reExpireCohort, i));
+  const prevReRates = months.map((_, i) =>
+    (prev.reExpireCohort[i] ?? 0) > 0 ? rate(prev.reExpireConverted, prev.reExpireCohort, i) : null
+  );
+  const curNew = months.map((_, i) => cur.newReg[i] ?? 0);
+  const prevNew = months.map((_, i) => (prev.newReg.length > i ? prev.newReg[i] ?? 0 : null));
+
+  // 평균 — 분모 없는 달(아직 안 온 달)과 진행 중인 달 제외
+  const avgOf = (num: number[], den: number[]) => {
+    let n = 0;
+    let d = 0;
+    for (let i = 0; i < months.length; i++) {
+      if (i === ip) continue;
+      if ((den[i] ?? 0) <= 0) continue;
+      n += num[i] ?? 0;
+      d += den[i] ?? 0;
+    }
+    return d > 0 ? Math.round((n / d) * 100) : 0;
+  };
+  const avg = avgOf(cur.expireConverted, cur.expireCohort);
+  const reAvg = avgOf(cur.reExpireConverted, cur.reExpireCohort);
+  const newTotal = curNew.reduce((s, v) => s + v, 0);
+  const prevNewTotal = prev.newReg.reduce((s, v) => s + v, 0);
+
+  const progressNote = ip >= 0 ? ` · ${Number(months[ip]?.slice(5, 7))}월은 진행 중(평균 제외)` : "";
+  const BAR = `올해(${thisYear})`;
+  const LINE = `작년(${lastYear})`;
 
   return (
     <div className="rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-5 py-4 shadow-sm space-y-5">
@@ -85,22 +130,23 @@ export function MemberConversionCard() {
             신규 → 재등록 전환률
           </h3>
           <span className="text-[12px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">
-            평균 {avg}%
+            올해 평균 {avg}%
           </span>
         </div>
         <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-2">
-          그 달에 <b>신규 회원권이 만료</b>된 회원 중 재등록한 비율 (월별) · 최근 12개월
+          그 달에 <b>신규 회원권이 만료</b>된 회원 중 재등록한 비율 · 막대 {BAR} / 선 {LINE}
           {progressNote}
         </p>
         <MonthlyStackedBars
           months={months}
-          series={[{ label: "전환률", color: "#6B7B3A", values: rates }]}
+          series={[{ label: BAR, color: "#6B7B3A", values: curRates }]}
+          line={{ label: LINE, color: "#C76C8E", values: prevRates }}
           mode="count"
           unit="%"
           hoverNote={(i) =>
-            `재등록 ${converted[i] ?? 0}명 / 신규 만료 ${cohort[i] ?? 0}명${
-              i === inProgressIndex ? " (진행 중 · 오늘까지)" : ""
-            }`
+            `${thisYear} 재등록 ${cur.expireConverted[i] ?? 0}명/만료 ${cur.expireCohort[i] ?? 0}명` +
+            ` · ${lastYear} 재등록 ${prev.expireConverted[i] ?? 0}명/만료 ${prev.expireCohort[i] ?? 0}명` +
+            (i === ip ? " (진행 중 · 오늘까지)" : "")
           }
         />
       </div>
@@ -112,28 +158,56 @@ export function MemberConversionCard() {
             재등록 → 재등록 전환률
           </h3>
           <span className="text-[12px] font-semibold text-[#B47B2A] dark:text-[#D8A24A]">
-            평균 {reAvg}%
+            올해 평균 {reAvg}%
           </span>
         </div>
         <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-2">
-          그 달에 <b>재등록 이용권이 만료</b>된 건 중 다시 재등록한 비율 (월별) · 최근 12개월
+          그 달에 <b>재등록 이용권이 만료</b>된 건 중 다시 재등록한 비율 · 막대 {BAR} / 선 {LINE}
           {progressNote}
         </p>
         <MonthlyStackedBars
           months={months}
-          series={[{ label: "전환률", color: "#B47B2A", values: reRates }]}
+          series={[{ label: BAR, color: "#B47B2A", values: curReRates }]}
+          line={{ label: LINE, color: "#5A8BB0", values: prevReRates }}
           mode="count"
           unit="%"
           hoverNote={(i) =>
-            `재등록 ${reConverted[i] ?? 0}건 / 재등록 만료 ${reCohort[i] ?? 0}건${
-              i === inProgressIndex ? " (진행 중 · 오늘까지)" : ""
-            }`
+            `${thisYear} 재등록 ${cur.reExpireConverted[i] ?? 0}건/만료 ${cur.reExpireCohort[i] ?? 0}건` +
+            ` · ${lastYear} 재등록 ${prev.reExpireConverted[i] ?? 0}건/만료 ${prev.reExpireCohort[i] ?? 0}건` +
+            (i === ip ? " (진행 중 · 오늘까지)" : "")
           }
         />
       </div>
 
+      {/* 신규 등록 수 */}
+      <div className="pt-1 border-t border-[#EFE7D8] dark:border-zinc-800">
+        <div className="flex items-center justify-between mb-1 mt-3">
+          <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">
+            신규 등록 수
+          </h3>
+          <span className="text-[12px] font-semibold text-[#5A8BB0] dark:text-[#8FC4E8]">
+            올해 {newTotal.toLocaleString()}명
+            <span className="ml-1 font-normal text-[#A89B80]">
+              (작년 {prevNewTotal.toLocaleString()}명)
+            </span>
+          </span>
+        </div>
+        <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-2">
+          그 달에 <b>처음 상품을 등록</b>한 회원 수 · 막대 {BAR} / 선 {LINE}
+        </p>
+        <MonthlyStackedBars
+          months={months}
+          series={[{ label: BAR, color: "#5A8BB0", values: curNew }]}
+          line={{ label: LINE, color: "#C76C8E", values: prevNew }}
+          mode="count"
+          unit="명"
+          hoverNote={(i) => `${thisYear} ${cur.newReg[i] ?? 0}명 · ${lastYear} ${prev.newReg[i] ?? 0}명`}
+        />
+      </div>
+
       <p className="text-[11px] text-[#A89B80] dark:text-zinc-500 leading-relaxed">
-        막대에 마우스를 올리면 전환률과 인원수가 표시돼요. 이용권이 만료된 달을 기준으로 집계합니다.
+        재등록 판정은 <b>첫 상품 이후 추가 발급이 있었는지</b>로 봅니다(만료 전 미리 재등록한 경우도 포함).
+        진행 중인 달은 아직 만료가 끝나지 않아 <b>오늘까지 만료된 건</b>만 분모에 넣고 평균에서 제외합니다.
       </p>
     </div>
   );

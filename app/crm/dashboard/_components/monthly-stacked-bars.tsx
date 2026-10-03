@@ -18,6 +18,8 @@ interface Props {
   height?: number;
   /** 툴팁 하단에 추가로 보여줄 문구 (예: 인원수) */
   hoverNote?: (idx: number) => string;
+  /** 막대 위에 겹쳐 그릴 꺾은선 (예: 작년 같은 달) — 값이 null 인 달은 선을 끊는다 */
+  line?: { label: string; color: string; values: (number | null)[] };
 }
 
 /**
@@ -25,7 +27,7 @@ interface Props {
  * - percent 모드: 각 달을 100%로 채우는 구성 비율 띠그래프
  * - count 모드: 절대값 누적 막대 (단일 시리즈면 일반 막대)
  */
-export function MonthlyStackedBars({ months, series, mode = "count", unit = "명", height = 200, hoverNote }: Props) {
+export function MonthlyStackedBars({ months, series, mode = "count", unit = "명", height = 200, hoverNote, line }: Props) {
   const [hover, setHover] = useState<{ x: number; y: number; idx: number; flip: boolean } | null>(null);
 
   if (months.length === 0 || series.length === 0) {
@@ -46,7 +48,9 @@ export function MonthlyStackedBars({ months, series, mode = "count", unit = "명
   const innerH = H - padT - padB;
 
   const totals = months.map((_, i) => series.reduce((s, ser) => s + (ser.values[i] ?? 0), 0));
-  const maxTotal = Math.max(...totals, 1);
+  // 꺾은선이 막대보다 높을 수 있으므로 축 최대값에 함께 반영한다.
+  const lineVals = (line?.values ?? []).filter((v): v is number => typeof v === "number");
+  const maxTotal = Math.max(...totals, ...lineVals, 1);
   const colW = innerW / months.length;
   const barW = Math.min(30, colW * 0.6);
 
@@ -130,10 +134,39 @@ export function MonthlyStackedBars({ months, series, mode = "count", unit = "명
             </g>
           );
         })}
+        {/* 꺾은선 (작년 등 비교 시리즈) — 막대 위에 겹쳐 그린다 */}
+        {line && (
+          <g pointerEvents="none">
+            <polyline
+              fill="none"
+              stroke={line.color}
+              strokeWidth={2}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              points={months
+                .map((_, i) => {
+                  const v = line.values[i];
+                  if (typeof v !== "number") return null;
+                  const cx = padL + colW * i + colW / 2;
+                  const cy = padT + innerH - (v / axisMax) * innerH;
+                  return `${cx},${cy}`;
+                })
+                .filter(Boolean)
+                .join(" ")}
+            />
+            {months.map((ym, i) => {
+              const v = line.values[i];
+              if (typeof v !== "number") return null;
+              const cx = padL + colW * i + colW / 2;
+              const cy = padT + innerH - (v / axisMax) * innerH;
+              return <circle key={ym} cx={cx} cy={cy} r={2.6} fill={line.color} />;
+            })}
+          </g>
+        )}
       </svg>
 
       {/* 범례 */}
-      {series.length > 1 && (
+      {(series.length > 1 || line) && (
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#6B5D47] dark:text-zinc-400">
           {series.map((ser) => (
             <span key={ser.label} className="inline-flex items-center gap-1">
@@ -141,6 +174,12 @@ export function MonthlyStackedBars({ months, series, mode = "count", unit = "명
               {ser.label}
             </span>
           ))}
+          {line && (
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block w-4 h-0.5 rounded" style={{ background: line.color }} />
+              {line.label}
+            </span>
+          )}
         </div>
       )}
 
@@ -170,6 +209,15 @@ export function MonthlyStackedBars({ months, series, mode = "count", unit = "명
               </div>
             );
           })}
+          {line && typeof line.values[hover.idx] === "number" && (
+            <div className="flex items-center gap-1.5 whitespace-nowrap">
+              <span className="inline-block w-3 h-0.5 rounded" style={{ background: line.color }} />
+              <span>
+                {line.label} {(line.values[hover.idx] as number).toLocaleString()}
+                {unit}
+              </span>
+            </div>
+          )}
           {hoverNote && (
             <div className="mt-0.5 text-[10.5px] opacity-80 whitespace-nowrap">
               {hoverNote(hover.idx)}
