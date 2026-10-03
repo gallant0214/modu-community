@@ -38,11 +38,7 @@ function rate(num: number[], den: number[], i: number): number {
  */
 export function MemberConversionCard() {
   const { getIdToken } = useAuth();
-  const [years] = useState(() => {
-    const y = new Date().getFullYear();
-    return { thisYear: y, lastYear: y - 1 };
-  });
-  const { thisYear, lastYear } = years;
+
   const [cur, setCur] = useState<YearData>(EMPTY);
   const [prev, setPrev] = useState<YearData>(EMPTY);
   const [loading, setLoading] = useState(true);
@@ -52,9 +48,13 @@ export function MemberConversionCard() {
       const token = await getIdToken();
       if (!token) return;
       const h = { authorization: `Bearer ${token}` };
+      // 최근 12개월(롤링) + 같은 버킷의 1년 전 구간
       const [rc, rp] = await Promise.all([
-        fetch(`/api/crm/dashboard/customer-status?year=${thisYear}`, { headers: h, cache: "no-store" }),
-        fetch(`/api/crm/dashboard/customer-status?year=${lastYear}`, { headers: h, cache: "no-store" }),
+        fetch("/api/crm/dashboard/customer-status?period=1y", { headers: h, cache: "no-store" }),
+        fetch("/api/crm/dashboard/customer-status?period=1y&shiftYears=1", {
+          headers: h,
+          cache: "no-store",
+        }),
       ]);
       if (rc.ok) {
         const d = await rc.json();
@@ -71,7 +71,7 @@ export function MemberConversionCard() {
     } finally {
       setLoading(false);
     }
-  }, [getIdToken, thisYear, lastYear]);
+  }, [getIdToken]);
 
   useEffect(() => {
     load();
@@ -121,8 +121,10 @@ export function MemberConversionCard() {
   const prevNewTotal = prev.newReg.reduce((s, v) => s + v, 0);
 
   const progressNote = ip >= 0 ? ` · ${Number(months[ip]?.slice(5, 7))}월은 진행 중(평균 제외)` : "";
-  const BAR = `올해(${thisYear})`;
-  const LINE = `작년(${lastYear})`;
+  // 최근 12개월 구간 표기 (예: 2025-11 ~ 2026-10)
+  const rangeNote = months.length > 0 ? `최근 12개월(${months[0]} ~ ${months[months.length - 1]})` : "최근 12개월";
+  const BAR = "최근 12개월";
+  const LINE = "1년 전 같은 달";
 
   return (
     <div className="rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 px-5 py-4 shadow-sm space-y-5">
@@ -133,13 +135,13 @@ export function MemberConversionCard() {
             신규 → 재등록 전환률
           </h3>
           <span className="text-[12px] font-semibold">
-            <span className="text-[#C76C8E] dark:text-[#E9AFC3]">작년 평균 {prevAvg}%</span>
+            <span className="text-[#C76C8E] dark:text-[#E9AFC3]">1년 전 평균 {prevAvg}%</span>
             <span className="mx-1 font-normal text-[#C9BFA8]">·</span>
-            <span className="text-[#6B7B3A] dark:text-[#A8B87A]">올해 평균 {avg}%</span>
+            <span className="text-[#6B7B3A] dark:text-[#A8B87A]">최근 12개월 평균 {avg}%</span>
           </span>
         </div>
         <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-2">
-          그 달에 <b>신규 회원권이 만료</b>된 회원 중 재등록한 비율 · 막대 {BAR} / 선 {LINE}
+          그 달에 <b>신규 회원권이 만료</b>된 회원 중 재등록한 비율 · 막대 {rangeNote} / 선 {LINE}
           {progressNote}
         </p>
         <MonthlyStackedBars
@@ -149,8 +151,8 @@ export function MemberConversionCard() {
           mode="count"
           unit="%"
           hoverNote={(i) =>
-            `${thisYear} 재등록 ${cur.expireConverted[i] ?? 0}명/만료 ${cur.expireCohort[i] ?? 0}명` +
-            ` · ${lastYear} 재등록 ${prev.expireConverted[i] ?? 0}명/만료 ${prev.expireCohort[i] ?? 0}명` +
+            `재등록 ${cur.expireConverted[i] ?? 0}명/만료 ${cur.expireCohort[i] ?? 0}명` +
+            ` · 1년 전 재등록 ${prev.expireConverted[i] ?? 0}명/만료 ${prev.expireCohort[i] ?? 0}명` +
             (i === ip ? " (진행 중 · 오늘까지)" : "")
           }
         />
@@ -163,13 +165,13 @@ export function MemberConversionCard() {
             재등록 → 재등록 전환률
           </h3>
           <span className="text-[12px] font-semibold">
-            <span className="text-[#5A8BB0] dark:text-[#8FC4E8]">작년 평균 {prevReAvg}%</span>
+            <span className="text-[#5A8BB0] dark:text-[#8FC4E8]">1년 전 평균 {prevReAvg}%</span>
             <span className="mx-1 font-normal text-[#C9BFA8]">·</span>
-            <span className="text-[#B47B2A] dark:text-[#D8A24A]">올해 평균 {reAvg}%</span>
+            <span className="text-[#B47B2A] dark:text-[#D8A24A]">최근 12개월 평균 {reAvg}%</span>
           </span>
         </div>
         <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-2">
-          그 달에 <b>재등록 이용권이 만료</b>된 건 중 다시 재등록한 비율 · 막대 {BAR} / 선 {LINE}
+          그 달에 <b>재등록 이용권이 만료</b>된 건 중 다시 재등록한 비율 · 막대 {rangeNote} / 선 {LINE}
           {progressNote}
         </p>
         <MonthlyStackedBars
@@ -179,8 +181,8 @@ export function MemberConversionCard() {
           mode="count"
           unit="%"
           hoverNote={(i) =>
-            `${thisYear} 재등록 ${cur.reExpireConverted[i] ?? 0}건/만료 ${cur.reExpireCohort[i] ?? 0}건` +
-            ` · ${lastYear} 재등록 ${prev.reExpireConverted[i] ?? 0}건/만료 ${prev.reExpireCohort[i] ?? 0}건` +
+            `재등록 ${cur.reExpireConverted[i] ?? 0}건/만료 ${cur.reExpireCohort[i] ?? 0}건` +
+            ` · 1년 전 재등록 ${prev.reExpireConverted[i] ?? 0}건/만료 ${prev.reExpireCohort[i] ?? 0}건` +
             (i === ip ? " (진행 중 · 오늘까지)" : "")
           }
         />
@@ -194,16 +196,16 @@ export function MemberConversionCard() {
           </h3>
           <span className="text-[12px] font-semibold">
             <span className="text-[#C76C8E] dark:text-[#E9AFC3]">
-              작년 {prevNewTotal.toLocaleString()}명
+              1년 전 {prevNewTotal.toLocaleString()}명
             </span>
             <span className="mx-1 font-normal text-[#C9BFA8]">·</span>
             <span className="text-[#5A8BB0] dark:text-[#8FC4E8]">
-              올해 {newTotal.toLocaleString()}명
+              최근 12개월 {newTotal.toLocaleString()}명
             </span>
           </span>
         </div>
         <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-2">
-          그 달에 <b>처음 상품을 등록</b>한 회원 수 · 막대 {BAR} / 선 {LINE}
+          그 달에 <b>처음 상품을 등록</b>한 회원 수 · 막대 {rangeNote} / 선 {LINE}
         </p>
         <MonthlyStackedBars
           months={months}
@@ -211,7 +213,7 @@ export function MemberConversionCard() {
           line={{ label: LINE, color: "#C76C8E", values: prevNew }}
           mode="count"
           unit="명"
-          hoverNote={(i) => `${thisYear} ${cur.newReg[i] ?? 0}명 · ${lastYear} ${prev.newReg[i] ?? 0}명`}
+          hoverNote={(i) => `${cur.newReg[i] ?? 0}명 · 1년 전 ${prev.newReg[i] ?? 0}명`}
         />
       </div>
 
