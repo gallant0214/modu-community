@@ -135,14 +135,16 @@ export async function syncMemberRegistrationDates(centerId: number, memberId: nu
 
     const patch: Record<string, string> = {};
     if (regDates.length > 0) {
-      const latest = regDates.reduce((a, b) => (b > a ? b : a));
-      const earliest = regDates.reduce((a, b) => (b < a ? b : a));
+      // 🚨 이관(POS) 등록일이 CRM 발급 기록보다 늦은 회원이 있어(실측 63명),
+      //    단순히 '발급 최신값' 으로 덮으면 최근 < 최초 로 역전된다.
+      //    → 알려진 모든 등록일 중 최근=최댓값 / 최초=최솟값 으로 맞춘다.
+      const known = [...regDates, cur.registered_at, cur.first_registered_at].filter(
+        (v): v is string => !!v
+      );
+      const latest = known.reduce((a, b) => (b > a ? b : a));
+      const earliest = known.reduce((a, b) => (b < a ? b : a));
       if (latest !== cur.registered_at) patch.registered_at = latest;
-      // 최초 등록일은 더 이른 날짜로만 내려간다(이관·수기로 들어온 과거 값 보존)
-      const firstKnown = [cur.first_registered_at, cur.registered_at, earliest]
-        .filter((v): v is string => !!v)
-        .reduce((a, b) => (b < a ? b : a));
-      if (firstKnown !== cur.first_registered_at) patch.first_registered_at = firstKnown;
+      if (earliest !== cur.first_registered_at) patch.first_registered_at = earliest;
     }
     if (payDates.length > 0) {
       const lastPay = payDates.reduce((a, b) => (b > a ? b : a));
