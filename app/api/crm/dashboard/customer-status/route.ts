@@ -58,7 +58,13 @@ export async function GET(request: Request) {
     const y = Number(sp.get("year"));
     return Number.isInteger(y) && y >= 2000 && y <= 2100 ? y : 0;
   })();
+  // ?shiftYears=1 → 같은 버킷 구조로 'N년 전 같은 구간' 을 집계(전년도 비교 꺾은선용)
+  const shiftYears = (() => {
+    const n = Number(sp.get("shiftYears"));
+    return Number.isInteger(n) && n > 0 && n <= 5 ? n : 0;
+  })();
   const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
+  if (shiftYears) nowKst.setUTCFullYear(nowKst.getUTCFullYear() - shiftYears);
   const todayYmd = nowKst.toISOString().slice(0, 10);
   const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -112,7 +118,7 @@ export async function GET(request: Request) {
 
   try {
     // 고객현황 차트는 12~24개월 집계로 무거움 + 과거 데이터라 거의 안 바뀜 → 120초 캐시.
-    const cacheKey = crmCacheKey(ctx, "dashboard:customer-status", `${period}:y${yearParam}:${todayYmd}`);
+    const cacheKey = crmCacheKey(ctx, "dashboard:customer-status", `${period}:y${yearParam}:s${shiftYears}:${todayYmd}`);
     const payload = await cached(cacheKey, 120, async () => {
     // 회원 성별·생년 (전체) — 유효 고객 구성 산출용
     const members = await paginateAll<{ id: number; gender: string | null; birth: string | null }>(

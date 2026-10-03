@@ -35,6 +35,8 @@ const PERIOD_OPTIONS: { key: Period; label: string }[] = [
 export function CustomerStatusView() {
   const { getIdToken } = useAuth();
   const [data, setData] = useState<CustomerStatus | null>(null);
+  // 전년도 같은 구간 — 각 그래프에 꺾은선으로 겹쳐 표시 (연단위 보기에선 의미가 없어 미조회)
+  const [prev, setPrev] = useState<CustomerStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [period, setPeriod] = useState<Period>("1y");
@@ -45,13 +47,20 @@ export function CustomerStatusView() {
     try {
       const token = await getIdToken();
       if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
-      const res = await fetch(`/api/crm/dashboard/customer-status?period=${period}`, {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
+      const h = { authorization: `Bearer ${token}` };
+      const [res, resPrev] = await Promise.all([
+        fetch(`/api/crm/dashboard/customer-status?period=${period}`, { headers: h, cache: "no-store" }),
+        period === "year"
+          ? Promise.resolve(null)
+          : fetch(`/api/crm/dashboard/customer-status?period=${period}&shiftYears=1`, {
+              headers: h,
+              cache: "no-store",
+            }),
+      ]);
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "조회 실패");
       setData(json);
+      setPrev(resPrev && resPrev.ok ? await resPrev.json() : null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -62,6 +71,15 @@ export function CustomerStatusView() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 전년도 꺾은선 — 같은 인덱스의 값을 겹친다(연단위 보기에선 숨김)
+  const prevLine = (key: keyof CustomerStatus, color: string) => {
+    if (!prev || period === "year") return undefined;
+    const arr = prev[key];
+    if (!Array.isArray(arr)) return undefined;
+    const values = (arr as number[]).map((v) => (typeof v === "number" ? v : null));
+    return { label: "작년 같은 기간", color, values };
+  };
 
   const periodDropdown = (
     <PeriodSelect value={period} onChange={setPeriod} />
@@ -106,6 +124,7 @@ export function CustomerStatusView() {
           <MonthlyStackedBars
             months={data.months}
             series={[{ label: "회원권 보유", color: "#6B7B3A", values: data.validMembership }]}
+            line={prevLine("validMembership", "#C76C8E")}
             mode="count"
           />
         </ChartCard>
@@ -113,6 +132,7 @@ export function CustomerStatusView() {
           <MonthlyStackedBars
             months={data.months}
             series={[{ label: "수강권 보유", color: "#B47B2A", values: data.validPass }]}
+            line={prevLine("validPass", "#5A8BB0")}
             mode="count"
           />
         </ChartCard>
@@ -136,6 +156,7 @@ export function CustomerStatusView() {
           <MonthlyStackedBars
             months={data.months}
             series={[{ label: "신규 회원권", color: "#6B7B3A", values: data.newMembership }]}
+            line={prevLine("newMembership", "#C76C8E")}
             mode="count"
           />
         </ChartCard>
@@ -143,6 +164,7 @@ export function CustomerStatusView() {
           <MonthlyStackedBars
             months={data.months}
             series={[{ label: "신규 수강권", color: "#B47B2A", values: data.newPass }]}
+            line={prevLine("newPass", "#5A8BB0")}
             mode="count"
           />
         </ChartCard>
@@ -154,6 +176,7 @@ export function CustomerStatusView() {
           <MonthlyStackedBars
             months={data.months}
             series={[{ label: "재등록 회원권", color: "#5A8BB0", values: data.reMembership }]}
+            line={prevLine("reMembership", "#C76C8E")}
             mode="count"
           />
         </ChartCard>
@@ -161,6 +184,7 @@ export function CustomerStatusView() {
           <MonthlyStackedBars
             months={data.months}
             series={[{ label: "재등록 수강권", color: "#C76C8E", values: data.rePass }]}
+            line={prevLine("rePass", "#6B7B3A")}
             mode="count"
           />
         </ChartCard>
@@ -179,6 +203,7 @@ export function CustomerStatusView() {
         <MonthlyStackedBars
           months={data.months}
           series={[{ label: "이탈고객", color: "#C76C8E", values: data.churn }]}
+            line={prevLine("churn", "#5A8BB0")}
           mode="count"
         />
       </ChartCard>
@@ -188,6 +213,7 @@ export function CustomerStatusView() {
         <MonthlyStackedBars
           months={data.months}
           series={[{ label: "출석회원", color: "#5A8BB0", values: data.visited }]}
+            line={prevLine("visited", "#C76C8E")}
           mode="count"
         />
       </ChartCard>

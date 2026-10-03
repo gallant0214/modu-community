@@ -20,6 +20,8 @@ interface Props {
   hoverNote?: (idx: number) => string;
   /** 막대 위에 겹쳐 그릴 꺾은선 (예: 작년 같은 달) — 값이 null 인 달은 선을 끊는다 */
   line?: { label: string; color: string; values: (number | null)[] };
+  /** 값 표기 포맷 (y축·막대 라벨·툴팁 공용). 금액처럼 숫자가 길 때 사용 */
+  formatValue?: (v: number) => string;
 }
 
 /**
@@ -27,7 +29,7 @@ interface Props {
  * - percent 모드: 각 달을 100%로 채우는 구성 비율 띠그래프
  * - count 모드: 절대값 누적 막대 (단일 시리즈면 일반 막대)
  */
-export function MonthlyStackedBars({ months, series, mode = "count", unit = "명", height = 200, hoverNote, line }: Props) {
+export function MonthlyStackedBars({ months, series, mode = "count", unit = "명", height = 200, hoverNote, line, formatValue }: Props) {
   const [hover, setHover] = useState<{ x: number; y: number; idx: number; flip: boolean } | null>(null);
 
   if (months.length === 0 || series.length === 0) {
@@ -76,7 +78,11 @@ export function MonthlyStackedBars({ months, series, mode = "count", unit = "명
             <g key={gi}>
               <line x1={padL} x2={W - padR} y1={gy} y2={gy} stroke="currentColor" strokeOpacity={0.16} />
               <text x={padL - 4} y={gy + 3} textAnchor="end" fontSize={9} fill="currentColor">
-                {mode === "percent" ? `${Math.round(axisMax * t)}%` : Math.round(axisMax * t)}
+                {mode === "percent"
+                  ? `${Math.round(axisMax * t)}%`
+                  : formatValue
+                    ? formatValue(axisMax * t)
+                    : Math.round(axisMax * t)}
               </text>
             </g>
           );
@@ -122,7 +128,7 @@ export function MonthlyStackedBars({ months, series, mode = "count", unit = "명
               {/* 총합/값 라벨 (상단) — 버킷 많으면 생략(툴팁으로 확인) */}
               {mode === "count" && total > 0 && months.length <= 14 && (
                 <text x={cx} y={padT + innerH - (total / axisMax) * innerH - 3} textAnchor="middle" fontSize={9} fill="#6B5D47">
-                  {total}
+                  {formatValue ? formatValue(total) : total}
                 </text>
               )}
               {/* x축 라벨 (버킷 많으면 일부만) */}
@@ -202,8 +208,7 @@ export function MonthlyStackedBars({ months, series, mode = "count", unit = "명
               <div key={ser.label} className="flex items-center gap-1.5 whitespace-nowrap">
                 <span className="inline-block w-2 h-2 rounded-sm" style={{ background: ser.color }} />
                 <span>
-                  {ser.label} {v.toLocaleString()}
-                  {unit}
+                  {ser.label} {formatValue ? formatValue(v) : `${v.toLocaleString()}${unit}`}
                   {series.length > 1 && mode === "percent" ? ` (${pct}%)` : ""}
                 </span>
               </div>
@@ -213,8 +218,10 @@ export function MonthlyStackedBars({ months, series, mode = "count", unit = "명
             <div className="flex items-center gap-1.5 whitespace-nowrap">
               <span className="inline-block w-3 h-0.5 rounded" style={{ background: line.color }} />
               <span>
-                {line.label} {(line.values[hover.idx] as number).toLocaleString()}
-                {unit}
+                {line.label}{" "}
+                {formatValue
+                  ? formatValue(line.values[hover.idx] as number)
+                  : `${(line.values[hover.idx] as number).toLocaleString()}${unit}`}
               </span>
             </div>
           )}

@@ -11,7 +11,7 @@ import { MemberConversionCard } from "./_components/member-conversion-card";
 import { WeeklyAttendanceChart } from "./_components/weekly-attendance-chart";
 import { JoinLinkModal } from "./_components/join-link-modal";
 import { PayLinkButton } from "./_components/pay-link-button";
-import { DualLineChart } from "./_components/dual-line-chart";
+import { MonthlyStackedBars } from "./_components/monthly-stacked-bars";
 
 interface TrendPoint {
   ym: string;
@@ -208,6 +208,32 @@ export default function CrmDashboardPage() {
     ? summary.members.newly.count + summary.members.reregistered.count
     : 0;
   const periodLabel = period === "day" ? "일간" : period === "week" ? "주간" : "월간";
+
+  // 매출 추이 그래프 — 막대 올해(1~12월) / 선 작년 같은 달.
+  // trend 는 최근 12개월 롤링 배열이고 각 항목에 작년 동월 값(revenuePrev)이 들어 있다.
+  // 최근 12개월에는 올해 경과한 달이 모두 포함되므로 달력연도로 그대로 매핑할 수 있다.
+  const revYear = Number(trend[trend.length - 1]?.ym.slice(0, 4)) || 0;
+  const revMonths = revYear
+    ? Array.from({ length: 12 }, (_, m) => `${revYear}-${String(m + 1).padStart(2, "0")}`)
+    : [];
+  const trendByYm = new Map(trend.map((t) => [t.ym, t]));
+  const ptCur = revMonths.map((ym) => trendByYm.get(ym)?.revenue ?? 0);
+  const ptPrev = revMonths.map((ym) => {
+    const t = trendByYm.get(ym);
+    return t ? t.revenuePrev ?? 0 : null;
+  });
+  const msCur = revMonths.map((ym) => trendByYm.get(ym)?.membershipRevenue ?? 0);
+  const msPrev = revMonths.map((ym) => {
+    const t = trendByYm.get(ym);
+    return t ? t.membershipRevenuePrev ?? 0 : null;
+  });
+  /** 금액 축·라벨용 짧은 표기 (1,234만 / 1.2억) */
+  const wonShort = (v: number) =>
+    v >= 100000000
+      ? `${(v / 100000000).toFixed(1)}억`
+      : v >= 10000
+        ? `${Math.round(v / 10000).toLocaleString()}만`
+        : `${Math.round(v).toLocaleString()}`;
 
   return (
     <div className="px-5 md:px-8 pt-2 pb-6 md:pt-3 md:pb-8 max-w-6xl mx-auto">
@@ -690,44 +716,38 @@ export default function CrmDashboardPage() {
           {/* PT/이용권 매출 추이 — 재무 권한 필요 */}
           {canFinance && (
           <>
-          <SectionHeader title="이번달 상세" subtitle="12개월 매출 추이" />
+          <SectionHeader title="이번달 상세" subtitle={`${revYear}년 매출 추이`} />
           <section className="grid gap-3">
             <div className="px-5 py-4 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm">
-              <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
-                월별 PT매출 추이 (12개월)
+              <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-0.5">
+                월별 PT매출 추이
               </h3>
-              <DualLineChart
-                xLabels={trend.map((m) => m.ym.slice(2).replace("-", "/"))}
-                primary={{
-                  label: "올해",
-                  values: trend.map((m) => m.revenue),
-                  dates: trend.map((m) => m.ym),
-                }}
-                secondary={{
-                  label: "작년 동월",
-                  values: trend.map((m) => m.revenuePrev ?? 0),
-                  dates: trend.map((m) => `${Number(m.ym.slice(0, 4)) - 1}${m.ym.slice(4)}`),
-                }}
+              <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-2">
+                막대 올해({revYear}) / 선 작년({revYear - 1})
+              </p>
+              <MonthlyStackedBars
+                months={revMonths}
+                series={[{ label: `올해(${revYear})`, color: "#6B7B3A", values: ptCur }]}
+                line={{ label: `작년(${revYear - 1})`, color: "#C76C8E", values: ptPrev }}
+                mode="count"
                 unit="원"
+                formatValue={wonShort}
               />
             </div>
             <div className="px-5 py-4 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm">
-              <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-2">
-                월별 이용권 매출 추이 (12개월)
+              <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-0.5">
+                월별 이용권 매출 추이
               </h3>
-              <DualLineChart
-                xLabels={trend.map((m) => m.ym.slice(2).replace("-", "/"))}
-                primary={{
-                  label: "올해",
-                  values: trend.map((m) => m.membershipRevenue ?? 0),
-                  dates: trend.map((m) => m.ym),
-                }}
-                secondary={{
-                  label: "작년 동월",
-                  values: trend.map((m) => m.membershipRevenuePrev ?? 0),
-                  dates: trend.map((m) => `${Number(m.ym.slice(0, 4)) - 1}${m.ym.slice(4)}`),
-                }}
+              <p className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mb-2">
+                막대 올해({revYear}) / 선 작년({revYear - 1})
+              </p>
+              <MonthlyStackedBars
+                months={revMonths}
+                series={[{ label: `올해(${revYear})`, color: "#5A8BB0", values: msCur }]}
+                line={{ label: `작년(${revYear - 1})`, color: "#B47B2A", values: msPrev }}
+                mode="count"
                 unit="원"
+                formatValue={wonShort}
               />
             </div>
           </section>
