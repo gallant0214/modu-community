@@ -47,9 +47,14 @@ export async function GET(request: Request) {
   if (status) query = query.eq("status", status);
   if (memberId) query = query.eq("member_id", Number(memberId));
 
-  // 데이터 격리: 강사/매니저(1인 강사 제외)는 본인이 판매한 회원권만.
-  // (수강권·상담·회원 목록과 동일 정책 — feedback: trainer/manager는 본인 데이터만)
-  if ((ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner) {
+  /* 🚨 member_id 로 **특정 회원 1명**을 조회할 때는 판매자 격리를 적용하지 않는다.
+     회원 상세 '현재 보유' 가 이 API 를 쓰는데, 격리를 걸면 남이 판매한 상품이 안 보여
+     담당 강사가 보유 상품을 전혀 확인할 수 없다(정지예 회원: 판매자가 박준익이라
+     김민지 강사에게는 락커만 보였다). 그 회원을 열 수 있는지는 회원 목록 범위
+     (members.app_view_all·담당회원)에서 이미 통제된다.
+     목록 전체 조회(member_id 없음)에는 기존처럼 격리를 유지한다. */
+  // 데이터 격리: 강사/매니저(1인 강사 제외)는 본인이 판매한 회원권만. (목록 조회에만 적용)
+  if (!memberId && (ctx.role === "trainer" || ctx.role === "manager") && !ctx.isSoloOwner) {
     query = query.eq("seller_member_id", ctx.centerMemberId);
   }
 
