@@ -8,7 +8,7 @@ import { Color } from "@tiptap/extension-color";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import FontFamily from "@tiptap/extension-font-family";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const FONTS = [
   { label: "기본서체", value: "" },
@@ -74,6 +74,17 @@ export default function RichEditor({ content = "", onChange, placeholder }: Prop
   const [fontLabel, setFontLabel] = useState("기본서체");
   const [, forceRender] = useState(0);
 
+  /* 🚨 TipTap v3 는 onUpdate 같은 핸들러가 바뀌어도 옵션을 갱신하지 않는다
+     (compareOptions 가 핸들러 키를 비교 대상에서 빼버린다). 그래서 content 가 그대로인
+     상태에서 부모가 리렌더되면 에디터는 **옛 onUpdate 클로저**를 계속 들고 있고,
+     그 안의 부모 state 가 낡은 값이라 입력 순간 다른 필드 수정이 되돌아갔다.
+     (전자계약서 양식: 섹션 제목을 고친 뒤 본문을 건드리면 제목이 되돌아가던 버그)
+     → 항상 최신 콜백을 쓰도록 ref 로 우회한다. */
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -87,7 +98,7 @@ export default function RichEditor({ content = "", onChange, placeholder }: Prop
     ],
     content,
     onUpdate: ({ editor }) => {
-      onChange?.(editor.getHTML());
+      onChangeRef.current?.(editor.getHTML());
     },
     onSelectionUpdate: () => {
       forceRender((n) => n + 1);

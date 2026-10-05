@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import RichEditor from "@/app/components/rich-editor";
 import { contractBodyHtml } from "@/app/lib/contract-body";
 
@@ -23,8 +24,17 @@ export function ContractSectionsEditor({
   sections: ContractSection[];
   onChange: (next: ContractSection[]) => void;
 }) {
+  /* 리치 에디터는 입력 중에도 예전 렌더의 콜백이 호출될 수 있어(TipTap 옵션 갱신 특성),
+     patch 를 만들 때 **항상 최신 sections** 를 쓴다. 안 그러면 방금 고친 제목이 되돌아간다. */
+  const sectionsRef = useRef(sections);
+  useEffect(() => {
+    sectionsRef.current = sections;
+  }, [sections]);
+
   const update = (idx: number, patch: Partial<ContractSection>) => {
-    const next = sections.slice();
+    const base = sectionsRef.current;
+    if (!base[idx]) return;
+    const next = base.slice();
     next[idx] = { ...next[idx], ...patch };
     onChange(next);
   };
