@@ -324,7 +324,7 @@ export function PassDetailModal({ passId, staff, canEdit, onClose, onSaved }: Pr
 
             <div className="mt-3 grid grid-cols-3 gap-2">
               <SummaryTile label="잔여 세션" value={`${pass.remaining_sessions}회`} hint={`총 ${pass.total_sessions}회`} tone={pass.remaining_sessions <= 2 ? "red" : "green"} />
-              <SummaryTile label="결제 금액" value={`${formatWon(pass.price_won)}원`} hint={pass.vat_included ? "부가세 포함" : "부가세 없음"} tone="dark" />
+              <SummaryTile label="상품 금액" value={`${formatWon(pass.price_won)}원`} hint={pass.vat_included ? "부가세 포함" : "부가세 없음"} tone="dark" />
               <SummaryTile label="만료일" value={pass.expires_at === "9999-12-31" ? "무기한" : pass.expires_at} hint={pass.expires_at === "9999-12-31" ? "" : expiryLabel(pass.expires_at, pass.status)} tone={pass.expires_at !== "9999-12-31" && daysUntil(pass.expires_at) <= 7 ? "gold" : "blue"} />
             </div>
             <div className="mt-3">

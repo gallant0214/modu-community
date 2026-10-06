@@ -6609,7 +6609,7 @@ function HoldingDetailModal({
                 ? ([["만료일", detail.expiresAt === "9999-12-31" ? "무기한" : detail.expiresAt]] as [string, React.ReactNode][])
                 : []),
               [
-                "결제 금액",
+                "상품 금액",
                 `${formatWon(detail.priceWon ?? 0)}원${detail.vatIncluded ? " (부가세 포함)" : " (부가세 별도)"}`,
               ],
               [
@@ -6618,17 +6618,23 @@ function HoldingDetailModal({
                   ? `-${formatWon(detail.discountWon ?? 0)}원`
                   : "0원",
               ],
-              [
-                "최종 결제 금액",
-                <span key="final" className="font-bold text-[#6B7B3A] dark:text-[#A8B87A]">
-                  {formatWon(Math.max(0, (detail.priceWon ?? 0) - (detail.discountWon ?? 0)))}원
-                  {detail.vatIncluded ? " (부가세 포함)" : " (부가세 별도)"}
-                </span>,
-              ],
-              ["결제 수단", paymentLabel],
+              // 🚨 마일리지는 실제로 받은 돈이 아니다 → 최종 결제 금액 위에서 차감 과정을 보여준다
               ...(detail.mileageUsed && detail.mileageUsed > 0
                 ? ([["마일리지 사용", `-${detail.mileageUsed.toLocaleString()}P`]] as [string, React.ReactNode][])
                 : []),
+              [
+                "최종 결제 금액",
+                <span key="final" className="font-bold text-[#6B7B3A] dark:text-[#A8B87A]">
+                  {formatWon(
+                    Math.max(
+                      0,
+                      (detail.priceWon ?? 0) - (detail.discountWon ?? 0) - (detail.mileageUsed ?? 0)
+                    )
+                  )}
+                  원{detail.vatIncluded ? " (부가세 포함)" : " (부가세 별도)"}
+                </span>,
+              ],
+              ["결제 수단", paymentLabel],
               ...(detail.mileageEarned && detail.mileageEarned > 0
                 ? ([["마일리지 적립", <span key="me" className="text-[#6B7B3A] dark:text-[#A8B87A] font-semibold">+{detail.mileageEarned.toLocaleString()}P</span>]] as [string, React.ReactNode][])
                 : []),
@@ -10087,7 +10093,8 @@ function PassDetailModal({
                 (pass as Pass & { start_date?: string }).start_date ?? pass.issued_at,
               ],
               ["만료일", pass.expires_at === "9999-12-31" ? "무기한" : pass.expires_at],
-              ["결제 금액", `${formatWon(pass.price_won)}원${pass.vat_included ? " (부가세 포함)" : ""}`],
+              // 라벨을 '상품 금액' 으로 — 마일리지를 쓰면 실제 결제액과 다르다(실결제는 결제내역)
+              ["상품 금액", `${formatWon(pass.price_won)}원${pass.vat_included ? " (부가세 포함)" : ""}`],
               ["결제 수단", paymentLabel],
             ]}
           />
