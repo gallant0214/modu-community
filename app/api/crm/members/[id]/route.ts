@@ -62,7 +62,7 @@ export async function GET(
   let passQuery = supabase
     .from("crm_passes")
     .select(
-      "id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, vat_included, payment_method, payment_method_custom, issued_at, expires_at, status, memo, trainer_member_id, seller_member_id, created_at"
+      "id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, mileage_used, mileage_earned, vat_included, payment_method, payment_method_custom, issued_at, expires_at, status, memo, trainer_member_id, seller_member_id, created_at"
     )
     .eq("center_id", targetCenterId)
     .eq("member_id", memberId)

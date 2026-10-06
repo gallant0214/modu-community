@@ -3,7 +3,14 @@ import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { syncProductPaymentAmount, syncProductPaymentDate } from "@/app/lib/crm-payment-sync";
-import { findProductPayment, parseRefundWon, readRefundBody, recordRefund } from "@/app/lib/crm-refund";
+import {
+  findProductPayment,
+  parseRefundWon,
+  readRefundBody,
+  recordRefund,
+  paymentMileage,
+  refundCartSiblings,
+} from "@/app/lib/crm-refund";
 import { retireIssuedForPayment } from "@/app/lib/crm-retire-issued";
 
 export const dynamic = "force-dynamic";
@@ -228,9 +235,28 @@ export async function DELETE(
     reason: body.reason ?? null,
     payment,
     product: { kind: "membership", id: mid },
+    // 환불 창에서 '마일리지 돌려주기' 를 켠 경우: 쓴 포인트 반환 + 적립분 회수
+    mileage: body.restore_mileage ? await paymentMileage(ctx.centerId, { membership_id: mid }) : undefined,
   });
   if (rec.error) {
     return NextResponse.json({ error: "환불 이력 기록 실패", detail: rec.error }, { status: 500 });
+  }
+
+  /* 장바구니로 함께 결제한 다른 상품도 같이 환불 (묶음 상품이 하나만 환불되던 문제) */
+  let cartRefunded = 0;
+  if (payment) {
+    const cart = await refundCartSiblings({
+      centerId: ctx.centerId,
+      actorUid: ctx.uid,
+      payment: { id: payment.id, member_id: payment.member_id, paid_at: payment.paid_at, order_id: payment.order_id },
+      reason: body.reason ?? null,
+      settleMileage: !!body.restore_mileage,
+      retire: async (paymentId) => {
+        const r = await retireIssuedForPayment({ centerId: ctx.centerId, paymentId, actorUid: ctx.uid });
+        return { ok: r.ok, error: r.error };
+      },
+    });
+    cartRefunded = cart.refunded;
   }
 
   await supabase.from("crm_audit_logs").insert({
@@ -242,5 +268,5 @@ export async function DELETE(
     payload: { refund_won: parsed.won, paid_won: paidWon, reason: body.reason ?? null } as never,
   });
 
-  return NextResponse.json({ ok: true, refund_won: parsed.won });
+  return NextResponse.json({ ok: true, refund_won: parsed.won, cart_refunded: cartRefunded });
 }

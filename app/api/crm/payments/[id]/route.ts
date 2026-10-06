@@ -6,6 +6,7 @@ import { notifyCenterStaffSignupPurchase } from "@/app/lib/crm-staff-notify";
 import { retireIssuedForPayment, RETIRE_KIND_LABEL } from "@/app/lib/crm-retire-issued";
 import { restoreCouponAfterRefund, findCouponIssueForPayment } from "@/app/lib/crm-coupons-server";
 import { markOrderItemRefunded } from "@/app/lib/crm-order-refund";
+import { paymentMileage, refundCartSiblings } from "@/app/lib/crm-refund";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,8 @@ export async function PATCH(
     refund_won?: number;
     /** 환불 사유 */
     refund_reason?: string | null;
+    /** 쓴 마일리지를 돌려주고 적립분을 회수할지 */
+    restore_mileage?: boolean;
   };
   try {
     body = await request.json();
@@ -64,7 +67,7 @@ export async function PATCH(
 
   const { data: cur } = await supabase
     .from("crm_payments")
-    .select("id, member_id, amount_won, status, order_id")
+    .select("id, member_id, amount_won, status, order_id, paid_at")
     .eq("id", paymentId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -75,6 +78,7 @@ export async function PATCH(
     amount_won: number;
     status: string;
     order_id: number | null;
+    paid_at: string;
   };
 
   const patch: Record<string, unknown> = {};
@@ -215,6 +219,56 @@ export async function PATCH(
       centerId: ctx.centerId,
       paymentId: before.id,
       amountWon: refundWon,
+    });
+
+    /* 마일리지 정산 — 환불 창에서 '돌려주기' 를 켠 경우.
+       쓴 포인트는 돌려주고 적립분은 회수한다(온라인 환불과 같은 규칙). */
+    if (body.restore_mileage) {
+      const mil = await paymentMileage(ctx.centerId, {
+        membership_id: retiredProductId.membership,
+        pass_id: retiredProductId.pass,
+        rental_id: retiredProductId.rental,
+      });
+      if (mil.used > 0 || mil.earned > 0) {
+        const { data: mem } = await supabase
+          .from("crm_members")
+          .select("mileage")
+          .eq("id", before.member_id)
+          .eq("center_id", ctx.centerId)
+          .maybeSingle();
+        const balance = mem?.mileage ?? 0;
+        const afterReturn = balance + mil.used;
+        const next = Math.max(0, afterReturn - mil.earned);
+        await supabase
+          .from("crm_members")
+          .update({ mileage: next } as never)
+          .eq("id", before.member_id)
+          .eq("center_id", ctx.centerId);
+        const mlogs: Record<string, unknown>[] = [];
+        if (mil.used > 0)
+          mlogs.push({ center_id: ctx.centerId, member_id: before.member_id, delta: mil.used, reason: "order_refund", balance_after: afterReturn });
+        if (mil.earned > 0)
+          mlogs.push({ center_id: ctx.centerId, member_id: before.member_id, delta: -mil.earned, reason: "order_refund", balance_after: next });
+        if (mlogs.length) await supabase.from("crm_member_mileage_logs").insert(mlogs as never);
+      }
+    }
+
+    /* 장바구니로 함께 결제한 다른 상품도 같이 환불 */
+    await refundCartSiblings({
+      centerId: ctx.centerId,
+      actorUid: ctx.uid,
+      payment: {
+        id: before.id,
+        member_id: before.member_id,
+        paid_at: before.paid_at,
+        order_id: before.order_id,
+      },
+      reason: body.refund_reason ?? null,
+      settleMileage: !!body.restore_mileage,
+      retire: async (pid) => {
+        const rr = await retireIssuedForPayment({ centerId: ctx.centerId, paymentId: pid, actorUid: ctx.uid });
+        return { ok: rr.ok, error: rr.error };
+      },
     });
 
     if (r.kind) {

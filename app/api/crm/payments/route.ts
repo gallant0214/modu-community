@@ -118,40 +118,54 @@ export async function GET(request: Request) {
   const membershipNameMap = new Map<number, string>();
   const rentalNameMap = new Map<number, string>();
   // 상품을 결제 받은 판매 직원(seller_member_id) 매핑
+  // 상품별 마일리지(사용/적립) — 키는 `m{id}`/`p{id}`/`r{id}`
+  const productMileage = new Map<string, { used: number; earned: number }>();
   const passSellerMap = new Map<number, number | null>();
   const membershipSellerMap = new Map<number, number | null>();
   const rentalSellerMap = new Map<number, number | null>();
   if (passIds.length > 0) {
     const { data: passes } = await supabase
       .from("crm_passes")
-      .select("id, lesson_kind, seller_member_id")
+      .select("id, lesson_kind, seller_member_id, mileage_used, mileage_earned")
       .eq("center_id", ctx.centerId)
       .in("id", passIds);
     for (const p of passes ?? []) {
       passNameMap.set(p.id, p.lesson_kind);
       passSellerMap.set(p.id, p.seller_member_id);
+      productMileage.set(`p${p.id}`, {
+        used: Number(p.mileage_used) || 0,
+        earned: Number(p.mileage_earned) || 0,
+      });
     }
   }
   if (membershipIds.length > 0) {
     const { data: memberships } = await supabase
       .from("crm_memberships")
-      .select("id, plan_name, seller_member_id")
+      .select("id, plan_name, seller_member_id, mileage_used, mileage_earned")
       .eq("center_id", ctx.centerId)
       .in("id", membershipIds);
     for (const m of memberships ?? []) {
       membershipNameMap.set(m.id, m.plan_name);
       membershipSellerMap.set(m.id, m.seller_member_id);
+      productMileage.set(`m${m.id}`, {
+        used: Number(m.mileage_used) || 0,
+        earned: Number(m.mileage_earned) || 0,
+      });
     }
   }
   if (rentalIds.length > 0) {
     const { data: rentals } = await supabase
       .from("crm_rentals")
-      .select("id, item_name, seller_member_id")
+      .select("id, item_name, seller_member_id, mileage_used, mileage_earned")
       .eq("center_id", ctx.centerId)
       .in("id", rentalIds);
     for (const r of rentals ?? []) {
       rentalNameMap.set(r.id, r.item_name);
       rentalSellerMap.set(r.id, r.seller_member_id);
+      productMileage.set(`r${r.id}`, {
+        used: Number(r.mileage_used) || 0,
+        earned: Number(r.mileage_earned) || 0,
+      });
     }
   }
 
@@ -367,6 +381,15 @@ export async function GET(request: Request) {
     for (const [key, ids] of members) cartSize.set(key, ids.length);
   }
 
+  const milOf = (r: { membership_id: number | null; pass_id: number | null; rental_id: number | null }) =>
+    r.membership_id
+      ? productMileage.get(`m${r.membership_id}`)
+      : r.pass_id
+        ? productMileage.get(`p${r.pass_id}`)
+        : r.rental_id
+          ? productMileage.get(`r${r.rental_id}`)
+          : undefined;
+
   const bundleIds = new Set<number>();
   if (componentsByParent.size > 0) {
     for (const parent of rows) {
@@ -421,6 +444,9 @@ export async function GET(request: Request) {
         : null,
       /** 상품 관리의 묶음 상품(부모 또는 그 구성 상품)으로 결제된 건 */
       bundle: bundleIds.has(r.id),
+      /** 이 결제에 쓴/적립된 마일리지 (환불 창에서 반환 여부를 묻는 데 쓴다) */
+      mileage_used: milOf(r)?.used ?? 0,
+      mileage_earned: milOf(r)?.earned ?? 0,
       /** 장바구니로 한 번에 결제한 묶음의 대표 결제 id (단건이면 자기 id) */
       cart_id: cartIdOf.get(r.id) ?? r.id,
       /** 그 묶음에 들어 있는 결제 건수 (1이면 단건) */

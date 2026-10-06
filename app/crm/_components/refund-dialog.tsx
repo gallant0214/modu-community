@@ -11,14 +11,16 @@ export function RefundDialog(props: {
   open: boolean;
   /** 환불 대상 상품명 */
   productName: string;
-  /** 결제 금액(환불 가능 상한) */
+  /** 실제 결제 금액(환불 가능 상한) — 마일리지로 깎인 금액은 제외한 '받은 돈' */
   paidWon: number;
+  /** 이 결제에 쓴 마일리지 — 함께 돌려줄지 묻는다 */
+  mileageUsed?: number;
   /** 대상별 주의 문구 (줄 단위) */
   notice?: string[];
   busy?: boolean;
   error?: string;
   onClose: () => void;
-  onSubmit: (refundWon: number, reason: string) => void;
+  onSubmit: (refundWon: number, reason: string, restoreMileage: boolean) => void;
 }) {
   if (!props.open) return null;
   // 닫으면 언마운트되므로 다음에 열 때 '결제 전액'으로 다시 시작한다 (effect 로 초기화하지 않는다)
@@ -28,6 +30,7 @@ export function RefundDialog(props: {
 function RefundDialogBody({
   productName,
   paidWon,
+  mileageUsed = 0,
   notice,
   busy,
   error,
@@ -37,14 +40,17 @@ function RefundDialogBody({
   open: boolean;
   productName: string;
   paidWon: number;
+  mileageUsed?: number;
   notice?: string[];
   busy?: boolean;
   error?: string;
   onClose: () => void;
-  onSubmit: (refundWon: number, reason: string) => void;
+  onSubmit: (refundWon: number, reason: string, restoreMileage: boolean) => void;
 }) {
   const [amount, setAmount] = useState(String(Math.max(0, paidWon)));
   const [reason, setReason] = useState("");
+  // 쓴 마일리지를 돌려줄지 — 기본은 돌려주기(회원이 쓴 포인트라 환불 시 복구가 자연스럽다)
+  const [restoreMileage, setRestoreMileage] = useState(true);
 
   const won = Math.trunc(Number(amount.replace(/[^\d]/g, "")) || 0);
   const tooMuch = won > paidWon;
@@ -63,7 +69,10 @@ function RefundDialogBody({
               {productName || "상품"}
             </div>
             <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500">
-              결제 금액 {paidWon.toLocaleString()}원
+              실제 결제 금액 {paidWon.toLocaleString()}원
+              {mileageUsed > 0 && (
+                <> · 마일리지 {mileageUsed.toLocaleString()}P 사용</>
+              )}
             </div>
           </div>
 
@@ -112,6 +121,23 @@ function RefundDialogBody({
             />
           </div>
 
+          {mileageUsed > 0 && (
+            <label className="flex items-start gap-2 px-3 py-2.5 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FBF7EB]/60 dark:bg-zinc-900/50 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={restoreMileage}
+                onChange={(e) => setRestoreMileage(e.target.checked)}
+                className="mt-0.5 w-4 h-4 accent-[#6B7B3A]"
+              />
+              <span className="text-[12.5px] text-[#3A342A] dark:text-zinc-200">
+                쓴 마일리지 <b>{mileageUsed.toLocaleString()}P</b> 를 회원에게 돌려주기
+                <span className="block mt-0.5 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+                  체크를 풀면 포인트는 돌려주지 않고 현금만 환불합니다.
+                </span>
+              </span>
+            </label>
+          )}
+
           {(notice ?? []).length > 0 && (
             <ul className="rounded-xl bg-[#F5F0E5]/60 dark:bg-zinc-800/40 px-3 py-2.5 space-y-1">
               {(notice ?? []).map((n, i) => (
@@ -139,7 +165,7 @@ function RefundDialogBody({
           </button>
           <button
             type="button"
-            onClick={() => onSubmit(won, reason.trim())}
+            onClick={() => onSubmit(won, reason.trim(), mileageUsed > 0 ? restoreMileage : false)}
             disabled={busy || tooMuch}
             className="px-3.5 py-2 rounded-lg bg-[#C0392B] text-white text-[13px] font-semibold disabled:opacity-50"
           >

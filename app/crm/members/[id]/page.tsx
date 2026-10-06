@@ -66,6 +66,9 @@ interface Pass {
   service_sessions?: number;
   session_minutes: number;
   price_won: number;
+  /** 이 구매에 쓴/적립된 마일리지 — 환불 창의 실결제액 계산에 쓴다 */
+  mileage_used?: number;
+  mileage_earned?: number;
   vat_included: boolean;
   payment_method: string;
   payment_method_custom: string | null;
@@ -3388,6 +3391,9 @@ interface PaymentRow {
     reason: string | null;
     actor_name: string | null;
   }[];
+  /** 이 결제에 쓴/적립된 마일리지 */
+  mileage_used?: number;
+  mileage_earned?: number;
   /** 장바구니로 한 번에 결제한 묶음의 대표 결제 id */
   cart_id?: number;
   /** 그 묶음의 결제 건수 (1이면 단건) */
@@ -3827,7 +3833,7 @@ function MemberPaymentsSection({
   const [refundTarget, setRefundTarget] = useState<number | null>(null);
   const [refundError, setRefundError] = useState("");
 
-  async function refund(id: number, refundWon: number, reason: string) {
+  async function refund(id: number, refundWon: number, reason: string, restoreMileage: boolean) {
     setBusyId(id);
     setRefundError("");
     try {
@@ -3836,7 +3842,12 @@ function MemberPaymentsSection({
       const res = await fetch(`/api/crm/payments/${id}`, {
         method: "PATCH",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ status: "refunded", refund_won: refundWon, refund_reason: reason }),
+        body: JSON.stringify({
+          status: "refunded",
+          refund_won: refundWon,
+          refund_reason: reason,
+          restore_mileage: restoreMileage,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "환불 실패");
@@ -4196,6 +4207,7 @@ function MemberPaymentsSection({
         open={refundTarget != null}
         productName={payments.find((x) => x.id === refundTarget)?.product_name ?? "결제 건"}
         paidWon={payments.find((x) => x.id === refundTarget)?.amount_won ?? 0}
+        mileageUsed={payments.find((x) => x.id === refundTarget)?.mileage_used ?? 0}
         busy={busyId === refundTarget}
         error={refundError}
         notice={[
@@ -4208,8 +4220,8 @@ function MemberPaymentsSection({
           setRefundTarget(null);
           setRefundError("");
         }}
-        onSubmit={(won, reason) => {
-          if (refundTarget != null) void refund(refundTarget, won, reason);
+        onSubmit={(won, reason, restoreMileage) => {
+          if (refundTarget != null) void refund(refundTarget, won, reason, restoreMileage);
         }}
       />
     </div>
@@ -6440,18 +6452,18 @@ function HoldingDetailModal({
     })();
   }, [open, getIdToken]);
 
-  const refund = async (refundWon: number, reason: string) => {
+  const refund = async (refundWon: number, reason: string, restoreMileage: boolean) => {
     if (!detail?.id || !detail.kind || refunding) return;
     setRefunding(true);
     setError("");
     try {
       const token = await getIdToken();
       const path = detail.kind === "rental" ? "rentals" : "memberships";
-      const qs = `?refund_won=${refundWon}&reason=${encodeURIComponent(reason)}`;
+      const qs = `?refund_won=${refundWon}&reason=${encodeURIComponent(reason)}${restoreMileage ? "&restore_mileage=1" : ""}`;
       const res = await fetch(`/api/crm/${path}/${detail.id}${qs}`, {
         method: "DELETE",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ refund_won: refundWon, reason }),
+        body: JSON.stringify({ refund_won: refundWon, reason, restore_mileage: restoreMileage }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "환불 실패");
@@ -7088,7 +7100,11 @@ function HoldingDetailModal({
     <RefundDialog
       open={refundOpen}
       productName={detail?.name ?? (detail?.kind === "rental" ? "대여권" : "회원권")}
-      paidWon={detail?.priceWon ?? 0}
+      paidWon={Math.max(
+        0,
+        (detail?.priceWon ?? 0) - (detail?.discountWon ?? 0) - (detail?.mileageUsed ?? 0)
+      )}
+      mileageUsed={detail?.mileageUsed ?? 0}
       busy={refunding}
       error={error}
       notice={[
@@ -7097,7 +7113,7 @@ function HoldingDetailModal({
         "⚠️ 카드 대금은 자동으로 돌아가지 않습니다 — PG(토스)에서 따로 취소해 주세요",
       ]}
       onClose={() => setRefundOpen(false)}
-      onSubmit={(won, reason) => void refund(won, reason)}
+      onSubmit={(won, reason, restoreMileage) => void refund(won, reason, restoreMileage)}
     />
     </>
   );
@@ -9900,17 +9916,17 @@ function PassDetailModal({
     }
   };
 
-  const refund = async (refundWon: number, reason: string) => {
+  const refund = async (refundWon: number, reason: string, restoreMileage: boolean) => {
     if (!detail || refunding) return;
     setRefunding(true);
     setError("");
     try {
       const token = await getIdToken();
-      const qs = `?refund_won=${refundWon}&reason=${encodeURIComponent(reason)}`;
+      const qs = `?refund_won=${refundWon}&reason=${encodeURIComponent(reason)}${restoreMileage ? "&restore_mileage=1" : ""}`;
       const res = await fetch(`/api/crm/passes/${detail.pass.id}${qs}`, {
         method: "DELETE",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ refund_won: refundWon, reason }),
+        body: JSON.stringify({ refund_won: refundWon, reason, restore_mileage: restoreMileage }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "환불 실패");
@@ -10467,7 +10483,8 @@ function PassDetailModal({
       <RefundDialog
         open={refundOpen}
         productName={pass ? stripPassCountSuffix(pass.lesson_kind) : "수강권"}
-        paidWon={pass?.price_won ?? 0}
+        paidWon={Math.max(0, (pass?.price_won ?? 0) - (pass?.mileage_used ?? 0))}
+        mileageUsed={pass?.mileage_used ?? 0}
         busy={refunding}
         error={error}
         notice={[
@@ -10476,7 +10493,7 @@ function PassDetailModal({
           "⚠️ 카드 대금은 자동으로 돌아가지 않습니다 — PG(토스)에서 따로 취소해 주세요",
         ]}
         onClose={() => setRefundOpen(false)}
-        onSubmit={(won, reason) => void refund(won, reason)}
+        onSubmit={(won, reason, restoreMileage) => void refund(won, reason, restoreMileage)}
       />
 
       <HoldModal
