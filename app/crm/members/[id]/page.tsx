@@ -20,6 +20,7 @@ import { CrmModal, CrmField, crmInputClass } from "../../_components/crm-modal";
 import BirthDateInput from "@/app/crm/_components/birth-date-input";
 import { RefundDialog } from "@/app/crm/_components/refund-dialog";
 import { CrmDeniedNotice } from "@/app/crm/_components/crm-denied-notice";
+import { PaymentEditDialog, type PaymentEditValue } from "@/app/crm/_components/payment-edit-dialog";
 import { LockerPickerModal } from "../../_components/locker-picker-modal";
 import { CrmLineChart } from "../../_components/crm-line-chart";
 import { unitToDays, formatDuration, computeExpiryYmd } from "@/app/lib/duration-convert";
@@ -561,6 +562,7 @@ export default function CrmMemberDetailPage() {
       ) : tab === "payments" ? (
         <MemberPaymentsSection
           memberId={member.id}
+          memberMileage={member.mileage ?? 0}
           canEdit={canEditSales}
           canRefund={canRefundSales}
           canDelete={canDeleteSales}
@@ -3394,6 +3396,9 @@ interface PaymentRow {
   /** 이 결제에 쓴/적립된 마일리지 */
   mileage_used?: number;
   mileage_earned?: number;
+  /** 연결 상품의 금액·할인 (결제 수정 창 기본값) */
+  product_price_won?: number;
+  product_discount_won?: number;
   /** 장바구니로 한 번에 결제한 묶음의 대표 결제 id */
   cart_id?: number;
   /** 그 묶음의 결제 건수 (1이면 단건) */
@@ -3729,6 +3734,7 @@ function MemberWorkoutLogsSection({
 
 function MemberPaymentsSection({
   memberId,
+  memberMileage = 0,
   canEdit = false,
   canRefund = false,
   canDelete = false,
@@ -3738,6 +3744,8 @@ function MemberPaymentsSection({
   onEditRental,
 }: {
   memberId: number;
+  /** 회원이 보유한 마일리지 — 결제 수정 창에서 추가 사용 한도에 쓴다 */
+  memberMileage?: number;
   canEdit?: boolean;
   canRefund?: boolean;
   canDelete?: boolean;
@@ -3824,6 +3832,41 @@ function MemberPaymentsSection({
       onChanged?.();
     } catch (e) {
       alert(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // 결제 수정 창 대상 (상품이 연결된 결제)
+  const [editDialogFor, setEditDialogFor] = useState<PaymentRow | null>(null);
+  const [editDialogError, setEditDialogError] = useState("");
+
+  async function saveEditDialog(p: PaymentRow, v: PaymentEditValue) {
+    setBusyId(p.id);
+    setEditDialogError("");
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch(`/api/crm/payments/${p.id}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          product_price_won: v.priceWon,
+          product_discount_won: v.discountWon,
+          product_mileage_used: v.mileageUsed,
+          method: v.method,
+          method_custom: v.method === "etc" ? v.methodCustom : null,
+          paid_at: v.paidDate || undefined,
+          note: v.note,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "수정 실패");
+      setEditDialogFor(null);
+      await load();
+      onChanged?.();
+    } catch (e) {
+      setEditDialogError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
       setBusyId(null);
     }
@@ -4166,12 +4209,10 @@ function MemberPaymentsSection({
                   {canEdit && (
                     <button
                       onClick={() => {
-                        // 상품이 연결된 결제(수강권·회원권·대여권)는 모두 해당 상품 편집 창으로,
-                        // 상품 링크가 없는 수기 결제만 인라인 수정.
-                        if (p.pass_id && onEditPass) onEditPass(p.pass_id);
-                        else if (p.membership_id && onEditMembership) onEditMembership(p.membership_id);
-                        else if (p.rental_id && onEditRental) onEditRental(p.rental_id);
-                        else startEdit(p);
+                        /* 상품이 연결된 결제는 '결제 수정' 창(발급창과 같은 금액 항목)으로 —
+                           마일리지·할인까지 여기서 고친다. 상품 종류·기간은 상품 카드에서. */
+                        if (p.pass_id || p.membership_id || p.rental_id) setEditDialogFor(p);
+                        else startEdit(p); // 상품 링크 없는 수기 결제는 기존 인라인 수정
                       }}
                       disabled={busy}
                       className="px-2.5 py-1 rounded-lg text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300 bg-[#F0EAD9] dark:bg-zinc-800 disabled:opacity-50"
@@ -4203,6 +4244,32 @@ function MemberPaymentsSection({
           );
         })}
       </ul>
+      {editDialogFor && (
+        <PaymentEditDialog
+          open
+          productName={editDialogFor.product_name || "결제 건"}
+          memberMileage={memberMileage}
+          busy={busyId === editDialogFor.id}
+          error={editDialogError}
+          initial={{
+            priceWon: editDialogFor.product_price_won ?? editDialogFor.amount_won ?? 0,
+            discountWon: editDialogFor.product_discount_won ?? 0,
+            mileageUsed: editDialogFor.mileage_used ?? 0,
+            paidDate: editDialogFor.paid_at
+              ? new Date(new Date(editDialogFor.paid_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+              : "",
+            method: editDialogFor.method || "card",
+            methodCustom: editDialogFor.method_custom || "",
+            note: editDialogFor.note || "",
+          }}
+          onClose={() => {
+            setEditDialogFor(null);
+            setEditDialogError("");
+          }}
+          onSubmit={(v) => void saveEditDialog(editDialogFor, v)}
+        />
+      )}
+
       <RefundDialog
         open={refundTarget != null}
         productName={payments.find((x) => x.id === refundTarget)?.product_name ?? "결제 건"}

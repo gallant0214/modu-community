@@ -43,6 +43,13 @@ export async function PATCH(
     refund_reason?: string | null;
     /** 쓴 마일리지를 돌려주고 적립분을 회수할지 */
     restore_mileage?: boolean;
+    /* ── 발급창과 같은 금액 항목 수정 (결제내역 '수정' 창) ── */
+    /** 상품 금액 */
+    product_price_won?: number;
+    /** 할인 금액 */
+    product_discount_won?: number;
+    /** 쓴 마일리지 */
+    product_mileage_used?: number;
   };
   try {
     body = await request.json();
@@ -80,6 +87,119 @@ export async function PATCH(
     order_id: number | null;
     paid_at: string;
   };
+
+  /* ── 상품 금액·할인·마일리지 수정 (결제내역 '수정' 창) ───────────────────────
+     결제행만 고치면 상품 레코드와 어긋나고 마일리지도 맞지 않는다.
+     상품(회원권·수강권·대여권)의 금액·할인·마일리지를 함께 고치고,
+     바뀐 마일리지 차액만큼 회원 잔액과 원장을 정산한 뒤, 결제액을 다시 계산한다. */
+  const editsProduct =
+    body.product_price_won !== undefined ||
+    body.product_discount_won !== undefined ||
+    body.product_mileage_used !== undefined;
+  if (editsProduct) {
+    if (!perms["sales.edit"]) {
+      return NextResponse.json({ error: "결제내역 수정 권한이 없습니다" }, { status: 403 });
+    }
+    const { data: link } = await supabase
+      .from("crm_payments")
+      .select("membership_id, pass_id, rental_id")
+      .eq("id", before.id)
+      .maybeSingle();
+    const l = (link ?? {}) as { membership_id?: number | null; pass_id?: number | null; rental_id?: number | null };
+    const table = l.membership_id
+      ? "crm_memberships"
+      : l.pass_id
+        ? "crm_passes"
+        : l.rental_id
+          ? "crm_rentals"
+          : null;
+    const productId = l.membership_id ?? l.pass_id ?? l.rental_id ?? null;
+    if (!table || !productId) {
+      return NextResponse.json(
+        { error: "이 결제에는 연결된 상품이 없어 금액을 수정할 수 없어요" },
+        { status: 400 }
+      );
+    }
+    const { data: prodRow } = await supabase
+      .from(table)
+      .select("price_won, discount_won, mileage_used")
+      .eq("id", productId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    const prod = (prodRow ?? {}) as { price_won?: number | null; discount_won?: number | null; mileage_used?: number | null };
+    const nz = (v: unknown, fallback: number) => {
+      if (v === undefined) return fallback;
+      const n = Math.trunc(Number(v));
+      return Number.isFinite(n) && n >= 0 ? n : fallback;
+    };
+    const nextPrice = nz(body.product_price_won, Number(prod.price_won) || 0);
+    const nextDiscount = nz(body.product_discount_won, Number(prod.discount_won) || 0);
+    const oldMileage = Math.max(0, Math.floor(Number(prod.mileage_used) || 0));
+    const nextMileage = nz(body.product_mileage_used, oldMileage);
+    const nextPaid = Math.max(0, nextPrice - nextDiscount - nextMileage);
+
+    // 마일리지 차액 정산 — 더 썼으면 잔액에서 더 빼고, 덜 썼으면 돌려준다
+    const diff = nextMileage - oldMileage;
+    if (diff !== 0) {
+      const { data: mem } = await supabase
+        .from("crm_members")
+        .select("mileage")
+        .eq("id", before.member_id)
+        .eq("center_id", ctx.centerId)
+        .maybeSingle();
+      const balance = mem?.mileage ?? 0;
+      if (diff > 0 && balance < diff) {
+        return NextResponse.json(
+          { error: `보유 마일리지(${balance.toLocaleString()}P)보다 많이 쓸 수 없어요` },
+          { status: 400 }
+        );
+      }
+      const nextBalance = Math.max(0, balance - diff);
+      await supabase
+        .from("crm_members")
+        .update({ mileage: nextBalance } as never)
+        .eq("id", before.member_id)
+        .eq("center_id", ctx.centerId);
+      await supabase.from("crm_member_mileage_logs").insert({
+        center_id: ctx.centerId,
+        member_id: before.member_id,
+        delta: -diff,
+        reason: "payment_edit",
+        balance_after: nextBalance,
+      } as never);
+    }
+
+    const prodPatch: Record<string, unknown> = {
+      price_won: nextPrice,
+      discount_won: nextDiscount,
+      mileage_used: nextMileage,
+      updated_at: new Date().toISOString(),
+    };
+    // 회원권·수강권은 미수금도 다시 계산한다(대여권엔 미수금 컬럼이 없다)
+    if (table !== "crm_rentals") {
+      prodPatch.outstanding_won = 0;
+      prodPatch.payment_status = "paid";
+    }
+    await supabase.from(table).update(prodPatch as never).eq("id", productId).eq("center_id", ctx.centerId);
+
+    // 결제행 금액은 서버가 계산한 실결제액으로 맞춘다
+    body.amount_won = nextPaid;
+
+    await supabase.from("crm_audit_logs").insert({
+      center_id: ctx.centerId,
+      actor_uid: ctx.uid,
+      action: "payment.update",
+      entity_type: "crm_payments",
+      entity_id: before.id,
+      payload: {
+        금액: nextPrice,
+        할인: nextDiscount,
+        마일리지사용: nextMileage,
+        실결제: nextPaid,
+        이전마일리지: oldMileage,
+      } as never,
+    });
+  }
 
   const patch: Record<string, unknown> = {};
   if (body.amount_won !== undefined) {
