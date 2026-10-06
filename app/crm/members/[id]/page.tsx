@@ -3388,6 +3388,10 @@ interface PaymentRow {
     reason: string | null;
     actor_name: string | null;
   }[];
+  /** 장바구니로 한 번에 결제한 묶음의 대표 결제 id */
+  cart_id?: number;
+  /** 그 묶음의 결제 건수 (1이면 단건) */
+  cart_count?: number;
   /** 온라인(PG) 결제면 어디서 결제·환불됐는지. 직원 발급이면 null */
   pg?: {
     provider: string;
@@ -3885,7 +3889,19 @@ function MemberPaymentsSection({
         </span>
       </div>
       <ul className="rounded-xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 overflow-hidden divide-y divide-[#E8E0D0]/70 dark:divide-zinc-800">
-        {payments.map((p) => {
+        {payments.map((p, pIdx) => {
+          /* 장바구니로 한 번에 결제한 묶음 — 묶음의 첫 줄에만 머리글을 얹고,
+             묶음에 속한 줄들은 왼쪽에 띠를 둬서 한 건으로 묶여 보이게 한다. */
+          const cartKey = p.cart_id ?? p.id;
+          const cartCount = p.cart_count ?? 1;
+          const inCart = cartCount > 1;
+          const prev = pIdx > 0 ? payments[pIdx - 1] : null;
+          const isCartHead = inCart && (prev?.cart_id ?? prev?.id) !== cartKey;
+          const cartTotal = inCart
+            ? payments
+                .filter((x) => (x.cart_id ?? x.id) === cartKey)
+                .reduce((sum, x) => sum + (x.amount_won ?? 0), 0)
+            : 0;
           // 수강권 이름 뒤에 붙는 세션 수 표기는 결제내역에서 생략 — '10회 이벤트(10회)' → '10회 이벤트'
           const rawProductLabel = p.product_name || "기타 결제";
           const productLabel = p.pass_id
@@ -3910,7 +3926,22 @@ function MemberPaymentsSection({
           const isEditing = editingId === p.id;
           const busy = busyId === p.id;
           return (
-            <li key={p.id} className="px-4 py-3">
+            <li
+              key={p.id}
+              className={`px-4 py-3 ${
+                inCart ? "border-l-[3px] border-[#6B7B3A]/40 dark:border-[#A8B87A]/40 bg-[#6B7B3A]/[0.025]" : ""
+              }`}
+            >
+              {isCartHead && (
+                <div className="mb-2 flex items-baseline justify-between gap-2 text-[11.5px]">
+                  <span className="inline-flex items-center gap-1.5 font-bold text-[#4d5a29] dark:text-[#A8B87A]">
+                    🛒 한 번에 결제 {cartCount}건
+                  </span>
+                  <span className="text-[#6B5D47] dark:text-zinc-400">
+                    합계 {formatWon(cartTotal)}원
+                  </span>
+                </div>
+              )}
               {/* 1줄: 결제 상품 + 금액 */}
               <div className="flex items-baseline justify-between gap-2">
                 <span className="min-w-0 flex items-baseline gap-1.5">

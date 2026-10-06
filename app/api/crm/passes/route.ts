@@ -144,6 +144,10 @@ export async function POST(request: Request) {
     service_sessions?: number;
     session_minutes?: number;
     price_won?: number;
+    /** 발급창에서 쓴 마일리지 — 실제 결제액(= 상품가 − 마일리지)과 미수금 계산에 쓴다 */
+    mileage_used?: number;
+    /** 이 구매로 적립되는 마일리지 */
+    mileage_earned?: number;
     payment_method?: string;
     payment_method_custom?: string;
     issued_at?: string;
@@ -275,12 +279,18 @@ export async function POST(request: Request) {
   }
 
   const totalSessions = Number(body.total_sessions) || 0;
+  /* 🚨 실제 결제 금액 = 상품가 − 마일리지 사용액.
+     예전엔 마일리지를 빼지 않아 결제내역이 정가로 남았다(정지예 회원: 165,000원 결제에
+     마일리지 12,000P 를 썼는데 결제내역은 165,000원). 마일리지는 이미 회원 잔액에서
+     차감되므로 실제로 받은 돈은 그만큼 적다. 미수금도 이 금액 기준으로 계산한다. */
   const priceWon = Number(body.price_won) || 0;
+  const usedMileage = Math.max(0, Math.floor(Number(body.mileage_used) || 0));
+  const netDue = Math.max(0, priceWon - usedMileage); // 현금·카드로 받아야 하는 금액
   const paidAmount =
     body.paid_amount_won === undefined
-      ? priceWon
-      : Math.max(0, Math.min(Math.floor(Number(body.paid_amount_won) || 0), priceWon));
-  const outstanding = priceWon - paidAmount;
+      ? netDue
+      : Math.max(0, Math.min(Math.floor(Number(body.paid_amount_won) || 0), netDue));
+  const outstanding = netDue - paidAmount;
   const paymentStatus = outstanding <= 0 ? "paid" : paidAmount > 0 ? "partial" : "unpaid";
 
   // 쿠폰(선택) — INSERT 전에 먼저 '사용'으로 잠가 이중 사용을 막는다
@@ -333,6 +343,8 @@ export async function POST(request: Request) {
       product_id: productId,
       group_capacity: groupCapacity,
       attendance_mileage_earn: productAttendanceMileage,
+      mileage_earned: Math.max(0, Math.floor(Number(body.mileage_earned) || 0)),
+      mileage_used: usedMileage,
     })
     .select("id")
     .single();
@@ -342,6 +354,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "발급 실패", detail: error?.message }, { status: 500 });
   }
   if (couponIssueId) await finalizeCouponUse(couponIssueId, "pass", created.id);
+
+  /* 🚨 마일리지 적립/사용 → 회원 잔고 + 원장.
+     수강권 라우트에는 이 처리가 아예 없었다. 발급창에서 수강권에 마일리지를 쓰면
+     잔액이 줄지 않고 기록도 남지 않았다(지금까지 실제 사용 0건이라 유실은 없음).
+     회원권·대여권과 같은 방식으로 맞춘다. [[moducm-crm-mileage-ledger]] */
+  const earnedMileage = Math.max(0, Math.floor(Number(body.mileage_earned) || 0));
+  if (earnedMileage > 0 || usedMileage > 0) {
+    const { data: mem } = await supabase
+      .from("crm_members")
+      .select("mileage")
+      .eq("id", memberId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    const base = mem?.mileage ?? 0;
+    const afterEarn = base + earnedMileage;
+    const nextMileage = Math.max(0, afterEarn - usedMileage);
+    await supabase
+      .from("crm_members")
+      .update({ mileage: nextMileage } as never)
+      .eq("id", memberId)
+      .eq("center_id", ctx.centerId);
+    const mlogs: Record<string, unknown>[] = [];
+    if (earnedMileage > 0)
+      mlogs.push({ center_id: ctx.centerId, member_id: memberId, delta: earnedMileage, reason: "earn", balance_after: afterEarn });
+    if (usedMileage > 0)
+      mlogs.push({ center_id: ctx.centerId, member_id: memberId, delta: -usedMileage, reason: "use", balance_after: nextMileage });
+    if (mlogs.length) await supabase.from("crm_member_mileage_logs").insert(mlogs as never);
+  }
 
   // 신규/재등록 자동 갱신 — 회원권·수강권 등록 횟수 기준
   await syncRegistrationType(ctx.centerId, memberId);

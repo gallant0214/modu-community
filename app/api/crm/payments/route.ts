@@ -335,6 +335,38 @@ export async function GET(request: Request) {
             : null
     );
 
+  /* 장바구니로 한 번에 결제한 묶음 — 같은 회원의 결제 시각이 ±3초 안이면 한 묶음으로 본다.
+     (결제 삭제·홀딩·등록횟수 판정과 같은 ±3초 관례. 온라인 주문은 order_id 가 있으면 그걸 우선)
+     대표 결제 id 를 cart_id 로 내려 화면이 같은 묶음을 묶어 보여줄 수 있게 한다. */
+  const CART_WINDOW_MS = 3000;
+  const cartIdOf = new Map<number, number>();
+  const cartSize = new Map<number, number>();
+  {
+    const sorted = [...rows].sort((a, b) => {
+      if (a.member_id !== b.member_id) return a.member_id - b.member_id;
+      return Date.parse(a.paid_at) - Date.parse(b.paid_at);
+    });
+    let head: typeof sorted[number] | null = null;
+    let groupKey = 0;
+    const members = new Map<number, number[]>();
+    for (const r of sorted) {
+      const sameCart =
+        head !== null &&
+        head.member_id === r.member_id &&
+        ((r.order_id && head.order_id && r.order_id === head.order_id) ||
+          Math.abs(Date.parse(r.paid_at) - Date.parse(head.paid_at)) <= CART_WINDOW_MS);
+      if (!sameCart) {
+        head = r;
+        groupKey = r.id;
+      }
+      cartIdOf.set(r.id, groupKey);
+      const list = members.get(groupKey) ?? [];
+      list.push(r.id);
+      members.set(groupKey, list);
+    }
+    for (const [key, ids] of members) cartSize.set(key, ids.length);
+  }
+
   const bundleIds = new Set<number>();
   if (componentsByParent.size > 0) {
     for (const parent of rows) {
@@ -389,6 +421,10 @@ export async function GET(request: Request) {
         : null,
       /** 상품 관리의 묶음 상품(부모 또는 그 구성 상품)으로 결제된 건 */
       bundle: bundleIds.has(r.id),
+      /** 장바구니로 한 번에 결제한 묶음의 대표 결제 id (단건이면 자기 id) */
+      cart_id: cartIdOf.get(r.id) ?? r.id,
+      /** 그 묶음에 들어 있는 결제 건수 (1이면 단건) */
+      cart_count: cartSize.get(cartIdOf.get(r.id) ?? r.id) ?? 1,
       /** 이 결제에 발생한 환불 이벤트들 (시간 오름차순).
           🚨 결제에 직접 걸린 이력이 있으면 주문 단위 이력은 붙이지 않는다.
              둘 다 붙이면 묶음 결제에서 같은 환불이 항목마다 중복으로 보인다. */

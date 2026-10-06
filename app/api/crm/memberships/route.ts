@@ -204,12 +204,18 @@ export async function POST(request: Request) {
   if (!m) return NextResponse.json({ error: "회원을 찾을 수 없습니다" }, { status: 404 });
 
   const sellerId = Number(body.seller_member_id) || ctx.centerMemberId;
+  /* 🚨 실제 결제 금액 = 상품가 − 마일리지 사용액.
+     예전엔 마일리지를 빼지 않아 결제내역이 정가로 남았다(정지예 회원: 165,000원 결제에
+     마일리지 12,000P 를 썼는데 결제내역은 165,000원). 마일리지는 이미 회원 잔액에서
+     차감되므로 실제로 받은 돈은 그만큼 적다. 미수금도 이 금액 기준으로 계산한다. */
   const priceWon = Number(body.price_won) || 0;
+  const usedMileage = Math.max(0, Math.floor(Number(body.mileage_used) || 0));
+  const netDue = Math.max(0, priceWon - usedMileage); // 현금·카드로 받아야 하는 금액
   const paidAmount =
     body.paid_amount_won === undefined
-      ? priceWon
-      : Math.max(0, Math.min(Math.floor(Number(body.paid_amount_won) || 0), priceWon));
-  const outstanding = priceWon - paidAmount;
+      ? netDue
+      : Math.max(0, Math.min(Math.floor(Number(body.paid_amount_won) || 0), netDue));
+  const outstanding = netDue - paidAmount;
   const paymentStatus = outstanding <= 0 ? "paid" : paidAmount > 0 ? "partial" : "unpaid";
 
   // 쿠폰(선택) — INSERT 전에 먼저 '사용'으로 잠가 이중 사용을 막는다
