@@ -114,7 +114,13 @@ export default async function ShopPolicyPage({ params }: { params: Promise<{ slu
       </Section>
 
       <Section title="결제 수단">
-        <p>신용·체크카드와 계좌이체로 결제하실 수 있습니다.</p>
+        {/* 🚨 PG 계약에 신청한 결제수단과 반드시 일치해야 한다.
+            여기에 없는 수단을 적어두면 심사에서 "계약에 없는 수단"으로 지적된다. */}
+        <p>신용카드·체크카드로 결제하실 수 있습니다.</p>
+        <p className="mt-2">
+          결제는 PG사(전자지급결제대행사)를 통해 안전하게 처리되며, 센터는 카드 정보를
+          저장하지 않습니다. 자동결제(정기결제)는 운영하지 않습니다.
+        </p>
       </Section>
 
       <div className="mt-8">
