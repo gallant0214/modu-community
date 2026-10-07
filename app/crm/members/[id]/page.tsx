@@ -3414,7 +3414,12 @@ interface PaymentRow {
 }
 
 /** PG 결제 출처 표시 — 어디서 결제됐는지 한눈에 */
-const PG_LABEL: Record<string, string> = { toss: "토스" };
+const PG_LABEL: Record<string, string> = { toss: "토스", portone: "KG이니시스" };
+/**
+ * 취소를 **실제로 해야 하는 곳**. 결제사(KG이니시스)와 관리 콘솔(포트원)이 달라서
+ * 결제 출처 표기와 따로 둔다. 여기를 틀리면 직원이 엉뚱한 데를 찾아다닌다.
+ */
+const PG_CONSOLE_LABEL: Record<string, string> = { toss: "토스", portone: "포트원" };
 const PG_CHANNEL_LABEL: Record<string, string> = { web: "홈페이지", app: "회원앱" };
 
 const PAYMENT_METHOD_KO: Record<string, string> = {
@@ -4229,15 +4234,20 @@ function MemberPaymentsSection({
                       환불
                     </button>
                   )}
-                  {/* 🚨 PG 결제는 CRM 에서 환불하지 않는다 — 장부만 정리되고 돈은 토스에 남는다 */}
-                  {!isRefunded && !!p.pg && (
-                    <span
-                      className="px-2.5 py-1 rounded-lg text-[12px] font-semibold text-[#8C8270] dark:text-zinc-400 bg-[#F0EAD9] dark:bg-zinc-800 cursor-help"
-                      title="온라인 결제는 토스에서 취소해야 대금이 실제로 돌아갑니다. 취소하면 이용권 회수까지 자동으로 처리됩니다."
-                    >
-                      환불은 토스에서
-                    </span>
-                  )}
+                  {/* 🚨 PG 결제는 CRM 에서 환불하지 않는다 — 장부만 정리되고 돈은 PG 에 남는다 */}
+                  {!isRefunded &&
+                    !!p.pg &&
+                    (() => {
+                      const where = PG_CONSOLE_LABEL[p.pg!.provider] ?? "PG";
+                      return (
+                        <span
+                          className="px-2.5 py-1 rounded-lg text-[12px] font-semibold text-[#8C8270] dark:text-zinc-400 bg-[#F0EAD9] dark:bg-zinc-800 cursor-help"
+                          title={`온라인 결제는 ${where}에서 취소해야 대금이 실제로 돌아갑니다. 취소하면 이용권 회수까지 자동으로 처리됩니다.`}
+                        >
+                          환불은 {where}에서
+                        </span>
+                      );
+                    })()}
                 </div>
               )}
             </li>

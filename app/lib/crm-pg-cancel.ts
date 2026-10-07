@@ -6,16 +6,24 @@ import { refundOrderMileage } from "@/app/lib/member-checkout";
 import { restoreCouponAfterRefund } from "@/app/lib/crm-coupons-server";
 import { notifyMembersByIds } from "@/app/lib/member-notify";
 
-/**
- * PG(토스)에서 취소된 결제를 CRM 에 반영한다.
- *
- * 두 곳이 쓴다 — 웹훅(자동)과 '＄PG 상태 다시 확인'(수동). 같은 함수를 써야
- * 두 경로가 어긋나지 않는다. CRM 에서 직접 환불하는 길은 막아뒀기 때문에
- * (돈은 토스에 남아 장부만 어긋난다) 이 함수가 유일한 환불 경로다.
- *
- * 🚨 환불 이력·마일리지·쿠폰은 모두 **환불된 항목 기준**이다.
- *    주문 단위로 처리하면 묶음 결제에서 금액이 어긋난다.
- */
+/** PG 응답에서 뽑아낸 취소 상태 — toss/portone 공통 */
+export interface PgCancelState {
+  canceled: boolean;
+  /** 일부만 취소됐는가 (남은 금액이 있으면 이용권을 전부 회수하지 않는다) */
+  isPartial: boolean;
+  canceledAmountWon: number;
+  refundedAt: string;
+  reason: string;
+  /** PG 취소 거래 식별자 — 환불 이력 멱등키의 뿌리 */
+  txKey: string | null;
+}
+
+/** 결제내역·활동로그에 남길 PG 이름 */
+const PROVIDER_LABEL: Record<string, string> = {
+  toss: "토스",
+  portone: "KG이니시스",
+};
+
 export interface PgCancelResult {
   ok: boolean;
   /** 사람이 읽을 처리 결과 */
@@ -34,32 +42,41 @@ interface OrderForCancel {
   coupon_issue_id: number | null;
 }
 
+/**
+ * PG 에서 취소된 결제를 CRM 에 반영한다.
+ *
+ * 네 곳이 쓴다 — 토스 웹훅 · 포트원 웹훅 · 'PG 상태 다시 확인'(수동). 같은 함수를 써야
+ * 경로마다 어긋나지 않는다. CRM 에서 직접 환불하는 길은 막아뒀기 때문에
+ * (돈은 PG 에 남아 장부만 어긋난다) 이 함수가 유일한 환불 반영 경로다.
+ *
+ * 🚨 **PG 별 응답 모양을 여기로 들여오지 않는다.** 호출하는 쪽이
+ *    `tossCancelState()` / `portoneCancelState()` 로 공통 모양(PgCancelState)으로 바꿔서 넘긴다.
+ *    토스와 포트원은 부분취소 표현이 아예 달라서(포트원은 부분취소 시 status 가 paid 그대로)
+ *    이 함수 안에서 분기하면 한쪽을 반드시 놓친다.
+ *
+ * 🚨 환불 이력·마일리지·쿠폰은 모두 **환불된 항목 기준**이다.
+ *    주문 단위로 처리하면 묶음 결제에서 금액이 어긋난다.
+ */
 export async function applyPgCancel(opts: {
   order: OrderForCancel;
-  /** 토스 결제 조회 결과 (status, cancels) */
-  pay: Record<string, unknown>;
+  /** 어느 PG 인지 — 환불 이력·로그 표기에만 쓴다. 판정에는 쓰지 않는다 */
+  provider: "toss" | "portone";
+  /** PG 응답을 공통 모양으로 바꾼 값 */
+  cancel: PgCancelState;
 }): Promise<PgCancelResult> {
-  const { order, pay } = opts;
-  const status = String(pay.status ?? "");
-  if (status !== "CANCELED" && status !== "PARTIAL_CANCELED") {
-    return { ok: false, note: `취소된 결제가 아니에요 (${status})`, needsStaff: false, retired: 0 };
+  const { order, provider, cancel } = opts;
+  const pgLabel = PROVIDER_LABEL[provider] ?? provider;
+  if (!cancel.canceled) {
+    return { ok: false, note: "취소된 결제가 아니에요", needsStaff: false, retired: 0 };
   }
   if (order.status === "refunded") {
     return { ok: true, note: "이미 환불 처리됨", needsStaff: false, retired: 0 };
   }
 
-  type TossCancel = {
-    cancelAmount?: number;
-    canceledAt?: string;
-    cancelReason?: string;
-    transactionKey?: string;
-  };
-  const cancels: TossCancel[] = Array.isArray(pay.cancels) ? (pay.cancels as TossCancel[]) : [];
-  const canceledAmount = cancels.reduce((sum, c) => sum + Number(c.cancelAmount ?? 0), 0);
-  const latest = cancels[cancels.length - 1];
-  const refundedAt = latest?.canceledAt || new Date().toISOString();
-  const reason = latest?.cancelReason || "PG 에서 취소됨";
-  const txKey = latest?.transactionKey || null;
+  const canceledAmount = cancel.canceledAmountWon;
+  const refundedAt = cancel.refundedAt;
+  const reason = cancel.reason;
+  const txKey = cancel.txKey;
 
   await supabase
     .from("crm_orders")
@@ -81,8 +98,8 @@ export async function applyPgCancel(opts: {
       amount_won: canceledAmount || order.amount_won,
       refunded_at: refundedAt,
       source: "pg",
-      provider: "toss",
-      is_partial: status !== "CANCELED",
+      provider,
+      is_partial: cancel.isPartial,
       reason,
       pg_transaction_key: txKey,
     } as never);
@@ -130,8 +147,8 @@ export async function applyPgCancel(opts: {
       amount_won: it.amount_won,
       refunded_at: refundedAt,
       source: "pg",
-      provider: "toss",
-      is_partial: status !== "CANCELED",
+      provider,
+      is_partial: cancel.isPartial,
       reason,
       pg_transaction_key: txKey ? `${txKey}:${it.id}` : null,
     } as never);
@@ -165,7 +182,7 @@ export async function applyPgCancel(opts: {
     notes.push(`${RETIRE_KIND_LABEL[r.kind] ?? r.kind} '${r.label ?? ""}' 회수`);
     await supabase.from("crm_audit_logs").insert({
       center_id: order.center_id,
-      actor_uid: "system:toss-webhook",
+      actor_uid: `system:${provider}-webhook`,
       action: "payment.refund_pg",
       entity_type: "crm_payments",
       entity_id: it.payment_id,
@@ -174,7 +191,7 @@ export async function applyPgCancel(opts: {
         환불금액: it.amount_won,
         회수항목: RETIRE_KIND_LABEL[r.kind] ?? r.kind,
         상품명: r.label,
-        처리경로: "PG(토스)에서 결제 취소 — 대금이 회원에게 반환됨",
+        처리경로: `PG(${pgLabel})에서 결제 취소 — 대금이 회원에게 반환됨`,
         ...(r.locker ? { 락커: `반납 ${r.locker.returned}건 · 기간원복 ${r.locker.reverted}건` } : {}),
       } as never,
     });

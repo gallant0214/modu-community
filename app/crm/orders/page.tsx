@@ -106,7 +106,7 @@ export default function CrmOrdersPage() {
     load();
   }, [load]);
 
-  /** 토스에서 취소했는데 웹훅이 오지 않은 경우를 손으로 맞춘다 */
+  /** PG 에서 취소했는데 웹훅이 오지 않은 경우를 손으로 맞춘다 */
   const resync = async (orderId: number) => {
     setSyncing(orderId);
     try {
@@ -280,8 +280,8 @@ export default function CrmOrdersPage() {
                   </p>
                 )}
 
-                {/* 환불은 토스에서만 한다(CRM 환불은 장부만 정리돼 어긋난다).
-                    토스에서 취소했는데 반영이 안 됐을 때 쓰는 보조 수단. */}
+                {/* 환불은 PG 콘솔(포트원)에서만 한다 — CRM 환불은 장부만 정리돼 어긋난다.
+                    PG 에서 취소했는데 웹훅이 안 와 반영이 안 됐을 때 쓰는 보조 수단. */}
                 {(o.status === "paid" || o.status === "refunded") && (
                   <div className="mt-2 flex items-center gap-2">
                     <button
@@ -289,12 +289,12 @@ export default function CrmOrdersPage() {
                       onClick={() => resync(o.id)}
                       disabled={syncing === o.id}
                       className="px-2.5 py-1 rounded-lg border border-[#D9CDB8] dark:border-zinc-700 text-[11.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F6F1E8] dark:hover:bg-zinc-800 disabled:opacity-50"
-                      title="토스에 직접 물어봐 취소 여부를 확인하고 반영합니다"
+                      title="PG 에 직접 물어봐 취소 여부를 확인하고 반영합니다"
                     >
                       {syncing === o.id ? "확인 중…" : "PG 상태 다시 확인"}
                     </button>
                     <span className="text-[11px] text-[#A89B80]">
-                      환불은 토스에서 취소하면 자동 반영됩니다
+                      환불은 포트원에서 취소하면 자동 반영됩니다
                     </span>
                   </div>
                 )}

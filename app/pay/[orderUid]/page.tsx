@@ -1,8 +1,13 @@
 import { notFound } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { verifyOrderToken } from "@/app/lib/order-token";
-import { tossClientKey, tossKeysMatch } from "@/app/lib/toss-payments";
-import { onlineSalesEnabled, SALES_DISABLED_MESSAGE } from "@/app/lib/member-checkout";
+import { portoneConfigured, portoneImpCode, portoneChannelKey } from "@/app/lib/portone-payments";
+import {
+  onlineSalesEnabled,
+  SALES_DISABLED_MESSAGE,
+  salesAllowedForMember,
+  SALES_RESTRICTED_MESSAGE,
+} from "@/app/lib/member-checkout";
 import PayClient from "./PayClient";
 import SellerInfo, { loadSellerInfo } from "../SellerInfo";
 
@@ -26,12 +31,13 @@ export default async function PayPage({
   if (!onlineSalesEnabled()) {
     return <Notice title="준비 중이에요" body={SALES_DISABLED_MESSAGE} />;
   }
-  // 클라이언트 키와 시크릿 키의 종류가 다르면 결제창은 떠도 승인에서 반드시 실패한다
-  if (!tossKeysMatch()) {
+  /* 식별코드·채널키·API 키 중 하나라도 비면 결제창이 뜨다 말거나 검증이 실패한다.
+     결제창을 띄워 돈을 받고 나서 터지면 수습이 훨씬 어려우니 들어오기 전에 막는다. */
+  if (!portoneConfigured()) {
     return (
       <Notice
         title="결제 설정에 문제가 있어요"
-        body="센터로 문의해주세요. (결제 키 설정 오류)"
+        body="센터로 문의해주세요. (결제 연동 설정 누락)"
       />
     );
   }
@@ -85,14 +91,30 @@ export default async function PayPage({
   if (order.expires_at && new Date(order.expires_at).getTime() < Date.now()) {
     return <Notice title="결제 시간이 지났어요" body="처음부터 다시 주문해주세요." />;
   }
+  /* 주문 생성 뒤에 허용목록이 바뀌었을 수도 있다 — 결제창을 띄우기 전에 한 번 더 본다 */
+  if (!salesAllowedForMember(order.member_id)) {
+    return <Notice title="준비 중이에요" body={SALES_RESTRICTED_MESSAGE} />;
+  }
 
+  /* 🚨 포트원 V1 은 buyer_tel 이 **필수**다. 비우면 결제창이 거부한다.
+     없으면 센터 대표번호로 대체한다 — 결제 자체가 막히는 것보다 낫다. */
   const { data: mem } = await supabase
     .from("crm_members")
-    .select("name")
+    .select("name, phone")
     .eq("id", order.member_id)
     .maybeSingle();
+  const member = mem as { name?: string; phone?: string | null } | null;
 
   const seller = await loadSellerInfo(order.center_id);
+
+  /* 센터 판매 페이지 주소 — 결제 동의 문구와 하단에 약관·정책 링크를 띄우는 데 쓴다.
+     🚨 PG 심사가 '이용약관·개인정보처리방침 유무'를 자동 검사한다. 결제 페이지에도 보여야 한다. */
+  const { data: slugRow } = await supabase
+    .from("crm_centers")
+    .select("shop_slug")
+    .eq("id", order.center_id)
+    .maybeSingle();
+  const slug = (slugRow as { shop_slug?: string | null } | null)?.shop_slug ?? undefined;
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-lg bg-white px-5 pb-16 pt-8">
@@ -133,13 +155,15 @@ export default async function PayPage({
         centerId={order.center_id}
         amount={order.amount_won}
         orderName={order.product_name}
-        customerName={(mem as { name?: string } | null)?.name ?? ""}
-        customerKey={`m_${order.center_id}_${order.member_id}`}
-        clientKey={tossClientKey()}
+        customerName={member?.name ?? ""}
+        customerTel={(member?.phone || seller?.phone || "").replace(/[^0-9]/g, "")}
+        impCode={portoneImpCode()}
+        channelKey={portoneChannelKey()}
+        slug={slug}
         returnToApp={rn === "1"}
       />
 
-      <SellerInfo seller={seller} />
+      <SellerInfo seller={seller} slug={slug} />
     </main>
   );
 }

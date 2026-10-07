@@ -1139,7 +1139,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
             <div className="text-[13px] font-semibold text-[#3A342A] dark:text-zinc-200">온라인 판매 정보</div>
             <p className="mt-1 text-[12px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">
               홈페이지·회원앱 결제 페이지 하단에 표기됩니다. 전자상거래법상 의무 항목이라
-              비어 있으면 PG(토스페이먼츠) 심사에서 반려될 수 있어요.
+              비어 있으면 PG(카드사) 심사에서 반려될 수 있어요.
             </p>
 
             {/* 센터 전용 판매 페이지 주소 — 인스타·QR·PG 심사에 쓰는 값 */}

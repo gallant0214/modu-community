@@ -18,20 +18,51 @@ export const ORDER_TTL_MINUTES = 30;
 /**
  * 온라인 판매 스위치.
  *
- * 🚨 기본은 **꺼짐**이다. PG 계약 전에는 토스 공개 테스트 키로 동작하는데,
+ * 🚨 기본은 **꺼짐**이다. PG 테스트 채널은 돈이 실제로 빠지지 않는데
  *    그 상태로 열어두면 가짜 결제로 진짜 이용권이 발급된다.
  *
- *   ONLINE_SALES_ENABLED=1  → 테스트 키로도 판매 허용 (운영 DB 로 리허설할 때만)
- *   실계약 키(TOSS_SECRET_KEY=live_...)가 꽂히면 자동으로 열린다
+ *   PORTONE_LIVE=1          → 포트원 **실연동** 채널을 꽂았다는 명시 (현재 PG)
+ *   ONLINE_SALES_ENABLED=1  → 테스트 채널로도 판매 허용 (운영 DB 리허설 때만)
+ *   TOSS_SECRET_KEY=live_…  → 토스 시절의 조건. 토스 계약이 거절돼 쓰이지 않지만
+ *                             과거 설정이 남은 환경에서 갑자기 꺼지지 않게 남겨둔다.
  */
 export function onlineSalesEnabled(): boolean {
   if (process.env.ONLINE_SALES_ENABLED === "1") return true;
+  if (process.env.PORTONE_LIVE === "1") return true;
   const k = process.env.TOSS_SECRET_KEY;
   return !!k && !k.startsWith("test_");
 }
 
 /** 판매가 꺼져 있을 때 회원에게 보여줄 문구 */
 export const SALES_DISABLED_MESSAGE = "온라인 결제는 준비 중이에요. 센터로 문의해주세요.";
+
+/**
+ * 🚨 테스트 채널로 도는 동안 **결제를 허용할 회원만** 지정한다.
+ *
+ * 왜 필요한가: PG 사이트 검수원은 결제창이 실제로 뜨는지 직접 확인한다.
+ * 그래서 판매를 열어둬야 하는데, 테스트 채널은 돈이 빠지지 않으므로
+ * 그 사이에 일반 회원이 결제하면 **공짜로 진짜 이용권을 받아간다.**
+ *
+ * `ONLINE_SALES_MEMBER_ALLOWLIST=1234,5678` 처럼 회원 id 를 적으면 그 회원만 결제할 수 있다.
+ * 비워 두면 제한 없음(= 실연동으로 전환한 뒤의 정상 상태).
+ */
+export function salesMemberAllowlist(): number[] {
+  return (process.env.ONLINE_SALES_MEMBER_ALLOWLIST ?? "")
+    .split(",")
+    .map((v) => Number(v.trim()))
+    .filter((n) => Number.isFinite(n) && n > 0);
+}
+
+/** 이 회원이 지금 온라인 결제를 할 수 있는가 — 마스터 스위치 + 허용목록 */
+export function salesAllowedForMember(memberId: number): boolean {
+  if (!onlineSalesEnabled()) return false;
+  const allow = salesMemberAllowlist();
+  return allow.length === 0 || allow.includes(memberId);
+}
+
+/** 허용목록 밖의 회원에게 보여줄 문구 — 내부 사정을 드러내지 않는다 */
+export const SALES_RESTRICTED_MESSAGE =
+  "온라인 결제 준비 중이에요. 센터로 문의해주시면 바로 도와드릴게요.";
 
 // 판매 대상 규칙은 화면과 공유한다 — 두 벌로 두면 한쪽만 고쳐져 어긋난다
 export { ONLINE_SELLABLE_TYPES, ADDON_TYPES } from "@/app/lib/crm-online-sale";

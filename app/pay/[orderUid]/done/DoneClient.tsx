@@ -31,24 +31,24 @@ export default function DoneClient(props: {
   orderUid: string;
   token: string;
   centerId: number;
-  paymentKey: string;
-  amount: number;
+  /** 포트원 결제 식별자. 비어 있으면 결제창에서 실패·취소된 것 */
+  impUid: string;
   failCode: string;
   failMessage: string;
   /** 회원앱이 시스템 브라우저로 연 결제인지 — 끝나면 딥링크로 앱에 돌려준다 */
   returnToApp?: boolean;
 }) {
-  const [phase, setPhase] = useState<Phase>(props.paymentKey ? "confirming" : "failed");
+  const [phase, setPhase] = useState<Phase>(props.impUid ? "confirming" : "failed");
   const [message, setMessage] = useState(props.failMessage || "결제가 취소됐어요");
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const ran = useRef(false);
 
   useEffect(() => {
-    if (!props.paymentKey) {
+    if (!props.impUid) {
       notifyApp({ type: "payment", ok: false, reason: props.failCode || "canceled" }, props.returnToApp);
       return;
     }
-    if (ran.current) return; // StrictMode 이중 실행 방지 (승인은 한 번만)
+    if (ran.current) return; // StrictMode 이중 실행 방지 (검증·발급은 한 번만)
     ran.current = true;
 
     (async () => {
@@ -59,15 +59,16 @@ export default function DoneClient(props: {
           body: JSON.stringify({
             centerId: props.centerId,
             orderUid: props.orderUid,
-            paymentKey: props.paymentKey,
-            amount: props.amount,
+            /* 🚨 금액은 보내지 않는다. 서버가 주문에 저장된 값으로 검증한다 —
+               클라이언트가 금액을 거들면 그게 곧 위변조 경로다. */
+            impUid: props.impUid,
             token: props.token,
           }),
         });
         const data = await res.json();
         if (!res.ok) {
           setPhase("failed");
-          setMessage(data?.error || "결제 승인에 실패했어요");
+          setMessage(data?.error || "결제 확인에 실패했어요");
           notifyApp({ type: "payment", ok: false, reason: data?.error }, props.returnToApp);
           return;
         }

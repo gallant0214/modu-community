@@ -194,3 +194,33 @@ export async function fetchTossPaymentByOrderId(
     return { ok: false, error: e instanceof Error ? e.message : "결제 서버 통신 실패" };
   }
 }
+
+/**
+ * 토스 결제 객체에서 **취소 상태**만 뽑아 공통 모양으로 바꾼다.
+ * 포트원 `portoneCancelState()` 와 같은 모양을 돌려주므로 환불 반영 로직이 PG 를 몰라도 된다.
+ */
+export function tossCancelState(pay: Record<string, unknown>): {
+  canceled: boolean;
+  isPartial: boolean;
+  canceledAmountWon: number;
+  refundedAt: string;
+  reason: string;
+  txKey: string | null;
+} {
+  const status = String(pay.status ?? "");
+  const cancels = (Array.isArray(pay.cancels) ? pay.cancels : []) as {
+    cancelAmount?: number;
+    canceledAt?: string;
+    cancelReason?: string;
+    transactionKey?: string;
+  }[];
+  const latest = cancels[cancels.length - 1];
+  return {
+    canceled: status === "CANCELED" || status === "PARTIAL_CANCELED",
+    isPartial: status === "PARTIAL_CANCELED",
+    canceledAmountWon: cancels.reduce((sum, c) => sum + Number(c.cancelAmount ?? 0), 0),
+    refundedAt: latest?.canceledAt || new Date().toISOString(),
+    reason: latest?.cancelReason || "PG 에서 취소됨",
+    txKey: latest?.transactionKey || null,
+  };
+}

@@ -7,6 +7,8 @@ import {
   expireStaleOrders,
   onlineSalesEnabled,
   SALES_DISABLED_MESSAGE,
+  salesAllowedForMember,
+  SALES_RESTRICTED_MESSAGE,
 } from "@/app/lib/member-checkout";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +54,10 @@ export async function POST(request: Request) {
 
   if (!onlineSalesEnabled()) {
     return NextResponse.json({ error: SALES_DISABLED_MESSAGE }, { status: 503 });
+  }
+  // 결제 못 할 회원에게 금액까지 계산해 보여주면 마지막에 막혀 더 혼란스럽다
+  if (!salesAllowedForMember(ctx.memberId)) {
+    return NextResponse.json({ error: SALES_RESTRICTED_MESSAGE }, { status: 503 });
   }
 
   // 시한 지난 주문이 잡고 있던 마일리지를 풀어야 가용액이 정확해진다

@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { PRODUCT_SELECT, type SellableProduct } from "@/app/lib/member-purchase";
-import { tossClientKey } from "@/app/lib/toss-payments";
+import { portoneImpCode, portoneChannelKey } from "@/app/lib/portone-payments";
 import {
   quoteCart,
   expireStaleOrders,
   ORDER_TTL_MINUTES,
   onlineSalesEnabled,
   SALES_DISABLED_MESSAGE,
+  salesAllowedForMember,
+  SALES_RESTRICTED_MESSAGE,
 } from "@/app/lib/member-checkout";
 import { claimCoupon, releaseCoupon } from "@/app/lib/crm-coupons-server";
 import { completeOrder, type OrderRow } from "@/app/lib/member-order-complete";
@@ -77,6 +79,11 @@ export async function POST(request: Request) {
 
   if (!onlineSalesEnabled()) {
     return NextResponse.json({ error: SALES_DISABLED_MESSAGE }, { status: 503 });
+  }
+  /* 🚨 테스트 채널로 도는 동안은 허용된 회원(PG 심사원)만 결제할 수 있다.
+     여기가 돈이 걸리는 유일한 관문이므로 반드시 주문 생성에서 막는다. */
+  if (!salesAllowedForMember(ctx.memberId)) {
+    return NextResponse.json({ error: SALES_RESTRICTED_MESSAGE }, { status: 503 });
   }
   const channel = body.channel === "web" ? "web" : "app";
 
@@ -170,7 +177,7 @@ export async function POST(request: Request) {
       amount_won: quote.amountWon,
       status: "pending",
       order_uid: orderUid,
-      pg_provider: "toss",
+      pg_provider: "portone",
       channel,
       expires_at: expiresAt,
     } as never)
@@ -242,9 +249,10 @@ export async function POST(request: Request) {
     orderName,
     lines: quote.lines,
     customerName: ctx.name || undefined,
-    // 토스 결제위젯이 요구하는 고객 식별자 — 회원별로 항상 같은 값
-    customerKey: `m_${centerId}_${ctx.memberId}`,
-    clientKey: tossClientKey(),
+    /* 포트원 V1 결제창 설정. 둘 다 공개값이고, 실제 결제는 서버가 imp_uid 로 재검증한다 */
+    provider: "portone",
+    impCode: portoneImpCode(),
+    channelKey: portoneChannelKey(),
     /**
      * 웹·앱이 공통으로 여는 결제 페이지.
      * 토큰은 이 주문 하나에만 유효 — 회원앱 WebView 처럼 웹 로그인 세션이 없는 곳에서 쓴다.

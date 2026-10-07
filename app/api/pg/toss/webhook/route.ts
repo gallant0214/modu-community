@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
-import { fetchTossPayment, fetchTossPaymentByOrderId } from "@/app/lib/toss-payments";
+import { fetchTossPayment, fetchTossPaymentByOrderId, tossCancelState } from "@/app/lib/toss-payments";
 import {
   completeOrder,
   claimOrderForFulfillment,
@@ -171,7 +171,7 @@ export async function POST(request: Request) {
   /* ── 토스 쪽에서 취소됨 ──────────────────────────── */
   if (status === "CANCELED" || status === "PARTIAL_CANCELED") {
     // 처리는 공용 함수가 한다 — '＄PG 상태 다시 확인'(수동)도 같은 함수를 쓴다
-    const res = await applyPgCancel({ order, pay });
+    const res = await applyPgCancel({ order, provider: "toss", cancel: tossCancelState(pay) });
     return finish(res.note, res.ok && !res.needsStaff);
   }
 

@@ -3,7 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { PRODUCT_SELECT, type SellableProduct } from "@/app/lib/member-purchase";
 import { isOnlineSellable } from "@/app/lib/member-checkout";
-import { tossClientKey, tossIsLive } from "@/app/lib/toss-payments";
+import { portoneImpCode, portoneChannelKey, portoneIsLive } from "@/app/lib/portone-payments";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +51,11 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     products,
-    payment: { provider: "toss", clientKey: tossClientKey(), live: tossIsLive() },
+    payment: {
+      provider: "portone",
+      impCode: portoneImpCode(),
+      channelKey: portoneChannelKey(),
+      live: portoneIsLive(),
+    },
   });
 }
