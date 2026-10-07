@@ -18,6 +18,15 @@ const TYPE_LABEL: Record<string, string> = {
   apparel: "운동복",
 };
 
+/** 상품 기간을 개월로 환산 — 구매 안내에 최대 제공기간을 명시하려고 쓴다 */
+function toMonths(value: number | null, unit: string | null): number {
+  if (!value) return 0;
+  if (unit === "month") return value;
+  if (unit === "year") return value * 12;
+  if (unit === "week") return Math.ceil((value * 7) / 30);
+  return Math.ceil(value / 30);
+}
+
 async function loadCenter(slug: string) {
   if (!isValidShopSlug(slug)) return null;
   const { data } = await supabase
@@ -87,6 +96,10 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
       addon: p.type === "apparel",
     }));
 
+  const maxMonths = products.reduce(
+    (m, p) => Math.max(m, toMonths(p.durationValue, p.durationUnit)),
+    0
+  );
   const seller = await loadSellerInfo(center.id);
 
   return (
@@ -112,7 +125,51 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
         salesEnabled={onlineSalesEnabled()}
       />
 
+      {/* 🚨 KG이니시스 사이트 검수 3번 — "상품 상세페이지에 서비스 제공기간, 교환, 환불,
+          취소 규정 기재". 정책 전문을 따로 두는 것만으로는 반려되므로, 상품이 보이는
+          이 페이지에서 네 항목이 그대로 읽혀야 한다. 전문은 /shop/[slug]/policy. */}
+      <section className="mt-8 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+        <h2 className="text-sm font-bold text-gray-900">구매 안내</h2>
+        <dl className="mt-3 space-y-2.5 text-[13px] leading-relaxed">
+          <Guide label="서비스 제공시기">
+            결제 완료 즉시 이용권이 등록되어 바로 이용하실 수 있습니다. 배송되는 물품은 없습니다.
+          </Guide>
+          <Guide label="서비스 제공기간">
+            각 상품에 표시된 기간
+            {maxMonths > 0 ? ` 동안 제공되며, 최대 ${maxMonths}개월입니다` : " 동안 제공됩니다"}.
+            횟수제 수강권은 남은 횟수를 모두 사용할 때까지 이용하실 수 있습니다.
+          </Guide>
+          <Guide label="주문 취소 · 청약철회">
+            이용을 시작하지 않았다면 결제일로부터 7일 이내에 위약금 없이 전액 환불되며, 접수 후
+            3영업일 이내에 결제하신 카드로 환급됩니다.
+          </Guide>
+          <Guide label="교환 · 상품 변경">
+            무형의 서비스라 물품 교환 절차는 없습니다. 이용 시작 전이라면 다른 기간·종류의
+            이용권으로 변경하실 수 있고, 차액은 추가 결제 또는 부분취소로 정산합니다.
+          </Guide>
+          <Guide label="환불">
+            이용을 시작한 뒤에는 이용한 기간에 해당하는 금액과 위약금을 공제한 잔액을 환불해
+            드립니다. 자세한 기준은 아래 환불·해지 규정을 확인해 주세요.
+          </Guide>
+        </dl>
+        <a
+          href={`/shop/${slug}/policy`}
+          className="mt-3 inline-block text-[13px] font-bold text-blue-600 underline"
+        >
+          판매 · 환불 정책 전문 보기
+        </a>
+      </section>
+
       <SellerInfo seller={seller} slug={slug} />
     </main>
+  );
+}
+
+function Guide({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="font-bold text-gray-800">{label}</dt>
+      <dd className="mt-0.5 text-gray-600">{children}</dd>
+    </div>
   );
 }
