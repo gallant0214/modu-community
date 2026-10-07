@@ -132,7 +132,7 @@ export default async function ShopPolicyPage({ params }: { params: Promise<{ slu
         </Link>
       </div>
 
-      <SellerInfo seller={seller} hideRefundPolicy />
+      <SellerInfo seller={seller} slug={slug} hideRefundPolicy />
     </main>
   );
 }

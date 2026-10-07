@@ -70,6 +70,14 @@ export async function GET(request: Request) {
     )
   );
 
+  // 퇴실 적립 창 — 오늘 마지막 체크인 + 3시간 이내만 활성
+  const CHECKOUT_WINDOW_MS = 3 * 3600 * 1000;
+  const todayCheckInMs = (atts ?? [])
+    .map((a) => new Date(a.checked_in_at).getTime())
+    .filter((ms) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10) === todayKst);
+  const lastCheckInMs = todayCheckInMs.length ? Math.max(...todayCheckInMs) : null;
+  const windowOpen = lastCheckInMs != null && Date.now() <= lastCheckInMs + CHECKOUT_WINDOW_MS;
+
   return NextResponse.json({
     notice: notice
       ? { id: notice.id, title: notice.title, body: notice.body, createdAt: notice.created_at }
@@ -80,6 +88,9 @@ export async function GET(request: Request) {
       enabled: settings?.checkout_mileage_enabled ?? false,
       earn: settings?.checkout_mileage_earn ?? 0,
       doneToday: (checkoutToday ?? 0) > 0,
+      windowOpen, // 오늘 마지막 체크인 후 3시간 이내만 true
+      checkInAt: lastCheckInMs ? new Date(lastCheckInMs).toISOString() : null,
+      windowMinutes: 180,
     },
     weekAttendance,
   });

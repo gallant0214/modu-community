@@ -98,9 +98,16 @@ export default function SellerInfo({
   seller,
   /** 환불 규정을 이미 본문에 보여준 페이지에서는 중복 표시하지 않는다 */
   hideRefundPolicy,
+  /**
+   * 센터 판매 페이지 주소. 주면 이용약관·개인정보처리방침 링크를 함께 띄운다.
+   * 🚨 PG 심사가 '이용약관 유무'·'개인정보처리방침 유무'를 자동 검사하므로
+   *    판매·결제 페이지 어디서든 링크가 보여야 한다.
+   */
+  slug,
 }: {
   seller: Seller | null;
   hideRefundPolicy?: boolean;
+  slug?: string;
 }) {
   if (!seller) return null;
   const rows: [string, string | null][] = [
@@ -121,7 +128,21 @@ export default function SellerInfo({
         </>
       )}
 
-      <p className={`mb-2 font-semibold text-gray-700 ${hideRefundPolicy ? "" : "mt-5"}`}>
+      {slug && (
+        <nav className="mb-5 flex flex-wrap gap-x-4 gap-y-1">
+          <a href={`/shop/${slug}/terms`} className="font-semibold text-gray-700 underline">
+            이용약관
+          </a>
+          <a href={`/shop/${slug}/privacy`} className="font-semibold text-gray-700 underline">
+            개인정보처리방침
+          </a>
+          <a href={`/shop/${slug}/policy`} className="font-semibold text-gray-700 underline">
+            판매 · 환불 정책
+          </a>
+        </nav>
+      )}
+
+      <p className={`mb-2 font-semibold text-gray-700 ${hideRefundPolicy || slug ? "" : "mt-5"}`}>
         판매자 정보
       </p>
       <dl className="space-y-0.5">

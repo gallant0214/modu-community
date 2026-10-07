@@ -112,7 +112,7 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
         salesEnabled={onlineSalesEnabled()}
       />
 
-      <SellerInfo seller={seller} />
+      <SellerInfo seller={seller} slug={slug} />
     </main>
   );
 }
