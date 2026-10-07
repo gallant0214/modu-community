@@ -53,11 +53,18 @@ export function salesMemberAllowlist(): number[] {
     .filter((n) => Number.isFinite(n) && n > 0);
 }
 
-/** 이 회원이 지금 온라인 결제를 할 수 있는가 — 마스터 스위치 + 허용목록 */
+/**
+ * 이 회원이 지금 온라인 결제를 할 수 있는가 — 마스터 스위치 + 허용목록.
+ *
+ * 🚨 **설정값이 있으면 fail-closed** 다. 값이 있는데 쓸 수 있는 회원 id 가 하나도
+ *    안 나오면(오타·공백 등) 전원을 막는다. 돈이 걸린 관문에서 설정 실수가
+ *    "모두 허용" 으로 풀리면 그게 곧 사고다. 제한을 풀 때는 환경변수를 **지운다.**
+ */
 export function salesAllowedForMember(memberId: number): boolean {
   if (!onlineSalesEnabled()) return false;
-  const allow = salesMemberAllowlist();
-  return allow.length === 0 || allow.includes(memberId);
+  const raw = (process.env.ONLINE_SALES_MEMBER_ALLOWLIST ?? "").trim();
+  if (!raw) return true; // 설정 안 함 = 제한 없음(실연동 전환 후의 정상 상태)
+  return salesMemberAllowlist().includes(memberId);
 }
 
 /** 허용목록 밖의 회원에게 보여줄 문구 — 내부 사정을 드러내지 않는다 */
