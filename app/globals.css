@@ -291,3 +291,39 @@ html.crm-kiosk-lock body {
 .lp-footer-nav-right{display:flex;gap:20px}
 .lp-footer-nav-right a{font-size:12px;color:rgba(255,255,255,.5);transition:color .2s}
 .lp-footer-nav-right a:hover{color:rgba(255,255,255,.8)}
+
+/* CRM 표 가로 스크롤바 — 항상 보이게(맥 오버레이 스크롤바는 멈추면 사라져 못 찾는다).
+   표 아래쪽 끝까지 내려가지 않아도 되도록 화면 하단에 고정되는 바(.crm-hbar)도 같은 모양. */
+.crm-xscroll::-webkit-scrollbar,
+.crm-hbar::-webkit-scrollbar {
+  height: 12px;
+}
+.crm-xscroll::-webkit-scrollbar-track,
+.crm-hbar::-webkit-scrollbar-track {
+  background: #F3EDE0;
+  border-radius: 6px;
+}
+.crm-xscroll::-webkit-scrollbar-thumb,
+.crm-hbar::-webkit-scrollbar-thumb {
+  background: #C3B79B;
+  border-radius: 6px;
+  border: 2px solid #F3EDE0;
+}
+.crm-xscroll::-webkit-scrollbar-thumb:hover,
+.crm-hbar::-webkit-scrollbar-thumb:hover {
+  background: #A89B80;
+}
+.crm-xscroll,
+.crm-hbar {
+  scrollbar-width: thin;
+  scrollbar-color: #C3B79B #F3EDE0;
+}
+.dark .crm-xscroll::-webkit-scrollbar-track,
+.dark .crm-hbar::-webkit-scrollbar-track {
+  background: #27272a;
+}
+.dark .crm-xscroll::-webkit-scrollbar-thumb,
+.dark .crm-hbar::-webkit-scrollbar-thumb {
+  background: #52525b;
+  border-color: #27272a;
+}

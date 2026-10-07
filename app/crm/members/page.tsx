@@ -1823,12 +1823,36 @@ function MembersTable({
     };
   }, [onResize]);
 
+  /* 표 가로 스크롤 ↔ 하단 고정 스크롤바 동기화.
+     한쪽을 움직이면 다른 쪽도 같은 위치로. 서로 onScroll 이 물려 무한 루프가 되지 않도록
+     '지금 누가 움직이는지' 를 ref 로 표시해 둔다. */
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const syncingRef = useRef<null | "table" | "bar">(null);
+  const syncFrom = (src: "table" | "bar") => {
+    if (syncingRef.current && syncingRef.current !== src) return;
+    const from = src === "table" ? scrollRef.current : barRef.current;
+    const to = src === "table" ? barRef.current : scrollRef.current;
+    if (!from || !to || to.scrollLeft === from.scrollLeft) return;
+    syncingRef.current = src;
+    to.scrollLeft = from.scrollLeft;
+    // 다음 프레임에 풀어 준다(스크롤 이벤트가 비동기로 한 번 더 들어온다)
+    requestAnimationFrame(() => {
+      syncingRef.current = null;
+    });
+  };
+
   const cols = order.map((k) => COLUMN_DEFS[k]);
   const totalWidth =
     (selectable ? 36 : 0) + cols.reduce((sum, c) => sum + (widths[c.key] ?? 120), 0);
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800">
+    <div className="relative">
+      <div
+        ref={scrollRef}
+        onScroll={() => syncFrom("table")}
+        className="crm-xscroll overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800"
+      >
       <table className="text-[13px] table-fixed" style={{ width: totalWidth }}>
         <colgroup>
           {selectable && <col style={{ width: 36 }} />}
@@ -1939,6 +1963,19 @@ function MembersTable({
           ))}
         </tbody>
       </table>
+      </div>
+
+      {/* 화면 하단에 붙는 좌우 스크롤바 — 표 끝까지 내려가지 않아도 오른쪽 열을 볼 수 있다.
+          위 표 컨테이너와 scrollLeft 를 양방향으로 맞춘다. */}
+      <div className="sticky bottom-0 z-20 -mt-px px-0.5 pb-0.5 pt-1 bg-gradient-to-t from-[#FDFBF5] dark:from-zinc-950 to-transparent">
+        <div
+          ref={barRef}
+          onScroll={() => syncFrom("bar")}
+          className="crm-hbar overflow-x-auto overflow-y-hidden"
+        >
+          <div style={{ width: totalWidth, height: 1 }} />
+        </div>
+      </div>
     </div>
   );
 }

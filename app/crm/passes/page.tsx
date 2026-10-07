@@ -407,7 +407,7 @@ export default function CrmPassesPage() {
       ) : visibleList.length === 0 ? (
         <Msg>일치하는 수강권이 없습니다.</Msg>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm">
+        <div className="crm-xscroll overflow-x-auto rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm">
           <table className="text-[13px] table-fixed" style={{ width: totalWidth }}>
             <colgroup>
               {P_COLS.map((c) => (
