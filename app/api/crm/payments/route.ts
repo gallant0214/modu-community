@@ -103,8 +103,21 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
   }
 
+  /* 결제내역 순서 — **결제일(날짜) 최신순, 같은 날짜면 입력한 순서(id) 최신순**.
+     🚨 시각까지 비교하면 구매일을 과거로 적은 건이 뒤로 밀린다.
+        (권미경 회원: 10-08 에 등록한 6개월 재등록의 구매일을 10-05 로 적었는데,
+         같은 10-05 에 기록된 환불 건의 시각이 더 늦어서 환불이 맨 위로 올라갔다)
+     같은 장바구니(묶음)는 id 가 연속이라 이 정렬에서도 붙어 있다. */
+  const kstYmdOfIso = (iso: string) =>
+    new Date(new Date(iso).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const rows = [...(data ?? [])].sort((a, b) => {
+    const da = kstYmdOfIso(a.paid_at);
+    const db = kstYmdOfIso(b.paid_at);
+    if (da !== db) return da < db ? 1 : -1;
+    return b.id - a.id;
+  });
+
   // 결제에 연결된 상품 이름(수강권 종류 / 회원권명) 을 붙여준다. (#id 대신 사람이 읽을 이름)
-  const rows = data ?? [];
   const passIds = Array.from(
     new Set(rows.map((r) => r.pass_id).filter((v): v is number => !!v))
   );
