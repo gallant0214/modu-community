@@ -13,6 +13,20 @@ import { kstTodayYmd } from "@/app/lib/crm-coupons";
    누구에게 구독을 강제할지
    ════════════════════════════════════════════════════════════════ */
 
+/** 쉼표 구분 목록 → 공백·빈값 제거. 이메일은 대소문자를 무시한다 */
+function parseIdList(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+/** 목록에 이 사용자가 있는가 — firebase uid 또는 이메일로 지정할 수 있다 */
+function matchesId(list: string[], uid: string, email?: string | null): boolean {
+  const mail = (email ?? "").trim().toLowerCase();
+  return list.some((v) => v === uid || (!!mail && v.toLowerCase() === mail));
+}
+
 /**
  * 🚨🚨 **극성 주의 — 판매 허용목록과 반대다.**
  *
@@ -25,22 +39,23 @@ import { kstTodayYmd } from "@/app/lib/crm-coupons";
  *        설정 실수로 전원을 잠그면 사장님들이 자기 CRM 에서 쫓겨나고 현장 운영이
  *        그 자리에서 멈춘다. 그쪽이 훨씬 큰 사고라 일부러 뒤집었다.
  *
- * PG 승인 전까지는 **심사용 테스트 계정의 firebase uid 하나만** 넣는다.
+ * PG 승인 전까지는 **심사용 테스트 계정 하나만** 넣는다.
+ * 값은 firebase uid 또는 **이메일** 둘 다 된다 (예: `review@example.com`).
  */
 export function subscriptionEnforcedUids(): string[] {
-  return (process.env.CRM_SUBSCRIPTION_ENFORCE_UIDS ?? "")
-    .split(",")
-    .map((v) => v.trim())
-    .filter(Boolean);
+  return parseIdList(process.env.CRM_SUBSCRIPTION_ENFORCE_UIDS);
 }
 
 /**
  * 이 사용자에게 구독 결제를 강제하는가.
  * 환경변수만 본다 — 전원 무료 상태에서 `/api/crm/*` 요청마다 쿼리가 늘지 않게 하려는 것이다.
+ *
+ * uid 와 **이메일 둘 다** 받는다 — 운영자가 firebase uid 를 찾으려면 콘솔을 뒤져야 해서
+ * 실수하기 쉽다. 이메일은 바로 아는 값이라 설정 사고가 줄어든다.
  */
-export function subscriptionEnforcedForUid(uid: string): boolean {
+export function subscriptionEnforcedForUid(uid: string, email?: string | null): boolean {
   const list = subscriptionEnforcedUids();
-  return list.length > 0 && list.includes(uid);
+  return list.length > 0 && matchesId(list, uid, email);
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -73,9 +88,10 @@ export interface CrmAccessState {
  */
 export function accessStateFor(
   uid: string,
-  sub: SubscriptionLike | null | undefined
+  sub: SubscriptionLike | null | undefined,
+  email?: string | null
 ): CrmAccessState {
-  if (!subscriptionEnforcedForUid(uid)) {
+  if (!subscriptionEnforcedForUid(uid, email)) {
     return { allowed: true, reason: "not_enforced", expiresOn: null };
   }
   if (!sub) return { allowed: false, reason: "no_subscription", expiresOn: null };
@@ -112,15 +128,12 @@ export function saasSalesEnabled(): boolean {
  * 값이 있는데 쓸 수 있는 uid 가 하나도 안 나오면 전원을 막는다.
  * 제한을 풀 때는 값을 비우는 게 아니라 **환경변수를 지운다.**
  */
-export function saasSalesAllowedForUid(uid: string): boolean {
+export function saasSalesAllowedForUid(uid: string, email?: string | null): boolean {
   if (!saasSalesEnabled()) return false;
   const raw = (process.env.SAAS_SALES_UID_ALLOWLIST ?? "").trim();
   if (!raw) return true;
-  return raw
-    .split(",")
-    .map((v) => v.trim())
-    .filter(Boolean)
-    .includes(uid);
+  // 🚨 값이 있는데 유효 항목이 0개면 전원 차단(fail-closed)
+  return matchesId(parseIdList(raw), uid, email);
 }
 
 export const SAAS_SALES_DISABLED_MESSAGE =

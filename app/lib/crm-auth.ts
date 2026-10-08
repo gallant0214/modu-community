@@ -141,7 +141,11 @@ export async function requireCrmContext(
         전원 무료(기본) 상태에서 요청마다 쿼리가 늘지 않는다.
      🚨 모든 /api/crm/* 가 이 함수를 지나므로 여기가 유일한 서버 관문이다.
         화면(crm/layout.tsx)만 막으면 API 를 직접 부르면 그대로 통과한다. */
-  const sub = await crmAccessState({ uid: user.uid, centerId: membership.center_id });
+  const sub = await crmAccessState({
+    uid: user.uid,
+    centerId: membership.center_id,
+    email: user.email,
+  });
   if (!sub.allowed) {
     return NextResponse.json(
       {

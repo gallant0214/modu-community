@@ -61,6 +61,16 @@ describe("구독 강제 대상 — 🚨 극성이 판매 허용목록과 반대�
     expect(subscriptionEnforcedForUid("owner-uid")).toBe(false);
   });
 
+  it("🚨 firebase uid 대신 **이메일**로도 지정할 수 있다 (uid 를 찾는 것보다 실수가 적다)", () => {
+    process.env.CRM_SUBSCRIPTION_ENFORCE_UIDS = "review@example.com";
+    expect(subscriptionEnforcedForUid("some-uid", "review@example.com")).toBe(true);
+    // 대소문자는 무시한다
+    expect(subscriptionEnforcedForUid("some-uid", "Review@Example.COM")).toBe(true);
+    expect(subscriptionEnforcedForUid("some-uid", "other@example.com")).toBe(false);
+    // 이메일을 안 넘기면 uid 로만 본다
+    expect(subscriptionEnforcedForUid("some-uid")).toBe(false);
+  });
+
   it("공백이 섞인 목록도 읽는다", () => {
     process.env.CRM_SUBSCRIPTION_ENFORCE_UIDS = " a , b ,, c ";
     expect(subscriptionEnforcedForUid("a")).toBe(true);
@@ -135,6 +145,14 @@ describe("판매 스위치 — 🚨 이쪽은 fail-closed", () => {
     process.env.SAAS_SALES_UID_ALLOWLIST = "review-uid";
     expect(saasSalesAllowedForUid("review-uid")).toBe(true);
     expect(saasSalesAllowedForUid("other-uid")).toBe(false);
+  });
+
+  it("결제 허용목록도 이메일로 지정할 수 있다", () => {
+    process.env.SAAS_SALES_ENABLED = "1";
+    process.env.SAAS_SALES_UID_ALLOWLIST = "review@example.com";
+    expect(saasSalesAllowedForUid("any-uid", "review@example.com")).toBe(true);
+    expect(saasSalesAllowedForUid("any-uid", "other@example.com")).toBe(false);
+    expect(saasSalesAllowedForUid("any-uid")).toBe(false);
   });
 
   it("값이 있는데 쓸 수 있는 uid 가 없으면 전원 차단 (설정 실수가 '전원 허용'으로 풀리지 않는다)", () => {

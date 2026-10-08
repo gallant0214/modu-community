@@ -75,10 +75,12 @@ export async function currentSubscription(centerId: number): Promise<SaasSubscri
 export async function crmAccessState(opts: {
   uid: string;
   centerId: number;
+  /** 허용목록을 이메일로도 지정할 수 있다 — uid 를 찾는 것보다 설정 사고가 적다 */
+  email?: string | null;
 }): Promise<CrmAccessState> {
-  if (!subscriptionEnforcedForUid(opts.uid)) {
+  if (!subscriptionEnforcedForUid(opts.uid, opts.email)) {
     return { allowed: true, reason: "not_enforced", expiresOn: null };
   }
   const sub = await currentSubscription(opts.centerId);
-  return accessStateFor(opts.uid, sub);
+  return accessStateFor(opts.uid, sub, opts.email);
 }

@@ -58,7 +58,7 @@ export async function GET(request: Request) {
       const subscription =
         m.status === "pending"
           ? { allowed: true, reason: "not_enforced" as const, expiresOn: null }
-          : await crmAccessState({ uid: user.uid, centerId: m.center_id });
+          : await crmAccessState({ uid: user.uid, centerId: m.center_id, email: user.email });
       return {
         centerMemberId: m.id,
         centerId: m.center_id,

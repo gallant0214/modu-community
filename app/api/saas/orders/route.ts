@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     body = {};
   }
 
-  if (!saasSalesAllowedForUid(user.uid)) {
+  if (!saasSalesAllowedForUid(user.uid, user.email)) {
     return NextResponse.json({ error: SAAS_SALES_DISABLED_MESSAGE }, { status: 503 });
   }
 

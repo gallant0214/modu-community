@@ -73,7 +73,7 @@ export async function GET(request: Request) {
   }
   /* CRM 이용권(구독) 상태. 🚨 bootstrap 은 requireCrmContext 를 지나지 않으므로
      여기서 따로 판정해야 한다. 강제 대상이 아니면 DB 조회 없이 통과한다. */
-  const sub = await crmAccessState({ uid: ctx.uid, centerId: ctx.centerId });
+  const sub = await crmAccessState({ uid: ctx.uid, centerId: ctx.centerId, email: user.email });
 
   return NextResponse.json({
     onboarded: true,
