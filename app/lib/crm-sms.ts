@@ -13,7 +13,7 @@ export {
   smsAllowedForCenter,
   SMS_NOT_READY_MESSAGE,
 } from "@/app/lib/crm-sms-availability";
-import { smsAllowedForCenter } from "@/app/lib/crm-sms-availability";
+import { smsAllowedForCenter, SMS_NOT_READY_MESSAGE } from "@/app/lib/crm-sms-availability";
 
 export interface CrmSmsResult {
   ok: boolean;
@@ -107,6 +107,11 @@ export async function sendCrmSms(opts: {
   const msg = (opts.msg ?? "").trim();
   if (receivers.length === 0) return { ok: false, sent: 0, failed: 0, message: "수신번호가 없습니다" };
   if (!msg) return { ok: false, sent: 0, failed: 0, message: "내용이 비어 있습니다" };
+  // 🚨 허용 센터가 아니면 여기서 끊는다 — CRM 문자 발송은 모두 이 함수를 지나므로
+  //    새 기능이 가드를 빼먹어도 실제 발송은 막힌다.
+  if (!smsAllowedForCenter(opts.centerId)) {
+    return { ok: false, sent: 0, failed: receivers.length, message: SMS_NOT_READY_MESSAGE };
+  }
   if (!solapiConfigured()) {
     return { ok: false, sent: 0, failed: receivers.length, message: "문자 발송 설정이 완료되지 않았습니다" };
   }
