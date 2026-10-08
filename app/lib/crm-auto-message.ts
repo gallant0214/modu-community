@@ -88,7 +88,7 @@ export async function dispatchQueued(opts: {
 
   // 행마다 실제로 나갈 채널을 확정 — smart 는 앱 설치 여부로 갈린다.
   const smsGroups = new Map<string, { ids: number[]; receivers: string[] }>();
-  const pushJobs: { id: number; memberId: number; message: string }[] = [];
+  const pushJobs: { id: number; memberId: number; message: string; triggerKey?: string | null }[] = [];
   const delivered = new Set<number>();
 
   for (const t of targets) {
@@ -97,7 +97,7 @@ export async function dispatchQueued(opts: {
     const usePush = t.methods.includes("push") || (smart && canPush);
     const useSms = t.methods.includes("sms") || (smart && !canPush);
 
-    if (usePush) pushJobs.push({ id: t.id, memberId: t.member_id, message: t.message });
+    if (usePush) pushJobs.push({ id: t.id, memberId: t.member_id, message: t.message, triggerKey: t.trigger_key });
     if (useSms) {
       const phone = phones.get(t.member_id);
       if (!phone) {
@@ -112,12 +112,18 @@ export async function dispatchQueued(opts: {
   }
 
   // 앱 푸시 — 회원마다 문구가 달라 개별 발송 (앱 알림함에도 함께 기록됨)
+  const pushedByTrigger = new Map<string, { memberIds: number[]; message: string }>();
   for (const j of pushJobs) {
     try {
       const tokens = await sendPushToMember(j.memberId, "auto_message", opts.centerName, j.message);
       if (tokens > 0) {
         result.push.sent += 1;
         delivered.add(j.id);
+        const key = j.triggerKey ?? "";
+        const g = pushedByTrigger.get(key) ?? { memberIds: [], message: j.message };
+        g.memberIds.push(j.memberId);
+        g.message = j.message;
+        pushedByTrigger.set(key, g);
       } else {
         result.push.failed += 1;
       }
@@ -152,6 +158,17 @@ export async function dispatchQueued(opts: {
         }
       }
     }
+  }
+
+  // 앱 푸시는 자체 기록이 없어 '메세지 전송 로그'에서 빠진다 → 트리거별로 한 줄 남긴다
+  for (const [triggerKey, g] of pushedByTrigger) {
+    if (!triggerKey) continue;
+    await logAutoMessagePush({
+      centerId: opts.centerId,
+      triggerKey,
+      message: g.message,
+      memberIds: g.memberIds,
+    });
   }
 
   const sentIds = Array.from(delivered);
@@ -302,5 +319,37 @@ export async function fireFirstPurchaseMessage(opts: {
     });
   } catch (e) {
     console.error("[auto-message] first purchase error", e);
+  }
+}
+
+/**
+ * 자동 메세지 **앱 푸시** 발송을 '메세지 전송 로그'에 남긴다.
+ *
+ * 로그 화면은 문자(crm_sms_logs) + 공지(crm_message_broadcasts)를 합쳐 보여주는데,
+ * 자동 메세지 푸시는 어느 쪽에도 기록되지 않아 보낸 이력이 사라졌다.
+ * 트리거·날짜 단위로 한 줄 남긴다(회원 한 명당 한 줄이면 로그가 금방 묻힌다).
+ */
+export async function logAutoMessagePush(opts: {
+  centerId: number;
+  triggerKey: string;
+  message: string;
+  memberIds: number[];
+}): Promise<void> {
+  if (opts.memberIds.length === 0) return;
+  try {
+    const { TRIGGER_BY_KEY } = await import("@/app/lib/auto-message-triggers");
+    const label = TRIGGER_BY_KEY[opts.triggerKey]?.label ?? opts.triggerKey;
+    await supabase.from("crm_message_broadcasts").insert({
+      center_id: opts.centerId,
+      title: `[자동] ${label}`,
+      body: opts.message,
+      audience_kind: "auto",
+      audience_filter: { trigger_key: opts.triggerKey, member_ids: opts.memberIds.slice(0, 500) } as never,
+      recipient_count: opts.memberIds.length,
+      sent_by_uid: "auto", // 사람이 보낸 게 아니라 자동 발송 (컬럼이 NOT NULL)
+      sent_by_name: "자동 메세지",
+    } as never);
+  } catch (e) {
+    console.error("[auto-message] push log error", opts.triggerKey, e);
   }
 }

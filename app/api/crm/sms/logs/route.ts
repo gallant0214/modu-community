@@ -15,6 +15,7 @@ const AUDIENCE_LABEL: Record<string, string> = {
   expired: "만료 회원",
   unassigned: "미배정 회원",
   individual: "개별",
+  auto: "자동 메세지",
 };
 
 function digitsOnly(s: string | null | undefined): string {

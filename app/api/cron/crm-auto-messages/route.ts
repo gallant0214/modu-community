@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { notifyMembersByIds } from "@/app/lib/member-notify";
-import { solapiConfigured, solapiSend } from "@/app/lib/solapi";
+import { sendCrmSms } from "@/app/lib/crm-sms";
+import { smsAllowedForCenter } from "@/app/lib/crm-sms-availability";
+import { logAutoMessagePush } from "@/app/lib/crm-auto-message";
 import { attachAutoCoupon } from "@/app/lib/crm-auto-coupon";
 import {
   SCAN_TRIGGERS,
@@ -104,6 +106,8 @@ export async function GET(request: Request) {
       centerCache.set(s.center_id, meta);
     }
 
+    const pushedMemberIds: number[] = [];
+    let lastPushMessage = "";
     for (const m of matches) {
       if (processed >= MAX_SENDS) break;
       const dedupeKey = `${s.trigger_key}:${m.member_id}:${today}`;
@@ -154,12 +158,16 @@ export async function GET(request: Request) {
           await notifyMembersByIds(s.center_id, [m.member_id], "message", meta.name || "알림", message);
           sentPush += 1;
           ok = true;
+          pushedMemberIds.push(m.member_id);
+          lastPushMessage = message;
         } catch (e) {
           errors.push(`push#${m.member_id}: ${e instanceof Error ? e.message : "error"}`);
         }
       }
-      // 문자 (솔라피 — 발신번호 설정 시)
-      if (wantSms && solapiConfigured()) {
+      // 문자 — 🚨 반드시 sendCrmSms 를 쓴다. 예전엔 solapiSend 를 직접 호출해
+      //   '메세지 전송 로그'(crm_sms_logs)에 자동 발송 이력이 전혀 남지 않았다.
+      //   허용 센터 검사도 이 함수가 함께 처리한다.
+      if (wantSms && smsAllowedForCenter(s.center_id)) {
         try {
           const { data: mem } = await supabase
             .from("crm_members")
@@ -168,10 +176,19 @@ export async function GET(request: Request) {
             .maybeSingle();
           const phone = (mem as { phone?: string | null } | null)?.phone;
           if (phone) {
-            const r = await solapiSend({ receivers: [phone], msg: message });
-            if (r.success > 0) {
+            const r = await sendCrmSms({
+              centerId: s.center_id,
+              uid: "cron",
+              receivers: [phone],
+              msg: message,
+              title: meta.name,
+              tag: "자동메세지",
+            });
+            if (r.sent > 0) {
               sentSms += 1;
               ok = true;
+            } else if (r.message) {
+              errors.push(`sms#${m.member_id}: ${r.message}`);
             }
           }
         } catch (e) {
@@ -185,6 +202,14 @@ export async function GET(request: Request) {
         .eq("center_id", s.center_id)
         .eq("dedupe_key", dedupeKey);
     }
+
+    // 앱 푸시는 문자와 달리 남는 기록이 없어 '메세지 전송 로그'에서 빠졌다 → 트리거별로 한 줄 남긴다
+    await logAutoMessagePush({
+      centerId: s.center_id,
+      triggerKey: s.trigger_key,
+      message: lastPushMessage,
+      memberIds: pushedMemberIds,
+    });
   }
 
   return NextResponse.json({
