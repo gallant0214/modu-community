@@ -35,6 +35,8 @@ export default function DoneClient(props: {
   impUid: string;
   failCode: string;
   failMessage: string;
+  /** 검증 API 경로. 기본은 센터 이용권. CRM 이용권은 /api/saas/orders/confirm */
+  confirmPath?: string;
   /** 회원앱이 시스템 브라우저로 연 결제인지 — 끝나면 딥링크로 앱에 돌려준다 */
   returnToApp?: boolean;
 }) {
@@ -53,7 +55,7 @@ export default function DoneClient(props: {
 
     (async () => {
       try {
-        const res = await fetch("/api/crm/member-app/orders/confirm", {
+        const res = await fetch(props.confirmPath ?? "/api/crm/member-app/orders/confirm", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

@@ -72,6 +72,15 @@ export default function PayClient(props: {
   channelKey: string;
   /** 센터 판매 페이지 주소 — 약관·정책 링크용 */
   slug?: string;
+  /**
+   * 결제 후 돌아올 경로. 기본은 센터 이용권 결제의 `/pay/<주문>/done`.
+   * CRM 이용권(구독) 결제는 `/billing/pay/<주문>/done` 를 넘긴다.
+   * 🚨 모바일은 콜백이 없어 PG 가 이 주소로 직접 redirect 하므로, 주문 종류에 맞지
+   *    않으면 "주문을 찾을 수 없어요" 가 되고 결제가 유실된 것처럼 보인다.
+   */
+  donePath?: string;
+  /** 약관 동의 문구 아래 띄울 정책 링크 (slug 없는 플랫폼 결제용) */
+  policyHref?: string;
   /** 회원앱이 연 결제창인지 — 끝나면 앱으로 되돌려보낸다 */
   returnToApp?: boolean;
 }) {
@@ -104,14 +113,17 @@ export default function PayClient(props: {
   /** 결제 결과를 들고 갈 주소 — 콜백과 모바일 redirect 가 같은 곳으로 모인다 */
   const doneUrl = useCallback(
     (extra?: Record<string, string>) => {
-      const u = new URL(`/pay/${props.orderUid}/done`, window.location.origin);
+      const u = new URL(
+        props.donePath ?? `/pay/${props.orderUid}/done`,
+        window.location.origin
+      );
       u.searchParams.set("t", props.token);
       u.searchParams.set("centerId", String(props.centerId));
       if (props.returnToApp) u.searchParams.set("rn", "1");
       for (const [k, v] of Object.entries(extra ?? {})) u.searchParams.set(k, v);
       return u.toString();
     },
-    [props.orderUid, props.token, props.centerId, props.returnToApp]
+    [props.orderUid, props.token, props.centerId, props.returnToApp, props.donePath]
   );
 
   function pay() {
@@ -177,11 +189,11 @@ export default function PayClient(props: {
         />
         <span className="text-[13px] leading-relaxed text-gray-700">
           주문 내용을 확인했으며, <b>서비스 제공기간·취소·환불 규정</b>에 동의합니다.
-          {props.slug && (
+          {(props.policyHref || props.slug) && (
             <>
               {" "}
               <a
-                href={`/shop/${props.slug}/policy`}
+                href={props.policyHref ?? `/shop/${props.slug}/policy`}
                 target="_blank"
                 rel="noreferrer"
                 className="font-semibold text-blue-600 underline"

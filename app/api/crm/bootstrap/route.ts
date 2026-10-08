@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { loadCrmContextForUid, getSelectedCenterId } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
+import { crmAccessState } from "@/app/lib/saas-subscription";
 
 export const dynamic = "force-dynamic";
 
@@ -70,8 +71,15 @@ export async function GET(request: Request) {
       centerName: ctx.centerName,
     });
   }
+  /* CRM 이용권(구독) 상태. 🚨 bootstrap 은 requireCrmContext 를 지나지 않으므로
+     여기서 따로 판정해야 한다. 강제 대상이 아니면 DB 조회 없이 통과한다. */
+  const sub = await crmAccessState({ uid: ctx.uid, centerId: ctx.centerId });
+
   return NextResponse.json({
     onboarded: true,
+    subscriptionRequired: !sub.allowed,
+    subscriptionReason: sub.allowed ? null : sub.reason,
+    subscriptionExpiresOn: sub.expiresOn,
     centerId: ctx.centerId,
     centerMemberId: ctx.centerMemberId ?? null,
     centerName: ctx.centerName,

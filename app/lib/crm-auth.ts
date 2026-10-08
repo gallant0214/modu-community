@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { verifyAuth } from "./firebase-admin";
 import { supabase } from "./supabase";
+import { crmAccessState, SUBSCRIPTION_BLOCKED_MESSAGE } from "./saas-subscription";
 
 /**
  * CRM 컨텍스트 — 한 사용자가 한 번에 한 센터에서 작업한다는 가정.
@@ -130,6 +131,27 @@ export async function requireCrmContext(
     if (order[accessLevel] < order[options.needAccessLevel]) {
       return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
     }
+  }
+
+  /* ── CRM 이용권(구독) 게이트 ──────────────────────────────
+     🚨 권한 시스템(crm-permissions.ts)에 넣을 수 없다. owner / is_solo_owner 가
+        세 겹으로 전부 통과하는데, 정작 돈을 내는 사람이 사장님(owner)이다.
+        그래서 권한 게이트 **뒤에** 독립 판정으로 둔다.
+     🚨 강제 대상이 아니면 crmAccessState() 가 환경변수만 보고 즉시 통과시킨다 —
+        전원 무료(기본) 상태에서 요청마다 쿼리가 늘지 않는다.
+     🚨 모든 /api/crm/* 가 이 함수를 지나므로 여기가 유일한 서버 관문이다.
+        화면(crm/layout.tsx)만 막으면 API 를 직접 부르면 그대로 통과한다. */
+  const sub = await crmAccessState({ uid: user.uid, centerId: membership.center_id });
+  if (!sub.allowed) {
+    return NextResponse.json(
+      {
+        error: SUBSCRIPTION_BLOCKED_MESSAGE[sub.reason] ?? "센터 CRM 이용권이 필요합니다",
+        code: "SUBSCRIPTION_REQUIRED",
+        reason: sub.reason,
+        expiresOn: sub.expiresOn,
+      },
+      { status: 402 }
+    );
   }
 
   // Supabase nested select 리턴 형태 정규화

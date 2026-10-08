@@ -175,8 +175,11 @@ export default async function Home() {
             <div className="lp-section-cta">
               <Link href="/crm/members" className="lp-btn lp-btn-primary">회원관리 CRM 시작하기 →</Link>
             </div>
+            {/* 🚨 /pricing 이 99,000원을 띄우는데 여기서 "무료" 라고 하면 PG 심사원이
+                '0원 상품' 으로 오해한다. 요금제를 명시하고 링크로 보낸다. */}
             <p className="lp-hero-note" style={{ marginTop: 12 }}>
-              현재 무료 이용 중 · 자동 알림 발송 · POS · 전자 계약서 채널 등 일부 기능은 추후 유료 전환될 수 있습니다.
+              센터 CRM 이용권 월 99,000원 (부가세 포함) ·{" "}
+              <Link href="/pricing" style={{ textDecoration: "underline" }}>요금제 자세히 보기</Link>
             </p>
           </div></div>
         </section>
@@ -299,7 +302,7 @@ export default async function Home() {
           <div className="lp-c"><div className="lp-card">
             <div className="lp-label">FAQ</div>
             <h2 className="lp-title">자주 묻는 질문</h2>
-            <FAQ q="Q. 무료인가요?" a="네, 커뮤니티·구인·거래·회원관리 CRM 모두 현재 무료로 이용 가능합니다. 자동 알림 발송, POS, 전자 계약서 발송 채널 등 CRM 일부 기능은 추후 유료 전환될 수 있으며, 시행 최소 30일 전 사전 공지드립니다." />
+            <FAQ q="Q. 무료인가요?" a="커뮤니티·구인·거래는 무료입니다. 센터 회원관리 CRM 은 월 99,000원(부가세 포함) 이용권으로 운영하며, 약정이나 자동결제 없이 결제한 1개월만 이용됩니다. 요금제 페이지에서 포함 기능과 환불 규정을 확인하실 수 있습니다." />
             <FAQ q="Q. 회원관리 CRM은 뭔가요?" a="체육시설 사장님과 프리랜서 강사를 위한 회원관리 도구입니다. 회원 등록, 이용권/수강권 발급, 스케줄·예약, 얼굴/번호 터치 출석, 마일리지, 락커, 전자 계약서, 강사 급여 자동 산정까지 별도 프로그램 없이 웹 브라우저 하나로 이용할 수 있으며, '센터 CRM'(다인)과 '개인 CRM'(1인 강사) 두 가지 형태로 제공됩니다." />
             <FAQ q="Q. 어떤 종목 후기를 볼 수 있나요?" a="생활스포츠지도사, 전문스포츠지도사, 유소년·노인스포츠지도사 등 체육지도자 자격시험 전 종목의 실기·구술 후기를 다루고 있습니다." />
             <FAQ q="Q. 구인 공고에는 어떤 분야가 있나요?" a="헬스장, PT 스튜디오, 필라테스, 요가, GX, 복싱, 수영 등 스포츠·운동 업계 전용 구인 공고만 모여 있습니다." />

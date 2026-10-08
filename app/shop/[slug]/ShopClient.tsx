@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
+import EmailLoginPanel from "@/app/components/email-login-panel";
 
 export interface ShopProduct {
   id: number;
@@ -72,8 +73,8 @@ export default function ShopClient(props: {
   products: ShopProduct[];
   salesEnabled: boolean;
 }) {
-  const { user, loading, signInWithGoogle, signInWithApple, signInWithEmail, signUpWithEmail, getIdToken } =
-    useAuth();
+  // 로그인 동작은 EmailLoginPanel 이 useAuth() 로 직접 가져간다 — 여기서 넘겨줄 필요가 없다
+  const { user, loading, getIdToken } = useAuth();
   const searchParams = useSearchParams();
   const [picked, setPicked] = useState<ShopProduct | null>(null);
 
@@ -234,10 +235,6 @@ export default function ShopClient(props: {
           auth={{
             user,
             loading,
-            signInWithGoogle,
-            signInWithApple,
-            signInWithEmail,
-            signUpWithEmail,
             getIdToken,
           }}
         />
@@ -314,10 +311,6 @@ function CheckoutSheet(props: {
   auth: {
     user: { uid: string } | null;
     loading: boolean;
-    signInWithGoogle: () => Promise<void>;
-    signInWithApple: () => Promise<void>;
-    signInWithEmail: (email: string, password: string) => Promise<void>;
-    signUpWithEmail: (email: string, password: string) => Promise<void>;
     getIdToken: () => Promise<string | null>;
   };
 }) {
@@ -449,12 +442,7 @@ function CheckoutSheet(props: {
 
         {/* 로그인 전 */}
         {!auth.user && !auth.loading && (
-          <LoginPanel
-            onEmailSignIn={auth.signInWithEmail}
-            onEmailSignUp={auth.signUpWithEmail}
-            onGoogle={auth.signInWithGoogle}
-            onApple={auth.signInWithApple}
-          />
+          <EmailLoginPanel intro="구매하려면 로그인이 필요해요. 센터에 등록된 회원 계정으로 로그인해주세요." />
         )}
 
         {/* 구매 자체가 막힌 상황 */}
@@ -616,110 +604,6 @@ function CheckoutSheet(props: {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-/**
- * 로그인 패널 — 이메일·비밀번호를 기본으로 두고 소셜을 보조로 둔다.
- *
- * 🚨 이메일 로그인이 반드시 있어야 하는 이유: PG 카드사 심사는
- *    소셜 로그인 테스트 계정을 받지 않는다. 심사원에게 줄 아이디/비밀번호가 필요하다.
- */
-function LoginPanel(props: {
-  onEmailSignIn: (email: string, password: string) => Promise<void>;
-  onEmailSignUp: (email: string, password: string) => Promise<void>;
-  onGoogle: () => Promise<void>;
-  onApple: () => Promise<void>;
-}) {
-  const [mode, setMode] = useState<"in" | "up">("in");
-  const [email, setEmail] = useState("");
-  const [pw, setPw] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      if (mode === "in") await props.onEmailSignIn(email, pw);
-      else await props.onEmailSignUp(email, pw);
-    } catch (e2) {
-      setErr(e2 instanceof Error ? e2.message : "로그인에 실패했어요");
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="mt-6">
-      <p className="text-sm leading-relaxed text-gray-600">
-        구매하려면 로그인이 필요해요. 센터에 등록된 회원 계정으로 로그인해주세요.
-      </p>
-
-      <form onSubmit={submit} className="mt-4 space-y-2">
-        <input
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="이메일"
-          className="w-full rounded-xl border border-gray-300 px-3.5 py-3 text-sm"
-        />
-        <input
-          type="password"
-          autoComplete={mode === "in" ? "current-password" : "new-password"}
-          required
-          minLength={6}
-          value={pw}
-          onChange={(e) => setPw(e.target.value)}
-          placeholder="비밀번호"
-          className="w-full rounded-xl border border-gray-300 px-3.5 py-3 text-sm"
-        />
-        {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{err}</p>}
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white disabled:bg-gray-300"
-        >
-          {busy ? "처리 중…" : mode === "in" ? "로그인" : "회원가입"}
-        </button>
-      </form>
-
-      <button
-        type="button"
-        onClick={() => {
-          setMode(mode === "in" ? "up" : "in");
-          setErr(null);
-        }}
-        className="mt-2 w-full text-center text-xs text-gray-500 underline"
-      >
-        {mode === "in" ? "처음이신가요? 이메일로 가입하기" : "이미 계정이 있어요. 로그인하기"}
-      </button>
-
-      <div className="my-4 flex items-center gap-3">
-        <span className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs text-gray-400">또는</span>
-        <span className="h-px flex-1 bg-gray-200" />
-      </div>
-
-      <button
-        type="button"
-        onClick={() => props.onGoogle()}
-        className="w-full rounded-xl border border-gray-300 py-3.5 text-sm font-bold text-gray-800"
-      >
-        구글로 로그인
-      </button>
-      <button
-        type="button"
-        onClick={() => props.onApple()}
-        className="mt-2 w-full rounded-xl bg-black py-3.5 text-sm font-bold text-white"
-      >
-        Apple 로 로그인
-      </button>
     </div>
   );
 }

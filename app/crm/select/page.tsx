@@ -18,6 +18,10 @@ interface CenterCtx {
   isSoloOwner: boolean;
   status: "active" | "pending";
   accessAllowed: boolean;
+  /** CRM 이용권(구독)이 없거나 만료됨 */
+  subscriptionBlocked?: boolean;
+  subscriptionReason?: "no_subscription" | "expired" | null;
+  subscriptionExpiresOn?: string | null;
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -141,12 +145,18 @@ export default function CrmSelectPage() {
               </div>
               <div className="space-y-2.5">
                 {centers.map((c) => {
+                  /* 이용권 만료를 권한보다 먼저 보여준다 — 사장님이 할 다음 행동이
+                     "결제" 하나로 분명한데 "접근 권한 없음" 이라고 하면 엉뚱한 곳을 찾는다 */
                   const blocked =
-                    !c.accessAllowed && c.status === "active"
-                      ? "접근 권한 없음"
-                      : c.status === "pending"
-                        ? "승인 대기 중"
-                        : null;
+                    c.subscriptionBlocked && c.status === "active"
+                      ? c.subscriptionReason === "expired"
+                        ? "이용권 만료"
+                        : "이용권 필요"
+                      : !c.accessAllowed && c.status === "active"
+                        ? "접근 권한 없음"
+                        : c.status === "pending"
+                          ? "승인 대기 중"
+                          : null;
                   return (
                     <ContextCard
                       key={c.centerMemberId}

@@ -4,6 +4,7 @@ import {
   fetchPortonePayment,
   fetchPortonePaymentByOrderUid,
   portoneCancelState,
+  type PortonePayment,
 } from "@/app/lib/portone-payments";
 import {
   completeOrder,
@@ -11,6 +12,13 @@ import {
   type OrderRow,
 } from "@/app/lib/member-order-complete";
 import { applyPgCancel } from "@/app/lib/crm-pg-cancel";
+import { applySaasPgCancel } from "@/app/lib/saas-pg-cancel";
+import {
+  claimSaasOrder,
+  completeSaasOrder,
+  SAAS_ORDER_SELECT,
+  type SaasOrderRow,
+} from "@/app/lib/saas-order-complete";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -33,6 +41,12 @@ const ORDER_SELECT =
  *    V2 로 두면 본문이 `{type, data:{paymentId}}` 로 와서 여기서 아무것도 못 꺼낸다.
  * 🚨 재시도를 부르지 않도록 항상 200 으로 답하고, 사유는 로그에 남긴다.
  *    (포트원은 2xx 가 아니면 최대 5회 재시도한다 → 같은 주문에 중복 처리가 몰린다)
+ *
+ * 🚨 **두 가지 주문이 이 엔드포인트로 같이 들어온다.** 포트원 콘솔에 웹훅 URL 은
+ *    하나만 등록되기 때문이다. 주문번호 접두사로 가른다:
+ *      `mo_` → crm_orders   (센터가 자기 회원에게 판 이용권)
+ *      `sa_` → saas_orders  (우리가 사장님에게 판 CRM 이용권)
+ *    섞이면 엉뚱한 테이블에서 "우리 주문이 아님" 이 나고 결제가 유실된다.
  */
 export async function POST(request: Request) {
   /* V1 웹훅은 JSON 과 form-urlencoded 둘 다 올 수 있다. 한쪽만 받으면 조용히 놓친다. */
@@ -97,6 +111,11 @@ export async function POST(request: Request) {
   const pay = look.pay;
   const orderUid = pay.merchant_uid || orderUidFromHook;
   if (!orderUid) return finish("주문번호를 확인할 수 없음", false);
+
+  // 🚨 주문 종류를 먼저 가른다 (위 주석 참고)
+  if (orderUid.startsWith("sa_")) {
+    return handleSaasOrder(orderUid, pay, finish);
+  }
 
   const { data: orderRow } = await supabase
     .from("crm_orders")
@@ -189,6 +208,72 @@ export async function POST(request: Request) {
   }
 
   return finish(`처리 대상 아닌 상태 (${pay.status})`, true);
+}
+
+/**
+ * CRM 이용권(SaaS 구독) 주문 처리.
+ *
+ * 센터 이용권 쪽과 **순서까지 같은 규칙**을 지킨다:
+ *   ① 취소 판정을 먼저 — 포트원은 부분취소 시 status 가 'paid' 그대로다
+ *   ② 발급은 조건부 UPDATE 로 선점 — 브라우저 검증과의 이중 발급 방지
+ *   ③ 금액이 다르면 손대지 않는다 — 사람이 봐야 한다
+ */
+async function handleSaasOrder(
+  orderUid: string,
+  pay: PortonePayment,
+  finish: (note: string, handled: boolean) => Promise<NextResponse>
+) {
+  const { data: row } = await supabase
+    .from("saas_orders")
+    .select(SAAS_ORDER_SELECT)
+    .eq("order_uid", orderUid)
+    .maybeSingle();
+  const order = row as unknown as SaasOrderRow | null;
+  if (!order) return finish(`우리 주문이 아님 (${orderUid})`, false);
+
+  const cancel = portoneCancelState(pay);
+  if (cancel.canceled) {
+    const res = await applySaasPgCancel({ order, cancel });
+    return finish(res.note, res.ok && !res.needsStaff);
+  }
+
+  if (pay.status !== "paid") {
+    return finish(`처리 대상 아닌 상태 (${pay.status})`, true);
+  }
+  if (order.status === "paid" && order.subscription_id) {
+    return finish("이미 처리된 주문", true);
+  }
+  if (Number(pay.amount) !== order.amount_won) {
+    return finish(`금액 불일치 (포트원 ${pay.amount} / 주문 ${order.amount_won})`, false);
+  }
+
+  /* 시한이 지나 canceled 된 주문이라도 포트원이 paid 라면 발급한다(allowStale=true).
+     돈이 실제로 들어온 쪽을 언제나 우선한다 — 막으면 "결제는 됐는데 이용권이 없는"
+     사장님이 생긴다. */
+  const claim = await claimSaasOrder(order.id, true);
+  if (!claim.won) {
+    return finish(
+      claim.reason === "already_done" ? "이미 발급됨(중복 방지)" : "다른 요청이 처리 중",
+      true
+    );
+  }
+
+  const done = await completeSaasOrder({
+    order: claim.order!,
+    pg: {
+      paymentKey: pay.imp_uid,
+      approvedAt: pay.paid_at ? new Date(Number(pay.paid_at) * 1000).toISOString() : "",
+      method: pay.card_name || pay.pay_method || "",
+      receiptUrl: pay.receipt_url || "",
+      raw: pay,
+    },
+  });
+  return finish(
+    done.ok
+      ? `웹훅으로 CRM 이용권 구제 발급 완료 (만료 ${done.expiresOn})`
+      : `구제 발급 실패: ${done.error}`,
+    done.ok
+  );
 }
 
 /** 포트원 콘솔의 연결 확인용 */

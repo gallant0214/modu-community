@@ -4857,6 +4857,123 @@ export type Database = {
         }
         Relationships: []
       }
+      saas_orders: {
+        Row: {
+          id: number
+          order_uid: string
+          firebase_uid: string
+          center_id: number
+          plan_code: string
+          plan_name: string
+          period_months: number
+          amount_won: number
+          status: string
+          expires_at: string | null
+          fail_reason: string | null
+          pg_provider: string
+          pg_payment_key: string | null
+          pg_approved_at: string | null
+          pg_method: string | null
+          pg_receipt_url: string | null
+          pg_raw: Json | null
+          refunded_at: string | null
+          refund_amount: number | null
+          refund_reason: string | null
+          subscription_id: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          order_uid: string
+          firebase_uid: string
+          center_id: number
+          plan_code: string
+          plan_name: string
+          period_months: number
+          amount_won: number
+          status?: string
+          expires_at?: string | null
+          fail_reason?: string | null
+          pg_provider?: string
+          pg_payment_key?: string | null
+          pg_approved_at?: string | null
+          pg_method?: string | null
+          pg_receipt_url?: string | null
+          pg_raw?: Json | null
+          refunded_at?: string | null
+          refund_amount?: number | null
+          refund_reason?: string | null
+          subscription_id?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          order_uid?: string
+          firebase_uid?: string
+          center_id?: number
+          plan_code?: string
+          plan_name?: string
+          period_months?: number
+          amount_won?: number
+          status?: string
+          expires_at?: string | null
+          fail_reason?: string | null
+          pg_provider?: string
+          pg_payment_key?: string | null
+          pg_approved_at?: string | null
+          pg_method?: string | null
+          pg_receipt_url?: string | null
+          pg_raw?: Json | null
+          refunded_at?: string | null
+          refund_amount?: number | null
+          refund_reason?: string | null
+          subscription_id?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      saas_subscriptions: {
+        Row: {
+          id: number
+          center_id: number
+          firebase_uid: string
+          plan_code: string
+          status: string
+          started_on: string
+          expires_on: string
+          billing_key: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          center_id: number
+          firebase_uid: string
+          plan_code: string
+          status?: string
+          started_on: string
+          expires_on: string
+          billing_key?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          center_id?: number
+          firebase_uid?: string
+          plan_code?: string
+          status?: string
+          started_on?: string
+          expires_on?: string
+          billing_key?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

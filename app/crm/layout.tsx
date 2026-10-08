@@ -13,6 +13,10 @@ type Role = "owner" | "admin" | "manager" | "trainer";
 interface BootstrapResp {
   onboarded: boolean;
   accessDenied?: boolean;
+  /** CRM 이용권(구독)이 없거나 만료됨 — 결제해야 들어올 수 있다 */
+  subscriptionRequired?: boolean;
+  subscriptionReason?: "no_subscription" | "expired" | null;
+  subscriptionExpiresOn?: string | null;
   centerId?: number;
   centerMemberId?: number | null;
   centerName?: string;
@@ -130,6 +134,46 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   // 5) 미가입 → onboarding 으로 이동 중
   if (!ctx.onboarded) {
     return <CrmShell><CenterMessage>설정 페이지로 이동합니다…</CenterMessage></CrmShell>;
+  }
+
+  /* 5-1) CRM 이용권이 없거나 만료됨.
+     🚨 권한(accessDenied) 보다 **먼저** 본다 — 이용권이 없으면 권한 이야기를 꺼낼
+        단계가 아니고, 사장님에게 보여줄 다음 행동이 "결제" 하나로 분명하다. */
+  if (ctx.subscriptionRequired) {
+    const expired = ctx.subscriptionReason === "expired";
+    return (
+      <CrmShell>
+        <CenterMessage>
+          <div className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-1.5">
+            {expired ? "센터 CRM 이용권이 만료됐어요" : "센터 CRM 이용권이 필요해요"}
+          </div>
+          <div className="text-[13px] leading-relaxed text-[#8C8270] dark:text-zinc-500">
+            {expired
+              ? "다시 결제하시면 그대로 이어서 사용하실 수 있어요. 회원·매출 데이터는 모두 그대로 있습니다."
+              : "이용권을 구매하시면 바로 사용하실 수 있어요."}
+            {ctx.subscriptionExpiresOn && (
+              <div className="mt-1">
+                만료일 {ctx.subscriptionExpiresOn.replace(/-/g, ".")}
+              </div>
+            )}
+          </div>
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <a
+              href="/billing"
+              className="px-4 py-2 rounded-lg bg-[#6B7B3A] text-white text-[14px] font-medium hover:bg-[#5a6932] transition-colors"
+            >
+              이용권 결제하기
+            </a>
+            <a
+              href="/pricing"
+              className="px-4 py-2 rounded-lg border border-[#D9CDB8] dark:border-zinc-700 text-[14px] font-medium text-[#3A342A] dark:text-zinc-300 hover:bg-[#F6F1E8] dark:hover:bg-zinc-800 transition-colors"
+            >
+              요금제 보기
+            </a>
+          </div>
+        </CenterMessage>
+      </CrmShell>
+    );
   }
 
   // 5-1) 직급권한상 이 센터 CRM 접속 차단됨

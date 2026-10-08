@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import type { CrmContext } from "@/app/lib/crm-auth";
+import { crmAccessState } from "@/app/lib/saas-subscription";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,10 @@ export async function GET(request: Request) {
         accessAllowed = perms["center.access_crm"] !== false;
         canViewMembers = perms["members.app_view_all"] === true;
       }
+      const subscription =
+        m.status === "pending"
+          ? { allowed: true, reason: "not_enforced" as const, expiresOn: null }
+          : await crmAccessState({ uid: user.uid, centerId: m.center_id });
       return {
         centerMemberId: m.id,
         centerId: m.center_id,
@@ -71,6 +76,12 @@ export async function GET(request: Request) {
         status: m.status, // active | pending
         accessAllowed,
         canViewMembers,
+        /* CRM 이용권(구독) 상태. 🚨 이 화면은 bootstrap 을 거치지 않으므로
+           여기서 내려주지 않으면 만료된 센터가 정상처럼 보이고, 눌러서 들어간
+           뒤에야 막힌다. 강제 대상이 아니면 조회 없이 통과한다. */
+        subscriptionBlocked: !subscription.allowed,
+        subscriptionReason: subscription.allowed ? null : subscription.reason,
+        subscriptionExpiresOn: subscription.expiresOn,
       };
     })
   );
