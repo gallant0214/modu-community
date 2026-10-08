@@ -165,6 +165,13 @@ export default function CrmSchedulePage() {
     newTrainerId?: number;
     newTrainerName?: string;
   } | null>(null);
+  /** 센터·개인 일정 드래그 이동 확인 대기 */
+  const [pendingEventMove, setPendingEventMove] = useState<{
+    event: ScheduleEvent;
+    startsAt: string;
+    endsAt: string;
+    trainerMemberId?: number;
+  } | null>(null);
 
   /**
    * 이미 일정이 있는 칸은 클릭해도 상세창만 열려 새 예약을 잡을 수 없다.
@@ -344,6 +351,53 @@ export default function CrmSchedulePage() {
     [getIdToken]
   );
 
+  /** 센터·개인 일정 드래그 이동 — 확인 후 PATCH. 회원 수업과 달리 통보 대상이 없어 바로 반영한다. */
+  const moveEvent = useCallback(
+    async (ev: ScheduleEvent, startsAt: string, endsAt: string, trainerMemberId?: number) => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`/api/crm/schedule-events/${ev.id}`, {
+          method: "PATCH",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify({
+            starts_at: startsAt,
+            ends_at: endsAt,
+            ...(trainerMemberId ? { trainer_member_id: trainerMemberId } : {}),
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          alert(data?.error || "일정 이동 실패");
+          return;
+        }
+        // 낙관적 업데이트
+        setEvents((prev) =>
+          prev.map((e) =>
+            e.id === ev.id
+              ? {
+                  ...e,
+                  starts_at: startsAt,
+                  ends_at: endsAt,
+                  trainer_member_id: trainerMemberId ?? e.trainer_member_id,
+                }
+              : e
+          )
+        );
+      } catch (e) {
+        alert(e instanceof Error ? e.message : "네트워크 오류");
+      }
+    },
+    [getIdToken]
+  );
+
+  const proposeEventMove = useCallback(
+    (ev: ScheduleEvent, startsAt: string, endsAt: string, trainerMemberId?: number) => {
+      setPendingEventMove({ event: ev, startsAt, endsAt, trainerMemberId });
+    },
+    []
+  );
+
   // 드래그 종료 시 자식 뷰에서 호출 — 실제 변경 전 확인창을 띄운다
   const proposeReschedule = useCallback(
     (
@@ -517,6 +571,7 @@ export default function CrmSchedulePage() {
           onPickEvent={setPickedEvent}
           onPickClass={setPickedClass}
           onReschedule={proposeReschedule}
+          onMoveEvent={proposeEventMove}
           strictTrainerId={selectedTrainerId === "all" ? null : selectedTrainerId}
           onSlotClick={(trainer, h, m) => {
             const startISO = kstDateToUTCISO(anchor, h, m, 0);
@@ -541,6 +596,7 @@ export default function CrmSchedulePage() {
           onPickEvent={setPickedEvent}
           onPickClass={setPickedClass}
           onReschedule={proposeReschedule}
+          onMoveEvent={proposeEventMove}
           strictTrainerId={selectedTrainerId === "all" ? null : selectedTrainerId}
           onSlotClick={(ymd, h, m, defaultTrainer) => {
             // 강사 필터가 특정인이면 그 강사를 기본으로. 전체 모드일 때만 로그인 사용자 우선.
@@ -666,6 +722,19 @@ export default function CrmSchedulePage() {
           onCancelled={() => {
             setPickedClass(null);
             load();
+          }}
+        />
+      )}
+
+      {pendingEventMove && (
+        <EventMoveConfirmDialog
+          pending={pendingEventMove}
+          trainers={trainers}
+          onCancel={() => setPendingEventMove(null)}
+          onConfirm={async () => {
+            const p = pendingEventMove;
+            setPendingEventMove(null);
+            await moveEvent(p.event, p.startsAt, p.endsAt, p.trainerMemberId);
           }}
         />
       )}
@@ -1372,6 +1441,82 @@ function EventDialog({
 }
 
 /** 드래그 후 예약 변경 확인 다이얼로그 */
+/** 센터·개인 일정 드래그 이동 확인 — 예약 변경 확인창과 같은 모양 */
+function EventMoveConfirmDialog({
+  pending,
+  trainers,
+  onCancel,
+  onConfirm,
+}: {
+  pending: {
+    event: ScheduleEvent;
+    startsAt: string;
+    endsAt: string;
+    trainerMemberId?: number;
+  };
+  trainers: StaffOption[];
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { event, startsAt, endsAt, trainerMemberId } = pending;
+  const beforeDay = kstDateKey(event.starts_at);
+  const afterDay = kstDateKey(startsAt);
+  const nextTrainer = trainerMemberId
+    ? trainers.find((t) => t.id === trainerMemberId)?.display_name ?? null
+    : null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
+      <div className="relative w-full max-w-sm rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-xl p-5">
+        <h2 className="text-[16px] font-bold text-[#2A251D] dark:text-zinc-100">일정 이동</h2>
+        <p className="mt-1.5 text-[13px] text-[#6B5D47] dark:text-zinc-400">
+          <span className="font-semibold text-[#3A342A] dark:text-zinc-200">
+            {event.type === "center" ? "[센터] " : "[개인] "}
+            {event.title}
+          </span>{" "}
+          일정을 아래처럼 옮길까요?
+        </p>
+        <div className="mt-3 rounded-lg border border-[#E8E0D0] dark:border-zinc-800 divide-y divide-[#E8E0D0] dark:divide-zinc-800 text-[13px]">
+          <div className="px-3 py-2 flex justify-between gap-3">
+            <span className="text-[#8C8270] dark:text-zinc-500 shrink-0">이동 전</span>
+            <span className="text-[#3A342A] dark:text-zinc-200 text-right">
+              {beforeDay} {fmtKstHm(event.starts_at)}~{fmtKstHm(event.ends_at)}
+            </span>
+          </div>
+          <div className="px-3 py-2 flex justify-between gap-3 bg-[#6B7B3A]/5">
+            <span className="text-[#8C8270] dark:text-zinc-500 shrink-0">이동 후</span>
+            <span className="text-[#6B7B3A] dark:text-[#A8B87A] font-semibold text-right">
+              {afterDay} {fmtKstHm(startsAt)}~{fmtKstHm(endsAt)}
+            </span>
+          </div>
+          {nextTrainer && (
+            <div className="px-3 py-2 flex justify-between gap-3">
+              <span className="text-[#8C8270] dark:text-zinc-500 shrink-0">담당</span>
+              <span className="text-[#3A342A] dark:text-zinc-200 text-right">{nextTrainer} 으로 변경</span>
+            </div>
+          )}
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13.5px] font-semibold text-[#3A342A] dark:text-zinc-300 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-[#6B7B3A] text-white text-[13.5px] font-semibold hover:bg-[#5a6932]"
+          >
+            이동
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RescheduleConfirmDialog({
   pending,
   onCancel,
@@ -1444,9 +1589,25 @@ function RescheduleConfirmDialog({
 
 /* ─── Day View (강사 × 시간 그리드) ────────────────────────────── */
 
+/** 드래그 중인 대상 — 회원 수업(예약)과 센터·개인 일정을 같은 방식으로 다룬다 */
+type DragItem = {
+  kind: "reservation" | "event";
+  id: number;
+  starts_at: string;
+  ends_at: string;
+  /** 고스트에 보일 제목 */
+  label: string;
+  /** 고스트 보조 문구 */
+  sub?: string;
+  /** 센터 일정은 강사 칸이 없다 → 세로(시간) 이동만 */
+  trainerLocked?: boolean;
+};
+
 type DayDragState = {
   id: number;
-  reservation: Reservation;
+  item: DragItem;
+  /** 예약이면 상태(색상용) */
+  status?: string;
   origTrainerId: number;
   startX: number;
   startY: number;
@@ -1475,6 +1636,7 @@ function DayView({
   onPickClass,
   onSlotClick,
   onReschedule,
+  onMoveEvent,
   strictTrainerId,
 }: {
   trainers: StaffOption[];
@@ -1492,6 +1654,13 @@ function DayView({
     newEndIso: string,
     newTrainerId?: number,
     newTrainerName?: string
+  ) => void;
+  /** 센터·개인 일정을 드래그로 옮겼을 때 (시간, 개인일정이면 강사 칸까지) */
+  onMoveEvent?: (
+    ev: ScheduleEvent,
+    newStartIso: string,
+    newEndIso: string,
+    newTrainerId?: number
   ) => void;
   /** 특정 강사가 필터된 상태면 그 id. null 이면 전체(all). 필터된 상태에서는 다른 트레이너의 일정·센터 일정 제외. */
   strictTrainerId: number | null;
@@ -1574,7 +1743,31 @@ function DayView({
                   <button
                     key={`center-${e.id}`}
                     type="button"
-                    onClick={() => onPickEvent(e)}
+                    onMouseDown={(ev) => {
+                      if (ev.button !== 0) return;
+                      ev.preventDefault();
+                      /* 센터 일정은 강사 칸이 없다 → 세로로 끌어 시간만 옮긴다.
+                         칩을 아래 격자 쪽으로 끌면 그만큼 시간이 밀린다. */
+                      startDayDrag(
+                        ev,
+                        {
+                          kind: "event",
+                          id: e.id,
+                          starts_at: e.starts_at,
+                          ends_at: e.ends_at,
+                          label: `[센터] ${e.title}`,
+                          trainerLocked: true,
+                        },
+                        trainers[0]?.id ?? 0,
+                        undefined,
+                        anchorDate,
+                        trainers,
+                        columnRefs.current,
+                        () => onPickEvent(e),
+                        (startIso, endIso) => onMoveEvent?.(e, startIso, endIso),
+                        setDrag
+                      );
+                    }}
                     className="px-2 py-0.5 rounded-md text-[11.5px] font-medium border border-[#5A8BB0]/40 bg-[#5A8BB0]/15 text-[#487596] dark:text-[#8FB7D4] hover:bg-[#5A8BB0]/25"
                     title={`${fmtKstHm(e.starts_at)} ~ ${fmtKstHm(e.ends_at)}${e.description ? " · " + e.description : ""}`}
                   >
@@ -1689,15 +1882,35 @@ function DayView({
                     <button
                       type="button"
                       key={`ev-${e.id}`}
-                      onClick={(ev) => {
+                      onMouseDown={(ev) => {
+                        if (ev.button !== 0) return;
+                        ev.preventDefault();
                         ev.stopPropagation();
-                        onPickEvent(e);
+                        // 개인일정도 회원 수업과 똑같이 드래그로 시간·강사 칸 이동
+                        startDayDrag(
+                          ev,
+                          {
+                            kind: "event",
+                            id: e.id,
+                            starts_at: e.starts_at,
+                            ends_at: e.ends_at,
+                            label: `[개인] ${e.title}`,
+                          },
+                          e.trainer_member_id ?? t.id,
+                          undefined,
+                          anchorDate,
+                          trainers,
+                          columnRefs.current,
+                          () => onPickEvent(e),
+                          (startIso, endIso, tid) => onMoveEvent?.(e, startIso, endIso, tid),
+                          setDrag
+                        );
                       }}
-                      className={`absolute px-2 py-1 rounded-md text-left text-[11.5px] font-medium border cursor-pointer ${cls}`}
+                      className={`absolute px-2 py-1 rounded-md text-left text-[11.5px] font-medium border cursor-grab active:cursor-grabbing ${cls} ${drag?.id === e.id && drag.moved ? "opacity-40" : ""}`}
                       style={{ top: `${top}px`, height: `${height}px`, ...laneStyle(`e-${e.id}`) }}
                       title={e.description ?? e.title}
                     >
-                      <div className="truncate font-semibold">
+                      <div className="truncate font-semibold pointer-events-none">
                         [개인] {e.title}
                       </div>
                     </button>
@@ -1747,12 +1960,22 @@ function DayView({
                         e.preventDefault();
                         startDayDrag(
                           e,
-                          r,
+                          {
+                            kind: "reservation",
+                            id: r.id,
+                            starts_at: r.starts_at,
+                            ends_at: r.ends_at,
+                            label: r.member_name || "회원",
+                            sub: RESERVATION_STATUS_LABEL[r.status],
+                          },
+                          r.trainer_member_id,
+                          r.status,
                           anchorDate,
                           trainers,
                           columnRefs.current,
-                          onPick,
-                          onReschedule,
+                          () => onPick(r),
+                          (startIso, endIso, tid, tname) =>
+                            onReschedule(r, startIso, endIso, tid, tname),
                           setDrag
                         );
                       }}
@@ -1777,16 +2000,21 @@ function DayView({
   );
 }
 
-/** DayView 드래그 시작 — 컬럼 스냅샷 + document 리스너 등록 */
+/**
+ * DayView 드래그 시작 — 컬럼 스냅샷 + document 리스너 등록.
+ * 회원 수업(예약)과 센터·개인 일정이 같은 경로를 쓴다.
+ *  - item.trainerLocked=true (센터 일정) 면 강사 칸은 바꾸지 않고 시간만 옮긴다.
+ */
 function startDayDrag(
   e: React.MouseEvent,
-  r: Reservation,
+  item: DragItem,
+  origTrainerId: number,
+  status: string | undefined,
   anchorDate: string,
   trainers: StaffOption[],
   columns: Map<number, HTMLDivElement | null>,
-  onPick: (r: Reservation) => void,
-  onReschedule: (
-    r: Reservation,
+  onPick: () => void,
+  onMove: (
     newStartIso: string,
     newEndIso: string,
     newTrainerId?: number,
@@ -1820,9 +2048,10 @@ function startDayDrag(
   const local = { dx: 0, dy: 0, moved: false };
 
   const base: DayDragState = {
-    id: r.id,
-    reservation: r,
-    origTrainerId: r.trainer_member_id,
+    id: item.id,
+    item,
+    status,
+    origTrainerId,
     startX,
     startY,
     dx: 0,
@@ -1833,7 +2062,7 @@ function startDayDrag(
   };
   setDrag(base);
 
-  const onMove = (ev: MouseEvent) => {
+  const onPointerMove = (ev: MouseEvent) => {
     local.dx = ev.clientX - startX;
     local.dy = ev.clientY - startY;
     local.moved = local.moved || Math.hypot(local.dx, local.dy) > 4;
@@ -1846,28 +2075,27 @@ function startDayDrag(
   };
 
   const onUp = (ev: MouseEvent) => {
-    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mousemove", onPointerMove);
     document.removeEventListener("mouseup", onUp);
     setDrag(null);
     if (!local.moved) {
-      onPick(r);
+      onPick();
       return;
     }
-    const targetCol = columnRects.find(
-      (c) => ev.clientX >= c.left && ev.clientX <= c.right
-    );
+    const targetCol = item.trainerLocked
+      ? columnRects.find((c) => c.trainerId === origTrainerId) ?? columnRects[0]
+      : columnRects.find((c) => ev.clientX >= c.left && ev.clientX <= c.right);
     if (!targetCol) return;
-    const target = computeDragTarget(r, local.dy);
+    const target = computeDragTarget(item, local.dy);
     if (!target) return;
     const newStartIso = kstDateToUTCISO(anchorDate, target.h, target.m, 0);
     const newEndIso = new Date(
       new Date(newStartIso).getTime() + target.durationMs
     ).toISOString();
-    const sameTime = newStartIso === r.starts_at && newEndIso === r.ends_at;
-    const sameTrainer = targetCol.trainerId === r.trainer_member_id;
+    const sameTime = newStartIso === item.starts_at && newEndIso === item.ends_at;
+    const sameTrainer = item.trainerLocked || targetCol.trainerId === origTrainerId;
     if (sameTime && sameTrainer) return;
-    onReschedule(
-      r,
+    onMove(
       newStartIso,
       newEndIso,
       sameTrainer ? undefined : targetCol.trainerId,
@@ -1875,25 +2103,30 @@ function startDayDrag(
     );
   };
 
-  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mousemove", onPointerMove);
   document.addEventListener("mouseup", onUp);
 }
 
 function DayDragGhost({ drag }: { drag: NonNullable<DayDragState> }) {
-  const r = drag.reservation;
+  const r = drag.item;
   const target = computeDragTarget(
     { starts_at: r.starts_at, ends_at: r.ends_at },
     drag.dy
   );
-  const targetCol = drag.columnRects.find(
-    (c) => drag.startX + drag.dx >= c.left && drag.startX + drag.dx <= c.right
-  );
+  // 센터 일정은 강사 칸이 없다 → 원래 칸(또는 첫 칸)에 고정하고 시간만 옮긴다
+  const targetCol = r.trainerLocked
+    ? drag.columnRects.find((c) => c.trainerId === drag.origTrainerId) ?? drag.columnRects[0]
+    : drag.columnRects.find(
+        (c) => drag.startX + drag.dx >= c.left && drag.startX + drag.dx <= c.right
+      );
   const timeLabel = target
     ? `${String(target.h).padStart(2, "0")}:${String(target.m).padStart(2, "0")}`
     : "";
   const ok = Boolean(target && targetCol);
   const color =
-    RESERVATION_STATUS_COLOR[r.status] ?? RESERVATION_STATUS_COLOR.booked;
+    r.kind === "event"
+      ? { bg: "bg-[#8B6BAA]/20", text: "text-[#7A5C99]" }
+      : RESERVATION_STATUS_COLOR[drag.status ?? "booked"] ?? RESERVATION_STATUS_COLOR.booked;
 
   let cardStyle: React.CSSProperties | null = null;
   if (ok && targetCol && target) {
@@ -1919,13 +2152,8 @@ function DayDragGhost({ drag }: { drag: NonNullable<DayDragState> }) {
           className={`fixed z-40 pointer-events-none px-2 py-1 rounded-md border-2 border-dashed text-left text-[11.5px] font-medium shadow-md ${color.bg} ${color.text} opacity-60 transition-[top,left,width] duration-75 ease-out`}
           style={cardStyle}
         >
-          <div className="truncate font-semibold">
-            {r.member_name || "회원"}
-          </div>
-          <div className="truncate text-[10.5px] opacity-80">
-            {RESERVATION_STATUS_LABEL[r.status]}
-            {sessionBadge(r) && <span className="ml-1 font-semibold">· {sessionBadge(r)}</span>}
-          </div>
+          <div className="truncate font-semibold">{r.label}</div>
+          {r.sub && <div className="truncate text-[10.5px] opacity-80">{r.sub}</div>}
         </div>
       )}
       <div
@@ -1937,7 +2165,7 @@ function DayDragGhost({ drag }: { drag: NonNullable<DayDragState> }) {
           top: drag.startY + drag.dy + 14,
         }}
       >
-        {ok ? `${targetCol!.trainerName} ${timeLabel}` : "이동 불가"}
+        {ok ? `${r.trainerLocked ? "" : targetCol!.trainerName + " "}${timeLabel}` : "이동 불가"}
       </div>
     </>
   );
@@ -1947,7 +2175,9 @@ function DayDragGhost({ drag }: { drag: NonNullable<DayDragState> }) {
 
 type WeekDragState = {
   id: number;
-  reservation: Reservation;
+  item: DragItem;
+  /** 예약이면 상태(색상용) */
+  status?: string;
   origDayKey: string;
   startX: number;
   startY: number;
@@ -1971,6 +2201,7 @@ function WeekView({
   onPickClass,
   onSlotClick,
   onReschedule,
+  onMoveEvent,
   strictTrainerId,
 }: {
   anchor: string;
@@ -1990,6 +2221,13 @@ function WeekView({
     newEndIso: string,
     newTrainerId?: number,
     newTrainerName?: string
+  ) => void;
+  /** 센터·개인 일정을 드래그로 옮겼을 때 (주간 뷰는 날짜+시간) */
+  onMoveEvent?: (
+    ev: ScheduleEvent,
+    newStartIso: string,
+    newEndIso: string,
+    newTrainerId?: number
   ) => void;
   /** 특정 강사가 필터된 상태면 그 id. null 이면 전체(all). 필터된 상태에서는 다른 트레이너의 일정·센터 일정 제외. */
   strictTrainerId: number | null;
@@ -2168,15 +2406,32 @@ function WeekView({
                     <button
                       type="button"
                       key={`ev-${e.id}`}
-                      onClick={(ev) => {
+                      onMouseDown={(ev) => {
+                        if (ev.button !== 0) return;
+                        ev.preventDefault();
                         ev.stopPropagation();
-                        onPickEvent(e);
+                        // 센터·개인 일정도 회원 수업처럼 드래그로 날짜·시간 이동
+                        startWeekDrag(
+                          ev,
+                          {
+                            kind: "event",
+                            id: e.id,
+                            starts_at: e.starts_at,
+                            ends_at: e.ends_at,
+                            label: `${e.type === "center" ? "센터·" : "개인·"}${e.title}`,
+                          },
+                          undefined,
+                          columnRefs.current,
+                          () => onPickEvent(e),
+                          (startIso, endIso) => onMoveEvent?.(e, startIso, endIso),
+                          setDrag
+                        );
                       }}
-                      className={`absolute px-1 py-0.5 rounded text-left text-[11px] font-medium border cursor-pointer ${cls}`}
+                      className={`absolute px-1 py-0.5 rounded text-left text-[11px] font-medium border cursor-grab active:cursor-grabbing ${cls} ${drag?.id === e.id && drag.moved ? "opacity-40" : ""}`}
                       style={{ top: `${top}px`, height: `${height}px`, ...laneStyle(`e-${e.id}`) }}
                       title={e.description ?? e.title}
                     >
-                      <div className="truncate font-semibold">
+                      <div className="truncate font-semibold pointer-events-none">
                         {e.type === "center" ? "센터·" : "개인·"}
                         {e.title}
                       </div>
@@ -2227,10 +2482,18 @@ function WeekView({
                         e.preventDefault();
                         startWeekDrag(
                           e,
-                          r,
+                          {
+                            kind: "reservation",
+                            id: r.id,
+                            starts_at: r.starts_at,
+                            ends_at: r.ends_at,
+                            label: r.member_name || "회원",
+                            sub: RESERVATION_STATUS_LABEL[r.status],
+                          },
+                          r.status,
                           columnRefs.current,
-                          onPick,
-                          onReschedule,
+                          () => onPick(r),
+                          (startIso, endIso) => onReschedule(r, startIso, endIso),
                           setDrag
                         );
                       }}
@@ -2265,16 +2528,11 @@ function WeekView({
  */
 function startWeekDrag(
   e: React.MouseEvent,
-  r: Reservation,
+  item: DragItem,
+  status: string | undefined,
   columns: Map<string, HTMLDivElement | null>,
-  onPick: (r: Reservation) => void,
-  onReschedule: (
-    r: Reservation,
-    newStartIso: string,
-    newEndIso: string,
-    newTrainerId?: number,
-    newTrainerName?: string
-  ) => void,
+  onPick: () => void,
+  onMove: (newStartIso: string, newEndIso: string) => void,
   setDrag: (s: WeekDragState) => void
 ) {
   const startX = e.clientX;
@@ -2291,12 +2549,13 @@ function startWeekDrag(
       width: rect.width,
     });
   });
-  const origDayKey = kstDateKey(r.starts_at);
+  const origDayKey = kstDateKey(item.starts_at);
   const local = { dx: 0, dy: 0, moved: false };
 
   const base: WeekDragState = {
-    id: r.id,
-    reservation: r,
+    id: item.id,
+    item,
+    status,
     origDayKey,
     startX,
     startY,
@@ -2307,7 +2566,7 @@ function startWeekDrag(
   };
   setDrag(base);
 
-  const onMove = (ev: MouseEvent) => {
+  const onPointerMove = (ev: MouseEvent) => {
     local.dx = ev.clientX - startX;
     local.dy = ev.clientY - startY;
     local.moved = local.moved || Math.hypot(local.dx, local.dy) > 4;
@@ -2320,28 +2579,28 @@ function startWeekDrag(
   };
 
   const onUp = (ev: MouseEvent) => {
-    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mousemove", onPointerMove);
     document.removeEventListener("mouseup", onUp);
     setDrag(null);
     if (!local.moved) {
-      onPick(r);
+      onPick();
       return;
     }
     const targetCol = columnRects.find(
       (c) => ev.clientX >= c.left && ev.clientX <= c.right
     );
     if (!targetCol) return;
-    const target = computeDragTarget(r, local.dy);
+    const target = computeDragTarget(item, local.dy);
     if (!target) return;
     const newStartIso = kstDateToUTCISO(targetCol.dayKey, target.h, target.m, 0);
     const newEndIso = new Date(
       new Date(newStartIso).getTime() + target.durationMs
     ).toISOString();
-    if (newStartIso === r.starts_at && newEndIso === r.ends_at) return;
-    onReschedule(r, newStartIso, newEndIso);
+    if (newStartIso === item.starts_at && newEndIso === item.ends_at) return;
+    onMove(newStartIso, newEndIso);
   };
 
-  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mousemove", onPointerMove);
   document.addEventListener("mouseup", onUp);
 }
 
@@ -2374,7 +2633,7 @@ function computeDragTarget(
  * 커서 옆에 "이동 후 시각" 라벨을 fixed 로 띄운다.
  */
 function WeekDragGhost({ drag }: { drag: NonNullable<WeekDragState> }) {
-  const r = drag.reservation;
+  const r = drag.item;
   const target = computeDragTarget(
     { starts_at: r.starts_at, ends_at: r.ends_at },
     drag.dy
@@ -2388,7 +2647,9 @@ function WeekDragGhost({ drag }: { drag: NonNullable<WeekDragState> }) {
   const dayLabel = targetCol ? targetCol.dayKey.slice(5).replace("-", "/") : "";
   const ok = Boolean(target && targetCol);
   const color =
-    RESERVATION_STATUS_COLOR[r.status] ?? RESERVATION_STATUS_COLOR.booked;
+    r.kind === "event"
+      ? { bg: "bg-[#8B6BAA]/20", text: "text-[#7A5C99]" }
+      : RESERVATION_STATUS_COLOR[drag.status ?? "booked"] ?? RESERVATION_STATUS_COLOR.booked;
 
   let cardStyle: React.CSSProperties | null = null;
   if (ok && targetCol && target) {
@@ -2414,9 +2675,7 @@ function WeekDragGhost({ drag }: { drag: NonNullable<WeekDragState> }) {
           className={`fixed z-40 pointer-events-none px-1.5 py-0.5 rounded border-2 border-dashed text-left text-[11px] font-medium shadow-md ${color.bg} ${color.text} opacity-60 transition-[top,left,width] duration-75 ease-out`}
           style={cardStyle}
         >
-          <div className="truncate font-semibold">
-            {r.member_name || "회원"}
-          </div>
+          <div className="truncate font-semibold">{r.label}</div>
         </div>
       )}
       <div

@@ -73,6 +73,8 @@ export async function PATCH(
     description?: string | null;
     starts_at?: string;
     ends_at?: string;
+    /** 개인일정을 다른 강사 칸으로 옮길 때 (스케줄에서 드래그 이동) */
+    trainer_member_id?: number | null;
     type?: string;
   };
   try {
@@ -119,6 +121,18 @@ export async function PATCH(
     }
     patch.type = body.type;
     patch.trainer_member_id = body.type === "personal" ? ctx.centerMemberId : null;
+  }
+  /* 담당 강사만 바꾸는 경우 (스케줄에서 개인일정을 다른 강사 칸으로 드래그).
+     남의 일정을 옮기는 것이므로 전체 관리 권한(schedule.manage_others)이 필요하다. */
+  if (body.type === undefined && body.trainer_member_id !== undefined) {
+    const nextTrainer = body.trainer_member_id === null ? null : Number(body.trainer_member_id);
+    if (nextTrainer !== ctx.centerMemberId && !hasManageAll) {
+      return NextResponse.json(
+        { error: "다른 강사의 일정으로 옮길 권한이 없어요" },
+        { status: 403 }
+      );
+    }
+    patch.trainer_member_id = nextTrainer;
   }
 
   if (Object.keys(patch).length === 0) {
