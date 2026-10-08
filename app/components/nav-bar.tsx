@@ -35,7 +35,7 @@ export function NavBar() {
     return pathname.startsWith(path);
   };
 
-  const isHome = isActive("/") && !isActive("/community") && !isActive("/category") && !isActive("/jobs") && !isActive("/practical") && !isActive("/my");
+  const isHome = isActive("/") && !isActive("/community") && !isActive("/category") && !isActive("/jobs") && !isActive("/practical") && !isActive("/study") && !isActive("/my");
 
   // 페이지 이동 시 메뉴/알림 닫기
   useEffect(() => {
@@ -157,6 +157,7 @@ export function NavBar() {
           <NavLink href="/" active={isHome}>소개</NavLink>
           <NavLink href="/crm/members" active={isActive("/crm")}>회원관리</NavLink>
           <NavLink href="/practical" active={isActive("/practical")}>실기·구술</NavLink>
+          <NavLink href="/study" active={isActive("/study")}>공부 자료</NavLink>
           <NavLink href="/community" active={isActive("/community") || isActive("/category")}>종목별 커뮤니티</NavLink>
           <NavLink href="/jobs" active={isActive("/jobs")}>스포츠 구인</NavLink>
           <NavLink href="/market" active={isActive("/market")}>스포츠마켓</NavLink>
@@ -349,6 +350,7 @@ export function NavBar() {
               <MobileNavLink href="/" active={isHome} onClick={() => setMenuOpen(false)} icon="home">소개</MobileNavLink>
               <MobileNavLink href="/crm/members" active={isActive("/crm")} onClick={() => setMenuOpen(false)} icon="members">회원관리</MobileNavLink>
               <MobileNavLink href="/practical" active={isActive("/practical")} onClick={() => setMenuOpen(false)} icon="book">실기·구술</MobileNavLink>
+              <MobileNavLink href="/study" active={isActive("/study")} onClick={() => setMenuOpen(false)} icon="book">공부 자료</MobileNavLink>
               <MobileNavLink href="/community" active={isActive("/community") || isActive("/category")} onClick={() => setMenuOpen(false)} icon="chat">종목별 커뮤니티</MobileNavLink>
               <MobileNavLink href="/jobs" active={isActive("/jobs")} onClick={() => setMenuOpen(false)} icon="briefcase">스포츠 구인</MobileNavLink>
               <MobileNavLink href="/market" active={isActive("/market")} onClick={() => setMenuOpen(false)} icon="trade">스포츠마켓</MobileNavLink>
