@@ -7,6 +7,13 @@ import {
   type OrderRow,
 } from "@/app/lib/member-order-complete";
 import { applyPgCancel } from "@/app/lib/crm-pg-cancel";
+import { applySaasPgCancel } from "@/app/lib/saas-pg-cancel";
+import {
+  claimSaasOrder,
+  completeSaasOrder,
+  SAAS_ORDER_SELECT,
+  type SaasOrderRow,
+} from "@/app/lib/saas-order-complete";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -27,6 +34,11 @@ const ORDER_SELECT =
  * 🚨 웹훅 본문은 믿지 않는다.
  *   토스 웹훅에는 서명이 없어서 누구나 흉내 낼 수 있다.
  *   주문번호만 꺼내 **토스 서버에 직접 물어본 결과**로만 판단한다.
+ *
+ * 🚨 **두 가지 주문이 이 엔드포인트로 같이 들어온다.** 주문번호 접두사로 가른다:
+ *     `mo_` → crm_orders   (센터가 자기 회원에게 판 이용권)
+ *     `sa_` → saas_orders  (우리가 사장님에게 판 CRM 이용권)
+ *   섞이면 엉뚱한 테이블에서 "우리 주문이 아님" 이 나고 결제가 유실된다.
  */
 export async function POST(request: Request) {
   let body: Record<string, unknown> = {};
@@ -66,6 +78,11 @@ export async function POST(request: Request) {
   };
 
   if (!orderUid) return finish("주문번호 없음", false);
+
+  // 🚨 주문 종류를 먼저 가른다 (위 주석 참고)
+  if (orderUid.startsWith("sa_")) {
+    return handleSaasOrder(orderUid, finish);
+  }
 
   const { data: orderRow } = await supabase
     .from("crm_orders")
@@ -176,4 +193,86 @@ export async function POST(request: Request) {
   }
 
   return finish(`처리 대상 아닌 상태 (${status})`, true);
+}
+
+/**
+ * CRM 이용권(SaaS 구독) 주문 처리 — 토스.
+ *
+ * 센터 이용권 쪽과 같은 규칙을 지킨다:
+ *   ① 취소면 공용 반영 함수로 ② 금액이 다르면 손대지 않는다 ③ 발급은 조건부 UPDATE 로 선점
+ *
+ * 🚨 `applySaasPgCancel()` 은 PG 응답 모양을 모른다 — `tossCancelState()` 로
+ *    공통 모양(PgCancelState)으로 바꿔서 넘긴다. 포트원 웹훅도 같은 함수를 쓴다.
+ */
+async function handleSaasOrder(
+  orderUid: string,
+  finish: (note: string, handled: boolean) => Promise<NextResponse>
+) {
+  const { data: row } = await supabase
+    .from("saas_orders")
+    .select(SAAS_ORDER_SELECT)
+    .eq("order_uid", orderUid)
+    .maybeSingle();
+  const order = row as unknown as SaasOrderRow | null;
+  if (!order) return finish(`우리 주문이 아님 (${orderUid})`, false);
+
+  /* 🚨 paymentKey 조회를 먼저 쓴다. 주문번호 조회는 결제위젯 키로 동작하지 않는다
+     (NOT_FOUND_MERCHANT). paymentKey 가 없을 때만 마지막 수단으로 쓴다. */
+  const look = order.pg_payment_key
+    ? await fetchTossPayment(order.pg_payment_key)
+    : await fetchTossPaymentByOrderId(orderUid);
+  if (!look.ok || !look.json) {
+    return finish(`토스 조회 실패: ${look.error ?? "알 수 없음"}`, false);
+  }
+  const pay = look.json;
+  // paymentKey 로 조회했을 수 있으니, 돌아온 결제가 정말 이 주문인지 대조한다
+  if (String(pay.orderId ?? "") !== orderUid) {
+    return finish(`주문번호 불일치 (토스 ${String(pay.orderId ?? "")})`, false);
+  }
+
+  const cancel = tossCancelState(pay);
+  if (cancel.canceled) {
+    const res = await applySaasPgCancel({ order, cancel });
+    return finish(res.note, res.ok && !res.needsStaff);
+  }
+
+  const status = String(pay.status ?? "");
+  if (status !== "DONE") return finish(`처리 대상 아닌 상태 (${status})`, true);
+
+  if (order.status === "paid" && order.subscription_id) {
+    return finish("이미 처리된 주문", true);
+  }
+  const approved = Number(pay.totalAmount ?? 0);
+  if (approved !== order.amount_won) {
+    // 금액이 다르면 손대지 않는다 — 사람이 봐야 하는 상황
+    return finish(`금액 불일치 (토스 ${approved} / 주문 ${order.amount_won})`, false);
+  }
+
+  /* 시한이 지나 canceled 된 주문이라도 토스가 DONE 이면 발급한다(allowStale=true).
+     돈이 실제로 들어온 쪽을 언제나 우선한다 — 막으면 "결제는 됐는데 이용권이 없는"
+     사장님이 생긴다. */
+  const claim = await claimSaasOrder(order.id, true);
+  if (!claim.won) {
+    return finish(
+      claim.reason === "already_done" ? "이미 발급됨(중복 방지)" : "다른 요청이 처리 중",
+      true
+    );
+  }
+
+  const done = await completeSaasOrder({
+    order: claim.order!,
+    pg: {
+      paymentKey: String(pay.paymentKey ?? ""),
+      approvedAt: String(pay.approvedAt ?? ""),
+      method: String(pay.method ?? ""),
+      receiptUrl: String((pay.receipt as Record<string, unknown> | undefined)?.url ?? ""),
+      raw: pay,
+    },
+  });
+  return finish(
+    done.ok
+      ? `웹훅으로 CRM 이용권 구제 발급 완료 (만료 ${done.expiresOn})`
+      : `구제 발급 실패: ${done.error}`,
+    done.ok
+  );
 }

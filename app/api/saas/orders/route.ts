@@ -5,6 +5,7 @@ import { signOrderToken } from "@/app/lib/order-token";
 import { defaultPlan, findPlan } from "@/app/lib/saas-plans";
 import {
   saasSalesAllowedForUid,
+  saasPgProvider,
   SAAS_SALES_DISABLED_MESSAGE,
   currentSubscription,
 } from "@/app/lib/saas-subscription";
@@ -120,7 +121,9 @@ export async function POST(request: Request) {
       amount_won: plan.priceWon,
       status: "pending",
       expires_at: saasOrderExpiresAt(),
-      pg_provider: "portone",
+      /* 🚨 주문 시점의 PG 를 박아둔다. 나중에 환경변수를 바꿔도 이 주문은 이 PG 로
+         승인·취소된다 — 안 그러면 진행 중이던 결제가 엉뚱한 PG 로 간다. */
+      pg_provider: saasPgProvider(),
     } as never)
     .select(SAAS_ORDER_SELECT)
     .single();

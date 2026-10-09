@@ -93,7 +93,15 @@ export async function confirmTossPayment(opts: {
       };
     }
     if (String(json.status) !== "DONE") {
-      return { ok: false, error: `결제가 완료되지 않았습니다 (${json.status})`, raw: json };
+      /* 🚨 코드를 반드시 붙인다. 호출부는 'code 가 없음 = 통신 실패라 결제 여부를 모름'
+         으로 보고 주문을 건드리지 않는데, 이건 결제가 확실히 안 끝난 경우라
+         코드가 없으면 실패를 '모름' 으로 오분류한다. */
+      return {
+        ok: false,
+        error: `결제가 완료되지 않았습니다 (${json.status})`,
+        code: `NOT_DONE_${json.status}`,
+        raw: json,
+      };
     }
     const approvedAmount = Number((json.totalAmount as number) ?? 0);
     if (approvedAmount !== opts.amount) {

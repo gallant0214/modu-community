@@ -29,11 +29,15 @@ export interface SaasOrderRow {
   expires_at: string | null;
   subscription_id: number | null;
   pg_receipt_url: string | null;
+  /** 이 주문을 어느 PG 로 결제하는가 — 주문 생성 시점에 박힌다 */
+  pg_provider: string | null;
+  /** 토스 paymentKey 또는 포트원 imp_uid */
+  pg_payment_key: string | null;
 }
 
 export const SAAS_ORDER_SELECT =
   "id, order_uid, firebase_uid, center_id, plan_code, plan_name, period_months, " +
-  "amount_won, status, expires_at, subscription_id, pg_receipt_url";
+  "amount_won, status, expires_at, subscription_id, pg_receipt_url, pg_provider, pg_payment_key";
 
 /**
  * 시한 지난 pending 주문을 정리한다.

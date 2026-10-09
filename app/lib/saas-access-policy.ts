@@ -136,6 +136,22 @@ export function saasSalesAllowedForUid(uid: string, email?: string | null): bool
   return matchesId(parseIdList(raw), uid, email);
 }
 
+export type SaasPgProvider = "toss" | "portone";
+
+/**
+ * CRM 이용권 결제를 어느 PG 로 받을지.
+ *
+ * 토스 → 거절(헬스 업종) → 포트원/KG이니시스 → 다시 토스(소프트웨어 업종으로 재심사).
+ * PG 가 자주 바뀌므로 환경변수 하나로 갈아끼울 수 있게 둔다.
+ *
+ * 🚨 **이미 만들어진 주문은 이 값을 보지 않는다.** 주문 행에 저장된 `pg_provider` 를 따른다.
+ *    결제창을 띄운 뒤 이 값을 바꾸면, 진행 중이던 결제가 엉뚱한 PG 로 승인 요청돼
+ *    돈은 빠지고 발급은 안 되는 상태가 된다.
+ */
+export function saasPgProvider(): SaasPgProvider {
+  return process.env.SAAS_PG_PROVIDER === "portone" ? "portone" : "toss";
+}
+
 export const SAAS_SALES_DISABLED_MESSAGE =
   "이용권 결제는 준비 중이에요. 문의해주시면 바로 도와드리겠습니다.";
 

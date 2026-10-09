@@ -31,12 +31,20 @@ export default function DoneClient(props: {
   orderUid: string;
   token: string;
   centerId: number;
-  /** 포트원 결제 식별자. 비어 있으면 결제창에서 실패·취소된 것 */
+  /**
+   * PG 결제 식별자 (포트원 imp_uid / 토스 paymentKey).
+   * 비어 있으면 결제창에서 실패·취소된 것으로 보고 바로 실패 화면을 띄운다.
+   */
   impUid: string;
   failCode: string;
   failMessage: string;
-  /** 검증 API 경로. 기본은 센터 이용권. CRM 이용권은 /api/saas/orders/confirm */
+  /** 검증·승인 API 경로. 기본은 센터 이용권. CRM 이용권은 /api/saas/orders/confirm */
   confirmPath?: string;
+  /**
+   * 서버로 보낼 본문에 덧붙일 값 — PG 마다 식별자 이름이 다르다.
+   * 🚨 금액은 절대 넣지 않는다. 서버가 주문에 저장된 값으로 승인한다.
+   */
+  confirmExtra?: Record<string, string>;
   /** 회원앱이 시스템 브라우저로 연 결제인지 — 끝나면 딥링크로 앱에 돌려준다 */
   returnToApp?: boolean;
 }) {
@@ -61,10 +69,11 @@ export default function DoneClient(props: {
           body: JSON.stringify({
             centerId: props.centerId,
             orderUid: props.orderUid,
-            /* 🚨 금액은 보내지 않는다. 서버가 주문에 저장된 값으로 검증한다 —
+            /* 🚨 금액은 보내지 않는다. 서버가 주문에 저장된 값으로 검증·승인한다 —
                클라이언트가 금액을 거들면 그게 곧 위변조 경로다. */
             impUid: props.impUid,
             token: props.token,
+            ...(props.confirmExtra ?? {}),
           }),
         });
         const data = await res.json();

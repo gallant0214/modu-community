@@ -2,9 +2,11 @@ import { notFound } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { verifyOrderToken } from "@/app/lib/order-token";
 import { portoneConfigured, portoneImpCode, portoneChannelKey } from "@/app/lib/portone-payments";
+import { tossClientKey, tossKeysMatch } from "@/app/lib/toss-payments";
 import { saasSalesEnabled, SAAS_SALES_DISABLED_MESSAGE } from "@/app/lib/saas-subscription";
 import { platformSeller } from "@/app/lib/platform-seller";
 import PayClient from "@/app/pay/[orderUid]/PayClient";
+import TossPayClient from "./TossPayClient";
 import SellerInfo from "@/app/pay/SellerInfo";
 
 export const dynamic = "force-dynamic";
@@ -28,11 +30,6 @@ export default async function SaasPayPage({
   if (!saasSalesEnabled()) {
     return <Notice title="준비 중이에요" body={SAAS_SALES_DISABLED_MESSAGE} />;
   }
-  /* 식별코드·채널키·API 키 중 하나라도 비면 결제창이 뜨다 말거나 검증이 실패한다.
-     돈을 받고 나서 터지면 수습이 훨씬 어려우니 들어오기 전에 막는다. */
-  if (!portoneConfigured()) {
-    return <Notice title="결제 설정에 문제가 있어요" body="문의해주세요. (결제 연동 설정 누락)" />;
-  }
   if (!verifyOrderToken(t, orderUid)) {
     return (
       <Notice title="결제 링크가 만료됐어요" body="이용권 화면에서 다시 시도해주세요." />
@@ -41,18 +38,31 @@ export default async function SaasPayPage({
 
   const { data } = await supabase
     .from("saas_orders")
-    .select("center_id, plan_name, period_months, amount_won, status, expires_at")
+    .select("center_id, firebase_uid, plan_name, period_months, amount_won, status, expires_at, pg_provider")
     .eq("order_uid", orderUid)
     .maybeSingle();
   const order = data as {
     center_id: number;
+    firebase_uid: string;
     plan_name: string;
     period_months: number;
     amount_won: number;
     status: string;
     expires_at: string | null;
+    pg_provider: string | null;
   } | null;
   if (!order) notFound();
+
+  /* 🚨 **주문에 저장된 PG** 를 따른다. 환경변수(현재 PG)를 보면, 결제창을 띄운 뒤
+     설정이 바뀐 경우 진행 중이던 결제가 엉뚱한 PG 로 승인 요청된다. */
+  const provider = order.pg_provider === "portone" ? "portone" : "toss";
+
+  /* 키가 비었거나 종류가 어긋나면 결제창이 뜨다 말거나 승인에서 반드시 실패한다.
+     돈을 받고 나서 터지면 수습이 훨씬 어려우니 들어오기 전에 막는다. */
+  const configOk = provider === "toss" ? tossKeysMatch() : portoneConfigured();
+  if (!configOk) {
+    return <Notice title="결제 설정에 문제가 있어요" body="문의해주세요. (결제 연동 설정 오류)" />;
+  }
 
   if (order.status !== "pending") {
     return (
@@ -108,19 +118,33 @@ export default async function SaasPayPage({
         </dl>
       </section>
 
-      <PayClient
-        orderUid={orderUid}
-        token={t as string}
-        centerId={order.center_id}
-        amount={order.amount_won}
-        orderName={order.plan_name}
-        customerName={center?.owner_name ?? ""}
-        customerTel={buyerTel}
-        impCode={portoneImpCode()}
-        channelKey={portoneChannelKey()}
-        donePath={`/billing/pay/${orderUid}/done`}
-        policyHref="/pricing/policy"
-      />
+      {provider === "toss" ? (
+        <TossPayClient
+          orderUid={orderUid}
+          token={t as string}
+          amount={order.amount_won}
+          orderName={order.plan_name}
+          customerName={center?.owner_name ?? ""}
+          // 회원별로 항상 같은 값이어야 한다 — 구매자(사장님) 기준
+          customerKey={`saas_${order.firebase_uid}`}
+          clientKey={tossClientKey()}
+          policyHref="/pricing/policy"
+        />
+      ) : (
+        <PayClient
+          orderUid={orderUid}
+          token={t as string}
+          centerId={order.center_id}
+          amount={order.amount_won}
+          orderName={order.plan_name}
+          customerName={center?.owner_name ?? ""}
+          customerTel={buyerTel}
+          impCode={portoneImpCode()}
+          channelKey={portoneChannelKey()}
+          donePath={`/billing/pay/${orderUid}/done`}
+          policyHref="/pricing/policy"
+        />
+      )}
 
       <SellerInfo seller={seller} />
     </main>

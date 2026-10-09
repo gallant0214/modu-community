@@ -28,10 +28,11 @@ export {
   SUBSCRIPTION_BLOCKED_MESSAGE,
   saasSalesEnabled,
   saasSalesAllowedForUid,
+  saasPgProvider,
   SAAS_SALES_DISABLED_MESSAGE,
   SAAS_ORDER_TTL_MINUTES,
 } from "@/app/lib/saas-access-policy";
-export type { CrmAccessState, AccessReason } from "@/app/lib/saas-access-policy";
+export type { CrmAccessState, AccessReason, SaasPgProvider } from "@/app/lib/saas-access-policy";
 
 export interface SaasSubscription {
   id: number;
