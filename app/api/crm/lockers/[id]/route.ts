@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
+import { lockerQuotaFor } from "@/app/lib/crm-locker-quota";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +96,23 @@ export async function PATCH(
     const sameMemberRenewal =
       locker.state === "assigned" && locker.assigned_member_id === memberId && !!locker.start_date;
     const keptStart = sameMemberRenewal ? (locker.start_date as string) : body.start_date;
+
+    // 🚨 락커 이용권 수 = 배정 가능 수. 같은 락커 연장은 수가 늘지 않으므로 검사 제외.
+    //    (자리 변경은 '이동' 을 써야 한다 — 이동은 수가 늘지 않아 검사하지 않음)
+    if (!sameMemberRenewal) {
+      const quota = await lockerQuotaFor(ctx.centerId, memberId);
+      if (!quota.canAssign) {
+        return NextResponse.json(
+          {
+            error:
+              quota.rentals === 0
+                ? `${member.name} 회원은 유효한 락커 이용권이 없어요. 락커 이용권을 먼저 발급해 주세요.`
+                : `락커 이용권 ${quota.rentals}개를 이미 모두 사용 중이에요(배정 ${quota.assigned}개). 자리를 바꾸려면 '이동'을 사용하고, 추가 배정은 이용권을 더 발급한 뒤에 가능해요.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     updates.state = "assigned";
     updates.assigned_member_id = memberId;

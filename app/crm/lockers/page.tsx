@@ -2237,31 +2237,29 @@ function LockerActionModal({
           </span>
         </div>
 
-        {/* 상세 / 기록 탭 */}
-        {mode !== "assign" && (
-          <div className="flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800 -mt-1">
-            <button
-              onClick={() => setMode("view")}
-              className={`px-3 py-1.5 -mb-px text-[12.5px] font-medium border-b-2 transition-colors
-                ${mode === "view"
-                  ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A]"
-                  : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
-                }`}
-            >
-              상세
-            </button>
-            <button
-              onClick={() => setMode("history")}
-              className={`px-3 py-1.5 -mb-px text-[12.5px] font-medium border-b-2 transition-colors
-                ${mode === "history"
-                  ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A]"
-                  : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
-                }`}
-            >
-              기록
-            </button>
-          </div>
-        )}
+        {/* 상세(배정) / 기록 탭 — 빈 락커도 사용 기록을 볼 수 있게 항상 표시 */}
+        <div className="flex gap-1.5 border-b border-[#E8E0D0] dark:border-zinc-800 -mt-1">
+          <button
+            onClick={() => setMode(locker.assigned_member_id ? "view" : "assign")}
+            className={`px-3 py-1.5 -mb-px text-[12.5px] font-medium border-b-2 transition-colors
+              ${mode !== "history"
+                ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A]"
+                : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
+              }`}
+          >
+            {locker.assigned_member_id ? "상세" : "배정"}
+          </button>
+          <button
+            onClick={() => setMode("history")}
+            className={`px-3 py-1.5 -mb-px text-[12.5px] font-medium border-b-2 transition-colors
+              ${mode === "history"
+                ? "border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A]"
+                : "border-transparent text-[#8C8270] hover:text-[#3A342A]"
+              }`}
+          >
+            기록
+          </button>
+        </div>
 
         {mode === "history" ? (
           <div>
