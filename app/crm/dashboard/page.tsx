@@ -771,6 +771,9 @@ export default function CrmDashboardPage() {
               </section>
             </>
           )}
+
+          {/* 출석 순위 — 회원앱 홈과 동일(이번 달 출석일수). CRM은 실명 전체 표시 */}
+          <AttendanceRankingSection />
         </div>
       )}
       </>
@@ -1037,6 +1040,60 @@ function RankBox({
         </ol>
       )}
     </div>
+  );
+}
+
+/** 출석 순위 (이번 달 출석일수) — 회원앱 홈과 동일 데이터, CRM 은 실명 전체 표시 */
+function AttendanceRankingSection() {
+  const { getIdToken } = useAuth();
+  const [rows, setRows] = useState<{ rank: number; member_id: number; name: string; days: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/dashboard/attendance-ranking", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) setRows((await res.json()).ranking ?? []);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [getIdToken]);
+
+  return (
+    <>
+      <SectionHeader title="출석 순위" subtitle="이번 달 · 출석일수" />
+      <section>
+        <div className="px-5 py-4 rounded-xl border border-[#E4D9C6] dark:border-zinc-800 bg-white/80 dark:bg-zinc-900 shadow-sm">
+          {loading ? (
+            <div className="text-[12.5px] text-[#8C8270] py-3">불러오는 중…</div>
+          ) : rows.length === 0 ? (
+            <div className="text-[12.5px] text-[#8C8270] py-3">이번 달 출석 기록이 없습니다.</div>
+          ) : (
+            <ol className="space-y-1.5 max-h-[460px] overflow-y-auto pr-1">
+              {rows.map((r) => (
+                <li key={r.member_id} className="flex items-center justify-between gap-2 text-[13px]">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <Medal place={r.rank} />
+                    <Link
+                      href={`/crm/members/${r.member_id}`}
+                      className="truncate text-[#3A342A] dark:text-zinc-300 hover:underline"
+                    >
+                      {r.name}
+                    </Link>
+                  </span>
+                  <span className="font-semibold text-[#6B7B3A] dark:text-[#A8B87A] shrink-0">{r.days}일</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </section>
+    </>
   );
 }
 
