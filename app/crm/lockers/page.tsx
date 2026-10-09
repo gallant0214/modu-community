@@ -1977,11 +1977,14 @@ function LockerActionModal({
   });
   const [password, setPassword] = useState("");
   const [memo, setMemo] = useState("");
-  // 선택한 회원이 구매한 락커 상품 (crm_sales) — 선택 시 만료일 자동 계산
+  // 선택한 회원의 '배정 가능한' 락커 이용권 — 선택 시 시작일·만료일 자동 입력
   const [lockerPurchases, setLockerPurchases] = useState<
-    { product_name: string; purchased_at: string; duration_value: number | null; duration_unit: string | null; amount_won: number; start_date: string | null; expires_at: string | null }[]
+    { rental_id: number; product_name: string; purchased_at: string; duration_value: number | null; duration_unit: string | null; amount_won: number; start_date: string | null; expires_at: string | null }[]
   >([]);
-  const [pickedProductName, setPickedProductName] = useState<string>("");
+  // 이용권은 있는데 모두 사용 중인지 구분해 안내하기 위한 수량
+  const [lockerQuota, setLockerQuota] = useState<{ rentals: number; assigned: number } | null>(null);
+  // 같은 상품을 2개 샀을 수 있어 상품명이 아니라 대여권 id 로 선택을 구분한다
+  const [pickedRentalId, setPickedRentalId] = useState<number | null>(null);
 
   // 시작일 + 기간(duration)으로 만료일 계산
   const computeExpires = (start: string, dv: number | null, du: string | null): string => {
@@ -1995,9 +1998,9 @@ function LockerActionModal({
   // 구매한 락커 상품 선택 시 결제 시 지정한 '시작일·만료일'을 그대로 자동 입력.
   //   대여권(crm_rentals)에 저장된 실제 기간이 있으면 그것을 우선 사용하고,
   //   없으면 (시작일 + 상품 기간)으로 만료일만 계산(하위 호환).
-  const applyProduct = (name: string) => {
-    setPickedProductName(name);
-    const prod = lockerPurchases.find((p) => p.product_name === name);
+  const applyProduct = (rentalId: number | null) => {
+    setPickedRentalId(rentalId);
+    const prod = lockerPurchases.find((p) => p.rental_id === rentalId);
     if (!prod) return;
     if (prod.start_date) setStartDate(prod.start_date);
     if (prod.expires_at) {
@@ -2016,7 +2019,8 @@ function LockerActionModal({
     setMemberResults([]);
     setPickedMember(null);
     setLockerPurchases([]);
-    setPickedProductName("");
+    setLockerQuota(null);
+    setPickedRentalId(null);
     setHistory([]);
     if (!open || !locker) {
       setMode("view");
@@ -2041,9 +2045,10 @@ function LockerActionModal({
 
   // 회원 선택 시 그 회원이 구매한 락커 상품 조회
   useEffect(() => {
-    setPickedProductName("");
+    setPickedRentalId(null);
     if (!pickedMember) {
       setLockerPurchases([]);
+      setLockerQuota(null);
       return;
     }
     (async () => {
@@ -2055,14 +2060,17 @@ function LockerActionModal({
       });
       if (!res.ok) {
         setLockerPurchases([]);
+        setLockerQuota(null);
         return;
       }
-      const items = (await res.json()).items ?? [];
+      const json = await res.json();
+      const items = json.items ?? [];
       setLockerPurchases(items);
-      // 결제한 락커 상품이 있으면 가장 최근 것으로 시작일·만료일 자동 입력
+      setLockerQuota(json.quota ?? null);
+      // 배정 가능한 이용권이 있으면 가장 최근 것으로 시작일·만료일 자동 입력
       if (items.length > 0) {
         const p = items[0];
-        setPickedProductName(p.product_name);
+        setPickedRentalId(p.rental_id);
         if (p.start_date) setStartDate(p.start_date);
         if (p.expires_at) {
           setExpiresAt(p.expires_at);
@@ -2374,22 +2382,29 @@ function LockerActionModal({
             </CrmField>
 
             {/* 회원이 구매한 락커 상품 — 카드로 표시. 카드 선택 시 결제 시 지정한 시작·만료일 자동 입력 */}
+            {pickedMember && lockerPurchases.length === 0 && (
+              <div className="px-3 py-2.5 rounded-lg border border-dashed border-[#E8D9B8] dark:border-amber-900/50 bg-[#FBF7EB]/60 dark:bg-amber-950/20 text-[12.5px] text-[#B47B2A] dark:text-amber-300">
+                {lockerQuota && lockerQuota.rentals > 0
+                  ? `락커 이용권 ${lockerQuota.rentals}개를 이미 모두 사용 중이에요(배정 ${lockerQuota.assigned}개). 자리를 바꾸려면 '이동' 을 사용해 주세요.`
+                  : "배정 가능한 락커 이용권이 없어요. 락커 이용권을 먼저 발급해 주세요."}
+              </div>
+            )}
             {pickedMember && lockerPurchases.length > 0 && (
               <div>
                 <div className="text-[12.5px] font-medium text-[#6B5D47] dark:text-zinc-400 mb-1.5">
-                  구매한 락커 상품
+                  배정 가능한 락커 이용권
                 </div>
                 <div className="space-y-1.5">
                   {lockerPurchases.map((p) => {
-                    const selected = pickedProductName === p.product_name;
+                    const selected = pickedRentalId === p.rental_id;
                     const durLbl = p.duration_value
                       ? `${p.duration_value}${p.duration_unit === "year" ? "년" : p.duration_unit === "day" ? "일" : "개월"}`
                       : "";
                     return (
                       <button
-                        key={p.product_name}
+                        key={p.rental_id}
                         type="button"
-                        onClick={() => applyProduct(selected ? "" : p.product_name)}
+                        onClick={() => applyProduct(selected ? null : p.rental_id)}
                         className={`w-full text-left px-3 py-2.5 rounded-lg border transition-colors ${
                           selected
                             ? "border-[#6B7B3A] bg-[#6B7B3A]/8 dark:bg-[#6B7B3A]/20"
@@ -2440,8 +2455,8 @@ function LockerActionModal({
                     const v = e.target.value;
                     setStartDate(v);
                     // 시작일을 직접 바꾸면(수동 조정) 상품 기간만큼 만료일 재계산 (시작일은 유지)
-                    if (pickedProductName) {
-                      const prod = lockerPurchases.find((p) => p.product_name === pickedProductName);
+                    if (pickedRentalId !== null) {
+                      const prod = lockerPurchases.find((p) => p.rental_id === pickedRentalId);
                       if (prod) {
                         const exp = computeExpires(v, prod.duration_value, prod.duration_unit);
                         if (exp) setExpiresAt(exp);
