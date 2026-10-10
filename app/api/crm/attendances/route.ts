@@ -37,7 +37,10 @@ export async function GET(request: Request) {
   // 회원 기본 + 얼굴 / 유효·만료 이용권 병렬 조회
   const [membersRes, mshipRes, passRes, rentalRes, lockerRes] = await Promise.all([
     memberIds.length
-      ? supabase.from("crm_members").select("id, name, phone, face_image_thumb, linked_firebase_uid").in("id", memberIds)
+      ? supabase
+          .from("crm_members")
+          .select("id, name, phone, face_image_thumb, linked_firebase_uid, mileage")
+          .in("id", memberIds)
       : Promise.resolve({ data: [] as never[] }),
     memberIds.length
       ? supabase
@@ -72,7 +75,7 @@ export async function GET(request: Request) {
       : Promise.resolve({ data: [] as never[] }),
   ]);
 
-  type Member = { id: number; name: string; phone: string | null; face_image_thumb: string | null; linked_firebase_uid: string | null };
+  type Member = { id: number; name: string; phone: string | null; face_image_thumb: string | null; linked_firebase_uid: string | null; mileage: number | null };
   const memberMap = new Map<number, Member>(
     ((membersRes.data ?? []) as unknown as Member[]).map((m) => [m.id, m])
   );
@@ -151,6 +154,8 @@ export async function GET(request: Request) {
               phone: m.phone,
               face_thumb: m.face_image_thumb,
               app_linked: !!m.linked_firebase_uid,
+              // 현재 보유 마일리지 — 출석기록 표에 표시
+              mileage: m.mileage ?? 0,
               status: activeSet.has(a.member_id) ? "active" : "expired",
               membership: primaryMembership.get(a.member_id) ?? null,
               expired_items: expiredItems.get(a.member_id) ?? [],

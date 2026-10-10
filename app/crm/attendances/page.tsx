@@ -19,6 +19,8 @@ interface Attendance {
     app_linked: boolean;
     status: "active" | "expired";
     membership: { plan_name: string; expires_at: string; days_left: number } | null;
+    /** 현재 보유 마일리지 */
+    mileage?: number;
     expired_items: { type: "rental" | "locker"; name: string; expires_at: string }[];
   } | null;
 }
@@ -793,6 +795,7 @@ export default function CrmAttendancesPage() {
                 <th className="px-4 py-2.5 text-left font-semibold">회원</th>
                 <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">앱연동</th>
                 <th className="px-4 py-2.5 text-left font-semibold">회원권</th>
+                <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap">마일리지</th>
                 <th className="px-4 py-2.5 text-left font-semibold">만료 이용권</th>
                 <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">경로</th>
               </tr>
@@ -880,6 +883,20 @@ export default function CrmAttendancesPage() {
                           )}
                         </div>
                       </div>
+                    ) : (
+                      <span className="text-[#C9BEA6]">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    {a.member ? (
+                      (a.member.mileage ?? 0) > 0 ? (
+                        <span className="inline-flex items-baseline gap-0.5 font-semibold text-[#9A6B12] dark:text-amber-300 tabular-nums">
+                          {(a.member.mileage ?? 0).toLocaleString()}
+                          <span className="text-[11px] font-normal opacity-70">P</span>
+                        </span>
+                      ) : (
+                        <span className="text-[#C9BEA6] tabular-nums">0</span>
+                      )
                     ) : (
                       <span className="text-[#C9BEA6]">—</span>
                     )}
