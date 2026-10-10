@@ -50,7 +50,7 @@ export const metadata: Metadata = {
   other: {
     "color-scheme": "light",
     "msvalidate.01": "0BB0F3FA8383FA4BC8A43B4559FFA2AF",
-    // Google AdSense — 사이트 소유 확인 + 광고 게재용
+    // Google AdSense — 사이트 소유 확인용 (심사 승인 후 adsbygoogle.js 스크립트 재삽입)
     "google-adsense-account": "ca-pub-8524743081350160",
   },
   // Google Search Console 도메인 소유권 확인
@@ -69,12 +69,7 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <link rel="manifest" href="/manifest.json" />
-        {/* Google AdSense */}
-        <script
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8524743081350160"
-          crossOrigin="anonymous"
-        />
+        {/* AdSense 스크립트는 심사 승인 후 재삽입. 지금은 소유권 확인 meta 만 유지. */}
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
