@@ -518,48 +518,30 @@ export default function CrmMembersPage() {
 
   // 정렬 (헤더 클릭, localStorage 저장)
   // 기본값: 최근 활동(recency) 최신순 → 신규·결제·재등록·가입 등 활동이 최근인 회원이 최상단
+  // 🚨 회원관리는 '항상 최근활동순(최신↓)' 으로 시작한다 (2026-10-10 사용자 지시).
+  //    헤더 클릭으로 그 화면에서는 다른 정렬로 볼 수 있지만, 저장하지 않으므로
+  //    다음에 다시 들어오면 늘 최근활동순 = 신규가입/최근활동 회원이 맨 위.
   const [sortKey, setSortKey] = useState<SortKey | null>("recency");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  // 이전에 저장돼 있던 정렬 설정은 더는 쓰지 않으므로 정리(있으면 제거).
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(SORT_KEY_STORAGE);
-      if (saved) {
-        const obj = JSON.parse(saved) as { key: SortKey | null; dir: SortDir };
-        if (obj && (obj.dir === "asc" || obj.dir === "desc")) {
-          setSortKey(obj.key ?? null);
-          setSortDir(obj.dir);
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
-  const persistSort = (key: SortKey | null, dir: SortDir) => {
-    try {
-      localStorage.setItem(SORT_KEY_STORAGE, JSON.stringify({ key, dir }));
-    } catch {
-      /* ignore */
-    }
-  };
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      const nextDir = sortDir === "asc" ? "desc" : "asc";
-      setSortDir(nextDir);
-      persistSort(key, nextDir);
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-      persistSort(key, "asc");
-    }
-  };
-  const resetSort = () => {
-    setSortKey("recency");
-    setSortDir("desc");
     try {
       localStorage.removeItem(SORT_KEY_STORAGE);
     } catch {
       /* ignore */
     }
+  }, []);
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+  const resetSort = () => {
+    setSortKey("recency");
+    setSortDir("desc");
   };
   const sortChanged = !(sortKey === "recency" && sortDir === "desc");
 
