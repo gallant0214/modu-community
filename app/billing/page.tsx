@@ -14,6 +14,11 @@ import { defaultPlan, won } from "@/app/lib/saas-plans";
  * 🚨 이 화면은 `/api/crm/centers/mine`(verifyAuth 기반)만 쓴다. `requireCrmContext` 를
  *    거치는 API 를 쓰면 이용권이 만료된 사장님이 **결제 화면에조차 못 들어온다**
  *    — 돈을 내려는 사람을 막는 게 가장 나쁜 실패다.
+ *
+ * 🚨 구독 상태는 `/api/saas/subscriptions` 로 **따로** 가져온다.
+ *    접근 판정(crmAccessState)은 구독 강제가 꺼져 있으면 구독이 없어도 "허용" 을
+ *    돌려주는데, 그걸 그대로 쓰면 결제 화면에 "무료 이용 중" 이 뜬다.
+ *    유료 상품 페이지에서 그 문구는 PG 심사원에게 '0원 상품' 으로 읽힌다.
  */
 
 interface CenterRow {
@@ -23,9 +28,13 @@ interface CenterRow {
   role: string;
   isSoloOwner: boolean;
   status: "active" | "pending";
-  subscriptionBlocked?: boolean;
-  subscriptionReason?: "no_subscription" | "expired" | null;
-  subscriptionExpiresOn?: string | null;
+}
+
+interface SubRow {
+  centerId: number;
+  startedOn: string;
+  expiresOn: string;
+  live: boolean;
 }
 
 const ymd = (s: string | null | undefined) => (s ? s.replace(/-/g, ".") : "");
@@ -33,6 +42,7 @@ const ymd = (s: string | null | undefined) => (s ? s.replace(/-/g, ".") : "");
 export default function BillingPage() {
   const { user, loading, getIdToken } = useAuth();
   const [centers, setCenters] = useState<CenterRow[] | null>(null);
+  const [subs, setSubs] = useState<Record<number, SubRow>>({});
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
   const plan = defaultPlan();
@@ -41,21 +51,29 @@ export default function BillingPage() {
     setError("");
     try {
       const token = await getIdToken();
-      const res = await fetch("/api/crm/centers/mine", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data?.error || "센터 정보를 불러오지 못했어요");
+      const headers = { authorization: `Bearer ${token}` };
+      const [cRes, sRes] = await Promise.all([
+        fetch("/api/crm/centers/mine", { headers, cache: "no-store" }),
+        fetch("/api/saas/subscriptions", { headers, cache: "no-store" }),
+      ]);
+      const cData = await cRes.json();
+      if (!cRes.ok) {
+        setError(cData?.error || "센터 정보를 불러오지 못했어요");
         setCenters([]);
         return;
       }
       // 대표자(또는 개인 CRM 본인)인 센터만 — 결제할 수 있는 사람만 보여준다
-      const mine = ((data.centers ?? []) as CenterRow[]).filter(
-        (c) => c.status === "active" && (c.role === "owner" || c.isSoloOwner)
+      setCenters(
+        ((cData.centers ?? []) as CenterRow[]).filter(
+          (c) => c.status === "active" && (c.role === "owner" || c.isSoloOwner)
+        )
       );
-      setCenters(mine);
+      if (sRes.ok) {
+        const sData = await sRes.json();
+        const map: Record<number, SubRow> = {};
+        for (const s of (sData.subscriptions ?? []) as SubRow[]) map[s.centerId] = s;
+        setSubs(map);
+      }
     } catch {
       setError("네트워크 오류로 불러오지 못했어요");
       setCenters([]);
@@ -96,14 +114,32 @@ export default function BillingPage() {
       <header>
         <p className="text-xs font-semibold text-blue-600">센터 CRM 이용권</p>
         <h1 className="mt-1 text-xl font-bold text-gray-900">이용권 결제</h1>
-        <p className="mt-2 text-sm leading-relaxed text-gray-500">
-          {plan.name} · <b className="text-gray-900">{won(plan.priceWon)}</b> (부가세 포함).
-          결제하시면 바로 사용하실 수 있어요.
-        </p>
-        <a href="/pricing" className="mt-2 inline-block text-[13px] font-semibold text-blue-600 underline">
-          요금제·환불 규정 보기
-        </a>
       </header>
+
+      {/* 결제 페이지(/billing/pay)와 같은 상품 요약 — 구매자가 무엇을 얼마에 사는지
+          결제창에 들어가기 전에 똑같이 보이게 한다 */}
+      <section className="mt-5 rounded-xl border border-gray-200 p-4">
+        <p className="font-semibold text-gray-900">{plan.name}</p>
+        <p className="mt-1 text-[13px] leading-relaxed text-gray-500">{plan.summary}</p>
+        <dl className="mt-3 space-y-1.5 text-sm">
+          <Line label="이용 기간" value={`${plan.periodMonths}개월`} />
+          <Line label="서비스 제공시기" value="결제 완료 즉시" />
+          <Line label="자동 결제" value="없음 (약정·해지 위약금 없음)" />
+          <div className="!mt-3 flex items-center justify-between border-t border-gray-200 pt-3">
+            <dt className="font-semibold text-gray-900">결제 금액</dt>
+            <dd className="text-lg font-bold text-gray-900">
+              {won(plan.priceWon)}{" "}
+              <span className="text-xs font-normal text-gray-400">(부가세 포함)</span>
+            </dd>
+          </div>
+        </dl>
+        <a
+          href="/pricing/policy"
+          className="mt-3 inline-block text-[13px] font-semibold text-blue-600 underline"
+        >
+          서비스 제공기간 · 취소 · 환불 규정 보기
+        </a>
+      </section>
 
       {loading && <p className="mt-8 text-sm text-gray-400">불러오는 중…</p>}
 
@@ -137,10 +173,14 @@ export default function BillingPage() {
             </div>
           )}
 
+          {centers && centers.length > 0 && (
+            <p className="mt-7 text-[13px] font-semibold text-gray-700">결제할 센터를 선택하세요</p>
+          )}
+
           {centers?.map((c) => {
-            const live = !c.subscriptionBlocked && !!c.subscriptionExpiresOn;
+            const sub = subs[c.centerId];
             return (
-              <section key={c.centerId} className="mt-5 rounded-xl border border-gray-200 p-4">
+              <section key={c.centerId} className="mt-3 rounded-xl border border-gray-200 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold text-gray-900">{c.centerName || "센터"}</p>
@@ -148,21 +188,15 @@ export default function BillingPage() {
                       {c.centerKind === "solo" ? "개인 CRM" : "센터 CRM"}
                     </p>
                   </div>
-                  <StatusChip
-                    blocked={!!c.subscriptionBlocked}
-                    reason={c.subscriptionReason}
-                    expiresOn={c.subscriptionExpiresOn}
-                  />
+                  <StatusChip sub={sub} />
                 </div>
 
                 <p className="mt-3 text-[13px] leading-relaxed text-gray-600">
-                  {c.subscriptionBlocked
-                    ? c.subscriptionReason === "expired"
-                      ? `${ymd(c.subscriptionExpiresOn)} 에 만료됐어요. 다시 결제하시면 그대로 이어서 사용하실 수 있습니다.`
-                      : "아직 이용권이 없어요. 결제하시면 바로 사용하실 수 있습니다."
-                    : live
-                      ? `${ymd(c.subscriptionExpiresOn)} 까지 이용하실 수 있어요. 미리 결제하시면 남은 기간에 1개월이 더해집니다.`
-                      : "지금은 무료로 이용 중이에요. 결제하시면 이용권이 시작됩니다."}
+                  {!sub
+                    ? "아직 이용권이 없습니다. 결제하시면 바로 사용하실 수 있어요."
+                    : sub.live
+                      ? `${ymd(sub.expiresOn)} 까지 이용하실 수 있어요. 미리 결제하시면 남은 기간에 1개월이 더해집니다.`
+                      : `${ymd(sub.expiresOn)} 에 만료됐습니다. 다시 결제하시면 그대로 이어서 사용하실 수 있어요.`}
                 </p>
 
                 <button
@@ -171,9 +205,7 @@ export default function BillingPage() {
                   disabled={busyId === c.centerId}
                   className="mt-4 w-full rounded-xl bg-blue-600 py-3.5 text-sm font-bold text-white disabled:bg-gray-300"
                 >
-                  {busyId === c.centerId
-                    ? "주문을 만드는 중…"
-                    : `${won(plan.priceWon)} 결제하기`}
+                  {busyId === c.centerId ? "주문을 만드는 중…" : `${won(plan.priceWon)} 결제하기`}
                 </button>
               </section>
             );
@@ -184,22 +216,26 @@ export default function BillingPage() {
   );
 }
 
-function StatusChip({
-  blocked,
-  reason,
-  expiresOn,
-}: {
-  blocked: boolean;
-  reason?: "no_subscription" | "expired" | null;
-  expiresOn?: string | null;
-}) {
-  const [label, cls] = blocked
-    ? reason === "expired"
-      ? ["만료", "bg-red-50 text-red-600"]
-      : ["이용권 없음", "bg-gray-100 text-gray-500"]
-    : expiresOn
+function Line({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <dt className="text-gray-500">{label}</dt>
+      <dd className="text-gray-900">{value}</dd>
+    </div>
+  );
+}
+
+/**
+ * 구독 상태 칩.
+ * 🚨 "무료 이용 중" 같은 문구를 두지 않는다 — 유료 상품 결제 화면에서
+ *    PG 심사원에게 '0원 상품' 으로 읽힌다. 상태는 셋뿐이다.
+ */
+function StatusChip({ sub }: { sub?: SubRow }) {
+  const [label, cls] = !sub
+    ? ["이용권 없음", "bg-gray-100 text-gray-500"]
+    : sub.live
       ? ["이용 중", "bg-blue-50 text-blue-600"]
-      : ["무료 이용 중", "bg-emerald-50 text-emerald-700"];
+      : ["만료", "bg-red-50 text-red-600"];
   return (
     <span className={`shrink-0 rounded-lg px-2.5 py-1 text-[12px] font-semibold ${cls}`}>
       {label}
