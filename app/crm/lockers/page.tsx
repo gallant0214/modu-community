@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { useCrmToast } from "../_components/crm-toast";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
@@ -1977,6 +1977,8 @@ function LockerActionModal({
   });
   const [password, setPassword] = useState("");
   const [memo, setMemo] = useState("");
+  // 같은 락커인지 판별용 — 조용한 목록 갱신에 비밀번호가 초기화되지 않게
+  const lastLockerIdRef = useRef<number | null>(null);
   // 선택한 회원의 '배정 가능한' 락커 이용권 — 선택 시 시작일·만료일 자동 입력
   const [lockerPurchases, setLockerPurchases] = useState<
     { rental_id: number; product_name: string; purchased_at: string; duration_value: number | null; duration_unit: string | null; amount_won: number; start_date: string | null; expires_at: string | null }[]
@@ -2014,6 +2016,14 @@ function LockerActionModal({
 
   // 열림/락커 전환 시 모든 상태를 초기화 (다른 락커를 누르면 처음처럼)
   useEffect(() => {
+    /* 🚨 비밀번호·메모는 **락커가 실제로 바뀔 때만** 다시 불러온다.
+       같은 락커인데 목록이 조용히 갱신(loadLockers(true))되면 locker 객체만 새로 와도
+       이 effect 가 다시 돌아, 직원이 보고 있던(또는 입력하던) 비밀번호가 날아가고
+       '0000' 힌트만 남았다. 자리의 비밀번호는 회원을 바꿔도 그대로 유지되어야 하고,
+       직원이 직접 고칠 때만 변경된다. */
+    const lockerChanged = lastLockerIdRef.current !== (locker?.id ?? null);
+    lastLockerIdRef.current = locker?.id ?? null;
+
     setError("");
     setMemberQuery("");
     setMemberResults([]);
@@ -2028,8 +2038,14 @@ function LockerActionModal({
       setMemo("");
       return;
     }
-    setPassword(locker.password ?? "");
-    setMemo(locker.memo ?? "");
+    if (lockerChanged) {
+      setPassword(locker.password ?? "");
+      setMemo(locker.memo ?? "");
+    } else {
+      // 같은 락커: 서버에 저장된 값이 있고 화면이 비어 있을 때만 채워 준다(입력 중인 값은 보존)
+      setPassword((cur) => cur || locker.password || "");
+      setMemo((cur) => cur || locker.memo || "");
+    }
     setStartDate(locker.start_date ?? today);
     setExpiresAt(
       locker.expires_at ??
@@ -2484,6 +2500,12 @@ function LockerActionModal({
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="0000"
               />
+              {/* 자리의 비밀번호는 회원이 바뀌어도 그대로 쓴다 — 직접 고칠 때만 변경 */}
+              <p className="mt-1 text-[11.5px] text-[#A89B80]">
+                {locker.password
+                  ? "이 자리에 설정된 비밀번호예요. 그대로 두면 유지되고, 고치면 변경됩니다."
+                  : "비워 두면 비밀번호 없이 배정됩니다."}
+              </p>
             </CrmField>
 
             <CrmField label="메모">
