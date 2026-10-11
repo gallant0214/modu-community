@@ -1828,6 +1828,21 @@ function MembersTable({
   const totalWidth =
     (selectable ? 36 : 0) + cols.reduce((sum, c) => sum + (widths[c.key] ?? 120), 0);
 
+  // 표가 실제로 넘칠 때만 하단 바를 띄운다(창이 넓으면 빈 막대만 남는다)
+  const [needsHScroll, setNeedsHScroll] = useState(false);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const check = () => setNeedsHScroll(el.scrollWidth - el.clientWidth > 2);
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    const raf = requestAnimationFrame(check); // 첫 렌더 직후 한 번
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(raf);
+    };
+  }, [totalWidth]);
+
   return (
     <div className="relative">
       <div
@@ -1948,16 +1963,24 @@ function MembersTable({
       </div>
 
       {/* 화면 하단에 붙는 좌우 스크롤바 — 표 끝까지 내려가지 않아도 오른쪽 열을 볼 수 있다.
-          위 표 컨테이너와 scrollLeft 를 양방향으로 맞춘다. */}
-      <div className="sticky bottom-0 z-20 -mt-px px-0.5 pb-0.5 pt-1 bg-gradient-to-t from-[#FDFBF5] dark:from-zinc-950 to-transparent">
-        <div
-          ref={barRef}
-          onScroll={() => syncFrom("bar")}
-          className="crm-hbar overflow-x-auto overflow-y-hidden"
-        >
-          <div style={{ width: totalWidth, height: 1 }} />
+          위 표 컨테이너와 scrollLeft 를 양방향으로 맞춘다.
+          🚨 바에 höhe(높이)를 주지 않으면 내용이 1px 이라 스크롤바가 그려질 자리가 없어
+             '안 보인다'. 반드시 스크롤바 높이보다 큰 고정 높이를 유지할 것. */}
+      {needsHScroll && (
+        <div className="sticky bottom-0 z-20 flex items-center gap-2 rounded-b-2xl border-x border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900 px-2 py-1.5 shadow-[0_-2px_6px_rgba(0,0,0,0.04)]">
+          <span className="shrink-0 text-[10.5px] font-semibold text-[#A89B80] select-none">
+            좌우 이동
+          </span>
+          <div
+            ref={barRef}
+            onScroll={() => syncFrom("bar")}
+            className="crm-hbar flex-1 overflow-x-auto overflow-y-hidden"
+            style={{ height: 16 }}
+          >
+            <div style={{ width: totalWidth, height: 1 }} />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -297,6 +297,12 @@ html.crm-kiosk-lock body {
 .crm-xscroll::-webkit-scrollbar,
 .crm-hbar::-webkit-scrollbar {
   height: 12px;
+  /* 🚨 오버레이 스크롤바(맥)여도 항상 보이게 — 자리를 차지하는 클래식 스크롤바로 강제 */
+  -webkit-appearance: none;
+}
+/* 하단 고정 바는 스크롤바만 보여주는 용도 → 높이를 스크롤바보다 크게 유지해야 잘리지 않는다 */
+.crm-hbar {
+  min-height: 14px;
 }
 .crm-xscroll::-webkit-scrollbar-track,
 .crm-hbar::-webkit-scrollbar-track {
