@@ -96,6 +96,10 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   const [num, setNum] = useState("");
   const [candidates, setCandidates] = useState<MemberLite[] | null>(null);
   const [enrollTarget, setEnrollTarget] = useState<MemberLite | null>(null);
+  // QR 출석은 이미 체크인이 끝난 상태 → 등록만 하고 다시 출석 처리하지 않는다
+  const [enrollOnly, setEnrollOnly] = useState(false);
+  // QR 결과창이 닫힌 뒤 띄울 얼굴 등록 대상
+  const [pendingEnroll, setPendingEnroll] = useState<MemberLite | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   // 디자인 미리보기: /crm/touch-attendance?preview=1 → 출석 확인창을 가짜 데이터로 바로 표시(자동 닫힘 없음)
   const [previewMode, setPreviewMode] = useState(false);
@@ -149,8 +153,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
     }
   }, [recogMode]);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // 얼굴 미등록 회원 체크인 시 '사진 촬영 권유' 여부 (터치출석 설정 photo_suggest_enabled)
-  const [photoSuggest, setPhotoSuggest] = useState(true);
+  // (얼굴 미등록자는 이제 설정과 무관하게 무조건 촬영 → photo_suggest_enabled 미사용)
 
   // 음성 안내 볼륨/속도 (기기별 localStorage). 모든 안내 음성에 공통 적용.
   const [voiceVol, setVoiceVolState] = useState(VOICE_VOL_DEFAULT);
@@ -241,7 +244,6 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         if (res.ok) {
           const data = await res.json();
           setCenterName(data.centerName ?? "");
-          setPhotoSuggest(data.photoSuggestEnabled !== false);
         }
       } catch {
         /* ignore */
@@ -319,6 +321,16 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
             else playCheckinChime();
           }
           speakMessages(Array.isArray(c.voice_messages) ? c.voice_messages : []);
+          // 얼굴 미등록 회원이면 결과창이 닫힌 뒤 촬영 화면을 띄운다(출석은 이미 처리됨)
+          if (c.member?.id && !c.member?.has_face) {
+            setPendingEnroll({
+              id: c.member.id,
+              name: c.member.name ?? "",
+              phone: c.member.phone ?? null,
+              birth: c.member.birth ?? null,
+              has_face: false,
+            });
+          }
         } else if (typeof d.latestId === "number" && d.latestId > qrPollCursor.current) {
           // 회원 조회 실패 등으로 결과 미구성 → 커서만 전진(재표시 방지)
           qrPollCursor.current = d.latestId;
@@ -416,9 +428,10 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
     }
   };
 
-  // 회원 확정 후: 얼굴 미등록자에게 촬영 권유(공개 태블릿=무조건 / 로그인=권유설정 ON), 아니면 바로 체크인.
+  // 회원 확정 후: 얼굴 미등록자는 **무조건** 촬영 화면으로 (2026-10-12 사용자 확정).
+  // 예전엔 로그인 모드에서 '사진 촬영 권유' 설정이 꺼져 있으면 건너뛰었다.
   const proceedMember = async (m: MemberLite) => {
-    const shouldEnroll = !m.has_face && (kiosk || photoSuggest);
+    const shouldEnroll = !m.has_face;
     if (!shouldEnroll) {
       await checkin(m);
     } else {
@@ -641,21 +654,32 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           portrait={!landscape}
           onClose={() => {
             setResult(null);
-            reset();
+            // QR 출석 중 얼굴 미등록이면 결과창을 닫으면서 촬영 화면으로 이어간다
+            if (pendingEnroll) {
+              setEnrollOnly(true);
+              setEnrollTarget(pendingEnroll);
+              setPendingEnroll(null);
+            } else {
+              reset();
+            }
           }}
         />
       )}
 
       {enrollTarget ? (
-        /* 얼굴 미등록 단일 회원 → 동의·촬영 */
+        /* 얼굴 미등록 회원 → 바로 촬영 (동의 화면 없음) */
         <FaceEnroll
           member={enrollTarget}
           kioskToken={kioskToken}
           onCancel={clearAll}
           onDone={async () => {
             const m = enrollTarget;
+            const only = enrollOnly;
             setEnrollTarget(null);
-            await checkin(m);
+            setEnrollOnly(false);
+            // QR 출석분은 이미 체크인됨 → 등록만 하고 종료
+            if (m && !only) await checkin(m);
+            else reset();
           }}
         />
       ) : candidates ? (

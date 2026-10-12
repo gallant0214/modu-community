@@ -478,7 +478,8 @@ export async function getLatestQrCheckin(centerId: number, sinceId: number | nul
 
   const { data: member } = await supabase
     .from("crm_members")
-    .select("id, name, phone, birth")
+    // face_image_data 는 용량이 커서 값 대신 '등록 여부' 만 쓴다(응답에 이미지 미포함)
+    .select("id, name, phone, birth, face_image_data")
     .eq("id", row.member_id)
     .eq("center_id", centerId)
     .maybeSingle();
@@ -500,7 +501,14 @@ export async function getLatestQrCheckin(centerId: number, sinceId: number | nul
     checkin: {
       attendance_id: row.id,
       checked_at: row.checked_in_at,
-      member: { name: member.name, birth: member.birth, phone: member.phone },
+      member: {
+        id: member.id,
+        name: member.name,
+        birth: member.birth,
+        phone: member.phone,
+        // 얼굴 미등록이면 태블릿이 결과창 뒤에 '얼굴 등록' 화면을 띄운다
+        has_face: !!member.face_image_data,
+      },
       duplicate: false,
       mileage_awarded: Number(row.attendance_mileage_awarded) || 0,
       voice_messages,

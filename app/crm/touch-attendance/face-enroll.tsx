@@ -10,9 +10,12 @@ interface Member {
 
 /**
  * 터치출석 얼굴 미등록 회원 현장 등록 플로우.
- * 1) 생체정보 수집 동의 고지 → 동의/미동의
- * 2) 동의 시 웹캠 촬영 → 저장(POST register-face) → onDone
- * 3) 미동의 시 얼굴 없이 출석(onDone)
+ *
+ * 🚨 2026-10-12 변경: 화면에서 받던 생체정보 수집 동의 단계를 제거하고 **바로 촬영 화면**을 띄운다.
+ *    (동의는 전자계약서 '개인정보 이용 동의서'(필수 체크)의 얼굴 인식 항목으로 받는다)
+ * 1) 열리면 즉시 카메라 시작 → 촬영
+ * 2) 저장(POST register-face) → onDone(true)
+ * 3) 카메라를 열 수 없을 때만 '얼굴 없이 출석' 으로 빠져나갈 수 있다(현장 마비 방지)
  */
 export default function FaceEnroll({
   member,
@@ -30,7 +33,7 @@ export default function FaceEnroll({
   const { getIdToken } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const [stage, setStage] = useState<"consent" | "capture">("consent");
+  // 동의 단계 없이 바로 촬영. (카메라 실패 시에만 건너뛰기 노출)
   const [captured, setCaptured] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -57,12 +60,11 @@ export default function FaceEnroll({
     }
   }, []);
 
-  useEffect(() => () => stopCamera(), [stopCamera]);
-
-  const agree = async () => {
-    setStage("capture");
-    await startCamera();
-  };
+  // 열리는 즉시 카메라 시작 → 동의 화면 없이 바로 촬영
+  useEffect(() => {
+    startCamera();
+    return () => stopCamera();
+  }, [startCamera, stopCamera]);
 
   // C등급: 800x800 q82 (~150KB) — 얼굴 인식률 우선 / 썸네일 120x120 q60
   const capture = () => {
@@ -133,47 +135,6 @@ export default function FaceEnroll({
 
   return (
     <div className="w-full max-w-[min(92vw,460px)]">
-      {stage === "consent" ? (
-        <div className="rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 p-5">
-          <div className="text-center">
-            <div className="text-[13px] text-[#6B5D47] dark:text-zinc-400">얼굴 미등록 회원</div>
-            <div className="text-[22px] font-bold text-[#2A251D] dark:text-zinc-100 mt-0.5">{member.name}</div>
-            <p className="mt-2 text-[13px] text-[#3A342A] dark:text-zinc-200">
-              얼굴 출석을 위해 본인 얼굴을 촬영·등록할 수 있어요.
-            </p>
-          </div>
-
-          {/* 법적 고지 (생체정보 수집·이용 동의) */}
-          <div className="mt-3 rounded-xl bg-[#FBF7EB] dark:bg-zinc-800/60 border border-[#E8E0D0]/70 dark:border-zinc-700 px-3.5 py-3 text-[11.5px] leading-relaxed text-[#6B5D47] dark:text-zinc-400">
-            <div className="font-semibold text-[#3A342A] dark:text-zinc-200 mb-1">얼굴 정보(생체정보) 수집·이용 동의</div>
-            · 수집 항목: 얼굴 이미지<br />
-            · 이용 목적: 출석 확인 및 본인 식별<br />
-            · 보유·이용 기간: 회원 탈퇴 또는 동의 철회 시까지<br />
-            동의를 거부하실 수 있으며, 미동의 시 얼굴 출석은 제공되지 않습니다(출석번호로 출석 가능).
-          </div>
-
-          <div className="mt-4 flex gap-2">
-            <button
-              onClick={() => {
-                stopCamera();
-                onDone(false);
-              }}
-              className="flex-1 py-3.5 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 text-[15px] font-semibold text-[#6B5D47] dark:text-zinc-300"
-            >
-              미동의 (번호만 출석)
-            </button>
-            <button
-              onClick={agree}
-              className="flex-1 py-3.5 rounded-xl bg-[#6B7B3A] text-white text-[15px] font-bold hover:bg-[#5a6932]"
-            >
-              동의하고 촬영
-            </button>
-          </div>
-          <button onClick={onCancel} className="mt-2 w-full py-2 text-[13px] text-[#A89B80]">
-            취소
-          </button>
-        </div>
-      ) : (
         <div className="rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
           <div className="text-center text-[15px] font-bold text-[#2A251D] dark:text-zinc-100 mb-3">
             {member.name} 얼굴 촬영
@@ -205,6 +166,11 @@ export default function FaceEnroll({
               </>
             )}
           </div>
+
+          {/* 카메라 아래 안내 — 왜 촬영이 뜨는지 알려준다 */}
+          <p className="mt-2.5 text-center text-[14px] font-semibold text-[#3A342A] dark:text-zinc-200">
+            첫 등록 시에는 얼굴 등록이 필요합니다.
+          </p>
 
           {error && (
             <div className="mt-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[12.5px] text-red-700 dark:text-red-300 text-center">
@@ -242,6 +208,18 @@ export default function FaceEnroll({
               </button>
             )}
           </div>
+          {/* 카메라를 열 수 없을 때만 우회 — 정상 상황에서는 촬영이 필수 */}
+          {error && (
+            <button
+              onClick={() => {
+                stopCamera();
+                onDone(false);
+              }}
+              className="mt-2 w-full py-3 rounded-xl border border-[#E8E0D0] dark:border-zinc-700 text-[14px] font-semibold text-[#6B5D47] dark:text-zinc-300"
+            >
+              얼굴 없이 출석하기
+            </button>
+          )}
           <button
             onClick={() => {
               stopCamera();
@@ -252,7 +230,6 @@ export default function FaceEnroll({
             취소
           </button>
         </div>
-      )}
     </div>
   );
 }
