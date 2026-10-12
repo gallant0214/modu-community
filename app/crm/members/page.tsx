@@ -1830,6 +1830,8 @@ function MembersTable({
 
   // 표가 실제로 넘칠 때만 하단 바를 띄운다(창이 넓으면 빈 막대만 남는다)
   const [needsHScroll, setNeedsHScroll] = useState(false);
+  // 좌우 이동 스크롤바는 '회원 목록에 마우스를 올렸을 때'만 보이게 한다.
+  const [listHover, setListHover] = useState(false);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -1844,7 +1846,11 @@ function MembersTable({
   }, [totalWidth]);
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onMouseEnter={() => setListHover(true)}
+      onMouseLeave={() => setListHover(false)}
+    >
       <div
         ref={scrollRef}
         onScroll={() => syncFrom("table")}
@@ -1967,7 +1973,9 @@ function MembersTable({
           🚨 바에 höhe(높이)를 주지 않으면 내용이 1px 이라 스크롤바가 그려질 자리가 없어
              '안 보인다'. 반드시 스크롤바 높이보다 큰 고정 높이를 유지할 것. */}
       {needsHScroll && (
-        <div className="sticky bottom-0 z-20 flex items-center gap-2 rounded-b-2xl border-x border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900 px-2 py-1.5 shadow-[0_-2px_6px_rgba(0,0,0,0.04)]">
+        <div
+          className={`sticky bottom-0 z-20 flex items-center gap-2 rounded-b-2xl border-x border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900 px-2 py-1.5 shadow-[0_-2px_6px_rgba(0,0,0,0.04)] transition-opacity duration-150 ${listHover ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        >
           <span className="shrink-0 text-[10.5px] font-semibold text-[#A89B80] select-none">
             좌우 이동
           </span>
