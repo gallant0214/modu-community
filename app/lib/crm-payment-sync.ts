@@ -19,11 +19,14 @@ export interface PaymentSyncResult {
 /**
  * 상품(수강권/회원권/대여권) 가격을 수정했을 때 연결된 결제내역 금액을 맞춰준다.
  *
- * 🚨 규칙 (2026-09-22 사용자 확정) — **단일 전액 결제만 자동 반영**:
- *  - 그 상품에 연결된 completed 결제행이 정확히 1건이고, 금액이 '수정 전 가격'과 같을 때만 새 가격으로 바꾼다.
- *    (= 정가를 한 번에 받은 건. 이 경우 가격 수정 의도는 곧 결제액 수정 의도다)
- *  - 결제행 2건 이상(분할 결제)이나 금액이 가격과 다른 건(부분 입금/미수금)은 **건드리지 않는다** —
- *    언제 얼마를 받았는지 기록이 사라지기 때문.
+ * 🚨 규칙 — **결제행이 1건일 때만** 자동 반영:
+ *  - 2026-09-22: 금액이 '수정 전 가격'과 같을 때만 새 가격으로 교체(단일 전액 결제).
+ *  - 2026-10-12 보완: 마일리지를 쓰거나 미수금이 있으면 결제액 ≠ 가격이라 위 조건에서 빠져
+ *    가격을 고쳐도 결제내역이 그대로였다(장현지 회원: 가격 424,000 · 마일리지 10,000 사용 →
+ *    결제 414,000. 가격을 480,000 으로 고쳐도 결제는 414,000 유지).
+ *    → 금액이 가격과 다르면 **가격 변동폭(Δ)만큼 결제액을 옮긴다**(414,000 + 56,000 = 470,000).
+ *      마일리지·미수금 차액이 보존되고, 실제로 받은 금액이 가격보다 커지지 않는다.
+ *  - 결제행 2건 이상(분할 결제)은 어느 건을 고칠지 알 수 없어 **건드리지 않는다**.
  *  - 결제행이 없는 건(이관 데이터 등)도 새로 만들지 않는다.
  *
  * price_won 은 이미 할인 후 실결제액이라 결제행 금액과 같은 기준이다(발급 시 amount_won = price_won).
@@ -55,11 +58,15 @@ export async function syncProductPaymentAmount(opts: {
   if (list.length > 1) return { synced: false, reason: "multiple_payments" };
 
   const row = list[0];
-  if ((row.amount_won ?? 0) !== oldPrice) return { synced: false, reason: "amount_mismatch" };
+  const curAmount = row.amount_won ?? 0;
+  // 전액 결제면 새 가격으로, 아니면(마일리지 사용·부분 입금) 변동폭만큼 이동
+  const nextAmount =
+    curAmount === oldPrice ? newPrice : Math.max(0, curAmount + (newPrice - oldPrice));
+  if (nextAmount === curAmount) return { synced: false, reason: "amount_mismatch" };
 
   const { error: upErr } = await supabase
     .from("crm_payments")
-    .update({ amount_won: newPrice, updated_at: new Date().toISOString() } as never)
+    .update({ amount_won: nextAmount, updated_at: new Date().toISOString() } as never)
     .eq("id", row.id)
     .eq("center_id", centerId);
   if (upErr) return { synced: false, reason: "error" };
@@ -71,8 +78,10 @@ export async function syncProductPaymentAmount(opts: {
     entity_type: "crm_payments",
     entity_id: row.id,
     payload: {
-      amount_won: newPrice,
-      before_amount_won: oldPrice,
+      amount_won: nextAmount,
+      before_amount_won: curAmount,
+      price_before: oldPrice,
+      price_after: newPrice,
       source: "product_price_sync",
       [link]: productId,
     } as never,

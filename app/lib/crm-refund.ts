@@ -13,6 +13,13 @@ import { markOrderItemRefunded } from "@/app/lib/crm-order-refund";
 
 export type ProductKind = "membership" | "pass" | "rental";
 
+/** 활동로그 entity_type — 회원 상세 '로그' 탭이 상품 id 로 수집한다 */
+const PRODUCT_ENTITY: Record<ProductKind, string> = {
+  membership: "crm_memberships",
+  pass: "crm_passes",
+  rental: "crm_rentals",
+};
+
 const PRODUCT_FK: Record<ProductKind, string> = {
   membership: "membership_id",
   pass: "pass_id",
@@ -165,6 +172,30 @@ export async function recordRefund(opts: {
       logs.push({ center_id: centerId, member_id: memberId, delta: -mileageEarned, reason: "order_refund", balance_after: next });
     if (logs.length) await supabase.from("crm_member_mileage_logs").insert(logs as never);
   }
+
+  /* 🚨 활동로그 — 예전엔 환불이 crm_payment_refunds 원장에만 남고 활동로그에는
+     전혀 기록되지 않아 "환불한 내용이 로그에 안 보인다" 는 문제가 있었다.
+     환불은 결제내역 탭·상품 상세 어디서 눌러도 이 함수를 지나므로 여기서 한 번만 남긴다.
+     payload.member_id 를 넣어 회원 상세 '로그' 탭에도 잡히게 한다. */
+  await supabase.from("crm_audit_logs").insert({
+    center_id: centerId,
+    actor_uid: actorUid,
+    action: "payment.refund",
+    entity_type: product ? PRODUCT_ENTITY[product.kind] : "crm_payments",
+    entity_id: product?.id ?? payment?.id ?? null,
+    payload: {
+      member_id: memberId,
+      refund_won: refundWon,
+      paid_won: paidWon,
+      is_partial: refundWon < Math.max(0, paidWon),
+      reason: (reason ?? "")?.toString().trim() || null,
+      payment_id: payment?.id ?? null,
+      product_kind: product?.kind ?? null,
+      product_id: product?.id ?? null,
+      mileage_returned: mileageUsed || undefined,
+      mileage_taken_back: mileageEarned || undefined,
+    } as never,
+  });
   return {};
 }
 

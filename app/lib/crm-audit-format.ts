@@ -33,6 +33,7 @@ export const ACTION_LABEL: Record<string, string> = {
   "payment.update": "결제 수정",
   "payment.delete": "결제 삭제(구매취소)",
   "payment.refund": "결제 환불 · 이용권 회수",
+  "payment.restore": "환불 복원 · 이용권 복구",
   "payment.refund_pg": "PG 결제 취소 · 이용권 회수",
   // 모두의지도사가 사장님에게 판 CRM 이용권(SaaS 구독) — 센터 이용권 환불과 다른 건이다
   "saas.refund_pg": "CRM 이용권 결제 취소 · 구독 기간 조정",

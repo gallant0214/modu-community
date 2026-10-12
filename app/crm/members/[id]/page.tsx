@@ -3909,6 +3909,33 @@ function MemberPaymentsSection({
     }
   }
 
+  /** 환불 복원(환불 취소) — 잘못 환불한 건을 되돌린다 */
+  async function restoreRefund(id: number) {
+    if (
+      !window.confirm(
+        "이 환불을 복원할까요?\n환불 이력을 지우고 결제와 상품을 다시 유효하게 만듭니다.\n\n⚠️ 환불 시 정산된 마일리지·쿠폰과 회수된 락커 배정은 자동으로 되돌아가지 않아요. 필요하면 따로 맞춰 주세요."
+      )
+    )
+      return;
+    setBusyId(id);
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch(`/api/crm/payments/${id}/restore`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "복원 실패");
+      await load();
+      onChanged?.();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
 
   // 누적 = 환불 제외한 유효 결제 합계
   /* 누적 = 결제액에서 환불액을 뺀 실매출.
@@ -4223,6 +4250,16 @@ function MemberPaymentsSection({
                       className="px-2.5 py-1 rounded-lg text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300 bg-[#F0EAD9] dark:bg-zinc-800 disabled:opacity-50"
                     >
                       수정
+                    </button>
+                  )}
+                  {/* 환불된 건은 '복원하기' — PG 결제는 원장 기준이 PG 라 제외 */}
+                  {canRefund && isRefunded && !p.pg && (
+                    <button
+                      onClick={() => restoreRefund(p.id)}
+                      disabled={busy}
+                      className="px-2.5 py-1 rounded-lg text-[12px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] bg-[#6B7B3A]/12 dark:bg-[#6B7B3A]/25 disabled:opacity-50"
+                    >
+                      복원하기
                     </button>
                   )}
                   {canRefund && !isRefunded && !p.pg && (
