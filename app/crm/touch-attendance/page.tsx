@@ -98,8 +98,8 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   const [enrollTarget, setEnrollTarget] = useState<MemberLite | null>(null);
   // QR 출석은 이미 체크인이 끝난 상태 → 등록만 하고 다시 출석 처리하지 않는다
   const [enrollOnly, setEnrollOnly] = useState(false);
-  // QR 결과창이 닫힌 뒤 띄울 얼굴 등록 대상
-  const [pendingEnroll, setPendingEnroll] = useState<MemberLite | null>(null);
+  // 얼굴 등록을 먼저 띄우는 경우(QR), 등록이 끝난 뒤 보여줄 결과
+  const [resultAfterEnroll, setResultAfterEnroll] = useState<Result | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   // 디자인 미리보기: /crm/touch-attendance?preview=1 → 출석 확인창을 가짜 데이터로 바로 표시(자동 닫힘 없음)
   const [previewMode, setPreviewMode] = useState(false);
@@ -302,7 +302,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         } else if (d.checkin && d.checkin.attendance_id > qrPollCursor.current) {
           qrPollCursor.current = d.checkin.attendance_id;
           const c = d.checkin;
-          setResult({
+          const qrResult: Result = {
             kind: "success",
             name: c.member?.name ?? "",
             birth: c.member?.birth ?? null,
@@ -312,7 +312,22 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
             dailyLimitWarn: !!c.daily_limit_warn,
             mileageAwarded: c.mileage_awarded ?? 0,
             summary: c.summary as CheckinSummary | undefined,
-          });
+          };
+          // 얼굴 미등록 회원이면 결과창보다 **촬영 창을 먼저** 띄운다(출석은 이미 처리됨).
+          // 등록이 끝나면(또는 취소하면) 그때 결과창을 보여준다.
+          if (c.member?.id && !c.member?.has_face) {
+            setResultAfterEnroll(qrResult);
+            setEnrollOnly(true);
+            setEnrollTarget({
+              id: c.member.id,
+              name: c.member.name ?? "",
+              phone: c.member.phone ?? null,
+              birth: c.member.birth ?? null,
+              has_face: false,
+            });
+          } else {
+            setResult(qrResult);
+          }
           if (!c.duplicate) {
             if (c.daily_limit_warn) playWarningBeep();
             // 입장 불가 + '시작 예정일 전' → 경고음(카운터 안내 필요)
@@ -321,16 +336,6 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
             else playCheckinChime();
           }
           speakMessages(Array.isArray(c.voice_messages) ? c.voice_messages : []);
-          // 얼굴 미등록 회원이면 결과창이 닫힌 뒤 촬영 화면을 띄운다(출석은 이미 처리됨)
-          if (c.member?.id && !c.member?.has_face) {
-            setPendingEnroll({
-              id: c.member.id,
-              name: c.member.name ?? "",
-              phone: c.member.phone ?? null,
-              birth: c.member.birth ?? null,
-              has_face: false,
-            });
-          }
         } else if (typeof d.latestId === "number" && d.latestId > qrPollCursor.current) {
           // 회원 조회 실패 등으로 결과 미구성 → 커서만 전진(재표시 방지)
           qrPollCursor.current = d.latestId;
@@ -654,14 +659,7 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
           portrait={!landscape}
           onClose={() => {
             setResult(null);
-            // QR 출석 중 얼굴 미등록이면 결과창을 닫으면서 촬영 화면으로 이어간다
-            if (pendingEnroll) {
-              setEnrollOnly(true);
-              setEnrollTarget(pendingEnroll);
-              setPendingEnroll(null);
-            } else {
-              reset();
-            }
+            reset();
           }}
         />
       )}
@@ -671,14 +669,25 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
         <FaceEnroll
           member={enrollTarget}
           kioskToken={kioskToken}
-          onCancel={clearAll}
+          onCancel={() => {
+            // QR 출석은 이미 체크인된 상태 → 촬영을 취소해도 결과창은 보여준다
+            const queued = resultAfterEnroll;
+            setEnrollTarget(null);
+            setEnrollOnly(false);
+            setResultAfterEnroll(null);
+            if (queued) setResult(queued);
+            else clearAll();
+          }}
           onDone={async () => {
             const m = enrollTarget;
             const only = enrollOnly;
+            const queued = resultAfterEnroll;
             setEnrollTarget(null);
             setEnrollOnly(false);
-            // QR 출석분은 이미 체크인됨 → 등록만 하고 종료
+            setResultAfterEnroll(null);
+            // QR 출석분은 이미 체크인됨 → 등록만 하고, 기다려둔 결과창을 보여준다
             if (m && !only) await checkin(m);
+            else if (queued) setResult(queued);
             else reset();
           }}
         />
