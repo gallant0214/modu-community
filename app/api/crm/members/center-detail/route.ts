@@ -69,7 +69,7 @@ export async function GET(request: Request) {
     // 경우가 있어 신뢰 불가. 반드시 crm_pauses(status='active')의 start~end 창으로 판정.
     supabase
       .from("crm_pauses")
-      .select("membership_id, pass_id, start_date, end_date, status")
+      .select("membership_id, pass_id, rental_id, start_date, end_date, status")
       .eq("center_id", centerId)
       .eq("member_id", memberId)
       .eq("status", "active"),
@@ -77,9 +77,28 @@ export async function GET(request: Request) {
 
   if (!member) return NextResponse.json({ error: "회원을 찾을 수 없습니다" }, { status: 404 });
 
+  // 운동복 등 대여(crm_rentals) + 락커(crm_lockers) — 회원권과 함께 표시.
+  const [{ data: rentals }, { data: lockers }, { data: zones }] = await Promise.all([
+    supabase
+      .from("crm_rentals")
+      .select("id, item_name, start_date, expires_at, status, is_paused")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .neq("status", "deleted")
+      .order("expires_at", { ascending: false }),
+    supabase
+      .from("crm_lockers")
+      .select("id, zone_id, number, start_date, expires_at, state")
+      .eq("center_id", centerId)
+      .eq("assigned_member_id", memberId)
+      .eq("state", "assigned")
+      .order("expires_at", { ascending: false }),
+    supabase.from("crm_locker_zones").select("id, name").eq("center_id", centerId),
+  ]);
+
   // 오늘(KST) 기준 홀딩 상태: 'holding'(기간 내) | 'scheduled'(시작 전) | null(없음/종료)
   const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-  const holdStateFor = (field: "membership_id" | "pass_id", id: number): "holding" | "scheduled" | null => {
+  const holdStateFor = (field: "membership_id" | "pass_id" | "rental_id", id: number): "holding" | "scheduled" | null => {
     const rows = (pauses ?? []).filter((p) => (p as Record<string, unknown>)[field] === id);
     let scheduled = false;
     for (const p of rows) {
@@ -94,9 +113,31 @@ export async function GET(request: Request) {
   const membershipsOut = (memberships ?? []).map((m) => ({ ...m, hold_state: holdStateFor("membership_id", m.id) }));
   const passesOut = (passes ?? []).map((p) => ({ ...p, hold_state: holdStateFor("pass_id", p.id) }));
 
+  const zoneName = new Map<number, string>((zones ?? []).map((z) => [z.id, z.name as string]));
+  const rentalsOut = (rentals ?? []).map((r) => ({
+    id: r.id,
+    item_name: r.item_name,
+    start_date: r.start_date,
+    expires_at: r.expires_at,
+    status: r.status,
+    hold_state: holdStateFor("rental_id", r.id),
+  }));
+  const lockersOut = (lockers ?? []).map((l) => {
+    const zn = l.zone_id ? zoneName.get(l.zone_id) : null;
+    return {
+      id: l.id,
+      label: [zn, l.number != null ? `${l.number}번` : null].filter(Boolean).join(" ") || "락커",
+      start_date: l.start_date,
+      expires_at: l.expires_at,
+      status: l.state,
+    };
+  });
+
   return NextResponse.json({
     member,
     memberships: membershipsOut,
     passes: passesOut,
+    rentals: rentalsOut,
+    lockers: lockersOut,
   });
 }
