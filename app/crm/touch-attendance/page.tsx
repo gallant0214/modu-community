@@ -100,6 +100,8 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   const [enrollOnly, setEnrollOnly] = useState(false);
   // 얼굴 등록을 먼저 띄우는 경우(QR), 등록이 끝난 뒤 보여줄 결과
   const [resultAfterEnroll, setResultAfterEnroll] = useState<Result | null>(null);
+  // 얼굴 전용 모드에서 '신규 회원 얼굴 촬영하기' → 번호로 회원을 찾아 등록만 하는 흐름
+  const [enrollByNumber, setEnrollByNumber] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   // 디자인 미리보기: /crm/touch-attendance?preview=1 → 출석 확인창을 가짜 데이터로 바로 표시(자동 닫힘 없음)
   const [previewMode, setPreviewMode] = useState(false);
@@ -436,6 +438,16 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
   // 회원 확정 후: 얼굴 미등록자는 **무조건** 촬영 화면으로 (2026-10-12 사용자 확정).
   // 예전엔 로그인 모드에서 '사진 촬영 권유' 설정이 꺼져 있으면 건너뛰었다.
   const proceedMember = async (m: MemberLite) => {
+    // 신규 등록 흐름(얼굴 전용 모드) — 출석은 하지 않고 얼굴만 등록한다.
+    // 등록되면 카메라가 바로 인식해 출석되므로 여기서 체크인하지 않는다.
+    if (enrollByNumber) {
+      setCandidates(null);
+      setEnrollOnly(true);
+      setEnrollTarget(m);
+      setBusy(false);
+      setNum("");
+      return;
+    }
     const shouldEnroll = !m.has_face;
     if (!shouldEnroll) {
       await checkin(m);
@@ -615,6 +627,94 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
       <div className="flex-1 min-h-0 w-full flex flex-col items-center justify-center overflow-y-auto pb-3">
       {recogMode === "face" ? (
         <>
+          {enrollTarget ? (
+            /* 신규 회원 얼굴 등록 촬영 (동의 화면 없음) */
+            <FaceEnroll
+              member={enrollTarget}
+              kioskToken={kioskToken}
+              onCancel={() => {
+                setEnrollTarget(null);
+                setEnrollOnly(false);
+                setEnrollByNumber(false);
+                setNum("");
+                setCandidates(null);
+              }}
+              onDone={() => {
+                setEnrollTarget(null);
+                setEnrollOnly(false);
+                setEnrollByNumber(false);
+                setNum("");
+                setCandidates(null);
+              }}
+            />
+          ) : candidates ? (
+            /* 같은 번호가 여러 명 → 본인 선택 */
+            <div className={`w-full ${landscape ? "max-w-[min(98vw,1200px)]" : "max-w-[min(96vw,720px)]"}`}>
+              <div className="mb-5 text-center text-[clamp(20px,3vmin,30px)] font-bold text-[#2A251D] dark:text-zinc-100">
+                본인 이름을 선택해 주세요
+              </div>
+              <ul className={landscape ? "grid grid-cols-2 gap-4" : "space-y-4"}>
+                {candidates.map((m) => (
+                  <li key={m.id}>
+                    <button
+                      onClick={() => proceedMember(m)}
+                      disabled={busy}
+                      className="w-full px-7 py-6 rounded-3xl border-2 border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-900 text-left hover:border-[#6B7B3A] disabled:opacity-50"
+                    >
+                      <div className="text-[clamp(26px,4vmin,40px)] font-bold text-[#2A251D] dark:text-zinc-100 leading-tight">
+                        {m.name}
+                      </div>
+                      <div className="mt-2 text-[clamp(16px,2.2vmin,22px)] text-[#6B5D47] dark:text-zinc-400 flex flex-wrap gap-x-3">
+                        {m.phone && <span className="tabular-nums font-semibold">{formatPhone(m.phone)}</span>}
+                        {m.birth && <span className="text-[#A89B80]">· 생년월일 {m.birth}</span>}
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => {
+                  setCandidates(null);
+                  setNum("");
+                }}
+                className="mt-6 w-full px-4 py-5 rounded-3xl border-2 border-[#E8E0D0] dark:border-zinc-700 text-[clamp(17px,2.4vmin,24px)] font-semibold text-[#6B5D47] dark:text-zinc-300"
+              >
+                취소
+              </button>
+            </div>
+          ) : enrollByNumber ? (
+            /* 신규 등록: 출석번호로 회원을 먼저 찾는다 */
+            <div className="w-full max-w-[min(92vw,560px)]">
+              <div className="mb-3 text-center">
+                <div className="text-[clamp(19px,2.8vmin,26px)] font-bold text-[#2A251D] dark:text-zinc-100">
+                  신규 회원 얼굴 등록
+                </div>
+                <p className="mt-1 text-[clamp(14px,2vmin,18px)] text-[#6B5D47] dark:text-zinc-400">
+                  본인 출석번호를 누르고 [회원 찾기] 를 눌러 주세요.
+                </p>
+              </div>
+              <div className="mb-3">{display}</div>
+              {keypad}
+              <button
+                onClick={submit}
+                disabled={busy || !num.trim()}
+                className="mt-3 w-full rounded-2xl bg-[#6B7B3A] text-white text-[clamp(18px,3.4vmin,34px)] font-bold py-[clamp(14px,2.6vmin,30px)] hover:bg-[#5a6932] disabled:opacity-40"
+              >
+                {busy ? "찾는 중…" : "회원 찾기"}
+              </button>
+              <button
+                onClick={() => {
+                  setEnrollByNumber(false);
+                  setNum("");
+                  setResult(null);
+                }}
+                className="mt-2 w-full py-3 rounded-2xl border-2 border-[#E8E0D0] dark:border-zinc-700 text-[clamp(15px,2.2vmin,20px)] font-semibold text-[#6B5D47] dark:text-zinc-300"
+              >
+                취소
+              </button>
+            </div>
+          ) : (
+            <>
           {/* 얼굴 전용 모드도 번호 출석과 동일한 확인창을 띄운다(회원번호·마일리지·보유상품). */}
           <FaceAttendance
             kioskToken={kioskToken}
@@ -631,6 +731,24 @@ export function TouchAttendanceKiosk({ kioskToken }: { kioskToken?: string }) {
               })
             }
           />
+          {/* 얼굴 미등록 신규 회원은 카메라가 인식하지 못하므로 번호로 등록할 길을 둔다 */}
+          <button
+            onClick={() => {
+              setEnrollByNumber(true);
+              setNum("");
+              setResult(null);
+            }}
+            className="mt-[clamp(10px,2vmin,20px)] w-full max-w-[min(92vw,560px)] py-[clamp(12px,2.2vmin,24px)] rounded-2xl border-2 border-[#6B7B3A]/40 bg-[#6B7B3A]/8 dark:bg-[#6B7B3A]/20 text-[clamp(16px,2.4vmin,24px)] font-bold text-[#55632E] dark:text-[#C3D191]"
+          >
+            신규 회원 얼굴 촬영하기
+          </button>
+            </>
+          )}
+          {result && result.kind === "error" && (
+            <div className="mt-3 w-full max-w-[min(92vw,560px)] px-5 py-4 rounded-2xl border-2 text-center border-red-300 bg-red-50 text-red-700">
+              <div className="text-[16px] font-semibold">{result.message}</div>
+            </div>
+          )}
           {result && result.kind === "success" && (
             <CheckinResultScreen
               data={result}
