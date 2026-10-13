@@ -3333,11 +3333,15 @@ function NoticesPanel() {
   const [nBody, setNBody] = useState("");
   const [nPublished, setNPublished] = useState(true);
 
-  // 편집 상태
+  // 편집 상태 — 한 번에 하나만 수정할 수 있다(editingId 단일값 + 다른 카드의 수정 버튼 비활성)
   const [editingId, setEditingId] = useState<number | null>(null);
   const [eTitle, setETitle] = useState("");
   const [eBody, setEBody] = useState("");
   const [ePublished, setEPublished] = useState(true);
+  // 수정하지 않고도 내용을 볼 수 있게 — 펼친 공지 id
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  // 게시 스위치 전환 중(연타 방지)
+  const [togglingId, setTogglingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setError("");
@@ -3415,13 +3419,17 @@ function NoticesPanel() {
   };
 
   const togglePublish = async (x: Notice) => {
+    if (togglingId) return;
+    setTogglingId(x.id);
     const token = await getIdToken();
     const res = await fetch(`/api/crm/notices/${x.id}`, {
       method: "PATCH",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify({ is_published: !x.is_published }),
     });
-    if (res.ok) load();
+    if (res.ok) await load();
+    else setError("게시 상태를 바꾸지 못했어요");
+    setTogglingId(null);
   };
 
   const remove = async (id: number) => {
@@ -3543,9 +3551,22 @@ function NoticesPanel() {
                         </span>
                       </div>
                       {x.body && (
-                        <p className="mt-1 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap line-clamp-3">
-                          {x.body}
-                        </p>
+                        <>
+                          <p
+                            className={`mt-1 text-[12.5px] text-[#6B5D47] dark:text-zinc-400 whitespace-pre-wrap ${
+                              expandedId === x.id ? "" : "line-clamp-3"
+                            }`}
+                          >
+                            {x.body}
+                          </p>
+                          {/* 수정하지 않고도 설정한 공지 내용을 볼 수 있게 */}
+                          <button
+                            onClick={() => setExpandedId(expandedId === x.id ? null : x.id)}
+                            className="mt-1 text-[12px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+                          >
+                            {expandedId === x.id ? "접기" : "내용 더보기"}
+                          </button>
+                        </>
                       )}
                       <div className="mt-1.5 text-[11px] text-[#A89B80] dark:text-zinc-500">
                         {formatDateTime(x.updated_at)}
@@ -3560,7 +3581,13 @@ function NoticesPanel() {
                       </button>
                       <button
                         onClick={() => startEdit(x)}
-                        className="px-2.5 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] font-medium text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40"
+                        disabled={editingId !== null && editingId !== x.id}
+                        title={
+                          editingId !== null && editingId !== x.id
+                            ? "다른 공지를 수정 중이에요. 저장하거나 취소한 뒤에 수정해 주세요."
+                            : undefined
+                        }
+                        className="px-2.5 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] font-medium text-[#3A342A] dark:text-zinc-300 hover:border-[#6B7B3A]/40 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-[#E8E0D0]"
                       >
                         수정
                       </button>
@@ -3570,6 +3597,17 @@ function NoticesPanel() {
                       >
                         삭제
                       </button>
+                    </div>
+                  </div>
+
+                  {/* 수정 모드에 들어가지 않고도 앱 노출을 켜고 끌 수 있는 스위치 */}
+                  <div className="mt-2 pt-2 border-t border-[#E8E0D0]/70 dark:border-zinc-800">
+                    <div className={togglingId === x.id ? "opacity-50 pointer-events-none" : ""}>
+                      <Toggle
+                        label="게시 (앱 노출)"
+                        on={x.is_published}
+                        onChange={() => togglePublish(x)}
+                      />
                     </div>
                   </div>
                 </div>
