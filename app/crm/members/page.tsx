@@ -1805,23 +1805,59 @@ function MembersTable({
     };
   }, [onResize]);
 
-  /* 표 가로 스크롤 ↔ 하단 고정 스크롤바 동기화.
-     한쪽을 움직이면 다른 쪽도 같은 위치로. 서로 onScroll 이 물려 무한 루프가 되지 않도록
-     '지금 누가 움직이는지' 를 ref 로 표시해 둔다. */
+  /* 표 가로 스크롤 바 — 네이티브 스크롤바가 안 보이는 환경(크롬 overlay 등) 대비,
+     직접 그린 항상 보이는 드래그 바. 표 스크롤 위치에 맞춰 thumb 위치/너비를 계산한다. */
   const scrollRef = useRef<HTMLDivElement>(null);
-  const barRef = useRef<HTMLDivElement>(null);
-  const syncingRef = useRef<null | "table" | "bar">(null);
-  const syncFrom = (src: "table" | "bar") => {
-    if (syncingRef.current && syncingRef.current !== src) return;
-    const from = src === "table" ? scrollRef.current : barRef.current;
-    const to = src === "table" ? barRef.current : scrollRef.current;
-    if (!from || !to || to.scrollLeft === from.scrollLeft) return;
-    syncingRef.current = src;
-    to.scrollLeft = from.scrollLeft;
-    // 다음 프레임에 풀어 준다(스크롤 이벤트가 비동기로 한 번 더 들어온다)
-    requestAnimationFrame(() => {
-      syncingRef.current = null;
-    });
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [thumb, setThumb] = useState({ left: 0, width: 100 }); // % 단위
+  const updateThumb = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    if (scrollWidth <= clientWidth) {
+      setThumb({ left: 0, width: 100 });
+      return;
+    }
+    const width = (clientWidth / scrollWidth) * 100;
+    const maxScroll = scrollWidth - clientWidth;
+    const left = (scrollLeft / maxScroll) * (100 - width);
+    setThumb({ left, width });
+  }, []);
+  // thumb 드래그 → 표 scrollLeft 이동
+  const onThumbDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = scrollRef.current;
+    const track = trackRef.current;
+    if (!el || !track) return;
+    const trackW = track.clientWidth;
+    const thumbW = trackW * (el.clientWidth / el.scrollWidth);
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    const denom = trackW - thumbW;
+    const startX = e.clientX;
+    const startLeft = el.scrollLeft;
+    const move = (ev: PointerEvent) => {
+      if (denom <= 0) return;
+      el.scrollLeft = startLeft + ((ev.clientX - startX) * maxScroll) / denom;
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  // 트랙(바탕) 클릭 → 그 위치로 점프
+  const onTrackDown = (e: React.PointerEvent) => {
+    const el = scrollRef.current;
+    const track = trackRef.current;
+    if (!el || !track) return;
+    const rect = track.getBoundingClientRect();
+    const thumbW = rect.width * (el.clientWidth / el.scrollWidth);
+    const denom = rect.width - thumbW;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    const target = e.clientX - rect.left - thumbW / 2;
+    el.scrollLeft = denom > 0 ? Math.max(0, Math.min(maxScroll, (target * maxScroll) / denom)) : 0;
   };
 
   const cols = order.map((k) => COLUMN_DEFS[k]);
@@ -1833,7 +1869,10 @@ function MembersTable({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const check = () => setNeedsHScroll(el.scrollWidth - el.clientWidth > 2);
+    const check = () => {
+      setNeedsHScroll(el.scrollWidth - el.clientWidth > 2);
+      updateThumb();
+    };
     const ro = new ResizeObserver(check);
     ro.observe(el);
     const raf = requestAnimationFrame(check); // 첫 렌더 직후 한 번
@@ -1841,13 +1880,13 @@ function MembersTable({
       ro.disconnect();
       cancelAnimationFrame(raf);
     };
-  }, [totalWidth]);
+  }, [totalWidth, updateThumb]);
 
   return (
     <div className="relative">
       <div
         ref={scrollRef}
-        onScroll={() => syncFrom("table")}
+        onScroll={updateThumb}
         className="crm-xscroll overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800"
       >
       <table className="text-[13px] table-fixed" style={{ width: totalWidth }}>
@@ -1967,19 +2006,21 @@ function MembersTable({
           🚨 바에 höhe(높이)를 주지 않으면 내용이 1px 이라 스크롤바가 그려질 자리가 없어
              '안 보인다'. 반드시 스크롤바 높이보다 큰 고정 높이를 유지할 것. */}
       {needsHScroll && (
-        <div
-          className="sticky bottom-0 z-20 flex items-center gap-2 rounded-b-2xl border-x border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900 px-2 py-1.5 shadow-[0_-2px_6px_rgba(0,0,0,0.04)]"
-        >
+        <div className="sticky bottom-0 z-20 flex items-center gap-2 rounded-b-2xl border-x border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#FBF7EB] dark:bg-zinc-900 px-2 py-2 shadow-[0_-2px_6px_rgba(0,0,0,0.04)]">
           <span className="shrink-0 text-[10.5px] font-semibold text-[#A89B80] select-none">
             좌우 이동
           </span>
+          {/* 직접 그린 항상 보이는 스크롤 바(트랙+손잡이) — 네이티브 overlay 스크롤바와 무관하게 늘 표시 */}
           <div
-            ref={barRef}
-            onScroll={() => syncFrom("bar")}
-            className="crm-hbar flex-1 overflow-x-auto overflow-y-hidden"
-            style={{ height: 16 }}
+            ref={trackRef}
+            onPointerDown={onTrackDown}
+            className="relative flex-1 h-3 rounded-full bg-[#E4D9C6] dark:bg-zinc-700 cursor-pointer"
           >
-            <div style={{ width: totalWidth, height: 1 }} />
+            <div
+              onPointerDown={onThumbDown}
+              className="absolute top-0 h-3 rounded-full bg-[#9A8C6E] dark:bg-zinc-400 hover:bg-[#8a7d60] dark:hover:bg-zinc-300 cursor-grab active:cursor-grabbing"
+              style={{ left: `${thumb.left}%`, width: `${thumb.width}%`, minWidth: 24 }}
+            />
           </div>
         </div>
       )}
