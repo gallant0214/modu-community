@@ -936,6 +936,7 @@ export default function CrmMemberDetailPage() {
         detail={paymentDetail}
         memberId={member.id}
         memberName={member.name}
+        memberAttendanceNo={member.attendance_no}
         onClose={() => setPaymentDetail(null)}
         staffList={staffList}
         onSaved={() => setUsageReload((n) => n + 1)}
@@ -6286,6 +6287,7 @@ function HoldingDetailModal({
   detail,
   memberId,
   memberName,
+  memberAttendanceNo,
   onClose,
   staffList,
   onSaved,
@@ -6294,6 +6296,8 @@ function HoldingDetailModal({
   detail: PaymentDetail | null;
   memberId: number;
   memberName: string;
+  /** 출석번호 — 결제 상세에서 회원 바로 아래에 표시 */
+  memberAttendanceNo: string | null;
   onClose: () => void;
   staffList: { id: number; display_name: string; role: string; status: string }[];
   onSaved: () => void;
@@ -6726,6 +6730,7 @@ function HoldingDetailModal({
           <DetailGrid
             rows={[
               ["회원", memberName],
+              ["출석번호", memberAttendanceNo || "—"],
               ["판매 직원", detail.sellerName ?? "—"],
               ["결제일", detail.paidAt ? new Date(detail.paidAt).toISOString().slice(0, 10) : "—"],
               ...(detail.startDate
@@ -7147,6 +7152,13 @@ function HoldingDetailModal({
                       placeholder="비밀번호 (선택) — 락커 관리에도 함께 반영됩니다"
                       className={crmInputClass}
                     />
+                    <p className="mt-1 text-[11px] text-[#A89B80]">
+                      {pickedLockerId
+                        ? lockerPassword
+                          ? "선택한 자리에 설정된 비밀번호예요. 그대로 두면 유지되고, 고치면 변경됩니다."
+                          : "선택한 자리에 설정된 비밀번호가 없어요. 비워 두면 비밀번호 없이 배정됩니다."
+                        : "락커를 선택하면 그 자리의 비밀번호가 표시됩니다."}
+                    </p>
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -7171,6 +7183,9 @@ function HoldingDetailModal({
                 onPick={(l) => {
                   setPickedLockerId(l.id);
                   setPickedLockerLabel(`${l.zone_name} ${l.number}번`);
+                  // 🚨 그 자리에 이미 설정된 비밀번호를 그대로 보여준다(없으면 비움).
+                  //    직원이 고치지 않으면 저장 시에도 그 값이 유지된다.
+                  setLockerPassword(l.password ?? "");
                   setLockerPickerOpen(false);
                 }}
                 onClose={() => setLockerPickerOpen(false)}

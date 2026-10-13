@@ -18,6 +18,8 @@ interface PickerLocker {
   expires_at: string | null;
   layout_row: number | null;
   layout_col: number | null;
+  /** 이 자리에 설정돼 있는 비밀번호 (lockers.edit 권한자에게만 내려온다) */
+  password?: string | null;
 }
 interface PickerZone {
   zone_number: number;
@@ -85,7 +87,7 @@ export function LockerPickerModal({
 }: {
   open: boolean;
   zone: number | null;
-  onPick: (l: { id: number; number: number; zone_name: string }) => void;
+  onPick: (l: { id: number; number: number; zone_name: string; password?: string | null }) => void;
   onClose: () => void;
   /** 이동 시 원본 락커 제외 */
   excludeLockerId?: number | null;
@@ -128,7 +130,8 @@ export function LockerPickerModal({
 
   const pick = (l: PickerLocker) => {
     if (getDisplayState(l, today) !== "unassigned") return; // 빈 락커만 선택 가능
-    onPick({ id: l.id, number: l.number, zone_name: zoneName });
+    // 🚨 비밀번호까지 함께 넘긴다 — 배정 화면에서 그 자리에 설정된 비밀번호를 그대로 보여줘야 한다.
+    onPick({ id: l.id, number: l.number, zone_name: zoneName, password: l.password ?? null });
   };
 
   const cell = (l: PickerLocker) => {
