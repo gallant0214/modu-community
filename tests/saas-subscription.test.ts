@@ -4,6 +4,8 @@ import {
   isSubscriptionLive,
   accessStateFor,
   saasSalesAllowedForUid,
+  pgOverrideAllowed,
+  parsePgProvider,
 } from "@/app/lib/saas-access-policy";
 import { planExpiryOn, defaultPlan, nextExpiryOn } from "@/app/lib/saas-plans";
 import { kstTodayYmd } from "@/app/lib/crm-coupons";
@@ -213,5 +215,25 @@ describe("구독 이어붙이기 — 미리 결제해도 남은 기간을 잃지
     const past = nextExpiryOn({ currentExpiresOn: shiftDays(-1), periodMonths: 1, todayYmd: kstTodayYmd() });
     expect(past.chained).toBe(false);
     expect(past.startOn).toBe(kstTodayYmd());
+  });
+});
+
+describe("PG 지정(?pg=) — 🚨 심사용 계정에만 열린다", () => {
+  it("허용목록이 비어 있으면(= 일반 공개) 누구에게도 허용하지 않는다", () => {
+    process.env.SAAS_SALES_ENABLED = "1";
+    expect(pgOverrideAllowed("any-uid", "any@example.com")).toBe(false);
+  });
+
+  it("허용목록에 있는 계정만 허용한다", () => {
+    process.env.SAAS_SALES_UID_ALLOWLIST = "review@moducm.com";
+    expect(pgOverrideAllowed("uid", "review@moducm.com")).toBe(true);
+    expect(pgOverrideAllowed("uid", "customer@example.com")).toBe(false);
+  });
+
+  it("알 수 없는 PG 값은 조용히 기본값으로 떨어지지 않고 null 이다", () => {
+    expect(parsePgProvider("toss")).toBe("toss");
+    expect(parsePgProvider("portone")).toBe("portone");
+    expect(parsePgProvider("kakao")).toBe(null);
+    expect(parsePgProvider(undefined)).toBe(null);
   });
 });

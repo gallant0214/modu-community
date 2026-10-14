@@ -152,6 +152,29 @@ export function saasPgProvider(): SaasPgProvider {
   return process.env.SAAS_PG_PROVIDER === "portone" ? "portone" : "toss";
 }
 
+/** 문자열 → PG. 알 수 없는 값이면 null (조용히 기본값으로 떨어뜨리지 않는다) */
+export function parsePgProvider(v: unknown): SaasPgProvider | null {
+  return v === "toss" || v === "portone" ? v : null;
+}
+
+/**
+ * 주소의 `?pg=` 로 PG 를 지정할 수 있는 사용자인지.
+ *
+ * 토스와 KG이니시스에 **동시에 심사를 넣으면** 전역 환경변수 하나로는 두 심사원에게
+ * 각자의 결제창을 보여줄 수 없다. 그래서 심사용 계정에 한해 주소로 지정하게 한다.
+ *   토스 심사     /billing
+ *   이니시스 심사  /billing?pg=portone
+ *
+ * 🚨 **허용목록이 비어 있으면(= 일반 공개 상태) 무조건 거부한다.**
+ *    일반 고객이 주소에 ?pg= 를 붙여 엉뚱한 PG 로 결제하게 두면 안 된다.
+ *    심사가 끝나 허용목록을 지우는 순간 이 기능도 함께 죽는다.
+ */
+export function pgOverrideAllowed(uid: string, email?: string | null): boolean {
+  const raw = (process.env.SAAS_SALES_UID_ALLOWLIST ?? "").trim();
+  if (!raw) return false;
+  return matchesId(parseIdList(raw), uid, email);
+}
+
 export const SAAS_SALES_DISABLED_MESSAGE =
   "이용권 결제는 준비 중이에요. 문의해주시면 바로 도와드리겠습니다.";
 

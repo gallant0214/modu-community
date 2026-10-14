@@ -6,6 +6,8 @@ import { defaultPlan, findPlan } from "@/app/lib/saas-plans";
 import {
   saasSalesAllowedForUid,
   saasPgProvider,
+  parsePgProvider,
+  pgOverrideAllowed,
   SAAS_SALES_DISABLED_MESSAGE,
   currentSubscription,
 } from "@/app/lib/saas-subscription";
@@ -34,7 +36,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
   }
 
-  let body: { centerId?: number; planCode?: string };
+  let body: { centerId?: number; planCode?: string; pgProvider?: string };
   try {
     body = await request.json();
   } catch {
@@ -54,6 +56,12 @@ export async function POST(request: Request) {
   if (!plan) {
     return NextResponse.json({ error: "판매 중인 요금제가 아니에요" }, { status: 400 });
   }
+
+  /* 어느 PG 로 결제할지. 기본은 환경변수이고, **심사용 계정만** 주소(?pg=)로 바꿀 수 있다.
+     토스·이니시스에 동시에 심사를 넣으면 전역 설정 하나로는 두 심사원에게
+     각자의 결제창을 보여줄 수 없어서 둔 장치다. */
+  const override = pgOverrideAllowed(user.uid, user.email) ? parsePgProvider(body.pgProvider) : null;
+  const provider = override ?? saasPgProvider();
 
   /* 🚨 이 센터의 **대표자만** 결제할 수 있다. 강사가 자기 센터 이용권을 결제하면
      누가 낸 돈인지, 누구에게 환불할지가 흐려진다. */
@@ -95,7 +103,20 @@ export async function POST(request: Request) {
     .in("status", ["pending", "processing"])
     .maybeSingle();
   const live = liveRow as unknown as SaasOrderRow | null;
-  if (live) {
+  /* 🚨 요청한 PG 와 살아있는 주문의 PG 가 다르면 그 주문을 접는다.
+     안 그러면 센터당 pending 1건 유니크 인덱스에 걸려, 심사원이 ?pg= 를 붙여도
+     계속 이전 PG 의 결제창만 보게 된다. */
+  if (live && live.pg_provider !== provider) {
+    await supabase
+      .from("saas_orders")
+      .update({
+        status: "canceled",
+        fail_reason: `결제사 변경(${live.pg_provider} → ${provider})으로 재생성`,
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("id", live.id)
+      .in("status", ["pending", "processing"]);
+  } else if (live) {
     return NextResponse.json({
       orderUid: live.order_uid,
       amount: live.amount_won,
@@ -121,9 +142,9 @@ export async function POST(request: Request) {
       amount_won: plan.priceWon,
       status: "pending",
       expires_at: saasOrderExpiresAt(),
-      /* 🚨 주문 시점의 PG 를 박아둔다. 나중에 환경변수를 바꿔도 이 주문은 이 PG 로
+      /* 🚨 주문 시점의 PG 를 박아둔다. 나중에 설정을 바꿔도 이 주문은 이 PG 로
          승인·취소된다 — 안 그러면 진행 중이던 결제가 엉뚱한 PG 로 간다. */
-      pg_provider: saasPgProvider(),
+      pg_provider: provider,
     } as never)
     .select(SAAS_ORDER_SELECT)
     .single();
@@ -141,6 +162,7 @@ export async function POST(request: Request) {
     amount: plan.priceWon,
     planName: plan.name,
     centerName: center.name,
+    provider,
     /** 현재 만료일 — 결제하면 이 다음 날부터 이어진다 */
     currentExpiresOn: sub?.expires_on ?? null,
     payUrl: `/billing/pay/${orderUid}?t=${signOrderToken(orderUid)}`,

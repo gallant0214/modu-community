@@ -91,10 +91,15 @@ export default function BillingPage() {
     setError("");
     try {
       const token = await getIdToken();
+      /* 주소에 ?pg=portone 이 붙어 있으면 그 PG 로 주문을 만든다.
+         🚨 서버가 **심사용 계정에만** 적용한다(일반 고객이 붙여도 무시).
+            토스·이니시스 동시 심사용 장치다.
+         useSearchParams 대신 window 에서 읽는다 — 이 페이지를 정적으로 유지하려고. */
+      const pg = new URLSearchParams(window.location.search).get("pg") || undefined;
       const res = await fetch("/api/saas/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ centerId, planCode: plan.code }),
+        body: JSON.stringify({ centerId, planCode: plan.code, pgProvider: pg }),
       });
       const data = await res.json();
       if (!res.ok || !data?.payUrl) {
