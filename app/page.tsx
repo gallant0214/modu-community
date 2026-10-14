@@ -3,6 +3,7 @@ export const revalidate = false;
 import Link from "next/link";
 import { AppStoreButton } from "@/app/components/app-store-button";
 import { GooglePlayButton } from "@/app/components/google-play-button";
+import { communityVisible } from "@/app/lib/community-visibility";
 
 export default async function Home() {
 
@@ -14,7 +15,12 @@ export default async function Home() {
         {/* ===== 1. 히어로 ===== */}
         <section className="lp-hero" id="about">
           <div className="lp-c">
-            <div className="lp-hero-chip">커뮤니티 · 스포츠 구인 · 스포츠 거래 · 시험 준비 · 회원관리 CRM</div>
+            {/* 🚨 PG 심사 중 '커뮤니티' 만 뺀다 — 토스 내부 규정상 커뮤니티 기능이
+                보이면 입점 불가. 콘텐츠는 그대로이고 문구에서만 가린다.
+                심사 후 NEXT_PUBLIC_HIDE_COMMUNITY 를 지우면 원복된다. */}
+            <div className="lp-hero-chip">
+              {communityVisible() && "커뮤니티 · "}스포츠 구인 · 스포츠 거래 · 시험 준비 · 회원관리 CRM
+            </div>
             <h1 className="lp-hero-title">
               체육지도사를 준비하고
               <br />
