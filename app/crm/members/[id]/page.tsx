@@ -310,31 +310,34 @@ export default function CrmMemberDetailPage() {
     id ? staffList.find((s) => s.id === id)?.display_name ?? null : null;
   // 오늘(KST) 기준. UTC 로 하면 한국 자정~오전9시 사이 만료 판정이 하루 어긋난다.
   const holdToday = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-  // 상품별 홀딩 상태: 오늘이 홀딩 시작~종료 사이면 "hold", 시작 전(예정)이면 "scheduled", 아니면 null.
-  // is_paused 플래그가 아니라 실제 홀딩 기간(crm_pauses)으로 판정한다.
+  // 상품별 홀딩 상태(crm_pauses 기준): 오늘이 홀딩 기간 내면 "hold", 시작 전이면 "hold_scheduled".
+  // is_paused 플래그가 아니라 실제 홀딩 기간으로 판정한다.
   const holdStateFor = (
     kind: "membership" | "pass" | "rental",
     id: number | null | undefined
-  ): "hold" | "scheduled" | null => {
+  ): "hold" | "hold_scheduled" | null => {
     if (!id) return null;
     const field = kind === "membership" ? "membership_id" : kind === "pass" ? "pass_id" : "rental_id";
     const ps = pauses.filter((p) => p.status === "active" && p[field] === id);
     if (ps.length === 0) return null;
     if (ps.some((p) => p.start_date <= holdToday && holdToday <= p.end_date)) return "hold";
-    if (ps.some((p) => p.start_date > holdToday)) return "scheduled";
+    if (ps.some((p) => p.start_date > holdToday)) return "hold_scheduled";
     return null;
   };
-  // 카드 칩 상태: 홀딩중이면 hold, 아니면 '아직 시작 안 한(사용 전) 상품'은 scheduled(예정),
-  // 미래 홀딩도 scheduled. 그 외 null. → 사용 전 상품엔 모두 [예정] 칩.
+  // 카드 칩 상태:
+  //  - hold           = 지금 홀딩 기간 → [홀딩]
+  //  - hold_scheduled = 홀딩이 잡혀 있으나 아직 시작 전 → [홀딩예정]
+  //  - scheduled      = 홀딩과 무관하게 '아직 시작 안 한(사용 전) 상품' → [예정]
   const chipStateFor = (
     kind: "membership" | "pass" | "rental",
     id: number | null | undefined,
     startDate: string | null | undefined
-  ): "hold" | "scheduled" | null => {
+  ): "hold" | "hold_scheduled" | "scheduled" | null => {
     const hs = holdStateFor(kind, id);
     if (hs === "hold") return "hold";
+    if (hs === "hold_scheduled") return "hold_scheduled";
     if (startDate && startDate > holdToday) return "scheduled"; // 아직 시작 전 = 예정
-    return hs; // 미래 홀딩 scheduled 또는 null
+    return null;
   };
   const validHoldMs = holdMs.filter((m) => m.status === "valid" && m.expires_at >= holdToday);
   const validHoldRs = holdRs.filter((r) => r.status === "valid" && r.expires_at >= holdToday);
@@ -5191,8 +5194,8 @@ function SnapHoldingCard({
   name: string;
   period: string | null;
   lockerUnassigned?: boolean;
-  // 홀딩 상태 칩: "hold"=현재 홀딩 기간(빨강 [홀딩]) / "scheduled"=홀딩 시작 전(파랑 [예정]) / null=없음
-  holdState?: "hold" | "scheduled" | null;
+  // 홀딩 칩: hold=현재 홀딩([홀딩]빨강) / hold_scheduled=홀딩 시작 전([홀딩예정]주황) / scheduled=상품 미시작([예정]파랑)
+  holdState?: "hold" | "hold_scheduled" | "scheduled" | null;
   onClick?: () => void;
 }) {
   return (
@@ -5207,6 +5210,11 @@ function SnapHoldingCard({
         {holdState === "hold" && (
           <span className="px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 text-[9.5px] font-bold">
             홀딩
+          </span>
+        )}
+        {holdState === "hold_scheduled" && (
+          <span className="px-1.5 py-0.5 rounded-full bg-[#B47B2A]/15 text-[#B47B2A] dark:text-amber-300 text-[9.5px] font-bold">
+            홀딩예정
           </span>
         )}
         {holdState === "scheduled" && (
@@ -6035,30 +6043,31 @@ function UsageSection({
   const refundMap = useRefundMap(memberId, reloadKey);
   const todayStr = new Date().toISOString().slice(0, 10);
   const isValid = (s: string, exp: string) => s === "valid" && exp >= todayStr;
-  // 상품별 홀딩 상태(오늘이 홀딩 기간 내=hold / 시작 전=scheduled). is_paused 플래그가 아니라 실제 기간으로 판정.
+  // 상품별 홀딩 상태(crm_pauses 기준): 홀딩 기간 내=hold / 시작 전=hold_scheduled.
   const holdTodayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const holdStateFor = (
     kind: "membership" | "rental",
     id: number | null | undefined
-  ): "hold" | "scheduled" | null => {
+  ): "hold" | "hold_scheduled" | null => {
     if (!id) return null;
     const field = kind === "membership" ? "membership_id" : "rental_id";
     const ps = pauses.filter((p) => p.status === "active" && p[field] === id);
     if (ps.length === 0) return null;
     if (ps.some((p) => p.start_date <= holdTodayKst && holdTodayKst <= p.end_date)) return "hold";
-    if (ps.some((p) => p.start_date > holdTodayKst)) return "scheduled";
+    if (ps.some((p) => p.start_date > holdTodayKst)) return "hold_scheduled";
     return null;
   };
-  // 홀딩중이면 hold, 아니면 아직 시작 안 한(사용 전) 상품은 scheduled(예정).
+  // hold=현재 홀딩 / hold_scheduled=홀딩 시작 전 / scheduled=상품 미시작(사용 전).
   const chipStateFor = (
     kind: "membership" | "rental",
     id: number | null | undefined,
     startDate: string | null | undefined
-  ): "hold" | "scheduled" | null => {
+  ): "hold" | "hold_scheduled" | "scheduled" | null => {
     const hs = holdStateFor(kind, id);
     if (hs === "hold") return "hold";
+    if (hs === "hold_scheduled") return "hold_scheduled";
     if (startDate && startDate > holdTodayKst) return "scheduled";
-    return hs;
+    return null;
   };
   const sellerName = (id: number | null) =>
     id ? staffList.find((s) => s.id === id)?.display_name ?? null : null;
@@ -6213,8 +6222,8 @@ function UsageCard({
   status?: string | null;
   /** 환불 요약 (있으면 상세 줄을 함께 보여준다) */
   refund?: RefundInfo | null;
-  // 홀딩 상태 칩: "hold"=현재 홀딩 기간(빨강 [홀딩]) / "scheduled"=홀딩 시작 전(파랑 [예정]) / null=없음
-  holdState?: "hold" | "scheduled" | null;
+  // 홀딩 칩: hold=현재 홀딩([홀딩]) / hold_scheduled=홀딩 시작 전([홀딩예정]) / scheduled=상품 미시작([예정])
+  holdState?: "hold" | "hold_scheduled" | "scheduled" | null;
   // 락커 배정 상태 칩: 배정됨(구역·번호) / "unassigned"(미배정) / 없음
   lockerAssign?: { zone_name: string; number: number } | "unassigned";
   onClick: () => void;
@@ -6236,6 +6245,11 @@ function UsageCard({
             {holdState === "hold" && (
               <span className="px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 text-[10px] font-bold">
                 홀딩
+              </span>
+            )}
+            {holdState === "hold_scheduled" && (
+              <span className="px-1.5 py-0.5 rounded-full bg-[#B47B2A]/15 text-[#B47B2A] dark:text-amber-300 text-[10px] font-bold">
+                홀딩예정
               </span>
             )}
             {holdState === "scheduled" && (
@@ -6454,6 +6468,17 @@ function HoldingDetailModal({
   const [pwOpen, setPwOpen] = useState(false);
   const [pwValue, setPwValue] = useState("");
   const [savingPw, setSavingPw] = useState(false);
+  // 이 상품의 진행 중(active) 홀딩 기록 — 헤더 칩(홀딩/홀딩예정)·기간 표시용
+  const [activePause, setActivePause] = useState<{ start_date: string; end_date: string } | null>(null);
+  // 홀딩 헤더 칩: crm_pauses 기준(오늘이 기간 내=hold / 시작 전=hold_scheduled). is_paused 플래그 아님.
+  const holdTodayKst2 = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const holdHeader: "hold" | "hold_scheduled" | null = activePause
+    ? activePause.start_date <= holdTodayKst2 && holdTodayKst2 <= activePause.end_date
+      ? "hold"
+      : activePause.start_date > holdTodayKst2
+        ? "hold_scheduled"
+        : null
+    : null;
 
   const loadVacantZones = async (): Promise<{ zone_number: number; name: string }[]> => {
     try {
@@ -6550,6 +6575,7 @@ function HoldingDetailModal({
     setRefunding(false);
     setSaving(false);
     setAssigningLocker(false);
+    setActivePause(null);
     if (!open) return;
     (async () => {
       try {
@@ -6564,11 +6590,26 @@ function HoldingDetailModal({
           setCanEdit(!!data.permissions?.["sales.edit"]);
           setCanRefund(!!data.permissions?.["sales.refund"]);
         }
+        // 이 상품(회원권/대여권)의 진행 중 홀딩 기록 조회 → 헤더 칩·기간 표시
+        if (detail?.id && (detail.kind === "membership" || detail.kind === "rental")) {
+          const pRes = await fetch(`/api/crm/pauses?member_id=${memberId}`, {
+            headers: { authorization: `Bearer ${token}` },
+            cache: "no-store",
+          });
+          if (pRes.ok) {
+            const ps = ((await pRes.json()).pauses ?? []) as {
+              membership_id: number | null; rental_id: number | null; status: string; start_date: string; end_date: string;
+            }[];
+            const col = detail.kind === "membership" ? "membership_id" : "rental_id";
+            const act = ps.find((p) => p.status === "active" && p[col] === detail.id) ?? null;
+            setActivePause(act ? { start_date: act.start_date, end_date: act.end_date } : null);
+          }
+        }
       } catch {
         /* ignore */
       }
     })();
-  }, [open, getIdToken]);
+  }, [open, getIdToken, detail?.id, detail?.kind, memberId]);
 
   const refund = async (refundWon: number, reason: string, restoreMileage: boolean) => {
     if (!detail?.id || !detail.kind || refunding) return;
@@ -6715,9 +6756,14 @@ function HoldingDetailModal({
             <div className="mt-0.5 flex items-baseline justify-between gap-2">
               <span className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">{detail.name}</span>
               <span className="flex items-center gap-1 shrink-0">
-                {detail.isPaused && (
-                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                    일시정지
+                {holdHeader === "hold" && (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-red-500/15 text-red-600 dark:text-red-400">
+                    홀딩
+                  </span>
+                )}
+                {holdHeader === "hold_scheduled" && (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#B47B2A]/15 text-[#B47B2A] dark:text-amber-300">
+                    홀딩예정
                   </span>
                 )}
                 {detail.status && <PassStatusChip status={detail.status} />}
@@ -6725,6 +6771,12 @@ function HoldingDetailModal({
             </div>
             {detail.period && (
               <div className="mt-0.5 text-[12px] text-[#A89B80]">{detail.period}</div>
+            )}
+            {activePause && (
+              <div className="mt-0.5 text-[12px] font-medium text-[#B47B2A] dark:text-amber-300">
+                홀딩 {activePause.start_date} ~ {activePause.end_date}
+                {holdHeader === "hold_scheduled" ? " (예정)" : ""}
+              </div>
             )}
           </div>
           <DetailGrid
@@ -10162,16 +10214,17 @@ function PassDetailModal({
       : PAYMENT_METHOD_LABEL[pass.payment_method] ?? pass.payment_method
     : "";
 
-  // 헤더 칩: 홀딩 기간 내=hold(홀딩중). 아니면 아직 시작 안 한(사용 전) 수강권=scheduled(예정).
+  // 헤더 칩: 홀딩 기간 내=hold(홀딩중) / 홀딩 시작 전=hold_scheduled(홀딩예정) / 수강권 미시작=scheduled(예정).
   const passHoldTodayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const passStartYmd = (pass as { start_date?: string | null } | undefined)?.start_date ?? null;
-  const passHoldState: "hold" | "scheduled" | null =
+  const passHoldState: "hold" | "hold_scheduled" | "scheduled" | null =
     activePause && activePause.start_date <= passHoldTodayKst && passHoldTodayKst <= activePause.end_date
       ? "hold"
-      : (activePause && activePause.start_date > passHoldTodayKst) ||
-          (passStartYmd && passStartYmd > passHoldTodayKst)
-        ? "scheduled"
-        : null;
+      : activePause && activePause.start_date > passHoldTodayKst
+        ? "hold_scheduled"
+        : passStartYmd && passStartYmd > passHoldTodayKst
+          ? "scheduled"
+          : null;
 
   return (
     <>
@@ -10193,6 +10246,11 @@ function PassDetailModal({
                     홀딩중
                   </span>
                 )}
+                {passHoldState === "hold_scheduled" && (
+                  <span className="px-2 py-0.5 rounded-full bg-[#B47B2A]/15 text-[#B47B2A] dark:text-amber-300 text-[11px] font-bold">
+                    홀딩예정
+                  </span>
+                )}
                 {passHoldState === "scheduled" && (
                   <span className="px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 text-[11px] font-bold">
                     예정
@@ -10210,6 +10268,12 @@ function PassDetailModal({
               잔여 <strong className="text-[#6B7B3A] dark:text-[#A8B87A]">{pass.remaining_sessions}</strong>/{pass.total_sessions}회 ·{" "}
               {pass.session_minutes}분 수업
             </div>
+            {activePause && (
+              <div className="mt-0.5 text-[12px] font-medium text-[#B47B2A] dark:text-amber-300">
+                홀딩 {activePause.start_date} ~ {activePause.end_date}
+                {passHoldState === "hold_scheduled" ? " (예정)" : ""}
+              </div>
+            )}
             {(() => {
               // 예약가능 = 잔여(출석·노쇼로 차감된 것 제외) − 예약대기(booked/requested)
               const upcoming = (detail.reservations ?? []).filter(
