@@ -324,6 +324,17 @@ html.crm-kiosk-lock body {
   scrollbar-width: thin;
   scrollbar-color: #C3B79B #F3EDE0;
 }
+/* 회원 목록 표 — 직접 그린 하단 스크롤 바가 있어 네이티브 스크롤바는 완전히 숨긴다
+   (드래그 시 크롬 overlay 스크롤바가 위에 하나 더 나타나는 중복 방지) */
+.crm-noscrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.crm-noscrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
 .dark .crm-xscroll::-webkit-scrollbar-track,
 .dark .crm-hbar::-webkit-scrollbar-track {
   background: #27272a;

@@ -1887,7 +1887,7 @@ function MembersTable({
       <div
         ref={scrollRef}
         onScroll={updateThumb}
-        className="crm-xscroll overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800"
+        className="crm-noscrollbar overflow-x-auto rounded-2xl border border-[#E8E0D0] dark:border-zinc-800"
       >
       <table className="text-[13px] table-fixed" style={{ width: totalWidth }}>
         <colgroup>
