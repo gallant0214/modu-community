@@ -51,7 +51,7 @@ export default async function CommunityPage() {
             운동 종목별 이야기와<br className="lg:hidden" /> 노하우가 모이는 공간
           </h1>
           <p className="text-[14px] sm:text-[15px] text-[#6B5D47] dark:text-zinc-400 leading-relaxed max-w-xl lg:mx-auto">
-            종목별 시험 후기, 실전 노하우, 진솔한 질문까지. 같은 길을 걷는 사람들과 경험을 나누는 커뮤니티입니다.
+            종목별 시험 후기, 실전 노하우, 진솔한 질문까지. 같은 길을 걷는 사람들과 경험을 나누는 공간입니다.
           </p>
         </div>
       </div>

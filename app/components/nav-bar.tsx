@@ -137,7 +137,7 @@ export function NavBar() {
   const userDisplayName = nickname || user?.displayName || "사용자";
 
   // 터치출석 화면(새 창)·공개 터치출석 링크(/touch/…)는 상단바 없이 센터명만 — NavBar 숨김
-  // 결제 페이지는 회원앱 WebView 로도 열린다 — 커뮤니티 네비를 띄우지 않는다
+  // 결제 페이지는 회원앱 WebView 로도 열린다 — 종목 후기 네비를 띄우지 않는다
   if (pathname === "/crm/touch-attendance" || pathname?.startsWith("/touch/") || pathname?.startsWith("/pay/") || pathname?.startsWith("/shop")) return null;
 
   return (
@@ -162,7 +162,7 @@ export function NavBar() {
           {/* 🚨 PG 심사 중 임시로 숨김 — 콘텐츠는 그대로 두고 메뉴만 가린다
               (app/lib/community-visibility.ts) */}
           {communityVisible() && (
-            <NavLink href="/community" active={isActive("/community") || isActive("/category")}>종목별 커뮤니티</NavLink>
+            <NavLink href="/community" active={isActive("/community") || isActive("/category")}>종목 후기</NavLink>
           )}
           <NavLink href="/jobs" active={isActive("/jobs")}>스포츠 구인</NavLink>
           <NavLink href="/market" active={isActive("/market")}>스포츠마켓</NavLink>
@@ -357,7 +357,7 @@ export function NavBar() {
               <MobileNavLink href="/practical" active={isActive("/practical")} onClick={() => setMenuOpen(false)} icon="book">실기·구술</MobileNavLink>
               <MobileNavLink href="/study" active={isActive("/study")} onClick={() => setMenuOpen(false)} icon="book">공부 자료</MobileNavLink>
               {communityVisible() && (
-                <MobileNavLink href="/community" active={isActive("/community") || isActive("/category")} onClick={() => setMenuOpen(false)} icon="chat">종목별 커뮤니티</MobileNavLink>
+                <MobileNavLink href="/community" active={isActive("/community") || isActive("/category")} onClick={() => setMenuOpen(false)} icon="chat">종목 후기</MobileNavLink>
               )}
               <MobileNavLink href="/jobs" active={isActive("/jobs")} onClick={() => setMenuOpen(false)} icon="briefcase">스포츠 구인</MobileNavLink>
               <MobileNavLink href="/market" active={isActive("/market")} onClick={() => setMenuOpen(false)} icon="trade">스포츠마켓</MobileNavLink>

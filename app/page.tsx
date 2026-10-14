@@ -15,12 +15,7 @@ export default async function Home() {
         {/* ===== 1. 히어로 ===== */}
         <section className="lp-hero" id="about">
           <div className="lp-c">
-            {/* 🚨 PG 심사 중 '커뮤니티' 만 뺀다 — 토스 내부 규정상 커뮤니티 기능이
-                보이면 입점 불가. 콘텐츠는 그대로이고 문구에서만 가린다.
-                심사 후 NEXT_PUBLIC_HIDE_COMMUNITY 를 지우면 원복된다. */}
-            <div className="lp-hero-chip">
-              {communityVisible() && "커뮤니티 · "}스포츠 구인 · 스포츠 거래 · 시험 준비 · 회원관리 CRM
-            </div>
+            <div className="lp-hero-chip">종목 후기 · 스포츠 구인 · 스포츠 거래 · 시험 준비 · 회원관리 CRM</div>
             <h1 className="lp-hero-title">
               체육지도사를 준비하고
               <br />
@@ -32,7 +27,12 @@ export default async function Home() {
               흩어진 준비 과정을 모두의 지도사 브랜드 안에서 더 차분하게 이어가세요.
             </p>
             <div className="lp-hero-ctas">
-              <Link href="/community" className="lp-btn lp-btn-primary">종목별 커뮤니티 보기</Link>
+              {/* 🚨 /community 로 가는 링크는 PG 심사 동안 숨긴다 — 이름을 바꿔도
+                  들어가는 길이 열려 있으면 심사원이 게시판을 그대로 본다.
+                  심사 후 NEXT_PUBLIC_HIDE_COMMUNITY 를 지우면 돌아온다. */}
+              {communityVisible() && (
+                <Link href="/community" className="lp-btn lp-btn-primary">종목 후기 보기</Link>
+              )}
               <Link href="/crm/members" className="lp-btn lp-btn-outline">회원관리 CRM</Link>
               <Link href="/jobs" className="lp-btn lp-btn-outline">구인 공고 탐색</Link>
               <Link href="/trade" className="lp-btn lp-btn-outline">스포츠 거래 보기</Link>
@@ -45,7 +45,7 @@ export default async function Home() {
                 모두의지도사 앱 보기
               </a>
             </div>
-            <p className="lp-hero-note">무료 커뮤니티 · 스포츠 업계 전용 구인·거래 · 기출문제 풀이앱 연결</p>
+            <p className="lp-hero-note">무료 종목 후기 · 스포츠 업계 전용 구인·거래 · 기출문제 풀이앱 연결</p>
           </div>
         </section>
 
@@ -55,7 +55,7 @@ export default async function Home() {
             <div className="lp-brand-bridge">
               <div>
                 <div className="lp-label">브랜드 안내</div>
-                <h2 className="lp-title">커뮤니티와 학습을 함께 이어가는 모두의 지도사</h2>
+                <h2 className="lp-title">종목 후기와 학습을 함께 이어가는 모두의 지도사</h2>
                 <p className="lp-desc">
                   이 홈페이지에서는 종목별 경험, 질문, 현장 이야기, 스포츠 구인·거래 정보를 모아보고,
                   {' '}
@@ -73,7 +73,7 @@ export default async function Home() {
               <div className="lp-brand-grid">
                 <div className="lp-brand-card">
                   <div className="lp-brand-kicker">moducm.com</div>
-                  <h3>정보를 찾고 연결되는 커뮤니티</h3>
+                  <h3>정보를 찾고 연결되는 종목 후기</h3>
                   <p>종목별 후기, 질문, 준비 팁, 스포츠 구인 공고와 거래 게시판을 한곳에서 살펴보세요.</p>
                 </div>
                 <a
@@ -308,7 +308,7 @@ export default async function Home() {
           <div className="lp-c"><div className="lp-card">
             <div className="lp-label">FAQ</div>
             <h2 className="lp-title">자주 묻는 질문</h2>
-            <FAQ q="Q. 무료인가요?" a="커뮤니티·구인·거래는 무료입니다. 센터 회원관리 CRM 은 월 99,000원(부가세 포함) 이용권으로 운영하며, 약정이나 자동결제 없이 결제한 1개월만 이용됩니다. 요금제 페이지에서 포함 기능과 환불 규정을 확인하실 수 있습니다." />
+            <FAQ q="Q. 무료인가요?" a="종목 후기·구인·거래는 무료입니다. 센터 회원관리 CRM 은 월 99,000원(부가세 포함) 이용권으로 운영하며, 약정이나 자동결제 없이 결제한 1개월만 이용됩니다. 요금제 페이지에서 포함 기능과 환불 규정을 확인하실 수 있습니다." />
             <FAQ q="Q. 회원관리 CRM은 뭔가요?" a="체육시설 사장님과 프리랜서 강사를 위한 회원관리 도구입니다. 회원 등록, 이용권/수강권 발급, 스케줄·예약, 얼굴/번호 터치 출석, 마일리지, 락커, 전자 계약서, 강사 급여 자동 산정까지 별도 프로그램 없이 웹 브라우저 하나로 이용할 수 있으며, '센터 CRM'(다인)과 '개인 CRM'(1인 강사) 두 가지 형태로 제공됩니다." />
             <FAQ q="Q. 어떤 종목 후기를 볼 수 있나요?" a="생활스포츠지도사, 전문스포츠지도사, 유소년·노인스포츠지도사 등 체육지도자 자격시험 전 종목의 실기·구술 후기를 다루고 있습니다." />
             <FAQ q="Q. 구인 공고에는 어떤 분야가 있나요?" a="헬스장, PT 스튜디오, 필라테스, 요가, GX, 복싱, 수영 등 스포츠·운동 업계 전용 구인 공고만 모여 있습니다." />
@@ -318,7 +318,7 @@ export default async function Home() {
             <div className="lp-faq-item">
               <div className="lp-faq-q">Q. 추가 문의는 어떻게 하나요?</div>
               <div className="lp-faq-a">
-                시험(실기·구술·필기) · 종목별 커뮤니티 · 스포츠 구인·거래 · 회원관리 CRM(센터/개인) 등
+                시험(실기·구술·필기) · 종목 후기 · 스포츠 구인·거래 · 회원관리 CRM(센터/개인) 등
                 모든 서비스에 대한 문의·오류 신고·기능 제안은 카카오톡 오픈채팅으로 받고 있습니다.
                 <div style={{ marginTop: 12 }}>
                   <a
@@ -377,10 +377,10 @@ export default async function Home() {
               </div>
             </div>
 
-            {/* 커뮤니티 앱 카드 (아래) */}
+            {/* 종목 후기 앱 카드 (아래) */}
             <div className="lp-final-cta" style={{ marginTop: 20 }}>
               <div className="lp-label" style={{background:"rgba(255,255,255,.15)",color:"#fff"}}>앱 다운로드</div>
-              <h2 className="lp-final-title">{`'모두의 지도사 커뮤니티' 앱에서`}<br />더 편하게 이용하세요.</h2>
+              <h2 className="lp-final-title">{`'모두의 지도사' 앱에서`}<br />더 편하게 이용하세요.</h2>
               <p className="lp-final-sub">시험 후기 알림, 관심 종목 즐겨찾기, 구인 공고 필터링, 운동 장비 거래까지<br />앱에서 더 빠르고 편리하게 사용할 수 있습니다.</p>
               <div className="lp-final-buttons">
                 <AppStoreButton />
