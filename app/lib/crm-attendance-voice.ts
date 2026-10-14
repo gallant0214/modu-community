@@ -73,6 +73,14 @@ export async function buildAttendanceVoiceMessages(
     return Math.floor((target.getTime() - start.getTime()) / (24 * 3600 * 1000));
   };
 
+  // 🚨 '만료 임박' 제외 규칙 — 뒤이어 사용할 이용권을 이미 구매해 둔 회원은 만료 예정이 아니다.
+  //    (예: 회원권이 10/14 만료인데 10/15 시작 회원권을 미리 구매 → 끊김 없이 이어서 사용)
+  //    같은 종류(회원권↔회원권, 수강권↔수강권) 중 더 늦게 끝나는 건이 있으면 안내하지 않는다.
+  const laterThan = (exp: string, rows: { expires_at: string }[]) =>
+    rows.some(
+      (o) => !!o.expires_at && (o.expires_at.startsWith("9999") || o.expires_at > exp)
+    );
+
   const messages: string[] = [];
   // 환영(welcome) 인사는 '입장 가능한' 회원에게만 재생. 만료 안내가 나가는 회원에겐
   // 붙이지 않는다(만료되었습니다 뒤에 '환영합니다'가 따라오는 문제 방지).
@@ -103,7 +111,8 @@ export async function buildAttendanceVoiceMessages(
         const hit = memberships.some((m) => {
           if (!m.expires_at || m.expires_at.startsWith("9999")) return false;
           const d = daysUntil(m.expires_at);
-          return d >= 0 && d <= n;
+          if (d < 0 || d > n) return false;
+          return !laterThan(m.expires_at, memberships); // 이어서 쓸 회원권이 있으면 제외
         });
         if (hit) messages.push(substitute(rule.message));
         break;
@@ -113,7 +122,10 @@ export async function buildAttendanceVoiceMessages(
         const hit = passes.some((p) => {
           if (!p.expires_at || p.expires_at.startsWith("9999")) return false;
           const d = daysUntil(p.expires_at);
-          return d >= 0 && d <= n;
+          if (d < 0 || d > n) return false;
+          // 이어서 쓸 수강권(잔여 횟수 남은 것)이 있으면 제외
+          const usableLater = passes.filter((o) => Number(o.remaining_sessions ?? 0) > 0);
+          return !laterThan(p.expires_at, usableLater);
         });
         if (hit) messages.push(substitute(rule.message));
         break;
@@ -248,7 +260,9 @@ export async function buildAttendanceVoiceMessages(
           !notStarted(m) &&
           !unlimited(m) &&
           daysUntil(m.expires_at) >= 0 &&
-          daysUntil(m.expires_at) <= EXPIRING_DEFAULT_DAYS
+          daysUntil(m.expires_at) <= EXPIRING_DEFAULT_DAYS &&
+          // 뒤이어 사용할 회원권(예정분 포함)을 이미 구매했으면 만료 예정 안내 제외
+          !laterThan(m.expires_at, valids)
       );
       const hasOutstanding =
         ms.some((m) => Number(m.outstanding_won ?? 0) > 0) ||
