@@ -3574,12 +3574,6 @@ function NoticesPanel() {
                     </div>
                     <div className="flex shrink-0 gap-1.5">
                       <button
-                        onClick={() => togglePublish(x)}
-                        className="px-2.5 py-1 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[12px] font-medium text-[#6B5D47] dark:text-zinc-400 hover:border-[#6B7B3A]/40"
-                      >
-                        {x.is_published ? "숨기기" : "게시"}
-                      </button>
-                      <button
                         onClick={() => startEdit(x)}
                         disabled={editingId !== null && editingId !== x.id}
                         title={
