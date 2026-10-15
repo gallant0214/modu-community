@@ -1475,18 +1475,29 @@ function HoldingCard({
   name,
   period,
   extra,
+  moreCount = 0,
 }: {
   tag: string;
   name: string;
   period: string | null;
   extra?: string | null;
+  /** 같은 종류 이용권이 더 있으면 우측 상단에 +N 배지 표시 */
+  moreCount?: number;
 }) {
   return (
     <div
-      className={`inline-flex flex-col rounded-md border px-1.5 py-1 leading-tight max-w-full ${
+      className={`relative inline-flex flex-col rounded-md border px-1.5 py-1 leading-tight max-w-full ${
         HOLDING_STYLE[tag] ?? "border-[#E8E0D0] bg-[#F5F0E5] text-[#8C8270]"
       }`}
     >
+      {moreCount > 0 && (
+        <span
+          className="absolute -top-1.5 -right-1.5 z-10 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-[#6B7B3A] text-white text-[9px] font-bold shadow-sm"
+          title={`이용권 ${moreCount}개 더 있음`}
+        >
+          +{moreCount}
+        </span>
+      )}
       <span className="text-[9px] font-bold uppercase tracking-wide opacity-80">{tag}</span>
       <span className="text-[11.5px] font-semibold text-[#2A251D] dark:text-zinc-100 truncate">
         {name}
@@ -1712,15 +1723,27 @@ const COLUMN_DEFS: Record<ColKey, ColDef> = {
     sortKey: null,
     render: (m) => {
       if (m.items && m.items.length > 0) {
+        // 종류별(회원권/수강권) 1개만 — 가장 최근(만료일 늦은) 진행중 건 — 표시하고,
+        // 같은 종류가 더 있으면 그 카드 우측 상단에 +N 배지.
+        const latest = (arr: typeof m.items) =>
+          arr.slice().sort((a, b) => (b.expires ?? "").localeCompare(a.expires ?? ""))[0];
+        const memberships = m.items.filter((it) => it.type === "membership");
+        const passes = m.items.filter((it) => it.type !== "membership");
+        const cards: { tag: string; it: (typeof m.items)[number]; more: number }[] = [];
+        if (memberships.length > 0)
+          cards.push({ tag: "회원권", it: latest(memberships), more: memberships.length - 1 });
+        if (passes.length > 0)
+          cards.push({ tag: "수강권", it: latest(passes), more: passes.length - 1 });
         return (
-          <div className="flex flex-wrap gap-1">
-            {m.items.map((it, idx) => (
+          <div className="flex flex-wrap gap-1.5">
+            {cards.map((c, idx) => (
               <HoldingCard
                 key={idx}
-                tag={it.type === "membership" ? "회원권" : "수강권"}
-                name={it.kind}
-                period={it.expires === "9999-12-31" ? "무기한" : `~ ${it.expires}`}
-                extra={it.remaining !== null ? `잔여 ${it.remaining}회` : null}
+                tag={c.tag}
+                name={c.it.kind}
+                period={c.it.expires === "9999-12-31" ? "무기한" : `~ ${c.it.expires}`}
+                extra={c.it.remaining !== null ? `잔여 ${c.it.remaining}회` : null}
+                moreCount={c.more}
               />
             ))}
           </div>
