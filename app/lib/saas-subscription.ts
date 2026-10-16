@@ -30,6 +30,8 @@ export {
   saasSalesAllowedForUid,
   saasPgProvider,
   parsePgProvider,
+  resolveSaasPg,
+  saasPortoneAllowed,
   pgOverrideAllowed,
   SAAS_SALES_DISABLED_MESSAGE,
   SAAS_ORDER_TTL_MINUTES,

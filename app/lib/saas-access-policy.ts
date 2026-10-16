@@ -158,6 +158,33 @@ export function parsePgProvider(v: unknown): SaasPgProvider | null {
 }
 
 /**
+ * 🚨 **CRM 이용권(소프트웨어)을 포트원/KG이니시스로 팔 수 있는가 — 기본 false.**
+ *
+ * 이니시스 MID `MOI9146979` 는 **체육시설 이용권** 업종으로 바로오픈 승인된 것이다
+ * (2026-10-16 사용자 확정: 소프트웨어로 업종 변경 요청을 보내지 않았다).
+ * 그 MID 로 소프트웨어를 팔면 **계약에 없는 상품 판매 = 계약 위반**이고,
+ * 적발되면 정산 보류·가맹 해지로 이어진다.
+ *
+ * 이니시스는 **센터 이용권(`/shop` → `/pay`)** 전용이다. 그쪽은 업종이 맞는다.
+ *
+ * 나중에 이니시스에서 소프트웨어 업종 변경을 승인받으면 `SAAS_ALLOW_PORTONE=1` 로 연다.
+ */
+export function saasPortoneAllowed(): boolean {
+  return process.env.SAAS_ALLOW_PORTONE === "1";
+}
+
+/**
+ * 요청된 PG 를 **실제로 써도 되는 PG** 로 정규화한다.
+ * 업종이 맞지 않는 PG 는 조용히 기본값(토스)으로 되돌린다 — 막는 것보다
+ * 결제가 되게 하는 쪽이 낫고, 어차피 쓰면 안 되는 경로다.
+ */
+export function resolveSaasPg(requested: SaasPgProvider | null): SaasPgProvider {
+  const want = requested ?? saasPgProvider();
+  if (want === "portone" && !saasPortoneAllowed()) return "toss";
+  return want;
+}
+
+/**
  * 주소의 `?pg=` 로 PG 를 지정할 수 있는 사용자인지.
  *
  * 토스와 KG이니시스에 **동시에 심사를 넣으면** 전역 환경변수 하나로는 두 심사원에게

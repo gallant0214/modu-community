@@ -5,9 +5,9 @@ import { signOrderToken } from "@/app/lib/order-token";
 import { defaultPlan, findPlan } from "@/app/lib/saas-plans";
 import {
   saasSalesAllowedForUid,
-  saasPgProvider,
   parsePgProvider,
   pgOverrideAllowed,
+  resolveSaasPg,
   SAAS_SALES_DISABLED_MESSAGE,
   currentSubscription,
 } from "@/app/lib/saas-subscription";
@@ -61,7 +61,9 @@ export async function POST(request: Request) {
      토스·이니시스에 동시에 심사를 넣으면 전역 설정 하나로는 두 심사원에게
      각자의 결제창을 보여줄 수 없어서 둔 장치다. */
   const override = pgOverrideAllowed(user.uid, user.email) ? parsePgProvider(body.pgProvider) : null;
-  const provider = override ?? saasPgProvider();
+  /* 🚨 업종이 맞지 않는 PG 는 여기서 걸러진다. 이니시스 MID 는 체육시설 업종이라
+     소프트웨어(CRM 이용권)를 팔면 계약 위반이다 — resolveSaasPg 가 토스로 되돌린다. */
+  const provider = resolveSaasPg(override);
 
   /* 🚨 이 센터의 **대표자만** 결제할 수 있다. 강사가 자기 센터 이용권을 결제하면
      누가 낸 돈인지, 누구에게 환불할지가 흐려진다. */

@@ -6,6 +6,7 @@ import {
   saasSalesAllowedForUid,
   pgOverrideAllowed,
   parsePgProvider,
+  resolveSaasPg,
 } from "@/app/lib/saas-access-policy";
 import { planExpiryOn, defaultPlan, nextExpiryOn } from "@/app/lib/saas-plans";
 import { kstTodayYmd } from "@/app/lib/crm-coupons";
@@ -19,6 +20,8 @@ const ENV_KEYS = [
   "CRM_SUBSCRIPTION_ENFORCE_UIDS",
   "SAAS_SALES_ENABLED",
   "SAAS_SALES_UID_ALLOWLIST",
+  "SAAS_PG_PROVIDER",
+  "SAAS_ALLOW_PORTONE",
 ] as const;
 
 let saved: Record<string, string | undefined> = {};
@@ -235,5 +238,25 @@ describe("PG 지정(?pg=) — 🚨 심사용 계정에만 열린다", () => {
     expect(parsePgProvider("portone")).toBe("portone");
     expect(parsePgProvider("kakao")).toBe(null);
     expect(parsePgProvider(undefined)).toBe(null);
+  });
+});
+
+describe("🚨 CRM 이용권은 포트원으로 팔 수 없다 (업종 불일치)", () => {
+  it("기본값은 토스다", () => {
+    expect(resolveSaasPg(null)).toBe("toss");
+  });
+
+  it("포트원을 요청해도 토스로 되돌린다 — 이니시스 MID 는 체육시설 업종이다", () => {
+    expect(resolveSaasPg("portone")).toBe("toss");
+  });
+
+  it("환경변수로 명시 설정해도 막힌다", () => {
+    process.env.SAAS_PG_PROVIDER = "portone";
+    expect(resolveSaasPg(null)).toBe("toss");
+  });
+
+  it("업종 변경을 승인받아 SAAS_ALLOW_PORTONE=1 을 켜면 그때 열린다", () => {
+    process.env.SAAS_ALLOW_PORTONE = "1";
+    expect(resolveSaasPg("portone")).toBe("portone");
   });
 });
