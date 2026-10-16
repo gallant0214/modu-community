@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
-import { communityVisible } from "@/app/lib/community-visibility";
+import { communityVisible, jobsVisible } from "@/app/lib/community-visibility";
 
 interface WebNotification {
   id: number;
@@ -164,7 +164,10 @@ export function NavBar() {
           {communityVisible() && (
             <NavLink href="/community" active={isActive("/community") || isActive("/category")}>종목 후기</NavLink>
           )}
-          <NavLink href="/jobs" active={isActive("/jobs")}>스포츠 구인</NavLink>
+          {/* 🚨 PG 심사 중 버튼만 가린다 — /jobs 라우트와 공고 등록 API 는 그대로 동작한다 */}
+          {jobsVisible() && (
+            <NavLink href="/jobs" active={isActive("/jobs")}>스포츠 구인</NavLink>
+          )}
           <NavLink href="/market" active={isActive("/market")}>스포츠마켓</NavLink>
           <NavLink href="/trade" active={isActive("/trade")}>거래</NavLink>
           <NavLink href="/my" active={isActive("/my")}>MY</NavLink>
@@ -359,7 +362,9 @@ export function NavBar() {
               {communityVisible() && (
                 <MobileNavLink href="/community" active={isActive("/community") || isActive("/category")} onClick={() => setMenuOpen(false)} icon="chat">종목 후기</MobileNavLink>
               )}
-              <MobileNavLink href="/jobs" active={isActive("/jobs")} onClick={() => setMenuOpen(false)} icon="briefcase">스포츠 구인</MobileNavLink>
+              {jobsVisible() && (
+                <MobileNavLink href="/jobs" active={isActive("/jobs")} onClick={() => setMenuOpen(false)} icon="briefcase">스포츠 구인</MobileNavLink>
+              )}
               <MobileNavLink href="/market" active={isActive("/market")} onClick={() => setMenuOpen(false)} icon="trade">스포츠마켓</MobileNavLink>
               <MobileNavLink href="/trade" active={isActive("/trade")} onClick={() => setMenuOpen(false)} icon="trade">거래</MobileNavLink>
               <MobileNavLink href="/my" active={isActive("/my")} onClick={() => setMenuOpen(false)} icon="user">MY</MobileNavLink>
