@@ -39,3 +39,21 @@ export function jobsHidden(): boolean {
 export function jobsVisible(): boolean {
   return !jobsHidden();
 }
+
+/**
+ * 스포츠마켓(/market) 메뉴 노출 여부.
+ * 토스페이먼츠 심사 중 임시 숨김(2026-10-16). 🚨 버튼만 가린다 — 라우트·API 는 그대로.
+ * 끄는 법: NEXT_PUBLIC_HIDE_MARKET=1  /  켜는 법: 그 환경변수를 **지운다**
+ */
+export function marketVisible(): boolean {
+  return process.env.NEXT_PUBLIC_HIDE_MARKET !== "1";
+}
+
+/**
+ * 거래(/trade) 메뉴 노출 여부.
+ * 토스페이먼츠 심사 중 임시 숨김(2026-10-16). 🚨 버튼만 가린다 — 라우트·API 는 그대로.
+ * 끄는 법: NEXT_PUBLIC_HIDE_TRADE=1  /  켜는 법: 그 환경변수를 **지운다**
+ */
+export function tradeVisible(): boolean {
+  return process.env.NEXT_PUBLIC_HIDE_TRADE !== "1";
+}
