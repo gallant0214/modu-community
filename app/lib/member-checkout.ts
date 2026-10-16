@@ -16,19 +16,23 @@ import { ONLINE_SELLABLE_TYPES as SELLABLE, ADDON_TYPES as ADDONS } from "@/app/
 export const ORDER_TTL_MINUTES = 30;
 
 /**
- * 온라인 판매 스위치.
+ * **센터 이용권** 온라인 판매 스위치 (회원이 헬스 회원권을 사는 쪽).
  *
  * 🚨 기본은 **꺼짐**이다. PG 테스트 채널은 돈이 실제로 빠지지 않는데
  *    그 상태로 열어두면 가짜 결제로 진짜 이용권이 발급된다.
  *
- *   PORTONE_LIVE=1          → 포트원 **실연동** 채널을 꽂았다는 명시 (현재 PG)
- *   ONLINE_SALES_ENABLED=1  → 테스트 채널로도 판매 허용 (운영 DB 리허설 때만)
+ *   ONLINE_SALES_ENABLED=1  → 센터 이용권 판매를 연다
  *   TOSS_SECRET_KEY=live_…  → 토스 시절의 조건. 토스 계약이 거절돼 쓰이지 않지만
  *                             과거 설정이 남은 환경에서 갑자기 꺼지지 않게 남겨둔다.
+ *
+ * 🚨 **`PORTONE_LIVE` 는 보지 않는다.** 그 변수는 "CRM 이용권(SaaS)을 파는 포트원
+ *    채널이 실연동이다" 라는 뜻이라 센터 이용권 판매와 아무 상관이 없다.
+ *    예전에 포트원이 센터 이용권용 PG 였을 때 붙여둔 조건인데, 지금 그대로 두면
+ *    **SaaS 를 실연동으로 켜는 순간 헬스 회원권 판매까지 같이 열린다.**
+ *    두 판매는 상품도 구매자도 PG 도 다르다 — 스위치를 섞지 않는다.
  */
 export function onlineSalesEnabled(): boolean {
   if (process.env.ONLINE_SALES_ENABLED === "1") return true;
-  if (process.env.PORTONE_LIVE === "1") return true;
   const k = process.env.TOSS_SECRET_KEY;
   return !!k && !k.startsWith("test_");
 }
