@@ -130,6 +130,30 @@ export interface QuoteCoupon {
  * 아직 결제되지 않은 내 주문들이 선점하고 있는 마일리지 합.
  * 결제창을 두 개 띄워 같은 마일리지를 두 번 쓰는 걸 막는다.
  */
+/**
+ * 회원이 새 결제를 시작할 때, 결제를 끝내지 않고 남겨둔 본인의 '미결제(pending)' 주문의
+ * 마일리지 보류를 즉시 푼다. (만료시각만 과거로 당긴다 — status 는 pending 그대로 두어
+ * 혹시 그 주문이 실제로 결제 완료되면 웹훅이 여전히 구제 발급할 수 있게 한다.)
+ * 미결제 주문이 30분간 마일리지를 묶어 재시도를 막던 문제 해결.
+ */
+export async function releaseMemberPendingHolds(opts: {
+  centerId: number;
+  memberId: number;
+  exceptOrderId?: number;
+}): Promise<void> {
+  const past = new Date(Date.now() - 60_000).toISOString();
+  let q = supabase
+    .from("crm_orders")
+    .update({ expires_at: past, updated_at: new Date().toISOString() } as never)
+    .eq("center_id", opts.centerId)
+    .eq("member_id", opts.memberId)
+    .eq("status", "pending")
+    .gt("mileage_used", 0)
+    .gt("expires_at", new Date().toISOString());
+  if (opts.exceptOrderId) q = q.neq("id", opts.exceptOrderId);
+  await q;
+}
+
 export async function heldMileage(opts: {
   centerId: number;
   memberId: number;

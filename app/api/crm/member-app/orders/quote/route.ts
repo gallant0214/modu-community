@@ -5,6 +5,7 @@ import { PRODUCT_SELECT, type SellableProduct } from "@/app/lib/member-purchase"
 import {
   quoteCart,
   expireStaleOrders,
+  releaseMemberPendingHolds,
   onlineSalesEnabled,
   SALES_DISABLED_MESSAGE,
   salesAllowedForMember,
@@ -62,6 +63,8 @@ export async function POST(request: Request) {
 
   // 시한 지난 주문이 잡고 있던 마일리지를 풀어야 가용액이 정확해진다
   await expireStaleOrders({ centerId, memberId: ctx.memberId });
+  // 결제를 안 끝내고 남겨둔 '본인의' 미결제 주문도 풀어준다(재시도 시 마일리지가 묶여 있지 않게)
+  await releaseMemberPendingHolds({ centerId, memberId: ctx.memberId });
 
   const { data } = await supabase
     .from("crm_products")

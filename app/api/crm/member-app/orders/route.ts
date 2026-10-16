@@ -6,6 +6,7 @@ import { portoneImpCode, portoneChannelKey } from "@/app/lib/portone-payments";
 import {
   quoteCart,
   expireStaleOrders,
+  releaseMemberPendingHolds,
   ORDER_TTL_MINUTES,
   onlineSalesEnabled,
   SALES_DISABLED_MESSAGE,
@@ -89,6 +90,8 @@ export async function POST(request: Request) {
 
   // 시한 지난 내 주문을 먼저 정리 — 묶여 있던 쿠폰·마일리지를 이번 주문에 쓸 수 있게
   await expireStaleOrders({ centerId, memberId: ctx.memberId });
+  // 결제를 안 끝내고 남겨둔 '본인의' 미결제 주문도 풀어준다(재시도 시 마일리지가 묶여 있지 않게)
+  await releaseMemberPendingHolds({ centerId, memberId: ctx.memberId });
 
   const { data } = await supabase
     .from("crm_products")
