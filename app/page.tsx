@@ -3,7 +3,7 @@ export const revalidate = false;
 import Link from "next/link";
 import { AppStoreButton } from "@/app/components/app-store-button";
 import { GooglePlayButton } from "@/app/components/google-play-button";
-import { communityVisible } from "@/app/lib/community-visibility";
+import { communityVisible, jobsVisible, tradeVisible } from "@/app/lib/community-visibility";
 
 export default async function Home() {
 
@@ -34,8 +34,14 @@ export default async function Home() {
                 <Link href="/community" className="lp-btn lp-btn-primary">종목 후기 보기</Link>
               )}
               <Link href="/crm/members" className="lp-btn lp-btn-outline">회원관리 CRM</Link>
-              <Link href="/jobs" className="lp-btn lp-btn-outline">구인 공고 탐색</Link>
-              <Link href="/trade" className="lp-btn lp-btn-outline">스포츠 거래 보기</Link>
+              {/* 🚨 PG 심사 중 숨김 — 각 기능의 스위치를 그대로 따른다.
+                  NEXT_PUBLIC_HIDE_JOBS / NEXT_PUBLIC_HIDE_TRADE 를 지우면 돌아온다. */}
+              {jobsVisible() && (
+                <Link href="/jobs" className="lp-btn lp-btn-outline">구인 공고 탐색</Link>
+              )}
+              {tradeVisible() && (
+                <Link href="/trade" className="lp-btn lp-btn-outline">스포츠 거래 보기</Link>
+              )}
               <a
                 href="https://modujidosa.com/"
                 target="_blank"
@@ -221,7 +227,10 @@ export default async function Home() {
           </div></div>
         </section>
 
-        {/* ===== 4. 실기·구술 후기 ===== */}
+        {/* ===== 4. 실기·구술 후기 =====
+            🚨 PG 심사 중 섹션 전체를 숨긴다 (토스: 커뮤니티 기능 노출 불가).
+            콘텐츠·라우트는 그대로이고, NEXT_PUBLIC_HIDE_COMMUNITY 를 지우면 돌아온다. */}
+        {communityVisible() && (
         <section className="lp-section" id="section-community">
           <div className="lp-c"><div className="lp-card">
             <div className="lp-label">실기·구술 후기</div>
@@ -252,8 +261,12 @@ export default async function Home() {
             </div>
           </div></div>
         </section>
+        )}
 
-        {/* ===== 5. 스포츠 구인 공고 ===== */}
+        {/* ===== 5. 스포츠 구인 공고 =====
+            🚨 PG 심사 중 섹션 전체를 숨긴다 (토스: 구인 게시판 노출 불가).
+            콘텐츠·라우트는 그대로이고, NEXT_PUBLIC_HIDE_JOBS 를 지우면 돌아온다. */}
+        {jobsVisible() && (
         <section className="lp-section" id="section-jobs">
           <div className="lp-c"><div className="lp-card">
             <div className="lp-label">스포츠 구인 공고</div>
@@ -284,6 +297,7 @@ export default async function Home() {
             </div>
           </div></div>
         </section>
+        )}
 
         {/* ===== 6. 타겟별 어필 ===== */}
         <section className="lp-section">
