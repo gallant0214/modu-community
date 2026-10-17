@@ -554,6 +554,34 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authStep, tab]);
 
+  // 센터 삭제 — 되돌릴 수 없음(회원·매출·예약 등 전부 삭제). 센터명 입력으로 확인.
+  const [deletingCenterId, setDeletingCenterId] = useState<number | null>(null);
+  const deleteCenter = async (c: AdminCenterRow) => {
+    const typed = window.prompt(
+      `⚠️ '${c.name}' 센터와 이 센터의 모든 데이터(회원·수강권·회원권·매출·예약·출석 등)가 영구 삭제됩니다.\n되돌릴 수 없습니다.\n\n삭제하려면 센터명을 정확히 입력하세요:`
+    );
+    if (typed === null) return; // 취소
+    if (typed.trim() !== c.name.trim()) {
+      window.alert("센터명이 일치하지 않아 취소했습니다.");
+      return;
+    }
+    setDeletingCenterId(c.id);
+    try {
+      const res = await fetch("/api/admin/center-delete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: storedPassword, centerId: c.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "삭제 실패");
+      setCentersList((prev) => prev.filter((x) => x.id !== c.id));
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setDeletingCenterId(null);
+    }
+  };
+
   const openLicense = async (c: AdminCenterRow) => {
     setLicenseView({ id: c.id, name: c.name, business_no: c.business_no, owner_name: c.owner_name, dataUrl: null });
     setLicenseLoading(true);
@@ -2136,6 +2164,7 @@ export default function AdminPage() {
                     <th className="px-3 py-2 text-left">사업자번호</th>
                     <th className="px-3 py-2 text-left">주소</th>
                     <th className="px-3 py-2 text-center">등록증</th>
+                    <th className="px-3 py-2 text-center">관리</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -2178,11 +2207,20 @@ export default function AdminPage() {
                           <span className="text-[11px] text-red-500">미첨부</span>
                         )}
                       </td>
+                      <td className="px-3 py-2 text-center">
+                        <button
+                          onClick={() => deleteCenter(c)}
+                          disabled={deletingCenterId === c.id}
+                          className="rounded-md border border-red-300 px-2.5 py-1 text-[11.5px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                        >
+                          {deletingCenterId === c.id ? "삭제 중…" : "삭제"}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {centersList.length === 0 && !centersLoading && (
                     <tr>
-                      <td colSpan={7} className="px-3 py-8 text-center text-[13px] text-zinc-400">
+                      <td colSpan={8} className="px-3 py-8 text-center text-[13px] text-zinc-400">
                         등록된 센터가 없거나 조건에 맞는 결과가 없습니다.
                       </td>
                     </tr>
