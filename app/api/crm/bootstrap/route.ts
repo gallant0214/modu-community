@@ -141,9 +141,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "mode 값이 잘못됨" }, { status: 400 });
   }
 
-  // 멱등성 처리 (모드별로 다르게):
-  //  - solo: '개인(solo) CRM' 이 이미 있으면 그걸 반환. 센터 가입돼 있어도 개인 CRM 은 새로 만들 수 있게 함.
-  //  - center: 기존 컨텍스트가 있으면 반환(센터 사장 온보딩 중복 방지).
+  // 멱등성 처리:
+  //  - solo: '개인(solo) CRM' 은 1인 1개뿐 — 이미 있으면 그걸 반환(중복 방지).
+  //  - center: 한 사람이 여러 센터를 소유/등록할 수 있으므로 기존 컨텍스트가 있어도 '새 센터'를 생성한다.
+  //    (예전엔 기존 컨텍스트를 반환해 '추가 센터 등록'이 막혀 기존 센터로 이동하는 버그가 있었음)
   if (mode === "solo") {
     const { data: solo } = await supabase
       .from("crm_center_members")
@@ -165,19 +166,6 @@ export async function POST(request: Request) {
         role: "trainer",
         accessLevel: "admin",
         isSoloOwner: true,
-      });
-    }
-  } else {
-    const existing = await loadCrmContextForUid(user.uid);
-    if (existing) {
-      return NextResponse.json({
-        onboarded: true,
-        centerId: existing.centerId,
-        centerName: existing.centerName,
-        centerKind: existing.centerKind,
-        role: existing.role,
-        accessLevel: existing.accessLevel,
-        isSoloOwner: existing.isSoloOwner,
       });
     }
   }
