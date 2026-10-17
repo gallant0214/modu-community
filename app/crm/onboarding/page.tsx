@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone, formatBusinessNo } from "../_components/crm-labels";
+import { setCenterCookie } from "../_components/crm-center-cookie";
 
 type Mode = "solo" | "center";
 type Step = "mode" | "center-search" | "center-register" | "requested";
@@ -109,6 +110,8 @@ export default function CrmOnboardingPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "등록에 실패했습니다");
+      // 새로 만든 개인 CRM 을 접속 컨텍스트로 지정 → 대시보드 레이아웃이 선택화면으로 되돌리지 않게 함
+      if (data?.centerId) setCenterCookie(Number(data.centerId));
       router.replace("/crm/dashboard");
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
@@ -158,6 +161,8 @@ export default function CrmOnboardingPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "등록에 실패했습니다");
+      // 새로 등록한 센터를 접속 컨텍스트로 지정 → 대시보드 레이아웃이 선택화면으로 되돌리지 않게 함
+      if (data?.centerId) setCenterCookie(Number(data.centerId));
       router.replace("/crm/dashboard");
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
