@@ -1488,6 +1488,7 @@ export type Database = {
         Row: {
           id: number
           center_id: number
+          dedupe_key: string | null
           member_id: number
           checked_in_at: string
           source: string
@@ -1497,6 +1498,7 @@ export type Database = {
         Insert: {
           id?: number
           center_id: number
+          dedupe_key?: string | null
           member_id: number
           checked_in_at?: string
           source?: string
@@ -1506,6 +1508,7 @@ export type Database = {
         Update: {
           id?: number
           center_id?: number
+          dedupe_key?: string | null
           member_id?: number
           checked_in_at?: string
           source?: string
@@ -1554,6 +1557,7 @@ export type Database = {
         Update: {
           id?: number
           center_id?: number
+          dedupe_key?: string | null
           member_id?: number
           measured_at?: string
           height_cm?: number | null

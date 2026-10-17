@@ -156,13 +156,38 @@ export async function runCheckIn(
     attendedEarlierToday = (todayRows ?? []).length > 0;
   }
 
+  /* 🚨 동시 중복 삽입 차단 (2026-10-17)
+     위의 '최근 N분 중복' 검사는 조회→삽입 사이에 경합이 생겨, 더블탭·앱 재시도처럼
+     요청이 동시에 오면 둘 다 통과했다(실측: 35ms 차이로 2건 기록 + 적립 2회).
+     → (center_id, dedupe_key) 유니크 인덱스로 DB 가 막고, 충돌(23505)은 중복으로 처리.
+     키 = 회원 + UTC 분 버킷 → 같은 분에 두 번은 한 건만 남는다. */
+  const minuteBucket = new Date(Math.floor(Date.now() / 60000) * 60000).toISOString().slice(0, 16);
+  const dedupeKey = `${member.id}:${minuteBucket}`;
   const { data: created, error } = await supabase
     .from("crm_attendances")
-    .insert({ center_id: centerId, member_id: member.id, source })
+    .insert({ center_id: centerId, member_id: member.id, source, dedupe_key: dedupeKey })
     .select("id, checked_in_at")
     .single();
 
   if (error || !created) {
+    // 유니크 충돌 = 같은 분에 이미 기록됨(동시 요청) → 기존 건으로 '이미 출석' 응답
+    const isConflict = (error as { code?: string } | null)?.code === "23505";
+    if (isConflict) {
+      const { data: existing } = await supabase
+        .from("crm_attendances")
+        .select("id, checked_in_at")
+        .eq("center_id", centerId)
+        .eq("dedupe_key", dedupeKey)
+        .maybeSingle();
+      return {
+        ok: true as const,
+        duplicate: true,
+        member,
+        attendance: existing ?? { id: 0, checked_in_at: new Date().toISOString() },
+        message: "이미 출석하셨습니다.",
+        voice_messages: [] as string[],
+      };
+    }
     return { error: "출석 실패", detail: error?.message, status: 500 as const };
   }
 
