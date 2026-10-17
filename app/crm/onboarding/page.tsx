@@ -367,9 +367,6 @@ export default function CrmOnboardingPage() {
             desc="현재 운영 중인 센터만 등록할 수 있어요. 오픈 예정 센터를 등록하려면 고객센터에 문의해 주세요."
           />
 
-          {/* 진행 스텝 (시각적) — 현재는 '센터 정보' 단계만 활성. 프랜차이즈/카테고리는 추후 확장. */}
-          <StepBar current={3} steps={["운영 형태", "프랜차이즈 정보", "센터 정보", "상품 카테고리"]} />
-
           <SubSection title="센터 정보">
             <Field label="업종" required>
               <select
@@ -674,42 +671,6 @@ function Field({
       )}
       {children}
     </label>
-  );
-}
-
-function StepBar({ current, steps }: { current: number; steps: string[] }) {
-  return (
-    <div className="mb-5 flex items-center gap-1.5">
-      {steps.map((label, i) => {
-        const n = i + 1;
-        const active = n === current;
-        const done = n < current;
-        return (
-          <div key={label} className="flex-1 flex items-center gap-1">
-            <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center text-[11.5px] font-bold ${
-                active
-                  ? "bg-[#6B7B3A] text-white"
-                  : done
-                    ? "bg-[#6B7B3A]/20 text-[#6B7B3A] dark:text-[#A8B87A]"
-                    : "bg-[#EDE4D4] text-[#A89B80] dark:bg-zinc-800 dark:text-zinc-500"
-              }`}
-            >
-              {n}
-            </div>
-            <div
-              className={`text-[11px] truncate ${
-                active
-                  ? "font-semibold text-[#2A251D] dark:text-zinc-100"
-                  : "text-[#A89B80] dark:text-zinc-500"
-              }`}
-            >
-              {label}
-            </div>
-          </div>
-        );
-      })}
-    </div>
   );
 }
 
