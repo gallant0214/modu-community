@@ -62,7 +62,9 @@ export async function GET(
   let passQuery = supabase
     .from("crm_passes")
     .select(
-      "id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, mileage_used, mileage_earned, vat_included, payment_method, payment_method_custom, issued_at, expires_at, status, memo, trainer_member_id, seller_member_id, created_at"
+      // start_date 필수 — 현재보유 카드의 '예정'(아직 시작 전) 칩 판정에 쓰인다.
+      //  🚨 빠져 있어서 수강권만 칩이 안 떴다(2026-10-18 강가희 회원 사례)
+      "id, issue_type, lesson_kind, total_sessions, remaining_sessions, session_minutes, price_won, mileage_used, mileage_earned, vat_included, payment_method, payment_method_custom, issued_at, start_date, expires_at, status, memo, trainer_member_id, seller_member_id, created_at"
     )
     .eq("center_id", targetCenterId)
     .eq("member_id", memberId)
