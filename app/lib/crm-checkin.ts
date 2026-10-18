@@ -452,11 +452,17 @@ export async function awardAttendanceMileage(
   );
   if (amount <= 0) return 0;
 
-  await supabase
+  /* 🚨 하루 1회 적립을 DB 가 보장 (2026-10-18)
+     위의 '오늘 이미 적립?' 조회는 조회→갱신 사이 경합에 노출돼, 동시 요청이면 둘 다
+     통과해 중복 적립됐다(실측: 15명 3,000P).
+     → (center_id, member_id, award_day) 유니크 인덱스. 충돌하면 이미 적립된 것이므로
+       회원 잔액은 건드리지 않고 0 을 돌려준다. */
+  const { error: awardErr } = await supabase
     .from("crm_attendances")
-    .update({ attendance_mileage_awarded: amount } as never)
+    .update({ attendance_mileage_awarded: amount, award_day: ymd } as never)
     .eq("id", attendanceId)
     .eq("center_id", centerId);
+  if (awardErr) return 0; // 23505(하루 1회 충돌) 포함 — 적립하지 않는다
 
   const { data: mem } = await supabase
     .from("crm_members")

@@ -1489,6 +1489,7 @@ export type Database = {
           id: number
           center_id: number
           dedupe_key: string | null
+          award_day: string | null
           member_id: number
           checked_in_at: string
           source: string
@@ -1499,6 +1500,7 @@ export type Database = {
           id?: number
           center_id: number
           dedupe_key?: string | null
+          award_day?: string | null
           member_id: number
           checked_in_at?: string
           source?: string
@@ -1509,6 +1511,7 @@ export type Database = {
           id?: number
           center_id?: number
           dedupe_key?: string | null
+          award_day?: string | null
           member_id?: number
           checked_in_at?: string
           source?: string
