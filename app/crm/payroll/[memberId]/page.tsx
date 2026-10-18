@@ -693,17 +693,12 @@ function MembersTab({ memberId }: { memberId: number }) {
                           (강사 기본 {defaultRate}% 가 기본값 · 바꾼 수강권만 따로 적용돼요)
                         </span>
                       </div>
-                      <div className="space-y-1.5 max-w-[720px]">
-                        {r.passes.map((p) => (
-                          <PassRateRow
-                            key={`${p.id}:${p.commission_rate ?? "base"}:${defaultRate}`}
-                            pass={p}
-                            defaultRate={defaultRate}
-                            saving={savingPass === p.id}
-                            onSave={(raw) => saveRate(r.id, p.id, raw)}
-                          />
-                        ))}
-                      </div>
+                      <PassRateList
+                        passes={r.passes}
+                        defaultRate={defaultRate}
+                        savingPassId={savingPass}
+                        onSave={(passId, raw) => saveRate(r.id, passId, raw)}
+                      />
                     </td>
                   </tr>
                 )}
@@ -714,6 +709,74 @@ function MembersTab({ memberId }: { memberId: number }) {
         </table>
       </div>
     </section>
+  );
+}
+
+/**
+ * 수강권 요율 편집 목록.
+ * 유효(진행중) 수강권 + 가장 최근 만료 수강권 1건은 기본 노출,
+ * 더 과거의 만료 수강권들은 접기/펼치기로 숨긴다 (목록이 길어지면 사용자가 찾기 힘들어 요청됨 2026-10-18).
+ * 과거 요율 override 가 있는 만료 수강권은 중요도가 있으니 접은 상태에서도 함께 보이게 올려둔다.
+ */
+function PassRateList({
+  passes,
+  defaultRate,
+  savingPassId,
+  onSave,
+}: {
+  passes: PassLite[];
+  defaultRate: number;
+  savingPassId: number | null;
+  onSave: (passId: number, raw: string) => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  // 유효 수강권 모두 노출. 만료 중에서는 '요율 override 가 있는 것' + '가장 최근 만료 1건' 을 기본 노출.
+  const activePasses = passes.filter((p) => p.valid);
+  const expiredPasses = passes.filter((p) => !p.valid);
+  const defaultExpired = new Set<number>();
+  if (expiredPasses[0]) defaultExpired.add(expiredPasses[0].id);
+  for (const p of expiredPasses) if (p.commission_rate != null) defaultExpired.add(p.id);
+  const visibleExpired = showAll ? expiredPasses : expiredPasses.filter((p) => defaultExpired.has(p.id));
+  const hiddenCount = expiredPasses.length - visibleExpired.length;
+  return (
+    <div className="space-y-1.5 max-w-[720px]">
+      {activePasses.map((p) => (
+        <PassRateRow
+          key={`${p.id}:${p.commission_rate ?? "base"}:${defaultRate}`}
+          pass={p}
+          defaultRate={defaultRate}
+          saving={savingPassId === p.id}
+          onSave={(raw) => onSave(p.id, raw)}
+        />
+      ))}
+      {visibleExpired.map((p) => (
+        <PassRateRow
+          key={`${p.id}:${p.commission_rate ?? "base"}:${defaultRate}`}
+          pass={p}
+          defaultRate={defaultRate}
+          saving={savingPassId === p.id}
+          onSave={(raw) => onSave(p.id, raw)}
+        />
+      ))}
+      {hiddenCount > 0 && !showAll && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="mt-1 text-[12px] font-semibold text-[#6B7B3A] dark:text-[#A8B87A] hover:underline"
+        >
+          이전 만료 수강권 {hiddenCount}건 더 보기 ▾
+        </button>
+      )}
+      {showAll && expiredPasses.length > 1 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(false)}
+          className="mt-1 text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-400 hover:underline"
+        >
+          접기 ▴
+        </button>
+      )}
+    </div>
   );
 }
 
