@@ -1,6 +1,33 @@
 import { supabase } from "@/app/lib/supabase";
 
 /**
+ * 이용권 구매(온라인 판매) 전용 신규/재등록 판정 (사용자 규칙 2026-10-18):
+ *   - 회원권/수강권을 **하나도 결제한 적이 없으면 신규**.
+ *   - **하나라도 있으면 재등록**.
+ * ⚠️ CRM 통계용 registration_type(2회↑=재등록)과 기준이 다르므로 여기서만 쓴다.
+ *    (신규 회원이 만료 전에 재등록가로 다시 결제할 수 있어야 하기 때문)
+ *    락커·운동복(대여권)은 등록 판정에 넣지 않는다.
+ */
+export async function shopRegistrationType(
+  centerId: number,
+  memberId: number
+): Promise<"신규" | "재등록"> {
+  const [{ count: ms }, { count: ps }] = await Promise.all([
+    supabase
+      .from("crm_memberships")
+      .select("id", { count: "exact", head: true })
+      .eq("center_id", centerId)
+      .eq("member_id", memberId),
+    supabase
+      .from("crm_passes")
+      .select("id", { count: "exact", head: true })
+      .eq("center_id", centerId)
+      .eq("member_id", memberId),
+  ]);
+  return (ms ?? 0) + (ps ?? 0) > 0 ? "재등록" : "신규";
+}
+
+/**
  * 회원의 신규/재등록 구분(`crm_members.registration_type`) 자동 갱신.
  *
  * 기준(사용자 정의): **이용권(회원권) + 수강권의 '등록 횟수'** 로 판정한다.

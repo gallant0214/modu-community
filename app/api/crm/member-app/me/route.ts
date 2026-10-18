@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
+import { shopRegistrationType } from "@/app/lib/crm-registration-type";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +14,16 @@ export async function GET(request: Request) {
   const ctx = await requireMemberForCenter(request, centerId);
   if (isMemberError(ctx)) return ctx;
 
-  // 신규/재등록 구분 — 판매 페이지가 내가 살 수 있는 상품만 보여주는 데 쓴다
   const { data } = await supabase
     .from("crm_members")
-    .select("registration_type, mileage")
+    .select("mileage")
     .eq("id", ctx.memberId)
     .maybeSingle();
-  const m = data as { registration_type: string | null; mileage: number | null } | null;
+  const m = data as { mileage: number | null } | null;
+
+  // 신규/재등록 구분 — 판매 페이지가 내가 살 수 있는 상품만 보여주는 데 쓴다.
+  // 🚨 이용권 구매 전용 규칙: 결제 1건↑=재등록 (CRM 통계용 2회↑와 다름).
+  const registrationType = await shopRegistrationType(ctx.centerId, ctx.memberId);
 
   return NextResponse.json({
     member: {
@@ -28,7 +32,7 @@ export async function GET(request: Request) {
       phone: ctx.phone,
       centerId: ctx.centerId,
       centerName: ctx.centerName,
-      registrationType: m?.registration_type ?? null,
+      registrationType,
       mileage: m?.mileage ?? 0,
     },
   });

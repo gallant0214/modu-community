@@ -11,6 +11,7 @@ import { supabase } from "@/app/lib/supabase";
 import { computeCouponDiscount, effectiveStatus, benefitText, type CouponDef } from "@/app/lib/crm-coupons";
 import type { SellableProduct } from "@/app/lib/member-purchase";
 import { ONLINE_SELLABLE_TYPES as SELLABLE, ADDON_TYPES as ADDONS } from "@/app/lib/crm-online-sale";
+import { shopRegistrationType } from "@/app/lib/crm-registration-type";
 
 /** pending 주문이 살아있는 시간 — 지나면 쿠폰·마일리지 선점이 풀린다 */
 export const ORDER_TTL_MINUTES = 30;
@@ -431,7 +432,9 @@ export async function quoteCart(opts: {
     .eq("center_id", centerId)
     .maybeSingle();
   const mem = memRow as { registration_type: string | null; mileage: number | null } | null;
-  const regType = (mem?.registration_type ?? null) as RegistrationType;
+  // 🚨 이용권 구매 자격은 CRM 통계용 registration_type(2회↑) 이 아니라
+  //    '결제 1건↑=재등록' 규칙을 쓴다(신규 회원도 만료 전 재등록 결제 가능하게).
+  const regType = await shopRegistrationType(centerId, memberId);
   for (const p of products) {
     const err = eligibilityError(p, regType);
     if (err) return { ...empty, ok: false, error: `'${p.name}': ${err}` };
