@@ -32,6 +32,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "상품을 불러오지 못했어요" }, { status: 500 });
   }
 
+  // 번들 구성품 중 '0원 = 증정' 항목을 유형별 라벨로 안내한다("🎁 락커 서비스 증정" 등).
+  const FREEBIE_LABEL: Record<string, string> = {
+    locker: "락커 서비스 증정",
+    apparel: "운동복 증정",
+    membership: "회원권 증정",
+    personal: "수강권 증정",
+    group: "수강권 증정",
+    class: "수강권 증정",
+  };
+
   const products = ((data ?? []) as unknown as SellableProduct[])
     .filter(isOnlineSellable)
     .map((p) => ({
@@ -47,6 +57,12 @@ export async function GET(request: Request) {
       totalSessions: p.total_sessions,
       sessionMinutes: p.session_minutes,
       mileageEarn: p.mileage_earn,
+      // 함께 증정되는 구성품(0원) 안내 라벨
+      freebies: Array.isArray(p.components)
+        ? p.components
+            .filter((c) => c && c.type && (Number(c.price_won) || 0) === 0)
+            .map((c) => FREEBIE_LABEL[String(c.type)] ?? `${c.name ?? ""} 증정`)
+        : [],
     }));
 
   return NextResponse.json({

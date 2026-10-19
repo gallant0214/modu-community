@@ -89,7 +89,7 @@ function SignupDoneInner() {
           <div className="text-[14px] font-bold text-[#2A251D] mb-2">앱 설치 후, 이렇게 연동하세요</div>
           <ol className="space-y-2 text-[13px] text-[#3A342A] leading-relaxed list-decimal list-inside">
             <li>회원용 앱을 열고 <b>“기존 회원 연동”</b>을 선택</li>
-            <li>방금 가입한 <b>센터명</b>과 <b>전화번호</b>를 입력</li>
+            <li>방금 가입한 센터에 등록된 <b>이름</b>과 <b>전화번호</b>를 입력하세요</li>
             <li><b>연동하기</b>를 누르면 내 이용권이 앱에 연결돼요</li>
           </ol>
           <p className="mt-3 text-[11.5px] text-[#A89B80]">
