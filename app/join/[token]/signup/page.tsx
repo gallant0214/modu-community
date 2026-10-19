@@ -718,6 +718,19 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+/** 선택 상태 라디오 동그라미 */
+function Radio({ on }: { on: boolean }) {
+  return (
+    <span
+      className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+        on ? "border-[#6B7B3A]" : "border-[#CFC6AE]"
+      }`}
+    >
+      {on && <span className="w-2.5 h-2.5 rounded-full bg-[#6B7B3A]" />}
+    </span>
+  );
+}
+
 function OptionList({
   options,
   selectedId,
@@ -735,11 +748,12 @@ function OptionList({
           <button
             key={p.id}
             onClick={() => onSelect(p.id)}
-            className={`w-full flex items-center justify-between gap-2 px-4 py-4 rounded-2xl border text-left transition-colors ${
+            className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl border text-left transition-colors ${
               on ? "border-[#6B7B3A] bg-[#6B7B3A]/8" : "border-[#E8E0D0] bg-white"
             }`}
           >
-            <span className="min-w-0">
+            <Radio on={on} />
+            <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-bold text-[#2A251D] truncate">{p.name}</span>
               <span className="block text-[12px] text-[#8C8270]">{durLabel(p.duration_value, p.duration_unit)}</span>
             </span>
@@ -755,11 +769,14 @@ function SkipCard({ active, onClick }: { active: boolean; onClick: () => void })
   return (
     <button
       onClick={onClick}
-      className={`w-full px-4 py-3.5 rounded-2xl border text-[14px] font-semibold transition-colors ${
-        active ? "border-[#6B7B3A] bg-[#6B7B3A]/8 text-[#2A251D]" : "border-[#E8E0D0] bg-white text-[#8C8270]"
+      className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl border text-left transition-colors ${
+        active ? "border-[#6B7B3A] bg-[#6B7B3A]/8" : "border-[#E8E0D0] bg-white"
       }`}
     >
-      선택 안 함
+      <Radio on={active} />
+      <span className={`text-[15px] font-bold ${active ? "text-[#2A251D]" : "text-[#8C8270]"}`}>
+        선택 안 함
+      </span>
     </button>
   );
 }
