@@ -80,6 +80,10 @@ export default function MemberWebSignupPage() {
   const [faceDataUrl, setFaceDataUrl] = useState<string>(""); // 저장 확정된 본인확인 사진
   const [cameraErr, setCameraErr] = useState("");
 
+  // 최종 제출(회원·계약·얼굴·주문 생성 → 결제)
+  const [submitting, setSubmitting] = useState(false);
+  const [submitErr, setSubmitErr] = useState("");
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -254,6 +258,61 @@ export default function MemberWebSignupPage() {
   };
   const saveFace = () => {
     if (facePreview) setFaceDataUrl(facePreview);
+  };
+
+  // 120x120 q60 썸네일 (출석 등록과 동일)
+  const makeThumb = (dataUrl: string): Promise<string> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement("canvas");
+        c.width = 120;
+        c.height = 120;
+        const ctx = c.getContext("2d");
+        if (!ctx) return resolve(dataUrl);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, 0, 0, 120, 120);
+        resolve(c.toDataURL("image/jpeg", 0.6));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+
+  const submitSignup = async () => {
+    if (submitting) return;
+    setSubmitErr("");
+    if (!faceDataUrl) return setSubmitErr("본인 확인 사진을 저장해 주세요");
+    if (!signatureDataUrl) return setSubmitErr("전자계약서 서명이 필요해요");
+    setSubmitting(true);
+    try {
+      const faceThumb = await makeThumb(faceDataUrl);
+      const res = await fetch(`/api/crm/join/signup/submit`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token,
+          name,
+          phone,
+          birth,
+          gender,
+          membershipId,
+          apparelId,
+          lockerId,
+          faceImage: faceDataUrl,
+          faceThumb,
+          signature: signatureDataUrl,
+          termsAccepted: agreed,
+          contractTemplateId: contractTpl?.id,
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok || !d.payUrl) throw new Error(d?.error || "결제를 시작하지 못했어요");
+      window.location.href = d.payUrl;
+    } catch (e) {
+      setSubmitErr(e instanceof Error ? e.message : "네트워크 오류");
+      setSubmitting(false);
+    }
   };
 
   const go = useCallback((next: Step, d: 1 | -1) => {
@@ -593,13 +652,21 @@ export default function MemberWebSignupPage() {
             본인확인 촬영하기
           </button>
         ) : step === "selfie" ? (
-          <button
-            disabled
-            className="w-full py-4 rounded-2xl bg-[#CFC6AE] text-white text-[16px] font-bold cursor-not-allowed"
-            title={faceDataUrl ? "결제 단계는 곧 제공됩니다" : "본인 확인 사진을 촬영·저장해 주세요"}
-          >
-            결제하기 (준비 중)
-          </button>
+          <>
+            {submitErr && (
+              <div className="mb-2 px-3 py-2 rounded-lg bg-red-50 text-[13px] text-red-700 text-center">
+                {submitErr}
+              </div>
+            )}
+            <button
+              onClick={submitSignup}
+              disabled={!faceDataUrl || submitting}
+              className="w-full py-4 rounded-2xl bg-[#6B7B3A] text-white text-[16px] font-bold transition-colors disabled:bg-[#CFC6AE] hover:bg-[#5a6932]"
+              title={faceDataUrl ? "" : "본인 확인 사진을 촬영·저장해 주세요"}
+            >
+              {submitting ? "결제 준비 중…" : `${won(total)}원 결제하기`}
+            </button>
+          </>
         ) : (
           <button
             onClick={next}

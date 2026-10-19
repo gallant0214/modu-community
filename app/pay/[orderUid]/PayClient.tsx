@@ -83,6 +83,8 @@ export default function PayClient(props: {
   policyHref?: string;
   /** 회원앱이 연 결제창인지 — 끝나면 앱으로 되돌려보낸다 */
   returnToApp?: boolean;
+  /** 결제 성공 후 이동할 경로 — 신규 웹 가입은 가입 완료(앱 설치) 화면으로 보낸다 */
+  returnTo?: string;
 }) {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -120,10 +122,11 @@ export default function PayClient(props: {
       u.searchParams.set("t", props.token);
       u.searchParams.set("centerId", String(props.centerId));
       if (props.returnToApp) u.searchParams.set("rn", "1");
+      if (props.returnTo) u.searchParams.set("returnTo", props.returnTo);
       for (const [k, v] of Object.entries(extra ?? {})) u.searchParams.set(k, v);
       return u.toString();
     },
-    [props.orderUid, props.token, props.centerId, props.returnToApp, props.donePath]
+    [props.orderUid, props.token, props.centerId, props.returnToApp, props.returnTo, props.donePath]
   );
 
   function pay() {

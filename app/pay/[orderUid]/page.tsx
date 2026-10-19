@@ -23,10 +23,10 @@ export default async function PayPage({
   searchParams,
 }: {
   params: Promise<{ orderUid: string }>;
-  searchParams: Promise<{ t?: string; rn?: string }>;
+  searchParams: Promise<{ t?: string; rn?: string; returnTo?: string }>;
 }) {
   const { orderUid } = await params;
-  const { t, rn } = await searchParams;
+  const { t, rn, returnTo } = await searchParams;
 
   if (!onlineSalesEnabled()) {
     return <Notice title="준비 중이에요" body={SALES_DISABLED_MESSAGE} />;
@@ -161,6 +161,7 @@ export default async function PayPage({
         channelKey={portoneChannelKey()}
         slug={slug}
         returnToApp={rn === "1"}
+        returnTo={returnTo}
       />
 
       <SellerInfo seller={seller} slug={slug} />

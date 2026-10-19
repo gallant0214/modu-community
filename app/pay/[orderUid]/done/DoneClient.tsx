@@ -47,6 +47,8 @@ export default function DoneClient(props: {
   confirmExtra?: Record<string, string>;
   /** 회원앱이 시스템 브라우저로 연 결제인지 — 끝나면 딥링크로 앱에 돌려준다 */
   returnToApp?: boolean;
+  /** 결제 성공 후 이동할 경로 — 신규 웹 가입 완료(앱 설치) 화면 */
+  returnTo?: string;
 }) {
   const [phase, setPhase] = useState<Phase>(props.impUid ? "confirming" : "failed");
   const [message, setMessage] = useState(props.failMessage || "결제가 취소됐어요");
@@ -89,6 +91,10 @@ export default function DoneClient(props: {
           { type: "payment", ok: true, orderId: data?.orderId, issued: data?.issued },
           props.returnToApp
         );
+        // 신규 웹 가입 등 — 성공 후 지정된 완료 화면으로 이동 (내부 경로만 허용)
+        if (props.returnTo && props.returnTo.startsWith("/")) {
+          setTimeout(() => window.location.replace(props.returnTo as string), 900);
+        }
       } catch {
         setPhase("failed");
         setMessage("네트워크 오류로 결제 확인을 못 했어요. 잠시 후 주문 내역을 확인해주세요.");

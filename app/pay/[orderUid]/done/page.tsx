@@ -36,6 +36,7 @@ export default async function PayDonePage({
       failCode={sp.error_code ?? ""}
       failMessage={sp.error_msg ?? ""}
       returnToApp={sp.rn === "1"}
+      returnTo={sp.returnTo}
     />
   );
 }
