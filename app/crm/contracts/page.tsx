@@ -19,6 +19,8 @@ interface Contract {
   id: number;
   category: string;
   title: string;
+  /** QR 신규 회원 가입 때 서명받을 계약서로 지정됐는지 */
+  signup_enabled?: boolean;
   created_by_uid: string;
   created_at: string;
   updated_at: string;
@@ -61,6 +63,28 @@ export default function CrmContractsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [initialEditing, setInitialEditing] = useState(false);
+  const [signupBusy, setSignupBusy] = useState<number | null>(null);
+
+  /** QR 신규 회원 가입 계약서 지정 토글 — 낙관적 반영 후 PATCH, 실패 시 롤백 */
+  const toggleSignup = async (c: Contract) => {
+    const next = !c.signup_enabled;
+    setSignupBusy(c.id);
+    setList((prev) => prev.map((x) => (x.id === c.id ? { ...x, signup_enabled: next } : x)));
+    try {
+      const token = await getIdToken();
+      const res = await fetch(`/api/crm/contracts/${c.id}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ signup_enabled: next }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setList((prev) => prev.map((x) => (x.id === c.id ? { ...x, signup_enabled: !next } : x)));
+      window.alert("설정을 바꾸지 못했어요. 권한을 확인해 주세요.");
+    } finally {
+      setSignupBusy(null);
+    }
+  };
 
   const load = useCallback(async () => {
     setError("");
@@ -241,6 +265,45 @@ export default function CrmContractsPage() {
                   <div className="mt-0.5 text-[12px] text-[#8C8270] dark:text-zinc-500">
                     생성일 : {formatDateTime(c.created_at)}
                   </div>
+                </button>
+                {/* QR 신규 회원 가입 계약서 지정 — 켜면 가입 플로우의 서명 단계에 이 양식이 뜬다.
+                    한 센터에 여러 개 켜면 가장 최근 생성 양식이 사용됨. */}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!!c.signup_enabled}
+                  disabled={signupBusy === c.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleSignup(c);
+                  }}
+                  title={
+                    c.signup_enabled
+                      ? "QR 신규 회원 가입 때 이 계약서로 서명받아요. 누르면 해제합니다."
+                      : "QR 신규 회원 가입 서명 단계에 쓸 계약서로 지정합니다."
+                  }
+                  className="mt-2.5 inline-flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <span
+                    className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
+                      c.signup_enabled ? "bg-[#6B7B3A]" : "bg-[#D9CDB8] dark:bg-zinc-700"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                        c.signup_enabled ? "left-3.5" : "left-0.5"
+                      }`}
+                    />
+                  </span>
+                  <span
+                    className={`text-[11.5px] font-semibold ${
+                      c.signup_enabled
+                        ? "text-[#6B7B3A] dark:text-[#A8B87A]"
+                        : "text-[#A89B80] dark:text-zinc-500"
+                    }`}
+                  >
+                    {c.signup_enabled ? "신규가입 계약서" : "신규가입용 지정"}
+                  </span>
                 </button>
                 <div className="absolute top-2.5 right-2.5 flex items-center gap-1">
                   <button

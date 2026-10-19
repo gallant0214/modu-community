@@ -28,7 +28,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("crm_contract_templates")
-    .select("id, category, title, created_by_uid, created_at, updated_at")
+    .select("id, category, title, signup_enabled, created_by_uid, created_at, updated_at")
     .eq("center_id", ctx.centerId)
     .eq("status", "active");
 
@@ -93,7 +93,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "계약서 편집 권한이 없습니다" }, { status: 403 });
   }
 
-  let body: { title?: string; category?: string; body?: string; sections?: unknown };
+  let body: {
+    title?: string;
+    category?: string;
+    body?: string;
+    sections?: unknown;
+    signup_enabled?: boolean;
+  };
   try {
     body = await request.json();
   } catch {
@@ -133,8 +139,9 @@ export async function POST(request: Request) {
       title,
       body: bodyText,
       sections: sections as never,
+      signup_enabled: !!body.signup_enabled,
       created_by_uid: ctx.uid,
-    })
+    } as never)
     .select("id")
     .single();
 

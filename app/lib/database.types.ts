@@ -3283,6 +3283,7 @@ export type Database = {
           title: string
           body: string
           sections: unknown
+          signup_enabled: boolean
           created_by_uid: string
           status: string
           created_at: string
@@ -3295,6 +3296,7 @@ export type Database = {
           title: string
           body?: string
           sections?: unknown
+          signup_enabled?: boolean
           created_by_uid: string
           status?: string
           created_at?: string
@@ -3307,6 +3309,7 @@ export type Database = {
           title?: string
           body?: string
           sections?: unknown
+          signup_enabled?: boolean
           created_by_uid?: string
           status?: string
           created_at?: string

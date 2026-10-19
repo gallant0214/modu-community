@@ -634,23 +634,10 @@ export default function CrmProductsPage() {
                         })}
                       </div>
                     )}
-                    <span className="mr-auto" />
-                    {/* 신규 회원 QR 웹 가입 노출 — 헬스이용권·운동복·락커만.
-                        켜면 QR '신규 회원 가입하기' 상품 선택 화면에 바로 나온다 */}
-                    {["membership", "apparel", "locker"].includes(p.type) && (
-                      <FlagSwitch
-                        on={p.signup_enabled === true}
-                        busy={saleBusy === `${p.id}:signup_enabled`}
-                        onToggle={() => toggleSale(p, "signup_enabled")}
-                        onLabel="신규가입 노출"
-                        offLabel="신규"
-                        title={
-                          p.signup_enabled === true
-                            ? "QR 신규 회원 가입 화면에 노출돼요. 누르면 내립니다."
-                            : "QR 신규 회원 가입 화면에 안 나와요. 누르면 가입 화면에 노출합니다."
-                        }
-                      />
-                    )}
+                  </div>
+
+                  {/* 아래 행: 수정 / 삭제 / 신규 스위치 (판매 스위치 행과 분리) */}
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
                       onClick={async () => {
@@ -673,6 +660,23 @@ export default function CrmProductsPage() {
                     >
                       삭제
                     </button>
+                    <span className="mr-auto" />
+                    {/* 신규 회원 QR 웹 가입 노출 — 헬스이용권·운동복·락커만. 행 우측 끝.
+                        켜면 QR '신규 회원 가입하기' 상품 선택 화면에 바로 나온다 */}
+                    {["membership", "apparel", "locker"].includes(p.type) && (
+                      <FlagSwitch
+                        on={p.signup_enabled === true}
+                        busy={saleBusy === `${p.id}:signup_enabled`}
+                        onToggle={() => toggleSale(p, "signup_enabled")}
+                        onLabel="신규가입 노출"
+                        offLabel="신규"
+                        title={
+                          p.signup_enabled === true
+                            ? "QR 신규 회원 가입 화면에 노출돼요. 누르면 내립니다."
+                            : "QR 신규 회원 가입 화면에 안 나와요. 누르면 가입 화면에 노출합니다."
+                        }
+                      />
+                    )}
                   </div>
                 </div>
               </li>

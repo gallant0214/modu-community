@@ -24,7 +24,7 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("crm_contract_templates")
-    .select("id, category, title, body, sections, created_by_uid, created_at, updated_at, status")
+    .select("id, category, title, body, sections, signup_enabled, created_by_uid, created_at, updated_at, status")
     .eq("id", contractId)
     .eq("center_id", ctx.centerId)
     .maybeSingle();
@@ -60,6 +60,7 @@ export async function PATCH(
     category?: string;
     body?: string;
     sections?: unknown;
+    signup_enabled?: boolean;
   };
   try {
     body = await request.json();
@@ -68,6 +69,9 @@ export async function PATCH(
   }
 
   const patch: Record<string, unknown> = {};
+  if (body.signup_enabled !== undefined) {
+    patch.signup_enabled = !!body.signup_enabled;
+  }
   if (body.title !== undefined) {
     const v = body.title.trim();
     if (!v) return NextResponse.json({ error: "계약서 제목을 입력해주세요" }, { status: 400 });

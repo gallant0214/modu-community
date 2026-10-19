@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { contractBodyHtml } from "@/app/lib/contract-body";
 
-/* 신규 회원 웹 가입 (토스 스타일) — QR/가입링크 → '신규 회원 가입하기' 로 진입.
-   단계: 정보입력 → 헬스이용권 → 운동복 → 락커 → 요약 → (다음 단계: 전자계약서·셀카·결제·앱연동 — 준비 중)
+/* 신규 회원 웹 가입 — QR/가입링크 → '신규 회원 가입하기' 로 진입.
+   단계: 정보입력 → 헬스이용권 → 운동복 → 락커 → 요약 → 전자계약서(서명) → (다음: 셀카·결제·앱연동)
    한 화면 한 질문 · 큰 제목 · 하단 CTA · 슬라이드 전환. */
 
 interface ProductOpt {
@@ -22,9 +23,20 @@ interface SignupProducts {
   apparel: ProductOpt[];
   lockers: ProductOpt[];
 }
+interface ContractSection {
+  key: string;
+  title: string;
+  body: string;
+  required: boolean;
+}
+interface ContractTemplate {
+  id: number;
+  title: string;
+  sections: ContractSection[];
+}
 
-type Step = "info" | "membership" | "apparel" | "locker" | "summary";
-const ORDER: Step[] = ["info", "membership", "apparel", "locker", "summary"];
+type Step = "info" | "membership" | "apparel" | "locker" | "summary" | "contract";
+const ORDER: Step[] = ["info", "membership", "apparel", "locker", "summary", "contract"];
 
 const won = (n: number) => n.toLocaleString("ko-KR");
 const durLabel = (v: number, u: string) =>
@@ -52,16 +64,28 @@ export default function MemberWebSignupPage() {
   const [apparelId, setApparelId] = useState<number | null>(null); // null=선택 안 함
   const [lockerId, setLockerId] = useState<number | null>(null);
 
+  // 전자계약서
+  const [contractTpl, setContractTpl] = useState<ContractTemplate | null>(null);
+  const [agreed, setAgreed] = useState<Record<string, boolean>>({});
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingRef = useRef(false);
+  const [signatureEmpty, setSignatureEmpty] = useState(true);
+  // 서명 data URL (계약서 단계를 벗어나도 유지 — 캔버스는 언마운트되므로 값만 보관)
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string>("");
+
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/crm/join/signup-products?token=${encodeURIComponent(token)}`, {
-          cache: "no-store",
-        });
-        const d = await res.json();
-        if (!res.ok) throw new Error(d?.error || "불러오지 못했어요");
+        const [pRes, cRes] = await Promise.all([
+          fetch(`/api/crm/join/signup-products?token=${encodeURIComponent(token)}`, { cache: "no-store" }),
+          fetch(`/api/crm/join/signup-contract?token=${encodeURIComponent(token)}`, { cache: "no-store" }),
+        ]);
+        const d = await pRes.json();
+        if (!pRes.ok) throw new Error(d?.error || "불러오지 못했어요");
         setData(d);
+        const c = await cRes.json();
+        if (cRes.ok && c.template) setContractTpl(c.template as ContractTemplate);
       } catch (e) {
         setLoadErr(e instanceof Error ? e.message : "네트워크 오류");
       } finally {
@@ -97,6 +121,75 @@ export default function MemberWebSignupPage() {
   };
   const birthError = birth.length >= 8 && !isValidBirth(birth);
 
+  // 계약서 섹션/필수동의 상태
+  const sections = contractTpl?.sections ?? [];
+  const requiredSections = sections.filter((s) => s?.required);
+  const requiredOk =
+    requiredSections.length > 0 && requiredSections.every((s) => agreed[s.key]);
+  const toggleAgree = (k: string) => setAgreed((prev) => ({ ...prev, [k]: !prev[k] }));
+
+  // 서명 캔버스 초기화 — 계약서 단계에 들어올 때마다
+  useEffect(() => {
+    if (step !== "contract") return;
+    const c = canvasRef.current;
+    if (!c) return;
+    const dpr = window.devicePixelRatio || 1;
+    c.width = c.clientWidth * dpr;
+    c.height = c.clientHeight * dpr;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#2A251D";
+    // 이전에 서명했다가 되돌아온 경우: 빈 캔버스로 두되 기존 값 유지(재서명 시 덮어씀)
+    setSignatureEmpty(!signatureDataUrl);
+  }, [step, contractTpl, signatureDataUrl]);
+
+  const sigPos = (e: React.MouseEvent | React.TouchEvent) => {
+    const c = canvasRef.current;
+    if (!c) return { x: 0, y: 0 };
+    const r = c.getBoundingClientRect();
+    if ("touches" in e) {
+      const t = e.touches[0];
+      return { x: t.clientX - r.left, y: t.clientY - r.top };
+    }
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+  const sigStart = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    drawingRef.current = true;
+    const { x, y } = sigPos(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+  const sigDraw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!drawingRef.current) return;
+    e.preventDefault();
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const { x, y } = sigPos(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    setSignatureEmpty(false);
+  };
+  const sigEnd = () => {
+    drawingRef.current = false;
+    const c = canvasRef.current;
+    if (c && !signatureEmpty) setSignatureDataUrl(c.toDataURL("image/png"));
+  };
+  const sigClear = () => {
+    const c = canvasRef.current;
+    const ctx = c?.getContext("2d");
+    if (!c || !ctx) return;
+    ctx.clearRect(0, 0, c.width, c.height);
+    setSignatureEmpty(true);
+    setSignatureDataUrl("");
+  };
+
   const go = useCallback((next: Step, d: 1 | -1) => {
     setDir(d);
     setStep(next);
@@ -122,8 +215,9 @@ export default function MemberWebSignupPage() {
         !!gender
       );
     if (step === "membership") return membershipId != null;
+    if (step === "contract") return !!contractTpl && requiredOk && !signatureEmpty;
     return true; // apparel/locker/summary 는 선택 안 함 허용
-  }, [step, name, phone, birth, gender, membershipId]);
+  }, [step, name, phone, birth, gender, membershipId, contractTpl, requiredOk, signatureEmpty]);
 
   const selMembership = data?.memberships.find((p) => p.id === membershipId) ?? null;
   const selApparel = data?.apparel.find((p) => p.id === apparelId) ?? null;
@@ -256,8 +350,83 @@ export default function MemberWebSignupPage() {
               </div>
             </div>
             <div className="mt-4 rounded-xl bg-[#FBF7EB] border border-[#EFE7D5] px-4 py-3 text-[12px] text-[#8C8270] leading-relaxed">
-              다음 단계(전자계약서 서명 · 본인확인 촬영 · 결제)는 순차적으로 제공될 예정입니다.
+              다음 단계에서 전자계약서에 동의·서명하면, 이어서 본인확인 촬영과 결제가 진행됩니다.
             </div>
+          </StepBody>
+        )}
+
+        {step === "contract" && (
+          <StepBody title="전자계약서에 동의해 주세요" sub={contractTpl?.title || "헬스 이용 계약서"}>
+            {!contractTpl ? (
+              <Empty text="센터에 등록된 가입 계약서가 없어요. 센터에 문의해 주세요." />
+            ) : (
+              <>
+                {sections.map((s, i) => (
+                  <div key={s.key || i} className="rounded-2xl border border-[#E8E0D0] bg-white p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[14px] font-bold text-[#2A251D]">
+                        {s.title || `약관 ${i + 1}`}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                          s.required ? "bg-[#F5E4C8] text-[#B47B2A]" : "bg-[#F0ECE1] text-[#8C8270]"
+                        }`}
+                      >
+                        {s.required ? "필수" : "선택"}
+                      </span>
+                    </div>
+                    <div
+                      className="text-[12.5px] leading-relaxed text-[#3A342A] max-h-[220px] overflow-y-auto px-3 py-2.5 border border-[#EFE7D5] rounded-lg bg-[#FBF7EB]/50"
+                      dangerouslySetInnerHTML={{ __html: contractBodyHtml(s.body) }}
+                    />
+                    <label className="mt-3 flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!agreed[s.key]}
+                        onChange={() => toggleAgree(s.key)}
+                        className="w-4 h-4 accent-[#6B7B3A]"
+                      />
+                      <span className="text-[13px] text-[#3A342A]">
+                        [{s.required ? "필수" : "선택"}] 위 내용을 확인하였으며 동의합니다.
+                      </span>
+                    </label>
+                  </div>
+                ))}
+
+                <div className="rounded-2xl border border-[#E8E0D0] bg-white p-4">
+                  <div className="text-[14px] font-bold text-[#2A251D] mb-2">본인 서명</div>
+                  <div className="rounded-lg border border-[#E8E0D0] bg-white overflow-hidden">
+                    <canvas
+                      ref={canvasRef}
+                      className="block w-full h-40 touch-none cursor-crosshair"
+                      onMouseDown={sigStart}
+                      onMouseMove={sigDraw}
+                      onMouseUp={sigEnd}
+                      onMouseLeave={sigEnd}
+                      onTouchStart={sigStart}
+                      onTouchMove={sigDraw}
+                      onTouchEnd={sigEnd}
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-[12px] text-[#A89B80]">
+                      {signatureEmpty ? "여기에 서명해 주세요" : "서명 완료"}
+                    </span>
+                    <button type="button" onClick={sigClear} className="text-[12px] text-[#6B5D47] underline">
+                      서명 지우기
+                    </button>
+                  </div>
+                </div>
+
+                <div className="text-[12px] text-[#8C8270]">
+                  {!requiredOk
+                    ? `필수 약관 ${requiredSections.length}개 중 ${requiredSections.filter((s) => agreed[s.key]).length}개 동의 완료`
+                    : signatureEmpty
+                      ? "필수 약관 동의 완료 — 위 서명란에 서명해 주세요."
+                      : "모두 준비됐어요. 아래 버튼으로 다음 단계로 진행하세요."}
+                </div>
+              </>
+            )}
           </StepBody>
         )}
       </div>
@@ -266,10 +435,18 @@ export default function MemberWebSignupPage() {
       <div className="sticky bottom-0 bg-gradient-to-t from-[#FBF7EB] via-[#FBF7EB] to-transparent pt-4 pb-5">
         {step === "summary" ? (
           <button
+            onClick={next}
+            className="w-full py-4 rounded-2xl bg-[#6B7B3A] text-white text-[16px] font-bold transition-colors hover:bg-[#5a6932]"
+          >
+            전자계약서 작성하기
+          </button>
+        ) : step === "contract" ? (
+          <button
             disabled
             className="w-full py-4 rounded-2xl bg-[#CFC6AE] text-white text-[16px] font-bold cursor-not-allowed"
+            title={canNext ? "" : "필수 약관 동의와 서명을 완료해 주세요"}
           >
-            전자계약서 작성하기 (준비 중)
+            본인확인 촬영 (준비 중)
           </button>
         ) : (
           <button
