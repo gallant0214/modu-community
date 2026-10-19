@@ -76,6 +76,26 @@ export default function MemberWebSignupPage() {
     if (d.length < 8) return `${d.slice(0, 3)}-${d.slice(3)}`;
     return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
   };
+  // 생년월일: 숫자만 입력받아 YYYY-MM-DD 로 자동 하이픈
+  const fmtBirth = (v: string) => {
+    const d = v.replace(/\D/g, "").slice(0, 8);
+    if (d.length < 5) return d;
+    if (d.length < 7) return `${d.slice(0, 4)}-${d.slice(4)}`;
+    return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}`;
+  };
+  // 실제 존재하는 날짜 + 합리적 연도(1900~올해) + 미래 아님 검사
+  const isValidBirth = (s: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+    const [y, m, day] = s.split("-").map(Number);
+    const now = new Date();
+    if (y < 1900 || y > now.getFullYear()) return false;
+    if (m < 1 || m > 12) return false;
+    const dt = new Date(y, m - 1, day);
+    if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== day) return false;
+    if (dt.getTime() > now.getTime()) return false; // 미래 날짜 불가
+    return true;
+  };
+  const birthError = birth.length >= 8 && !isValidBirth(birth);
 
   const go = useCallback((next: Step, d: 1 | -1) => {
     setDir(d);
@@ -98,7 +118,7 @@ export default function MemberWebSignupPage() {
       return (
         name.trim().length > 0 &&
         phone.replace(/\D/g, "").length >= 10 &&
-        /^\d{4}-\d{2}-\d{2}$/.test(birth) &&
+        isValidBirth(birth) &&
         !!gender
       );
     if (step === "membership") return membershipId != null;
@@ -160,7 +180,19 @@ export default function MemberWebSignupPage() {
               />
             </Field>
             <Field label="생년월일">
-              <input type="date" value={birth} onChange={(e) => setBirth(e.target.value)} className={inputCls} />
+              <input
+                value={birth}
+                onChange={(e) => setBirth(fmtBirth(e.target.value))}
+                inputMode="numeric"
+                placeholder="19950321"
+                maxLength={10}
+                className={`${inputCls} ${birthError ? "border-red-400 focus:border-red-400" : ""}`}
+              />
+              {birthError && (
+                <div className="mt-1.5 text-[12px] text-red-500">
+                  생년월일을 올바르게 입력해 주세요. (예: 1995-03-21)
+                </div>
+              )}
             </Field>
             <Field label="성별">
               <div className="grid grid-cols-2 gap-2">
