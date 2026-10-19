@@ -18,6 +18,7 @@ import { supabase } from "@/app/lib/supabase";
 import {
   PRODUCT_SELECT,
   fulfillPurchase,
+  fulfillProductComponents,
   recordPayment,
   type SellableProduct,
 } from "@/app/lib/member-purchase";
@@ -181,6 +182,35 @@ export async function completeOrder(opts: {
       name: item.product_name,
       summary: outcome.summary as unknown as Record<string, unknown>,
     });
+
+    /* ── 묶음(번들) 구성품 발급 — 회원권+락커처럼 상품에 딸린 항목(보통 0원) ──
+       🚨 앱 결제가 components 를 안 펼쳐 락커가 누락되던 버그(이승은 님) 수정.
+          본품과 같은 시작일로 함께 발급하고, 0원 결제원장을 주문에 건다. */
+    try {
+      const compOutcomes = await fulfillProductComponents({
+        centerId,
+        memberId,
+        product,
+        startDate: order.start_date ?? null,
+        pgMethod: pg?.method ?? (order.amount_won === 0 ? "쿠폰·마일리지" : null),
+        channel: order.channel,
+      });
+      for (const co of compOutcomes) {
+        await recordPayment({
+          centerId,
+          memberId,
+          orderId: order.id,
+          orderItemId: null, // 🚨 본품이 order_item_id 를 이미 점유(uniq 제약) → 구성품은 NULL
+          amountWon: 0,
+          outcome: co,
+          note: `${channelLabel} · 번들 구성품`,
+        });
+        issued.push({ kind: co.kind, id: co.id, name: "번들 구성품", summary: co.summary as unknown as Record<string, unknown> });
+      }
+    } catch (e) {
+      // 구성품 발급 실패가 본품 결제까지 되돌리면 안 된다 — 로그만 남기고 진행(직원이 수동 보완).
+      console.error("[order-complete] bundle component fulfill error", order.id, e);
+    }
   }
 
   /* ── 마일리지 정산 (주문 단위 1회) ─────────────────── */

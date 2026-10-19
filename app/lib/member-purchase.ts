@@ -49,13 +49,27 @@ export interface SellableProduct {
   /** 온라인 구매 자격: any(누구나) | new(신규만) | rejoin(재등록만) */
   online_eligibility: string;
   mileage_usable: boolean;
+  /** 묶음(번들) 구성품 — 회원권+락커처럼 상품 하나에 딸려 함께 발급되는 항목들(0원이 보통) */
+  components?: BundleComponent[] | null;
+}
+
+/** crm_products.components JSON 한 항목 */
+export interface BundleComponent {
+  name?: string;
+  type?: string;
+  billing_mode?: string;
+  price_won?: number;
+  duration_value?: number | null;
+  duration_unit?: string | null;
+  total_sessions?: number | null;
+  session_minutes?: number | null;
 }
 
 export const PRODUCT_SELECT =
   "id, center_id, type, billing_mode, name, description, price_won, vat_included, " +
   "duration_value, duration_unit, total_sessions, session_minutes, capacity, " +
   "mileage_earn, attendance_mileage_earn, status, sale_enabled, online_sale_enabled, " +
-  "online_eligibility, mileage_usable";
+  "online_eligibility, mileage_usable, components";
 
 /** 앱에서 발급 처리가 구현된 유형만 판매한다 */
 const APP_SELLABLE_TYPES = new Set([
@@ -291,6 +305,69 @@ export async function fulfillPurchase(opts: {
     id: (data as { id: number }).id,
     summary: { startDate, expiresAt, sessions: totalSessions || null },
   };
+}
+
+/**
+ * 묶음(번들) 상품의 구성품 발급 — 회원권+락커처럼 상품 하나에 딸린 항목들.
+ *
+ * 🚨 왜 필요한가: CRM 직원 발급은 화면이 components 를 읽어 각 구성품을 따로 발급하지만,
+ *    회원앱 결제는 최상위 상품만 발급해 락커 등 구성품이 누락됐다(이승은 님 사례).
+ *    앱 결제에서도 같은 결과가 나오도록 구성품을 여기서 함께 발급한다.
+ *
+ * 구성품은 보통 0원이라 결제 금액에 영향 없다. 시작일은 본품과 동일하게 맞춘다.
+ */
+export async function fulfillProductComponents(opts: {
+  centerId: number;
+  memberId: number;
+  product: SellableProduct;
+  /** 본품과 동일 시작일(YYYY-MM-DD). 없으면 각 유형 기존 규칙(이어붙이기/오늘) */
+  startDate?: string | null;
+  pgMethod?: string | null;
+  channel?: string | null;
+}): Promise<FulfillOutcome[]> {
+  const comps = Array.isArray(opts.product.components) ? opts.product.components : [];
+  const out: FulfillOutcome[] = [];
+  for (const comp of comps) {
+    if (!comp || !comp.type || !APP_SELLABLE_TYPES.has(String(comp.type))) continue;
+    // 구성품을 발급 가능한 합성 상품으로 변환 (자체 product id 는 없음 → 0)
+    const synthetic: SellableProduct = {
+      id: 0,
+      center_id: opts.centerId,
+      type: String(comp.type),
+      billing_mode: String(comp.billing_mode ?? "period"),
+      name: String(comp.name ?? opts.product.name),
+      description: null,
+      price_won: Math.max(0, Math.floor(Number(comp.price_won) || 0)),
+      vat_included: opts.product.vat_included,
+      duration_value: comp.duration_value ?? null,
+      duration_unit: comp.duration_unit ?? null,
+      total_sessions: comp.total_sessions ?? null,
+      session_minutes: comp.session_minutes ?? null,
+      capacity: null,
+      mileage_earn: 0,
+      attendance_mileage_earn: 0,
+      status: "active",
+      sale_enabled: true,
+      online_sale_enabled: true,
+      online_eligibility: "any",
+      mileage_usable: false,
+      components: null,
+    };
+    const outcome = await fulfillPurchase({
+      centerId: opts.centerId,
+      memberId: opts.memberId,
+      product: synthetic,
+      amountWon: synthetic.price_won,
+      discountWon: 0,
+      mileageUsed: 0,
+      mileageEarn: 0,
+      pgMethod: opts.pgMethod ?? null,
+      channel: opts.channel ?? null,
+      startDate: opts.startDate ?? null,
+    });
+    if (outcome.kind !== "none") out.push(outcome);
+  }
+  return out;
 }
 
 /** 발급 결과에 맞춰 결제 원장(crm_payments)에 기록 */
