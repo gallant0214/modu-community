@@ -248,13 +248,16 @@ export default function CrmContractsPage() {
         ) : (
           <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {list.map((c) => (
-              <li key={c.id} className="relative group">
+              <li
+                key={c.id}
+                className="relative group flex flex-col rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors"
+              >
                 <button
                   onClick={() => {
                     setInitialEditing(false);
                     setDetailId(c.id);
                   }}
-                  className="w-full text-left px-4 py-3.5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 hover:border-[#6B7B3A]/50 transition-colors h-full"
+                  className="w-full flex-1 text-left px-4 pt-3.5 pb-3"
                 >
                   <div className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100 break-keep pr-16">
                     {c.title}
@@ -282,27 +285,30 @@ export default function CrmContractsPage() {
                       ? "QR 신규 회원 가입 때 이 계약서로 서명받아요. 누르면 해제합니다."
                       : "QR 신규 회원 가입 서명 단계에 쓸 계약서로 지정합니다."
                   }
-                  className="mt-2.5 inline-flex items-center gap-1.5 disabled:opacity-50"
+                  className="mx-3 mb-3 px-3 py-2 rounded-xl border border-[#EFE7D5] dark:border-zinc-800 bg-[#FBF7EB]/60 dark:bg-zinc-950/40 flex items-center justify-between gap-2 disabled:opacity-50"
                 >
-                  <span
-                    className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
-                      c.signup_enabled ? "bg-[#6B7B3A]" : "bg-[#D9CDB8] dark:bg-zinc-700"
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
-                        c.signup_enabled ? "left-3.5" : "left-0.5"
-                      }`}
-                    />
+                  <span className="text-[12px] font-semibold text-[#6B5D47] dark:text-zinc-300">
+                    신규 회원 가입 계약서로 사용
                   </span>
-                  <span
-                    className={`text-[11.5px] font-semibold ${
-                      c.signup_enabled
-                        ? "text-[#6B7B3A] dark:text-[#A8B87A]"
-                        : "text-[#A89B80] dark:text-zinc-500"
-                    }`}
-                  >
-                    {c.signup_enabled ? "신규가입 계약서" : "신규가입용 지정"}
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
+                        c.signup_enabled ? "bg-[#6B7B3A]" : "bg-[#D9CDB8] dark:bg-zinc-700"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                          c.signup_enabled ? "left-3.5" : "left-0.5"
+                        }`}
+                      />
+                    </span>
+                    <span
+                      className={`text-[11.5px] font-bold ${
+                        c.signup_enabled ? "text-[#6B7B3A] dark:text-[#A8B87A]" : "text-[#A89B80] dark:text-zinc-500"
+                      }`}
+                    >
+                      {c.signup_enabled ? "ON" : "OFF"}
+                    </span>
                   </span>
                 </button>
                 <div className="absolute top-2.5 right-2.5 flex items-center gap-1">
