@@ -35,8 +35,8 @@ interface ContractTemplate {
   sections: ContractSection[];
 }
 
-type Step = "info" | "membership" | "apparel" | "locker" | "summary" | "contract";
-const ORDER: Step[] = ["info", "membership", "apparel", "locker", "summary", "contract"];
+type Step = "info" | "membership" | "apparel" | "locker" | "summary" | "contract" | "selfie";
+const ORDER: Step[] = ["info", "membership", "apparel", "locker", "summary", "contract", "selfie"];
 
 const won = (n: number) => n.toLocaleString("ko-KR");
 const durLabel = (v: number, u: string) =>
@@ -72,6 +72,13 @@ export default function MemberWebSignupPage() {
   const [signatureEmpty, setSignatureEmpty] = useState(true);
   // 서명 data URL (계약서 단계를 벗어나도 유지 — 캔버스는 언마운트되므로 값만 보관)
   const [signatureDataUrl, setSignatureDataUrl] = useState<string>("");
+
+  // 셀카 본인확인 촬영
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [facePreview, setFacePreview] = useState<string | null>(null); // 촬영 직후 미리보기(저장 전)
+  const [faceDataUrl, setFaceDataUrl] = useState<string>(""); // 저장 확정된 본인확인 사진
+  const [cameraErr, setCameraErr] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -188,6 +195,65 @@ export default function MemberWebSignupPage() {
     ctx.clearRect(0, 0, c.width, c.height);
     setSignatureEmpty(true);
     setSignatureDataUrl("");
+  };
+
+  // ── 셀카 카메라 ──
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }, []);
+  const startCamera = useCallback(async () => {
+    setCameraErr("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+    } catch {
+      setCameraErr("카메라를 열 수 없어요. 권한을 확인해 주세요.");
+    }
+  }, []);
+  // 셀카 단계 진입 시(저장본·미리보기가 없을 때) 카메라 시작, 벗어나면 정지
+  useEffect(() => {
+    if (step === "selfie" && !facePreview && !faceDataUrl) {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+    return () => stopCamera();
+  }, [step, facePreview, faceDataUrl, startCamera, stopCamera]);
+
+  // 800x800 q82 (출석 등록과 동일 등급)
+  const captureFace = () => {
+    const video = videoRef.current;
+    if (!video || video.readyState < 2) return;
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const side = Math.min(vw, vh);
+    const sx = (vw - side) / 2;
+    const sy = (vh - side) / 2;
+    const c = document.createElement("canvas");
+    c.width = 800;
+    c.height = 800;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(video, sx, sy, side, side, 0, 0, 800, 800);
+    setFacePreview(c.toDataURL("image/jpeg", 0.82));
+    stopCamera();
+  };
+  const retakeFace = () => {
+    setFacePreview(null);
+    setFaceDataUrl("");
+  };
+  const saveFace = () => {
+    if (facePreview) setFaceDataUrl(facePreview);
   };
 
   const go = useCallback((next: Step, d: 1 | -1) => {
@@ -429,6 +495,83 @@ export default function MemberWebSignupPage() {
             )}
           </StepBody>
         )}
+
+        {step === "selfie" && (
+          <StepBody title="본인 확인 사진을 촬영해 주세요" sub="센터 본인 확인용">
+            {/* 카메라 위 안내 문구 */}
+            <div className="rounded-xl bg-[#FBF7EB] border border-[#EFE7D5] px-4 py-3 text-[12.5px] text-[#6B5D47] leading-relaxed text-center">
+              마스크를 벗어주세요 · 정면을 바라봐주세요
+              <br />센터에 본인 확인 용으로만 저장됩니다
+            </div>
+
+            <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-black">
+              {facePreview || faceDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={facePreview || faceDataUrl}
+                  alt="촬영본"
+                  className="w-full h-full object-cover"
+                  style={{ transform: "scaleX(-1)" }}
+                />
+              ) : (
+                <>
+                  <video
+                    ref={videoRef}
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
+                    style={{ transform: "scaleX(-1)" }}
+                  />
+                  {/* 출석 화면과 동일한 얼굴 가이드 동그라미 */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-[62%] h-[78%] rounded-[50%] border-2 border-white/70" />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {cameraErr && (
+              <div className="px-3 py-2 rounded-lg bg-red-50 text-[12.5px] text-red-700 text-center">
+                {cameraErr}
+              </div>
+            )}
+
+            {faceDataUrl ? (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[13px] font-semibold text-[#6B7B3A]">✓ 본인 확인 사진이 저장됐어요</span>
+                <button type="button" onClick={retakeFace} className="text-[13px] text-[#6B5D47] underline">
+                  다시 촬영
+                </button>
+              </div>
+            ) : facePreview ? (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={retakeFace}
+                  className="flex-1 py-3.5 rounded-xl border border-[#E8E0D0] text-[15px] font-semibold text-[#6B5D47]"
+                >
+                  다시 촬영
+                </button>
+                <button
+                  type="button"
+                  onClick={saveFace}
+                  className="flex-1 py-3.5 rounded-xl bg-[#6B7B3A] text-white text-[15px] font-bold hover:bg-[#5a6932]"
+                >
+                  저장하기
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={captureFace}
+                disabled={!!cameraErr}
+                className="w-full py-3.5 rounded-xl bg-[#6B7B3A] text-white text-[16px] font-bold hover:bg-[#5a6932] disabled:bg-[#CFC6AE]"
+              >
+                촬영
+              </button>
+            )}
+          </StepBody>
+        )}
       </div>
 
       {/* 하단 CTA */}
@@ -442,11 +585,20 @@ export default function MemberWebSignupPage() {
           </button>
         ) : step === "contract" ? (
           <button
-            disabled
-            className="w-full py-4 rounded-2xl bg-[#CFC6AE] text-white text-[16px] font-bold cursor-not-allowed"
+            onClick={next}
+            disabled={!canNext}
+            className="w-full py-4 rounded-2xl bg-[#6B7B3A] text-white text-[16px] font-bold transition-colors disabled:bg-[#CFC6AE] hover:bg-[#5a6932]"
             title={canNext ? "" : "필수 약관 동의와 서명을 완료해 주세요"}
           >
-            본인확인 촬영 (준비 중)
+            본인확인 촬영하기
+          </button>
+        ) : step === "selfie" ? (
+          <button
+            disabled
+            className="w-full py-4 rounded-2xl bg-[#CFC6AE] text-white text-[16px] font-bold cursor-not-allowed"
+            title={faceDataUrl ? "결제 단계는 곧 제공됩니다" : "본인 확인 사진을 촬영·저장해 주세요"}
+          >
+            결제하기 (준비 중)
           </button>
         ) : (
           <button
