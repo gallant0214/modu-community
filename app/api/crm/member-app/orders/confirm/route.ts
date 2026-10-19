@@ -16,7 +16,7 @@ export const maxDuration = 60;
 
 const ORDER_SELECT =
   "id, center_id, member_id, product_id, product_name, amount_won, list_price_won, " +
-  "coupon_issue_id, coupon_discount_won, mileage_used, mileage_earned, channel, status, " +
+  "coupon_issue_id, coupon_discount_won, mileage_used, mileage_earned, channel, status, start_date, " +
   "issued_kind, issued_id, expires_at, pg_receipt_url";
 
 /**

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
+import { sendPushToMember, formatKstSlot } from "@/app/lib/member-notify";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -59,10 +60,23 @@ export async function GET(req: NextRequest) {
     .gte("ends_at", endLowerIso)
     .limit(2000);
 
+  // 3) 회원 '수업 전' 알림 후보 — 트레이너와 리드타임/on·off 가 달라 발송 플래그를 따로 쓴다.
+  //    🚨 로컬 예약이 아니라 서버가 '발송 시점의 실제 booked 상태'로 보내므로,
+  //       옮기거나 취소된 수업은 옛 시간에 회원 폰에서 울리지 않는다.
+  const { data: memberStartRows } = await supabase
+    .from("crm_reservations")
+    .select("id, center_id, member_id, starts_at")
+    .eq("status", "booked")
+    .is("member_reminder_sent_at", null)
+    .gt("starts_at", nowIso)
+    .lte("starts_at", startWindowIso)
+    .limit(2000);
+
   const starts = (startRows ?? []).filter((r) => r.trainer_member_id);
   const ends = (endRows ?? []).filter((r) => r.trainer_member_id);
-  if (starts.length === 0 && ends.length === 0) {
-    return NextResponse.json({ ok: true, start: 0, end: 0 });
+  const memberStarts = (memberStartRows ?? []).filter((r) => r.member_id);
+  if (starts.length === 0 && ends.length === 0 && memberStarts.length === 0) {
+    return NextResponse.json({ ok: true, start: 0, end: 0, member: 0 });
   }
 
   // 강사 설정(리드타임·on/off) 일괄 조회.
@@ -86,8 +100,21 @@ export async function GET(req: NextRequest) {
     : { data: [] as { id: number; name: string }[] };
   const nameMap = new Map((memberRows ?? []).map((m) => [m.id as number, m.name as string]));
 
+  // 회원 수업알림 설정(on/off·리드타임) 일괄 조회.
+  const reminderMemberIds = Array.from(new Set(memberStarts.map((r) => r.member_id as number)));
+  type MemberPref = { id: number; notify_class_reminder: boolean | null; notify_class_reminder_lead_min: number | null };
+  const { data: memberPrefRaw } = reminderMemberIds.length
+    ? await supabase
+        .from("crm_members")
+        .select("id, notify_class_reminder, notify_class_reminder_lead_min")
+        .in("id", reminderMemberIds)
+    : { data: [] };
+  const memberPrefRows = (memberPrefRaw ?? []) as unknown as MemberPref[];
+  const memberPrefMap = new Map(memberPrefRows.map((m) => [m.id, m]));
+
   let startSent = 0;
   let endSent = 0;
+  let memberSent = 0;
 
   // 시작 전 알림
   for (const r of starts) {
@@ -138,5 +165,29 @@ export async function GET(req: NextRequest) {
     endSent++;
   }
 
-  return NextResponse.json({ ok: true, start: startSent, end: endSent });
+  // 회원 '수업 전' 알림
+  for (const r of memberStarts) {
+    const pref = memberPrefMap.get(r.member_id as number);
+    const enabled = pref ? pref.notify_class_reminder !== false : true; // 미설정=기본 ON
+    if (!enabled) continue;
+    const leadMin = pref?.notify_class_reminder_lead_min ?? 60;
+    const fireAt = new Date(r.starts_at).getTime() - leadMin * 60 * 1000;
+    if (now < fireAt) continue; // 아직 리드타임 전 → 다음 크론에서
+
+    await sendPushToMember(
+      r.member_id as number,
+      "class_reminder",
+      "수업 알림",
+      `${formatKstSlot(r.starts_at)} 수업이 곧 시작돼요.`,
+      { kind: "class_reminder", reservation_id: String(r.id) }
+    ).catch(() => {});
+    await supabase
+      .from("crm_reservations")
+      .update({ member_reminder_sent_at: nowIso } as never)
+      .eq("id", r.id)
+      .is("member_reminder_sent_at", null); // 경합 방지
+    memberSent++;
+  }
+
+  return NextResponse.json({ ok: true, start: startSent, end: endSent, member: memberSent });
 }

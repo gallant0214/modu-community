@@ -112,6 +112,11 @@ export async function fulfillPurchase(opts: {
   pgMethod?: string | null;
   /** 어디서 구매했는지 — 메모에 남긴다. web=홈페이지 / app=회원앱 */
   channel?: string | null;
+  /**
+   * 회원이 고른 시작일(YYYY-MM-DD). 주면 **모든 유형**(회원권·수강권·운동복·락커)을
+   * 이 날짜로 발급한다(만료일도 여기서 계산). 안 주면 기존 규칙(이어붙이기/오늘).
+   */
+  startDate?: string | null;
 }): Promise<FulfillOutcome> {
   const { centerId, memberId, product } = opts;
   const today = kstToday();
@@ -123,12 +128,15 @@ export async function fulfillPurchase(opts: {
     Math.floor(opts.mileageEarn ?? product.mileage_earn ?? 0)
   );
 
-  // 회원권/운동복/락커는 기존 이용권 뒤로 이어붙인다(수강권은 이어붙이기 대상 아님)
+  // 회원이 시작일을 직접 골랐으면 그 날짜를 모든 유형에 그대로 쓴다.
+  const overrideStart =
+    opts.startDate && /^\d{4}-\d{2}-\d{2}$/.test(opts.startDate) ? opts.startDate : null;
+  // (override 없을 때) 회원권/운동복/락커는 기존 이용권 뒤로 이어붙인다(수강권은 이어붙이기 대상 아님)
   const chainType =
     product.type === "membership" ? "membership" : product.type === "apparel" ? "apparel" : product.type === "locker" ? "locker" : null;
-  const startDate = chainType
-    ? (await computeNextStart(centerId, memberId, chainType)).start_date
-    : today;
+  const startDate =
+    overrideStart ??
+    (chainType ? (await computeNextStart(centerId, memberId, chainType)).start_date : today);
 
   const expiresAt = isCount
     ? UNLIMITED_EXPIRY

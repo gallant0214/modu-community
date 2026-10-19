@@ -241,6 +241,7 @@ export async function PATCH(
       // 시간이 바뀌었으니 '곧 수업/수업 종료' 알림 발송 기록을 초기화 → 새 시간 기준으로 다시 발송.
       class_reminder_sent_at: null,
       class_end_sent_at: null,
+      member_reminder_sent_at: null, // 회원 '수업 전' 알림도 새 시간 기준 재발송
     };
     if (body.trainer_member_id && body.trainer_member_id !== cur.trainer_member_id) {
       patch.trainer_member_id = trainerId;

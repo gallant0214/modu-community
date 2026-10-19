@@ -78,3 +78,50 @@ export async function computeNextStart(
     after: maxExpiry,
   };
 }
+
+/**
+ * 재등록(이용권 구매)에서 보여줄 '시작일 기본값'.
+ *   - 지금 유효하게 이용 중인 이용권(회원권 + 기간제 수강권) 중 가장 늦은 종료일의 **다음날**.
+ *   - 유효한 이용권이 없으면 **오늘**.
+ * 락커·운동복(대여권)은 '이용권' 이 아니므로 기본값 계산에 넣지 않는다.
+ * 과거로 내려가지 않도록 오늘보다 이르면 오늘로 올린다.
+ */
+export async function computeMemberNextStart(
+  centerId: number,
+  memberId: number
+): Promise<NextStart> {
+  const todayYmd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  if (!memberId) return { start_date: todayYmd, chained: false };
+
+  const [{ data: ms }, { data: ps }] = await Promise.all([
+    supabase
+      .from("crm_memberships")
+      .select("expires_at")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .eq("status", "valid")
+      .gte("expires_at", todayYmd)
+      .order("expires_at", { ascending: false })
+      .limit(1),
+    supabase
+      .from("crm_passes")
+      .select("expires_at")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .eq("status", "valid")
+      .gte("expires_at", todayYmd)
+      .order("expires_at", { ascending: false })
+      .limit(1),
+  ]);
+
+  const candidates = [ms?.[0]?.expires_at, ps?.[0]?.expires_at]
+    .filter((v): v is string => !!v && !isUnlimited(v))
+    .map((v) => v.slice(0, 10));
+  if (candidates.length === 0) return { start_date: todayYmd, chained: false };
+
+  const maxExpiry = candidates.reduce((a, b) => (b > a ? b : a));
+  const d = new Date(`${maxExpiry}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  const next = d.toISOString().slice(0, 10);
+  return { start_date: next < todayYmd ? todayYmd : next, chained: true, after: maxExpiry };
+}

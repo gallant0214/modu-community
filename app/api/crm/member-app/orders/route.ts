@@ -22,7 +22,7 @@ export const maxDuration = 60;
 
 const ORDER_SELECT =
   "id, center_id, member_id, product_id, product_name, amount_won, list_price_won, " +
-  "coupon_issue_id, coupon_discount_won, mileage_used, mileage_earned, channel, status";
+  "coupon_issue_id, coupon_discount_won, mileage_used, mileage_earned, channel, status, start_date";
 
 /**
  * POST /api/crm/member-app/orders
@@ -52,6 +52,8 @@ export async function POST(request: Request) {
     couponIssueId?: number | null;
     mileageUse?: number | null;
     channel?: string;
+    /** 재등록 시작일(YYYY-MM-DD). 회원권·수강권·운동복·락커 모든 구성품에 일괄 적용 */
+    startDate?: string | null;
   };
   try {
     body = await request.json();
@@ -61,6 +63,22 @@ export async function POST(request: Request) {
   const centerId = Number(body.centerId);
   const ctx = await requireMemberForCenter(request, centerId);
   if (isMemberError(ctx)) return ctx;
+
+  /* ── 시작일 검증 ──────────────────────────────────────────
+     YYYY-MM-DD 형식만 받고, 오늘(KST) 이전으로는 설정할 수 없다(과거 소급 금지).
+     안 보내면 null → 발급 시 기존 규칙(이어붙이기/오늘)으로 처리한다. */
+  const todayYmd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  let startDate: string | null = null;
+  if (body.startDate != null && String(body.startDate).trim() !== "") {
+    const s = String(body.startDate).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      return NextResponse.json({ error: "시작일 형식이 올바르지 않아요" }, { status: 400 });
+    }
+    if (s < todayYmd) {
+      return NextResponse.json({ error: "시작일은 오늘 이후로 선택해주세요" }, { status: 400 });
+    }
+    startDate = s;
+  }
 
   const productIds = (
     Array.isArray(body.productIds) && body.productIds.length > 0
@@ -183,6 +201,7 @@ export async function POST(request: Request) {
       pg_provider: "portone",
       channel,
       expires_at: expiresAt,
+      start_date: startDate,
     } as never)
     .select(ORDER_SELECT)
     .single();

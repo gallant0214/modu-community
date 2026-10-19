@@ -40,6 +40,8 @@ export interface OrderRow {
   mileage_earned: number;
   channel: string;
   status: string;
+  /** 회원이 고른 시작일 — 모든 구성품에 일괄 적용. null 이면 발급 시 기존 규칙(이어붙이기/오늘) */
+  start_date?: string | null;
 }
 
 export interface OrderItemRow {
@@ -140,6 +142,8 @@ export async function completeOrder(opts: {
         mileageEarn: item.mileage_earned ?? 0,
         pgMethod: pg?.method ?? (order.amount_won === 0 ? "쿠폰·마일리지" : null),
         channel: order.channel,
+        // 회원이 고른 시작일 — 회원권·수강권·운동복·락커 모두 같은 날짜로 발급
+        startDate: order.start_date ?? null,
       });
     } catch (e) {
       return failOrder(
@@ -281,7 +285,7 @@ async function failOrder(
 /** 주문 조회에 쓰는 컬럼 — 발급에 필요한 것 전부 */
 export const ORDER_FULL_SELECT =
   "id, center_id, member_id, product_id, product_name, amount_won, list_price_won, " +
-  "coupon_issue_id, coupon_discount_won, mileage_used, mileage_earned, channel, status, " +
+  "coupon_issue_id, coupon_discount_won, mileage_used, mileage_earned, channel, status, start_date, " +
   "issued_kind, issued_id, pg_payment_key, pg_receipt_url";
 
 /** 발급에 필요한 컬럼이 모두 채워진 주문 */

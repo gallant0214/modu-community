@@ -11,6 +11,7 @@ import {
   salesAllowedForMember,
   SALES_RESTRICTED_MESSAGE,
 } from "@/app/lib/member-checkout";
+import { computeMemberNextStart } from "@/app/lib/next-start";
 
 export const dynamic = "force-dynamic";
 
@@ -90,8 +91,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: quote.error ?? "계산할 수 없어요" }, { status: 400 });
   }
 
+  // 시작일 기본값 — 지금 이용 중인 이용권 종료일 다음날(없으면 오늘). 앱에서 수정 가능.
+  const nextStart = await computeMemberNextStart(centerId, ctx.memberId);
+
   return NextResponse.json({
     lines: quote.lines,
+    /** 재등록 시작일 기본값(YYYY-MM-DD). 지금 이용 중인 이용권 종료일 다음날 또는 오늘 */
+    defaultStartDate: nextStart.start_date,
+    startChained: nextStart.chained,
     listPrice: quote.listPriceWon,
     couponDiscount: quote.couponDiscountWon,
     mileageUsed: quote.mileageUsedWon,
