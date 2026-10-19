@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 
 // 회원용 앱 스토어 (com.moduji.member / App Store id 6797501332)
 const ANDROID_URL = "https://play.google.com/store/apps/details?id=com.moduji.member";
@@ -20,8 +20,18 @@ function detectPlatform(): Platform {
 /* 신규 웹 가입 완료 화면 — 결제 성공 후 이곳으로 이동.
    이용권은 센터 CRM 에 이미 발급됐고, 여기서 회원용 앱 설치 + 기존 회원 연동을 안내한다. */
 export default function SignupDonePage() {
+  return (
+    <Suspense fallback={<div className="min-h-[100dvh] bg-[#FBF7EB]" />}>
+      <SignupDoneInner />
+    </Suspense>
+  );
+}
+
+function SignupDoneInner() {
   const params = useParams<{ token: string }>();
   const token = params?.token ?? "";
+  const searchParams = useSearchParams();
+  const attendanceNo = (searchParams.get("no") ?? "").replace(/\D/g, "").slice(-4);
   const [platform, setPlatform] = useState<Platform>("other");
 
   useEffect(() => {
@@ -53,6 +63,16 @@ export default function SignupDonePage() {
           결제가 완료되어 이용권이 등록됐습니다.
           <br />이제 <b>회원용 앱</b>을 설치하면 내 이용권·출석·예약을 관리할 수 있어요.
         </p>
+
+        {attendanceNo && (
+          <div className="mt-5 rounded-2xl bg-[#6B7B3A]/8 border border-[#6B7B3A]/25 px-4 py-4 text-center">
+            <div className="text-[13px] text-[#6B5D47]">회원님의 출석번호는</div>
+            <div className="mt-1 text-[28px] font-extrabold tracking-[0.15em] text-[#6B7B3A]">
+              {attendanceNo}
+            </div>
+            <div className="mt-1 text-[12px] text-[#8C8270]">입니다 (휴대폰번호 뒤 4자리)</div>
+          </div>
+        )}
 
         <button
           onClick={goInstall}

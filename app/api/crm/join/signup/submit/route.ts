@@ -313,8 +313,9 @@ export async function POST(request: Request) {
   }
 
   const payToken = signOrderToken(orderUid);
-  // 결제 성공 후 가입 완료(앱 설치) 화면으로 되돌아오도록 returnTo 를 붙인다
-  const returnTo = `/join/${encodeURIComponent(token)}/signup/done`;
+  // 결제 성공 후 가입 완료(앱 설치) 화면으로 — 출석번호(휴대폰 뒤 4자리)도 함께 전달
+  const last4 = phone.replace(/\D/g, "").slice(-4);
+  const returnTo = `/join/${encodeURIComponent(token)}/signup/done?no=${last4}`;
   return NextResponse.json({
     ok: true,
     orderUid,
