@@ -1649,6 +1649,7 @@ export type Database = {
           status: string
           sale_enabled: boolean
           online_sale_enabled: boolean
+          signup_enabled: boolean
           online_eligibility: string
           created_at: string
           updated_at: string
@@ -1687,6 +1688,7 @@ export type Database = {
           status?: string
           sale_enabled?: boolean
           online_sale_enabled?: boolean
+          signup_enabled?: boolean
           online_eligibility?: string
           created_at?: string
           updated_at?: string
@@ -1725,6 +1727,7 @@ export type Database = {
           status?: string
           sale_enabled?: boolean
           online_sale_enabled?: boolean
+          signup_enabled?: boolean
           online_eligibility?: string
           created_at?: string
           updated_at?: string

@@ -94,9 +94,15 @@ export default function JoinLandingPage() {
               <br /><b>{center.centerName}</b>으로 가입이 연결돼요.
             </p>
 
+            <a
+              href={`/join/${encodeURIComponent(token)}/signup`}
+              className="mt-5 block w-full px-4 py-3 rounded-xl bg-[#6B7B3A] text-white text-[15px] font-bold text-center hover:bg-[#5a6932] transition-colors"
+            >
+              신규 회원 가입하기
+            </a>
             <button
               onClick={goInstall}
-              className="mt-5 w-full px-4 py-3 rounded-xl bg-[#6B7B3A] text-white text-[15px] font-bold hover:bg-[#5a6932] transition-colors"
+              className="mt-2 w-full px-4 py-3 rounded-xl border border-[#6B7B3A] text-[#6B7B3A] text-[15px] font-bold hover:bg-[#6B7B3A]/5 transition-colors"
             >
               앱 설치하고 가입하기
             </button>

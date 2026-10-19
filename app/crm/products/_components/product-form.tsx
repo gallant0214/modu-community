@@ -37,6 +37,8 @@ export interface ProductInitial {
   daily_check_in_limit?: number;
   daily_time_limit_enabled?: boolean;
   components?: BundleComponent[];
+  /** 신규 회원 웹 가입(QR 링크) 화면에 노출할 상품인지 */
+  signup_enabled?: boolean;
 }
 
 export interface BundleComponent {
@@ -241,6 +243,8 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
   const [durationUnit, setDurationUnit] = useState<DurationUnit>(
     (initial?.duration_unit as DurationUnit) ?? (isFacility(type) ? "month" : "day")
   );
+  // 신규 회원 웹 가입(QR) 화면 노출 여부 — 회원권/운동복/락커(시설 이용권)만 대상
+  const [signupEnabled, setSignupEnabled] = useState<boolean>(!!initial?.signup_enabled);
   // serviceDays 는 모드별 의미가 다름: 횟수제=유효 기간(기본 40일), 기간제=서비스 기간(기본 0일).
   const [serviceDays, setServiceDays] = useState(
     initial?.service_days ?? (billingMode === "period" ? 0 : 40)
@@ -449,6 +453,7 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
           type === "personal" || type === "group" || type === "class" ? sessionMinutes ?? 0 : 0,
         daily_check_in_limit: effectiveDaily,
         daily_time_limit_enabled: dailyTimeLimitEnabled,
+        signup_enabled: isFacility(type) ? signupEnabled : false,
         components: components.map((c) => ({
           type: c.type,
           name: (c.name ?? "").trim(),
@@ -791,6 +796,25 @@ function ProductFormInner({ mode, initial, onSaved, onCancel, scope = "center", 
           <p className="mt-1 text-[12px] text-[#A89B80]">
             회원에게 이 상품을 판매(결제)할 때 자동으로 채워지는 기본 금액이에요.
           </p>
+          {isFacility(type) && (
+            <div className="mt-3 pt-3 border-t border-[#E8E0D0] dark:border-zinc-800">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={signupEnabled}
+                  onChange={(e) => setSignupEnabled(e.target.checked)}
+                  className="w-4 h-4 accent-[#6B7B3A]"
+                />
+                <span className="text-[12.5px] font-medium text-[#3A342A] dark:text-zinc-200">
+                  신규 회원 가입 화면에 노출
+                </span>
+              </label>
+              <p className="mt-1 text-[12px] text-[#A89B80]">
+                센터 QR/가입 링크로 들어온 신규 회원이 웹에서 가입할 때 선택할 수 있는 상품으로 보여집니다.
+                ({type === "membership" ? "헬스 이용권" : type === "apparel" ? "운동복" : "락커"})
+              </p>
+            </div>
+          )}
         </div>
       </Section>
 

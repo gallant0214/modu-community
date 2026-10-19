@@ -98,6 +98,7 @@ export async function PATCH(
     "class_book_before_min",
     "sale_enabled",
     "online_sale_enabled",
+    "signup_enabled",
     "online_eligibility",
     "session_minutes",
     "daily_check_in_limit",
