@@ -625,9 +625,7 @@ export default function ConsultationDetailPage() {
       {statusModal === "converted" && (
         <ConvertedModal
           onCancel={() => setStatusModal("")}
-          onConfirm={(passId) =>
-            setStatus("converted", passId ? { converted_pass_id: passId } : {})
-          }
+          onConfirm={() => setStatus("converted", {})}
         />
       )}
       {statusModal === "lost" && (
@@ -813,20 +811,14 @@ function ConvertedModal({
   onConfirm,
 }: {
   onCancel: () => void;
-  onConfirm: (passId?: number) => void;
+  onConfirm: () => void;
 }) {
-  const [passId, setPassId] = useState<string>("");
   return (
     <Modal title="PT 등록으로 전환" onClose={onCancel}>
       <p className="text-[12.5px] text-[#6B5D47] mb-3">
-        전환된 수강권 ID 를 알고 있다면 입력해 주세요. 몰라도 저장 가능합니다.
+        이 상담을 <strong>PT 등록으로 전환</strong> 처리할까요? 상담 상태가 &lsquo;전환&rsquo; 으로 바뀌고
+        전환 날짜가 기록됩니다.
       </p>
-      <input
-        value={passId}
-        onChange={(e) => setPassId(e.target.value.replace(/[^0-9]/g, ""))}
-        placeholder="수강권 ID (선택)"
-        className="w-full h-10 px-3 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px]"
-      />
       <div className="mt-4 flex justify-end gap-2">
         <button
           type="button"
@@ -837,7 +829,7 @@ function ConvertedModal({
         </button>
         <button
           type="button"
-          onClick={() => onConfirm(passId ? Number(passId) : undefined)}
+          onClick={() => onConfirm()}
           className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-[13px] font-semibold hover:bg-emerald-800"
         >
           전환 저장
