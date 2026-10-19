@@ -128,6 +128,8 @@ interface Product {
   /** 판매 on/off. false 면 회원권·수강권 발급 목록에서 제외 */
   sale_enabled?: boolean;
   online_sale_enabled?: boolean;
+  /** 신규 회원 QR 웹 가입 화면 노출 on/off (헬스이용권·운동복·락커). 기본 꺼짐 */
+  signup_enabled?: boolean;
   online_eligibility?: string;
   created_at?: string;
   updated_at?: string;
@@ -238,9 +240,12 @@ export default function CrmProductsPage() {
 
   /** 판매 on/off 토글 — 낙관적 반영 후 PATCH, 실패 시 롤백 */
   const [saleBusy, setSaleBusy] = useState<string | null>(null);
-  const toggleSale = async (p: Product, field: "sale_enabled" | "online_sale_enabled") => {
-    // sale_enabled 는 기본 ON(undefined=켜짐), online_sale_enabled 는 기본 OFF
-    const cur = field === "sale_enabled" ? p.sale_enabled !== false : p.online_sale_enabled === true;
+  const toggleSale = async (
+    p: Product,
+    field: "sale_enabled" | "online_sale_enabled" | "signup_enabled"
+  ) => {
+    // sale_enabled 는 기본 ON(undefined=켜짐), online_sale_enabled·signup_enabled 는 기본 OFF
+    const cur = field === "sale_enabled" ? p.sale_enabled !== false : p[field] === true;
     const next = !cur;
     const key = `${p.id}:${field}`;
     setSaleBusy(key);
@@ -630,6 +635,22 @@ export default function CrmProductsPage() {
                       </div>
                     )}
                     <span className="mr-auto" />
+                    {/* 신규 회원 QR 웹 가입 노출 — 헬스이용권·운동복·락커만.
+                        켜면 QR '신규 회원 가입하기' 상품 선택 화면에 바로 나온다 */}
+                    {["membership", "apparel", "locker"].includes(p.type) && (
+                      <FlagSwitch
+                        on={p.signup_enabled === true}
+                        busy={saleBusy === `${p.id}:signup_enabled`}
+                        onToggle={() => toggleSale(p, "signup_enabled")}
+                        onLabel="신규가입 노출"
+                        offLabel="신규"
+                        title={
+                          p.signup_enabled === true
+                            ? "QR 신규 회원 가입 화면에 노출돼요. 누르면 내립니다."
+                            : "QR 신규 회원 가입 화면에 안 나와요. 누르면 가입 화면에 노출합니다."
+                        }
+                      />
+                    )}
                     <button
                       type="button"
                       onClick={async () => {
