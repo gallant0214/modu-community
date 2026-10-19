@@ -76,7 +76,7 @@ export async function GET(request: Request) {
       .lt("starts_at", kstStart(todayExcl)),
     supabase
       .from("crm_passes")
-      .select("member_id, expires_at, remaining_sessions, total_sessions, outstanding_won")
+      .select("member_id, expires_at, remaining_sessions, total_sessions, outstanding_won, trainer_member_id, co_trainer_ids")
       .eq("center_id", centerId)
       .eq("status", "valid")
       .or(scopeOr),
@@ -105,7 +105,18 @@ export async function GET(request: Request) {
   let outstandingWon = 0;
   let outstandingCount = 0;
   for (const p of scopedPasses ?? []) {
-    if (p.member_id) memberSet.add(p.member_id);
+    // 담당 회원 수: 판매자(seller)만 연결된 건 제외하고 주강사/추가강사만.
+    //   + '현재 사용 가능한' 수강권만(횟수제=잔여>0, 기간제=만료 전). 소진·만료 건은 제외.
+    const mine =
+      p.trainer_member_id === me || (p.co_trainer_ids ?? []).includes(me);
+    if (p.member_id && mine) {
+      const total = p.total_sessions ?? 0;
+      const usable =
+        total > 0
+          ? (p.remaining_sessions ?? 0) > 0
+          : (p.expires_at ?? "") >= today; // 기간제: 만료일이 오늘 이후(무기한 9999 포함)
+      if (usable) memberSet.add(p.member_id);
+    }
     const expSoon = (p.expires_at ?? "") !== "" && (p.expires_at as string) <= expiringLimit;
     const lowSess = (p.total_sessions ?? 0) > 0 && (p.remaining_sessions ?? 0) <= 2;
     if (expSoon || lowSess) expiringCount += 1;
