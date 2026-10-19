@@ -19,11 +19,6 @@ export function buildConsultationPayload(
   const asBool = (v: unknown) => v === true;
   // 빈값/null/undefined 는 반드시 null (Number(null)===0, Number("")===0 로 0 이 되는 것 방지).
   // member_id/template_id 등 FK 컬럼에 0 이 들어가면 외래키 위반으로 저장 실패한다.
-  const asNum = (v: unknown) => {
-    if (v === null || v === undefined || v === "") return null;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  };
   const asInt = (v: unknown) => {
     if (v === null || v === undefined || v === "") return null;
     const n = Math.floor(Number(v));
@@ -76,12 +71,13 @@ export function buildConsultationPayload(
     meal_habits: asArr(body.meal_habits),
     preferred_foods: asArr(body.preferred_foods),
     preferred_foods_etc: asStr(body.preferred_foods_etc),
-    water_liters_per_day: asNum(body.water_liters_per_day),
-    caffeine_cups_per_day: asInt(body.caffeine_cups_per_day),
+    // 🚨 자유 입력(글자) — '하루 2리터', '아메리카노 2잔' 처럼 적을 수 있다
+    water_liters_per_day: asStr(body.water_liters_per_day),
+    caffeine_cups_per_day: asStr(body.caffeine_cups_per_day),
     alcohol_period: asStr(body.alcohol_period),
-    alcohol_count: asInt(body.alcohol_count),
+    alcohol_count: asStr(body.alcohol_count),
     smoking: asBool(body.smoking),
-    cigarettes_per_day: asInt(body.cigarettes_per_day),
+    cigarettes_per_day: asStr(body.cigarettes_per_day),
     supplements: asStr(body.supplements),
     diet_experience: asBool(body.diet_experience),
     diet_experience_detail: asStr(body.diet_experience_detail),

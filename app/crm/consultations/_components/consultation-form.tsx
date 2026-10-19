@@ -155,6 +155,11 @@ function ConsultationFormInner({
     const v = initial?.[k];
     return typeof v === "number" ? v : v ? Number(v) : "";
   };
+  // 숫자로 저장돼 있던 옛 값도 글자로 받아 준다 (수분·카페인은 자유 입력으로 바뀜)
+  const asText = (k: string) => {
+    const v = initial?.[k];
+    return v === null || v === undefined ? "" : String(v);
+  };
   const asArr = (k: string): string[] =>
     Array.isArray(initial?.[k]) ? (initial![k] as string[]) : [];
   const asBool = (k: string) => Boolean(initial?.[k]);
@@ -238,14 +243,12 @@ function ConsultationFormInner({
   const [mealHabits, setMealHabits] = useState<string[]>(asArr("meal_habits"));
   const [preferredFoods, setPreferredFoods] = useState<string[]>(asArr("preferred_foods"));
   const [preferredFoodsEtc, setPreferredFoodsEtc] = useState(asStr("preferred_foods_etc"));
-  const [waterLiters, setWaterLiters] = useState<number | "">(asNum("water_liters_per_day"));
-  const [caffeineCups, setCaffeineCups] = useState<number | "">(asNum("caffeine_cups_per_day"));
+  const [waterLiters, setWaterLiters] = useState(asText("water_liters_per_day"));
+  const [caffeineCups, setCaffeineCups] = useState(asText("caffeine_cups_per_day"));
   const [alcoholPeriod, setAlcoholPeriod] = useState(asStr("alcohol_period"));
-  const [alcoholCount, setAlcoholCount] = useState<number | "">(asNum("alcohol_count"));
+  const [alcoholCount, setAlcoholCount] = useState(asText("alcohol_count"));
   const [smoking, setSmoking] = useState(asBool("smoking"));
-  const [cigarettesPerDay, setCigarettesPerDay] = useState<number | "">(
-    asNum("cigarettes_per_day")
-  );
+  const [cigarettesPerDay, setCigarettesPerDay] = useState(asText("cigarettes_per_day"));
   const [supplements, setSupplements] = useState(asStr("supplements"));
   const [dietExperience, setDietExperience] = useState(asBool("diet_experience"));
   const [dietExperienceDetail, setDietExperienceDetail] = useState(asStr("diet_experience_detail"));
@@ -553,12 +556,12 @@ function ConsultationFormInner({
     meal_habits: mealHabits,
     preferred_foods: preferredFoods,
     preferred_foods_etc: preferredFoodsEtc,
-    water_liters_per_day: waterLiters === "" ? null : waterLiters,
-    caffeine_cups_per_day: caffeineCups === "" ? null : caffeineCups,
+    water_liters_per_day: waterLiters.trim() || null,
+    caffeine_cups_per_day: caffeineCups.trim() || null,
     alcohol_period: alcoholPeriod || null,
-    alcohol_count: alcoholCount === "" ? null : alcoholCount,
+    alcohol_count: alcoholCount.trim() || null,
     smoking,
-    cigarettes_per_day: cigarettesPerDay === "" ? null : cigarettesPerDay,
+    cigarettes_per_day: cigarettesPerDay.trim() || null,
     supplements,
     diet_experience: dietExperience,
     diet_experience_detail: dietExperienceDetail,
@@ -1098,22 +1101,21 @@ function ConsultationFormInner({
             />
           </Field>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="수분 섭취 (리터/일)">
+            <Field label="수분 섭취">
               <input
-                type="number"
-                step="0.1"
-                min={0}
+                type="text"
                 value={waterLiters}
-                onChange={(e) => setWaterLiters(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => setWaterLiters(e.target.value)}
+                placeholder="예: 2리터 / 하루 1.5L 정도 / 거의 안 마심"
                 className={crmInputClass}
               />
             </Field>
-            <Field label="카페인 (잔/일)">
+            <Field label="카페인 (커피)">
               <input
-                type="number"
-                min={0}
+                type="text"
                 value={caffeineCups}
-                onChange={(e) => setCaffeineCups(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => setCaffeineCups(e.target.value)}
+                placeholder="예: 아메리카노 2잔 / 오전에만 1잔 / 안 마심"
                 className={crmInputClass}
               />
             </Field>
@@ -1129,12 +1131,11 @@ function ConsultationFormInner({
                   <option value="month">월</option>
                 </select>
                 <input
-                  type="number"
-                  min={0}
+                  type="text"
                   value={alcoholCount}
-                  onChange={(e) => setAlcoholCount(e.target.value === "" ? "" : Number(e.target.value))}
+                  onChange={(e) => setAlcoholCount(e.target.value)}
                   className={crmInputClass}
-                  placeholder="회"
+                  placeholder="예: 2회 / 소주 1병 / 거의 안 마심"
                 />
               </div>
             </Field>
@@ -1149,15 +1150,12 @@ function ConsultationFormInner({
                   />
                 </label>
                 <input
-                  type="number"
-                  min={0}
+                  type="text"
                   disabled={!smoking}
                   value={cigarettesPerDay}
-                  onChange={(e) =>
-                    setCigarettesPerDay(e.target.value === "" ? "" : Number(e.target.value))
-                  }
+                  onChange={(e) => setCigarettesPerDay(e.target.value)}
                   className={`${crmInputClass} disabled:opacity-50`}
-                  placeholder="일 개비"
+                  placeholder="예: 하루 10개비 / 반 갑 / 금연 3개월차"
                 />
               </div>
             </Field>

@@ -3706,12 +3706,12 @@ export type Database = {
           meal_habits: unknown
           preferred_foods: unknown
           preferred_foods_etc: string | null
-          water_liters_per_day: number | null
-          caffeine_cups_per_day: number | null
+          water_liters_per_day: string | null
+          caffeine_cups_per_day: string | null
           alcohol_period: string | null
-          alcohol_count: number | null
+          alcohol_count: string | null
           smoking: boolean
-          cigarettes_per_day: number | null
+          cigarettes_per_day: string | null
           supplements: string | null
           diet_experience: boolean
           diet_experience_detail: string | null
@@ -3790,12 +3790,12 @@ export type Database = {
           meal_habits?: unknown
           preferred_foods?: unknown
           preferred_foods_etc?: string | null
-          water_liters_per_day?: number | null
-          caffeine_cups_per_day?: number | null
+          water_liters_per_day?: string | null
+          caffeine_cups_per_day?: string | null
           alcohol_period?: string | null
-          alcohol_count?: number | null
+          alcohol_count?: string | null
           smoking?: boolean
-          cigarettes_per_day?: number | null
+          cigarettes_per_day?: string | null
           supplements?: string | null
           diet_experience?: boolean
           diet_experience_detail?: string | null
@@ -3874,12 +3874,12 @@ export type Database = {
           meal_habits?: unknown
           preferred_foods?: unknown
           preferred_foods_etc?: string | null
-          water_liters_per_day?: number | null
-          caffeine_cups_per_day?: number | null
+          water_liters_per_day?: string | null
+          caffeine_cups_per_day?: string | null
           alcohol_period?: string | null
-          alcohol_count?: number | null
+          alcohol_count?: string | null
           smoking?: boolean
-          cigarettes_per_day?: number | null
+          cigarettes_per_day?: string | null
           supplements?: string | null
           diet_experience?: boolean
           diet_experience_detail?: string | null

@@ -66,12 +66,12 @@ interface Consultation {
   meal_habits: string[] | null;
   preferred_foods: string[] | null;
   preferred_foods_etc: string | null;
-  water_liters_per_day: number | null;
-  caffeine_cups_per_day: number | null;
+  water_liters_per_day: string | null;
+  caffeine_cups_per_day: string | null;
   alcohol_period: string | null;
-  alcohol_count: number | null;
+  alcohol_count: string | null;
   smoking: boolean;
-  cigarettes_per_day: number | null;
+  cigarettes_per_day: string | null;
   supplements: string | null;
   diet_experience: boolean;
   diet_experience_detail: string | null;
@@ -440,18 +440,11 @@ export default function ConsultationDetailPage() {
             ],
             ["식사 습관", labelJoin(MEAL_HABITS, c.meal_habits, objectText(selectionOther.meal_habits))],
             ["선호 음식", labelJoin(PREFERRED_FOODS, c.preferred_foods, c.preferred_foods_etc)],
-            ["수분 섭취", c.water_liters_per_day ? `${c.water_liters_per_day} 리터/일` : null],
-            ["카페인", c.caffeine_cups_per_day ? `${c.caffeine_cups_per_day} 잔/일` : null],
-            [
-              "음주",
-              c.alcohol_period && c.alcohol_count
-                ? `${c.alcohol_period === "week" ? "주" : "월"} ${c.alcohol_count}회`
-                : null,
-            ],
-            [
-              "흡연",
-              c.smoking ? (c.cigarettes_per_day ? `일 ${c.cigarettes_per_day} 개비` : "흡연") : "무",
-            ],
+            // 숫자만 적힌 옛 기록은 단위를 붙여 주고, 글자로 적은 건 그대로 보여준다
+            ["수분 섭취", withUnit(c.water_liters_per_day, "리터/일")],
+            ["카페인", withUnit(c.caffeine_cups_per_day, "잔/일")],
+            ["음주", alcoholText(c.alcohol_period, c.alcohol_count)],
+            ["흡연", smokingText(c.smoking, c.cigarettes_per_day)],
             ["섭취 영양제", c.supplements],
             [
               "식단 경험",
@@ -712,6 +705,30 @@ function labelJoin(
     .filter(Boolean);
   if (etc && etc.trim()) labels.push(`기타: ${etc.trim()}`);
   return labels.length ? labels.join(", ") : null;
+}
+
+/** 자유 입력 칸(수분·카페인) — 숫자만 적힌 옛 기록에는 단위를 붙여 준다. */
+function withUnit(value: string | null | undefined, unit: string): string | null {
+  const v = (value ?? "").toString().trim();
+  if (!v) return null;
+  return /^\d+(\.\d+)?$/.test(v) ? `${v} ${unit}` : v;
+}
+
+/** 음주 — 주기(주/월)가 있으면 앞에 붙이고, 내용은 적은 그대로. */
+function alcoholText(period: string | null, count: string | null): string | null {
+  const v = (count ?? "").toString().trim();
+  if (!v) return null;
+  const body = /^\d+$/.test(v) ? `${v}회` : v;
+  const prefix = period === "week" ? "주 " : period === "month" ? "월 " : "";
+  return `${prefix}${body}`;
+}
+
+/** 흡연 — 양을 숫자만 적었으면 단위를 붙여 준다. */
+function smokingText(smoking: boolean, amount: string | null): string {
+  if (!smoking) return "무";
+  const v = (amount ?? "").toString().trim();
+  if (!v) return "흡연";
+  return /^\d+$/.test(v) ? `일 ${v} 개비` : v;
 }
 
 function objectText(value: unknown): string | null {
