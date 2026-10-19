@@ -1,3 +1,23 @@
+import type { CustomFieldOption } from "./crm-consultation-template";
+import {
+  PAST_SPORTS,
+  EXPERIENCE_LENGTHS,
+  GOALS,
+  MEAL_HABITS,
+  PREFERRED_FOODS,
+  COMMUTES,
+  JOB_TRAITS,
+  LEVELS,
+  FATIGUE_WHEN,
+  PAIN_PARTS,
+  CONDITIONS,
+  PLANNED_DAYS,
+  SAFETY_FLAGS,
+  EXERCISE_BARRIERS,
+  COACHING_STYLES,
+  CONTACT_METHODS,
+} from "@/app/crm/consultations/_labels";
+
 /**
  * PT 상담지 '기본 양식'(표준 섹션) 목록.
  *
@@ -373,3 +393,29 @@ export function orderedSectionKeys(order?: string[] | null): string[] {
   const known = order.filter((k) => base.includes(k));
   return [...known, ...base.filter((k) => !known.includes(k))];
 }
+
+/* ── 객관식 버튼(칩)이 달린 표준 문항 ────────────────────────────────
+   key → 기본 버튼 목록. 상담지 관리에서 이 목록을 고치면
+   definition.standard_overrides.field_options 에 '고친 전체 목록' 이 저장되고,
+   상담지 폼의 ChipList 가 그 목록을 대신 쓴다.
+   🚨 버튼의 v(저장값)는 건드리지 않는다 — 과거 답변이 그 값으로 저장돼 있다. */
+export const STANDARD_FIELD_OPTIONS: Record<string, readonly CustomFieldOption[]> = {
+  past_sports: PAST_SPORTS,
+  experience_length: EXPERIENCE_LENGTHS,
+  goals: GOALS,
+  meal_habits: MEAL_HABITS,
+  preferred_foods: PREFERRED_FOODS,
+  commute: COMMUTES,
+  job_traits: JOB_TRAITS,
+  sleep_satisfaction: LEVELS,
+  condition_score: LEVELS,
+  fatigue_when: FATIGUE_WHEN,
+  "safety_screening.flags": SAFETY_FLAGS,
+  pain_parts: PAIN_PARTS,
+  conditions_past: CONDITIONS,
+  conditions: CONDITIONS,
+  planned_days: PLANNED_DAYS,
+  "adherence_details.barriers": EXERCISE_BARRIERS,
+  "coaching_preferences.styles": COACHING_STYLES,
+  "follow_up_details.preferred_contact": CONTACT_METHODS,
+};

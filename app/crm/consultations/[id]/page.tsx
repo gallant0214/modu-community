@@ -692,6 +692,11 @@ function KVList({ rows }: { rows: [string, string | null | undefined][] }) {
   );
 }
 
+/** 상담지 관리에서 새로 만든 버튼은 보기 목록에 없다 — 저장값(예: 허리_통증)을 사람이 읽게 바꿔 준다. */
+function prettyOptionValue(v: string): string {
+  return /[가-힣]/.test(v) ? v.replace(/_/g, " ") : v;
+}
+
 function labelJoin(
   opts: readonly { v: string; l: string }[],
   arr: string[] | null | undefined,
@@ -699,7 +704,7 @@ function labelJoin(
 ): string | null {
   const labels = (arr ?? [])
     .filter((v) => v !== "__other")
-    .map((v) => opts.find((o) => o.v === v)?.l ?? v)
+    .map((v) => opts.find((o) => o.v === v)?.l ?? prettyOptionValue(v))
     .filter(Boolean);
   if (etc && etc.trim()) labels.push(`기타: ${etc.trim()}`);
   return labels.length ? labels.join(", ") : null;
@@ -761,7 +766,7 @@ function labelOne(
 ): string | null {
   if (!v) return null;
   if ((v === "__other" || v === "etc") && other?.trim()) return `기타: ${other.trim()}`;
-  return opts.find((o) => o.v === v)?.l ?? v;
+  return opts.find((o) => o.v === v)?.l ?? prettyOptionValue(v);
 }
 
 function ActionBtn({

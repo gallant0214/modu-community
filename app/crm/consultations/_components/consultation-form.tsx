@@ -1674,6 +1674,8 @@ function ConsultationFormInner({
 
 /** 기본 양식 손질값 — 표준 섹션/항목만 참조한다(커스텀 섹션은 skey/fkey 가 없어 영향 없음). */
 const StdOverridesContext = createContext<StandardOverrides>({});
+/** 지금 그리는 표준 항목의 key — 안쪽 ChipList 가 '고친 객관식 버튼 목록'을 찾는 데 쓴다. */
+const FieldKeyContext = createContext<string | null>(null);
 
 /** 섹션을 설정된 순서대로 다시 배열. 설정이 없으면 코드에 적힌 순서 그대로. */
 function OrderedSections({ order, children }: { order?: string[]; children: React.ReactNode }) {
@@ -1766,13 +1768,15 @@ function Field({
   if (fkey && ov.hidden_fields?.includes(fkey)) return null;
   const shownLabel = (fkey && ov.field_labels?.[fkey]) || label;
   return (
-    <div className="min-w-0">
-      <div className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100 mb-1.5">
-        {shownLabel}
-        {required && <span className="text-[#B47B2A] ml-0.5">*</span>}
+    <FieldKeyContext.Provider value={fkey ?? null}>
+      <div className="min-w-0">
+        <div className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100 mb-1.5">
+          {shownLabel}
+          {required && <span className="text-[#B47B2A] ml-0.5">*</span>}
+        </div>
+        {children}
       </div>
-      {children}
-    </div>
+    </FieldKeyContext.Provider>
   );
 }
 
@@ -1837,7 +1841,13 @@ function ChipList({
   onOtherTextChange?: (value: string) => void;
   otherPlaceholder?: string;
 }) {
-  const displayOptions = allowOther ? [...options, { v: "__other", l: "기타" }] : options;
+  /* 상담지 관리에서 버튼 목록을 고쳤으면 그 목록을 쓴다 (표준 항목만 해당) */
+  const ov = useContext(StdOverridesContext);
+  const fkey = useContext(FieldKeyContext);
+  const baseOptions = (fkey && ov.field_options?.[fkey]) || options;
+  const displayOptions = allowOther
+    ? [...baseOptions, { v: "__other", l: "기타" }]
+    : baseOptions;
   const otherSelected = value.includes("__other");
   return (
     <div>

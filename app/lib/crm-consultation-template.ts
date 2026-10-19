@@ -53,6 +53,8 @@ export interface StandardOverrides {
   field_labels?: Record<string, string>;
   /** 섹션 표시 순서 (key 배열) */
   section_order?: string[];
+  /** 객관식 버튼 목록 바꾸기 (항목 key → 고친 전체 목록) */
+  field_options?: Record<string, CustomFieldOption[]>;
 }
 
 export interface TemplateDefinition {
@@ -99,8 +101,8 @@ export const FIELD_TYPE_LABEL: Record<CustomFieldType, string> = {
   number: "숫자",
   date: "날짜",
   time: "시간",
-  chips_multi: "다중 선택 칩",
-  chips_single: "단일 선택 칩",
+  chips_multi: "객관식 버튼 (여러 개 선택)",
+  chips_single: "객관식 버튼 (하나만 선택)",
   toggle: "예/아니오 (스위치)",
 };
 
@@ -124,5 +126,21 @@ export function normalizeOverrides(raw: unknown): StandardOverrides {
     section_titles: strMap(o.section_titles),
     field_labels: strMap(o.field_labels),
     section_order: strArray(o.section_order),
+    field_options: optionMap(o.field_options),
   };
+}
+
+function optionMap(v: unknown): Record<string, CustomFieldOption[]> {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+  const out: Record<string, CustomFieldOption[]> = {};
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if (!Array.isArray(val)) continue;
+    const opts = val
+      .filter((o): o is CustomFieldOption =>
+        !!o && typeof o === "object" && typeof (o as CustomFieldOption).v === "string"
+      )
+      .map((o) => ({ v: o.v, l: typeof o.l === "string" && o.l ? o.l : o.v }));
+    if (opts.length) out[k] = opts;
+  }
+  return out;
 }
