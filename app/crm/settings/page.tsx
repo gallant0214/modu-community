@@ -47,6 +47,8 @@ interface AuditLog {
   created_at: string;
   /** 대상 회원 이름 (회원권/수강권/대여권/예약/회원 관련 로그) */
   subject_name?: string | null;
+  /** 실행한 직원 이름 (자동 처리는 '시스템 …') */
+  actor_name?: string | null;
 }
 
 // 로그 작업명은 공용 모듈(app/lib/crm-audit-format)의 actionLabel 로 통일.
@@ -661,8 +663,13 @@ export default function CrmSettingsPage() {
                       return d ? <span className="text-[#8C8270] dark:text-zinc-500"> · {d}</span> : null;
                     })()}
                   </span>
-                  <span className="text-[#A89B80] dark:text-zinc-500 shrink-0">
-                    {formatDateTime(log.created_at)}
+                  <span className="shrink-0 flex items-baseline gap-2">
+                    <span className="text-[#3A342A] dark:text-zinc-300 font-medium">
+                      {log.actor_name || "알 수 없음"}
+                    </span>
+                    <span className="text-[#A89B80] dark:text-zinc-500">
+                      {formatDateTime(log.created_at)}
+                    </span>
                   </span>
                 </li>
               ))}

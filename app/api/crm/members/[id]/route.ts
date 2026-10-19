@@ -570,6 +570,14 @@ export async function DELETE(
   const memberId = Number(id);
   if (!memberId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
 
+  // 삭제 전에 이름·회원번호를 읽어 둔다 — 로그만 보고도 누구를 지웠는지 알 수 있게.
+  const { data: target } = await supabase
+    .from("crm_members")
+    .select("name, attendance_no")
+    .eq("id", memberId)
+    .eq("center_id", ctx.centerId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("crm_members")
     .update({ status: "deleted" } as never)
@@ -586,7 +594,7 @@ export async function DELETE(
     action: "member.delete",
     entity_type: "member",
     entity_id: memberId,
-    payload: null,
+    payload: target ? ({ 이름: target.name, 회원번호: target.attendance_no } as never) : null,
   });
 
   return NextResponse.json({ ok: true });

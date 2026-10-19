@@ -10,6 +10,9 @@ export const dynamic = "force-dynamic";
  *
  * 각 로그의 대상 회원 이름(subject_name)을 함께 반환 →
  * "누구의" 회원권/수강권을 수정했는지 표시.
+ *
+ * 실행자 이름(actor_name)도 함께 반환 → "누가" 했는지 추적.
+ * actor_uid 가 'system:*' 이면 자동 처리이므로 한글 라벨로 바꿔 준다.
  */
 export async function GET(request: Request) {
   const ctx = await requireCrmContext(request, { needRole: "admin" });
@@ -81,11 +84,51 @@ export async function GET(request: Request) {
     for (const m of members ?? []) nameMap.set(m.id, m.name);
   }
 
+  // 실행자 이름 resolve — actor_uid(firebase_uid) → crm_center_members.display_name
+  // 퇴사자도 보여야 하므로 status 로 걸러내지 않는다. 다른 센터 소속 UID 는 센터 조건 없이 한 번 더 찾는다.
+  const SYSTEM_ACTOR_LABEL: Record<string, string> = {
+    "system:cron": "시스템 (자동 처리)",
+    "system:toss-webhook": "시스템 (온라인 결제)",
+    "system:portone-webhook": "시스템 (온라인 결제)",
+    "system:fix": "시스템 (데이터 보정)",
+  };
+  const actorUids = Array.from(
+    new Set(logs.map((l) => l.actor_uid).filter((u): u is string => !!u && !u.startsWith("system:")))
+  );
+  const actorMap = new Map<string, string>();
+  if (actorUids.length > 0) {
+    const { data: inCenter } = await supabase
+      .from("crm_center_members")
+      .select("firebase_uid, display_name")
+      .eq("center_id", ctx.centerId)
+      .in("firebase_uid", actorUids);
+    for (const a of inCenter ?? []) {
+      if (a.display_name) actorMap.set(a.firebase_uid, a.display_name);
+    }
+    const missing = actorUids.filter((u) => !actorMap.has(u));
+    if (missing.length > 0) {
+      const { data: anyCenter } = await supabase
+        .from("crm_center_members")
+        .select("firebase_uid, display_name")
+        .in("firebase_uid", missing);
+      for (const a of anyCenter ?? []) {
+        if (a.display_name && !actorMap.has(a.firebase_uid)) actorMap.set(a.firebase_uid, a.display_name);
+      }
+    }
+  }
+
   const enriched = logs.map((l) => {
     let memberId: number | undefined;
     if (l.entity_type === "member" && l.entity_id) memberId = l.entity_id;
     else if (l.entity_id) memberId = entityToMember.get(`${l.entity_type}:${l.entity_id}`);
-    return { ...l, subject_name: memberId ? nameMap.get(memberId) ?? null : null };
+    const actorName = l.actor_uid?.startsWith("system:")
+      ? SYSTEM_ACTOR_LABEL[l.actor_uid] ?? "시스템"
+      : actorMap.get(l.actor_uid) ?? null;
+    return {
+      ...l,
+      subject_name: memberId ? nameMap.get(memberId) ?? null : null,
+      actor_name: actorName,
+    };
   });
 
   return NextResponse.json({ logs: enriched });
