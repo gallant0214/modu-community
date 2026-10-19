@@ -1606,7 +1606,7 @@ function ConsultationFormInner({
               <p className="text-[12px] text-[#A89B80]">이 섹션에 항목이 없습니다.</p>
             ) : (
               s.fields.map((f) => (
-                <Field key={f.key} label={f.label}>
+                <Field key={f.key} label={f.label} required={f.required}>
                   <CustomFieldInput
                     field={f}
                     value={customData[f.key]}

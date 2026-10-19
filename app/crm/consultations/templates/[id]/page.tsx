@@ -17,6 +17,7 @@ import {
   normalizeOverrides,
 } from "@/app/lib/crm-consultation-template";
 import { STANDARD_SECTIONS, orderedSectionKeys } from "@/app/lib/crm-consultation-standard";
+import { CONSULTATION_PRESETS, type ConsultationPreset } from "@/app/lib/crm-consultation-presets";
 
 interface Template {
   id: number;
@@ -54,6 +55,7 @@ export default function TemplateEditorPage() {
   const [sections, setSections] = useState<CustomSection[]>([]);
   /* 기본 양식 손질(숨김·이름·순서) */
   const [stdOv, setStdOv] = useState<StandardOverrides>({});
+  const [presetOpen, setPresetOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -172,6 +174,63 @@ export default function TemplateEditorPage() {
     );
   };
 
+  /** 제공된 양식 붙여넣기 — 섹션·항목 key 는 겹치지 않게 새로 만든다 */
+  const addPreset = (preset: ConsultationPreset) => {
+    setSections((prev) => {
+      const secKeys = new Set(prev.map((s) => s.key));
+      const added = preset.sections.map((sec) => {
+        const key = makeSectionKey(secKeys, sec.key);
+        secKeys.add(key);
+        const fKeys = new Set<string>();
+        return {
+          key,
+          title: sec.title,
+          fields: sec.fields.map((f) => {
+            const fk = makeFieldKey(fKeys, f.key);
+            fKeys.add(fk);
+            return { ...f, key: fk, options: f.options?.map((o) => ({ ...o })) };
+          }),
+        };
+      });
+      return [...prev, ...added];
+    });
+    setPresetOpen(false);
+  };
+
+  /** 항목 순서 바꾸기 (네이버 폼처럼 질문을 위아래로 옮긴다) */
+  const moveField = (sIdx: number, fIdx: number, dir: -1 | 1) => {
+    setSections((prev) =>
+      prev.map((s, i) => {
+        if (i !== sIdx) return s;
+        const arr = [...s.fields];
+        const j = fIdx + dir;
+        if (j < 0 || j >= arr.length) return s;
+        [arr[fIdx], arr[j]] = [arr[j], arr[fIdx]];
+        return { ...s, fields: arr };
+      })
+    );
+  };
+
+  /** 항목 복제 — 선택지까지 그대로 복사하고 저장 키만 새로 만든다 */
+  const duplicateField = (sIdx: number, fIdx: number) => {
+    setSections((prev) =>
+      prev.map((s, i) => {
+        if (i !== sIdx) return s;
+        const src = s.fields[fIdx];
+        if (!src) return s;
+        const key = makeFieldKey(new Set(s.fields.map((f) => f.key)), src.key);
+        const copy: CustomField = {
+          ...src,
+          key,
+          options: src.options ? src.options.map((o) => ({ ...o })) : undefined,
+        };
+        const arr = [...s.fields];
+        arr.splice(fIdx + 1, 0, copy);
+        return { ...s, fields: arr };
+      })
+    );
+  };
+
   const removeField = (sIdx: number, fIdx: number) => {
     setSections((prev) =>
       prev.map((s, i) => {
@@ -263,14 +322,44 @@ export default function TemplateEditorPage() {
           <h2 className="text-[14px] font-bold text-[#2A251D] dark:text-zinc-100">
             커스텀 섹션 · 항목
           </h2>
-          <button
-            type="button"
-            onClick={addSection}
-            className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]"
-          >
-            + 섹션 추가
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setPresetOpen((v) => !v)}
+              className="px-3 py-1.5 rounded-lg border border-[#6B7B3A] text-[#6B7B3A] dark:border-[#A8B87A] dark:text-[#A8B87A] text-[12.5px] font-semibold hover:bg-[#F3F7EA]"
+            >
+              제공된 양식 가져오기
+            </button>
+            <button
+              type="button"
+              onClick={addSection}
+              className="px-3 py-1.5 rounded-lg bg-[#6B7B3A] text-white text-[12.5px] font-semibold hover:bg-[#5a6932]"
+            >
+              + 섹션 추가
+            </button>
+          </div>
         </div>
+
+        {presetOpen && (
+          <div className="rounded-xl border border-[#6B7B3A]/40 bg-[#F3F7EA]/60 dark:bg-emerald-950/20 p-3 space-y-2">
+            <p className="text-[12px] text-[#6B5D47] dark:text-zinc-400">
+              누르면 질문 묶음이 아래에 그대로 추가돼요. 추가한 뒤 이름·선택지를 자유롭게 고치면 됩니다.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {CONSULTATION_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => addPreset(p)}
+                  className="text-left px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 hover:border-[#6B7B3A]"
+                >
+                  <div className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100">{p.name}</div>
+                  <div className="text-[11.5px] text-[#8C8270] dark:text-zinc-500 mt-0.5">{p.summary}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {sections.length === 0 ? (
           <p className="text-[12.5px] text-[#A89B80] text-center py-6">
@@ -353,14 +442,51 @@ export default function TemplateEditorPage() {
                               </option>
                             ))}
                           </select>
-                          <button
-                            type="button"
-                            onClick={() => removeField(sIdx, fIdx)}
-                            className="px-2 py-2 rounded border border-red-200 text-[11.5px] text-red-700 hover:bg-red-50"
-                          >
-                            삭제
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => moveField(sIdx, fIdx, -1)}
+                              disabled={fIdx === 0}
+                              className="px-2 py-2 rounded border border-[#E8E0D0] dark:border-zinc-700 text-[11.5px] hover:bg-[#F5F0E5] disabled:opacity-30"
+                              title="위로"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveField(sIdx, fIdx, 1)}
+                              disabled={fIdx === s.fields.length - 1}
+                              className="px-2 py-2 rounded border border-[#E8E0D0] dark:border-zinc-700 text-[11.5px] hover:bg-[#F5F0E5] disabled:opacity-30"
+                              title="아래로"
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => duplicateField(sIdx, fIdx)}
+                              className="px-2 py-2 rounded border border-[#E8E0D0] dark:border-zinc-700 text-[11.5px] text-[#6B5D47] dark:text-zinc-300 hover:bg-[#F5F0E5]"
+                              title="이 항목 복제"
+                            >
+                              복제
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeField(sIdx, fIdx)}
+                              className="px-2 py-2 rounded border border-red-200 text-[11.5px] text-red-700 hover:bg-red-50"
+                            >
+                              삭제
+                            </button>
+                          </div>
                         </div>
+                        <label className="mt-2 inline-flex items-center gap-1.5 text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                          <input
+                            type="checkbox"
+                            checked={!!f.required}
+                            onChange={(e) => updateField(sIdx, fIdx, { required: e.target.checked })}
+                            className="w-3.5 h-3.5 accent-[#6B7B3A]"
+                          />
+                          필수 항목으로 표시
+                        </label>
 
                         {(f.type === "chips_multi" || f.type === "chips_single") && (
                           <OptionEditor

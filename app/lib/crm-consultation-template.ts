@@ -27,6 +27,8 @@ export interface CustomField {
   placeholder?: string;
   helper?: string;
   options?: CustomFieldOption[];  // chips_multi/chips_single 에서만 사용
+  /** 필수 입력 표시(*) — 저장을 막지는 않고 작성자에게 표시만 한다 */
+  required?: boolean;
 }
 
 export interface CustomSection {
