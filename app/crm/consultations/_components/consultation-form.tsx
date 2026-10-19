@@ -1,6 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Children,
+  createContext,
+  isValidElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
 import { crmInputClass } from "../../_components/crm-modal";
@@ -28,7 +39,11 @@ import type {
   CustomSection,
   TemplateDefinition,
 } from "@/app/lib/crm-consultation-template";
-import { normalizeDefinition } from "@/app/lib/crm-consultation-template";
+import {
+  normalizeDefinition,
+  normalizeOverrides,
+  type StandardOverrides,
+} from "@/app/lib/crm-consultation-template";
 
 export interface ConsultationInitial {
   id?: number;
@@ -146,6 +161,8 @@ function ConsultationFormInner({
 }: Props & { draftKey: string; restoredFromDraft: boolean }) {
   const def = useMemo(() => normalizeDefinition(templateDefinition), [templateDefinition]);
   const includeStandard = def.include_standard !== false;
+  /* 기본 양식 손질(숨김·이름·순서) — 상담지 관리에서 저장한 값 */
+  const stdOverrides = useMemo(() => normalizeOverrides(def.standard_overrides), [def]);
   const customSections: CustomSection[] = def.custom_sections ?? [];
   const router = useRouter();
   const { getIdToken } = useAuth();
@@ -948,11 +965,12 @@ function ConsultationFormInner({
 
       {/* ===== 표준 섹션 (템플릿에서 include_standard=false 이면 숨김) ===== */}
       {includeStandard && (
-      <>
+      <StdOverridesContext.Provider value={stdOverrides}>
+      <OrderedSections order={stdOverrides.section_order}>
       {/* ===== 운동 경험 ===== */}
-      <Section title="운동 경험">
+      <Section skey="exercise" title="운동 경험">
         <div className="space-y-3">
-          <Field label="최근 1년간 운동 경력">
+          <Field fkey="recent_year_history" label="최근 1년간 운동 경력">
             <textarea
               value={recentYearHistory}
               onChange={(e) => setRecentYearHistory(e.target.value)}
@@ -960,7 +978,7 @@ function ConsultationFormInner({
               placeholder="예: 헬스 6개월, 크로스핏 3개월…"
             />
           </Field>
-          <Field label="과거 운동 종목">
+          <Field fkey="past_sports" label="과거 운동 종목">
             <ChipList
               options={PAST_SPORTS.map((s) => ({ v: s.v, l: s.l }))}
               value={pastSports}
@@ -971,7 +989,7 @@ function ConsultationFormInner({
               otherPlaceholder="기타 운동 종목을 입력해 주세요"
             />
           </Field>
-          <Field label="운동 경력">
+          <Field fkey="experience_length" label="운동 경력">
             <ChipList
               single
               options={EXPERIENCE_LENGTHS.map((s) => ({ v: s.v, l: s.l }))}
@@ -983,14 +1001,14 @@ function ConsultationFormInner({
               otherPlaceholder="기타 운동 경력을 입력해 주세요"
             />
           </Field>
-          <Field label="운동 동기 / 계기">
+          <Field fkey="motivation" label="운동 동기 / 계기">
             <textarea
               value={motivation}
               onChange={(e) => setMotivation(e.target.value)}
               className={`${crmInputClass} min-h-[60px]`}
             />
           </Field>
-          <Field label="목표">
+          <Field fkey="goals" label="목표">
             <ChipList
               options={GOALS.map((s) => ({ v: s.v, l: s.l }))}
               value={goals}
@@ -1004,32 +1022,32 @@ function ConsultationFormInner({
           <div className="rounded-xl border border-[#DDE8C5] bg-[#F7FAF0] p-3.5 dark:border-[#65733C] dark:bg-emerald-950/20">
             <h3 className="mb-3 text-[13.5px] font-bold text-[#4D622C] dark:text-emerald-200">목표 구체화</h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="가장 중요한 1순위 목표">
+              <Field fkey="goal_details.primary_goal" label="가장 중요한 1순위 목표">
                 <input value={primaryGoal} onChange={(e) => setPrimaryGoal(e.target.value)} className={crmInputClass} placeholder="예: 체지방 감량" />
               </Field>
-              <Field label="목표 기한">
+              <Field fkey="goal_details.deadline" label="목표 기한">
                 <input type="date" value={goalDeadline} onChange={(e) => setGoalDeadline(e.target.value)} className={crmInputClass} />
               </Field>
-              <Field label="현재 상태·수치 (선택)">
+              <Field fkey="goal_details.current_metric" label="현재 상태·수치 (선택)">
                 <input value={currentMetric} onChange={(e) => setCurrentMetric(e.target.value)} className={crmInputClass} placeholder="예: 체중 78kg, 스쿼트 40kg" />
               </Field>
-              <Field label="목표 상태·수치 (선택)">
+              <Field fkey="goal_details.target_metric" label="목표 상태·수치 (선택)">
                 <input value={targetMetric} onChange={(e) => setTargetMetric(e.target.value)} className={crmInputClass} placeholder="예: 체중 72kg, 스쿼트 60kg" />
               </Field>
-              <Field label="목표 중요도">
+              <Field fkey="goal_details.importance" label="목표 중요도">
                 <ScoreSelect value={goalImportance} onChange={setGoalImportance} />
               </Field>
-              <Field label="달성 자신감">
+              <Field fkey="goal_details.confidence" label="달성 자신감">
                 <ScoreSelect value={goalConfidence} onChange={setGoalConfidence} />
               </Field>
             </div>
             <div className="mt-3">
-              <Field label="성공했다고 판단할 기준">
+              <Field fkey="goal_details.success_criteria" label="성공했다고 판단할 기준">
                 <textarea value={successCriteria} onChange={(e) => setSuccessCriteria(e.target.value)} className={`${crmInputClass} min-h-[60px]`} placeholder="예: 주 3회 운동을 3개월 유지하고 허리둘레 5cm 감소" />
               </Field>
             </div>
           </div>
-          <Field label="운동 방법">
+          <Field fkey="workout_method" label="운동 방법">
             <textarea
               value={workoutMethod}
               onChange={(e) => setWorkoutMethod(e.target.value)}
@@ -1038,14 +1056,14 @@ function ConsultationFormInner({
             />
           </Field>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="희망 트레이너">
+            <Field fkey="preferred_trainer" label="희망 트레이너">
               <input
                 value={preferredTrainer}
                 onChange={(e) => setPreferredTrainer(e.target.value)}
                 className={crmInputClass}
               />
             </Field>
-            <Field label="유입 경로">
+            <Field fkey="referral_source" label="유입 경로">
               <input
                 value={referralSource}
                 onChange={(e) => setReferralSource(e.target.value)}
@@ -1058,7 +1076,7 @@ function ConsultationFormInner({
       </Section>
 
       {/* ===== 영양 ===== */}
-      <Section title="영양">
+      <Section skey="nutrition" title="영양">
         <div className="space-y-3">
           {(
             [
@@ -1079,7 +1097,7 @@ function ConsultationFormInner({
             </div>
           ))}
 
-          <Field label="식사 습관">
+          <Field fkey="meal_habits" label="식사 습관">
             <ChipList
               options={MEAL_HABITS.map((s) => ({ v: s.v, l: s.l }))}
               value={mealHabits}
@@ -1089,7 +1107,7 @@ function ConsultationFormInner({
               onOtherTextChange={setMealHabitsOther}
             />
           </Field>
-          <Field label="선호 음식">
+          <Field fkey="preferred_foods" label="선호 음식">
             <ChipList
               options={PREFERRED_FOODS.map((s) => ({ v: s.v, l: s.l }))}
               value={preferredFoods}
@@ -1101,7 +1119,7 @@ function ConsultationFormInner({
             />
           </Field>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="수분 섭취">
+            <Field fkey="water_liters_per_day" label="수분 섭취">
               <input
                 type="text"
                 value={waterLiters}
@@ -1110,7 +1128,7 @@ function ConsultationFormInner({
                 className={crmInputClass}
               />
             </Field>
-            <Field label="카페인 (커피)">
+            <Field fkey="caffeine_cups_per_day" label="카페인 (커피)">
               <input
                 type="text"
                 value={caffeineCups}
@@ -1119,7 +1137,7 @@ function ConsultationFormInner({
                 className={crmInputClass}
               />
             </Field>
-            <Field label="음주 주기">
+            <Field fkey="alcohol_period" label="음주 주기">
               <div className="flex gap-2 items-center">
                 <select
                   value={alcoholPeriod}
@@ -1139,7 +1157,7 @@ function ConsultationFormInner({
                 />
               </div>
             </Field>
-            <Field label="흡연">
+            <Field fkey="smoking" label="흡연">
               <div className="flex gap-2 items-center">
                 <label className="inline-flex items-center">
                   <input
@@ -1160,7 +1178,7 @@ function ConsultationFormInner({
               </div>
             </Field>
           </div>
-          <Field label="섭취 중인 영양제">
+          <Field fkey="supplements" label="섭취 중인 영양제">
             <input
               value={supplements}
               onChange={(e) => setSupplements(e.target.value)}
@@ -1168,7 +1186,7 @@ function ConsultationFormInner({
               placeholder="예: 비타민D, 오메가3…"
             />
           </Field>
-          <Field label="식단 경험">
+          <Field fkey="diet_experience" label="식단 경험">
             <div className="space-y-2">
               <label
                 className={`flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border px-3.5 py-2.5 transition-colors ${
@@ -1202,17 +1220,17 @@ function ConsultationFormInner({
       </Section>
 
       {/* ===== 근무 패턴 ===== */}
-      <Section title="근무 패턴">
+      <Section skey="work" title="근무 패턴">
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="직업">
+            <Field fkey="job" label="직업">
               <input
                 value={job}
                 onChange={(e) => setJob(e.target.value)}
                 className={crmInputClass}
               />
             </Field>
-            <Field label="근무 시간">
+            <Field fkey="work_hours_start" label="근무 시간">
               <div className="flex items-center gap-2 flex-wrap">
                 <Time10Picker value={workStart} onChange={setWorkStart} />
                 <span className="text-[13px] text-[#A89B80]">~</span>
@@ -1220,7 +1238,7 @@ function ConsultationFormInner({
               </div>
             </Field>
           </div>
-          <Field label="출퇴근 수단">
+          <Field fkey="commute" label="출퇴근 수단">
             <ChipList
               single
               options={COMMUTES.map((s) => ({ v: s.v, l: s.l }))}
@@ -1231,7 +1249,7 @@ function ConsultationFormInner({
               <input value={commuteOther} onChange={(e) => setCommuteOther(e.target.value)} className={`${crmInputClass} mt-2`} placeholder="기타 출퇴근 수단을 입력해 주세요" autoFocus />
             )}
           </Field>
-          <Field label="직업 형태">
+          <Field fkey="job_traits" label="직업 형태">
             <ChipList
               options={JOB_TRAITS.map((s) => ({ v: s.v, l: s.l }))}
               value={jobTraits}
@@ -1241,7 +1259,7 @@ function ConsultationFormInner({
               onOtherTextChange={setJobTraitsOther}
             />
           </Field>
-          <Field label="기타 사항">
+          <Field fkey="work_notes" label="기타 사항">
             <textarea
               value={workNotes}
               onChange={(e) => setWorkNotes(e.target.value)}
@@ -1252,10 +1270,10 @@ function ConsultationFormInner({
       </Section>
 
       {/* ===== 컨디션 ===== */}
-      <Section title="컨디션">
+      <Section skey="condition" title="컨디션">
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="기상 시간">
+            <Field fkey="wake_hour" label="기상 시간">
               <div className="flex items-center gap-1.5">
                 <select
                   value={wakeHour}
@@ -1283,7 +1301,7 @@ function ConsultationFormInner({
                 </select>
               </div>
             </Field>
-            <Field label="취침 시간">
+            <Field fkey="sleep_hour" label="취침 시간">
               <div className="flex items-center gap-1.5">
                 <select
                   value={sleepHour}
@@ -1312,7 +1330,7 @@ function ConsultationFormInner({
               </div>
             </Field>
           </div>
-          <Field label="수면 만족도">
+          <Field fkey="sleep_satisfaction" label="수면 만족도">
             <ChipList
               single
               options={LEVELS.map((s) => ({ v: s.v, l: s.l }))}
@@ -1320,7 +1338,7 @@ function ConsultationFormInner({
               onToggle={(v) => setSleepSatisfaction(sleepSatisfaction === v ? "" : v)}
             />
           </Field>
-          <Field label="컨디션 지수">
+          <Field fkey="condition_score" label="컨디션 지수">
             <ChipList
               single
               options={LEVELS.map((s) => ({ v: s.v, l: s.l }))}
@@ -1328,7 +1346,7 @@ function ConsultationFormInner({
               onToggle={(v) => setConditionScore(conditionScore === v ? "" : v)}
             />
           </Field>
-          <Field label="피로도 시점">
+          <Field fkey="fatigue_when" label="피로도 시점">
             <ChipList
               options={FATIGUE_WHEN.map((s) => ({ v: s.v, l: s.l }))}
               value={fatigueWhen}
@@ -1338,14 +1356,14 @@ function ConsultationFormInner({
               onOtherTextChange={setFatigueWhenOther}
             />
           </Field>
-          <Field label="피로도 원인">
+          <Field fkey="fatigue_reason" label="피로도 원인">
             <input
               value={fatigueReason}
               onChange={(e) => setFatigueReason(e.target.value)}
               className={crmInputClass}
             />
           </Field>
-          <Field label="기타 사항">
+          <Field fkey="condition_notes" label="기타 사항">
             <textarea
               value={conditionNotes}
               onChange={(e) => setConditionNotes(e.target.value)}
@@ -1356,18 +1374,18 @@ function ConsultationFormInner({
       </Section>
 
       {/* ===== 운동 전 안전 확인 ===== */}
-      <Section title="운동 전 안전 확인">
+      <Section skey="safety" title="운동 전 안전 확인">
         <div className="space-y-3">
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
             아래 항목은 진단이 아니라 안전한 운동 시작을 위한 사전 확인입니다. 해당 시 의료진 확인이 필요할 수 있습니다.
           </p>
-          <Field label="현재 또는 최근 경험한 항목">
+          <Field fkey="safety_screening.flags" label="현재 또는 최근 경험한 항목">
             <ChipList options={SAFETY_FLAGS.map((s) => ({ v: s.v, l: s.l }))} value={safetyFlags} onToggle={(v) => toggle(safetyFlags, v, setSafetyFlags)} allowOther otherText={safetyOther} onOtherTextChange={setSafetyOther} otherPlaceholder="기타 안전 확인 내용을 입력해 주세요" />
           </Field>
           {safetyFlags.length > 0 && (
             <div className="rounded-xl border border-amber-300 bg-amber-50/70 p-3.5 dark:border-amber-800 dark:bg-amber-950/20">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="의료진 운동 확인 상태">
+                <Field fkey="safety_screening.clearance_status" label="의료진 운동 확인 상태">
                   <select value={clearanceStatus} onChange={(e) => setClearanceStatus(e.target.value)} className={crmInputClass}>
                     <option value="">선택</option>
                     <option value="pending">확인 예정·대기</option>
@@ -1375,12 +1393,12 @@ function ConsultationFormInner({
                     <option value="restricted">조건부 가능·제한 있음</option>
                   </select>
                 </Field>
-                <Field label="확인일">
+                <Field fkey="safety_screening.clearance_date" label="확인일">
                   <input type="date" value={clearanceDate} onChange={(e) => setClearanceDate(e.target.value)} className={crmInputClass} />
                 </Field>
               </div>
               <div className="mt-3">
-                <Field label="의료진 주의사항·운동 제한">
+                <Field fkey="safety_screening.precautions" label="의료진 주의사항·운동 제한">
                   <textarea value={medicalPrecautions} onChange={(e) => setMedicalPrecautions(e.target.value)} className={`${crmInputClass} min-h-[64px]`} />
                 </Field>
               </div>
@@ -1390,9 +1408,9 @@ function ConsultationFormInner({
       </Section>
 
       {/* ===== 통증 체크 ===== */}
-      <Section title="통증 체크">
+      <Section skey="pain" title="통증 체크">
         <div className="space-y-3">
-          <Field label="부상 경험">
+          <Field fkey="injury_history" label="부상 경험">
             <textarea
               value={injuryHistory}
               onChange={(e) => setInjuryHistory(e.target.value)}
@@ -1400,7 +1418,7 @@ function ConsultationFormInner({
               placeholder="예: 3년 전 왼쪽 발목 인대 파열…"
             />
           </Field>
-          <Field label="통증 부위">
+          <Field fkey="pain_parts" label="통증 부위">
             <ChipList
               options={PAIN_PARTS.map((s) => ({ v: s.v, l: s.l }))}
               value={painParts}
@@ -1414,23 +1432,23 @@ function ConsultationFormInner({
           {(painParts.length > 0 || painPartsEtc || injuryHistory) && (
             <div className="rounded-xl border border-[#E8E0D0] bg-white p-3.5 dark:border-zinc-700 dark:bg-zinc-950">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <Field label="통증 강도 (0~10)">
+                <Field fkey="pain_details.intensity" label="통증 강도 (0~10)">
                   <input type="number" min={0} max={10} value={painIntensity} onChange={(e) => setPainIntensity(e.target.value === "" ? "" : Number(e.target.value))} className={crmInputClass} />
                 </Field>
-                <Field label="방향">
+                <Field fkey="pain_details.side" label="방향">
                   <select value={painSide} onChange={(e) => setPainSide(e.target.value)} className={crmInputClass}>
                     <option value="">선택</option><option value="left">왼쪽</option><option value="right">오른쪽</option><option value="both">양쪽</option>
                   </select>
                 </Field>
-                <Field label="시작 시점">
+                <Field fkey="pain_details.onset" label="시작 시점">
                   <input value={painOnset} onChange={(e) => setPainOnset(e.target.value)} className={crmInputClass} placeholder="예: 약 3개월 전" />
                 </Field>
               </div>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="통증이 발생하는 동작"><input value={painTrigger} onChange={(e) => setPainTrigger(e.target.value)} className={crmInputClass} placeholder="예: 계단 내려가기" /></Field>
-                <Field label="피해야 하는 동작"><input value={painAvoid} onChange={(e) => setPainAvoid(e.target.value)} className={crmInputClass} placeholder="예: 깊은 스쿼트" /></Field>
-                <Field label="병원 진단명"><input value={painDiagnosis} onChange={(e) => setPainDiagnosis(e.target.value)} className={crmInputClass} /></Field>
-                <Field label="치료·재활 상태"><input value={painTreatment} onChange={(e) => setPainTreatment(e.target.value)} className={crmInputClass} placeholder="예: 물리치료 주 1회" /></Field>
+                <Field fkey="pain_details.trigger" label="통증이 발생하는 동작"><input value={painTrigger} onChange={(e) => setPainTrigger(e.target.value)} className={crmInputClass} placeholder="예: 계단 내려가기" /></Field>
+                <Field fkey="pain_details.avoid" label="피해야 하는 동작"><input value={painAvoid} onChange={(e) => setPainAvoid(e.target.value)} className={crmInputClass} placeholder="예: 깊은 스쿼트" /></Field>
+                <Field fkey="pain_details.diagnosis" label="병원 진단명"><input value={painDiagnosis} onChange={(e) => setPainDiagnosis(e.target.value)} className={crmInputClass} /></Field>
+                <Field fkey="pain_details.treatment" label="치료·재활 상태"><input value={painTreatment} onChange={(e) => setPainTreatment(e.target.value)} className={crmInputClass} placeholder="예: 물리치료 주 1회" /></Field>
               </div>
             </div>
           )}
@@ -1438,9 +1456,9 @@ function ConsultationFormInner({
       </Section>
 
       {/* ===== 과거 / 현재 병력 ===== */}
-      <Section title="과거 / 현재 병력">
+      <Section skey="history" title="과거 / 현재 병력">
         <div className="space-y-3">
-          <Field label="과거 병력">
+          <Field fkey="conditions_past" label="과거 병력">
             <ChipList
               options={CONDITIONS.map((s) => ({ v: s.v, l: s.l }))}
               value={conditionsPast}
@@ -1451,7 +1469,7 @@ function ConsultationFormInner({
               otherPlaceholder="기타 과거 병력·건강 상태를 입력해 주세요"
             />
           </Field>
-          <Field label="현재 병력">
+          <Field fkey="conditions" label="현재 병력">
             <ChipList
               options={CONDITIONS.map((s) => ({ v: s.v, l: s.l }))}
               value={conditions}
@@ -1463,7 +1481,7 @@ function ConsultationFormInner({
             />
           </Field>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="약물 복용 여부">
+            <Field fkey="medications" label="약물 복용 여부">
               <textarea
                 value={medications}
                 onChange={(e) => setMedications(e.target.value)}
@@ -1471,7 +1489,7 @@ function ConsultationFormInner({
                 placeholder="복용 중인 약이 있으면 기록"
               />
             </Field>
-            <Field label="현재 상태">
+            <Field fkey="current_state" label="현재 상태">
               <textarea
                 value={currentState}
                 onChange={(e) => setCurrentState(e.target.value)}
@@ -1484,10 +1502,10 @@ function ConsultationFormInner({
       </Section>
 
       {/* ===== 운동 계획 ===== */}
-      <Section title="운동 계획">
+      <Section skey="plan" title="운동 계획">
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="주 몇 회">
+            <Field fkey="weekly_freq" label="주 몇 회">
               <input
                 type="number"
                 min={0}
@@ -1497,7 +1515,7 @@ function ConsultationFormInner({
                 className={crmInputClass}
               />
             </Field>
-            <Field label="원하는 시간대">
+            <Field fkey="planned_time" label="원하는 시간대">
               <input
                 value={plannedTime}
                 onChange={(e) => setPlannedTime(e.target.value)}
@@ -1506,7 +1524,7 @@ function ConsultationFormInner({
               />
             </Field>
           </div>
-          <Field label="요일">
+          <Field fkey="planned_days" label="요일">
             <ChipList
               options={PLANNED_DAYS.map((s) => ({ v: s.v, l: s.l }))}
               value={plannedDays}
@@ -1520,27 +1538,27 @@ function ConsultationFormInner({
         </div>
       </Section>
 
-      <Section title="운동 지속 및 지도 선호">
+      <Section skey="adherence" title="운동 지속 및 지도 선호">
         <div className="space-y-4">
-          <Field label="운동 지속을 방해할 수 있는 요인">
+          <Field fkey="adherence_details.barriers" label="운동 지속을 방해할 수 있는 요인">
             <ChipList options={EXERCISE_BARRIERS.map((s) => ({ v: s.v, l: s.l }))} value={barriers} onToggle={(v) => toggle(barriers, v, setBarriers)} allowOther otherText={barriersOther} onOtherTextChange={setBarriersOther} otherPlaceholder="기타 방해 요인을 입력해 주세요" />
           </Field>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="이전 운동을 중단한 가장 큰 이유">
+            <Field fkey="adherence_details.dropout_reason" label="이전 운동을 중단한 가장 큰 이유">
               <textarea value={dropoutReason} onChange={(e) => setDropoutReason(e.target.value)} className={`${crmInputClass} min-h-[64px]`} />
             </Field>
-            <Field label="운동을 지속하기 위해 필요한 도움">
+            <Field fkey="adherence_details.support_needed" label="운동을 지속하기 위해 필요한 도움">
               <textarea value={adherenceSupport} onChange={(e) => setAdherenceSupport(e.target.value)} className={`${crmInputClass} min-h-[64px]`} />
             </Field>
           </div>
-          <Field label="선호하는 지도 방식">
+          <Field fkey="coaching_preferences.styles" label="선호하는 지도 방식">
             <ChipList options={COACHING_STYLES.map((s) => ({ v: s.v, l: s.l }))} value={coachingStyles} onToggle={(v) => toggle(coachingStyles, v, setCoachingStyles)} allowOther otherText={coachingStylesOther} onOtherTextChange={setCoachingStylesOther} otherPlaceholder="기타 선호 지도 방식을 입력해 주세요" />
           </Field>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="자세 교정을 위한 신체 접촉 동의">
+            <Field fkey="coaching_preferences.touch_consent" label="자세 교정을 위한 신체 접촉 동의">
               <YesNoChoice value={touchConsent} onChange={setTouchConsent} />
             </Field>
-            <Field label="자세 확인용 사진·영상 촬영 동의">
+            <Field fkey="coaching_preferences.media_consent" label="자세 확인용 사진·영상 촬영 동의">
               <YesNoChoice value={mediaConsent} onChange={setMediaConsent} />
             </Field>
           </div>
@@ -1548,7 +1566,7 @@ function ConsultationFormInner({
       </Section>
 
       {/* ===== 강사에게 바라는 점 ===== */}
-      <Section title="강사에게 바라는 점 또는 요청 사항">
+      <Section skey="request" title="강사에게 바라는 점 또는 요청 사항">
         <textarea
           value={requestNote}
           onChange={(e) => setRequestNote(e.target.value)}
@@ -1556,27 +1574,28 @@ function ConsultationFormInner({
         />
       </Section>
 
-      <Section title="상담 후속 관리">
+      <Section skey="followup" title="상담 후속 관리">
         <div className="space-y-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="운동 시작 희망일"><input type="date" value={desiredStartDate} onChange={(e) => setDesiredStartDate(e.target.value)} className={crmInputClass} /></Field>
-            <Field label="관심 수업 횟수"><input value={interestedSessions} onChange={(e) => setInterestedSessions(e.target.value)} className={crmInputClass} placeholder="예: 주 2회, 20회권" /></Field>
-            <Field label="선호 연락 방식">
+            <Field fkey="follow_up_details.desired_start_date" label="운동 시작 희망일"><input type="date" value={desiredStartDate} onChange={(e) => setDesiredStartDate(e.target.value)} className={crmInputClass} /></Field>
+            <Field fkey="follow_up_details.interested_sessions" label="관심 수업 횟수"><input value={interestedSessions} onChange={(e) => setInterestedSessions(e.target.value)} className={crmInputClass} placeholder="예: 주 2회, 20회권" /></Field>
+            <Field fkey="follow_up_details.preferred_contact" label="선호 연락 방식">
               <ChipList single options={CONTACT_METHODS.map((s) => ({ v: s.v, l: s.l }))} value={preferredContact ? [preferredContact] : []} onToggle={(v) => setPreferredContact(preferredContact === v ? "" : v)} allowOther otherText={preferredContactOther} onOtherTextChange={setPreferredContactOther} otherPlaceholder="기타 연락 방식을 입력해 주세요" />
             </Field>
-            <Field label="연락 가능한 시간"><input value={contactTime} onChange={(e) => setContactTime(e.target.value)} className={crmInputClass} placeholder="예: 평일 오후 6시 이후" /></Field>
-            <Field label="다음 연락 예정일"><input type="date" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} className={crmInputClass} /></Field>
-            <Field label="등록 가능성">
+            <Field fkey="follow_up_details.contact_time" label="연락 가능한 시간"><input value={contactTime} onChange={(e) => setContactTime(e.target.value)} className={crmInputClass} placeholder="예: 평일 오후 6시 이후" /></Field>
+            <Field fkey="follow_up_details.follow_up_date" label="다음 연락 예정일"><input type="date" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} className={crmInputClass} /></Field>
+            <Field fkey="follow_up_details.lead_temperature" label="등록 가능성">
               <select value={leadTemperature} onChange={(e) => setLeadTemperature(e.target.value)} className={crmInputClass}>
                 <option value="">선택</option><option value="hot">높음</option><option value="warm">보통</option><option value="cold">낮음</option>
               </select>
             </Field>
           </div>
-          <Field label="등록을 망설이는 이유"><input value={hesitationReason} onChange={(e) => setHesitationReason(e.target.value)} className={crmInputClass} placeholder="예: 근무 일정 확인, 비용 상담 필요" /></Field>
-          <Field label="다음 연락·상담 내용"><textarea value={followUpNote} onChange={(e) => setFollowUpNote(e.target.value)} className={`${crmInputClass} min-h-[72px]`} placeholder="예: 8월 15일 저녁에 일정 확인 후 재연락" /></Field>
+          <Field fkey="follow_up_details.hesitation_reason" label="등록을 망설이는 이유"><input value={hesitationReason} onChange={(e) => setHesitationReason(e.target.value)} className={crmInputClass} placeholder="예: 근무 일정 확인, 비용 상담 필요" /></Field>
+          <Field fkey="follow_up_details.follow_up_note" label="다음 연락·상담 내용"><textarea value={followUpNote} onChange={(e) => setFollowUpNote(e.target.value)} className={`${crmInputClass} min-h-[72px]`} placeholder="예: 8월 15일 저녁에 일정 확인 후 재연락" /></Field>
         </div>
       </Section>
-      </>
+      </OrderedSections>
+      </StdOverridesContext.Provider>
       )}
 
       {/* ===== 커스텀 섹션 (템플릿에서 정의) ===== */}
@@ -1653,22 +1672,42 @@ function ConsultationFormInner({
   );
 }
 
+/** 기본 양식 손질값 — 표준 섹션/항목만 참조한다(커스텀 섹션은 skey/fkey 가 없어 영향 없음). */
+const StdOverridesContext = createContext<StandardOverrides>({});
+
+/** 섹션을 설정된 순서대로 다시 배열. 설정이 없으면 코드에 적힌 순서 그대로. */
+function OrderedSections({ order, children }: { order?: string[]; children: React.ReactNode }) {
+  const items = Children.toArray(children).filter(isValidElement) as ReactElement<{ skey?: string }>[];
+  if (!order || order.length === 0) return <>{items}</>;
+  const rank = new Map(order.map((k, i) => [k, i]));
+  const sorted = [...items].sort(
+    (a, b) => (rank.get(a.props.skey ?? "") ?? 999) - (rank.get(b.props.skey ?? "") ?? 999)
+  );
+  return <>{sorted}</>;
+}
+
 function Section({
+  skey,
   title,
   required,
   headerRight,
   children,
 }: {
+  /** 표준 섹션 key (상담지 관리에서 숨김·이름 바꾸기 대상) */
+  skey?: string;
   title: string;
   required?: boolean;
   headerRight?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const ov = useContext(StdOverridesContext);
+  if (skey && ov.hidden_sections?.includes(skey)) return null;
+  const shownTitle = (skey && ov.section_titles?.[skey]) || title;
   return (
     <section className="mb-5 px-4 py-4 md:px-5 md:py-5 rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
       <div className="flex items-center justify-between gap-2 mb-4">
         <h2 className="text-[16px] font-bold text-[#2A251D] dark:text-zinc-100">
-          {title}
+          {shownTitle}
           {required && <span className="text-[#B47B2A] ml-1">*</span>}
         </h2>
         {headerRight}
@@ -1712,18 +1751,24 @@ function YesNoChoice({ value, onChange }: { value: string; onChange: (value: str
 }
 
 function Field({
+  fkey,
   label,
   required,
   children,
 }: {
+  /** 표준 항목 key (상담지 관리에서 숨김·이름 바꾸기 대상) */
+  fkey?: string;
   label: string;
   required?: boolean;
   children: React.ReactNode;
 }) {
+  const ov = useContext(StdOverridesContext);
+  if (fkey && ov.hidden_fields?.includes(fkey)) return null;
+  const shownLabel = (fkey && ov.field_labels?.[fkey]) || label;
   return (
     <div className="min-w-0">
       <div className="text-[13px] font-bold text-[#2A251D] dark:text-zinc-100 mb-1.5">
-        {label}
+        {shownLabel}
         {required && <span className="text-[#B47B2A] ml-0.5">*</span>}
       </div>
       {children}

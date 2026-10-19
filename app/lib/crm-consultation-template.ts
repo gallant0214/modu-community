@@ -35,9 +35,29 @@ export interface CustomSection {
   fields: CustomField[];
 }
 
+/**
+ * 기본 양식(표준 섹션) 손질 결과.
+ * 🚨 숨김·이름변경·순서만 저장한다. 답변이 들어가는 DB 컬럼은 건드리지 않으므로
+ *    예전 상담 기록이 그대로 보인다.
+ */
+export interface StandardOverrides {
+  /** 숨길 섹션 key */
+  hidden_sections?: string[];
+  /** 숨길 항목 key */
+  hidden_fields?: string[];
+  /** 섹션 제목 바꾸기 (key → 새 제목) */
+  section_titles?: Record<string, string>;
+  /** 항목 이름 바꾸기 (key → 새 이름) */
+  field_labels?: Record<string, string>;
+  /** 섹션 표시 순서 (key 배열) */
+  section_order?: string[];
+}
+
 export interface TemplateDefinition {
   /** 표준 섹션(기본 상담지) 포함 여부. false 면 최소 정보만 + custom_sections. */
   include_standard?: boolean;
+  /** 기본 양식 손질 (숨김·이름·순서) */
+  standard_overrides?: StandardOverrides;
   /** 사용자 정의 섹션 목록 (표준 섹션 뒤에 노출) */
   custom_sections?: CustomSection[];
   /** 템플릿 노트 (관리자용, 폼에는 노출 안 됨) */
@@ -49,6 +69,7 @@ export function normalizeDefinition(raw: unknown): TemplateDefinition {
   const obj = raw as Partial<TemplateDefinition>;
   return {
     include_standard: obj.include_standard !== false,
+    standard_overrides: normalizeOverrides(obj.standard_overrides),
     custom_sections: Array.isArray(obj.custom_sections) ? obj.custom_sections : [],
     note: typeof obj.note === "string" ? obj.note : undefined,
   };
@@ -80,3 +101,26 @@ export const FIELD_TYPE_LABEL: Record<CustomFieldType, string> = {
   chips_single: "단일 선택 칩",
   toggle: "예/아니오 (스위치)",
 };
+
+function strArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
+function strMap(v: unknown): Record<string, string> {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof val === "string" && val.trim()) out[k] = val;
+  }
+  return out;
+}
+
+export function normalizeOverrides(raw: unknown): StandardOverrides {
+  const o = (raw ?? {}) as Partial<StandardOverrides>;
+  return {
+    hidden_sections: strArray(o.hidden_sections),
+    hidden_fields: strArray(o.hidden_fields),
+    section_titles: strMap(o.section_titles),
+    field_labels: strMap(o.field_labels),
+    section_order: strArray(o.section_order),
+  };
+}
