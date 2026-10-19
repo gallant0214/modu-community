@@ -139,7 +139,9 @@ export default function MemberWebSignupPage() {
     requiredSections.length > 0 && requiredSections.every((s) => agreed[s.key]);
   const toggleAgree = (k: string) => setAgreed((prev) => ({ ...prev, [k]: !prev[k] }));
 
-  // 서명 캔버스 초기화 — 계약서 단계에 들어올 때마다
+  // 서명 캔버스 초기화 — 계약서 단계에 '진입'할 때만.
+  // 🚨 signatureDataUrl 을 deps 에 넣으면 손 뗄 때(sigEnd 가 값을 저장) effect 가 다시 돌며
+  //    캔버스 크기 재설정으로 그림이 지워진다. 그래서 step/contractTpl 에만 의존한다.
   useEffect(() => {
     if (step !== "contract") return;
     const c = canvasRef.current;
@@ -154,9 +156,17 @@ export default function MemberWebSignupPage() {
     ctx.lineJoin = "round";
     ctx.lineWidth = 2;
     ctx.strokeStyle = "#2A251D";
-    // 이전에 서명했다가 되돌아온 경우: 빈 캔버스로 두되 기존 값 유지(재서명 시 덮어씀)
-    setSignatureEmpty(!signatureDataUrl);
-  }, [step, contractTpl, signatureDataUrl]);
+    // 되돌아왔을 때 기존 서명이 있으면 다시 그려서 보여준다
+    if (signatureDataUrl) {
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0, c.clientWidth, c.clientHeight);
+      img.src = signatureDataUrl;
+      setSignatureEmpty(false);
+    } else {
+      setSignatureEmpty(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, contractTpl]);
 
   const sigPos = (e: React.MouseEvent | React.TouchEvent) => {
     const c = canvasRef.current;

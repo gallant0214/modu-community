@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const PROFILE_COLUMNS =
   "id, name, legal_name, policy_contract_template_id, kind, region_sido, region_sigungu, phone, business_no, owner_name, address, address_detail, " +
-  "naver_url, google_url, instagram_id, youtube_url, operating_hours, logo_data_url, status, " +
+  "naver_url, google_url, instagram_id, youtube_url, operating_hours, logo_data_url, stamp_data_url, status, " +
   // 온라인 판매(PG 결제) 페이지 표기 항목
   "mail_order_no, support_email, refund_policy" as unknown as "*";
 
@@ -55,6 +55,7 @@ export async function PATCH(request: Request) {
     operating_hours?: string | null;
     /** 사이드바 로고 (data URL png). 빈 문자열/null → 로고 삭제 */
     logo_data_url?: string | null;
+    stamp_data_url?: string | null;
     /* 온라인 판매(PG 결제) 페이지에 표기되는 항목 — 전자상거래법 의무 */
     mail_order_no?: string | null;
     support_email?: string | null;
@@ -140,6 +141,17 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "로고 이미지 용량이 너무 큽니다" }, { status: 400 });
     }
     patch.logo_data_url = v || null;
+  }
+  // 센터 각인(도장): 로고와 같은 규칙 — data URL 저장, 빈 값이면 삭제
+  if (body.stamp_data_url !== undefined) {
+    const v = body.stamp_data_url === null ? "" : String(body.stamp_data_url).trim();
+    if (v && !v.startsWith("data:image/")) {
+      return NextResponse.json({ error: "각인 이미지 형식이 올바르지 않습니다" }, { status: 400 });
+    }
+    if (v.length > 2_000_000) {
+      return NextResponse.json({ error: "각인 이미지 용량이 너무 큽니다" }, { status: 400 });
+    }
+    patch.stamp_data_url = v || null;
   }
 
   if (Object.keys(patch).length === 0) {

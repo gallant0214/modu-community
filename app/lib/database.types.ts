@@ -1288,6 +1288,7 @@ export type Database = {
           operating_hours: string | null
           kiosk_token: string | null
           logo_data_url: string | null
+          stamp_data_url: string | null
           industry: string | null
           business_license_data_url: string | null
           postal_code: string | null
@@ -1326,6 +1327,7 @@ export type Database = {
           operating_hours?: string | null
           kiosk_token?: string | null
           logo_data_url?: string | null
+          stamp_data_url?: string | null
           industry?: string | null
           business_license_data_url?: string | null
           postal_code?: string | null
@@ -1364,6 +1366,7 @@ export type Database = {
           operating_hours?: string | null
           kiosk_token?: string | null
           logo_data_url?: string | null
+          stamp_data_url?: string | null
           industry?: string | null
           business_license_data_url?: string | null
           postal_code?: string | null
