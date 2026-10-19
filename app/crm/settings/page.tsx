@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import { actionLabel } from "@/app/lib/crm-audit-format";
 import { CrmModal } from "../_components/crm-modal";
@@ -722,6 +722,8 @@ interface CenterProfile {
   mail_order_no: string | null;
   support_email: string | null;
   refund_policy: string | null;
+  /* 센터 각인(대표자 도장) 이미지 — 계약서 등 각인 용도 */
+  stamp_data_url: string | null;
 }
 
 // 운영 시간: 요일 선택 + 시간대 항목 배열을 JSON 으로 operating_hours(text)에 저장.
@@ -830,6 +832,10 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
   const [hoursNoteMode, setHoursNoteMode] = useState(false);
   const [hoursNote, setHoursNote] = useState("");
   const hoursSerialized = hoursEntries.length > 0 ? JSON.stringify(hoursEntries) : "";
+  // 센터 각인(대표자 도장): 이미지 한 장. 파일을 고르면 그 즉시 저장한다(아래 '저장' 버튼과 무관).
+  const [stampDataUrl, setStampDataUrl] = useState<string | null>(null);
+  const [stampBusy, setStampBusy] = useState(false);
+  const stampInputRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
     setError("");
@@ -886,6 +892,7 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       }
       setSupportEmail(c.support_email ?? "");
       setRefundPolicy(c.refund_policy ?? "");
+      setStampDataUrl(c.stamp_data_url ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -914,6 +921,60 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
       mailOrderNo !== (profile.mail_order_no ?? "") ||
       supportEmail !== (profile.support_email ?? "") ||
       refundPolicy !== (profile.refund_policy ?? ""));
+
+  // 각인 이미지 저장/삭제 — null 이면 삭제
+  const saveStamp = async (next: string | null) => {
+    setStampBusy(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/crm/centers/me", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ stamp_data_url: next }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || "각인 저장 실패");
+      setStampDataUrl(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setStampBusy(false);
+    }
+  };
+
+  // 도장은 보통 배경이 투명하므로 PNG 로 유지하고, 긴 변 600px 으로만 줄인다.
+  const pickStampFile = (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("이미지 파일만 올릴 수 있어요");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = String(reader.result ?? "");
+      if (!raw) return;
+      const img = new Image();
+      img.onload = () => {
+        const max = 600;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, 0, 0, w, h);
+        void saveStamp(canvas.toDataURL("image/png"));
+      };
+      img.onerror = () => setError("이미지를 읽을 수 없어요");
+      img.src = raw;
+    };
+    reader.readAsDataURL(file);
+  };
 
   const save = async () => {
     if (!canEdit || !dirty || saving) return;
@@ -1335,6 +1396,60 @@ function CenterProfilePanel({ role }: { role: "owner" | "admin" | "manager" | "t
             </button>
           </div>
         )}
+      </Card>
+
+      <Card title="센터 각인 (대표자 도장)">
+        <p className="text-[12px] text-[#8C8270] dark:text-zinc-500 leading-relaxed">
+          센터 각인이나 대표자 도장 이미지를 보관하는 공간이에요. 배경이 투명한 PNG 를 올리면 깔끔하게 찍힙니다.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="w-[128px] h-[128px] rounded-xl border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 flex items-center justify-center overflow-hidden">
+            {stampDataUrl ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={stampDataUrl} alt="센터 각인" className="max-w-full max-h-full object-contain" />
+            ) : (
+              <span className="text-[11.5px] text-[#B0A488] dark:text-zinc-600">없음</span>
+            )}
+          </div>
+          {canEdit && (
+            <div className="flex flex-col gap-2">
+              <input
+                ref={stampInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  pickStampFile(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => stampInputRef.current?.click()}
+                disabled={stampBusy}
+                className="px-3 py-2 rounded-lg text-[13px] font-semibold bg-[#6B7B3A] text-white hover:bg-[#5a6932] disabled:opacity-60"
+              >
+                {stampBusy ? "저장 중…" : stampDataUrl ? "이미지 변경" : "이미지 첨부"}
+              </button>
+              {stampDataUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!window.confirm("각인 이미지를 삭제할까요?")) return;
+                    void saveStamp(null);
+                  }}
+                  disabled={stampBusy}
+                  className="px-3 py-2 rounded-lg text-[12.5px] font-semibold border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-60"
+                >
+                  삭제
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        <p className="text-[11px] text-[#A89B80] leading-relaxed">
+          첨부하면 바로 저장돼요. 긴 변 600px 으로 줄여 보관합니다.
+        </p>
       </Card>
     </div>
   );
