@@ -3946,6 +3946,8 @@ export type Database = {
           booking_reason: string | null
           attendance_reminded_at: string | null
           reschedule_history: Json
+          class_reminder_sent_at: string | null
+          class_end_sent_at: string | null
         }
         Insert: {
           id?: number
@@ -3971,6 +3973,8 @@ export type Database = {
           rejected_reason?: string | null
           booking_reason?: string | null
           reschedule_history?: Json
+          class_reminder_sent_at?: string | null
+          class_end_sent_at?: string | null
         }
         Update: {
           id?: number
@@ -3996,6 +4000,8 @@ export type Database = {
           rejected_reason?: string | null
           booking_reason?: string | null
           reschedule_history?: Json
+          class_reminder_sent_at?: string | null
+          class_end_sent_at?: string | null
         }
         Relationships: []
       }
@@ -4235,6 +4241,9 @@ export type Database = {
           notify_reservation_cancelled: boolean
           notify_attendance: boolean
           notify_signup_purchase: boolean
+          class_reminder_enabled: boolean
+          class_reminder_lead_min: number
+          class_end_enabled: boolean
           updated_at: string
         }
         Insert: {
@@ -4244,6 +4253,9 @@ export type Database = {
           notify_reservation_cancelled?: boolean
           notify_attendance?: boolean
           notify_signup_purchase?: boolean
+          class_reminder_enabled?: boolean
+          class_reminder_lead_min?: number
+          class_end_enabled?: boolean
           updated_at?: string
         }
         Update: {
@@ -4253,6 +4265,9 @@ export type Database = {
           notify_reservation_cancelled?: boolean
           notify_attendance?: boolean
           notify_signup_purchase?: boolean
+          class_reminder_enabled?: boolean
+          class_reminder_lead_min?: number
+          class_end_enabled?: boolean
           updated_at?: string
         }
         Relationships: []

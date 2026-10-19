@@ -45,6 +45,8 @@ export async function notifyStaffMember(params: {
       member_signup: "notify_signup_purchase",
       member_purchase: "notify_signup_purchase",
       member_refund: "notify_signup_purchase",
+      class_reminder: "class_reminder_enabled",
+      class_end: "class_end_enabled",
     };
     const prefCol = PREF_COLUMN[type];
     if (prefCol) {
