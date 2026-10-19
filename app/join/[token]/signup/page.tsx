@@ -35,8 +35,11 @@ interface ContractTemplate {
   sections: ContractSection[];
 }
 
-type Step = "info" | "membership" | "apparel" | "locker" | "summary" | "contract" | "selfie";
-const ORDER: Step[] = ["info", "membership", "apparel", "locker", "summary", "contract", "selfie"];
+type Step = "info" | "membership" | "apparel" | "locker" | "start" | "summary" | "contract" | "selfie";
+const ORDER: Step[] = ["info", "membership", "apparel", "locker", "start", "summary", "contract", "selfie"];
+
+/** 오늘(KST) YYYY-MM-DD */
+const kstTodayYmd = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
 const won = (n: number) => n.toLocaleString("ko-KR");
 const durLabel = (v: number, u: string) =>
@@ -63,6 +66,10 @@ export default function MemberWebSignupPage() {
   const [membershipId, setMembershipId] = useState<number | null>(null);
   const [apparelId, setApparelId] = useState<number | null>(null); // null=선택 안 함
   const [lockerId, setLockerId] = useState<number | null>(null);
+  // 시작일 (모든 상품 일괄 적용)
+  const [startMode, setStartMode] = useState<"today" | "custom">("today");
+  const [customStart, setCustomStart] = useState<string>("");
+  const effectiveStart = startMode === "today" ? kstTodayYmd() : customStart;
 
   // 전자계약서
   const [contractTpl, setContractTpl] = useState<ContractTemplate | null>(null);
@@ -309,6 +316,7 @@ export default function MemberWebSignupPage() {
           membershipId,
           apparelId,
           lockerId,
+          startDate: effectiveStart,
           faceImage: faceDataUrl,
           faceThumb,
           signature: signatureDataUrl,
@@ -350,9 +358,11 @@ export default function MemberWebSignupPage() {
         !!gender
       );
     if (step === "membership") return membershipId != null;
+    if (step === "start")
+      return startMode === "today" || (/^\d{4}-\d{2}-\d{2}$/.test(customStart) && customStart >= kstTodayYmd());
     if (step === "contract") return !!contractTpl && requiredOk && !signatureEmpty;
     return true; // apparel/locker/summary 는 선택 안 함 허용
-  }, [step, name, phone, birth, gender, membershipId, contractTpl, requiredOk, signatureEmpty]);
+  }, [step, name, phone, birth, gender, membershipId, startMode, customStart, contractTpl, requiredOk, signatureEmpty]);
 
   const selMembership = data?.memberships.find((p) => p.id === membershipId) ?? null;
   const selApparel = data?.apparel.find((p) => p.id === apparelId) ?? null;
@@ -471,11 +481,52 @@ export default function MemberWebSignupPage() {
           </StepBody>
         )}
 
+        {step === "start" && (
+          <StepBody title="언제부터 시작할까요?" sub="선택한 상품 전체에 같은 시작일이 적용돼요">
+            <button
+              onClick={() => setStartMode("today")}
+              className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl border text-left transition-colors ${
+                startMode === "today" ? "border-[#6B7B3A] bg-[#6B7B3A]/8" : "border-[#E8E0D0] bg-white"
+              }`}
+            >
+              <Radio on={startMode === "today"} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-bold text-[#2A251D]">오늘부터 시작</span>
+                <span className="block text-[12px] text-[#8C8270]">{kstTodayYmd()}</span>
+              </span>
+            </button>
+
+            <button
+              onClick={() => setStartMode("custom")}
+              className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl border text-left transition-colors ${
+                startMode === "custom" ? "border-[#6B7B3A] bg-[#6B7B3A]/8" : "border-[#E8E0D0] bg-white"
+              }`}
+            >
+              <Radio on={startMode === "custom"} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-bold text-[#2A251D]">날짜 직접 선택</span>
+                <span className="block text-[12px] text-[#8C8270]">달력에서 원하는 날짜를 고르세요</span>
+              </span>
+            </button>
+
+            {startMode === "custom" && (
+              <input
+                type="date"
+                value={customStart}
+                min={kstTodayYmd()}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className={inputCls}
+              />
+            )}
+          </StepBody>
+        )}
+
         {step === "summary" && (
           <StepBody title="신청 내용을 확인해 주세요" sub={data.centerName}>
             <div className="rounded-2xl border border-[#E8E0D0] bg-white divide-y divide-[#EFE7D5]">
               <SumRow label="이름" value={name} />
               <SumRow label="연락처" value={phone} />
+              <SumRow label="시작일" value={`${effectiveStart} 부터`} />
               <SumRow label="헬스 이용권" value={selMembership ? `${selMembership.name} · ${won(selMembership.price_won)}원` : "—"} />
               <SumRow label="운동복" value={selApparel ? `${selApparel.name} · ${won(selApparel.price_won)}원` : "선택 안 함"} />
               <SumRow label="락커" value={selLocker ? `${selLocker.name} · ${won(selLocker.price_won)}원` : "선택 안 함"} />

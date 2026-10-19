@@ -71,6 +71,7 @@ export async function POST(request: Request) {
     membershipId?: number;
     apparelId?: number | null;
     lockerId?: number | null;
+    startDate?: string | null;
     faceImage?: string;
     faceThumb?: string;
     signature?: string;
@@ -152,6 +153,15 @@ export async function POST(request: Request) {
   const amount = ordered.reduce((s, p) => s + Math.max(0, Number(p.price_won) || 0), 0);
   if (amount <= 0)
     return NextResponse.json({ error: "결제 금액이 올바르지 않아요" }, { status: 400 });
+
+  // 시작일 — 모든 구성품에 일괄 적용. 오늘(KST) 이전 금지. 안 주면 null(발급 시 오늘).
+  let startDate: string | null = null;
+  if (body.startDate && String(body.startDate).trim()) {
+    const s = String(body.startDate).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || s < kstToday())
+      return NextResponse.json({ error: "시작일을 확인해 주세요" }, { status: 400 });
+    startDate = s;
+  }
 
   // 4) 계약서 양식 + 섹션 (센터 지정 양식만) + 필수 동의 검증
   let tplQuery = supabase
@@ -274,7 +284,7 @@ export async function POST(request: Request) {
       pg_provider: "portone",
       channel: "web",
       expires_at: expiresAt,
-      start_date: null,
+      start_date: startDate,
     } as never)
     .select("id")
     .single();
