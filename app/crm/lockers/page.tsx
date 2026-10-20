@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import Link from "next/link";
 import { useAuth } from "@/app/components/auth-provider";
 import { useCrmToast } from "../_components/crm-toast";
 import { CrmModal, CrmField, crmInputClass } from "../_components/crm-modal";
@@ -1951,6 +1952,7 @@ function LockerActionModal({
     {
       id: number;
       action: string;
+      member_id: number | null;
       member_name: string | null;
       created_at: string;
       note: string | null;
@@ -2308,9 +2310,19 @@ function LockerActionModal({
                       <span className="text-[12.5px] font-semibold text-[#3A342A] dark:text-zinc-200">
                         {ACTION_KO[h.action] ?? h.action}
                         {h.member_name && (
-                          <span className="ml-2 text-[12px] text-[#6B5D47] dark:text-zinc-400 font-normal">
-                            {h.member_name}
-                          </span>
+                          h.member_id ? (
+                            /* 이름 클릭 → 회원 상세 페이지 */
+                            <Link
+                              href={`/crm/members/${h.member_id}`}
+                              className="ml-2 text-[12px] text-[#6B7B3A] dark:text-[#A8B87A] font-normal underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                            >
+                              {h.member_name}
+                            </Link>
+                          ) : (
+                            <span className="ml-2 text-[12px] text-[#6B5D47] dark:text-zinc-400 font-normal">
+                              {h.member_name}
+                            </span>
+                          )
                         )}
                       </span>
                       <span className="text-[11px] text-[#A89B80] shrink-0">
