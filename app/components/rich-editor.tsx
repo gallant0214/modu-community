@@ -72,7 +72,6 @@ export default function RichEditor({ content = "", onChange, placeholder }: Prop
   const [showBgMenu, setShowBgMenu] = useState(false);
   const [fontSize, setFontSize] = useState(15);
   const [fontLabel, setFontLabel] = useState("기본서체");
-  const [, forceRender] = useState(0);
 
   /* 🚨 TipTap v3 는 onUpdate 같은 핸들러가 바뀌어도 옵션을 갱신하지 않는다
      (compareOptions 가 핸들러 키를 비교 대상에서 빼버린다). 그래서 content 가 그대로인
@@ -131,12 +130,10 @@ export default function RichEditor({ content = "", onChange, placeholder }: Prop
       lastEmittedRef.current = html;
       onChangeRef.current?.(html);
     },
-    onSelectionUpdate: () => {
-      forceRender((n) => n + 1);
-    },
-    onTransaction: () => {
-      forceRender((n) => n + 1);
-    },
+    // 🚨 선택/트랜잭션마다 forceRender 로 리렌더하던 것을 제거.
+    //    잦은 리렌더가 useEditor 의 재생성 사이클을 건드려 에디터 DOM 이 재장착되고
+    //    포커스가 제목 입력으로 튀는 원인이었다. 툴바 활성표시는 실시간이 아니게 되지만
+    //    입력·커서 안정성이 우선이다.
     editorProps,
   });
 
