@@ -455,7 +455,7 @@ export default function MemberWebSignupPage() {
               <input
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="예: ○○동"
+                placeholder="예: ○○동 ○○아파트"
                 maxLength={120}
                 className={inputCls}
               />
