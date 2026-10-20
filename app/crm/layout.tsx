@@ -214,7 +214,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
           centerMemberId={ctx.centerMemberId ?? null}
           permissions={ctx.permissions}
         />
-        <main className="flex-1 min-w-0 md:ml-60">{children}</main>
+        <main className="flex-1 min-w-0 lg:ml-60">{children}</main>
       </div>
     </CrmShell>
   );

@@ -341,7 +341,7 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
   return (
     <>
       {/* 모바일 상단 바 (햄버거) */}
-      <div className="md:hidden sticky top-0 z-30 flex items-center gap-2 px-4 h-12 border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7]/95 dark:bg-zinc-950/95 backdrop-blur">
+      <div className="lg:hidden sticky top-0 z-30 flex items-center gap-2 px-4 h-12 border-b border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7]/95 dark:bg-zinc-950/95 backdrop-blur">
         <button
           onClick={() => setMobileOpen(true)}
           aria-label="메뉴 열기"
@@ -357,7 +357,7 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
       </div>
 
       {/* 데스크탑 사이드바 — navbar(56px) 아래 완전 고정(fixed). 스크롤·overflow 무관하게 항상 고정 */}
-      <aside className="hidden md:flex flex-col w-60 border-r border-[#E1D5C0] dark:border-zinc-800 bg-[#FBF7EB]/82 dark:bg-zinc-950/88 backdrop-blur fixed top-14 left-0 z-30 h-[calc(100dvh-3.5rem)]">
+      <aside className="hidden lg:flex flex-col w-60 border-r border-[#E1D5C0] dark:border-zinc-800 bg-[#FBF7EB]/82 dark:bg-zinc-950/88 backdrop-blur fixed top-14 left-0 z-30 h-[calc(100dvh-3.5rem)]">
         <SidebarHeader centerName={centerName} initialLogo={centerLogo ?? null} canEdit={role === "owner" || role === "admin"} />
         <nav className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-3">{links}</nav>
         <SidebarFooter />
@@ -365,7 +365,7 @@ export function CrmSidebar({ role, centerName, centerLogo, centerKind, centerMem
 
       {/* 모바일 슬라이드 사이드바 */}
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-40">
+        <div className="lg:hidden fixed inset-0 z-40">
           <div
             className="absolute inset-0 bg-black/40"
             onClick={() => setMobileOpen(false)}
