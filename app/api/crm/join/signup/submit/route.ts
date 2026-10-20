@@ -68,6 +68,7 @@ export async function POST(request: Request) {
     phone?: string;
     birth?: string;
     gender?: "male" | "female" | string;
+    address?: string;
     membershipId?: number;
     apparelId?: number | null;
     lockerId?: number | null;
@@ -109,6 +110,7 @@ export async function POST(request: Request) {
   const phone = normPhone(body.phone ?? "");
   const birth = (body.birth ?? "").trim();
   const gender = body.gender === "male" ? "M" : body.gender === "female" ? "F" : "";
+  const address = (body.address ?? "").trim().slice(0, 120) || null;
   if (!name) return NextResponse.json({ error: "이름을 입력해 주세요" }, { status: 400 });
   if (phone.replace(/\D/g, "").length < 10)
     return NextResponse.json({ error: "연락처를 확인해 주세요" }, { status: 400 });
@@ -206,6 +208,7 @@ export async function POST(request: Request) {
         name,
         birth,
         gender,
+        ...(address ? { address } : {}),
         face_image_data: face,
         face_image_thumb: body.faceThumb || face,
         face_consent_at: new Date().toISOString(),
@@ -221,6 +224,7 @@ export async function POST(request: Request) {
         phone,
         birth,
         gender,
+        address,
         status: "active",
         registration_type: "신규",
         registered_at: kstToday(),
@@ -248,6 +252,7 @@ export async function POST(request: Request) {
       phone,
       birth,
       gender: gender === "M" ? "남" : gender === "F" ? "여" : "",
+      address: address ?? "",
     } as never,
     product_info: { plan_name: membershipProd?.name ?? "" } as never,
     payment_info: { price_won: amount } as never,

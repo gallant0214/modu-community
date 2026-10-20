@@ -62,6 +62,7 @@ export default function MemberWebSignupPage() {
   const [phone, setPhone] = useState("");
   const [birth, setBirth] = useState("");
   const [gender, setGender] = useState<"male" | "female" | "">("");
+  const [address, setAddress] = useState("");
   // 선택값
   const [membershipId, setMembershipId] = useState<number | null>(null);
   const [apparelId, setApparelId] = useState<number | null>(null); // null=선택 안 함
@@ -313,6 +314,7 @@ export default function MemberWebSignupPage() {
           phone,
           birth,
           gender,
+          address,
           membershipId,
           apparelId,
           lockerId,
@@ -449,6 +451,15 @@ export default function MemberWebSignupPage() {
                   </button>
                 ))}
               </div>
+            </Field>
+            <Field label="주소">
+              <input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="예: ○○동"
+                maxLength={120}
+                className={inputCls}
+              />
             </Field>
           </StepBody>
         )}
