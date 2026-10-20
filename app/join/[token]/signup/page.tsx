@@ -42,8 +42,6 @@ const ORDER: Step[] = ["info", "membership", "apparel", "locker", "start", "summ
 const kstTodayYmd = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
 const won = (n: number) => n.toLocaleString("ko-KR");
-const durLabel = (v: number, u: string) =>
-  u === "month" ? `${v}개월` : u === "year" ? `${v}년` : `${v}일`;
 
 export default function MemberWebSignupPage() {
   const params = useParams<{ token: string }>();
@@ -827,7 +825,6 @@ function OptionList({
             <Radio on={on} />
             <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-bold text-[#2A251D] truncate">{p.name}</span>
-              <span className="block text-[12px] text-[#8C8270]">{durLabel(p.duration_value, p.duration_unit)}</span>
             </span>
             <span className="shrink-0 text-[15px] font-extrabold text-[#6B7B3A]">{won(p.price_won)}원</span>
           </button>
