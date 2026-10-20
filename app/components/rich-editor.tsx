@@ -90,6 +90,13 @@ export default function RichEditor({ content = "", onChange, placeholder }: Prop
      (안 그러면 빠른 입력 중 옛 HTML 로 리셋돼 커서가 튄다) */
   const lastEmittedRef = useRef<string>(content);
 
+  /* 🚨 @tiptap/react v3: useEditor 는 매 렌더마다 options 를 비교해 바뀌면 setOptions 를
+     호출하는데, content 는 비교 대상에 포함된다(compareOptions). 그래서 content prop 을
+     그대로 넘기면 입력할 때마다(부모 리렌더) content 가 바뀐 것으로 보고 에디터를 리셋해
+     "본문이 입력되지 않고 커서가 튀는" 증상이 난다.
+     → 생성 시점의 초기값만 고정으로 넘기고, 이후 외부 변경은 아래 useEffect(setContent)로 반영. */
+  const initialContentRef = useRef<string>(content);
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -101,7 +108,7 @@ export default function RichEditor({ content = "", onChange, placeholder }: Prop
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
     ],
-    content,
+    content: initialContentRef.current,
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
       lastEmittedRef.current = html;
