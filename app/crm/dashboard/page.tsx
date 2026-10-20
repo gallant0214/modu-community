@@ -6,6 +6,7 @@ import { useAuth } from "@/app/components/auth-provider";
 import { CrmDonutChart } from "../_components/crm-donut-chart";
 import { PAYMENT_METHOD_LABEL, formatWon } from "../_components/crm-labels";
 import { TrainerDashboard } from "./_trainer-dashboard";
+import { SimpleDashboard } from "./_simple-dashboard";
 import { CustomerStatusView } from "./_components/customer-status-view";
 import { MemberConversionCard } from "./_components/member-conversion-card";
 import { WeeklyAttendanceChart } from "./_components/weekly-attendance-chart";
@@ -108,11 +109,16 @@ interface SummaryResp {
 
 interface BootstrapResp {
   role: "owner" | "admin" | "manager" | "trainer";
+  /** 직급(등급) 라벨 — 아르바이트·FC 등 비교육 직급 판별용 */
+  gradeLabel?: string | null;
   centerKind?: "solo" | "center";
   displayName: string | null;
   centerName: string;
   permissions: Record<string, boolean>;
 }
+
+/** 수업을 하지 않는 직급(수업·수업료 지표를 숨기고 간단 대시보드) */
+const NON_TEACHING_GRADES = ["아르바이트", "FC"];
 
 const DONUT_COLORS = ["#6B7B3A", "#B47B2A", "#A8B87A", "#E8C088", "#8C8270"];
 
@@ -147,6 +153,7 @@ export default function CrmDashboardPage() {
       const d = await fetch("/api/crm/bootstrap", { headers: auth, cache: "no-store" });
       const meData: BootstrapResp | null = d.ok ? await d.json() : null;
       setMe(meData);
+      // solo·강사·비교육직급(아르바이트·FC) 은 센터 집계 API 를 호출하지 않는다
       const isTrainer = meData?.centerKind === "solo" || meData?.role === "trainer";
       if (isTrainer) return;
 
@@ -173,6 +180,17 @@ export default function CrmDashboardPage() {
     load();
   }, [load]);
 
+  // 비교육 직급(아르바이트·FC) → 수업 지표 없는 간단 대시보드.
+  //   solo 는 제외(개인 CRM 운영자). 센터 소속 trainer 중 해당 라벨만.
+  if (
+    me &&
+    me.centerKind !== "solo" &&
+    me.role === "trainer" &&
+    me.gradeLabel &&
+    NON_TEACHING_GRADES.includes(me.gradeLabel)
+  ) {
+    return <SimpleDashboard centerName={me.centerName} displayName={me.displayName} />;
+  }
   // 개인/프리랜서 트레이너(solo 또는 role='trainer') → 트레이너 전용 대시보드로 분기.
   if (me && (me.centerKind === "solo" || me.role === "trainer")) {
     return <TrainerDashboard centerName={me.centerName} displayName={me.displayName} />;

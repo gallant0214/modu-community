@@ -57,6 +57,16 @@ export async function GET(request: Request) {
     .select("photo_suggest_enabled")
     .eq("center_id", ctx.centerId)
     .maybeSingle();
+  // 직급(등급) 라벨 — 대시보드가 비교육 직급(아르바이트·FC) 을 구분하는 데 쓴다
+  let gradeLabel: string | null = null;
+  if (ctx.gradeId) {
+    const { data: g } = await supabase
+      .from("crm_grades")
+      .select("label")
+      .eq("id", ctx.gradeId)
+      .maybeSingle();
+    gradeLabel = (g as { label?: string } | null)?.label ?? null;
+  }
   const permissions = await loadPermissionsForContext(ctx);
   // 직급권한 '센터 CRM 접속' 차단: 센터 컨텍스트 + owner 아님 + 권한 OFF → 진입 차단 신호.
   // 개인 CRM(solo)·owner 는 항상 허용.
@@ -85,6 +95,7 @@ export async function GET(request: Request) {
     centerName: ctx.centerName,
     centerKind: ctx.centerKind,
     role: ctx.role,
+    gradeLabel,
     accessLevel: ctx.accessLevel,
     isSoloOwner: ctx.isSoloOwner,
     businessNo: centerInfo?.business_no ?? null,
