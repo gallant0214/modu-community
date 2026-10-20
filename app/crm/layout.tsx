@@ -204,7 +204,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
   // 6) 정상: 사이드바 + 컨텐츠
   return (
     <CrmShell>
-      <div className="flex min-h-[calc(100dvh-3.5rem)]">
+      <div className="min-h-[calc(100dvh-3.5rem)]">
         <CrmSidebar
           role={ctx.role ?? "trainer"}
           centerName={ctx.centerName ?? ""}
