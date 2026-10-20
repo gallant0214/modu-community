@@ -68,6 +68,7 @@ export default function MemberWebSignupPage() {
   // 시작일 (모든 상품 일괄 적용)
   const [startMode, setStartMode] = useState<"today" | "custom">("today");
   const [customStart, setCustomStart] = useState<string>("");
+  const [calOpen, setCalOpen] = useState(false); // 달력 팝업
   const effectiveStart = startMode === "today" ? kstTodayYmd() : customStart;
 
   // 전자계약서
@@ -506,7 +507,10 @@ export default function MemberWebSignupPage() {
             </button>
 
             <button
-              onClick={() => setStartMode("custom")}
+              onClick={() => {
+                setStartMode("custom");
+                setCalOpen(true); // 누르면 달력 바로 열림
+              }}
               className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl border text-left transition-colors ${
                 startMode === "custom" ? "border-[#6B7B3A] bg-[#6B7B3A]/8" : "border-[#E8E0D0] bg-white"
               }`}
@@ -514,19 +518,11 @@ export default function MemberWebSignupPage() {
               <Radio on={startMode === "custom"} />
               <span className="min-w-0 flex-1">
                 <span className="block text-[15px] font-bold text-[#2A251D]">날짜 직접 선택</span>
-                <span className="block text-[12px] text-[#8C8270]">달력에서 원하는 날짜를 고르세요</span>
+                <span className="block text-[12px] text-[#8C8270]">
+                  {startMode === "custom" && customStart ? `${customStart} 부터` : "달력에서 원하는 날짜를 고르세요"}
+                </span>
               </span>
             </button>
-
-            {startMode === "custom" && (
-              <input
-                type="date"
-                value={customStart}
-                min={kstTodayYmd()}
-                onChange={(e) => setCustomStart(e.target.value)}
-                className={inputCls}
-              />
-            )}
           </StepBody>
         )}
 
@@ -748,6 +744,19 @@ export default function MemberWebSignupPage() {
         )}
       </div>
 
+      {calOpen && (
+        <CalendarModal
+          value={customStart}
+          minYmd={kstTodayYmd()}
+          onClose={() => setCalOpen(false)}
+          onPick={(ymd) => {
+            setCustomStart(ymd);
+            setStartMode("custom");
+            setCalOpen(false);
+          }}
+        />
+      )}
+
       <style>{`
         @keyframes twSlideR { from { transform: translateX(16px); opacity: 0 } to { transform: translateX(0); opacity: 1 } }
         @keyframes twSlideL { from { transform: translateX(-16px); opacity: 0 } to { transform: translateX(0); opacity: 1 } }
@@ -784,6 +793,109 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <div className="text-[12.5px] font-semibold text-[#6B5D47] mb-1.5">{label}</div>
       {children}
+    </div>
+  );
+}
+
+/** 시작일 선택 달력 팝업 — 배경(backdrop) 누르면 닫힌다 */
+function CalendarModal({
+  value,
+  minYmd,
+  onPick,
+  onClose,
+}: {
+  value: string;
+  minYmd: string;
+  onPick: (ymd: string) => void;
+  onClose: () => void;
+}) {
+  const min = new Date(`${minYmd}T00:00:00`);
+  const base = value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00`) : min;
+  const [view, setView] = useState<{ y: number; m: number }>({ y: base.getFullYear(), m: base.getMonth() });
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const ymd = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad(d)}`;
+  const firstWeekday = new Date(view.y, view.m, 1).getDay();
+  const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
+  const minYmdStr = ymd(min.getFullYear(), min.getMonth(), min.getDate());
+
+  // 이전 달로 못 가게: 뷰가 min 의 달이면 prev 비활성
+  const atMinMonth = view.y === min.getFullYear() && view.m === min.getMonth();
+  const prev = () => setView((v) => (v.m === 0 ? { y: v.y - 1, m: 11 } : { y: v.y, m: v.m - 1 }));
+  const nextM = () => setView((v) => (v.m === 11 ? { y: v.y + 1, m: 0 } : { y: v.y, m: v.m + 1 }));
+
+  const cells: (number | null)[] = [
+    ...Array(firstWeekday).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center px-4 pb-6"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-[360px] rounded-3xl bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={prev}
+            disabled={atMinMonth}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-[#3A342A] disabled:text-[#D9CDB8]"
+            aria-label="이전 달"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div className="text-[16px] font-extrabold text-[#2A251D]">
+            {view.y}년 {view.m + 1}월
+          </div>
+          <button
+            onClick={nextM}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-[#3A342A]"
+            aria-label="다음 달"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1 mb-1">
+          {["일", "월", "화", "수", "목", "금", "토"].map((w) => (
+            <div key={w} className="text-center text-[11px] font-semibold text-[#A89B80] py-1">
+              {w}
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-7 gap-1">
+          {cells.map((d, i) => {
+            if (d === null) return <div key={`b${i}`} />;
+            const cur = ymd(view.y, view.m, d);
+            const disabled = cur < minYmdStr;
+            const selected = cur === value;
+            return (
+              <button
+                key={cur}
+                disabled={disabled}
+                onClick={() => onPick(cur)}
+                className={`aspect-square rounded-full text-[14px] font-semibold flex items-center justify-center transition-colors ${
+                  selected
+                    ? "bg-[#6B7B3A] text-white"
+                    : disabled
+                      ? "text-[#D9CDB8] cursor-not-allowed"
+                      : "text-[#2A251D] hover:bg-[#6B7B3A]/10"
+                }`}
+              >
+                {d}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
