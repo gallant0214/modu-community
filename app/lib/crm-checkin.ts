@@ -367,6 +367,39 @@ export async function buildCheckinSummary(centerId: number, memberId: number) {
 }
 
 /**
+ * 지금 쓸 수 있는 이용권(=등록된 회원)인지 — 유효·미정지·시작한 회원권 또는 잔여 있는 수강권 보유 여부.
+ * 락커·대여권(운동복)은 부가상품이라 자격으로 보지 않는다(입장 자격 can_enter 와 같은 기준).
+ * 퇴실 적립처럼 '등록 회원만' 대상인 기능의 판정에 쓴다.
+ */
+export async function hasUsableEntitlement(centerId: number, memberId: number): Promise<boolean> {
+  const ymd = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const [{ data: memberships }, { data: passes }] = await Promise.all([
+    supabase
+      .from("crm_memberships")
+      .select("id")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .eq("status", "valid")
+      .eq("is_paused", false)
+      .gte("expires_at", ymd)
+      .or(`start_date.lte.${ymd},start_date.is.null`)
+      .limit(1),
+    supabase
+      .from("crm_passes")
+      .select("id")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .eq("status", "valid")
+      .eq("is_paused", false)
+      .gte("expires_at", ymd)
+      .gt("remaining_sessions", 0)
+      .or(`start_date.lte.${ymd},start_date.is.null`)
+      .limit(1),
+  ]);
+  return (memberships ?? []).length > 0 || (passes ?? []).length > 0;
+}
+
+/**
  * 이 회원이 출석 시 적립되는 출석포인트 '적립 가능액'(일일 중복과 무관, 상품 설정 기준).
  * 유효·미정지 회원권/수강권의 attendance_mileage_earn 중 최대값. 0이면 적립 없는 회원.
  */

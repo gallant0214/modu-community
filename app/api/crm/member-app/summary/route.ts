@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
+import { hasUsableEntitlement } from "@/app/lib/crm-checkin";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
   const weekStartUtc = new Date(weekStartKst.getTime() - 9 * 3600 * 1000).toISOString();
   const weekEndUtc = new Date(weekStartKst.getTime() + 7 * 24 * 3600 * 1000 - 9 * 3600 * 1000).toISOString();
 
-  const [{ data: notice }, { data: mem }, { data: settings }, { count: checkoutToday }, { data: atts }, { count: noticeUnread }] = await Promise.all([
+  const [{ data: notice }, { data: mem }, { data: settings }, { count: checkoutToday }, { data: atts }, { count: noticeUnread }, eligible] = await Promise.all([
     supabase
       .from("crm_center_notices")
       .select("id, title, body, created_at")
@@ -59,6 +60,8 @@ export async function GET(request: Request) {
       .eq("member_id", ctx.memberId)
       .eq("type", "notice")
       .is("read_at", null),
+    // 퇴실 적립 자격 — 지금 쓸 수 있는 회원권/수강권이 있는 '등록 회원' 만
+    hasUsableEntitlement(ctx.centerId, ctx.memberId),
   ]);
 
   // 이번 주 출석한 요일(KST ymd) 집합
@@ -89,6 +92,8 @@ export async function GET(request: Request) {
       earn: settings?.checkout_mileage_earn ?? 0,
       doneToday: (checkoutToday ?? 0) > 0,
       windowOpen, // 오늘 마지막 체크인 후 3시간 이내만 true
+      // 🚨 유효 이용권이 없는(미등록·만료) 회원은 출석해도 퇴실 적립 대상이 아니다
+      eligible,
       checkInAt: lastCheckInMs ? new Date(lastCheckInMs).toISOString() : null,
       windowMinutes: 180,
     },

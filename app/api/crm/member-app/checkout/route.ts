@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { notifyCenterStaffAttendance } from "@/app/lib/crm-staff-notify";
 import { sendLocalizedPushToMember } from "@/app/lib/member-notify";
+import { hasUsableEntitlement } from "@/app/lib/crm-checkin";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,15 @@ export async function POST(request: Request) {
   const earn = settings.checkout_mileage_earn ?? 0;
   if (earn <= 0) {
     return NextResponse.json({ error: "적립 포인트가 설정되지 않았어요" }, { status: 400 });
+  }
+
+  // 🚨 퇴실 적립은 '등록 회원'(지금 쓸 수 있는 회원권/수강권 보유) 만. 만료·미등록 회원이
+  //    출석만 하고 적립받는 것을 막는다. (앱 버튼도 비활성이지만 구버전 앱 대비 서버에서도 차단)
+  if (!(await hasUsableEntitlement(ctx.centerId, ctx.memberId))) {
+    return NextResponse.json(
+      { error: "이용 중인 회원권이 없어 퇴실 적립을 받을 수 없어요." },
+      { status: 400 }
+    );
   }
 
   const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
