@@ -85,6 +85,11 @@ export default function RichEditor({ content = "", onChange, placeholder }: Prop
     onChangeRef.current = onChange;
   }, [onChange]);
 
+  /* 에디터가 **스스로 내보낸** 마지막 HTML. content prop 이 이 값과 같으면
+     "내가 방금 타이핑한 결과가 되돌아온 것"이므로 setContent 로 덮어쓰지 않는다.
+     (안 그러면 빠른 입력 중 옛 HTML 로 리셋돼 커서가 튄다) */
+  const lastEmittedRef = useRef<string>(content);
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -98,7 +103,9 @@ export default function RichEditor({ content = "", onChange, placeholder }: Prop
     ],
     content,
     onUpdate: ({ editor }) => {
-      onChangeRef.current?.(editor.getHTML());
+      const html = editor.getHTML();
+      lastEmittedRef.current = html;
+      onChangeRef.current?.(html);
     },
     onSelectionUpdate: () => {
       forceRender((n) => n + 1);
@@ -113,10 +120,17 @@ export default function RichEditor({ content = "", onChange, placeholder }: Prop
     },
   });
 
+  // 외부에서 content 가 바뀌었을 때만 에디터에 반영한다.
+  // - 에디터 자신이 내보낸 값이 그대로 돌아온 경우(lastEmitted) → 무시
+  // - 사용자가 지금 입력 중(focused) → 무시 (입력 중 리셋 = 커서 튐의 원인)
+  // - 이미 같은 HTML 이면 → 무시
   useEffect(() => {
-    if (editor && content && !editor.getHTML().includes(content.slice(0, 20))) {
-      editor.commands.setContent(content);
-    }
+    if (!editor) return;
+    if (content === lastEmittedRef.current) return;
+    if (editor.isFocused) return;
+    if (content === editor.getHTML()) return;
+    editor.commands.setContent(content || "");
+    lastEmittedRef.current = content;
   }, [content, editor]);
 
   if (!editor) return null;
