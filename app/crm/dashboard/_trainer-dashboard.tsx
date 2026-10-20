@@ -162,7 +162,7 @@ export function TrainerDashboard({
           <div className="min-w-0">
             <p className="text-[12px] font-semibold text-[#7F6F55] dark:text-zinc-500">{centerName || "CRM"}</p>
             <h1 className="mt-1 text-[24px] md:text-[28px] leading-tight font-bold text-[#241F18] dark:text-zinc-100">
-              개인 트레이너 대시보드
+              대시보드
             </h1>
             <p className="mt-1.5 text-[13px] text-[#6B5D47] dark:text-zinc-400">
               {displayName ? <strong className="text-[#2A251D] dark:text-zinc-100">{displayName}</strong> : null}
