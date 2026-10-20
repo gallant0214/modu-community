@@ -8,7 +8,7 @@ import { Color } from "@tiptap/extension-color";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import FontFamily from "@tiptap/extension-font-family";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 const FONTS = [
   { label: "기본서체", value: "" },
@@ -97,9 +97,12 @@ export default function RichEditor({ content = "", onChange, placeholder }: Prop
      → 생성 시점의 초기값만 고정으로 넘기고, 이후 외부 변경은 아래 useEffect(setContent)로 반영. */
   const initialContentRef = useRef<string>(content);
 
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions: [
+  /* 🚨 extensions·editorProps 는 반드시 렌더 간 **안정적인 참조**여야 한다.
+     매 렌더 새 배열/객체(특히 Highlight.configure(...) 같은 새 인스턴스)를 넘기면
+     useEditor 의 compareOptions 가 "옵션이 바뀌었다"로 보고 매 렌더 setOptions →
+     에디터 뷰가 재구성되며 포커스·커서가 날아간다(클릭하면 제목으로 튐). */
+  const extensions = useMemo(
+    () => [
       StarterKit,
       Underline,
       FontSizeExtension,
@@ -108,6 +111,20 @@ export default function RichEditor({ content = "", onChange, placeholder }: Prop
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
     ],
+    []
+  );
+  const editorProps = useMemo(
+    () => ({
+      attributes: {
+        class: "prose prose-sm max-w-none focus:outline-none min-h-[300px] px-4 py-5 text-[15px] leading-[1.85] text-[#2A251D] dark:text-zinc-100",
+      },
+    }),
+    []
+  );
+
+  const editor = useEditor({
+    immediatelyRender: false,
+    extensions,
     content: initialContentRef.current,
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
@@ -120,11 +137,7 @@ export default function RichEditor({ content = "", onChange, placeholder }: Prop
     onTransaction: () => {
       forceRender((n) => n + 1);
     },
-    editorProps: {
-      attributes: {
-        class: "prose prose-sm max-w-none focus:outline-none min-h-[300px] px-4 py-5 text-[15px] leading-[1.85] text-[#2A251D] dark:text-zinc-100",
-      },
-    },
+    editorProps,
   });
 
   // 외부에서 content 가 바뀌었을 때만 에디터에 반영한다.
