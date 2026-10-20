@@ -98,7 +98,7 @@ export async function POST(request: Request) {
   const centerId = link.center_id as number;
   const { data: center } = await supabase
     .from("crm_centers")
-    .select("id, name, status")
+    .select("id, name, status, stamp_data_url")
     .eq("id", centerId)
     .maybeSingle();
   if (!center || center.status !== "active") {
@@ -259,6 +259,14 @@ export async function POST(request: Request) {
     terms_accepted: accepted as never,
     terms_snapshot: sections as never,
     signature_data_url: sig,
+    // 직원이 아닌 '센터'가 계약 상대 — 직원 서명란에 센터명 + 센터 각인(도장)을 넣는다.
+    // 각인이 없으면 화면에서 '계약자: 센터명' 으로 표시(center_party 플래그로 분기).
+    trainer_signature_data_url:
+      typeof (center as { stamp_data_url?: string | null }).stamp_data_url === "string" &&
+      (center as { stamp_data_url?: string }).stamp_data_url!.startsWith("data:image")
+        ? (center as { stamp_data_url?: string }).stamp_data_url
+        : null,
+    trainer_info: { name: center.name, center_party: true } as never,
     signed_by_uid: null,
     status: "signed",
     signed_at: new Date().toISOString(),

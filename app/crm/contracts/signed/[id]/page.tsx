@@ -49,7 +49,7 @@ interface SignedContract {
   terms_snapshot: TermSnapshot[];
   signature_data_url: string | null;
   trainer_signature_data_url: string | null;
-  trainer_info: { center_member_id?: number | null; name?: string | null } | null;
+  trainer_info: { center_member_id?: number | null; name?: string | null; center_party?: boolean } | null;
   status: string;
 }
 
@@ -223,24 +223,44 @@ export default function SignedContractDetailPage() {
             작성일: <span className="font-semibold text-[#2A251D]">{dateStr}</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <div className="text-[12.5px] text-[#6B5D47] mb-1">
-                계약 직원{" "}
-                <span className="text-[#3A342A] font-semibold">
-                  {contract.trainer_info?.name || "—"}
-                </span>
+            {contract.trainer_info?.center_party ? (
+              /* QR 웹 신규가입 — 직원이 아닌 '센터'가 계약 상대. 센터명 + 센터 각인(도장) */
+              <div>
+                <div className="text-[12.5px] text-[#6B5D47] mb-1">계약자(센터)</div>
+                <div className="relative flex items-center justify-center min-h-32 border border-[#E8E0D0] rounded-lg bg-white px-4 py-6">
+                  <span className="text-[14px] font-semibold text-[#2A251D]">
+                    계약자: {contract.trainer_info?.name || "—"}
+                  </span>
+                  {contract.trainer_signature_data_url && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={contract.trainer_signature_data_url}
+                      alt="센터 각인"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 w-24 h-24 object-contain opacity-90 mix-blend-multiply pointer-events-none"
+                    />
+                  )}
+                </div>
               </div>
-              {contract.trainer_signature_data_url ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={contract.trainer_signature_data_url}
-                  alt="계약 직원 서명"
-                  className="max-h-32 border border-[#E8E0D0] rounded-lg bg-white"
-                />
-              ) : (
-                <div className="text-[12.5px] text-[#A89B80]">서명 없음</div>
-              )}
-            </div>
+            ) : (
+              <div>
+                <div className="text-[12.5px] text-[#6B5D47] mb-1">
+                  계약 직원{" "}
+                  <span className="text-[#3A342A] font-semibold">
+                    {contract.trainer_info?.name || "—"}
+                  </span>
+                </div>
+                {contract.trainer_signature_data_url ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={contract.trainer_signature_data_url}
+                    alt="계약 직원 서명"
+                    className="max-h-32 border border-[#E8E0D0] rounded-lg bg-white"
+                  />
+                ) : (
+                  <div className="text-[12.5px] text-[#A89B80]">서명 없음</div>
+                )}
+              </div>
+            )}
             <div>
               <div className="text-[12.5px] text-[#6B5D47] mb-1">
                 가입 회원{" "}
