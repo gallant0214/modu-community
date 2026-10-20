@@ -1889,7 +1889,23 @@ function ReturnsTab({ zone, zoneLabel }: { zone: number; zoneLabel: (n: number) 
             <tbody>
               {list.map((h) => (
                 <tr key={h.id} className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900">
-                  <Td><span className="font-semibold text-[#2A251D] dark:text-zinc-100">{h.member_name || "—"}</span></Td>
+                  <Td>
+                    {h.member_name ? (
+                      h.member_id ? (
+                        /* 이름 클릭 → 회원 상세 페이지 */
+                        <Link
+                          href={`/crm/members/${h.member_id}`}
+                          className="font-semibold text-[#6B7B3A] dark:text-[#A8B87A] underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                        >
+                          {h.member_name}
+                        </Link>
+                      ) : (
+                        <span className="font-semibold text-[#2A251D] dark:text-zinc-100">{h.member_name}</span>
+                      )
+                    ) : (
+                      <span className="text-[#A89B80]">—</span>
+                    )}
+                  </Td>
                   <Td className="text-[#6B5D47] dark:text-zinc-400">{h.zone_name}</Td>
                   <Td className="font-medium">{h.number}</Td>
                   <Td className="text-[#8C8270] dark:text-zinc-500">{formatDateTimeKST(h.created_at)}</Td>
