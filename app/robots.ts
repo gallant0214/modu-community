@@ -20,6 +20,7 @@ export default function robots(): MetadataRoute.Robots {
           "/developer",
           "/crm",
           "/pay/",
+          "/store/",
           "/billing",
           "/pricing",
           "/shop/",

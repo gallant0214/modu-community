@@ -18,7 +18,7 @@ export default async function PayDonePage({
   params,
   searchParams,
 }: {
-  params: Promise<{ orderUid: string }>;
+  params: Promise<{ centerSlug: string; orderUid: string }>;
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { orderUid } = await params;

@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { onlineSalesEnabled, SALES_DISABLED_MESSAGE } from "@/app/lib/member-checkout";
 import { portoneConfigured } from "@/app/lib/portone-payments";
 import { signOrderToken } from "@/app/lib/order-token";
+import { payPath, payPathSlugForCenter } from "@/app/lib/pay-path";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -333,6 +334,6 @@ export async function POST(request: Request) {
     ok: true,
     orderUid,
     amount,
-    payUrl: `/pay/${orderUid}?t=${payToken}&returnTo=${encodeURIComponent(returnTo)}`,
+    payUrl: `${payPath(await payPathSlugForCenter(centerId), orderUid)}?t=${payToken}&returnTo=${encodeURIComponent(returnTo)}`,
   });
 }

@@ -6,7 +6,7 @@ import { loadTossPayments } from "@tosspayments/tosspayments-sdk";
 /**
  * 토스페이먼츠 **결제위젯** — CRM 이용권(SaaS 구독) 결제용.
  *
- * 포트원(`app/pay/[orderUid]/PayClient.tsx`)과 다른 점:
+ * 포트원(`app/store/[centerSlug]/pay/[orderUid]/PayClient.tsx`)과 다른 점:
  *   · 결제수단·약관동의 UI 를 **위젯이 페이지 안에 직접 그린다**
  *     → 포트원 때 직접 만든 동의 체크박스가 여기서는 필요 없다(위젯이 renderAgreement 로 그린다)
  *   · 승인 모델이 다르다. 토스는 결제창에서 돌아온 뒤 **우리가 승인 API 를 호출해야**

@@ -1,4 +1,4 @@
-import DoneClient from "@/app/pay/[orderUid]/done/DoneClient";
+import DoneClient from "@/app/store/[centerSlug]/pay/[orderUid]/done/DoneClient";
 
 export const dynamic = "force-dynamic";
 

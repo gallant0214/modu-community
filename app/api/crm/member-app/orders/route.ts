@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { PRODUCT_SELECT, type SellableProduct } from "@/app/lib/member-purchase";
 import { portoneImpCode, portoneChannelKey } from "@/app/lib/portone-payments";
+import { payPath, payPathSlugForCenter } from "@/app/lib/pay-path";
 import {
   quoteCart,
   expireStaleOrders,
@@ -279,7 +280,7 @@ export async function POST(request: Request) {
      * 웹·앱이 공통으로 여는 결제 페이지.
      * 토큰은 이 주문 하나에만 유효 — 회원앱 WebView 처럼 웹 로그인 세션이 없는 곳에서 쓴다.
      */
-    payUrl: `/pay/${orderUid}?t=${payToken}`,
+    payUrl: `${payPath(await payPathSlugForCenter(centerId), orderUid)}?t=${payToken}`,
     payToken,
     expiresAt,
   });

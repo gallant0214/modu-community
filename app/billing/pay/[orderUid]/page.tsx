@@ -5,7 +5,7 @@ import { portoneConfigured, portoneImpCode, portoneChannelKey } from "@/app/lib/
 import { tossClientKey, tossKeysMatch } from "@/app/lib/toss-payments";
 import { saasSalesEnabled, SAAS_SALES_DISABLED_MESSAGE } from "@/app/lib/saas-subscription";
 import { platformSeller } from "@/app/lib/platform-seller";
-import PayClient from "@/app/pay/[orderUid]/PayClient";
+import PayClient from "@/app/store/[centerSlug]/pay/[orderUid]/PayClient";
 import TossPayClient from "./TossPayClient";
 import SellerInfo from "@/app/pay/SellerInfo";
 
