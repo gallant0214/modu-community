@@ -19,38 +19,112 @@ export interface SaasPlan {
   periodMonths: number;
   /** 요금제 페이지 한 줄 설명 */
   summary: string;
-  /** 요금제 페이지에 나열할 포함 기능 */
-  features: string[];
+  /** 1개월권 대비 할인율(%) — 0 이면 표시하지 않는다 */
+  discountPercent: number;
 }
 
 export const CRM_CENTER_1M = "crm_center_1m";
+export const CRM_CENTER_2M = "crm_center_2m";
+export const CRM_CENTER_3M = "crm_center_3m";
+export const CRM_CENTER_6M = "crm_center_6m";
 
+/** 요금제 공통 포함 기능 — 기간만 다르고 기능은 같다 */
+export const PLAN_FEATURES: string[] = [
+  "회원·이용권 관리 (회원권·수강권·대여권·락커)",
+  "예약·출석 관리 + 태블릿 터치 출석",
+  "매출·정산·경영 요약 통계",
+  "직원 급여·커미션 계산",
+  "전자계약서 작성·발송",
+  "회원용 앱 · 강사용 앱 연동",
+  "문자·앱 푸시 자동 알림",
+];
+
+/**
+ * 🚨 가격은 **월 환산이 딱 떨어지게** 잡았다 — 할인 폭을 구매자가 바로 알아본다.
+ *    1개월 99,000 / 2개월 94,000 / 3개월 89,000 / 6개월 79,000 (월 기준)
+ *    긴 기간일수록 싸다는 게 숫자로 보여야 장기 결제가 늘어난다.
+ */
 export const SAAS_PLANS: SaasPlan[] = [
   {
     code: CRM_CENTER_1M,
     name: "센터 CRM 1개월 이용권",
     priceWon: 99000,
     periodMonths: 1,
-    summary: "회원 관리부터 매출 정산까지, 센터 운영에 필요한 기능을 한 달 동안 모두 쓰실 수 있어요.",
-    features: [
-      "회원·이용권 관리 (회원권·수강권·대여권·락커)",
-      "예약·출석 관리 + 태블릿 터치 출석",
-      "매출·정산·경영 요약 통계",
-      "직원 급여·커미션 계산",
-      "전자계약서 작성·발송",
-      "회원용 앱 · 강사용 앱 연동",
-      "문자·앱 푸시 자동 알림",
-    ],
+    summary: "먼저 한 달 써보고 결정하세요.",
+    discountPercent: 0,
+  },
+  {
+    code: CRM_CENTER_2M,
+    name: "센터 CRM 2개월 이용권",
+    priceWon: 188000,
+    periodMonths: 2,
+    summary: "월 94,000원 — 1개월권보다 5% 저렴합니다.",
+    discountPercent: 5,
+  },
+  {
+    code: CRM_CENTER_3M,
+    name: "센터 CRM 3개월 이용권",
+    priceWon: 267000,
+    periodMonths: 3,
+    summary: "월 89,000원 — 한 분기를 한 번에, 10% 저렴합니다.",
+    discountPercent: 10,
+  },
+  {
+    code: CRM_CENTER_6M,
+    name: "센터 CRM 6개월 이용권",
+    priceWon: 474000,
+    periodMonths: 6,
+    summary: "월 79,000원 — 가장 저렴한 20% 할인입니다.",
+    discountPercent: 20,
   },
 ];
+
+/**
+ * 판매를 잠시 내릴 요금제 — 코드를 쉼표로 적는다.
+ *
+ * 🚨 PG 심사에서 특정 기간이 지적되면 **배포 없이** 그 상품만 내릴 수 있어야 한다.
+ *    (이니시스는 원래 '서비스 제공기간 3개월 이내' 조건이 있었고, 6개월은
+ *     2026-10-22 에 별도로 확인받았다. 조건이 다시 바뀔 수 있다)
+ *    예: NEXT_PUBLIC_SAAS_HIDDEN_PLANS=crm_center_6m
+ */
+function hiddenPlanCodes(): string[] {
+  return (process.env.NEXT_PUBLIC_SAAS_HIDDEN_PLANS ?? "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+/** 지금 화면에 노출하고 결제까지 허용할 요금제 */
+export function visiblePlans(): SaasPlan[] {
+  const hidden = hiddenPlanCodes();
+  return SAAS_PLANS.filter((p) => !hidden.includes(p.code));
+}
+
+/** 월 환산 금액 — 할인 폭을 보여줄 때 쓴다 */
+export function monthlyWon(plan: SaasPlan): number {
+  return Math.round(plan.priceWon / plan.periodMonths);
+}
+
+/** 할인 전 정가 (1개월권 × 개월수) */
+export function listPriceWon(plan: SaasPlan): number {
+  return SAAS_PLANS[0].priceWon * plan.periodMonths;
+}
 
 export function findPlan(code: string | null | undefined): SaasPlan | null {
   return SAAS_PLANS.find((p) => p.code === code) ?? null;
 }
 
-/** 지금 판매 중인 기본 요금제 — 하나뿐이라 화면에서 고를 필요가 없다 */
+/**
+ * 요금제를 고르지 않았을 때의 기본값.
+ * 🚨 숨긴 요금제가 기본이 되면 "고를 수 없는 상품으로 결제" 가 되므로 노출 중인 것 중에서 고른다.
+ */
 export function defaultPlan(): SaasPlan {
-  return SAAS_PLANS[0];
+  return visiblePlans()[0] ?? SAAS_PLANS[0];
+}
+
+/** 결제까지 허용되는 요금제인지 — 서버가 주문 생성 전에 확인한다 */
+export function isPlanSellable(code: string | null | undefined): boolean {
+  return visiblePlans().some((p) => p.code === code);
 }
 
 /**

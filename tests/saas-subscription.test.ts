@@ -8,7 +8,17 @@ import {
   parsePgProvider,
   resolveSaasPg,
 } from "@/app/lib/saas-access-policy";
-import { planExpiryOn, defaultPlan, nextExpiryOn } from "@/app/lib/saas-plans";
+import {
+  planExpiryOn,
+  defaultPlan,
+  nextExpiryOn,
+  SAAS_PLANS,
+  visiblePlans,
+  monthlyWon,
+  listPriceWon,
+  isPlanSellable,
+  findPlan,
+} from "@/app/lib/saas-plans";
 import { kstTodayYmd } from "@/app/lib/crm-coupons";
 
 /**
@@ -22,6 +32,7 @@ const ENV_KEYS = [
   "SAAS_SALES_UID_ALLOWLIST",
   "SAAS_PG_PROVIDER",
   "SAAS_ALLOW_PORTONE",
+  "NEXT_PUBLIC_SAAS_HIDDEN_PLANS",
 ] as const;
 
 let saved: Record<string, string | undefined> = {};
@@ -258,5 +269,60 @@ describe("🚨 CRM 이용권은 포트원으로 팔 수 없다 (업종 불일치
   it("업종 변경을 승인받아 SAAS_ALLOW_PORTONE=1 을 켜면 그때 열린다", () => {
     process.env.SAAS_ALLOW_PORTONE = "1";
     expect(resolveSaasPg("portone")).toBe("portone");
+  });
+});
+
+describe("요금제 4종 (1·2·3·6개월) — 장기 할인", () => {
+  it("월 환산이 1원 단위 없이 딱 떨어진다 — 심사·안내 문구에 그대로 쓰인다", () => {
+    for (const p of SAAS_PLANS) {
+      expect(p.priceWon % p.periodMonths).toBe(0);
+    }
+  });
+
+  it("기간이 길수록 월 단가가 싸진다", () => {
+    const sorted = [...SAAS_PLANS].sort((a, b) => a.periodMonths - b.periodMonths);
+    for (let i = 1; i < sorted.length; i++) {
+      expect(monthlyWon(sorted[i])).toBeLessThan(monthlyWon(sorted[i - 1]));
+    }
+  });
+
+  it("표시 할인율이 실제 가격과 일치한다 — 숫자만 고치고 뱃지를 안 고치는 사고 방지", () => {
+    for (const p of SAAS_PLANS) {
+      const actual = Math.round((1 - p.priceWon / listPriceWon(p)) * 100);
+      expect(actual).toBe(p.discountPercent);
+    }
+  });
+
+  it("정가는 1개월권 × 개월수다", () => {
+    const base = SAAS_PLANS[0];
+    expect(base.periodMonths).toBe(1);
+    for (const p of SAAS_PLANS) {
+      expect(listPriceWon(p)).toBe(base.priceWon * p.periodMonths);
+    }
+  });
+});
+
+describe("요금제 숨기기 — 🚨 숨긴 요금제는 주문도 거부돼야 한다", () => {
+  it("기본은 4종 전부 노출", () => {
+    expect(visiblePlans().map((p) => p.periodMonths)).toEqual([1, 2, 3, 6]);
+  });
+
+  it("숨기면 목록에서 빠지고 판매도 막힌다", () => {
+    process.env.NEXT_PUBLIC_SAAS_HIDDEN_PLANS = "crm_center_6m";
+    expect(visiblePlans().some((p) => p.code === "crm_center_6m")).toBe(false);
+    expect(isPlanSellable("crm_center_6m")).toBe(false);
+    // 🚨 조회는 계속 돼야 한다 — 과거 주문·구독을 읽어야 하므로
+    expect(findPlan("crm_center_6m")?.periodMonths).toBe(6);
+  });
+
+  it("기본 요금제가 숨겨지면 남은 것 중에서 고른다 — 못 고르는 상품으로 결제되면 안 된다", () => {
+    process.env.NEXT_PUBLIC_SAAS_HIDDEN_PLANS = "crm_center_1m";
+    expect(defaultPlan().code).not.toBe("crm_center_1m");
+    expect(isPlanSellable(defaultPlan().code)).toBe(true);
+  });
+
+  it("없는 요금제 코드는 팔 수 없다", () => {
+    expect(isPlanSellable("crm_center_12m")).toBe(false);
+    expect(isPlanSellable(null)).toBe(false);
   });
 });

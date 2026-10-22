@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { signOrderToken } from "@/app/lib/order-token";
-import { defaultPlan, findPlan } from "@/app/lib/saas-plans";
+import { defaultPlan, findPlan, isPlanSellable } from "@/app/lib/saas-plans";
 import {
   saasSalesAllowedForUid,
   parsePgProvider,
@@ -52,8 +52,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "센터를 선택해주세요" }, { status: 400 });
   }
 
+  /* 🚨 `findPlan` 은 **숨긴 요금제도 찾아준다**(과거 주문을 읽으려면 그래야 한다).
+     그래서 판매 가능 여부는 `isPlanSellable` 로 따로 본다 — 이걸 빼면 화면에서 내린
+     요금제가 주문 API 로는 계속 팔린다. 금액은 여기서 조회한 값만 쓰고
+     요청 본문의 금액은 받지 않는다. */
   const plan = body.planCode ? findPlan(body.planCode) : defaultPlan();
-  if (!plan) {
+  if (!plan || !isPlanSellable(plan.code)) {
     return NextResponse.json({ error: "판매 중인 요금제가 아니에요" }, { status: 400 });
   }
 

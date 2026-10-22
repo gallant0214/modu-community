@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import EmailLoginPanel from "@/app/components/email-login-panel";
-import { defaultPlan, won } from "@/app/lib/saas-plans";
+import { visiblePlans, defaultPlan, monthlyWon, listPriceWon, won } from "@/app/lib/saas-plans";
 
 /**
  * /billing — 센터 CRM 이용권 구매·구독 상태.
@@ -14,6 +14,10 @@ import { defaultPlan, won } from "@/app/lib/saas-plans";
  * 🚨 이 화면은 `/api/crm/centers/mine`(verifyAuth 기반)만 쓴다. `requireCrmContext` 를
  *    거치는 API 를 쓰면 이용권이 만료된 사장님이 **결제 화면에조차 못 들어온다**
  *    — 돈을 내려는 사람을 막는 게 가장 나쁜 실패다.
+ *
+ * 🚨 요금제는 `visiblePlans()` 가 주는 것만 보여준다. 기간이 다를 뿐 기능은 같으므로
+ *    고른 요금제의 `code` 를 주문에 그대로 실어 보내고, **금액은 서버가 다시 조회한다**
+ *    — 화면에서 보낸 금액을 믿으면 그 순간 위변조 경로가 열린다.
  *
  * 🚨 구독 상태는 `/api/saas/subscriptions` 로 **따로** 가져온다.
  *    접근 판정(crmAccessState)은 구독 강제가 꺼져 있으면 구독이 없어도 "허용" 을
@@ -45,7 +49,9 @@ export default function BillingPage() {
   const [subs, setSubs] = useState<Record<number, SubRow>>({});
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
-  const plan = defaultPlan();
+  const plans = visiblePlans();
+  const [planCode, setPlanCode] = useState(defaultPlan().code);
+  const plan = plans.find((p) => p.code === planCode) ?? defaultPlan();
 
   const load = useCallback(async () => {
     setError("");
@@ -121,9 +127,48 @@ export default function BillingPage() {
         <h1 className="mt-1 text-xl font-bold text-gray-900">이용권 결제</h1>
       </header>
 
+      {/* 기간 선택 — 기능은 모두 같고 길수록 월 단가가 내려간다 */}
+      <section className="mt-5">
+        <p className="text-[13px] font-semibold text-gray-700">이용 기간을 고르세요</p>
+        <div className="mt-2 space-y-2">
+          {plans.map((p) => {
+            const on = p.code === plan.code;
+            return (
+              <button
+                key={p.code}
+                type="button"
+                onClick={() => setPlanCode(p.code)}
+                aria-pressed={on}
+                className={`flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left ${
+                  on ? "border-blue-600 bg-blue-50/60" : "border-gray-200 bg-white"
+                }`}
+              >
+                <span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-[15px] font-bold text-gray-900">{p.periodMonths}개월</span>
+                    {p.discountPercent > 0 && (
+                      <span className="rounded-md bg-blue-600 px-1.5 py-0.5 text-[11px] font-bold text-white">
+                        {p.discountPercent}% 할인
+                      </span>
+                    )}
+                  </span>
+                  <span className="mt-0.5 block text-[12.5px] text-gray-500">
+                    월 {won(monthlyWon(p))} 꼴
+                    {p.discountPercent > 0 ? ` · 1개월권 ${p.periodMonths}회 결제 시 ${won(listPriceWon(p))}` : ""}
+                  </span>
+                </span>
+                <span className={`shrink-0 text-[15px] font-bold ${on ? "text-blue-700" : "text-gray-900"}`}>
+                  {won(p.priceWon)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
       {/* 결제 페이지(/billing/pay)와 같은 상품 요약 — 구매자가 무엇을 얼마에 사는지
           결제창에 들어가기 전에 똑같이 보이게 한다 */}
-      <section className="mt-5 rounded-xl border border-gray-200 p-4">
+      <section className="mt-4 rounded-xl border border-gray-200 p-4">
         <p className="font-semibold text-gray-900">{plan.name}</p>
         <p className="mt-1 text-[13px] leading-relaxed text-gray-500">{plan.summary}</p>
         <dl className="mt-3 space-y-1.5 text-sm">
@@ -200,7 +245,7 @@ export default function BillingPage() {
                   {!sub
                     ? "아직 이용권이 없습니다. 결제하시면 바로 사용하실 수 있어요."
                     : sub.live
-                      ? `${ymd(sub.expiresOn)} 까지 이용하실 수 있어요. 미리 결제하시면 남은 기간에 1개월이 더해집니다.`
+                      ? `${ymd(sub.expiresOn)} 까지 이용하실 수 있어요. 미리 결제하시면 남은 기간에 ${plan.periodMonths}개월이 더해집니다.`
                       : `${ymd(sub.expiresOn)} 에 만료됐습니다. 다시 결제하시면 그대로 이어서 사용하실 수 있어요.`}
                 </p>
 

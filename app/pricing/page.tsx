@@ -1,13 +1,13 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { SAAS_PLANS, won } from "@/app/lib/saas-plans";
+import { visiblePlans, PLAN_FEATURES, monthlyWon, listPriceWon, won } from "@/app/lib/saas-plans";
 import { platformSeller, SERVICE_NAME } from "@/app/lib/platform-seller";
 import SellerInfo from "@/app/pay/SellerInfo";
 
 export const metadata: Metadata = {
   title: "센터 CRM 요금제",
   description:
-    "모두의지도사 센터 CRM 이용권. 회원 관리부터 매출 정산까지 한 달 단위로 이용하실 수 있습니다.",
+    "모두의지도사 센터 CRM 이용권. 회원 관리부터 매출 정산까지. 1 · 2 · 3 · 6개월 중 원하는 기간을 골라 이용하실 수 있습니다.",
 };
 
 /**
@@ -25,6 +25,7 @@ export const metadata: Metadata = {
  */
 export default function PricingPage() {
   const seller = platformSeller();
+  const plans = visiblePlans();
 
   return (
     <div
@@ -41,7 +42,7 @@ export default function PricingPage() {
             <h1 className="lp-hero-title">
               회원 관리부터 매출 정산까지,
               <br />
-              한 달 단위로 쓰세요
+              필요한 기간만 쓰세요
             </h1>
             <p className="lp-hero-sub">
               {SERVICE_NAME} 센터 CRM 은 체육시설 운영에 필요한 기능을 한곳에 모은
@@ -53,51 +54,87 @@ export default function PricingPage() {
         {/* ===== 요금제 ===== */}
         <section className="lp-section" id="plans">
           <div className="lp-c">
-            {SAAS_PLANS.map((plan) => (
-              <div className="lp-card" key={plan.code}>
-                <div className="lp-label">요금제</div>
-                <h2 className="lp-title">{plan.name}</h2>
-                <p className="lp-desc">{plan.summary}</p>
+            <div className="lp-card">
+              <div className="lp-label">요금제</div>
+              <h2 className="lp-title">기간을 고르세요</h2>
+              <p className="lp-desc">
+                기능은 어느 요금제나 똑같습니다. 기간이 길수록 월 단가가 내려갑니다.
+                자동 갱신이 없어 결제한 기간만 이용되고, 약정·해지 위약금이 없습니다.
+              </p>
 
-                <div style={{ margin: "20px 0 4px", display: "flex", alignItems: "baseline", gap: 8 }}>
-                  <span style={{ fontSize: 36, fontWeight: 800, color: "#2F2A24" }}>
-                    {won(plan.priceWon)}
-                  </span>
-                  <span style={{ fontSize: 15, color: "#6B6560" }}>
-                    / {plan.periodMonths}개월 (부가세 포함)
-                  </span>
-                </div>
-                <p className="lp-hero-note" style={{ marginTop: 4 }}>
-                  자동 갱신 없이 결제한 기간만 이용됩니다. 약정·해지 위약금이 없습니다.
-                </p>
+              <div className="lp-grid-2" style={{ marginTop: 22 }}>
+                {plans.map((plan) => (
+                  <div
+                    key={plan.code}
+                    style={{
+                      border: "1px solid #EFE8DC",
+                      borderRadius: 16,
+                      padding: "20px 18px",
+                      background: "#fff",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 17, fontWeight: 800, color: "#2F2A24" }}>
+                        {plan.periodMonths}개월
+                      </span>
+                      {plan.discountPercent > 0 && (
+                        <span
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: "#fff",
+                            background: "#4A6D5E",
+                            borderRadius: 999,
+                            padding: "2px 8px",
+                          }}
+                        >
+                          {plan.discountPercent}% 할인
+                        </span>
+                      )}
+                    </div>
 
-                <ul style={{ margin: "22px 0 0", padding: 0, listStyle: "none" }}>
-                  {plan.features.map((f) => (
-                    <li
-                      key={f}
-                      style={{
-                        padding: "9px 0",
-                        borderTop: "1px solid #EFE8DC",
-                        fontSize: 15,
-                        color: "#3A342A",
-                      }}
-                    >
-                      <span style={{ color: "#4A6D5E", fontWeight: 700, marginRight: 8 }}>✓</span>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
+                    <div style={{ marginTop: 10, fontSize: 26, fontWeight: 800, color: "#2F2A24" }}>
+                      {won(plan.priceWon)}
+                    </div>
+                    <div style={{ fontSize: 13, color: "#6B6560", marginTop: 2 }}>
+                      부가세 포함 · 월 {won(monthlyWon(plan))} 꼴
+                    </div>
 
-                <div className="lp-section-cta" style={{ marginTop: 26 }}>
-                  <Link href="/billing" className="lp-btn lp-btn-primary">
-                    이용권 구매하기 →
-                  </Link>
-                </div>
-                <p className="lp-hero-note" style={{ marginTop: 10 }}>
-                  구매는 {SERVICE_NAME} 회원가입 후 센터를 등록하신 다음 진행하실 수 있습니다.
-                </p>
+                    {plan.discountPercent > 0 && (
+                      <div style={{ fontSize: 12.5, color: "#9A938C", marginTop: 6 }}>
+                        1개월권 {plan.periodMonths}회 결제 시 {won(listPriceWon(plan))}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
+
+              <ul style={{ margin: "26px 0 0", padding: 0, listStyle: "none" }}>
+                {PLAN_FEATURES.map((f) => (
+                  <li
+                    key={f}
+                    style={{
+                      padding: "9px 0",
+                      borderTop: "1px solid #EFE8DC",
+                      fontSize: 15,
+                      color: "#3A342A",
+                    }}
+                  >
+                    <span style={{ color: "#4A6D5E", fontWeight: 700, marginRight: 8 }}>✓</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+
+              <div className="lp-section-cta" style={{ marginTop: 26 }}>
+                <Link href="/billing" className="lp-btn lp-btn-primary">
+                  이용권 구매하기 →
+                </Link>
+              </div>
+              <p className="lp-hero-note" style={{ marginTop: 10 }}>
+                구매는 {SERVICE_NAME} 회원가입 후 센터를 등록하신 다음 진행하실 수 있습니다.
+              </p>
+            </div>
           </div>
         </section>
 
@@ -114,9 +151,9 @@ export default function PricingPage() {
               </Guide>
 
               <Guide label="서비스 제공기간">
-                결제일부터 <b>1개월</b>입니다. 만료일이 지나면 자동으로 이용이 종료되며, 자동
-                결제되지 않습니다. 만료 전에 미리 결제하시면 남은 기간에 이어서 1개월이
-                더해집니다.
+                결제일부터 <b>구매하신 요금제의 이용기간</b>(1 · 2 · 3 · 6개월 중 선택)입니다.
+                만료일이 지나면 자동으로 이용이 종료되며, 자동 결제되지 않습니다. 만료 전에 미리
+                결제하시면 남은 기간에 이어서 구매한 기간이 더해집니다.
               </Guide>
 
               <Guide label="주문 취소 · 청약철회">
@@ -126,8 +163,9 @@ export default function PricingPage() {
               </Guide>
 
               <Guide label="교환 · 상품 변경">
-                무형의 서비스로 배송되는 물품이 없어 <b>물품 교환 절차가 없습니다.</b> 현재 판매
-                중인 요금제가 1개월권 하나이므로 상품 간 변경도 발생하지 않습니다.
+                무형의 서비스로 배송되는 물품이 없어 <b>물품 교환 절차가 없습니다.</b> 요금제는
+                기능이 모두 같고 이용기간만 다르므로, 결제하신 요금제를 다른 요금제로 바꾸는 교환은
+                제공하지 않습니다. 자세한 내용은 판매·환불 정책에 적어 두었습니다.
               </Guide>
 
               <Guide label="환불">

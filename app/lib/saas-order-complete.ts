@@ -139,8 +139,12 @@ export async function completeSaasOrder(opts: {
   };
 }): Promise<CompleteResult> {
   const { order, pg } = opts;
+  /* 🚨 기간은 **주문 행에 찍힌 스냅샷**이 기준이다 — 코드의 요금제 정의가 아니다.
+     요금제가 4종(1·2·3·6개월)이 된 뒤로는 이게 돈 문제다: 나중에 요금제의
+     periodMonths 를 바꾸면, 1개월을 결제한 사람에게 바뀐 기간을 줘버린다.
+     그래서 `period_months` 컬럼을 스냅샷해 두는 것이다. */
   const plan = findPlan(order.plan_code);
-  const months = plan?.periodMonths ?? order.period_months;
+  const months = order.period_months || plan?.periodMonths || 1;
   const today = kstTodayYmd();
 
   const existing = await currentSubscription(order.center_id);

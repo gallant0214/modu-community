@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { SAAS_PLANS, won } from "@/app/lib/saas-plans";
+import { visiblePlans, monthlyWon, won } from "@/app/lib/saas-plans";
 import { platformSeller, SERVICE_NAME } from "@/app/lib/platform-seller";
 import SellerInfo from "@/app/pay/SellerInfo";
 
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
  */
 export default function PricingPolicyPage() {
   const seller = platformSeller();
-  const plan = SAAS_PLANS[0];
+  const plans = visiblePlans();
 
   return (
     <div
@@ -47,10 +47,19 @@ export default function PricingPolicyPage() {
                   <b>무형의 소프트웨어 서비스</b>이며, 설치 파일이나 배송되는 물품은 없습니다.
                 </p>
                 <p style={{ marginTop: 8 }}>
-                  현재 판매 중인 요금제는 <b>{plan.name} / {won(plan.priceWon)}</b> (부가세 포함)
-                  하나입니다. 이용권은 <b>센터 단위</b>로, 소속 강사·직원 수에 관계없이 한 센터당
-                  하나를 결제합니다.
+                  이용권은 <b>센터 단위</b>로, 소속 강사·직원 수에 관계없이 한 센터당 하나를
+                  결제합니다. 판매 중인 요금제는 다음과 같으며, <b>기능은 모든 요금제가
+                  동일하고 이용기간만 다릅니다.</b>
                 </p>
+                <ul style={ULS}>
+                  {plans.map((p) => (
+                    <li key={p.code}>
+                      <b>{p.name}</b> — {won(p.priceWon)} (부가세 포함) · 이용기간{" "}
+                      {p.periodMonths}개월 · 월 {won(monthlyWon(p))} 꼴
+                      {p.discountPercent > 0 ? ` · 1개월권 대비 ${p.discountPercent}% 할인` : ""}
+                    </li>
+                  ))}
+                </ul>
               </Section>
 
               <Section title="서비스 제공시기">
@@ -62,12 +71,13 @@ export default function PricingPolicyPage() {
 
               <Section title="서비스 제공기간">
                 <p>
-                  결제일부터 <b>1개월</b>입니다(만료일 당일까지 포함). 만료일이 지나면 자동으로
-                  이용이 종료되며 <b>자동 결제되지 않습니다.</b>
+                  결제일부터 <b>구매하신 요금제의 이용기간</b>(1 · 2 · 3 · 6개월 중 선택)입니다.
+                  만료일 당일까지 이용하실 수 있고, 만료일이 지나면 자동으로 이용이 종료되며{" "}
+                  <b>자동 결제되지 않습니다.</b>
                 </p>
                 <p style={{ marginTop: 8 }}>
                   만료 전에 미리 결제하시면 남은 기간을 잃지 않고 <b>기존 만료일 다음 날부터</b>{" "}
-                  1개월이 더해집니다.
+                  새로 구매한 기간이 더해집니다.
                 </p>
               </Section>
 
@@ -91,8 +101,10 @@ export default function PricingPolicyPage() {
               <Section title="교환 · 상품 변경">
                 <p>
                   무형의 서비스로 배송되는 물품이 없어 <b>물품 교환에 해당하는 절차가 없습니다.</b>{" "}
-                  현재 판매 중인 요금제가 1개월권 하나이므로 상품 간 변경도 발생하지 않습니다.
-                  요금제가 추가되면 이 정책을 함께 갱신합니다.
+                  요금제는 기능이 모두 같고 이용기간만 다르므로, 이미 결제하신 요금제를 다른
+                  요금제로 바꾸는 교환은 제공하지 않습니다. 더 긴 기간을 원하시면 현재 이용권을
+                  환불받고 다시 결제하시거나, 만료 전에 원하시는 요금제를 추가로 결제하시면{" "}
+                  <b>기존 만료일 다음 날부터</b> 이어집니다.
                 </p>
               </Section>
 
