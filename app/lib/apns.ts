@@ -60,6 +60,8 @@ export type ApnsPayload = {
   body: string;
   data?: Record<string, string>;
   badge?: number;
+  /** 앱 번들 ID 재정의 — 미지정 시 env APNS_BUNDLE_ID 또는 트레이너 기본값. 회원앱은 com.moduji.member 전달 */
+  bundleId?: string;
 };
 
 export type ApnsResult = {
@@ -85,12 +87,11 @@ export async function sendApnsPush(tokens: string[], payload: ApnsPayload): Prom
 
   const keyId = process.env.APNS_KEY_ID!;
   const teamId = process.env.APNS_TEAM_ID!;
-  const bundleId = process.env.APNS_BUNDLE_ID || "com.moduji.trainer";
+  // 번들은 호출자 지정 > env > 트레이너 기본. 회원앱은 com.moduji.member 를 넘긴다.
+  const bundleId = payload.bundleId || process.env.APNS_BUNDLE_ID || "com.moduji.trainer";
   const privateKeyPem = normalizePrivateKey(process.env.APNS_AUTH_KEY!);
-  const host =
-    process.env.APNS_PRODUCTION === "false" || process.env.APNS_ENV === "sandbox"
-      ? SANDBOX_HOST
-      : PROD_HOST;
+  const forcedSandbox =
+    process.env.APNS_PRODUCTION === "false" || process.env.APNS_ENV === "sandbox";
 
   let jwt: string;
   try {
@@ -110,75 +111,93 @@ export async function sendApnsPush(tokens: string[], payload: ApnsPayload): Prom
     ...(payload.data ?? {}),
   });
 
-  const client = http2.connect(`https://${host}`);
-  const closeClient = () =>
-    new Promise<void>((resolve) => {
-      try {
-        client.close(() => resolve());
-      } catch {
-        resolve();
-      }
-    });
+  // 1차: 설정 환경(기본 production). 2차: 환경 불일치(BadDeviceToken) 토큰만 반대 환경 재시도.
+  // 🚨 앱스토어/TestFlight=production, dev-client=sandbox 토큰이 섞일 수 있어 자동 폴백한다.
+  const primaryHost = forcedSandbox ? SANDBOX_HOST : PROD_HOST;
+  const first = await sendToApnsHost(primaryHost, tokens, jwt, bundleId, bodyJson, forcedSandbox);
+  result.sent += first.sent;
+  result.invalidTokens.push(...first.invalid);
+  if (!forcedSandbox && first.retry.length > 0) {
+    const second = await sendToApnsHost(SANDBOX_HOST, first.retry, jwt, bundleId, bodyJson, true);
+    result.sent += second.sent;
+    result.invalidTokens.push(...second.invalid);
+  }
+  result.failed = tokens.length - result.sent;
+  return result;
+}
 
-  await new Promise<void>((resolveConn) => {
+type HostResult = { sent: number; invalid: string[]; retry: string[] };
+
+/** 한 APNs 호스트로 발송. lastEnv=true 면 BadDeviceToken 도 재시도 않고 무효 처리. */
+function sendToApnsHost(
+  host: string,
+  tokens: string[],
+  jwt: string,
+  bundleId: string,
+  bodyJson: string,
+  lastEnv: boolean
+): Promise<HostResult> {
+  return new Promise((resolveAll) => {
+    const out: HostResult = { sent: 0, invalid: [], retry: [] };
+    if (tokens.length === 0) return resolveAll(out);
+
+    const client = http2.connect(`https://${host}`);
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      try { client.close(); } catch { /* noop */ }
+      resolveAll(out);
+    };
+    const guard = setTimeout(finish, 15000);
     client.on("error", (e) => {
       console.error("[apns] http2 connect error", e);
-      resolveConn();
+      clearTimeout(guard);
+      finish();
     });
-    client.on("connect", () => resolveConn());
+
+    let pending = tokens.length;
+    const one = () => { if (--pending <= 0) { clearTimeout(guard); finish(); } };
+
+    for (const token of tokens) {
+      let req: http2.ClientHttp2Stream;
+      try {
+        req = client.request({
+          ":method": "POST",
+          ":path": `/3/device/${token}`,
+          authorization: `bearer ${jwt}`,
+          "apns-topic": bundleId,
+          "apns-push-type": "alert",
+          "apns-priority": "10",
+          "content-type": "application/json",
+        });
+      } catch {
+        one();
+        continue;
+      }
+      let status = 0;
+      let respBody = "";
+      req.setEncoding("utf8");
+      req.on("response", (headers) => { status = Number(headers[":status"]) || 0; });
+      req.on("data", (chunk) => { respBody += chunk; });
+      req.on("error", (e) => { console.error("[apns] request error", e); one(); });
+      req.on("end", () => {
+        if (status === 200) {
+          out.sent++;
+        } else {
+          let reason = "";
+          try { reason = (JSON.parse(respBody) as { reason?: string }).reason ?? ""; } catch { /* noop */ }
+          if (reason === "Unregistered" || status === 410) {
+            out.invalid.push(token); // 앱 삭제/만료 → 제거
+          } else if (reason === "BadDeviceToken" || reason === "DeviceTokenNotForTopic") {
+            if (lastEnv) out.invalid.push(token);
+            else out.retry.push(token); // 반대 환경(sandbox) 재시도
+          }
+          if (reason) console.error(`[apns] 발송 실패 host=${host} status=${status} reason=${reason}`);
+        }
+        one();
+      });
+      req.end(bodyJson);
+    }
   });
-
-  await Promise.all(
-    tokens.map(
-      (token) =>
-        new Promise<void>((resolve) => {
-          let status = 0;
-          let respBody = "";
-          const req = client.request({
-            ":method": "POST",
-            ":path": `/3/device/${token}`,
-            authorization: `bearer ${jwt}`,
-            "apns-topic": bundleId,
-            "apns-push-type": "alert",
-            "apns-priority": "10",
-            "content-type": "application/json",
-          });
-          req.setEncoding("utf8");
-          req.on("response", (headers) => {
-            status = Number(headers[":status"]) || 0;
-          });
-          req.on("data", (chunk) => {
-            respBody += chunk;
-          });
-          req.on("error", (e) => {
-            console.error("[apns] request error", e);
-            result.failed++;
-            resolve();
-          });
-          req.on("end", () => {
-            if (status === 200) {
-              result.sent++;
-            } else {
-              result.failed++;
-              let reason = "";
-              try {
-                reason = (JSON.parse(respBody) as { reason?: string }).reason ?? "";
-              } catch {
-                /* noop */
-              }
-              // 유효하지 않은 토큰 → 정리 대상
-              if (status === 410 || reason === "BadDeviceToken" || reason === "Unregistered") {
-                result.invalidTokens.push(token);
-              }
-              if (reason) console.error(`[apns] 발송 실패 status=${status} reason=${reason}`);
-            }
-            resolve();
-          });
-          req.end(bodyJson);
-        })
-    )
-  );
-
-  await closeClient();
-  return result;
 }

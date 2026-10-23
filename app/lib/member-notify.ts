@@ -4,6 +4,14 @@ import { supabase } from "./supabase";
 import { sendPushToUser } from "./notifications";
 import { notifyStaffMember } from "./crm-staff-notify";
 import { renderNotif, formatSlot, normalizeLang, type NotifLang } from "./notify-i18n";
+import { apnsConfigured, sendApnsPush } from "./apns";
+
+/** 원시 APNs 토큰 형식(64자리 hex)인지 — Android FCM 토큰과 구분해 iOS 는 APNs 로 보낸다 */
+function isRawApnsToken(token: string): boolean {
+  return /^[0-9a-fA-F]{64}$/.test(token);
+}
+/** 회원앱 iOS 번들 — APNs apns-topic */
+const MEMBER_BUNDLE_ID = "com.moduji.member";
 
 function getAdmin() {
   const apps = getApps();
@@ -20,9 +28,12 @@ function getAdmin() {
 }
 
 /**
- * FCM 멀티캐스트 발송 + 무효 토큰 자동 정리(프루닝).
- * 500개씩 나눠 보내고, FCM 이 '미등록/무효' 로 판정한 토큰은 DB 에서 삭제한다.
- * (구 iOS APNs 원시토큰 등 FCM 으로 전달 불가한 토큰이 쌓이지 않도록)
+ * 푸시 발송 + 무효 토큰 자동 정리(프루닝).
+ *
+ * 🚨 토큰 형식으로 갈라 보낸다:
+ *   - iOS 원시 APNs 토큰(64자리 hex) → APNs 로 직접 발송(.p8). FCM 은 이 토큰을 배달 못 한다.
+ *   - 그 외(Android FCM, 혹시 있을 iOS FCM 토큰) → FCM 멀티캐스트.
+ * 각 경로가 '미등록/무효' 로 판정한 토큰은 DB 에서 삭제한다.
  */
 async function sendMulticastPrune(
   messaging: ReturnType<typeof getMessaging>,
@@ -30,8 +41,13 @@ async function sendMulticastPrune(
   payload: { title: string; body: string; data: Record<string, string> }
 ) {
   const toDelete: string[] = [];
-  for (let i = 0; i < tokenList.length; i += 500) {
-    const batch = tokenList.slice(i, i + 500);
+
+  // iOS 원시 APNs 토큰은 APNs 로 직접 (키 미설정이면 FCM 으로 흘려보내 기존 동작 유지)
+  const apnsTokens = apnsConfigured() ? tokenList.filter(isRawApnsToken) : [];
+  const fcmTokens = apnsConfigured() ? tokenList.filter((t) => !isRawApnsToken(t)) : tokenList;
+
+  for (let i = 0; i < fcmTokens.length; i += 500) {
+    const batch = fcmTokens.slice(i, i + 500);
     try {
       const result = await messaging.sendEachForMulticast({
         notification: { title: payload.title, body: payload.body },
@@ -52,6 +68,17 @@ async function sendMulticastPrune(
       });
     } catch {}
   }
+
+  if (apnsTokens.length > 0) {
+    const res = await sendApnsPush(apnsTokens, {
+      title: payload.title,
+      body: payload.body,
+      data: payload.data,
+      bundleId: MEMBER_BUNDLE_ID,
+    });
+    toDelete.push(...res.invalidTokens);
+  }
+
   if (toDelete.length > 0) {
     await supabase.from("crm_member_device_tokens").delete().in("token", toDelete).then(() => {}, () => {});
   }
@@ -296,29 +323,9 @@ export async function sendPushToMember(
     const tokenList = Array.from(new Set((tokens ?? []).map((t) => t.token))).filter(Boolean);
     if (tokenList.length === 0) return 0;
 
+    // iOS 원시 APNs 토큰은 APNs 로, 나머지는 FCM 으로 — 공통 함수가 갈라 보낸다.
     const messaging = getMessaging(getAdmin());
-    const result = await messaging.sendEachForMulticast({
-      notification: { title, body },
-      data: { type, ...data },
-      apns: { payload: { aps: { sound: "default", badge: 1 } } },
-      tokens: tokenList,
-    });
-
-    const toDelete: string[] = [];
-    result.responses.forEach((r, idx) => {
-      if (!r.success) {
-        const code = (r.error as { code?: string } | undefined)?.code;
-        if (
-          code === "messaging/invalid-registration-token" ||
-          code === "messaging/registration-token-not-registered"
-        ) {
-          toDelete.push(tokenList[idx]);
-        }
-      }
-    });
-    if (toDelete.length > 0) {
-      await supabase.from("crm_member_device_tokens").delete().in("token", toDelete);
-    }
+    await sendMulticastPrune(messaging, tokenList, { title, body, data: { type, ...data } });
     return tokenList.length;
   } catch (error) {
     console.error("[member-notify] push error", error);
