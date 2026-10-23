@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
-import { actionLabel } from "@/app/lib/crm-audit-format";
+import { actionLabel, summarizeAuditLog } from "@/app/lib/crm-audit-format";
 import { CrmModal } from "../_components/crm-modal";
 import { crmInputClass } from "../_components/crm-modal";
 import { formatWon, parseWon, formatPhone, formatBusinessNo } from "../_components/crm-labels";
@@ -47,8 +47,53 @@ interface AuditLog {
   created_at: string;
   /** 대상 회원 이름 (회원권/수강권/대여권/예약/회원 관련 로그) */
   subject_name?: string | null;
+  /** 대상 회원 전화번호 */
+  subject_phone?: string | null;
   /** 실행한 직원 이름 (자동 처리는 '시스템 …') */
   actor_name?: string | null;
+}
+
+/** action → 유형(서비스 유형) 분류 + 칩 색상. BROJ 로그기록의 '서비스 유형' 벤치마킹. */
+function logCategory(action: string): { label: string; cls: string } {
+  const a = action;
+  const s = (p: string) => a === p || a.startsWith(p + ".");
+  const olive = "bg-[#6B7B3A]/12 text-[#5a6932] dark:bg-[#6B7B3A]/25 dark:text-[#A8B87A]";
+  if (s("member") || s("members")) return { label: "회원", cls: "bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300" };
+  if (s("membership") || s("pass")) return { label: "이용권", cls: olive };
+  if (s("rental") || s("locker") || s("locker_zone") || s("locker_layout") || ["assign", "return", "returned", "reverted", "move", "broken", "repaired"].includes(a))
+    return { label: "락커·대여", cls: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" };
+  if (s("payment") || s("order") || s("saas")) return { label: "결제", cls: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300" };
+  if (s("pause")) return { label: "홀딩", cls: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300" };
+  if (s("reservation") || s("attendance") || s("measurement")) return { label: "예약·출석", cls: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" };
+  if (s("contract")) return { label: "계약서", cls: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300" };
+  if (s("staff") || s("grade") || s("grade_permission") || s("role_permission") || ["approve", "reject"].includes(a))
+    return { label: "직원·권한", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800/60 dark:text-slate-300" };
+  if (s("message") || s("auto_message") || s("coupon") || s("notice"))
+    return { label: "메시지·쿠폰", cls: "bg-pink-50 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300" };
+  if (s("product") || s("vendor") || s("additional_income") || s("additional_expense") || s("fixed_expense") || s("payout_rule"))
+    return { label: "상품·정산", cls: "bg-[#B47B2A]/12 text-[#8A641D] dark:bg-amber-900/30 dark:text-amber-300" };
+  return { label: "설정·기타", cls: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-400" };
+}
+
+const LOG_CATEGORIES = ["회원", "이용권", "락커·대여", "결제", "홀딩", "예약·출석", "계약서", "직원·권한", "메시지·쿠폰", "상품·정산", "설정·기타"];
+
+/** 로그 일시 → 날짜(요일)/시간 2줄 표기 (KST) */
+function fmtLogDT(iso: string): { date: string; time: string } {
+  const k = new Date(new Date(iso).getTime() + 9 * 3600 * 1000);
+  const p = (n: number) => String(n).padStart(2, "0");
+  const wd = ["일", "월", "화", "수", "목", "금", "토"][k.getUTCDay()];
+  return {
+    date: `${k.getUTCFullYear()}.${p(k.getUTCMonth() + 1)}.${p(k.getUTCDate())} (${wd})`,
+    time: `${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`,
+  };
+}
+
+/** 기본 조회 기간 = 최근 30일 */
+function defaultLogRange(): { from: string; to: string } {
+  const now = new Date(Date.now() + 9 * 3600 * 1000);
+  const to = now.toISOString().slice(0, 10);
+  const from = new Date(now.getTime() - 29 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  return { from, to };
 }
 
 // 로그 작업명은 공용 모듈(app/lib/crm-audit-format)의 actionLabel 로 통일.
@@ -61,53 +106,6 @@ const BASE_ROLE_LABEL: Record<string, string> = {
   fc: "FC",
   alba: "아르바이트",
 };
-
-// 활동 로그 payload → 사람이 읽는 한 줄 요약
-const FIELD_LABEL: Record<string, string> = {
-  price_won: "금액", discount_won: "할인", vat_included: "부가세포함",
-  payment_method: "결제수단", seller_member_id: "담당자", trainer_member_id: "담당강사",
-  co_trainer_ids: "추가강사", start_date: "시작일", expires_at: "만료일", purchased_at: "구매일",
-  memo: "메모", lesson_kind: "수업종류", total_sessions: "총세션", remaining_sessions: "잔여세션",
-  session_minutes: "수업시간(분)", checkout_mileage_enabled: "퇴실 마일리지", checkout_mileage_earn: "퇴실 적립P",
-  cancel_hours: "취소 가능시간", booking_enabled: "예약", cancel_enabled: "취소",
-  default_columns: "스케줄 열수", booking_unit_min: "예약단위(분)", booking_horizon_days: "예약가능일",
-  notify_cancel: "취소알림", notify_change: "변경알림", notify_attend: "출석알림",
-  notify_register: "등록알림", notify_pass_issue: "발급알림",
-  working_hours_start: "운영시작", working_hours_end: "운영종료",
-  label: "이름", base_role: "기본분류", amount_won: "금액", billing_day: "결제일",
-  role: "등급", grade_id: "등급", access_level: "권한레벨", employment_status: "재직상태",
-  employment_type: "근무형태", display_name: "이름", status: "상태", sort_order: "순서",
-  audience_kind: "대상", recipient_count: "인원", ym: "귀속월", reason: "사유",
-  requested_by: "요청자", days: "기간(일)", plan_name: "플랜", duration_days: "기간(일)",
-  permission_key: "권한", enabled: "허용", role_key: "등급", title: "제목", category: "분류",
-  name: "이름", phone: "연락처", password: "비밀번호", note: "메모",
-};
-function fmtLogVal(k: string, v: unknown): string {
-  if (typeof v === "boolean") return v ? "켬" : "끔";
-  if (Array.isArray(v)) return `${v.length}건`;
-  if (v === null || v === undefined || v === "") return "없음";
-  if (typeof v === "object") return "변경";
-  if (k.endsWith("_id")) return "변경";
-  if (typeof v === "number" && /won|earn|amount|price|paid/i.test(k)) return `${v.toLocaleString()}원`;
-  return String(v);
-}
-function describeLog(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "";
-  const p = payload as Record<string, unknown>;
-  const parts: string[] = [];
-  for (const [k, v] of Object.entries(p)) {
-    if (k === "updated_at") continue;
-    // 락커 등 { from, to } 변경 표기
-    if (v && typeof v === "object" && !Array.isArray(v) && "to" in (v as Record<string, unknown>)) {
-      const t = (v as { to?: unknown }).to;
-      parts.push(`${FIELD_LABEL[k] ?? k} → ${fmtLogVal(k, t)}`);
-    } else {
-      parts.push(`${FIELD_LABEL[k] ?? k} ${fmtLogVal(k, v)}`);
-    }
-    if (parts.length >= 5) break;
-  }
-  return parts.join(", ");
-}
 
 interface BootstrapInfo {
   role: "owner" | "admin" | "manager" | "trainer";
@@ -217,6 +215,11 @@ export default function CrmSettingsPage() {
   const toast = useCrmToast();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [logNames, setLogNames] = useState<Record<number, string>>({});
+  const [logLoading, setLogLoading] = useState(false);
+  const [logSearch, setLogSearch] = useState("");
+  const [logCat, setLogCat] = useState<string>(""); // "" = 전체
+  const [logRange, setLogRange] = useState(defaultLogRange);
   const [info, setInfo] = useState<BootstrapInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -293,17 +296,25 @@ export default function CrmSettingsPage() {
   useEffect(() => {
     if (tab !== "logs") return;
     (async () => {
-      const token = await getIdToken();
-      if (!token) return;
-      const res = await fetch("/api/crm/audit-logs?limit=80", {
-        headers: { authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setLogs(data.logs ?? []);
+      setLogLoading(true);
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const qs = new URLSearchParams({ from: logRange.from, to: logRange.to, limit: "500" });
+        const res = await fetch(`/api/crm/audit-logs?${qs}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setLogs(data.logs ?? []);
+          setLogNames(data.names ?? {});
+        }
+      } finally {
+        setLogLoading(false);
       }
     })();
-  }, [tab, getIdToken]);
+  }, [tab, getIdToken, logRange]);
 
   const save = async (patch: Partial<Settings>) => {
     if (saving) return;
@@ -640,43 +651,121 @@ export default function CrmSettingsPage() {
         </div>
       )}
 
-      {tab === "logs" && (
-        <Card title="최근 활동 (최대 80건)">
-          {logs.length === 0 ? (
-            <div className="px-4 py-8 text-center text-[12.5px] text-[#8C8270]">
-              아직 활동 기록이 없습니다.
+      {tab === "logs" && (() => {
+        const nameOf = (id: unknown) => logNames[Number(id)] ?? "";
+        const q = logSearch.trim().toLowerCase();
+        const filtered = logs.filter((l) => {
+          if (logCat && logCategory(l.action).label !== logCat) return false;
+          if (q) {
+            const hay = `${actionLabel(l.action)} ${l.subject_name ?? ""} ${l.subject_phone ?? ""} ${l.actor_name ?? ""} ${summarizeAuditLog(l.action, l.payload, nameOf)}`.toLowerCase();
+            if (!hay.includes(q)) return false;
+          }
+          return true;
+        });
+        return (
+          <Card title="활동 로그">
+            {/* 필터 바 */}
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <input
+                value={logSearch}
+                onChange={(e) => setLogSearch(e.target.value)}
+                placeholder="대상 이름·전화·작업 검색"
+                className="flex-1 min-w-[160px] px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-[#2A251D] dark:text-zinc-100 focus:outline-none focus:border-[#6B7B3A]"
+              />
+              <select
+                value={logCat}
+                onChange={(e) => setLogCat(e.target.value)}
+                className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-[#2A251D] dark:text-zinc-100"
+              >
+                <option value="">전체 유형</option>
+                {LOG_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <input
+                type="date"
+                value={logRange.from}
+                max={logRange.to}
+                onChange={(e) => setLogRange((r) => ({ ...r, from: e.target.value }))}
+                className="px-2.5 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-[#2A251D] dark:text-zinc-100"
+              />
+              <span className="text-[#A89B80] text-[13px]">~</span>
+              <input
+                type="date"
+                value={logRange.to}
+                min={logRange.from}
+                onChange={(e) => setLogRange((r) => ({ ...r, to: e.target.value }))}
+                className="px-2.5 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-[#2A251D] dark:text-zinc-100"
+              />
             </div>
-          ) : (
-            <ul className="space-y-1.5">
-              {logs.map((log) => (
-                <li
-                  key={log.id}
-                  className="flex items-baseline justify-between gap-3 py-1.5 border-b border-[#E8E0D0]/40 dark:border-zinc-800/40 last:border-0 text-[12.5px]"
-                >
-                  <span className="min-w-0 text-[#3A342A] dark:text-zinc-300 truncate">
-                    <span className="font-medium">{actionLabel(log.action)}</span>
-                    {log.subject_name && (
-                      <span className="font-semibold text-[#6B7B3A] dark:text-[#A8B87A]"> · {log.subject_name}</span>
-                    )}
-                    {(() => {
-                      const d = describeLog(log.payload);
-                      return d ? <span className="text-[#8C8270] dark:text-zinc-500"> · {d}</span> : null;
-                    })()}
-                  </span>
-                  <span className="shrink-0 flex items-baseline gap-2">
-                    <span className="text-[#3A342A] dark:text-zinc-300 font-medium">
-                      {log.actor_name || "알 수 없음"}
-                    </span>
-                    <span className="text-[#A89B80] dark:text-zinc-500">
-                      {formatDateTime(log.created_at)}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      )}
+            <div className="mb-2 text-[12px] text-[#8C8270] dark:text-zinc-500">
+              {logLoading ? "불러오는 중…" : `${filtered.length}건`}
+            </div>
+
+            {filtered.length === 0 ? (
+              <div className="px-4 py-10 text-center text-[12.5px] text-[#8C8270]">
+                {logLoading ? "불러오는 중…" : "조건에 맞는 활동 기록이 없습니다."}
+              </div>
+            ) : (
+              <div className="overflow-x-auto -mx-1">
+                <table className="w-full min-w-[760px] text-[12.5px]">
+                  <thead>
+                    <tr className="text-left text-[11.5px] font-semibold text-[#8C8270] dark:text-zinc-500 border-b border-[#E8E0D0] dark:border-zinc-800">
+                      <th className="py-2 pr-3 whitespace-nowrap">일시</th>
+                      <th className="py-2 pr-3 whitespace-nowrap">유형</th>
+                      <th className="py-2 pr-3 whitespace-nowrap">작업</th>
+                      <th className="py-2 pr-3 whitespace-nowrap">대상</th>
+                      <th className="py-2 pr-3">내용</th>
+                      <th className="py-2 pr-1 whitespace-nowrap">실행자</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((log) => {
+                      const cat = logCategory(log.action);
+                      const dt = fmtLogDT(log.created_at);
+                      const detail = summarizeAuditLog(log.action, log.payload, nameOf);
+                      return (
+                        <tr key={log.id} className="border-b border-[#E8E0D0]/40 dark:border-zinc-800/40 align-top">
+                          <td className="py-2 pr-3 whitespace-nowrap text-[#6B5D47] dark:text-zinc-400">
+                            <div>{dt.date}</div>
+                            <div className="text-[11px] text-[#A89B80] dark:text-zinc-500">{dt.time}</div>
+                          </td>
+                          <td className="py-2 pr-3 whitespace-nowrap">
+                            <span className={`inline-block px-1.5 py-0.5 rounded-full text-[11px] font-semibold ${cat.cls}`}>
+                              {cat.label}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-3 whitespace-nowrap font-medium text-[#2A251D] dark:text-zinc-100">
+                            {actionLabel(log.action)}
+                          </td>
+                          <td className="py-2 pr-3 whitespace-nowrap">
+                            {log.subject_name ? (
+                              <>
+                                <span className="font-semibold text-[#6B7B3A] dark:text-[#A8B87A]">{log.subject_name}</span>
+                                {log.subject_phone && (
+                                  <div className="text-[11px] text-[#A89B80] dark:text-zinc-500">{log.subject_phone}</div>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-[#C9BE9F]">—</span>
+                            )}
+                          </td>
+                          <td className="py-2 pr-3 text-[#3A342A] dark:text-zinc-300 min-w-[220px]">
+                            {detail || <span className="text-[#C9BE9F]">—</span>}
+                          </td>
+                          <td className="py-2 pr-1 whitespace-nowrap text-[#6B5D47] dark:text-zinc-400">
+                            {log.actor_name || "알 수 없음"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        );
+      })()}
 
       {tab === "staff" && (
         <div className="-mx-5 md:-mx-8 -mt-2">
