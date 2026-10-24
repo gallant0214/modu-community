@@ -151,6 +151,9 @@ export async function GET(request: Request) {
 
   (passes ?? []).forEach((p) => {
     if (!p.trainer_member_id) return; // 담당 강사 미배정 수강권은 강사별 집계 제외
+    // 환불된 건은 강사 매출에서 제외 — 강사별 월별 매출 그래프/강사 상세 매출 탭과 같은 기준
+    // (전체 매출 KPI totalRevenue 는 종전 기준 유지)
+    if (p.status === "refunded") return;
     const t = addTrainer(p.trainer_member_id);
     t.passes.total += 1;
     t.passes.revenue += p.price_won ?? 0;

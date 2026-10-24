@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
  *  - 회원권(crm_memberships)  : seller_member_id(판매 직원), purchased_at ?? start_date
  *  - 대여권(crm_rentals)      : seller_member_id(판매 직원), start_date
  * ⚠️ 판매 직원 미지정 건은 귀속 불가 → 집계에서 빠진다.
+ * ⚠️ 환불된 건(status='refunded')은 제외 — 그래프와 동일 기준.
  *
  * 카테고리:
  *  membership 회원권 / personal 개인 레슨(정원 1) / group 그룹 수업(정원 2+)
@@ -79,6 +80,7 @@ export async function GET(request: Request) {
         )
         .eq("center_id", ctx.centerId)
         .eq("trainer_member_id", trainerId)
+        .neq("status", "refunded")
         .gte("issued_at", from)
         .lt("issued_at", endExcl)
         .limit(2000),
@@ -89,6 +91,7 @@ export async function GET(request: Request) {
         )
         .eq("center_id", ctx.centerId)
         .eq("seller_member_id", trainerId)
+        .neq("status", "refunded")
         .or(
           `and(purchased_at.gte.${from},purchased_at.lt.${endExcl}),` +
             `and(purchased_at.is.null,start_date.gte.${from},start_date.lt.${endExcl})`
@@ -101,6 +104,7 @@ export async function GET(request: Request) {
         )
         .eq("center_id", ctx.centerId)
         .eq("seller_member_id", trainerId)
+        .neq("status", "refunded")
         .gte("start_date", from)
         .lt("start_date", endExcl)
         .limit(2000),
@@ -127,7 +131,7 @@ export async function GET(request: Request) {
         outstanding_won: p.outstanding_won ?? 0,
         payment_method: p.payment_method,
         payment_method_custom: p.payment_method_custom,
-        memo: p.status === "refunded" ? "환불" : p.memo,
+        memo: p.memo,
       });
     }
     for (const m of membershipRes.data ?? []) {
@@ -146,7 +150,7 @@ export async function GET(request: Request) {
         outstanding_won: m.outstanding_won ?? 0,
         payment_method: m.payment_method,
         payment_method_custom: m.payment_method_custom,
-        memo: m.status === "refunded" ? "환불" : m.memo,
+        memo: m.memo,
       });
     }
     for (const r of rentalRes.data ?? []) {
@@ -165,7 +169,7 @@ export async function GET(request: Request) {
         outstanding_won: 0, // 대여권에는 미수금 컬럼이 없다
         payment_method: r.payment_method,
         payment_method_custom: r.payment_method_custom,
-        memo: r.status === "refunded" ? "환불" : r.memo,
+        memo: r.memo,
       });
     }
 

@@ -32,6 +32,8 @@ async function paginateAll<T>(
  *                         purchased_at(없으면 start_date)
  *  - 기타(etc)          : crm_rentals(운동복·락커) seller_member_id × price_won, start_date
  * ⚠️ 회원권·기타는 판매 직원이 지정된 건만 집계된다(미지정 건은 귀속 불가).
+ * ⚠️ 환불된 건(status='refunded')은 제외 (2026-10-24 사용자 결정) —
+ *    예전엔 포함돼, 환불 후 재발급하면 같은 매출이 두 번 잡혔다.
  *
  * 응답: { months, trainers: [{ id, name, role, monthly, total,
  *         monthly_by_type: { membership, pass, etc }, total_by_type: {...} }] }
@@ -87,6 +89,7 @@ export async function GET(request: Request) {
         .from("crm_passes")
         .select("trainer_member_id, price_won, issued_at")
         .eq("center_id", ctx.centerId)
+        .neq("status", "refunded")
         .not("trainer_member_id", "is", null)
         .gte("issued_at", windowStart)
         .lt("issued_at", windowEndExcl)
@@ -108,6 +111,7 @@ export async function GET(request: Request) {
         .from("crm_memberships")
         .select("seller_member_id, price_won, purchased_at, start_date")
         .eq("center_id", ctx.centerId)
+        .neq("status", "refunded")
         .not("seller_member_id", "is", null)
         .or(
           `and(purchased_at.gte.${windowStart},purchased_at.lt.${windowEndExcl}),` +
@@ -130,6 +134,7 @@ export async function GET(request: Request) {
         .from("crm_rentals")
         .select("seller_member_id, price_won, start_date")
         .eq("center_id", ctx.centerId)
+        .neq("status", "refunded")
         .not("seller_member_id", "is", null)
         .gte("start_date", windowStart)
         .lt("start_date", windowEndExcl)
