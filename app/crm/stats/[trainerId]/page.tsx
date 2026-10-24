@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/components/auth-provider";
-import { ROLE_LABEL, formatWon, formatPhone } from "../../_components/crm-labels";
+import { ROLE_LABEL, formatWon, formatPhone, PAYMENT_METHOD_LABEL } from "../../_components/crm-labels";
 import { crmInputClass } from "../../_components/crm-modal";
 
 type Tab = "revenue" | "members" | "sessions" | "cancel";
@@ -132,7 +132,7 @@ export default function TrainerStatsDetailPage() {
         </TabBtn>
       </div>
 
-      {tab === "revenue" && <RevenueTab />}
+      {tab === "revenue" && <RevenueTab trainerId={trainerId} />}
       {tab === "members" && <MembersTab />}
       {tab === "sessions" && <SessionsTab />}
       {tab === "cancel" && <CancellationsTab trainerId={trainerId} />}
@@ -315,8 +315,54 @@ function formatKstDateTime(iso: string): string {
 
 /* ─── 매출 탭 ────────────────────────────── */
 
-function RevenueTab() {
+function RevenueTab({ trainerId }: { trainerId: number }) {
+  const { getIdToken } = useAuth();
   const [period, setPeriod] = useState<Period>("this_month");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [filter, setFilter] = useState<"all" | CategoryKey>("all");
+  const [data, setData] = useState<RevenueDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // 직접 선택 진입 시 기본값 = 이번 달 1일 ~ 오늘
+  useEffect(() => {
+    if (period !== "custom" || customFrom) return;
+    const r = periodRange("this_month", "", "");
+    const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    setCustomFrom(r.from);
+    setCustomTo(today);
+  }, [period, customFrom]);
+
+  const range = periodRange(period, customFrom, customTo);
+
+  const load = useCallback(async () => {
+    if (!trainerId || !range.from || !range.to) return;
+    setLoading(true);
+    setError("");
+    try {
+      const token = await getIdToken();
+      if (!token) throw new Error("로그인 정보를 확인할 수 없습니다");
+      const res = await fetch(
+        `/api/crm/stats/trainer-revenue-detail?trainer_member_id=${trainerId}&from=${range.from}&to=${range.to}`,
+        { headers: { authorization: `Bearer ${token}` }, cache: "no-store" }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "조회 실패");
+      setData(json);
+    } catch (e) {
+      setData(null);
+      setError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setLoading(false);
+    }
+  }, [getIdToken, trainerId, range.from, range.to]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const items = (data?.items ?? []).filter((i) => filter === "all" || i.category === filter);
 
   return (
     <>
@@ -341,11 +387,22 @@ function RevenueTab() {
             </select>
           </div>
         </div>
+        {period === "custom" && (
+          <div className="flex items-center gap-1.5 mb-3">
+            <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className={crmInputClass} style={{ width: 150 }} />
+            <span className="text-[#A89B80]">~</span>
+            <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className={crmInputClass} style={{ width: 150 }} />
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
-          <RevenueKpi label="매출 적용 금액" value={0} />
-          <RevenueKpi label="잔여 미수금" value={0} muted />
+          <RevenueKpi label="매출 적용 금액" value={data?.total.revenue ?? 0} />
+          <RevenueKpi label="잔여 미수금" value={data?.total.outstanding ?? 0} muted />
         </div>
+        {error && <div className="mt-2 text-[12.5px] text-red-600 dark:text-red-400">{error}</div>}
+        <p className="mt-2 text-[11.5px] text-[#A89B80] dark:text-zinc-500 leading-relaxed">
+          수강권은 담당강사, 회원권·락커·운동용품은 판매 직원 기준이에요. 판매 직원이 지정되지 않은 건은 집계되지 않습니다.
+        </p>
       </section>
 
       {/* 카테고리별 매출 5종 */}
@@ -357,10 +414,13 @@ function RevenueTab() {
           >
             <h3 className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100 mb-3">
               {c.label}
+              <span className="ml-1.5 text-[11.5px] font-normal text-[#A89B80]">
+                {data?.categories[c.key].count ?? 0}건
+              </span>
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              <RevenueKpi label="매출 적용 금액" value={0} small />
-              <RevenueKpi label="잔여 미수금" value={0} small muted />
+              <RevenueKpi label="매출 적용 금액" value={data?.categories[c.key].revenue ?? 0} small />
+              <RevenueKpi label="잔여 미수금" value={data?.categories[c.key].outstanding ?? 0} small muted />
             </div>
           </div>
         ))}
@@ -370,15 +430,18 @@ function RevenueTab() {
       <section className="rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900 p-4 md:p-5">
         <div className="flex flex-wrap items-center gap-3 mb-3">
           <h2 className="text-[14.5px] font-semibold text-[#2A251D] dark:text-zinc-100">
-            매출 내역 (0건)
+            매출 내역 ({items.length}건)
           </h2>
-          <select className={`${crmInputClass} ml-auto`} style={{ maxWidth: 160 }}>
-            <option>전체 상품</option>
-            <option>회원권</option>
-            <option>그룹 수업</option>
-            <option>개인 레슨</option>
-            <option>락커</option>
-            <option>운동 용품</option>
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as "all" | CategoryKey)}
+            className={`${crmInputClass} ml-auto`}
+            style={{ maxWidth: 160 }}
+          >
+            <option value="all">전체 상품</option>
+            {CATEGORIES.map((c) => (
+              <option key={c.key} value={c.key}>{c.short}</option>
+            ))}
           </select>
         </div>
 
@@ -395,16 +458,77 @@ function RevenueTab() {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td colSpan={6} className="px-3 py-12 text-center">
-                  <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">
-                    데이터가 없어요
-                  </div>
-                  <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
-                    보여드릴 매출 내역이 없어요.
-                  </div>
-                </td>
-              </tr>
+              {loading && !data ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-12 text-center text-[13px] text-[#8C8270]">
+                    불러오는 중…
+                  </td>
+                </tr>
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-12 text-center">
+                    <div className="text-[13.5px] text-[#8C8270] dark:text-zinc-400">
+                      데이터가 없어요
+                    </div>
+                    <div className="mt-1 text-[12px] text-[#A89B80] dark:text-zinc-500">
+                      이 기간에 이 직원 매출로 잡힌 결제가 없어요.
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                items.map((i) => (
+                  <tr
+                    key={i.id}
+                    className="border-t border-[#E8E0D0]/70 dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-900"
+                  >
+                    <Td className="text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap">{i.date}</Td>
+                    <Td>
+                      {i.member_id ? (
+                        <Link
+                          href={`/crm/members/${i.member_id}`}
+                          className="font-semibold text-[#6B7B3A] dark:text-[#A8B87A] underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                        >
+                          {i.member_name || `#${i.member_id}`}
+                        </Link>
+                      ) : (
+                        <span className="text-[#A89B80]">—</span>
+                      )}
+                    </Td>
+                    <Td className="text-[#6B5D47] dark:text-zinc-400 whitespace-nowrap">
+                      {i.member_phone ? formatPhone(i.member_phone) : "—"}
+                    </Td>
+                    <Td>
+                      <span className="text-[11px] px-1.5 py-0.5 mr-1.5 rounded border border-[#E8E0D0] dark:border-zinc-700 text-[#8C8270] dark:text-zinc-400">
+                        {CATEGORY_SHORT[i.category]}
+                      </span>
+                      {i.product_name}
+                    </Td>
+                    <Td className="font-semibold whitespace-nowrap">
+                      {formatWon(i.amount_won)}원
+                      {i.discount_won > 0 && (
+                        <span className="ml-1 text-[11px] font-normal text-[#A89B80]">
+                          (할인 {formatWon(i.discount_won)})
+                        </span>
+                      )}
+                    </Td>
+                    <Td className="text-[#6B5D47] dark:text-zinc-400 max-w-[220px]">
+                      <span className="block truncate" title={i.memo || ""}>
+                        {[
+                          i.payment_method === "etc" && i.payment_method_custom
+                            ? i.payment_method_custom
+                            : i.payment_method
+                              ? PAYMENT_METHOD_LABEL[i.payment_method] ?? i.payment_method
+                              : null,
+                          i.outstanding_won > 0 ? `미수 ${formatWon(i.outstanding_won)}원` : null,
+                          i.memo,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "—"}
+                      </span>
+                    </Td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -413,13 +537,45 @@ function RevenueTab() {
   );
 }
 
-const CATEGORIES = [
-  { key: "membership", label: "회원권 매출" },
-  { key: "group", label: "그룹 수업 매출" },
-  { key: "personal", label: "개인 레슨 매출" },
-  { key: "locker", label: "락커 매출" },
-  { key: "goods", label: "운동 용품 매출" },
+type CategoryKey = "membership" | "personal" | "group" | "locker" | "goods";
+
+interface RevenueDetail {
+  from: string;
+  to: string;
+  total: { revenue: number; outstanding: number; count: number };
+  categories: Record<CategoryKey, { revenue: number; outstanding: number; count: number }>;
+  items: {
+    id: string;
+    category: CategoryKey;
+    date: string;
+    member_id: number | null;
+    member_name: string | null;
+    member_phone: string | null;
+    product_name: string;
+    amount_won: number;
+    discount_won: number;
+    outstanding_won: number;
+    payment_method: string | null;
+    payment_method_custom: string | null;
+    memo: string | null;
+  }[];
+}
+
+const CATEGORIES: { key: CategoryKey; label: string; short: string }[] = [
+  { key: "membership", label: "회원권 매출", short: "회원권" },
+  { key: "group", label: "그룹 수업 매출", short: "그룹 수업" },
+  { key: "personal", label: "개인 레슨 매출", short: "개인 레슨" },
+  { key: "locker", label: "락커 매출", short: "락커" },
+  { key: "goods", label: "운동 용품 매출", short: "운동 용품" },
 ];
+
+const CATEGORY_SHORT: Record<CategoryKey, string> = {
+  membership: "회원권",
+  group: "그룹 수업",
+  personal: "개인 레슨",
+  locker: "락커",
+  goods: "운동 용품",
+};
 
 function RevenueKpi({
   label,
@@ -634,4 +790,8 @@ function TabBtn({
 
 function Th({ children }: { children: React.ReactNode }) {
   return <th className="text-left font-medium px-3 py-2.5 whitespace-nowrap">{children}</th>;
+}
+
+function Td({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <td className={`px-3 py-2.5 ${className || ""}`}>{children}</td>;
 }
