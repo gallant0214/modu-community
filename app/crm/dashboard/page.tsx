@@ -139,7 +139,7 @@ export default function CrmDashboardPage() {
   const [me, setMe] = useState<BootstrapResp | null>(null);
   const [period, setPeriod] = useState<Period>("month");
   const [joinModal, setJoinModal] = useState<"qr" | "link" | null>(null);
-  const [view, setView] = useState<"overview" | "customers">("overview");
+  const [view, setView] = useState<"overview" | "customers" | "finance">("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -332,14 +332,19 @@ export default function CrmDashboardPage() {
         )}
       </header>
 
-      {/* 상단 탭: 운영 현황 / 고객 현황 (전체 집계라 trainer 제외) */}
+      {/* 상단 탭: 대시보드 / 고객현황 / 재무현황 (전체 집계라 trainer 제외) */}
       <div className="mb-4 flex gap-1 border-b border-[#E8E0D0] dark:border-zinc-800">
         <DashTab active={view === "overview"} onClick={() => setView("overview")}>
-          운영 현황
+          대시보드
         </DashTab>
         {canCustomers && (
           <DashTab active={view === "customers"} onClick={() => setView("customers")}>
-            고객 현황
+            고객현황
+          </DashTab>
+        )}
+        {canFinance && (
+          <DashTab active={view === "finance"} onClick={() => setView("finance")}>
+            재무현황
           </DashTab>
         )}
       </div>
@@ -359,7 +364,7 @@ export default function CrmDashboardPage() {
       ) : (
         <div className="space-y-4">
           {/* 운영 알림 */}
-          {summary && (
+          {summary && view === "overview" && (
             <>
               <SectionHeader title="운영 알림" subtitle="재등록·수금 우선 확인 대상" />
               <section className={`grid grid-cols-2 gap-2 ${canFinance ? "lg:grid-cols-5" : "lg:grid-cols-3"}`}>
@@ -412,13 +417,13 @@ export default function CrmDashboardPage() {
           )}
 
           {/* 회원 통계 — dashboard.members 권한 */}
-          {summary && canMemberStats && (
+          {summary && canMemberStats && view === "overview" && (
             <SectionHeader
               title="회원 통계"
               subtitle={`${summary.range.from === summary.range.to ? summary.range.to : `${summary.range.from} ~ ${summary.range.to}`} · 총 ${summary.members.total.count.toLocaleString()}명`}
             />
           )}
-          {summary && (
+          {summary && view === "overview" && (
             <>
               <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
                 <GenderStatCard label="유효 회원" data={summary.members.active} accent />
@@ -579,7 +584,7 @@ export default function CrmDashboardPage() {
           )}
 
           {/* 출석 통계 */}
-          {summary && (
+          {summary && view === "overview" && (
             <>
               <SectionHeader
                 title="출석 통계"
@@ -605,8 +610,8 @@ export default function CrmDashboardPage() {
             </>
           )}
 
-          {/* 매출 통계 — 재무 권한(dashboard.finance) 필요 */}
-          {summary && canFinance && (
+          {/* 매출 통계 — 재무현황 탭 (dashboard.finance 권한) */}
+          {summary && canFinance && view === "finance" && (
             <>
               <SectionHeader
                 title="매출 통계"
@@ -707,7 +712,7 @@ export default function CrmDashboardPage() {
           )}
 
           {/* 수업 통계 — dashboard.members 권한 */}
-          {summary && canMemberStats && (
+          {summary && canMemberStats && view === "overview" && (
             <>
               <SectionHeader title="수업 통계" subtitle="예약 건수 / 신청자 / 미진행(결제했으나 미예약 잔여 세션)" />
               <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -724,8 +729,8 @@ export default function CrmDashboardPage() {
             </>
           )}
 
-          {/* PT/이용권 매출 추이 — 재무 권한 필요 */}
-          {canFinance && (
+          {/* PT/이용권 매출 추이 — 재무현황 탭 */}
+          {canFinance && view === "finance" && (
           <>
           <SectionHeader title="이번달 상세" subtitle="최근 12개월 매출 추이" />
           <section className="grid gap-3">
@@ -765,12 +770,12 @@ export default function CrmDashboardPage() {
           </>
           )}
 
-          {/* 강사 랭킹 — PT매출은 재무 권한 필요, 수업완료는 항상 표시 */}
-          {monthly && monthly.trainers.length > 0 && (
+          {/* 강사 랭킹 — PT매출은 재무현황 탭, 수업완료는 대시보드 탭 */}
+          {monthly && monthly.trainers.length > 0 && (view === "overview" || (view === "finance" && canFinance)) && (
             <>
               <SectionHeader title="강사 랭킹" subtitle="이번달 실적" />
-              <section className={`grid gap-3 ${canFinance ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
-                {canFinance && (
+              <section className="grid gap-3 md:grid-cols-1">
+                {canFinance && view === "finance" && (
                   <RankBox
                     title="PT매출 TOP 5"
                     rows={[...monthly.trainers]
@@ -779,19 +784,21 @@ export default function CrmDashboardPage() {
                       .map((t) => ({ label: t.name, value: `${formatWon(t.passes.revenue)}원` }))}
                   />
                 )}
-                <RankBox
-                  title="수업완료 TOP 5"
-                  rows={[...monthly.trainers]
-                    .sort((a, b) => b.reservations.attended - a.reservations.attended)
-                    .slice(0, 5)
-                    .map((t) => ({ label: t.name, value: `${t.reservations.attended}회` }))}
-                />
+                {view === "overview" && (
+                  <RankBox
+                    title="수업완료 TOP 5"
+                    rows={[...monthly.trainers]
+                      .sort((a, b) => b.reservations.attended - a.reservations.attended)
+                      .slice(0, 5)
+                      .map((t) => ({ label: t.name, value: `${t.reservations.attended}회` }))}
+                  />
+                )}
               </section>
             </>
           )}
 
-          {/* 출석 순위 — 회원앱 홈과 동일(이번 달 출석일수). CRM은 실명 전체 표시 */}
-          <AttendanceRankingSection />
+          {/* 출석 순위 — 대시보드 탭에만 (회원앱 홈과 동일, 이번 달 출석일수, 실명 전체) */}
+          {view === "overview" && <AttendanceRankingSection />}
         </div>
       )}
       </>
