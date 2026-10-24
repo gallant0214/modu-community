@@ -8000,25 +8000,11 @@ function UsageIssueModal({
           }),
         });
       } else {
-        // locker: 자리(lockerId) 가 지정된 경우에만 물리 배정.
-        //   지정 안 됐으면 결제(rental 매출)만 기록 → 배정은 나중에 락커 관리에서 진행.
-        if (line.lockerId) {
-          const assignRes = await fetch(`/api/crm/lockers/${line.lockerId}`, {
-            method: "PATCH",
-            headers,
-            body: JSON.stringify({
-              action: "assign",
-              member_id: memberId,
-              start_date: line.startDate,
-              expires_at: lineExpires,
-              password: line.lockerPassword || undefined,
-              memo: line.memo || undefined,
-            }),
-          });
-          const aData = await assignRes.json();
-          if (!assignRes.ok) return { ok: false, error: aData?.error || "락커 배정 실패" };
-        }
-
+        // locker: 이용권(대여권)을 먼저 발급하고, 그 다음에 자리(lockerId)를 배정한다.
+        //   🚨 순서를 바꾸면 안 된다 — 락커 배정은 '유효한 락커 이용권 수' 를 한도로 검사하므로
+        //      (app/lib/crm-locker-quota.ts) 배정을 먼저 하면 아직 이용권이 없어
+        //      "유효한 락커 이용권이 없어요" 로 막힌다.
+        //   자리를 안 골랐으면 결제(rental 매출)만 기록 → 배정은 나중에 락커 관리에서 진행.
         const rentalMemo = [
           line.lockerLabel ?? "구역 미배정",
           line.memo,
@@ -8049,6 +8035,29 @@ function UsageIssueModal({
             memo: rentalMemo,
           }),
         });
+
+        if (res.ok && line.lockerId) {
+          const assignRes = await fetch(`/api/crm/lockers/${line.lockerId}`, {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({
+              action: "assign",
+              member_id: memberId,
+              start_date: line.startDate,
+              expires_at: lineExpires,
+              password: line.lockerPassword || undefined,
+              memo: line.memo || undefined,
+            }),
+          });
+          if (!assignRes.ok) {
+            const aData = await assignRes.json().catch(() => null);
+            // 이용권은 이미 발급됐으므로 그 사실을 함께 알려 준다(중복 발급 방지).
+            return {
+              ok: false,
+              error: `${aData?.error || "락커 배정 실패"} 이용권은 발급됐으니 락커관리에서 자리만 배정해 주세요.`,
+            };
+          }
+        }
       }
       const data = await res.json();
       if (!res.ok) return { ok: false, error: data?.error || "발급 실패" };
