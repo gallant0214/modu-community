@@ -181,17 +181,15 @@ export async function PATCH(
     updates.assigned_member_id = null;
     updates.start_date = null;
     updates.expires_at = null;
-    updates.password = null;
     updates.memo = null;
+    // 🚨 비밀번호는 '자리'에 붙은 값이라 회수해도 지우지 않는다.
+    //    (회수할 때마다 지우면 빈 락커를 다시 배정할 때 번호를 새로 적어야 해서 번거롭다.
+    //     바꾸려면 락커 상세에서 직접 고치면 된다.)
 
     history.action = "return";
     history.member_id = locker.assigned_member_id;
     history.member_name = memberName;
     history.note = body.note ?? null;
-    // 회수 시점에 남아있던 비밀번호 기록 (해제됨)
-    if (locker.password) {
-      history.changes = { password: { from: locker.password, to: null } };
-    }
   } else if (action === "update") {
     const changes: Record<string, { from: unknown; to: unknown }> = {};
     if (body.password !== undefined) {

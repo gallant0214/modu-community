@@ -530,7 +530,8 @@ export async function DELETE(
         } else {
           await supabase
             .from("crm_lockers")
-            .update({ state: "unassigned", assigned_member_id: null, start_date: null, expires_at: null, password: null, memo: null, updated_at: nowIso } as never)
+            // 비밀번호는 자리에 남겨 둔다 (회수해도 유지 — 다시 배정할 때 그대로 씀)
+            .update({ state: "unassigned", assigned_member_id: null, start_date: null, expires_at: null, memo: null, updated_at: nowIso } as never)
             .eq("id", lid)
             .eq("center_id", ctx.centerId);
           if (lk) {
