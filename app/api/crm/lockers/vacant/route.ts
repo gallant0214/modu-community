@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
+import { ctxHasPermission } from "@/app/lib/crm-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("crm_lockers")
-    .select("id, zone_id, number, state")
+    .select("id, zone_id, number, state, password")
     .eq("center_id", ctx.centerId)
     .eq("state", "unassigned")
     .order("number", { ascending: true });
@@ -33,6 +34,8 @@ export async function GET(request: Request) {
     : { data: [] };
   const zoneMap = new Map((zones ?? []).map((z) => [z.id, z]));
 
+  // 락커 비밀번호는 lockers.edit 권한자에게만 (락커 현황 API 와 같은 규칙)
+  const canSeePw = await ctxHasPermission(ctx, "lockers.edit");
   return NextResponse.json({
     lockers: (data ?? []).map((d) => ({
       id: d.id,
@@ -40,6 +43,7 @@ export async function GET(request: Request) {
       zone_name: zoneMap.get(d.zone_id)?.name ?? "",
       zone_number: zoneMap.get(d.zone_id)?.zone_number ?? null,
       number: d.number,
+      password: canSeePw ? d.password : null,
     })),
   });
 }
