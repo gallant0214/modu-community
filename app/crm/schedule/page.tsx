@@ -693,6 +693,21 @@ export default function CrmSchedulePage() {
           }
           trainers={trainers}
           onClose={() => setPickedEvent(null)}
+          onSave={async (patch) => {
+            const token = await getIdToken();
+            const res = await fetch(`/api/crm/schedule-events/${pickedEvent.id}`, {
+              method: "PATCH",
+              headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+              body: JSON.stringify(patch),
+            });
+            if (!res.ok) {
+              const d = await res.json().catch(() => ({}));
+              return d?.error || "수정 실패";
+            }
+            setPickedEvent(null);
+            load();
+            return null;
+          }}
           onDelete={async () => {
             const ev = pickedEvent;
             const token = await getIdToken();
@@ -1354,6 +1369,7 @@ function EventDialog({
   onClose,
   onDelete,
   onAddSchedule,
+  onSave,
 }: {
   event: ScheduleEvent;
   trainers: StaffOption[];
@@ -1361,15 +1377,156 @@ function EventDialog({
   onDelete: () => void;
   /** 같은 시간대에 일정을 하나 더 잡기 */
   onAddSchedule: () => void;
+  /** 수정 저장 — 실패하면 보여줄 메시지를 돌려준다 */
+  onSave: (patch: {
+    title: string;
+    description: string;
+    starts_at: string;
+    ends_at: string;
+    trainer_member_id?: number | null;
+  }) => Promise<string | null>;
 }) {
   const trainerName = trainers.find((t) => t.id === event.trainer_member_id)?.display_name ?? null;
   const typeLabel = event.type === "center" ? "센터 일정" : "개인 일정";
   const [confirming, setConfirming] = useState(false);
+
+  /* 수정 모드 — 제목·날짜·시간·담당·내용 */
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(event.title);
+  const [desc, setDesc] = useState(event.description ?? "");
+  const [ymd, setYmd] = useState(kstDateKey(event.starts_at));
+  const [startHm, setStartHm] = useState(fmtKstHm(event.starts_at));
+  const [endHm, setEndHm] = useState(fmtKstHm(event.ends_at));
+  const [trainerId, setTrainerId] = useState<number | "">(event.trainer_member_id ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const save = async () => {
+    const t = title.trim();
+    if (!t) return setSaveError("제목을 입력해 주세요");
+    const [sh, sm] = startHm.split(":").map(Number);
+    const [eh, em] = endHm.split(":").map(Number);
+    if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return setSaveError("시간을 확인해 주세요");
+    if (eh * 60 + em <= sh * 60 + sm) return setSaveError("종료 시간이 시작 시간보다 빨라요");
+    setSaving(true);
+    setSaveError("");
+    const msg = await onSave({
+      title: t,
+      description: desc,
+      starts_at: kstDateToUTCISO(ymd, sh, sm),
+      ends_at: kstDateToUTCISO(ymd, eh, em),
+      trainer_member_id: event.type === "personal" ? (trainerId === "" ? null : trainerId) : undefined,
+    });
+    setSaving(false);
+    if (msg) setSaveError(msg);
+  };
+
+  const editInput =
+    "w-full px-2.5 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-[#2A251D] dark:text-zinc-100";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative w-full max-w-sm rounded-2xl border border-[#E8E0D0] dark:border-zinc-800 bg-[#FEFCF7] dark:bg-zinc-950 shadow-xl p-5">
-        <h2 className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">일정 상세</h2>
+        <h2 className="text-[15px] font-semibold text-[#2A251D] dark:text-zinc-100">
+          {editing ? "일정 수정" : "일정 상세"}
+        </h2>
+        {editing ? (
+          <div className="mt-3 space-y-2.5">
+            <label className="block text-[12px] text-[#6B5D47] dark:text-zinc-400">
+              제목
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className={`${editInput} mt-1`}
+                placeholder="예: 센터 청소, 외부 미팅"
+              />
+            </label>
+            <label className="block text-[12px] text-[#6B5D47] dark:text-zinc-400">
+              날짜
+              <input
+                type="date"
+                value={ymd}
+                onChange={(e) => setYmd(e.target.value)}
+                className={`${editInput} mt-1`}
+              />
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                시작
+                <input
+                  type="time"
+                  step={300}
+                  value={startHm}
+                  onChange={(e) => setStartHm(e.target.value)}
+                  className={`${editInput} mt-1`}
+                />
+              </label>
+              <label className="block text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                종료
+                <input
+                  type="time"
+                  step={300}
+                  value={endHm}
+                  onChange={(e) => setEndHm(e.target.value)}
+                  className={`${editInput} mt-1`}
+                />
+              </label>
+            </div>
+            {event.type === "personal" && (
+              <label className="block text-[12px] text-[#6B5D47] dark:text-zinc-400">
+                담당 직원
+                <select
+                  value={trainerId}
+                  onChange={(e) => setTrainerId(e.target.value ? Number(e.target.value) : "")}
+                  className={`${editInput} mt-1`}
+                >
+                  <option value="">지정 안 함</option>
+                  {trainers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.display_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className="block text-[12px] text-[#6B5D47] dark:text-zinc-400">
+              내용
+              <textarea
+                value={desc}
+                onChange={(e) => setDesc(e.target.value)}
+                className={`${editInput} mt-1 min-h-[72px]`}
+                placeholder="메모 (선택)"
+              />
+            </label>
+            {saveError && (
+              <div className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 text-[12.5px] text-red-700 dark:text-red-300">
+                {saveError}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(false);
+                  setSaveError("");
+                }}
+                disabled={saving}
+                className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 text-[13px] text-[#6B5D47] dark:text-zinc-400 hover:bg-[#F5F0E5] dark:hover:bg-zinc-800 disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={save}
+                disabled={saving}
+                className="px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932] disabled:opacity-50"
+              >
+                {saving ? "저장 중…" : "저장"}
+              </button>
+            </div>
+          </div>
+        ) : (
+        <>
         <div className="mt-2 text-[13px] text-[#6B5D47] dark:text-zinc-400 space-y-1">
           <div>
             <span className="text-[11.5px] text-[#A89B80] mr-1.5">유형</span>
@@ -1395,6 +1552,13 @@ function EventDialog({
         <div className="mt-4 space-y-2">
           {!confirming ? (
             <>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="w-full px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932]"
+              >
+                일정 수정
+              </button>
               <button
                 type="button"
                 onClick={() => setConfirming(true)}
@@ -1435,6 +1599,8 @@ function EventDialog({
             </>
           )}
         </div>
+        </>
+        )}
       </div>
     </div>
   );
