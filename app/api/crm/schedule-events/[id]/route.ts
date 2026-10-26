@@ -7,8 +7,9 @@ export const dynamic = "force-dynamic";
 
 /**
  * DELETE /api/crm/schedule-events/[id]
- * 소프트 삭제 (status=cancelled). 본인이 만든 일정만 삭제 가능.
- * owner/admin 은 모두 삭제 가능.
+ * 소프트 삭제 (status=cancelled).
+ * 🚨 센터일정·개인일정은 **만든 사람만** 지울 수 있다 (2026-10-26 운영 결정).
+ *    대표·관리자나 '타 직원 일정 관리' 권한이 있어도 남의 일정은 손대지 않는다.
  */
 export async function DELETE(
   request: Request,
@@ -29,16 +30,11 @@ export async function DELETE(
     .maybeSingle();
   if (!ev) return NextResponse.json({ error: "일정을 찾을 수 없어요" }, { status: 404 });
 
-  const isAdmin = ctx.role === "owner" || ctx.role === "admin";
-  const isOwnerOfEvent = ev.created_by_uid === ctx.uid;
-  let hasManageAll = false;
-  if (!isAdmin && !isOwnerOfEvent) {
-    // 타 강사 일정 관리 = schedule.manage_others (직급 권한 일원화)
-    hasManageAll =
-      ctx.isSoloOwner || (await loadPermissionsForContext(ctx))["schedule.manage_others"] === true;
-  }
-  if (!isAdmin && !isOwnerOfEvent && !hasManageAll) {
-    return NextResponse.json({ error: "삭제 권한이 없어요" }, { status: 403 });
+  if (ev.created_by_uid !== ctx.uid) {
+    return NextResponse.json(
+      { error: "일정을 만든 직원만 삭제할 수 있어요" },
+      { status: 403 }
+    );
   }
 
   const { error } = await supabase
@@ -53,8 +49,10 @@ export async function DELETE(
 
 /**
  * PATCH /api/crm/schedule-events/[id]
- * 일정 수정 — 제목·내용·시간 이동(드래그 reschedule). 본인이 만든 일정 또는
- * owner/admin/can_manage_all_schedules 만 가능. 센터 일정으로의 전환은 관리자 권한 필요.
+ * 일정 수정 — 제목·내용·시간 이동(드래그 reschedule).
+ * 🚨 센터일정·개인일정은 **만든 사람만** 고칠 수 있다 (2026-10-26 운영 결정).
+ *    대표·관리자나 '타 직원 일정 관리' 권한이 있어도 남의 일정은 손대지 않는다.
+ *    단, 개인 → 센터 일정 전환은 여전히 관리자 권한이 필요하다.
  * body: { title?, description?, starts_at?, ends_at?, type? }
  */
 export async function PATCH(
@@ -91,16 +89,16 @@ export async function PATCH(
     .maybeSingle();
   if (!ev) return NextResponse.json({ error: "일정을 찾을 수 없어요" }, { status: 404 });
 
+  if (ev.created_by_uid !== ctx.uid) {
+    return NextResponse.json(
+      { error: "일정을 만든 직원만 수정할 수 있어요" },
+      { status: 403 }
+    );
+  }
+  // 센터 일정 지정(개인 → 센터)은 별개 권한 — 만든 사람이라도 관리자급만 가능
   const isAdmin = ctx.role === "owner" || ctx.role === "admin" || ctx.isSoloOwner;
-  const isOwnerOfEvent = ev.created_by_uid === ctx.uid;
-  let hasManageAll = isAdmin;
-  if (!hasManageAll) {
-    // 타 강사 일정 관리 = schedule.manage_others (직급 권한 일원화)
-    hasManageAll = (await loadPermissionsForContext(ctx))["schedule.manage_others"] === true;
-  }
-  if (!isAdmin && !isOwnerOfEvent && !hasManageAll) {
-    return NextResponse.json({ error: "수정 권한이 없어요" }, { status: 403 });
-  }
+  const hasManageAll =
+    isAdmin || (await loadPermissionsForContext(ctx))["schedule.manage_others"] === true;
 
   const patch: Record<string, unknown> = {};
   if (typeof body.title === "string") {

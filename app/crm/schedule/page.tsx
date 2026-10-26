@@ -48,6 +48,8 @@ interface ScheduleEvent {
   trainer_member_id: number | null;
   starts_at: string;
   ends_at: string;
+  /** 만든 직원의 로그인 uid — 수정·삭제는 이 사람만 가능 */
+  created_by_uid?: string | null;
 }
 
 /** 클래스 수업 세션 (crm_class_sessions) — 정원을 여러 회원이 공유하는 그룹 수업 */
@@ -132,7 +134,7 @@ function layoutOverlaps<
 }
 
 export default function CrmSchedulePage() {
-  const { getIdToken } = useAuth();
+  const { getIdToken, user } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   // 화면 모드: 캘린더 / 수업 예약 내역(리스트)
   const [panelMode, setPanelMode] = useState<"calendar" | "list" | "class">("calendar");
@@ -393,9 +395,14 @@ export default function CrmSchedulePage() {
 
   const proposeEventMove = useCallback(
     (ev: ScheduleEvent, startsAt: string, endsAt: string, trainerMemberId?: number) => {
+      // 센터·개인 일정은 만든 사람만 옮길 수 있다 (서버 규칙과 동일)
+      if (!user?.uid || ev.created_by_uid !== user.uid) {
+        alert("이 일정을 등록한 직원만 옮길 수 있어요.");
+        return;
+      }
       setPendingEventMove({ event: ev, startsAt, endsAt, trainerMemberId });
     },
-    []
+    [user?.uid]
   );
 
   // 드래그 종료 시 자식 뷰에서 호출 — 실제 변경 전 확인창을 띄운다
@@ -688,6 +695,7 @@ export default function CrmSchedulePage() {
       {pickedEvent && (
         <EventDialog
           event={pickedEvent}
+          canEdit={!!user?.uid && pickedEvent.created_by_uid === user.uid}
           onAddSchedule={() =>
             openAddScheduleAt(pickedEvent.starts_at, pickedEvent.ends_at, pickedEvent.trainer_member_id)
           }
@@ -1366,6 +1374,7 @@ function ClassSessionDialog({
 function EventDialog({
   event,
   trainers,
+  canEdit,
   onClose,
   onDelete,
   onAddSchedule,
@@ -1373,6 +1382,8 @@ function EventDialog({
 }: {
   event: ScheduleEvent;
   trainers: StaffOption[];
+  /** 이 일정을 만든 본인인지 — 수정·삭제는 만든 사람만 */
+  canEdit: boolean;
   onClose: () => void;
   onDelete: () => void;
   /** 같은 시간대에 일정을 하나 더 잡기 */
@@ -1552,20 +1563,28 @@ function EventDialog({
         <div className="mt-4 space-y-2">
           {!confirming ? (
             <>
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="w-full px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932]"
-              >
-                일정 수정
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirming(true)}
-                className="w-full px-3 py-2 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-[13px] font-semibold text-red-700 dark:text-red-300 hover:bg-red-100"
-              >
-                일정 삭제
-              </button>
+              {canEdit ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="w-full px-3 py-2 rounded-lg bg-[#6B7B3A] text-white text-[13px] font-semibold hover:bg-[#5a6932]"
+                  >
+                    일정 수정
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(true)}
+                    className="w-full px-3 py-2 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-[13px] font-semibold text-red-700 dark:text-red-300 hover:bg-red-100"
+                  >
+                    일정 삭제
+                  </button>
+                </>
+              ) : (
+                <div className="px-3 py-2 rounded-lg bg-[#F5F0E5] dark:bg-zinc-900 text-[12.5px] text-[#8C8270] dark:text-zinc-500 text-center">
+                  이 일정을 등록한 직원만 수정·삭제할 수 있어요.
+                </div>
+              )}
               <button
                 type="button"
                 onClick={onClose}
