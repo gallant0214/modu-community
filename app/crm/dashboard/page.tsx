@@ -142,6 +142,9 @@ export default function CrmDashboardPage() {
   const [view, setView] = useState<"overview" | "customers" | "finance">("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // 계약서 미작성 유효회원
+  const [noContract, setNoContract] = useState<{ id: number; name: string; phone: string | null }[] | null>(null);
+  const [ncOpen, setNcOpen] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -179,6 +182,20 @@ export default function CrmDashboardPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 계약서 미작성 유효회원 — 센터 직원(trainer 제외) 에게만, 한 번만 조회
+  useEffect(() => {
+    if (!me || me.centerKind === "solo" || me.role === "trainer") return;
+    (async () => {
+      const token = await getIdToken();
+      if (!token) return;
+      const res = await fetch("/api/crm/dashboard/no-contract-members", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (res.ok) setNoContract((await res.json()).members ?? []);
+    })();
+  }, [me, getIdToken]);
 
   // 비교육 직급(아르바이트·FC) → 수업 지표 없는 간단 대시보드.
   //   solo 는 제외(개인 CRM 운영자). 센터 소속 trainer 중 해당 라벨만.
@@ -392,6 +409,15 @@ export default function CrmDashboardPage() {
                     tone="warn"
                   />
                 </Link>
+                {/* 계약서 미작성 유효회원 — 클릭 시 명단 모달 */}
+                <button type="button" onClick={() => setNcOpen(true)} className="w-full text-left">
+                  <ActionInsightCard
+                    label="계약서 미작성"
+                    value={noContract == null ? "…" : `${noContract.length.toLocaleString()}명`}
+                    hint="유효회원 · 눌러서 명단 보기"
+                    tone="gold"
+                  />
+                </button>
                 {canFinance && (
                   <>
                     <Link href="/crm/members?payment=outstanding">
@@ -802,6 +828,51 @@ export default function CrmDashboardPage() {
         </div>
       )}
       </>
+      )}
+
+      {/* 계약서 미작성 회원 명단 모달 */}
+      {ncOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4" onClick={() => setNcOpen(false)}>
+          <div
+            className="w-full max-w-md max-h-[80vh] flex flex-col rounded-2xl bg-[#FEFCF7] dark:bg-zinc-950 border border-[#E8E0D0] dark:border-zinc-800 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#E8E0D0]/70 dark:border-zinc-800">
+              <h2 className="text-[15px] font-bold text-[#2A251D] dark:text-zinc-100">
+                계약서 미작성 회원 {noContract ? `(${noContract.length}명)` : ""}
+              </h2>
+              <button onClick={() => setNcOpen(false)} aria-label="닫기" className="p-1 -m-1 text-[#A89B80] hover:text-[#3A342A] dark:hover:text-zinc-200">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-4 py-2 text-[11.5px] text-[#8C8270] dark:text-zinc-500">
+              유효 회원권·수강권 보유 회원 중 서명된 전자계약서가 없는 회원이에요. 이름을 누르면 회원 상세로 이동합니다.
+            </div>
+            <div className="flex-1 overflow-y-auto px-3 pb-4">
+              {noContract == null ? (
+                <div className="py-10 text-center text-[13px] text-[#8C8270]">불러오는 중…</div>
+              ) : noContract.length === 0 ? (
+                <div className="py-10 text-center text-[13px] text-[#8C8270]">모든 유효회원이 계약서를 작성했어요 👍</div>
+              ) : (
+                <ul className="divide-y divide-[#EFE7D5] dark:divide-zinc-800">
+                  {noContract.map((m) => (
+                    <li key={m.id}>
+                      <Link
+                        href={`/crm/members/${m.id}`}
+                        className="flex items-center justify-between gap-3 px-2 py-2.5 rounded-lg hover:bg-[#F5F0E5] dark:hover:bg-zinc-900"
+                      >
+                        <span className="text-[14px] font-semibold text-[#2A251D] dark:text-zinc-100">{m.name}</span>
+                        <span className="text-[12.5px] text-[#8C8270] dark:text-zinc-500">{m.phone ?? ""}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
