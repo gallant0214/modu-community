@@ -109,15 +109,24 @@ export async function POST(request: Request) {
     .in("status", ["pending", "processing"])
     .maybeSingle();
   const live = liveRow as unknown as SaasOrderRow | null;
-  /* 🚨 요청한 PG 와 살아있는 주문의 PG 가 다르면 그 주문을 접는다.
-     안 그러면 센터당 pending 1건 유니크 인덱스에 걸려, 심사원이 ?pg= 를 붙여도
-     계속 이전 PG 의 결제창만 보게 된다. */
-  if (live && live.pg_provider !== provider) {
+  /* 🚨 살아있는 주문이 **요청한 것과 다른 상품**이면 그 주문을 접는다.
+     센터당 pending 1건 유니크 인덱스가 있어서, 접지 않으면 새 주문을 만들 수 없고
+     이전 주문이 그대로 재사용된다.
+
+     🚨 요금제(plan_code)까지 비교해야 한다. PG 만 비교하던 때는 1개월 결제창을
+        열고 닫은 뒤 6개월을 고르면 **1개월 주문(99,000원)이 그대로 돌아왔다** —
+        화면은 474,000원이라고 적어둔 채로. 요금제가 4종이 된 뒤 생긴 문제다. */
+  const sameOrder = live && live.pg_provider === provider && live.plan_code === plan.code;
+  if (live && !sameOrder) {
+    const why =
+      live.pg_provider !== provider
+        ? `결제사 변경(${live.pg_provider} → ${provider})으로 재생성`
+        : `요금제 변경(${live.plan_code} → ${plan.code})으로 재생성`;
     await supabase
       .from("saas_orders")
       .update({
         status: "canceled",
-        fail_reason: `결제사 변경(${live.pg_provider} → ${provider})으로 재생성`,
+        fail_reason: why,
         updated_at: new Date().toISOString(),
       } as never)
       .eq("id", live.id)
