@@ -94,6 +94,20 @@ export default async function SaasPayPage({
     owner_phone: string | null;
   } | null;
 
+  /* 🚨 구매자명 폴백 — **개인 강사(solo) 센터는 owner_name 이 비어 있다.**
+     온보딩 '개인 강사' 경로가 대표자 정보를 받지 않기 때문이다. 비운 채로 보내면
+     이니시스 결제창에 구매자명이 없어 심사에서 걸리고, 매입 전표에도 남지 않는다.
+     대표자명 → 가입 닉네임 → 이메일 앞부분 순으로 채운다. */
+  const { data: nickRow } = await supabase
+    .from("nicknames")
+    .select("name")
+    .eq("firebase_uid", order.firebase_uid)
+    .maybeSingle();
+  const buyerName =
+    (center?.owner_name || "").trim() ||
+    ((nickRow as { name: string | null } | null)?.name || "").trim() ||
+    "구매자";
+
   const seller = platformSeller();
   /* 🚨 포트원 V1 은 buyer_tel 이 **필수**다. 비우면 결제창이 거부한다.
      대표자 휴대전화 → 센터 전화 → 우리 대표번호 순으로 채운다. */
@@ -124,7 +138,7 @@ export default async function SaasPayPage({
           token={t as string}
           amount={order.amount_won}
           orderName={order.plan_name}
-          customerName={center?.owner_name ?? ""}
+          customerName={buyerName}
           // 회원별로 항상 같은 값이어야 한다 — 구매자(사장님) 기준
           customerKey={`saas_${order.firebase_uid}`}
           clientKey={tossClientKey()}
@@ -137,7 +151,7 @@ export default async function SaasPayPage({
           centerId={order.center_id}
           amount={order.amount_won}
           orderName={order.plan_name}
-          customerName={center?.owner_name ?? ""}
+          customerName={buyerName}
           customerTel={buyerTel}
           impCode={portoneImpCode()}
           channelKey={portoneChannelKey()}
