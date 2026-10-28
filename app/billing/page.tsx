@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/app/components/auth-provider";
 import EmailLoginPanel from "@/app/components/email-login-panel";
 import { visiblePlans, defaultPlan, monthlyWon, listPriceWon, won } from "@/app/lib/saas-plans";
@@ -90,6 +90,22 @@ export default function BillingPage() {
     if (!user) return;
     void load();
   }, [user, load]);
+
+  /* 회원가입만 하고 들어온 사람은 결제할 센터가 없다 → **센터 선택창**(온보딩 첫 화면,
+     '개인 강사 / 센터 선택하기')으로 바로 보낸다. 거기서 등록을 마치면 returnTo 로
+     이 결제 화면에 돌아온다.
+
+     🚨 한 번만 보낸다. 센터 등록을 중간에 그만두고 돌아온 사람을 매번 다시 밀어내면
+        결제 화면을 아예 볼 수 없게 된다.
+     🚨 조회에 **성공해서** 0개인 경우만이다 — 네트워크 오류로 비어 있는 것과 구분하지
+        않으면 에러를 삼키고 엉뚱한 화면으로 보낸다. */
+  const sentToOnboarding = useRef(false);
+  useEffect(() => {
+    if (!user || error || centers === null) return;
+    if (centers.length > 0 || sentToOnboarding.current) return;
+    sentToOnboarding.current = true;
+    goOnboarding();
+  }, [user, error, centers]);
 
   /* 센터 등록을 마치면 **이 화면으로 돌아오게** 한다 — ?pg= 같은 쿼리까지 그대로 들고 간다.
      결제하러 들어온 사람을 대시보드에 떨어뜨리면 흐름이 끊긴다. */
@@ -216,7 +232,7 @@ export default function BillingPage() {
 
           {centers !== null && centers.length === 0 && (
             <div className="mt-6 rounded-xl border border-gray-200 px-4 py-5">
-              <p className="text-sm font-semibold text-gray-900">먼저 센터를 등록해주세요</p>
+              <p className="text-sm font-semibold text-gray-900">먼저 센터를 선택해주세요</p>
               <p className="mt-1.5 text-[13px] leading-relaxed text-gray-500">
                 이용권은 센터 단위로 결제합니다. 센터를 등록하시면 이 화면으로 돌아와 바로
                 결제하실 수 있어요. 개인 강사는 사업자등록증 없이 등록되고, 센터(사업장)로
