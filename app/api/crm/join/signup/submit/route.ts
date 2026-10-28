@@ -47,6 +47,21 @@ const normPhone = (v: string) => {
 };
 const kstToday = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
+/** 이 회원이 이미 발급받은 상품(회원권/수강권/대여권)이 있는지 — 완료된 가입 판별 */
+async function memberHasProducts(memberId: number, centerId: number): Promise<boolean> {
+  for (const table of ["crm_memberships", "crm_passes", "crm_rentals"] as const) {
+    const { data } = await supabase
+      .from(table)
+      .select("id")
+      .eq("center_id", centerId)
+      .eq("member_id", memberId)
+      .limit(1)
+      .maybeSingle();
+    if (data) return true;
+  }
+  return false;
+}
+
 /**
  * POST /api/crm/join/signup/submit  (공개·무인증 — QR 가입 링크 토큰으로 센터 판별)
  *
@@ -191,18 +206,47 @@ export async function POST(request: Request) {
   if (requiredMissing.length > 0)
     return NextResponse.json({ error: "필수 약관에 모두 동의해 주세요" }, { status: 400 });
 
-  // 5) 회원 생성/재사용 (center_id + phone 로 중복 방지 — 결제 재시도 안전)
-  let memberId: number;
-  const { data: existing } = await supabase
+  // 5) 기존 등록 회원 차단 + 회원 생성/재사용
+  //    같은 센터에 '이름+전화번호'가 동일한 회원이 이미 있으면:
+  //      · 앱 연동됨 / 정식회원(member_type≠provisional) / 발급 상품 보유(완료된 가입) → 신규가입 차단(연동 안내)
+  //      · 결제 미완료로 남은 provisional(상품 없음) → 재사용(결제 재시도 안전)
+  const phoneDigits = phone.replace(/\D/g, "");
+  const { data: cands } = await supabase
     .from("crm_members")
-    .select("id")
+    .select("id, name, phone, member_type, linked_firebase_uid")
     .eq("center_id", centerId)
-    .eq("phone", phone)
     .eq("status", "active")
-    .limit(1)
-    .maybeSingle();
-  if (existing) {
-    memberId = existing.id as number;
+    .ilike("phone", `%${phoneDigits.slice(-4)}%`);
+  const matches = (cands ?? []).filter(
+    (m) =>
+      (m.phone ?? "").replace(/\D/g, "") === phoneDigits &&
+      (m.name ?? "").trim().toLowerCase() === name.toLowerCase()
+  );
+  let blocked = matches.some((m) => m.linked_firebase_uid || m.member_type !== "provisional");
+  let reuseId: number | null = null;
+  if (!blocked) {
+    for (const m of matches) {
+      if (await memberHasProducts(m.id as number, centerId)) {
+        blocked = true;
+        break;
+      }
+      reuseId = m.id as number; // 상품 없는 provisional → 재사용 대상
+    }
+  }
+  if (blocked) {
+    return NextResponse.json(
+      {
+        ok: false,
+        reason: "already_member",
+        error: "이미 등록된 회원입니다. 회원용 앱의 '기존 회원 연동' 기능을 이용해 주세요.",
+      },
+      { status: 409 }
+    );
+  }
+
+  let memberId: number;
+  if (reuseId) {
+    memberId = reuseId;
     await supabase
       .from("crm_members")
       .update({

@@ -90,6 +90,7 @@ export default function MemberWebSignupPage() {
   // 최종 제출(회원·계약·얼굴·주문 생성 → 결제)
   const [submitting, setSubmitting] = useState(false);
   const [submitErr, setSubmitErr] = useState("");
+  const [alreadyMember, setAlreadyMember] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -326,6 +327,12 @@ export default function MemberWebSignupPage() {
         }),
       });
       const d = await res.json();
+      // 이미 등록된 회원 → 가입 차단 안내 모달
+      if (res.status === 409 && d?.reason === "already_member") {
+        setAlreadyMember(true);
+        setSubmitting(false);
+        return;
+      }
       if (!res.ok || !d.payUrl) throw new Error(d?.error || "결제를 시작하지 못했어요");
       window.location.href = d.payUrl;
     } catch (e) {
@@ -755,6 +762,28 @@ export default function MemberWebSignupPage() {
             setCalOpen(false);
           }}
         />
+      )}
+
+      {/* 이미 등록된 회원 안내 모달 */}
+      {alreadyMember && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-5">
+          <div className="w-full max-w-[360px] rounded-3xl bg-white p-6 text-center shadow-xl">
+            <div className="mx-auto mb-3 w-14 h-14 rounded-full bg-[#6B7B3A]/12 flex items-center justify-center text-[#6B7B3A] text-[26px]">
+              !
+            </div>
+            <div className="text-[17px] font-extrabold text-[#2A251D]">이미 등록된 회원이에요</div>
+            <p className="mt-2 text-[13px] text-[#6B5D47] leading-relaxed">
+              입력하신 이름과 전화번호로 이미 가입된 회원이 있어요.
+              <br />회원용 앱의 <b>&lsquo;기존 회원 연동&rsquo;</b> 기능을 이용해 주세요.
+            </p>
+            <button
+              onClick={() => router.replace(`/join/${encodeURIComponent(token)}`)}
+              className="mt-6 w-full py-3.5 rounded-2xl bg-[#6B7B3A] text-white text-[15px] font-bold hover:bg-[#5a6932] transition-colors"
+            >
+              돌아가기
+            </button>
+          </div>
+        </div>
       )}
 
       <style>{`
