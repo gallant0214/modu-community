@@ -91,6 +91,13 @@ export default function BillingPage() {
     void load();
   }, [user, load]);
 
+  /* 센터 등록을 마치면 **이 화면으로 돌아오게** 한다 — ?pg= 같은 쿼리까지 그대로 들고 간다.
+     결제하러 들어온 사람을 대시보드에 떨어뜨리면 흐름이 끊긴다. */
+  function goOnboarding() {
+    const back = window.location.pathname + window.location.search;
+    window.location.href = `/crm/onboarding?returnTo=${encodeURIComponent(back)}`;
+  }
+
   async function buy(centerId: number) {
     if (busyId) return;
     setBusyId(centerId);
@@ -211,15 +218,17 @@ export default function BillingPage() {
             <div className="mt-6 rounded-xl border border-gray-200 px-4 py-5">
               <p className="text-sm font-semibold text-gray-900">먼저 센터를 등록해주세요</p>
               <p className="mt-1.5 text-[13px] leading-relaxed text-gray-500">
-                이용권은 센터 단위로 결제합니다. 센터를 등록하시면 이 화면에서 바로 결제하실 수
-                있어요. 등록에는 사업자등록증 사본이 필요합니다.
+                이용권은 센터 단위로 결제합니다. 센터를 등록하시면 이 화면으로 돌아와 바로
+                결제하실 수 있어요. 개인 강사는 사업자등록증 없이 등록되고, 센터(사업장)로
+                등록하실 때만 사업자등록증 사본이 필요합니다.
               </p>
-              <a
-                href="/crm/onboarding"
+              <button
+                type="button"
+                onClick={goOnboarding}
                 className="mt-4 inline-block rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white"
               >
                 센터 등록하기
-              </a>
+              </button>
             </div>
           )}
 

@@ -17,6 +17,23 @@ interface CenterSearchResult {
   phone: string | null;
 }
 
+/**
+ * 센터 등록을 마친 뒤 돌아갈 곳.
+ *
+ * 이용권 결제(`/billing`)에서 "센터 등록하기" 로 들어온 사람은 **결제 화면으로
+ * 되돌려 보내야** 한다. 대시보드로 보내면 결제하러 왔던 흐름이 끊긴다.
+ *
+ * 🚨 열린 리다이렉트를 막는다 — 같은 사이트 내부 경로만 허용한다.
+ *    `//evil.com` 은 브라우저가 외부 주소로 해석하므로 `/` 로 시작하는 것만으로는 부족하다.
+ * useSearchParams 를 쓰지 않는 이유: 이 페이지를 Suspense 로 감싸지 않아도 되게 하려고.
+ */
+function safeReturnTo(): string | null {
+  if (typeof window === "undefined") return null;
+  const raw = new URLSearchParams(window.location.search).get("returnTo");
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+}
+
 export default function CrmOnboardingPage() {
   const router = useRouter();
   const { getIdToken } = useAuth();
@@ -112,7 +129,7 @@ export default function CrmOnboardingPage() {
       if (!res.ok) throw new Error(data?.error || "등록에 실패했습니다");
       // 새로 만든 개인 CRM 을 접속 컨텍스트로 지정 → 대시보드 레이아웃이 선택화면으로 되돌리지 않게 함
       if (data?.centerId) setCenterCookie(Number(data.centerId));
-      router.replace("/crm/dashboard");
+      router.replace(safeReturnTo() ?? "/crm/dashboard");
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
@@ -163,7 +180,7 @@ export default function CrmOnboardingPage() {
       if (!res.ok) throw new Error(data?.error || "등록에 실패했습니다");
       // 새로 등록한 센터를 접속 컨텍스트로 지정 → 대시보드 레이아웃이 선택화면으로 되돌리지 않게 함
       if (data?.centerId) setCenterCookie(Number(data.centerId));
-      router.replace("/crm/dashboard");
+      router.replace(safeReturnTo() ?? "/crm/dashboard");
     } catch (e) {
       setError(e instanceof Error ? e.message : "네트워크 오류");
     } finally {
