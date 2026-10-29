@@ -110,7 +110,7 @@ export default async function Home() {
                 <h3>🏢 센터 CRM</h3>
                 <ul>
                   <li>다인 사업장(센터장 · 관리자 · 강사 · 프론트) 권한 분리</li>
-                  <li>회원별 이용권·락커·운동복 · 결제 · 미수금 · 예약 · 출석 통합</li>
+                  <li>회원별 이용권·락커·운동복 · 미수금 · 예약 · 출석 통합</li>
                   <li>강사 수업료 · 급여 자동 산정, 성과급 구간 지원</li>
                   <li>얼굴 인식/번호 입력 터치 출석, 음성 안내</li>
                 </ul>
@@ -141,12 +141,16 @@ export default async function Home() {
                 <p className="lp-feature-example">&ldquo;출석번호 or 얼굴만 대면 자동 체크인&rdquo;</p>
                 <p>번호 / 얼굴 / 번호+얼굴 3가지 모드 + 만료·생일·저세션 음성 안내</p>
               </div>
+              {/* 2026-10-29 KG이니시스 심사 지적으로 '이용권 · 결제' 소개 카드만 잠시 가림.
+                  CRM 기능 자체는 그대로다 — 홈 소개 문구에서만 뺐다.
+                  되돌릴 때: 이 세 줄과 아래 닫는 줄만 지우면 원래대로 돌아온다.
               <div className="lp-feature-card">
                 <div className="lp-feature-icon">💳</div>
                 <h3>이용권 · 결제</h3>
                 <p className="lp-feature-example">&ldquo;회원권+락커+운동복 장바구니 한번에 결제&rdquo;</p>
                 <p>회원권/수강권 발급, 정지·홀딩, 미수금, 자동 마일리지 적립</p>
               </div>
+              */}
               <div className="lp-feature-card">
                 <div className="lp-feature-icon">📝</div>
                 <h3>전자 계약서</h3>
