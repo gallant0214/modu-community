@@ -11,6 +11,7 @@ import {
 } from "@/app/lib/member-checkout";
 import PayClient from "./PayClient";
 import SellerInfo, { loadSellerInfo } from "@/app/pay/SellerInfo";
+import { pgProductName } from "@/app/lib/pg-product-name";
 
 export const dynamic = "force-dynamic";
 
@@ -60,14 +61,17 @@ export default async function PayPage({
   const { data } = await supabase
     .from("crm_orders")
     .select(
-      "id, center_id, member_id, product_name, list_price_won, coupon_discount_won, " +
-        "mileage_used, mileage_earned, amount_won, status, expires_at"
+      "id, center_id, member_id, product_id, product_type, product_name, list_price_won, " +
+        "coupon_discount_won, mileage_used, mileage_earned, amount_won, status, expires_at"
     )
     .eq("order_uid", orderUid)
     .maybeSingle();
   const order = data as {
+    id: number;
     center_id: number;
     member_id: number;
+    product_id: number | null;
+    product_type: string | null;
     product_name: string;
     list_price_won: number;
     coupon_discount_won: number;
@@ -122,6 +126,37 @@ export default async function PayPage({
   const centerForPath = centerRow as { id: number; pay_slug: string | null; shop_slug: string | null } | null;
   if (!centerForPath || payPathSlug(centerForPath) !== centerSlug) notFound();
 
+  /* 🚨 PG 로 넘길 상품명은 한글 종목명을 쓰지 않는다 — 이니시스 전표에 '회원권·운동복·락커'
+     가 남지 않아야 한다(2026-10-29 심사 지적). 화면에 보이는 이름은 그대로 한글이고,
+     코드로 바꾸는 건 결제창에 넘기는 값 하나뿐이다. 자세한 이유는 pg-product-name.ts. */
+  const { data: itemRows } = await supabase
+    .from("crm_order_items")
+    .select("product_type")
+    .eq("order_id", order.id);
+  const itemTypes = ((itemRows as { product_type: string | null }[] | null) ?? []).map(
+    (r) => r.product_type
+  );
+  /* 대표 상품의 기간 — 코드만 남기면 무엇을 샀는지 전혀 알 수 없어 기간은 붙인다 */
+  const { data: repRow } = order.product_id
+    ? await supabase
+        .from("crm_products")
+        .select("duration_value, duration_unit, total_sessions")
+        .eq("id", order.product_id)
+        .maybeSingle()
+    : { data: null };
+  const rep = repRow as {
+    duration_value: number | null;
+    duration_unit: string | null;
+    total_sessions: number | null;
+  } | null;
+  const pgName = pgProductName({
+    // 항목 조회가 비면(이론상 없다) 주문에 적힌 대표 종류라도 코드로 바꿔 넘긴다
+    types: itemTypes.length > 0 ? itemTypes : [order.product_type],
+    durationValue: rep?.duration_value,
+    durationUnit: rep?.duration_unit,
+    totalSessions: rep?.total_sessions,
+  });
+
   const seller = await loadSellerInfo(order.center_id);
 
   /* 센터 판매 페이지 주소 — 결제 동의 문구와 하단에 약관·정책 링크를 띄우는 데 쓴다.
@@ -171,7 +206,7 @@ export default async function PayPage({
         token={t as string}
         centerId={order.center_id}
         amount={order.amount_won}
-        orderName={order.product_name}
+        orderName={pgName}
         customerName={member?.name ?? ""}
         customerTel={(member?.phone || seller?.phone || "").replace(/[^0-9]/g, "")}
         impCode={portoneImpCode()}
