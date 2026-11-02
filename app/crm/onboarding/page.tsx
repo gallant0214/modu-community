@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { safeReturnPath } from "@/app/lib/safe-return-to";
 import { useAuth } from "@/app/components/auth-provider";
 import { formatPhone, formatBusinessNo } from "../_components/crm-labels";
 import { setCenterCookie } from "../_components/crm-center-cookie";
@@ -29,9 +30,7 @@ interface CenterSearchResult {
  */
 function safeReturnTo(): string | null {
   if (typeof window === "undefined") return null;
-  const raw = new URLSearchParams(window.location.search).get("returnTo");
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return null;
-  return raw;
+  return safeReturnPath(new URLSearchParams(window.location.search).get("returnTo"));
 }
 
 export default function CrmOnboardingPage() {

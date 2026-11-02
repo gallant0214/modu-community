@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { safeReturnPath } from "@/app/lib/safe-return-to";
 
 type Phase = "confirming" | "done" | "failed";
 
@@ -91,9 +92,12 @@ export default function DoneClient(props: {
           { type: "payment", ok: true, orderId: data?.orderId, issued: data?.issued },
           props.returnToApp
         );
-        // 신규 웹 가입 등 — 성공 후 지정된 완료 화면으로 이동 (내부 경로만 허용)
-        if (props.returnTo && props.returnTo.startsWith("/")) {
-          setTimeout(() => window.location.replace(props.returnTo as string), 900);
+        /* 신규 웹 가입 등 — 성공 후 지정된 완료 화면으로 이동.
+           🚨 내부 경로만 허용한다. `/` 로 시작하는지만 보면 `//evil.com` 이 통과해
+              결제 직후의 회원이 가짜 안내 화면으로 끌려간다. */
+        const back = safeReturnPath(props.returnTo);
+        if (back) {
+          setTimeout(() => window.location.replace(back), 900);
         }
       } catch {
         setPhase("failed");
