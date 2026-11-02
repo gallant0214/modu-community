@@ -310,6 +310,8 @@ export default function CrmMemberDetailPage() {
     id ? staffList.find((s) => s.id === id)?.display_name ?? null : null;
   // 오늘(KST) 기준. UTC 로 하면 한국 자정~오전9시 사이 만료 판정이 하루 어긋난다.
   const holdToday = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  // 만료 임박 기준: 오늘로부터 7일 이내(=7일 남음 이하)
+  const hold7d = new Date(Date.now() + 9 * 3600 * 1000 + 7 * 24 * 3600 * 1000).toISOString().slice(0, 10);
   // 상품별 홀딩 상태(crm_pauses 기준): 오늘이 홀딩 기간 내면 "hold", 시작 전이면 "hold_scheduled".
   // is_paused 플래그가 아니라 실제 홀딩 기간으로 판정한다.
   const holdStateFor = (
@@ -331,12 +333,16 @@ export default function CrmMemberDetailPage() {
   const chipStateFor = (
     kind: "membership" | "pass" | "rental",
     id: number | null | undefined,
-    startDate: string | null | undefined
-  ): "hold" | "hold_scheduled" | "scheduled" | null => {
+    startDate: string | null | undefined,
+    expiresAt?: string | null
+  ): "hold" | "hold_scheduled" | "scheduled" | "imminent" | null => {
     const hs = holdStateFor(kind, id);
     if (hs === "hold") return "hold";
     if (hs === "hold_scheduled") return "hold_scheduled";
     if (startDate && startDate > holdToday) return "scheduled"; // 아직 시작 전 = 예정
+    // 사용 중(시작됨·홀딩 아님)인데 7일 이내 만료 → 임박. 무기한(9999-12-31)은 제외.
+    if (expiresAt && expiresAt !== "9999-12-31" && expiresAt >= holdToday && expiresAt <= hold7d)
+      return "imminent";
     return null;
   };
   const validHoldMs = holdMs.filter((m) => m.status === "valid" && m.expires_at >= holdToday);
@@ -670,7 +676,7 @@ export default function CrmMemberDetailPage() {
                   tag="회원권"
                   name={m.plan_name}
                   period={fmtPeriod(m.start_date, m.expires_at)}
-                  holdState={chipStateFor("membership", m.id, m.start_date)}
+                  holdState={chipStateFor("membership", m.id, m.start_date, m.expires_at)}
                   onClick={() => setPaymentDetail(membershipToDetail(m, staffName))}
                 />
               ))
@@ -683,7 +689,7 @@ export default function CrmMemberDetailPage() {
                   tag="수강권"
                   name={stripPassCountSuffix(p.lesson_kind)}
                   period={`잔여 ${p.remaining_sessions}/${p.total_sessions}회 · ${p.expires_at === "9999-12-31" ? "무기한" : `~${p.expires_at}`}`}
-                  holdState={chipStateFor("pass", p.id, (p as { start_date?: string | null }).start_date ?? null)}
+                  holdState={chipStateFor("pass", p.id, (p as { start_date?: string | null }).start_date ?? null, p.expires_at)}
                   onClick={() => { setPassStartEdit(false); setDetailPassId(p.id); }}
                 />
               ))
@@ -696,7 +702,7 @@ export default function CrmMemberDetailPage() {
                   tag="대여권"
                   name={r.item_name}
                   period={fmtPeriod(r.start_date, r.expires_at)}
-                  holdState={chipStateFor("rental", r.id, r.start_date)}
+                  holdState={chipStateFor("rental", r.id, r.start_date, r.expires_at)}
                   onClick={() => setPaymentDetail(rentalToDetail(r, staffName))}
                 />
               ))
@@ -712,7 +718,7 @@ export default function CrmMemberDetailPage() {
                   name={c.assign ? `${c.assign.zone_name} ${c.assign.number}번` : c.name}
                   period={fmtPeriod(c.start, c.exp)}
                   lockerUnassigned={!c.assign}
-                  holdState={chipStateFor("rental", c.rental?.id, c.start)}
+                  holdState={chipStateFor("rental", c.rental?.id, c.start, c.exp)}
                   onClick={
                     c.rental
                       ? () =>
@@ -5194,8 +5200,8 @@ function SnapHoldingCard({
   name: string;
   period: string | null;
   lockerUnassigned?: boolean;
-  // 홀딩 칩: hold=현재 홀딩([홀딩]빨강) / hold_scheduled=홀딩 시작 전([홀딩예정]주황) / scheduled=상품 미시작([예정]파랑)
-  holdState?: "hold" | "hold_scheduled" | "scheduled" | null;
+  // 홀딩 칩: hold=현재 홀딩([홀딩]빨강) / hold_scheduled=홀딩 시작 전([홀딩예정]주황) / scheduled=상품 미시작([예정]파랑) / imminent=7일 이내 만료([임박]빨강)
+  holdState?: "hold" | "hold_scheduled" | "scheduled" | "imminent" | null;
   onClick?: () => void;
 }) {
   return (
@@ -5220,6 +5226,11 @@ function SnapHoldingCard({
         {holdState === "scheduled" && (
           <span className="px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 text-[9.5px] font-bold">
             예정
+          </span>
+        )}
+        {holdState === "imminent" && (
+          <span className="px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 text-[9.5px] font-bold">
+            임박
           </span>
         )}
         <span className="text-[9.5px] font-bold uppercase tracking-wide opacity-80">{tag}</span>
