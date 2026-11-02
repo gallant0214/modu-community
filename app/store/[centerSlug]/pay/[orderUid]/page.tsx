@@ -3,6 +3,7 @@ import { supabase } from "@/app/lib/supabase";
 import { verifyOrderToken } from "@/app/lib/order-token";
 import { payPathSlug, payDonePath } from "@/app/lib/pay-path";
 import { portoneConfigured, portoneImpCode, portoneChannelKey } from "@/app/lib/portone-payments";
+import { tossKeysMatch, tossClientKey } from "@/app/lib/toss-payments";
 import {
   onlineSalesEnabled,
   SALES_DISABLED_MESSAGE,
@@ -10,6 +11,7 @@ import {
   SALES_RESTRICTED_MESSAGE,
 } from "@/app/lib/member-checkout";
 import PayClient from "./PayClient";
+import TossPayClient from "@/app/pay/TossPayClient";
 import SellerInfo, { loadSellerInfo } from "@/app/pay/SellerInfo";
 import { pgProductName } from "@/app/lib/pg-product-name";
 
@@ -39,8 +41,10 @@ export default async function PayPage({
     return <Notice title="준비 중이에요" body={SALES_DISABLED_MESSAGE} />;
   }
   /* 식별코드·채널키·API 키 중 하나라도 비면 결제창이 뜨다 말거나 검증이 실패한다.
-     결제창을 띄워 돈을 받고 나서 터지면 수습이 훨씬 어려우니 들어오기 전에 막는다. */
-  if (!portoneConfigured()) {
+     결제창을 띄워 돈을 받고 나서 터지면 수습이 훨씬 어려우니 들어오기 전에 막는다.
+     🚨 어느 PG 인지는 **주문을 읽어야** 알 수 있다(아래 provider). 여기서는 둘 다
+        쓸 수 없는 경우만 미리 거르고, PG 별 검사는 주문을 읽은 뒤에 한 번 더 한다. */
+  if (!portoneConfigured() && !tossKeysMatch()) {
     return (
       <Notice
         title="결제 설정에 문제가 있어요"
@@ -62,7 +66,7 @@ export default async function PayPage({
     .from("crm_orders")
     .select(
       "id, center_id, member_id, product_id, product_type, product_name, list_price_won, " +
-        "coupon_discount_won, mileage_used, mileage_earned, amount_won, status, expires_at"
+        "coupon_discount_won, mileage_used, mileage_earned, amount_won, status, expires_at, pg_provider"
     )
     .eq("order_uid", orderUid)
     .maybeSingle();
@@ -80,6 +84,7 @@ export default async function PayPage({
     amount_won: number;
     status: string;
     expires_at: string | null;
+    pg_provider: string | null;
   } | null;
 
   if (!order) notFound();
@@ -125,6 +130,18 @@ export default async function PayPage({
     .maybeSingle();
   const centerForPath = centerRow as { id: number; pay_slug: string | null; shop_slug: string | null } | null;
   if (!centerForPath || payPathSlug(centerForPath) !== centerSlug) notFound();
+
+  /* 🚨 **주문에 저장된 PG** 를 따른다. 환경변수(현재 PG)를 보면, 결제창을 띄운 뒤
+     스위치가 바뀐 경우 진행 중이던 결제가 엉뚱한 PG 로 승인 요청된다. */
+  const provider = order.pg_provider === "toss" ? "toss" : "portone";
+  if (provider === "toss" ? !tossKeysMatch() : !portoneConfigured()) {
+    return (
+      <Notice
+        title="결제 설정에 문제가 있어요"
+        body="센터로 문의해주세요. (결제 연동 설정 누락)"
+      />
+    );
+  }
 
   /* 🚨 PG 로 넘길 상품명은 한글 종목명을 쓰지 않는다 — 이니시스 전표에 '회원권·운동복·락커'
      가 남지 않아야 한다(2026-10-29 심사 지적). 화면에 보이는 이름은 그대로 한글이고,
@@ -201,21 +218,41 @@ export default async function PayPage({
         </dl>
       </section>
 
-      <PayClient
-        orderUid={orderUid}
-        token={t as string}
-        centerId={order.center_id}
-        amount={order.amount_won}
-        orderName={pgName}
-        customerName={member?.name ?? ""}
-        customerTel={(member?.phone || seller?.phone || "").replace(/[^0-9]/g, "")}
-        impCode={portoneImpCode()}
-        channelKey={portoneChannelKey()}
-        slug={slug}
-        donePath={payDonePath(centerSlug, orderUid)}
-        returnToApp={rn === "1"}
-        returnTo={returnTo}
-      />
+      {provider === "toss" ? (
+        <TossPayClient
+          orderUid={orderUid}
+          token={t as string}
+          amount={order.amount_won}
+          orderName={pgName}
+          customerName={member?.name ?? ""}
+          // 회원별로 항상 같은 값이어야 한다 — 토스 위젯 요구사항
+          customerKey={`member_${order.member_id}`}
+          clientKey={tossClientKey()}
+          policyHref={slug ? `/shop/${slug}/policy` : undefined}
+          donePath={payDonePath(centerSlug, orderUid)}
+          doneParams={{
+            centerId: String(order.center_id),
+            ...(rn === "1" ? { rn: "1" } : {}),
+            ...(returnTo ? { returnTo } : {}),
+          }}
+        />
+      ) : (
+        <PayClient
+          orderUid={orderUid}
+          token={t as string}
+          centerId={order.center_id}
+          amount={order.amount_won}
+          orderName={pgName}
+          customerName={member?.name ?? ""}
+          customerTel={(member?.phone || seller?.phone || "").replace(/[^0-9]/g, "")}
+          impCode={portoneImpCode()}
+          channelKey={portoneChannelKey()}
+          slug={slug}
+          donePath={payDonePath(centerSlug, orderUid)}
+          returnToApp={rn === "1"}
+          returnTo={returnTo}
+        />
+      )}
 
       <SellerInfo seller={seller} slug={slug} />
     </main>

@@ -37,6 +37,8 @@ export default function DoneClient(props: {
    * 비어 있으면 결제창에서 실패·취소된 것으로 보고 바로 실패 화면을 띄운다.
    */
   impUid: string;
+  /** 토스 결제 식별자 — 포트원이면 비어 있다 */
+  paymentKey?: string;
   failCode: string;
   failMessage: string;
   /** 검증·승인 API 경로. 기본은 센터 이용권. CRM 이용권은 /api/saas/orders/confirm */
@@ -51,13 +53,15 @@ export default function DoneClient(props: {
   /** 결제 성공 후 이동할 경로 — 신규 웹 가입 완료(앱 설치) 화면 */
   returnTo?: string;
 }) {
-  const [phase, setPhase] = useState<Phase>(props.impUid ? "confirming" : "failed");
+  /** 어느 PG 든 식별자가 있어야 승인·검증을 시작한다 */
+  const pgKey = props.impUid || props.paymentKey || "";
+  const [phase, setPhase] = useState<Phase>(pgKey ? "confirming" : "failed");
   const [message, setMessage] = useState(props.failMessage || "결제가 취소됐어요");
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const ran = useRef(false);
 
   useEffect(() => {
-    if (!props.impUid) {
+    if (!pgKey) {
       notifyApp({ type: "payment", ok: false, reason: props.failCode || "canceled" }, props.returnToApp);
       return;
     }
@@ -74,7 +78,8 @@ export default function DoneClient(props: {
             orderUid: props.orderUid,
             /* 🚨 금액은 보내지 않는다. 서버가 주문에 저장된 값으로 검증·승인한다 —
                클라이언트가 금액을 거들면 그게 곧 위변조 경로다. */
-            impUid: props.impUid,
+            ...(props.impUid ? { impUid: props.impUid } : {}),
+            ...(props.paymentKey ? { paymentKey: props.paymentKey } : {}),
             token: props.token,
             ...(props.confirmExtra ?? {}),
           }),

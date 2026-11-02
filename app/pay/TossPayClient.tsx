@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { loadTossPayments } from "@tosspayments/tosspayments-sdk";
 
 /**
- * 토스페이먼츠 **결제위젯** — CRM 이용권(SaaS 구독) 결제용.
+ * 토스페이먼츠 **결제위젯** — 센터 이용권(회원 결제)과 CRM 이용권(SaaS 구독)이 함께 쓴다.
  *
  * 포트원(`app/store/[centerSlug]/pay/[orderUid]/PayClient.tsx`)과 다른 점:
  *   · 결제수단·약관동의 UI 를 **위젯이 페이지 안에 직접 그린다**
@@ -34,6 +34,13 @@ export default function TossPayClient(props: {
   clientKey: string;
   /** 약관·정책 링크 */
   policyHref?: string;
+  /** 결제 결과를 받을 경로. 기본은 CRM 이용권(SaaS) 자리 */
+  donePath?: string;
+  /**
+   * 결과 주소에 덧붙일 값 — 센터 이용권은 centerId·앱 복귀 플래그가 더 필요하다.
+   * 🚨 금액은 절대 넣지 않는다. 서버가 주문에 저장된 값으로 승인한다.
+   */
+  doneParams?: Record<string, string>;
 }) {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -78,8 +85,10 @@ export default function TossPayClient(props: {
     setBusy(true);
     setError(null);
 
-    const base = `${window.location.origin}/billing/pay/${props.orderUid}/done`;
-    const q = `t=${encodeURIComponent(props.token)}`;
+    /* 성공·실패를 같은 주소로 받는다. 토스가 성공이면 paymentKey·orderId·amount 를,
+       실패면 code·message 를 붙여 보내므로 결과 페이지가 그걸로 가른다. */
+    const base = `${window.location.origin}${props.donePath ?? `/billing/pay/${props.orderUid}/done`}`;
+    const q = new URLSearchParams({ t: props.token, ...(props.doneParams ?? {}) }).toString();
     try {
       await widgets.requestPayment({
         orderId: props.orderUid,

@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { PRODUCT_SELECT, type SellableProduct } from "@/app/lib/member-purchase";
-import { isOnlineSellable } from "@/app/lib/member-checkout";
+import { isOnlineSellable, memberPgProvider } from "@/app/lib/member-checkout";
 import { portoneImpCode, portoneChannelKey, portoneIsLive } from "@/app/lib/portone-payments";
+import { tossIsLive } from "@/app/lib/toss-payments";
 
 export const dynamic = "force-dynamic";
 
@@ -67,11 +68,13 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     products,
+    /* 결제는 앱이 아니라 웹 결제 페이지가 띄운다(앱은 payUrl 을 브라우저로 열 뿐).
+       이 블록은 참고용이지만, 쓰는 PG 와 어긋나 있으면 나중에 읽는 쪽이 속는다. */
     payment: {
-      provider: "portone",
+      provider: memberPgProvider(),
       impCode: portoneImpCode(),
       channelKey: portoneChannelKey(),
-      live: portoneIsLive(),
+      live: memberPgProvider() === "toss" ? tossIsLive() : portoneIsLive(),
     },
   });
 }

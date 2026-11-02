@@ -3,9 +3,9 @@ import DoneClient from "./DoneClient";
 export const dynamic = "force-dynamic";
 
 /**
- * 결제창에서 돌아오는 자리. **포트원(V1)** 이 결과를 쿼리로 붙여 보낸다.
- *   성공: imp_uid, merchant_uid, imp_success=true
- *   실패: imp_success=false, error_code, error_msg
+ * 결제창에서 돌아오는 자리. PG 가 결과를 쿼리로 붙여 보낸다.
+ *   포트원(V1) 성공: imp_uid, merchant_uid, imp_success=true / 실패: imp_success=false, error_code, error_msg
+ *   토스         성공: paymentKey, orderId, amount        / 실패: code, message
  *
  * 두 경로가 모두 여기로 모인다 — PC 는 PayClient 의 콜백이 이 주소로 보내고,
  * 모바일은 PG 가 m_redirect_url 로 직접 보낸다.
@@ -24,8 +24,13 @@ export default async function PayDonePage({
   const { orderUid } = await params;
   const sp = await searchParams;
 
-  // 이니시스는 redirect 시 imp_success 를, 콜백 경로는 우리가 같은 이름으로 붙여 보낸다
-  const failed = sp.imp_success === "false" || sp.success === "false";
+  /* PG 마다 돌아오는 값이 다르다. 성공·실패를 같은 주소로 받으므로 여기서 가른다.
+       포트원 : 성공 imp_uid + imp_success=true / 실패 imp_success=false, error_code, error_msg
+       토스   : 성공 paymentKey + orderId + amount / 실패 code, message
+     🚨 금액(amount)은 쓰지 않는다. 승인·검증은 서버가 주문에 저장된 값으로 한다. */
+  const portoneFailed = sp.imp_success === "false" || sp.success === "false";
+  const tossFailed = !sp.paymentKey && !!sp.code;
+  const failed = portoneFailed || tossFailed;
 
   return (
     <DoneClient
@@ -33,8 +38,9 @@ export default async function PayDonePage({
       token={sp.t ?? ""}
       centerId={Number(sp.centerId) || 0}
       impUid={failed ? "" : (sp.imp_uid ?? "")}
-      failCode={sp.error_code ?? ""}
-      failMessage={sp.error_msg ?? ""}
+      paymentKey={failed ? "" : (sp.paymentKey ?? "")}
+      failCode={sp.error_code ?? sp.code ?? ""}
+      failMessage={sp.error_msg ?? sp.message ?? ""}
       returnToApp={sp.rn === "1"}
       returnTo={sp.returnTo}
     />

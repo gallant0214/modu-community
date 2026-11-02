@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
 import { verifyPortonePayment } from "@/app/lib/portone-payments";
+import { confirmTossPayment } from "@/app/lib/toss-payments";
 import {
   completeOrder,
   claimOrderForFulfillment,
@@ -45,6 +46,8 @@ export async function POST(request: Request) {
     orderUid?: string;
     /** 포트원 결제 식별자 */
     impUid?: string;
+    /** 토스 결제 식별자 — 둘 중 온 쪽으로 PG 를 가른다 */
+    paymentKey?: string;
     /** 결제 페이지가 보내는 주문 토큰 — 웹 로그인 세션이 없는 앱 브라우저용 */
     token?: string;
   };
@@ -56,7 +59,12 @@ export async function POST(request: Request) {
 
   const orderUid = String(body.orderUid ?? "").trim();
   const impUid = String(body.impUid ?? "").trim();
-  if (!orderUid || !impUid) {
+  const paymentKey = String(body.paymentKey ?? "").trim();
+  /* 🚨 어느 PG 인지는 **들어온 식별자**로 가른다. 주문의 pg_provider 를 믿고 가르면,
+     스위치를 돌린 직후 결제창을 띄워둔 회원이 다른 PG 로 승인 요청돼 반드시 실패한다. */
+  const isToss = !!paymentKey;
+  const pgKey = paymentKey || impUid;
+  if (!orderUid || !pgKey) {
     return NextResponse.json({ error: "결제 정보가 올바르지 않아요" }, { status: 400 });
   }
 
@@ -119,17 +127,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "이미 종료된 주문이에요" }, { status: 409 });
   }
 
-  /* ── 2) PG 검증 — 금액은 주문에 저장된 서버 값으로 대조한다 ── */
-  const confirm = await verifyPortonePayment({
-    impUid,
-    orderUid,
-    amountWon: order.amount_won,
-  });
+  /* ── 2) PG 승인·검증 — 금액은 주문에 저장된 서버 값만 넘긴다 ──
+     🚨 두 PG 는 **승인 모델이 반대**다. 여기를 섞으면 돈 사고가 난다.
+       토스   : 이 호출이 곧 **승인**이다. 실패하면 돈은 움직이지 않았다.
+       포트원 : 결제창에서 **이미 승인이 끝난** 뒤라 이건 **검증**이고,
+                금액이 어긋나면 verifyPortonePayment() 가 즉시 취소까지 한다. */
+  const confirm = isToss
+    ? await confirmTossPayment({ paymentKey, orderId: orderUid, amount: order.amount_won })
+    : await verifyPortonePayment({ impUid, orderUid, amountWon: order.amount_won });
   if (!confirm.ok) {
-    /* 결제가 성공했는지 **모르는** 경우(조회 실패)에는 주문을 건드리지 않는다.
+    /* 결제 성공 여부를 **모르는** 경우에는 주문을 건드리지 않는다.
        failed 로 적고 쿠폰을 풀어버리면, 실제로는 결제가 됐는데 웹훅이 뒤늦게
-       발급할 때 할인 근거가 없어져 금액이 어긋난다. 모를 때는 웹훅에 맡긴다. */
-    if (confirm.code === "LOOKUP_FAILED") {
+       발급할 때 할인 근거가 없어져 금액이 어긋난다. 모를 때는 웹훅에 맡긴다.
+         포트원 : 조회 자체가 실패(LOOKUP_FAILED)
+         토스   : code 가 없다 = 통신이 끊겨 승인 결과를 못 받은 것
+                  (확실한 실패에는 토스가 코드를 붙여 준다) */
+    const unknown = isToss ? !confirm.code : confirm.code === "LOOKUP_FAILED";
+    if (unknown) {
       return NextResponse.json(
         {
           error:
@@ -144,7 +158,7 @@ export async function POST(request: Request) {
       .update({
         status: "failed",
         fail_reason: confirm.error ?? "검증 실패",
-        pg_payment_key: impUid,
+        pg_payment_key: pgKey,
         pg_raw: (confirm.raw ?? null) as never,
         updated_at: new Date().toISOString(),
       } as never)
@@ -181,7 +195,7 @@ export async function POST(request: Request) {
     order: claim.order,
     memberName,
     pg: {
-      paymentKey: confirm.impUid,
+      paymentKey: pgKey,
       approvedAt: confirm.approvedAt,
       method: confirm.method,
       receiptUrl: confirm.receiptUrl,

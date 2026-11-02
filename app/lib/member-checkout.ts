@@ -72,6 +72,20 @@ export function salesAllowedForMember(memberId: number): boolean {
   return salesMemberAllowlist().includes(memberId);
 }
 
+/**
+ * 회원 결제를 어느 PG 로 보낼지. 기본은 **포트원(KG이니시스)** 이고,
+ * `MEMBER_PG_PROVIDER=toss` 일 때만 토스로 간다.
+ *
+ * 🚨 SaaS 쪽 `SAAS_PG_PROVIDER`(saas-access-policy.ts)와 **기본값이 반대**다.
+ *    저쪽은 토스가 기본이고 환경변수로 포트원이 된다. 둘을 같은 값으로 착각하지 말 것.
+ *
+ * 🚨 이미 만들어진 주문은 `crm_orders.pg_provider` 에 적힌 PG 로 끝까지 간다.
+ *    스위치를 돌려도 진행 중이던 주문이 다른 PG 로 넘어가지 않는다.
+ */
+export function memberPgProvider(): "toss" | "portone" {
+  return process.env.MEMBER_PG_PROVIDER === "toss" ? "toss" : "portone";
+}
+
 /** 허용목록 밖의 회원에게 보여줄 문구 — 내부 사정을 드러내지 않는다 */
 export const SALES_RESTRICTED_MESSAGE =
   "온라인 결제 준비 중이에요. 센터로 문의해주시면 바로 도와드릴게요.";

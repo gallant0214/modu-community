@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
-import { onlineSalesEnabled, SALES_DISABLED_MESSAGE } from "@/app/lib/member-checkout";
+import {
+  onlineSalesEnabled,
+  SALES_DISABLED_MESSAGE,
+  memberPgProvider,
+} from "@/app/lib/member-checkout";
 import { portoneConfigured } from "@/app/lib/portone-payments";
+import { tossKeysMatch } from "@/app/lib/toss-payments";
 import { signOrderToken } from "@/app/lib/order-token";
 import { payPath, payPathSlugForCenter } from "@/app/lib/pay-path";
 
@@ -68,13 +73,16 @@ async function memberHasProducts(memberId: number, centerId: number): Promise<bo
  * 웹 신규 회원 가입의 마지막 제출. 결제창을 열기 전에 서버에서:
  *   1) 회원 생성(없으면) + 본인확인 얼굴 저장
  *   2) 전자계약서 서명 저장(crm_signed_contracts, status=signed)
- *   3) 주문 생성(crm_orders pending, pg=portone) + 주문항목
+ *   3) 주문 생성(crm_orders pending, pg=memberPgProvider()) + 주문항목
  * → 결제 페이지 URL(payUrl) 반환. 결제 성공 시 기존 confirm 흐름이 상품을 발급한다.
  *
  * 금액은 클라이언트 값을 믿지 않고 signup_enabled 상품 가격을 서버에서 합산한다.
  */
 export async function POST(request: Request) {
-  if (!onlineSalesEnabled() || !portoneConfigured()) {
+  /* 결제창을 띄울 수 있는 상태인지 — 쓰는 PG 의 키만 본다.
+     포트원 키가 비어도 토스로 팔고 있으면 막을 이유가 없다. */
+  const pgReady = memberPgProvider() === "toss" ? tossKeysMatch() : portoneConfigured();
+  if (!onlineSalesEnabled() || !pgReady) {
     return NextResponse.json({ error: SALES_DISABLED_MESSAGE }, { status: 503 });
   }
 
@@ -339,7 +347,7 @@ export async function POST(request: Request) {
       amount_won: amount,
       status: "pending",
       order_uid: orderUid,
-      pg_provider: "portone",
+      pg_provider: memberPgProvider(),
       channel: "web",
       expires_at: expiresAt,
       start_date: startDate,

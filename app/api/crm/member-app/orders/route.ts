@@ -13,6 +13,7 @@ import {
   SALES_DISABLED_MESSAGE,
   salesAllowedForMember,
   SALES_RESTRICTED_MESSAGE,
+  memberPgProvider,
 } from "@/app/lib/member-checkout";
 import { claimCoupon, releaseCoupon } from "@/app/lib/crm-coupons-server";
 import { completeOrder, type OrderRow } from "@/app/lib/member-order-complete";
@@ -199,7 +200,7 @@ export async function POST(request: Request) {
       amount_won: quote.amountWon,
       status: "pending",
       order_uid: orderUid,
-      pg_provider: "portone",
+      pg_provider: memberPgProvider(),
       channel,
       expires_at: expiresAt,
       start_date: startDate,
