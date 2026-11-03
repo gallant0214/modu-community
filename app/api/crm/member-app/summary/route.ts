@@ -73,8 +73,8 @@ export async function GET(request: Request) {
     )
   );
 
-  // 퇴실 적립 창 — 오늘 마지막 체크인 + 3시간 이내만 활성
-  const CHECKOUT_WINDOW_MS = 3 * 3600 * 1000;
+  // 퇴실 적립 창 — 오늘 마지막 체크인 + 4시간 이내만 활성
+  const CHECKOUT_WINDOW_MS = 4 * 3600 * 1000;
   const todayCheckInMs = (atts ?? [])
     .map((a) => new Date(a.checked_in_at).getTime())
     .filter((ms) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10) === todayKst);
@@ -91,11 +91,11 @@ export async function GET(request: Request) {
       enabled: settings?.checkout_mileage_enabled ?? false,
       earn: settings?.checkout_mileage_earn ?? 0,
       doneToday: (checkoutToday ?? 0) > 0,
-      windowOpen, // 오늘 마지막 체크인 후 3시간 이내만 true
+      windowOpen, // 오늘 마지막 체크인 후 4시간 이내만 true
       // 🚨 유효 이용권이 없는(미등록·만료) 회원은 출석해도 퇴실 적립 대상이 아니다
       eligible,
       checkInAt: lastCheckInMs ? new Date(lastCheckInMs).toISOString() : null,
-      windowMinutes: 180,
+      windowMinutes: 240,
     },
     weekAttendance,
   });

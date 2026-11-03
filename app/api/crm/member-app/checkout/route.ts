@@ -47,8 +47,8 @@ export async function POST(request: Request) {
   const dayStartUtc = new Date(`${todayKst}T00:00:00+09:00`).toISOString();
   const dayEndUtc = new Date(new Date(dayStartUtc).getTime() + 24 * 3600 * 1000).toISOString();
 
-  // 오늘 출석(체크인) 해야만 퇴실 적립 가능 — 단, 마지막 체크인 후 3시간 이내만
-  const CHECKOUT_WINDOW_MS = 3 * 3600 * 1000;
+  // 오늘 출석(체크인) 해야만 퇴실 적립 가능 — 단, 마지막 체크인 후 4시간 이내만
+  const CHECKOUT_WINDOW_MS = 4 * 3600 * 1000;
   const { data: lastAtt } = await supabase
     .from("crm_attendances")
     .select("checked_in_at")
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
   const checkInMs = new Date((lastAtt as { checked_in_at: string }).checked_in_at).getTime();
   if (Date.now() > checkInMs + CHECKOUT_WINDOW_MS) {
     return NextResponse.json(
-      { error: "퇴실 적립은 출석 후 3시간 이내에만 가능해요." },
+      { error: "퇴실 적립은 출석 후 4시간 이내에만 가능해요." },
       { status: 400 }
     );
   }
