@@ -107,10 +107,12 @@ export async function notifyStaffMember(params: {
             // 🚨 high priority 가 없으면 Doze/절전 상태 안드로이드에서 지연·누락됨(간헐 미도달 주원인).
             android: {
               priority: "high",
-              // 🚨 채널 id 는 '설치된 앱이 실제로 생성한 채널'과 일치해야 한다. 없는 채널로
-              //    보내면 Android 가 알림을 drop 하거나 임시(Miscellaneous) 채널로 떨궈 간헐 미도달.
-              //    현재 배포된 빌드는 'default' 채널만 생성한다. 'alerts'(고중요도) 채널을 만드는
-              //    새 빌드가 배포·설치된 뒤에 'alerts'로 올릴 것. (메모리: moducm-push-channel-token)
+              // 🚨 channelId 는 'default' 고정 — 'alerts' 로 바꾸지 말 것.
+              //    없는 채널로 보내면 FCM 이 앱 매니페스트 기본 채널로, 그것도 없으면 기타(Miscellaneous)로 떨군다.
+              //    - 1.0.13 이하: 'default' 채널을 가짐 → 그대로 사용.
+              //    - 1.0.14 이상: 'default' 를 지우고 매니페스트 기본 채널 = 'alerts'(firebase.json) → 고중요도로 뜸.
+              //    'alerts' 로 바꾸면 구버전 설치본이 기타 채널로 떨어져 간헐 미도달 재발(2026-10-28 사고).
+              //    (메모리: moducm-push-channel-token)
               notification: { sound: "default", channelId: "default" },
             },
             apns: {
