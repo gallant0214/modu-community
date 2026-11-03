@@ -107,10 +107,11 @@ export async function notifyStaffMember(params: {
             // 🚨 high priority 가 없으면 Doze/절전 상태 안드로이드에서 지연·누락됨(간헐 미도달 주원인).
             android: {
               priority: "high",
-              // 🚨 강사앱의 고중요도 채널 id 와 반드시 일치('alerts'). 과거 'default' 채널이
-              //    낮은 중요도로 잠겨 소리·배너 없이 조용히만 떠 '안 온다'고 느낀 사고가 있었다.
-              //    앱(push.ts ALERT_CHANNEL)에서 MAX 중요도로 새로 만든 채널로 발송한다.
-              notification: { sound: "default", channelId: "alerts" },
+              // 🚨 채널 id 는 '설치된 앱이 실제로 생성한 채널'과 일치해야 한다. 없는 채널로
+              //    보내면 Android 가 알림을 drop 하거나 임시(Miscellaneous) 채널로 떨궈 간헐 미도달.
+              //    현재 배포된 빌드는 'default' 채널만 생성한다. 'alerts'(고중요도) 채널을 만드는
+              //    새 빌드가 배포·설치된 뒤에 'alerts'로 올릴 것. (메모리: moducm-push-channel-token)
+              notification: { sound: "default", channelId: "default" },
             },
             apns: {
               headers: { "apns-priority": "10", "apns-push-type": "alert" },
