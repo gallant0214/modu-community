@@ -201,3 +201,67 @@ function sendToApnsHost(
     }
   });
 }
+
+export type ApnsProbe = { ok: boolean; status: number; reason: string };
+
+/**
+ * APNs 인증 점검(비파괴) — 올바른 형식의 **가짜 토큰**으로 보내 Apple 의 거부 사유를 본다.
+ * 실제 기기로는 아무것도 가지 않는다.
+ *   - BadDeviceToken          → 키·Key ID·Team ID·번들 인증 정상(가짜 토큰만 거부) = OK
+ *   - InvalidProviderToken 등 → 키가 틀렸거나 폐기됨 → **실발송이 전부 실패하는 상태**
+ * 🚨 2026-11-03: 무효 키(59D9F68G72)가 11일간 설정돼 iOS 푸시가 조용히 실패한 사고 재발 방지용.
+ *    운영 발송과 같은 JWT 서명 경로(buildProviderToken)를 그대로 써서 '배포된 설정' 자체를 검사한다.
+ */
+export async function probeApnsAuth(bundleId: string): Promise<ApnsProbe> {
+  if (!apnsConfigured()) return { ok: false, status: 0, reason: "NotConfigured" };
+  let jwt: string;
+  try {
+    jwt = buildProviderToken(
+      process.env.APNS_KEY_ID!,
+      process.env.APNS_TEAM_ID!,
+      normalizePrivateKey(process.env.APNS_AUTH_KEY!)
+    );
+  } catch (e) {
+    return { ok: false, status: 0, reason: `JwtError: ${e instanceof Error ? e.message : "unknown"}` };
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (r: ApnsProbe) => {
+      if (settled) return;
+      settled = true;
+      try { client.close(); } catch { /* noop */ }
+      resolve(r);
+    };
+    const client = http2.connect(`https://${PROD_HOST}`);
+    const guard = setTimeout(() => done({ ok: false, status: 0, reason: "Timeout" }), 10000);
+    client.on("error", (e) => {
+      clearTimeout(guard);
+      done({ ok: false, status: 0, reason: `ConnectError: ${e.message}` });
+    });
+    const req = client.request({
+      ":method": "POST",
+      ":path": `/3/device/${"00".repeat(32)}`,
+      authorization: `bearer ${jwt}`,
+      "apns-topic": bundleId,
+      "apns-push-type": "alert",
+      "content-type": "application/json",
+    });
+    let status = 0;
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("response", (h) => { status = Number(h[":status"]) || 0; });
+    req.on("data", (c) => { body += c; });
+    req.on("error", (e) => {
+      clearTimeout(guard);
+      done({ ok: false, status, reason: `RequestError: ${e.message}` });
+    });
+    req.on("end", () => {
+      clearTimeout(guard);
+      let reason = "";
+      try { reason = (JSON.parse(body) as { reason?: string }).reason ?? ""; } catch { /* noop */ }
+      done({ ok: reason === "BadDeviceToken", status, reason: reason || `HTTP ${status}` });
+    });
+    req.end(JSON.stringify({ aps: { alert: { title: "health", body: "health" } } }));
+  });
+}
