@@ -377,6 +377,11 @@ export async function recordPayment(opts: {
   orderId: number;
   /** 묶음 결제의 항목 id — 항목별 환불이 가능하도록 원장을 항목에 건다 */
   orderItemId?: number | null;
+  /**
+   * 번들 구성품이면 본품의 결제행 id. 구성품은 order_item_id 를 못 쓰므로(본품이 유니크로 점유)
+   * 이 연결이 없으면 본품을 PG 에서 취소해도 구성품(회원권에 딸린 락커 등)이 남는다.
+   */
+  bundleParentPaymentId?: number | null;
   amountWon: number;
   outcome: FulfillOutcome;
   note?: string;
@@ -397,6 +402,7 @@ export async function recordPayment(opts: {
       status: "completed",
       order_id: opts.orderId,
       order_item_id: opts.orderItemId ?? null,
+      bundle_parent_payment_id: opts.bundleParentPaymentId ?? null,
       source: "member_app",
     } as never)
     .select("id")

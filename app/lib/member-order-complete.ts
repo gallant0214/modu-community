@@ -201,6 +201,8 @@ export async function completeOrder(opts: {
           memberId,
           orderId: order.id,
           orderItemId: null, // 🚨 본품이 order_item_id 를 이미 점유(uniq 제약) → 구성품은 NULL
+          // 대신 본품 결제행을 가리킨다 — PG 에서 본품을 취소하면 구성품도 함께 회수된다
+          bundleParentPaymentId: paymentId,
           amountWon: 0,
           outcome: co,
           note: `${channelLabel} · 번들 구성품`,

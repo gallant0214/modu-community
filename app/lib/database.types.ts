@@ -1888,6 +1888,7 @@ export type Database = {
           updated_at: string
           order_id: number | null
           order_item_id: number | null
+          bundle_parent_payment_id: number | null
           source: string
           product_label: string | null
         }
@@ -1909,6 +1910,7 @@ export type Database = {
           updated_at?: string
           order_id?: number | null
           order_item_id?: number | null
+          bundle_parent_payment_id?: number | null
           source?: string
           product_label?: string | null
         }
@@ -1930,6 +1932,7 @@ export type Database = {
           updated_at?: string
           order_id?: number | null
           order_item_id?: number | null
+          bundle_parent_payment_id?: number | null
           source?: string
           product_label?: string | null
         }

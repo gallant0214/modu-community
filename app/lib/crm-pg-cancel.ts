@@ -70,7 +70,15 @@ export async function applyPgCancel(opts: {
     return { ok: false, note: "취소된 결제가 아니에요", needsStaff: false, retired: 0 };
   }
   if (order.status === "refunded") {
-    return { ok: true, note: "이미 환불 처리됨", needsStaff: false, retired: 0 };
+    /* 이미 환불된 주문. 2026-11-04 이전엔 묶음 구성품을 놓쳐 락커가 유효로 남았다 —
+       'PG 상태 다시 확인'을 누르면 그렇게 남은 구성품만 정리한다(없으면 아무것도 안 한다). */
+    const healed = await retireBundleComponents({ order, provider, cancel });
+    return {
+      ok: true,
+      note: ["이미 환불 처리됨", ...healed].join(" · "),
+      needsStaff: healed.some((n) => n.includes("확인 필요")),
+      retired: 0,
+    };
   }
 
   const canceledAmount = cancel.canceledAmountWon;
@@ -176,6 +184,8 @@ export async function applyPgCancel(opts: {
       notes.push(`'${it.product_name}' 이용권 회수 실패(${r.error ?? "알 수 없음"}) — 직원 확인 필요`);
       continue;
     }
+    // 이 항목에 딸려 나간 묶음 구성품(회원권에 딸린 락커 등)도 함께 회수
+    notes.push(...(await retireBundleComponents({ order, provider, cancel, parentPaymentId: it.payment_id })));
     if (!r.kind) continue;
     retired += 1;
     if (r.label || it.product_name) retiredLabels.push(r.label || it.product_name);
@@ -207,6 +217,9 @@ export async function applyPgCancel(opts: {
 
   const state = await syncOrderRefundState(order.id, refundedAt);
 
+  // 안전망 — 주문이 전부 환불됐으면 본품 연결이 없는 구성품(2026-11-04 이전 주문)까지 정리
+  if (state.allRefunded) notes.push(...(await retireBundleComponents({ order, provider, cancel })));
+
   // 쿠폰은 전부 환불됐을 때만 — 살아있는 항목이 이미 할인을 받았다
   if (state.allRefunded && order.coupon_issue_id) {
     await restoreCouponAfterRefund(order.coupon_issue_id);
@@ -236,4 +249,87 @@ export async function applyPgCancel(opts: {
     retired,
     note: `환불 처리 완료${notes.length ? " · " + notes.join(" · ") : ""}`,
   };
+}
+
+/**
+ * 묶음 구성품(회원권에 딸린 락커 등, 보통 0원) 결제행을 회수한다.
+ *
+ * 구성품은 주문 항목이 아니라 본품 발급에 딸려 나가서, 항목만 도는 applyPgCancel 의
+ * 루프로는 닿지 않는다. 그래서 토스에서 묶음 주문을 취소했는데 락커만 유효로 남았다(2026-11-04).
+ *  · parentPaymentId 를 주면 → 그 본품에 딸린 구성품만 (부분 취소에서도 정확하다)
+ *  · 안 주면 → 이 주문에서 아직 살아있는 구성품 전부 (주문 전체가 환불됐을 때의 안전망.
+ *    본품 연결 칸이 생기기 전 주문은 이 경로로만 정리된다)
+ *
+ * 돌려줄 돈은 없지만 환불 이력(0원)을 남긴다 — CRM 에서 묶음 환불할 때와 결제내역이 똑같이 보인다.
+ * 회원 알림 문구에는 넣지 않는다. 회원이 산 건 본품이다.
+ */
+async function retireBundleComponents(opts: {
+  order: OrderForCancel;
+  provider: "toss" | "portone";
+  cancel: PgCancelState;
+  parentPaymentId?: number;
+}): Promise<string[]> {
+  const { order, provider, cancel } = opts;
+  const pgLabel = PROVIDER_LABEL[provider] ?? provider;
+
+  let query = supabase
+    .from("crm_payments")
+    .select("id")
+    .eq("center_id", order.center_id)
+    .eq("order_id", order.id)
+    .is("order_item_id", null) // 항목 결제행은 루프가 맡는다 — 구성품만
+    .neq("status", "refunded");
+  if (opts.parentPaymentId) query = query.eq("bundle_parent_payment_id", opts.parentPaymentId);
+  const { data } = await query;
+
+  const notes: string[] = [];
+  for (const { id: paymentId } of (data ?? []) as { id: number }[]) {
+    const { error: refErr } = await supabase.from("crm_payment_refunds").insert({
+      center_id: order.center_id,
+      member_id: order.member_id,
+      payment_id: paymentId,
+      order_id: order.id,
+      amount_won: 0,
+      refunded_at: cancel.refundedAt,
+      source: "pg",
+      provider,
+      is_partial: false,
+      reason: cancel.reason,
+      // 항목 키(`:{항목id}`)와 겹치지 않게 c 를 붙인다
+      pg_transaction_key: cancel.txKey ? `${cancel.txKey}:c${paymentId}` : null,
+    } as never);
+    if (refErr && !String(refErr.message).includes("duplicate")) {
+      notes.push(`묶음 구성품 #${paymentId} 환불 이력 기록 실패(${refErr.message}) — 직원 확인 필요`);
+      continue;
+    }
+
+    await supabase
+      .from("crm_payments")
+      .update({ status: "refunded", updated_at: cancel.refundedAt } as never)
+      .eq("id", paymentId);
+
+    const r = await retireIssuedForPayment({ centerId: order.center_id, paymentId });
+    if (!r.ok) {
+      notes.push(`묶음 구성품 #${paymentId} 회수 실패(${r.error ?? "알 수 없음"}) — 직원 확인 필요`);
+      continue;
+    }
+    if (!r.kind) continue;
+    notes.push(`묶음 구성품 ${RETIRE_KIND_LABEL[r.kind] ?? r.kind} '${r.label ?? ""}' 회수`);
+    await supabase.from("crm_audit_logs").insert({
+      center_id: order.center_id,
+      actor_uid: `system:${provider}-webhook`,
+      action: "payment.refund_pg",
+      entity_type: "crm_payments",
+      entity_id: paymentId,
+      payload: {
+        member_id: order.member_id,
+        환불금액: 0,
+        회수항목: RETIRE_KIND_LABEL[r.kind] ?? r.kind,
+        상품명: r.label,
+        처리경로: `PG(${pgLabel})에서 결제 취소 — 묶음 구성품 함께 회수`,
+        ...(r.locker ? { 락커: `반납 ${r.locker.returned}건 · 기간원복 ${r.locker.reverted}건` } : {}),
+      } as never,
+    });
+  }
+  return notes;
 }
