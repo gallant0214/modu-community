@@ -24,7 +24,8 @@ export async function POST(request: Request) {
   const token = (body.kiosk_token ?? "").trim();
   if (!token) return NextResponse.json({ error: "QR 정보가 없어요" }, { status: 400 });
 
-  const center = await resolveKioskCenter(token);
+  // 회원앱 QR 출석 — 센터 화면의 주간 QR 을 받는 유일한 곳(아래에서 회원 본인 인증을 한다)
+  const center = await resolveKioskCenter(token, { allowWeeklyQr: true });
   if (!center) {
     return NextResponse.json({ error: "유효하지 않은 QR이에요. 센터 화면의 QR을 다시 스캔해 주세요." }, { status: 404 });
   }

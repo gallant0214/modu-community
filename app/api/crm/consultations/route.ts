@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { escapePostgrestQuery } from "@/app/lib/security";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { buildConsultationPayload } from "@/app/lib/crm-consultation";
@@ -19,7 +20,8 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const status = url.searchParams.get("status");
   const trainerParam = url.searchParams.get("trainer_id");
-  const q = (url.searchParams.get("q") || "").trim();
+  // 🚨 .or() 필터 문자열에 그대로 들어간다 — 쉼표·괄호를 지우지 않으면 조건을 끼워 넣을 수 있다
+  const q = escapePostgrestQuery(url.searchParams.get("q") || "");
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 200), 1), 1000);

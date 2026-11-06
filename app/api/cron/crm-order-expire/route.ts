@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isCronAuthorized } from "@/app/lib/cron-auth";
 import { expireStaleOrders } from "@/app/lib/member-checkout";
 
 export const dynamic = "force-dynamic";
@@ -13,9 +14,7 @@ export const dynamic = "force-dynamic";
  * 마일리지는 승인 시점에만 차감하므로 여기서 되돌릴 게 없다(선점만 풀린다).
  */
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && auth !== `Bearer ${cronSecret}`) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

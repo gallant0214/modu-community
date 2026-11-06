@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isCronAuthorized } from "@/app/lib/cron-auth";
 import { supabase } from "@/app/lib/supabase";
 import { sendLocalizedPushToMember } from "@/app/lib/member-notify";
 
@@ -18,10 +19,7 @@ export const dynamic = "force-dynamic";
  * 응답: 발송 통계
  */
 export async function GET(request: Request) {
-  // Vercel Cron 은 Authorization header 가 없을 수도 있으니 secret 으로도 보호
-  const auth = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && auth !== `Bearer ${cronSecret}`) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

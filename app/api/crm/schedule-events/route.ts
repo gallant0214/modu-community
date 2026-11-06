@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   if (isCrmError(ctx)) return ctx;
 
   const url = new URL(request.url);
-  const from = url.searchParams.get("from") || new Date().toISOString().slice(0, 10);
+  const from = url.searchParams.get("from") || new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) /* KST 오늘 — UTC 로 하면 00~09시에 어제가 된다 */;
   const to = url.searchParams.get("to") || from;
   const trainerParam = url.searchParams.get("trainer_id");
 

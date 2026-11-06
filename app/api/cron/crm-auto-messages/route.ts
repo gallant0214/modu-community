@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isCronAuthorized } from "@/app/lib/cron-auth";
 import { supabase } from "@/app/lib/supabase";
 import { smsAllowedForCenter } from "@/app/lib/crm-sms";
 import { dispatchQueued, type QueuedRow } from "@/app/lib/crm-auto-message";
@@ -37,9 +38,7 @@ export const dynamic = "force-dynamic";
  *   같은 트리거·회원·날짜는 하루 1회만 발송.
  */
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && auth !== `Bearer ${cronSecret}`) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

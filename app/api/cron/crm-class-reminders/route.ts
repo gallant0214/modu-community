@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isCronAuthorized } from "@/app/lib/cron-auth";
 import { supabase } from "@/app/lib/supabase";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
 import { sendPushToMember, formatKstSlot } from "@/app/lib/member-notify";
@@ -16,7 +17,7 @@ export const maxDuration = 60;
  *    조회해 보내므로, 옮겨지거나 취소된 수업은 옛 시간에 울리지 않는다.
  *    (리스케줄 시 reservations PATCH 가 class_reminder_sent_at/class_end_sent_at 을 리셋)
  *
- * 보안: Vercel x-vercel-cron 헤더 또는 CRON_SECRET.
+ * 보안: CRON_SECRET 만 인정(isCronAuthorized). x-vercel-cron 헤더는 위조 가능해 쓰지 않는다.
  */
 const MAX_LEAD_MIN = 1440; // 커스텀 리드타임(최대 24시간)까지 커버
 const END_GRACE_MIN = 25; // 종료 알림을 놓치지 않기 위한 하한(크론 10분 + 여유)
@@ -27,11 +28,7 @@ function hmKst(iso: string): string {
 }
 
 export async function GET(req: NextRequest) {
-  const isVercelCron = req.headers.get("x-vercel-cron") !== null;
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = req.headers.get("authorization");
-  const hasValidSecret = cronSecret && authHeader === `Bearer ${cronSecret}`;
-  if (!isVercelCron && !hasValidSecret) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

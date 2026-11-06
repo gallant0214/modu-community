@@ -1,5 +1,6 @@
 import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
+import { paginateAll } from "@/app/lib/crm-coupons-db";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
 import { sendLocalizedPushToMember, memberNotifyOn } from "@/app/lib/member-notify";
@@ -26,14 +27,14 @@ export async function GET(request: Request) {
   let startUtc: Date;
   let endUtc: Date;
   if (from || to) {
-    const f = from || new Date().toISOString().slice(0, 10);
+    const f = from || new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) /* KST 오늘 — UTC 로 하면 00~09시에 어제가 된다 */;
     const t = to || f;
     startUtc = new Date(`${f}T00:00:00+09:00`);
     endUtc = new Date(`${t}T00:00:00+09:00`);
     // to 가 inclusive 가 되도록 24시간 추가
     endUtc = new Date(endUtc.getTime() + 24 * 3600 * 1000);
   } else {
-    const d = date || new Date().toISOString().slice(0, 10);
+    const d = date || new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) /* KST 오늘 — UTC 로 하면 00~09시에 어제가 된다 */;
     startUtc = new Date(`${d}T00:00:00+09:00`);
     endUtc = new Date(startUtc.getTime() + 24 * 3600 * 1000);
   }
@@ -120,19 +121,26 @@ export async function GET(request: Request) {
   const passTotalMap = new Map<number, number>(); // pass id → total_sessions
   const passLessonMap = new Map<number, string>(); // pass id → lesson_kind(수강권명)
   if (passIds.length > 0) {
-    const [{ data: passes }, { data: allRes }] = await Promise.all([
+    // 🚨 회차를 매기려면 그 수강권들의 '전체 기간' 예약이 필요하다 — 화면에 보이는 주가 아니라
+    //   수강권 시작부터. 한 달 화면이면 이미 ~760행(2026-11 범어점)이라 1000행 제한에 곧 걸린다.
+    //   잘리면 starts_at 오름차순 뒤쪽(=지금 보고 있는 최근 예약)의 회차가 통째로 빈다 → 페이지네이션.
+    const [{ data: passes }, allRes] = await Promise.all([
       supabase
         .from("crm_passes")
         .select("id, total_sessions, lesson_kind")
         .eq("center_id", ctx.centerId)
         .in("id", passIds),
-      supabase
-        .from("crm_reservations")
-        .select("id, pass_id, starts_at, status")
-        .eq("center_id", ctx.centerId)
-        .in("pass_id", passIds)
-        .not("status", "in", "(cancelled,rejected)")
-        .order("starts_at", { ascending: true }),
+      paginateAll<{ id: number; pass_id: number | null; starts_at: string; status: string }>((f, t) =>
+        supabase
+          .from("crm_reservations")
+          .select("id, pass_id, starts_at, status")
+          .eq("center_id", ctx.centerId)
+          .in("pass_id", passIds)
+          .not("status", "in", "(cancelled,rejected)")
+          .order("starts_at", { ascending: true })
+          .order("id", { ascending: true }) // 페이지 경계에서 같은 시각 행이 겹치거나 빠지지 않게
+          .range(f, t)
+      ),
     ]);
     for (const p of passes ?? []) {
       passTotalMap.set(p.id, p.total_sessions ?? 0);

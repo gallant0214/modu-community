@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isCronAuthorized } from "@/app/lib/cron-auth";
 import { syncFacilities } from "@/app/lib/market-sync";
 
 export const dynamic = "force-dynamic";
@@ -10,9 +11,7 @@ export const maxDuration = 300;
  * 전국 154페이지라 한 바퀴에 못 끝나면 다음 주 실행이 남은 페이지부터 이어받는다.
  */
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && auth !== `Bearer ${cronSecret}`) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (!process.env.DATA_GO_KR_KEY) {

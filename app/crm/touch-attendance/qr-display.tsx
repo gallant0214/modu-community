@@ -44,8 +44,9 @@ export default function QrDisplay({
         // 🚨 권한 없음(403)을 '링크를 먼저 만들어 주세요' 로 안내하면 원인을 헛짚는다
         denied = res.status === 403;
       }
-      // 회전 토큰(qr) 우선, 없으면 정적 토큰 폴백
-      const value = data.qr ?? data.token ?? (kioskToken || null);
+      // 🚨 화면에는 주간 회전 토큰(qr)만 띄운다. 정적 토큰으로 폴백하면 키오스크 링크 자체가
+      //    QR 로 노출돼(누구나 촬영 가능) 공개 키오스크 API 전체가 영구히 열린다.
+      const value = data.qr ?? null;
       if (value) {
         setQr(value);
         setErr("");

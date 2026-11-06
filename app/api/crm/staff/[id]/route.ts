@@ -157,7 +157,10 @@ export async function PATCH(
     body.status !== undefined ||
     body.employment_status !== undefined ||
     body.employment_type !== undefined;
-  if (touchesStaffCore && !isSelf && !(await ctxHasPermission(ctx, "staff.manage"))) {
+  // 🚨 본인이라도 예외 없다 — 예전엔 `!isSelf` 예외가 있어서, staff.manage 없는 팀장이
+  //   자기 등급(grade_id)을 같은 서열의 더 넓은 권한 등급으로 바꿀 수 있었다(권한 상승).
+  //   owner/admin 은 ctxHasPermission 이 항상 통과시키므로 영향 없음.
+  if (touchesStaffCore && !(await ctxHasPermission(ctx, "staff.manage"))) {
     return NextResponse.json({ error: "직원 관리 권한이 없습니다" }, { status: 403 });
   }
 

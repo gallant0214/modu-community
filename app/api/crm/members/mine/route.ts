@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { escapePostgrestQuery } from "@/app/lib/security";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 
@@ -22,7 +23,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
   }
 
-  const q = (new URL(request.url).searchParams.get("q") || "").trim();
+  // 🚨 .or() 필터 문자열에 그대로 들어간다 — 쉼표·괄호를 지우지 않으면 조건을 끼워 넣을 수 있다
+  const q = escapePostgrestQuery(new URL(request.url).searchParams.get("q") || "");
 
   const { data: memberships } = await supabase
     .from("crm_center_members")

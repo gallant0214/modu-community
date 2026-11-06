@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isCronAuthorized } from "@/app/lib/cron-auth";
 import { supabase } from "@/app/lib/supabase";
 import { notifyStaffMember } from "@/app/lib/crm-staff-notify";
 
@@ -10,14 +11,10 @@ export const maxDuration = 60;
  * 수업이 하루 지났는데도 출석/노쇼 처리(attended/noshow)가 안 된 예약(booked)에 대해
  * 담당 강사에게 "출석 여부를 처리해 주세요" 알림 + 푸시. 예약당 1회만(재알림 방지).
  *
- * 보안: Vercel x-vercel-cron 헤더 또는 CRON_SECRET.
+ * 보안: CRON_SECRET 만 인정(isCronAuthorized). x-vercel-cron 헤더는 위조 가능해 쓰지 않는다.
  */
 export async function GET(req: NextRequest) {
-  const isVercelCron = req.headers.get("x-vercel-cron") !== null;
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = req.headers.get("authorization");
-  const hasValidSecret = cronSecret && authHeader === `Bearer ${cronSecret}`;
-  if (!isVercelCron && !hasValidSecret) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

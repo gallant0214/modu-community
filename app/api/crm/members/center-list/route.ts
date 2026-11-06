@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { escapePostgrestQuery } from "@/app/lib/security";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
@@ -21,7 +22,8 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const centerId = Number(url.searchParams.get("centerId"));
   const page = Math.max(0, Number(url.searchParams.get("page")) || 0);
-  const q = (url.searchParams.get("q") || "").trim();
+  // 🚨 .or() 필터 문자열에 그대로 들어간다 — 쉼표·괄호를 지우지 않으면 조건을 끼워 넣을 수 있다
+  const q = escapePostgrestQuery(url.searchParams.get("q") || "");
   if (!centerId) return NextResponse.json({ error: "센터가 필요합니다" }, { status: 400 });
 
   // 이 센터에서의 내 신원(권한 판단)

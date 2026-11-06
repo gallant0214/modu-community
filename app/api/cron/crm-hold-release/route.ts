@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isCronAuthorized } from "@/app/lib/cron-auth";
 import { supabase } from "@/app/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -17,9 +18,7 @@ export const dynamic = "force-dynamic";
  *    근거 기록이 없으면 홀딩으로 볼 수 없으므로 해제하고 감사로그를 남긴다.
  */
 export async function GET(request: Request) {
-  const auth = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && auth !== `Bearer ${cronSecret}`) {
+  if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

@@ -1,4 +1,5 @@
 import { NextResponse, after } from "next/server";
+import { escapePostgrestQuery } from "@/app/lib/security";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { loadPermissionsForContext } from "@/app/lib/crm-permissions";
@@ -40,7 +41,8 @@ export async function GET(request: Request) {
   if (isCrmError(ctx)) return ctx;
 
   const url = new URL(request.url);
-  const q = (url.searchParams.get("q") || "").trim();
+  // 🚨 .or() 필터 문자열에 그대로 들어간다 — 쉼표·괄호를 지우지 않으면 조건을 끼워 넣을 수 있다
+  const q = escapePostgrestQuery(url.searchParams.get("q") || "");
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 50), 1), 5000);
 
   // ── 회원 스코프 계산 ──

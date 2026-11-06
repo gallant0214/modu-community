@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isCronAuthorized } from "@/app/lib/cron-auth";
 import { checkPushHealth, summarizeFailure } from "@/app/lib/push-health";
 import { solapiConfigured, solapiSend } from "@/app/lib/solapi";
 
@@ -10,7 +11,7 @@ export const maxDuration = 30;
  * iOS(APNs)·Android(FCM) 푸시 발송 경로를 비파괴로 점검한다. 사용자에게는 아무것도 가지 않는다.
  *
  * 인증 두 갈래:
- *   - 크론(x-vercel-cron 또는 CRON_SECRET): 점검 + **실패 시 운영자(OPS_ALERT_PHONE)에게 문자**
+ *   - 크론(CRON_SECRET — isCronAuthorized): 점검 + **실패 시 운영자(OPS_ALERT_PHONE)에게 문자**
  *   - 수동(Authorization: Bearer PUSH_HEALTH_TOKEN): 점검 결과만 반환(문자 없음).
  *     키·환경변수를 바꾼 직후 바로 확인하는 용도.
  *
@@ -18,10 +19,8 @@ export const maxDuration = 30;
  */
 export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization") ?? "";
-  const cronSecret = process.env.CRON_SECRET;
   const healthToken = process.env.PUSH_HEALTH_TOKEN;
-  const isCron =
-    req.headers.get("x-vercel-cron") !== null || (!!cronSecret && auth === `Bearer ${cronSecret}`);
+  const isCron = isCronAuthorized(req);
   const isManual = !!healthToken && auth === `Bearer ${healthToken}`;
   if (!isCron && !isManual) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });

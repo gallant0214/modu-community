@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   if (isCrmError(ctx)) return ctx;
 
   const url = new URL(request.url);
-  const date = url.searchParams.get("date") || new Date().toISOString().slice(0, 10);
+  const date = url.searchParams.get("date") || new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) /* KST 오늘 — UTC 로 하면 00~09시에 어제가 된다 */;
 
   const startUtc = new Date(`${date}T00:00:00+09:00`);
   const endUtc = new Date(startUtc.getTime() + 24 * 3600 * 1000);

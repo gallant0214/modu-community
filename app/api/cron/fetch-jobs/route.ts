@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 import { supabase } from "@/app/lib/supabase";
+import { isCronAuthorized } from "@/app/lib/cron-auth";
 import { EXCLUDE_TITLE } from "@/app/lib/job-title-filter";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -422,8 +423,7 @@ async function fetchByKeyword(kw: string): Promise<W24[]> {
 }
 
 export async function GET(req: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!API_KEY) return NextResponse.json({ error: "WORK24_API_KEY not set" }, { status: 500 });

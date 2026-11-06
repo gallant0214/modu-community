@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     .eq("member_id", ctx.memberId);
 
   if (from || to) {
-    const f = from || new Date().toISOString().slice(0, 10);
+    const f = from || new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) /* KST 오늘 — UTC 로 하면 00~09시에 어제가 된다 */;
     const t = to || f;
     const startUtc = new Date(`${f}T00:00:00+09:00`);
     const endUtc = new Date(new Date(`${t}T00:00:00+09:00`).getTime() + 24 * 3600 * 1000);
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       .lt("starts_at", endUtc.toISOString())
       .order("starts_at", { ascending: false });
   } else {
-    const todayKst = new Date().toISOString().slice(0, 10);
+    const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) /* KST 오늘 — UTC 로 하면 00~09시에 어제가 된다 */;
     query = query.gte("starts_at", new Date(`${todayKst}T00:00:00+09:00`).toISOString()).order("starts_at", { ascending: true });
   }
 

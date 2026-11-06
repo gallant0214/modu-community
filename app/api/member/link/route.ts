@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { digitsOnly } from "@/app/lib/crm-identity";
+import { getClientIp, checkRateLimit } from "@/app/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,10 @@ export const dynamic = "force-dynamic";
  * 추후 초대 링크(딥링크) 기반 자동 연동으로 대체 예정.
  */
 export async function POST(request: Request) {
+  // 🚨 이름+전화번호 대입 시도를 막는다 — 신버전(/api/crm/member-app/link)과 같은 제한
+  const rl = checkRateLimit(getClientIp(request), "auth");
+  if (rl) return rl;
+
   const user = await verifyAuth(request);
   if (!user) {
     return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
