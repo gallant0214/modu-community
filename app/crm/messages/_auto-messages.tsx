@@ -502,6 +502,30 @@ function AutoMessageEditor({
       alive = false;
     };
   }, [getToken]);
+  // 07 변수 버튼 호버 미리보기 — 센터 값은 실제 값으로 보여준다(회원 값은 예시값)
+  const [varSamples, setVarSamples] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/auto-messages/var-samples", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!alive || !res.ok) return;
+        const data = await res.json();
+        setVarSamples((data.samples ?? {}) as Record<string, string>);
+      } catch {
+        /* 못 받아도 예시값으로 보여주면 되므로 무시 */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [getToken]);
+
   const selectedCoupon = coupons.find((c) => Number(c.id) === couponId) ?? null;
   // 출석일수 쿠폰은 06 쿠폰 첨부가 아니라 '규칙'의 쿠폰을 쓴다 →
   // 미리보기·테스트 발송도 규칙의 쿠폰으로 치환해야 `#쿠폰혜택#` 이 글자 그대로 남지 않는다.
@@ -509,6 +533,40 @@ function AutoMessageEditor({
     ? coupons.find((c) => attendRules.some((r) => Number(r.coupon_id) === Number(c.id))) ?? null
     : null;
   const previewCoupon = showAttendanceRules ? ruleCoupon : selectedCoupon;
+
+  // 07 변수 호버 미리보기 — 어떤 값으로 바뀌어 나가는지.
+  // 센터 실제 값 > 선택한 쿠폰의 실제 값 > 예시값(MESSAGE_VARIABLES.sample) 순.
+  const sampleOf = useCallback(
+    (token: string): string => {
+      if (varSamples[token]) return varSamples[token];
+      if (previewCoupon) {
+        if (token === "#쿠폰명#") return previewCoupon.name;
+        if (token === "#쿠폰혜택#") return benefitText(previewCoupon);
+        if (token === "#쿠폰기한#") {
+          const exp = issueExpiryYmd(previewCoupon);
+          return exp ? `${exp.replace(/-/g, ".")}까지` : "기한 없음";
+        }
+      }
+      return MESSAGE_VARIABLES.find((v) => v.token === token)?.sample ?? "";
+    },
+    [varSamples, previewCoupon]
+  );
+  // 말풍선 위치 — 모달이 스크롤·overflow-hidden 영역이라 fixed 로 띄우고 화면 안으로 보정한다
+  const [varHint, setVarHint] = useState<{ token: string; left: number; top: number; above: boolean } | null>(
+    null
+  );
+  const openVarHint = (token: string, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    const W = 300;
+    const H = 150; // 말풍선 대략 높이 — 아래로 공간이 없으면 위로 띄운다
+    const above = r.bottom + H > window.innerHeight;
+    setVarHint({
+      token,
+      left: Math.max(10, Math.min(r.left, window.innerWidth - W - 10)),
+      top: above ? r.top - 8 : r.bottom + 8,
+      above,
+    });
+  };
   const [body, setBody] = useState(base.message_body ?? "");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -1151,7 +1209,7 @@ function AutoMessageEditor({
             <NumberedField
               no="07"
               title="메세지 입력"
-              hint="아래 변수 버튼을 누르면 커서 위치에 삽입됩니다. 발송 시 회원별 값으로 자동 치환되고, 값이 없는 변수는 빈칸으로 나갑니다. 90Byte를 넘으면 장문(LMS)으로 전환돼 문자 요금이 올라가요."
+              hint="아래 변수 버튼을 누르면 커서 위치에 삽입됩니다. 버튼에 마우스를 올리면 회원이 받는 메세지에 어떻게 보이는지 미리 볼 수 있어요. 발송 시 회원별 값으로 자동 치환되고, 값이 없는 변수는 빈칸으로 나갑니다. 90Byte를 넘으면 장문(LMS)으로 전환돼 문자 요금이 올라가요."
             >
               {/* 변수 버튼 — 쿠폰 변수는 '쿠폰이 붙은 알림에서만' 값이 채워지므로 따로 묶어 보여준다 */}
               <div className="flex flex-wrap gap-1.5 mb-2">
@@ -1160,7 +1218,10 @@ function AutoMessageEditor({
                     key={v.token}
                     type="button"
                     onClick={() => insertVar(v.token)}
-                    title={v.desc}
+                    onMouseEnter={(e) => openVarHint(v.token, e.currentTarget)}
+                    onMouseLeave={() => setVarHint(null)}
+                    onFocus={(e) => openVarHint(v.token, e.currentTarget)}
+                    onBlur={() => setVarHint(null)}
                     className="px-2 py-1 rounded-md text-[11.5px] font-semibold border border-[#E8E0D0] dark:border-zinc-700 text-[#6B7B3A] dark:text-[#A8B87A] bg-white dark:bg-zinc-900 hover:bg-[#6B7B3A]/5"
                   >
                     {v.token}
@@ -1176,7 +1237,10 @@ function AutoMessageEditor({
                     key={v.token}
                     type="button"
                     onClick={() => insertVar(v.token)}
-                    title={v.desc}
+                    onMouseEnter={(e) => openVarHint(v.token, e.currentTarget)}
+                    onMouseLeave={() => setVarHint(null)}
+                    onFocus={(e) => openVarHint(v.token, e.currentTarget)}
+                    onBlur={() => setVarHint(null)}
                     className="px-2 py-1 rounded-md text-[11.5px] font-semibold border border-[#B47B2A]/40 text-[#B47B2A] dark:text-amber-300 bg-[#F5E4C8]/20 hover:bg-[#F5E4C8]/40"
                   >
                     {v.token}
@@ -1237,6 +1301,53 @@ function AutoMessageEditor({
           >
             {saving ? "저장 중…" : "저장"}
           </button>
+        </div>
+      </div>
+
+      {/* 07 변수 호버 미리보기 — '보내는 문구' vs '회원이 받는 메세지' */}
+      {varHint && <VarHintBubble token={varHint.token} left={varHint.left} top={varHint.top} above={varHint.above} sample={sampleOf(varHint.token)} />}
+    </div>
+  );
+}
+
+/**
+ * 변수 버튼 말풍선 — 같은 문구가 발송되면 어떻게 바뀌는지 위/아래로 나란히 보여준다.
+ * 모달 안쪽은 스크롤·overflow-hidden 이라 fixed 로 띄운다(잘림 방지).
+ */
+function VarHintBubble({
+  token,
+  left,
+  top,
+  above,
+  sample,
+}: {
+  token: string;
+  left: number;
+  top: number;
+  above: boolean;
+  sample: string;
+}) {
+  const v = MESSAGE_VARIABLES.find((x) => x.token === token);
+  if (!v) return null;
+  const received = v.example.replaceAll(token, sample);
+  return (
+    <div
+      role="tooltip"
+      style={{ left, top, transform: above ? "translateY(-100%)" : undefined }}
+      className="pointer-events-none fixed z-[60] w-[300px] max-w-[calc(100vw-1.25rem)] rounded-xl bg-[#4A4640] px-3.5 py-3 text-left shadow-[0_12px_28px_-10px_rgba(0,0,0,0.5)]"
+    >
+      <div className="text-[12px] font-bold text-white">{v.token}</div>
+      <div className="mt-0.5 text-[11px] leading-relaxed text-white/70">{v.desc}</div>
+      <div className="mt-2.5 space-y-1.5 border-t border-white/15 pt-2.5">
+        <div>
+          <div className="text-[10px] font-semibold text-white/50">내가 쓴 문구</div>
+          <div className="text-[12px] leading-relaxed text-white/85 break-words">{v.example}</div>
+        </div>
+        <div>
+          <div className="text-[10px] font-semibold text-[#C7D68A]">회원이 받는 메세지</div>
+          <div className="text-[12.5px] font-semibold leading-relaxed text-white break-words">
+            {received}
+          </div>
         </div>
       </div>
     </div>
