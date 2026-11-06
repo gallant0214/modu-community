@@ -25,12 +25,17 @@ export async function GET(request: Request) {
 
   const byKey = new Map<string, TriggerSetting>();
   for (const s of (settings ?? []) as (TriggerSetting & {
-    config?: { send_days_dir?: "before" | "after"; expiry_basis?: "period" | "sessions" } | null;
+    config?: {
+      send_days_dir?: "before" | "after";
+      expiry_basis?: "period" | "sessions";
+      attendance_rules?: { product_id: number; max_days: number; coupon_id: number }[];
+    } | null;
   })[]) {
     byKey.set(s.trigger_key, {
       ...s,
       send_days_dir: s.config?.send_days_dir,
       expiry_basis: s.config?.expiry_basis,
+      attendance_rules: s.config?.attendance_rules,
     });
   }
 

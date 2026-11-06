@@ -10,6 +10,8 @@ import {
   MESSAGE_VARIABLES,
   smsByteLength,
   smsKind,
+  ATTENDANCE_RULE_TRIGGER,
+  type AttendanceCouponRule,
   EXPIRY_BASIS_TRIGGERS,
   EXPIRY_BASIS_LABEL,
   EXPIRY_BASIS_DESC,
@@ -32,6 +34,8 @@ interface SettingConfig {
   send_hour?: number | null;
   /** 만료 판정 기준(수강권 만료 시): 기간 만료(period, 기본) / 횟수 소진(sessions) */
   expiry_basis?: ExpiryBasis;
+  /** 출석일수 기준 쿠폰 전송 규칙 (출석일수 쿠폰 트리거) */
+  attendance_rules?: AttendanceCouponRule[];
 }
 interface SettingRow {
   trigger_key: string;
@@ -303,6 +307,8 @@ export function AutoMessagesTab({ smsAllowed = true }: { smsAllowed?: boolean })
                         : " · 이벤트 기반"}
                       {EXPIRY_BASIS_TRIGGERS.has(t.key) &&
                         ` · ${EXPIRY_BASIS_LABEL[row?.config?.expiry_basis === "sessions" ? "sessions" : "period"]}`}
+                      {t.key === ATTENDANCE_RULE_TRIGGER &&
+                        ` · 쿠폰 규칙 ${(row?.config?.attendance_rules ?? []).length}개`}
                     </div>
                   </div>
                   <button
@@ -397,7 +403,9 @@ function AutoMessageEditor({
 
   const [enabled, setEnabled] = useState(base.enabled);
   const [sendBasis, setSendBasis] = useState<SendBasis>((base.send_basis as SendBasis) || "immediate");
-  const [sendDays, setSendDays] = useState<number>(base.send_days ?? 3);
+  const [sendDays, setSendDays] = useState<number>(
+    base.send_days ?? (triggerKey === ATTENDANCE_RULE_TRIGGER ? 7 : 3)
+  );
   const [sendDaysDir, setSendDaysDir] = useState<"before" | "after">(
     base.config?.send_days_dir === "after" ? "after" : "before"
   );
@@ -412,11 +420,43 @@ function AutoMessageEditor({
   );
   const [methods, setMethods] = useState<string[]>(base.methods ?? []);
   const [attachments, setAttachments] = useState<string[]>(base.config?.attachments ?? []);
+  // 출석일수 기준 쿠폰 규칙 — 이 트리거는 쿠폰을 '규칙별로' 고르므로 06 쿠폰 첨부를 대체한다
+  const showAttendanceRules = triggerKey === ATTENDANCE_RULE_TRIGGER;
+  const [attendRules, setAttendRules] = useState<AttendanceCouponRule[]>(
+    base.config?.attendance_rules ?? []
+  );
+  const [products, setProducts] = useState<{ id: number; name: string }[]>([]);
   // 06 쿠폰 첨부 — 사이드바 '쿠폰' 에서 만든 쿠폰 중 선택 (발송 때 회원마다 1장씩 발급)
   const [couponId, setCouponId] = useState<number | null>(base.coupon_id ?? null);
   const [coupons, setCoupons] = useState<(CouponDef & { sendable?: boolean })[]>([]);
   const [couponsState, setCouponsState] = useState<"loading" | "ok" | "denied" | "error">("loading");
   const { getIdToken: getToken } = useAuth();
+  // 규칙에서 고를 회원권 상품 목록 (출석일수 쿠폰 트리거에서만 필요)
+  useEffect(() => {
+    if (!showAttendanceRules) return;
+    let alive = true;
+    (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const res = await fetch("/api/crm/products?type=membership", {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!alive || !res.ok) return;
+        const data = await res.json();
+        setProducts(
+          ((data.products ?? []) as { id: number; name: string }[]).map((p) => ({ id: p.id, name: p.name }))
+        );
+      } catch {
+        /* 목록을 못 받아도 규칙 편집은 막지 않는다 */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [showAttendanceRules, getToken]);
+
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -515,7 +555,8 @@ function AutoMessageEditor({
         methods: smsAllowed ? methods : methods.filter((m) => m !== "sms"),
         audience: [], // 수신 대상은 트리거 조건이 자동 결정 (수동 세그먼트 미사용)
         message_body: body,
-        coupon_id: couponId,
+        // 출석일수 쿠폰은 규칙별 쿠폰을 쓰므로 설정 단위 쿠폰은 비워 둔다
+        coupon_id: showAttendanceRules ? null : couponId,
         config: {
           attachments,
           coupon: null, // (구) 이름·링크 직접 입력 방식은 폐기 — coupon_id 로 연동
@@ -523,6 +564,9 @@ function AutoMessageEditor({
           // '즉시'는 발송 시각 개념이 없어 저장하지 않는다.
           send_hour: sendBasis === "immediate" ? null : sendHour,
           ...(showExpiryBasis ? { expiry_basis: expiryBasis } : {}),
+          ...(showAttendanceRules
+            ? { attendance_rules: attendRules.filter((r) => r.product_id && r.max_days > 0 && r.coupon_id) }
+            : {}),
         },
       });
     } finally {
@@ -534,7 +578,11 @@ function AutoMessageEditor({
   const recipientText =
     trigger.key === "long_absence"
       ? `장기 미출석(휴면 ${sendBasis === "count" ? sendCount : sendDays}일) 회원`
-      : showExpiryBasis
+      : showAttendanceRules
+        ? attendRules.length === 0
+          ? "쿠폰 규칙을 추가해야 대상이 정해져요 (아래 06)"
+          : `규칙 ${attendRules.length}개 · 지정 상품 만료 ${sendDays}일 ${sendDaysDir === "before" ? "전" : "후"}, 출석일수가 기준 미만인 회원`
+        : showExpiryBasis
         ? EXPIRY_BASIS_DESC[expiryBasis]
         : trigger.recipient;
 
@@ -877,7 +925,106 @@ function AutoMessageEditor({
               </div>
             </NumberedField>
 
+            {/* 06 쿠폰 규칙 (출석일수 기준) — 상품별 단계마다 다른 쿠폰 */}
+            {showAttendanceRules && (
+              <NumberedField
+                no="06"
+                title="쿠폰 규칙 (출석일수 기준)"
+                hint="상품마다 '출석일수 N일 미만 → 이 쿠폰' 을 단계별로 넣어요. 한 회원이 두 단계에 모두 걸리면 기준 일수가 작은 쪽(혜택이 큰 쿠폰) 하나만 나갑니다. 출석일수는 그 이용권 기간(시작일~발송일)에 센터에 온 날짜 수예요."
+              >
+                <div className="space-y-2">
+                  {attendRules.length === 0 && (
+                    <div className="text-[12.5px] text-[#8C8270]">
+                      규칙이 없으면 아무에게도 발송되지 않아요. 아래에서 추가해 주세요.
+                    </div>
+                  )}
+                  {attendRules.map((r, i) => (
+                    <div
+                      key={i}
+                      className="flex flex-wrap items-center gap-1.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#FEFCF7] dark:bg-zinc-900 p-2"
+                    >
+                      <select
+                        value={r.product_id || ""}
+                        onChange={(e) =>
+                          setAttendRules((prev) =>
+                            prev.map((x, k) => (k === i ? { ...x, product_id: Number(e.target.value) || 0 } : x))
+                          )
+                        }
+                        className={`${inputCls} flex-1 min-w-[150px]`}
+                      >
+                        <option value="">상품 선택</option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                        {r.product_id > 0 && !products.some((p) => p.id === r.product_id) && (
+                          <option value={r.product_id}>삭제된 상품 #{r.product_id}</option>
+                        )}
+                      </select>
+                      <span className="text-[12px] text-[#8C8270]">출석</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={r.max_days || ""}
+                        onChange={(e) =>
+                          setAttendRules((prev) =>
+                            prev.map((x, k) =>
+                              k === i ? { ...x, max_days: Math.max(0, Math.floor(Number(e.target.value) || 0)) } : x
+                            )
+                          )
+                        }
+                        className={`${inputCls} w-[70px] text-center`}
+                      />
+                      <span className="text-[12px] text-[#8C8270]">일 미만 →</span>
+                      <select
+                        value={r.coupon_id || ""}
+                        onChange={(e) =>
+                          setAttendRules((prev) =>
+                            prev.map((x, k) => (k === i ? { ...x, coupon_id: Number(e.target.value) || 0 } : x))
+                          )
+                        }
+                        className={`${inputCls} flex-1 min-w-[150px]`}
+                      >
+                        <option value="">쿠폰 선택</option>
+                        {coupons.map((c) => (
+                          <option key={c.id} value={c.id} disabled={c.sendable === false}>
+                            {c.name} · {benefitText(c)}
+                            {c.sendable === false ? " (기한 지남)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setAttendRules((prev) => prev.filter((_, k) => k !== i))}
+                        className="px-2 py-1 rounded-md border border-red-200 dark:border-red-900/60 text-[12px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAttendRules((prev) => [...prev, { product_id: 0, max_days: 14, coupon_id: 0 }])
+                    }
+                    className="px-3 py-1.5 rounded-lg text-[12.5px] font-semibold border border-dashed border-[#6B7B3A] text-[#6B7B3A] dark:text-[#A8B87A] hover:bg-[#6B7B3A]/5"
+                  >
+                    + 규칙 추가
+                  </button>
+                  {coupons.length === 0 && couponsState === "ok" && (
+                    <div className="text-[12px] text-[#8C8270]">
+                      쓸 수 있는 쿠폰이 없어요.{" "}
+                      <a href="/crm/coupons" className="text-[#6B7B3A] dark:text-[#A8B87A] underline">
+                        쿠폰 만들기
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </NumberedField>
+            )}
+
             {/* 06 쿠폰 첨부 — 사이드바 '쿠폰' 과 연동 */}
+            {!showAttendanceRules && (
             <NumberedField
               no="06"
               title="쿠폰 첨부"
@@ -946,6 +1093,7 @@ function AutoMessageEditor({
                 </div>
               )}
             </NumberedField>
+            )}
 
             {/* 07 메세지 입력 */}
             <NumberedField

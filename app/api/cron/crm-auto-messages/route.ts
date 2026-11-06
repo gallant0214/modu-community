@@ -66,6 +66,7 @@ export async function GET(request: Request) {
       send_hour?: number;
       send_days_dir?: "before" | "after";
       expiry_basis?: "period" | "sessions";
+      attendance_rules?: { product_id: number; max_days: number; coupon_id: number }[];
     } | null;
   }[]) {
     if (processed >= MAX_SENDS) break;
@@ -89,6 +90,7 @@ export async function GET(request: Request) {
       send_count: s.send_count,
       send_days_dir: cfg.send_days_dir,
       expiry_basis: cfg.expiry_basis,
+      attendance_rules: cfg.attendance_rules,
     };
 
     let matches;
@@ -110,7 +112,8 @@ export async function GET(request: Request) {
     let lastPushMessage = "";
     for (const m of matches) {
       if (processed >= MAX_SENDS) break;
-      const dedupeKey = `${s.trigger_key}:${m.member_id}:${today}`;
+      // 중복 방지 키 — 트리거가 정한 키(예: 이용권 1건당 1회)가 있으면 그걸 쓴다
+      const dedupeKey = m.dedupeKey ?? `${s.trigger_key}:${m.member_id}:${today}`;
       const rendered = renderMessage(s.message_body, {
         center: meta.name,
         name: m.name,
@@ -119,6 +122,7 @@ export async function GET(request: Request) {
         payment: paymentText(m.product, m.price),
         appLink: meta.appLink,
         basis: basisText(s.trigger_key, setting, today, m.expiry),
+        attendDays: m.attendDays,
       });
 
       // 대기열에 pending 적재 시도 — (center_id, dedupe_key) 유니크 위반이면 이미 처리됨 → 건너뜀
@@ -133,6 +137,7 @@ export async function GET(request: Request) {
           status: "pending",
           dedupe_key: dedupeKey,
           scheduled_for: today,
+          coupon_id: m.couponId ?? null,
         } as never)
         .select("id")
         .single();
@@ -147,7 +152,8 @@ export async function GET(request: Request) {
         centerId: s.center_id,
         queueId: (queued as { id: number }).id,
         memberId: m.member_id,
-        couponId: s.coupon_id,
+        // 규칙별로 쿠폰이 다른 트리거(출석일수 쿠폰)는 매칭이 정한 쿠폰을 우선한다
+        couponId: m.couponId ?? s.coupon_id,
         message: rendered,
       });
 

@@ -76,6 +76,22 @@ export const AUTO_MESSAGE_CATEGORIES: AutoMsgCategory[] = [
       { key: "facility_cancelled", label: "시설 예약 취소 시", bases: ["immediate"], recipient: "시설 예약을 취소한 회원" },
     ],
   },
+  {
+    key: "event",
+    label: "이벤트 전송",
+    triggers: [
+      {
+        key: "attendance_coupon",
+        label: "출석일수 기준 쿠폰 전송",
+        // 만료일 기준 일정 발송만 — '만료 당일'은 0일로 설정한다(즉시형은 사건 hook 이 필요해 제외)
+        bases: ["schedule"],
+        recipient: "지정 상품을 쓰는 회원 중 출석일수가 기준 미만인 회원",
+        basisNoun: "만료일",
+        defaultBody:
+          "#회원명#님, #센터명#입니다.\n이용권(#상품명#) 만료가 #전송기준# 남았어요.\n이번 기간 출석은 #출석일수#일이었습니다. 다음 기간엔 더 자주 만나뵐 수 있도록 할인 혜택을 준비했어요.",
+      },
+    ],
+  },
 ];
 
 export const ALL_TRIGGERS: AutoMsgTrigger[] = AUTO_MESSAGE_CATEGORIES.flatMap((c) => c.triggers);
@@ -104,6 +120,33 @@ export const EXPIRY_BASIS_DESC: Record<ExpiryBasis, string> = {
   sessions: "수강권 잔여 횟수를 모두 소진한 회원",
 };
 
+/**
+ * 출석일수 기준 쿠폰 전송 규칙 (trigger attendance_coupon).
+ * `crm_auto_message_settings.config.attendance_rules` 에 배열로 저장.
+ *
+ * 한 줄 = "이 상품을 쓴 회원 중 출석일수가 N일 미만이면 이 쿠폰". 상품마다 여러 줄(단계)을 둘 수 있고,
+ * 한 회원이 여러 줄에 걸리면 **기준 일수가 가장 작은 줄(=혜택이 큰 쪽) 하나만** 발송한다.
+ */
+export interface AttendanceCouponRule {
+  /** 대상 회원권 상품 id (crm_products.id) */
+  product_id: number;
+  /** 이 일수 '미만' 이면 대상 (예: 14 → 13일 이하) */
+  max_days: number;
+  /** 보낼 쿠폰 종류 (crm_coupons.id) */
+  coupon_id: number;
+}
+
+export const ATTENDANCE_RULE_TRIGGER = "attendance_coupon";
+
+/** 규칙 1줄의 설명 문구 — 설정 화면·미리보기 공용 */
+export function attendanceRuleText(
+  rule: { max_days: number },
+  productName: string,
+  couponName: string
+): string {
+  return `${productName} · 출석 ${rule.max_days}일 미만 → ${couponName}`;
+}
+
 export const SEND_BASIS_LABEL: Record<SendBasis, string> = {
   immediate: "즉시",
   schedule: "일정 기준",
@@ -130,6 +173,7 @@ export const MESSAGE_VARIABLES: { token: string; desc: string }[] = [
   { token: "#만료일#", desc: "대상 상품의 만료 날짜" },
   { token: "#마지막방문일#", desc: "마지막 출석 날짜 (장기 미출석 알림용)" },
   { token: "#전송기준#", desc: "남은 기간(예: 10일)" },
+  { token: "#출석일수#", desc: "이용권 기간 중 출석한 날짜 수 (출석일수 쿠폰용)" },
   { token: "#앱설치링크#", desc: "회원 앱 설치 링크" },
 ];
 

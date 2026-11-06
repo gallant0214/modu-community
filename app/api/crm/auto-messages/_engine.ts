@@ -16,6 +16,12 @@ export interface Match {
   price?: number;
   /** 마지막 출석일 (#마지막방문일#) — 장기 미출석 알림용 */
   lastVisit?: string;
+  /** 이용권 기간 중 출석한 날짜 수 (#출석일수#) — 출석일수 쿠폰용 */
+  attendDays?: number;
+  /** 이 건에 붙일 쿠폰 (규칙별로 쿠폰이 다른 트리거). 없으면 설정의 06 쿠폰 첨부를 쓴다 */
+  couponId?: number;
+  /** 중복 방지 키를 트리거가 직접 정할 때 (기본: trigger:member:오늘) */
+  dedupeKey?: string;
 }
 
 export interface TriggerSetting {
@@ -27,6 +33,8 @@ export interface TriggerSetting {
   send_days_dir?: "before" | "after";
   /** 수강권 만료 판정: 기간 만료(period, 기본) / 횟수 소진(sessions) */
   expiry_basis?: "period" | "sessions";
+  /** 출석일수 기준 쿠폰 전송 규칙 (attendance_coupon) */
+  attendance_rules?: { product_id: number; max_days: number; coupon_id: number }[];
 }
 
 /** 스캔(데이터 기반)으로 대상 산출이 가능한 트리거 */
@@ -45,6 +53,7 @@ export const SCAN_TRIGGERS = new Set<string>([
   "long_absence",
   "membership_new",
   "membership_renew",
+  "attendance_coupon",
 ]);
 
 /** 만료 임박(#전송기준# 잔여일 계산) 트리거 */
@@ -351,6 +360,155 @@ async function matchDepleted(
   return out;
 }
 
+/**
+ * 출석일수 기준 쿠폰 전송 매칭 (attendance_coupon).
+ *
+ * 1) 설정한 규칙의 상품(crm_products.id)으로 발급된 회원권 중 **만료일이 target 당일**인 건을 찾는다.
+ *    (일정 기준이면 '만료 N일 전/후' 그 날 하루만 → 자동 반복발송 방지)
+ * 2) 그 이용권 기간(start_date ~ min(만료일, 오늘)) 안의 **출석한 날짜 수**를 센다.
+ *    하루에 여러 번 와도 1일. 발송 시점까지만 세므로 만료 전 발송에서도 과소평가가 없다.
+ * 3) 그 상품의 규칙 중 `출석일수 < max_days` 를 만족하는 줄 가운데 **max_days 가 가장 작은 줄**
+ *    (= 혜택이 큰 쪽) 하나만 적용한다. 예) 7일 출석 → 8일 미만(30%)과 14일 미만(20%) 둘 다 해당 → 30%.
+ * 4) 이미 다음 이용권을 산 회원(만료일 이후까지 유효한 회원권 보유)은 제외 — 재등록 유치가 목적이다.
+ *
+ * 중복 방지: dedupe_key 를 회원권 id 기준으로 둬서 한 이용권당 1회만 나간다.
+ */
+async function matchAttendanceCoupon(
+  centerId: number,
+  setting: TriggerSetting,
+  members: Map<number, MemberLite>,
+  target: string,
+  today: string
+): Promise<Match[]> {
+  const rules = (setting.attendance_rules ?? []).filter(
+    (r) => r && r.product_id > 0 && r.max_days > 0 && r.coupon_id > 0
+  );
+  if (rules.length === 0) return [];
+
+  // 상품 id → 그 상품 규칙(기준 일수 오름차순 = 혜택 큰 순)
+  const byProduct = new Map<number, { max_days: number; coupon_id: number }[]>();
+  for (const r of rules) {
+    const list = byProduct.get(r.product_id) ?? [];
+    list.push({ max_days: r.max_days, coupon_id: r.coupon_id });
+    byProduct.set(r.product_id, list);
+  }
+  for (const list of byProduct.values()) list.sort((a, b) => a.max_days - b.max_days);
+
+  // 규칙 상품명 — 회원권은 product_id 컬럼이 없어 plan_name 으로 맞춘다
+  const { data: prodRows } = await supabase
+    .from("crm_products")
+    .select("id, name")
+    .eq("center_id", centerId)
+    .in("id", Array.from(byProduct.keys()));
+  const nameToProduct = new Map<string, number>();
+  for (const p of (prodRows ?? []) as { id: number; name: string }[]) {
+    nameToProduct.set(String(p.name).trim(), Number(p.id));
+  }
+  if (nameToProduct.size === 0) return [];
+
+  // 만료일이 target 인 회원권 (상품명 일치분만)
+  const { data: mbRows } = await supabase
+    .from("crm_memberships")
+    .select("id, member_id, plan_name, price_won, start_date, expires_at, status")
+    .eq("center_id", centerId)
+    .eq("expires_at", target)
+    .neq("status", "deleted");
+  const targets = ((mbRows ?? []) as {
+    id: number;
+    member_id: number;
+    plan_name: string | null;
+    price_won: number | null;
+    start_date: string | null;
+    expires_at: string;
+    status: string;
+  }[]).filter((m) => m.status !== "refunded" && nameToProduct.has(String(m.plan_name ?? "").trim()));
+  if (targets.length === 0) return [];
+
+  // 이미 다음 이용권을 산 회원 제외 (만료일 이후까지 유효한 회원권·수강권 보유)
+  const memberIds = Array.from(new Set(targets.map((m) => m.member_id)));
+  const [laterMb, laterPass] = await Promise.all([
+    supabase
+      .from("crm_memberships")
+      .select("member_id")
+      .eq("center_id", centerId)
+      .in("member_id", memberIds)
+      .neq("status", "deleted")
+      .neq("status", "refunded")
+      .gt("expires_at", target),
+    supabase
+      .from("crm_passes")
+      .select("member_id")
+      .eq("center_id", centerId)
+      .in("member_id", memberIds)
+      .neq("status", "deleted")
+      .neq("status", "refunded")
+      .gt("expires_at", target),
+  ]);
+  const renewed = new Set<number>();
+  for (const r of (laterMb.data ?? []) as { member_id: number }[]) renewed.add(Number(r.member_id));
+  for (const r of (laterPass.data ?? []) as { member_id: number }[]) renewed.add(Number(r.member_id));
+
+  const pending = targets.filter((m) => !renewed.has(m.member_id));
+  if (pending.length === 0) return [];
+
+  // 출석일수 — 이용권 기간(시작일 ~ min(만료일, 오늘)) 안의 '출석한 날짜' 수
+  const windowStart = pending.reduce(
+    (min, m) => (m.start_date && m.start_date < min ? m.start_date : min),
+    today
+  );
+  const countEnd = target < today ? target : today;
+  const attends = await paginateAll<{ member_id: number; checked_in_at: string }>(async (f, t) => {
+    const r = await supabase
+      .from("crm_attendances")
+      .select("member_id, checked_in_at")
+      .eq("center_id", centerId)
+      .in("member_id", memberIds)
+      .gte("checked_in_at", `${windowStart}T00:00:00+09:00`)
+      .lt("checked_in_at", `${addDays(countEnd, 1)}T00:00:00+09:00`)
+      .range(f, t);
+    return { data: r.data as { member_id: number; checked_in_at: string }[] | null, error: r.error };
+  });
+  // 회원별 출석 '날짜' 집합 (KST)
+  const daysByMember = new Map<number, Set<string>>();
+  for (const a of attends) {
+    const ymd = ymdOf(new Date(new Date(a.checked_in_at).getTime() + 9 * 3600 * 1000));
+    const set = daysByMember.get(a.member_id) ?? new Set<string>();
+    set.add(ymd);
+    daysByMember.set(a.member_id, set);
+  }
+
+  const out: Match[] = [];
+  for (const mb of pending) {
+    const member = members.get(mb.member_id);
+    if (!member) continue;
+    const productId = nameToProduct.get(String(mb.plan_name ?? "").trim());
+    const list = productId ? byProduct.get(productId) : undefined;
+    if (!list || list.length === 0) continue;
+
+    const from = mb.start_date ?? windowStart;
+    const days = daysByMember.get(mb.member_id);
+    let attendDays = 0;
+    if (days) {
+      for (const d of days) if (d >= from && d <= countEnd) attendDays += 1;
+    }
+
+    const hit = list.find((r) => attendDays < r.max_days);
+    if (!hit) continue;
+
+    out.push({
+      member_id: mb.member_id,
+      name: member.name,
+      product: mb.plan_name ?? "",
+      expiry: mb.expires_at,
+      price: mb.price_won ?? undefined,
+      attendDays,
+      couponId: hit.coupon_id,
+      dedupeKey: `attendance_coupon:${mb.member_id}:mb${mb.id}`,
+    });
+  }
+  return out;
+}
+
 /* ─── 트리거 매칭 ───────────────────────────────── */
 export async function computeMatches(centerId: number, setting: TriggerSetting): Promise<Match[]> {
   const key = setting.trigger_key;
@@ -419,6 +577,12 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
     }
   }
 
+  // 출석일수 기준 쿠폰 전송 — 지정 상품 회원권의 만료일이 target 인 회원 중,
+  // 그 이용권 기간(시작일~오늘) 출석일수가 규칙 기준 미만인 사람에게 규칙별 쿠폰을 보낸다.
+  if (key === "attendance_coupon") {
+    return matchAttendanceCoupon(centerId, setting, members, targetExpiry(setting, today), today);
+  }
+
   // 신규/재등록 (오늘 생성된 회원권 기준)
   if (key === "membership_new" || key === "membership_renew") {
     const rows = await loadDated(centerId, "crm_memberships", "plan_name");
@@ -455,6 +619,7 @@ export function renderMessage(
     appLink?: string;
     basis?: string;
     lastVisit?: string;
+    attendDays?: number;
   }
 ): string {
   return (template || "")
@@ -465,7 +630,8 @@ export function renderMessage(
     .replaceAll("#마지막방문일#", vars.lastVisit ?? "")
     .replaceAll("#결제내역#", vars.payment ?? "")
     .replaceAll("#앱설치링크#", vars.appLink ?? "")
-    .replaceAll("#전송기준#", vars.basis ?? "");
+    .replaceAll("#전송기준#", vars.basis ?? "")
+    .replaceAll("#출석일수#", vars.attendDays != null ? String(vars.attendDays) : "");
 }
 
 /** 두 YYYY-MM-DD 사이 일수(b-a). */
@@ -485,7 +651,7 @@ export function basisText(
   today: string,
   expiry?: string
 ): string {
-  if (EXPIRING_TRIGGERS.has(triggerKey) && expiry) {
+  if ((EXPIRING_TRIGGERS.has(triggerKey) || triggerKey === "attendance_coupon") && expiry) {
     return `${Math.max(0, daysBetween(today, expiry))}일`;
   }
   if (EXPIRED_TRIGGERS.has(triggerKey)) return "0일";

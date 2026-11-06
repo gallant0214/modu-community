@@ -56,7 +56,11 @@ export async function POST(request: Request) {
   let total = 0;
 
   for (const s of (settings ?? []) as (FullSetting & {
-    config?: { send_days_dir?: "before" | "after"; expiry_basis?: "period" | "sessions" } | null;
+    config?: {
+      send_days_dir?: "before" | "after";
+      expiry_basis?: "period" | "sessions";
+      attendance_rules?: { product_id: number; max_days: number; coupon_id: number }[];
+    } | null;
   })[]) {
     if (!SCAN_TRIGGERS.has(s.trigger_key)) continue;
     let matches;
@@ -65,6 +69,7 @@ export async function POST(request: Request) {
         ...s,
         send_days_dir: s.config?.send_days_dir,
         expiry_basis: s.config?.expiry_basis,
+        attendance_rules: s.config?.attendance_rules,
       });
     } catch {
       continue;
@@ -86,11 +91,14 @@ export async function POST(request: Request) {
         appLink,
         basis: basisText(s.trigger_key, s, today, m.expiry),
         lastVisit: m.lastVisit,
+        attendDays: m.attendDays,
       }),
       methods: (Array.isArray(s.methods) ? s.methods : []) as never,
       status: "pending",
-      dedupe_key: `${s.trigger_key}:${m.member_id}:${today}`,
+      dedupe_key: m.dedupeKey ?? `${s.trigger_key}:${m.member_id}:${today}`,
       scheduled_for: today,
+      // 규칙별로 쿠폰이 다른 트리거(출석일수 쿠폰)는 이 건에 붙일 쿠폰을 행에 적어 둔다
+      coupon_id: m.couponId ?? null,
     }));
     // 중복(dedupe_key)은 무시하고 신규만 적재
     const { error } = await supabase
@@ -112,7 +120,7 @@ export async function POST(request: Request) {
 
   const { data: pending } = await supabase
     .from("crm_auto_message_queue")
-    .select("id, member_id, message, methods, trigger_key")
+    .select("id, member_id, message, methods, trigger_key, coupon_id")
     .eq("center_id", ctx.centerId)
     .eq("status", "pending")
     .eq("scheduled_for", today)
@@ -124,6 +132,7 @@ export async function POST(request: Request) {
     message: string;
     methods: unknown;
     trigger_key: string | null;
+    coupon_id: number | null;
   }[]).map((q) => ({ ...q, methods: Array.isArray(q.methods) ? (q.methods as string[]) : [] }));
 
   let skipped = 0;

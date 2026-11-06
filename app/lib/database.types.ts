@@ -4664,6 +4664,8 @@ export type Database = {
           scheduled_for: string | null
           created_at: string
           sent_at: string | null
+          coupon_issue_id: number | null
+          coupon_id: number | null
         }
         Insert: {
           id?: number
@@ -4677,6 +4679,8 @@ export type Database = {
           scheduled_for?: string | null
           created_at?: string
           sent_at?: string | null
+          coupon_issue_id?: number | null
+          coupon_id?: number | null
         }
         Update: {
           id?: number
@@ -4690,6 +4694,8 @@ export type Database = {
           scheduled_for?: string | null
           created_at?: string
           sent_at?: string | null
+          coupon_issue_id?: number | null
+          coupon_id?: number | null
         }
         Relationships: []
       }

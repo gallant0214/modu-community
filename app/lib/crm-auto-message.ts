@@ -31,6 +31,8 @@ export interface QueuedRow {
   methods: string[];
   /** 트리거 키 — 06 쿠폰 첨부 설정을 찾는 데 쓴다 */
   trigger_key?: string | null;
+  /** 이 건 전용 쿠폰 — 규칙별로 쿠폰이 다른 트리거(출석일수 쿠폰). 설정값보다 우선 */
+  coupon_id?: number | null;
 }
 
 export interface DispatchResult {
@@ -66,9 +68,10 @@ export async function dispatchQueued(opts: {
 
   // 06 쿠폰 첨부 — 설정된 트리거면 회원마다 쿠폰 1장 발급 후 메세지에 쿠폰 정보를 넣는다
   const triggerCoupons = await loadTriggerCoupons(opts.centerId);
-  if (triggerCoupons.size > 0) {
+  if (triggerCoupons.size > 0 || targets.some((t) => t.coupon_id)) {
     for (const t of targets) {
-      const couponId = t.trigger_key ? triggerCoupons.get(t.trigger_key) : undefined;
+      const couponId =
+        t.coupon_id ?? (t.trigger_key ? triggerCoupons.get(t.trigger_key) : undefined);
       if (!couponId) continue;
       t.message = await attachAutoCoupon({
         centerId: opts.centerId,
