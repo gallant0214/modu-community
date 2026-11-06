@@ -65,6 +65,7 @@ export async function POST(request: Request) {
     appLink,
     basis: "(예시) 만료 7일 전",
     lastVisit: kstYmd(),
+    attendDays: 9, // (예시) 출석일수 — 실제 발송 때는 회원별 실값
   });
   // 06 쿠폰 첨부 — 테스트는 실제 발급 없이 예시 코드(TEST-0000)로 보여준다
   const msg = await sampleCouponMessage(ctx.centerId, Number(body.coupon_id) || null, rendered);

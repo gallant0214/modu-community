@@ -482,6 +482,12 @@ function AutoMessageEditor({
     };
   }, [getToken]);
   const selectedCoupon = coupons.find((c) => Number(c.id) === couponId) ?? null;
+  // 출석일수 쿠폰은 06 쿠폰 첨부가 아니라 '규칙'의 쿠폰을 쓴다 →
+  // 미리보기·테스트 발송도 규칙의 쿠폰으로 치환해야 `#쿠폰혜택#` 이 글자 그대로 남지 않는다.
+  const ruleCoupon = showAttendanceRules
+    ? coupons.find((c) => attendRules.some((r) => Number(r.coupon_id) === Number(c.id))) ?? null
+    : null;
+  const previewCoupon = showAttendanceRules ? ruleCoupon : selectedCoupon;
   const [body, setBody] = useState(base.message_body ?? "");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -598,7 +604,7 @@ function AutoMessageEditor({
       kind={kind}
       methods={methods}
       attachments={attachments}
-      coupon={selectedCoupon}
+      coupon={previewCoupon}
       sendBasis={sendBasis}
       sendDays={sendDays}
       sendDaysDir={sendDaysDir}
@@ -609,7 +615,9 @@ function AutoMessageEditor({
   );
 
   // 미리보기 아래 테스트 발송 — 저장 전 문구를 한 명에게 실제 문자로 보내본다.
-  const testPanel = <TestSendPanel body={body} methods={methods} couponId={couponId} />;
+  const testPanel = (
+    <TestSendPanel body={body} methods={methods} couponId={previewCoupon?.id ?? couponId} />
+  );
 
   const inputCls =
     "w-full px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] text-[#2A251D] dark:text-zinc-100";

@@ -7,7 +7,7 @@ import {
   smsAllowedForCenter,
 } from "@/app/lib/crm-sms";
 import { sendPushToMember } from "@/app/lib/member-notify";
-import { attachAutoCoupon, loadTriggerCoupons } from "@/app/lib/crm-auto-coupon";
+import { attachAutoCoupon, loadTriggerCoupons, stripCouponVars } from "@/app/lib/crm-auto-coupon";
 
 /**
  * 자동 메세지 발송 공용 로직.
@@ -82,6 +82,9 @@ export async function dispatchQueued(opts: {
       });
     }
   }
+
+  // 쿠폰이 안 붙은 건에 남아 있는 쿠폰 변수는 지운다(그대로 발송되면 '#쿠폰혜택#' 글자가 그대로 나간다)
+  for (const t of targets) t.message = stripCouponVars(t.message);
 
   const memberIds = targets.map((t) => t.member_id);
   const [phones, pushable] = await Promise.all([

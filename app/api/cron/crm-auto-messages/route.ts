@@ -4,7 +4,7 @@ import { notifyMembersByIds } from "@/app/lib/member-notify";
 import { sendCrmSms } from "@/app/lib/crm-sms";
 import { smsAllowedForCenter } from "@/app/lib/crm-sms-availability";
 import { logAutoMessagePush } from "@/app/lib/crm-auto-message";
-import { attachAutoCoupon } from "@/app/lib/crm-auto-coupon";
+import { attachAutoCoupon, stripCouponVars } from "@/app/lib/crm-auto-coupon";
 import {
   SCAN_TRIGGERS,
   computeMatches,
@@ -148,7 +148,7 @@ export async function GET(request: Request) {
       processed += 1;
 
       // 06 쿠폰 첨부 — 설정돼 있으면 회원마다 쿠폰 1장 발급 후 메세지에 쿠폰 정보 삽입
-      const message = await attachAutoCoupon({
+      const withCoupon = await attachAutoCoupon({
         centerId: s.center_id,
         queueId: (queued as { id: number }).id,
         memberId: m.member_id,
@@ -156,6 +156,8 @@ export async function GET(request: Request) {
         couponId: m.couponId ?? s.coupon_id,
         message: rendered,
       });
+      // 쿠폰이 안 붙었으면 본문에 남은 쿠폰 변수를 지운다(글자 그대로 발송 방지)
+      const message = stripCouponVars(withCoupon);
 
       let ok = false;
       // 앱 푸시 (연동 회원만 수신 — 미연동은 기기토큰 없어 자동 무시)
