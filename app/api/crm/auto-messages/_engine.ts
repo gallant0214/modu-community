@@ -685,6 +685,59 @@ async function enrichMatches(
   return matches;
 }
 
+/**
+ * 즉시형 자동 메세지(발급·결제 직후 발송)용 — 회원 1명의 공통 치환값.
+ *
+ * 🚨 스캔형(크론·지금 실행)과 **같은 보강 함수(enrichMatches)** 를 쓴다.
+ *   예전엔 즉시형이 센터명·회원명·상품명·만료일·결제내역만 채워서,
+ *   문구에 #마일리지# #회원번호# #센터전화# #미수금# #총출석# 같은 변수를 넣으면
+ *   **그 자리가 빈칸으로 발송됐다**(스캔형에서는 정상 출력돼 재현이 어려웠다).
+ */
+export async function loadMemberCommonVars(
+  centerId: number,
+  memberId: number
+): Promise<{
+  memberNo?: string;
+  mileage?: number;
+  outstanding?: number;
+  totalAttend?: number;
+  nextLesson?: string;
+  joinDate?: string;
+  lastVisit?: string;
+}> {
+  const { data } = await supabase
+    .from("crm_members")
+    .select(
+      "id, name, birth, last_attended_at, attendance_no, mileage, first_registered_at, registered_at"
+    )
+    .eq("center_id", centerId)
+    .eq("id", memberId)
+    .maybeSingle();
+  const mem = data as MemberLite | null;
+  if (!mem) return {};
+  const [m] = await enrichMatches(
+    centerId,
+    [
+      {
+        member_id: memberId,
+        name: mem.name,
+        memberNo: mem.attendance_no ?? undefined,
+        mileage: mem.mileage ?? undefined,
+      },
+    ],
+    new Map([[memberId, mem]])
+  );
+  return {
+    memberNo: m.memberNo,
+    mileage: m.mileage,
+    outstanding: m.outstanding,
+    totalAttend: m.totalAttend,
+    nextLesson: m.nextLesson,
+    joinDate: m.joinDate,
+    lastVisit: m.lastVisit,
+  };
+}
+
 /* ─── 트리거 매칭 ───────────────────────────────── */
 export async function computeMatches(centerId: number, setting: TriggerSetting): Promise<Match[]> {
   const key = setting.trigger_key;

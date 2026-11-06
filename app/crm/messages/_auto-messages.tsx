@@ -12,6 +12,7 @@ import {
   smsByteLength,
   smsKind,
   ATTENDANCE_RULE_TRIGGER,
+  DISPATCHABLE_TRIGGERS,
   type AttendanceCouponRule,
   EXPIRY_BASIS_TRIGGERS,
   EXPIRY_BASIS_LABEL,
@@ -312,8 +313,15 @@ export function AutoMessagesTab({ smsAllowed = true }: { smsAllowed?: boolean })
                       {t.key === ATTENDANCE_RULE_TRIGGER &&
                         ` · 쿠폰 규칙 ${(row?.config?.attendance_rules ?? []).length}개`}
                     </div>
+                    {/* 발송 로직이 아직 없는 알림 — 켜 두면 보내는 줄 알고 방치된다 */}
+                    {on && !DISPATCHABLE_TRIGGERS.has(t.key) && (
+                      <div className="text-[11px] font-semibold text-[#C0392B] dark:text-red-300 mt-0.5">
+                        🚨 준비 중인 알림 · 발송 안 됨
+                      </div>
+                    )}
                     {/* 켜져 있어도 전송 방법이 없으면 한 건도 안 나간다 — 목록에서 바로 보이게 */}
                     {on &&
+                      DISPATCHABLE_TRIGGERS.has(t.key) &&
                       (row?.methods ?? []).filter((m) => m !== "alimtalk").length === 0 && (
                         <div className="text-[11px] font-semibold text-[#C0392B] dark:text-red-300 mt-0.5">
                           🚨 전송 방법 미선택 · 발송 안 됨
@@ -665,6 +673,14 @@ function AutoMessageEditor({
         {/* 본문: 좌 폼 / 우 미리보기 */}
         <div className="flex-1 min-h-0 grid md:grid-cols-[minmax(0,1fr)_340px] overflow-hidden">
           <div className="overflow-y-auto px-5 py-4 space-y-5">
+            {/* 발송 로직이 아직 없는 알림 — 켜고 저장해도 한 건도 나가지 않는다 */}
+            {!DISPATCHABLE_TRIGGERS.has(trigger.key) && (
+              <div className="px-3 py-2.5 rounded-lg border border-[#C0392B]/40 bg-[#C0392B]/[0.07] dark:bg-red-500/10 text-[12.5px] leading-relaxed text-[#9C2B1E] dark:text-red-300">
+                🚨 <strong>준비 중인 알림입니다.</strong> 문구를 저장하고 사용 여부를 켜도 아직{" "}
+                <strong>자동으로 발송되지 않습니다.</strong> 지금 필요하시면 메세지 전송에서 직접
+                보내 주세요.
+              </div>
+            )}
             {/* 01 자동알림명 (읽기 전용) */}
             <NumberedField no="01" title="자동알림명" hint="자동알림명은 고정이며 수정할 수 없습니다.">
               <div className="px-3 py-2 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-[#F5F0E5]/50 dark:bg-zinc-800/50 text-[13.5px] font-medium text-[#6B5D47] dark:text-zinc-300">

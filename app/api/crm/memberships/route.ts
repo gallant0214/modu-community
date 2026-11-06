@@ -358,6 +358,7 @@ export async function POST(request: Request) {
       dedupeSuffix: created.id,
       product: plan,
       expiry: body.expires_at,
+      startDate: body.start_date,
       price: priceWon,
     });
   } catch {

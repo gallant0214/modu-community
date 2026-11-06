@@ -136,6 +136,36 @@ export interface AttendanceCouponRule {
   coupon_id: number;
 }
 
+/**
+ * 실제로 발송 로직이 붙어 있는 트리거.
+ *
+ * 🚨 여기 없는 트리거는 설정을 켜도 **아무 것도 나가지 않는다**(조건 스캔도, 즉시 발사도 없음).
+ *   목록에만 있고 구현이 없는 알림을 켜 둔 채 "보냈겠지" 하고 있는 사고를 막기 위해
+ *   설정 화면에서 경고를 띄우는 데 쓴다.
+ *   - 스캔형은 _engine.ts 의 SCAN_TRIGGERS 와,
+ *   - 즉시형은 fireAutoMessage()/fireFirstPurchaseMessage() 호출처와 일치해야 한다.
+ */
+export const DISPATCHABLE_TRIGGERS = new Set<string>([
+  // 스캔형(크론이 매시간 조건 검사)
+  "birthday",
+  "membership_expiring",
+  "membership_expired",
+  "pass_expiring",
+  "pass_expired",
+  "class_expiring",
+  "class_expired",
+  "locker_expiring",
+  "locker_expired",
+  "sportswear_expiring",
+  "sportswear_expired",
+  "long_absence",
+  "attendance_coupon",
+  // 즉시형(발급·결제 직후 발사) — 신규/재등록은 스캔형에도 있다
+  "membership_new",
+  "membership_renew",
+  "first_purchase",
+]);
+
 export const ATTENDANCE_RULE_TRIGGER = "attendance_coupon";
 
 /** 규칙 1줄의 설명 문구 — 설정 화면·미리보기 공용 */

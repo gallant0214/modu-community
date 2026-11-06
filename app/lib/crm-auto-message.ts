@@ -213,6 +213,16 @@ export async function dispatchQueued(opts: {
 }
 
 /**
+ * 즉시형으로도 보내고 크론 스캔(SCAN_TRIGGERS)에도 들어 있는 트리거.
+ *
+ * 🚨 이 트리거는 대기열 중복키(dedupe_key)를 스캔형과 똑같이 '날짜'로 맞춘다.
+ *   안 맞추면 발급 직후 1건(`...:<이용권id>`) + 크론 스캔 1건(`...:<날짜>`)이
+ *   각각 적재돼 **같은 안내가 두 번 발송된다**
+ *   (2026-09-05 '이용권 재등록 시' 안내가 한 회원에게 2건 나간 것을 확인).
+ */
+const ALSO_SCANNED = new Set(["membership_new", "membership_renew"]);
+
+/**
  * 즉시형 자동 메세지 발사 — 결제·발급 직후 호출.
  * 설정이 꺼져 있거나 문구가 비어 있으면 아무 것도 하지 않는다.
  * 절대 예외를 던지지 않는다(발송 실패가 결제·발급 자체를 막으면 안 됨).
@@ -229,6 +239,8 @@ export async function fireAutoMessage(opts: {
   product?: string;
   expiry?: string;
   price?: number;
+  /** 대상 상품 시작일(#시작일#) */
+  startDate?: string;
 }): Promise<void> {
   try {
     const { data: setting } = await supabase
@@ -247,11 +259,26 @@ export async function fireAutoMessage(opts: {
     if (methods.length === 0) return;
 
     // 순환 import 를 피하려고 필요한 것만 지연 로드
-    const { renderMessage, loadCenterName, loadJoinLink, paymentText } = await import(
-      "@/app/api/crm/auto-messages/_engine"
-    );
-    const center = await loadCenterName(opts.centerId);
-    const appLink = await loadJoinLink(opts.centerId);
+    const {
+      renderMessage,
+      loadCenterName,
+      loadJoinLink,
+      loadCenterPhone,
+      loadCenterAddress,
+      loadCenterHours,
+      loadMemberCommonVars,
+      paymentText,
+    } = await import("@/app/api/crm/auto-messages/_engine");
+    const [center, appLink, centerPhone, centerAddress, centerHours, common] = await Promise.all([
+      loadCenterName(opts.centerId),
+      loadJoinLink(opts.centerId),
+      loadCenterPhone(opts.centerId),
+      loadCenterAddress(opts.centerId),
+      loadCenterHours(opts.centerId),
+      loadMemberCommonVars(opts.centerId, opts.memberId),
+    ]);
+    // 🚨 치환 변수는 스캔형(크론·지금 실행)과 **같은 목록을 전부** 넘겨야 한다.
+    //   빠뜨린 변수는 에러 없이 빈칸으로 발송돼, 받는 사람 문구만 뚝 끊긴다.
     const message = renderMessage(template, {
       center,
       name: opts.memberName,
@@ -260,6 +287,11 @@ export async function fireAutoMessage(opts: {
       payment: paymentText(opts.product, opts.price),
       appLink,
       basis: "", // 즉시형은 '전송 기준'이 없다
+      startDate: opts.startDate,
+      centerPhone,
+      centerAddress,
+      centerHours,
+      ...common,
     });
 
     const today = kstToday();
@@ -273,7 +305,9 @@ export async function fireAutoMessage(opts: {
           message,
           methods: methods as never,
           status: "pending",
-          dedupe_key: `${opts.triggerKey}:${opts.memberId}:${opts.dedupeSuffix}`,
+          dedupe_key: `${opts.triggerKey}:${opts.memberId}:${
+            ALSO_SCANNED.has(opts.triggerKey) ? today : opts.dedupeSuffix
+          }`,
           scheduled_for: today,
         } as never,
         { onConflict: "center_id,dedupe_key", ignoreDuplicates: true }
