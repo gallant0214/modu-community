@@ -9,9 +9,8 @@ import { supabase } from "./supabase";
  * 직원용 [[crm-auth]] (requireCrmContext) 과 별개 — 회원은 crm_center_members 가 아니라
  * crm_members.linked_firebase_uid 로 식별한다.
  *
- * 연동 방식(v1): 구글/애플 Firebase 로그인 → 전화번호로 crm_members 를 찾아
- * linked_firebase_uid 를 채워 연결(POST /api/member/link).
- * 추후: 초대 링크 딥링크로 자동 연동 예정.
+ * 연동: 구글/애플 Firebase 로그인 → crm_members.linked_firebase_uid 를 채워 연결
+ * (현재 경로는 /api/crm/member-app/*). 옛 moducm-schedule 앱용 /api/member/* 는 2026-11-06 제거.
  *
  * 한 회원이 여러 센터에 등록돼 있을 수 있으나 v1 은 센터 전환 UI 가 없으므로
  * 최신 등록 1건을 활성 컨텍스트로 선택한다.
