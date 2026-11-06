@@ -32,6 +32,14 @@ export interface Match {
   memberNo?: string;
   /** 보유 마일리지 (#마일리지#) */
   mileage?: number;
+  /** 남은 미수금 합계 (#미수금#) */
+  outstanding?: number;
+  /** 누적 출석일수 (#총출석#) */
+  totalAttend?: number;
+  /** 다음 예약 수업 (#다음수업#) 예: "11/08(토) 14:00" */
+  nextLesson?: string;
+  /** 센터 첫 등록일 (#가입일#) */
+  joinDate?: string;
 }
 
 export interface TriggerSetting {
@@ -125,6 +133,8 @@ interface MemberLite {
   last_attended_at: string | null;
   attendance_no: string | null;
   mileage: number | null;
+  first_registered_at: string | null;
+  registered_at: string | null;
 }
 interface DatedRow {
   member_id: number;
@@ -143,7 +153,9 @@ async function loadMembers(centerId: number): Promise<Map<number, MemberLite>> {
   const rows = await paginateAll<MemberLite>(async (f, t) => {
     const r = await supabase
       .from("crm_members")
-      .select("id, name, birth, last_attended_at, attendance_no, mileage")
+      .select(
+        "id, name, birth, last_attended_at, attendance_no, mileage, first_registered_at, registered_at"
+      )
       .eq("center_id", centerId)
       .eq("status", "active")
       .range(f, t);
@@ -573,12 +585,111 @@ async function matchAttendanceCoupon(
   return out;
 }
 
+/**
+ * 매칭 결과 공통 보강 — 미수금·누적 출석일수·다음 수업·가입일.
+ * 트리거마다 따로 긁지 않고 **대상자만** 한 번에 조회한다(대상은 보통 수십 명).
+ */
+async function enrichMatches(
+  centerId: number,
+  matches: Match[],
+  members: Map<number, MemberLite>
+): Promise<Match[]> {
+  if (matches.length === 0) return matches;
+  const ids = Array.from(new Set(matches.map((m) => m.member_id)));
+
+  const [mbDue, passDue, attends, nextRes] = await Promise.all([
+    supabase
+      .from("crm_memberships")
+      .select("member_id, outstanding_won")
+      .eq("center_id", centerId)
+      .in("member_id", ids)
+      .gt("outstanding_won", 0)
+      .neq("status", "deleted")
+      .neq("status", "refunded"),
+    supabase
+      .from("crm_passes")
+      .select("member_id, outstanding_won")
+      .eq("center_id", centerId)
+      .in("member_id", ids)
+      .gt("outstanding_won", 0)
+      .neq("status", "deleted")
+      .neq("status", "refunded"),
+    paginateAll<{ member_id: number; checked_in_at: string }>(async (f, t) => {
+      const r = await supabase
+        .from("crm_attendances")
+        .select("member_id, checked_in_at")
+        .eq("center_id", centerId)
+        .in("member_id", ids)
+        .range(f, t);
+      return { data: r.data as { member_id: number; checked_in_at: string }[] | null, error: r.error };
+    }),
+    supabase
+      .from("crm_reservations")
+      .select("member_id, starts_at")
+      .eq("center_id", centerId)
+      .in("member_id", ids)
+      .eq("status", "booked")
+      .gte("starts_at", new Date().toISOString())
+      .order("starts_at", { ascending: true }),
+  ]);
+
+  const due = new Map<number, number>();
+  for (const r of [...(mbDue.data ?? []), ...(passDue.data ?? [])] as {
+    member_id: number;
+    outstanding_won: number | null;
+  }[]) {
+    due.set(r.member_id, (due.get(r.member_id) ?? 0) + (r.outstanding_won ?? 0));
+  }
+
+  // 누적 출석일수 = 출석한 '날짜' 수 (하루 여러 번은 1일)
+  const attendDays = new Map<number, Set<string>>();
+  for (const a of attends) {
+    const ymd = ymdOf(new Date(new Date(a.checked_in_at).getTime() + 9 * 3600 * 1000));
+    const set = attendDays.get(a.member_id) ?? new Set<string>();
+    set.add(ymd);
+    attendDays.set(a.member_id, set);
+  }
+
+  const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+  const nextByMember = new Map<number, string>();
+  for (const r of (nextRes.data ?? []) as { member_id: number; starts_at: string }[]) {
+    if (nextByMember.has(r.member_id)) continue; // 가장 이른 1건
+    const k = new Date(new Date(r.starts_at).getTime() + 9 * 3600 * 1000);
+    const mm = String(k.getUTCMonth() + 1);
+    const dd = String(k.getUTCDate());
+    const hh = String(k.getUTCHours()).padStart(2, "0");
+    const mi = String(k.getUTCMinutes()).padStart(2, "0");
+    nextByMember.set(r.member_id, `${mm}/${dd}(${DOW[k.getUTCDay()]}) ${hh}:${mi}`);
+  }
+
+  for (const m of matches) {
+    const mem = members.get(m.member_id);
+    m.outstanding = due.get(m.member_id) ?? 0;
+    m.totalAttend = attendDays.get(m.member_id)?.size ?? 0;
+    m.nextLesson = nextByMember.get(m.member_id);
+    const join = mem?.first_registered_at ?? mem?.registered_at ?? null;
+    m.joinDate = join ? join.slice(0, 10) : undefined;
+  }
+  return matches;
+}
+
 /* ─── 트리거 매칭 ───────────────────────────────── */
 export async function computeMatches(centerId: number, setting: TriggerSetting): Promise<Match[]> {
   const key = setting.trigger_key;
   if (!SCAN_TRIGGERS.has(key)) return [];
-  const today = kstYmd();
   const members = await loadMembers(centerId);
+  const matches = await matchTrigger(centerId, setting, members);
+  // 미수금·누적 출석·다음 수업·가입일은 트리거와 무관한 공통 값 → 대상자만 한 번에 보강
+  return enrichMatches(centerId, matches, members);
+}
+
+async function matchTrigger(
+  centerId: number,
+  setting: TriggerSetting,
+  members: Map<number, MemberLite>
+): Promise<Match[]> {
+  const key = setting.trigger_key;
+  const today = kstYmd();
 
   // 생일 (기준일 전=생일 N일 전 발송 / 후=생일 N일 후 발송)
   if (key === "birthday") {
@@ -717,6 +828,12 @@ export function renderMessage(
     memberNo?: string;
     mileage?: number;
     centerPhone?: string;
+    centerAddress?: string;
+    centerHours?: string;
+    outstanding?: number;
+    totalAttend?: number;
+    nextLesson?: string;
+    joinDate?: string;
   }
 ): string {
   return (template || "")
@@ -734,7 +851,13 @@ export function renderMessage(
     .replaceAll("#담당강사#", vars.trainerName ?? "")
     .replaceAll("#회원번호#", vars.memberNo ?? "")
     .replaceAll("#마일리지#", vars.mileage != null ? vars.mileage.toLocaleString() : "")
-    .replaceAll("#센터전화#", vars.centerPhone ?? "");
+    .replaceAll("#센터전화#", vars.centerPhone ?? "")
+    .replaceAll("#센터주소#", vars.centerAddress ?? "")
+    .replaceAll("#운영시간#", vars.centerHours ?? "")
+    .replaceAll("#미수금#", vars.outstanding ? vars.outstanding.toLocaleString() : "0")
+    .replaceAll("#총출석#", vars.totalAttend != null ? String(vars.totalAttend) : "")
+    .replaceAll("#다음수업#", vars.nextLesson ?? "")
+    .replaceAll("#가입일#", vars.joinDate ?? "");
 }
 
 /** 두 YYYY-MM-DD 사이 일수(b-a). */
@@ -773,6 +896,50 @@ export function paymentText(product?: string, price?: number): string {
 export async function loadCenterPhone(centerId: number): Promise<string> {
   const { data } = await supabase.from("crm_centers").select("phone").eq("id", centerId).maybeSingle();
   return (data as { phone?: string | null } | null)?.phone ?? "";
+}
+
+/** #센터주소# */
+export async function loadCenterAddress(centerId: number): Promise<string> {
+  const { data } = await supabase.from("crm_centers").select("address").eq("id", centerId).maybeSingle();
+  return (data as { address?: string | null } | null)?.address ?? "";
+}
+
+const HOURS_DAYS = ["월", "화", "수", "목", "금", "토", "일"];
+
+/**
+ * #운영시간# — 센터설정의 운영 시간(JSON)을 한 줄 문구로.
+ * 저장 형식은 센터설정 화면과 동일: [{ days:[0..6], open:"HH:MM", close:"HH:MM", note:"" }]
+ * 설정 화면의 표기 규칙(요일 ·로 연결, 00분이면 'N시')을 그대로 따른다.
+ */
+export async function loadCenterHours(centerId: number): Promise<string> {
+  const { data } = await supabase
+    .from("crm_centers")
+    .select("operating_hours")
+    .eq("id", centerId)
+    .maybeSingle();
+  const raw = (data as { operating_hours?: string | null } | null)?.operating_hours;
+  if (!raw) return "";
+  let list: { days?: number[]; open?: string; close?: string; note?: string }[];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return "";
+    list = parsed;
+  } catch {
+    return raw; // 예전 자유 입력 값은 그대로
+  }
+  const hm = (t: string) => {
+    const [h, m] = (t || "0:00").split(":");
+    return m === "00" ? `${Number(h)}시` : `${Number(h)}시 ${Number(m)}분`;
+  };
+  return list
+    .map((e) => {
+      if (e.note) return e.note;
+      const days = [...(e.days ?? [])].sort((a, b) => a - b).map((d) => HOURS_DAYS[d]).join("·");
+      if (!days || !e.open || !e.close) return "";
+      return `${days} ${hm(e.open)}~${hm(e.close)}`;
+    })
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export async function loadCenterName(centerId: number): Promise<string> {

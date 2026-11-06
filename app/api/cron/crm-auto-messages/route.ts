@@ -13,6 +13,8 @@ import {
   basisText,
   loadCenterName,
   loadCenterPhone,
+  loadCenterAddress,
+  loadCenterHours,
   loadJoinLink,
   kstYmd,
   type TriggerSetting,
@@ -46,7 +48,10 @@ export async function GET(request: Request) {
     .select("center_id, trigger_key, send_basis, send_days, send_count, methods, message_body, coupon_id, config")
     .eq("enabled", true);
 
-  const centerCache = new Map<number, { name: string; appLink: string; phone: string }>();
+  const centerCache = new Map<
+    number,
+    { name: string; appLink: string; phone: string; address: string; hours: string }
+  >();
   let sentPush = 0;
   let sentSms = 0;
   let processed = 0;
@@ -109,6 +114,8 @@ export async function GET(request: Request) {
         name: await loadCenterName(s.center_id),
         appLink: await loadJoinLink(s.center_id),
         phone: await loadCenterPhone(s.center_id),
+        address: await loadCenterAddress(s.center_id),
+        hours: await loadCenterHours(s.center_id),
       };
       centerCache.set(s.center_id, meta);
     }
@@ -134,6 +141,12 @@ export async function GET(request: Request) {
         memberNo: m.memberNo,
         mileage: m.mileage,
         centerPhone: meta.phone,
+        centerAddress: meta.address,
+        centerHours: meta.hours,
+        outstanding: m.outstanding,
+        totalAttend: m.totalAttend,
+        nextLesson: m.nextLesson,
+        joinDate: m.joinDate,
         lastVisit: m.lastVisit,
       });
 

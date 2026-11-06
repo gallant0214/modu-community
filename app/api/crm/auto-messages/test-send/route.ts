@@ -5,7 +5,15 @@ import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
 import { sendCrmSms, loadPushableMembers, smsAllowedForCenter } from "@/app/lib/crm-sms";
 import { sendPushToMember } from "@/app/lib/member-notify";
-import { renderMessage, loadCenterName, loadCenterPhone, loadJoinLink, kstYmd } from "../_engine";
+import {
+  renderMessage,
+  loadCenterName,
+  loadCenterPhone,
+  loadCenterAddress,
+  loadCenterHours,
+  loadJoinLink,
+  kstYmd,
+} from "../_engine";
 import { sampleCouponMessage } from "@/app/lib/crm-auto-coupon";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +64,8 @@ export async function POST(request: Request) {
   const center = await loadCenterName(ctx.centerId);
   const appLink = await loadJoinLink(ctx.centerId);
   const centerPhone = await loadCenterPhone(ctx.centerId);
+  const centerAddress = await loadCenterAddress(ctx.centerId);
+  const centerHours = await loadCenterHours(ctx.centerId);
   // 트리거 실행 없이 보내는 미리보기라, 조건에서 정해지는 값은 예시로 채운다.
   const rendered = renderMessage(template, {
     center,
@@ -74,6 +84,12 @@ export async function POST(request: Request) {
     memberNo: (member as { attendance_no?: string | null }).attendance_no ?? undefined,
     mileage: (member as { mileage?: number | null }).mileage ?? undefined,
     centerPhone,
+    centerAddress,
+    centerHours,
+    outstanding: 0,
+    totalAttend: 24, // (예시) 누적 출석일수
+    nextLesson: "(예시) 11/8(토) 14:00",
+    joinDate: kstYmd(),
   });
   // 06 쿠폰 첨부 — 테스트는 실제 발급 없이 예시 코드(TEST-0000)로 보여준다
   const msg = await sampleCouponMessage(ctx.centerId, Number(body.coupon_id) || null, rendered);

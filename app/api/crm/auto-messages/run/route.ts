@@ -12,6 +12,8 @@ import {
   basisText,
   loadCenterName,
   loadCenterPhone,
+  loadCenterAddress,
+  loadCenterHours,
   loadJoinLink,
   kstYmd,
   type TriggerSetting,
@@ -53,6 +55,8 @@ export async function POST(request: Request) {
   const center = await loadCenterName(ctx.centerId);
   const appLink = await loadJoinLink(ctx.centerId);
   const centerPhone = await loadCenterPhone(ctx.centerId);
+  const centerAddress = await loadCenterAddress(ctx.centerId);
+  const centerHours = await loadCenterHours(ctx.centerId);
   const today = kstYmd();
   const byTrigger: Record<string, number> = {};
   let total = 0;
@@ -100,6 +104,12 @@ export async function POST(request: Request) {
         memberNo: m.memberNo,
         mileage: m.mileage,
         centerPhone,
+        centerAddress,
+        centerHours,
+        outstanding: m.outstanding,
+        totalAttend: m.totalAttend,
+        nextLesson: m.nextLesson,
+        joinDate: m.joinDate,
       }),
       methods: (Array.isArray(s.methods) ? s.methods : []) as never,
       status: "pending",
