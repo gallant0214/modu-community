@@ -37,7 +37,26 @@ export interface QueuedRow {
 
 export interface DispatchResult {
   sms: { sent: number; failed: number; message: string };
-  push: { sent: number; failed: number };
+  /** optedOut: 회원앱에서 '센터 메세지 알림'을 끈 회원이라 푸시를 보내지 않은 건수 */
+  push: { sent: number; failed: number; optedOut: number };
+}
+
+/**
+ * 회원앱에서 '센터 메세지 알림'을 끈 회원(notify_center_messages=false) 집합.
+ * 자동 안내 푸시는 이 회원에게 보내지 않는다 — 센터 공지·메세지 푸시와 같은 기준.
+ */
+async function loadPushOptOut(centerId: number, memberIds: number[]): Promise<Set<number>> {
+  const out = new Set<number>();
+  for (let i = 0; i < memberIds.length; i += 500) {
+    const { data } = await supabase
+      .from("crm_members")
+      .select("id")
+      .eq("center_id", centerId)
+      .in("id", memberIds.slice(i, i + 500))
+      .eq("notify_center_messages", false);
+    for (const m of (data ?? []) as { id: number }[]) out.add(Number(m.id));
+  }
+  return out;
 }
 
 /** KST 오늘(YYYY-MM-DD) */
@@ -59,7 +78,7 @@ export async function dispatchQueued(opts: {
 }): Promise<DispatchResult> {
   const result: DispatchResult = {
     sms: { sent: 0, failed: 0, message: "" },
-    push: { sent: 0, failed: 0 },
+    push: { sent: 0, failed: 0, optedOut: 0 },
   };
   const targets = opts.rows.filter((r) =>
     r.methods.some((m) => m === "sms" || m === "push" || m === "smart")
@@ -87,9 +106,10 @@ export async function dispatchQueued(opts: {
   for (const t of targets) t.message = stripCouponVars(t.message);
 
   const memberIds = targets.map((t) => t.member_id);
-  const [phones, pushable] = await Promise.all([
+  const [phones, pushable, pushOff] = await Promise.all([
     loadMemberPhones(opts.centerId, memberIds),
     loadPushableMembers(opts.centerId, memberIds),
+    loadPushOptOut(opts.centerId, memberIds),
   ]);
 
   // 행마다 실제로 나갈 채널을 확정 — smart 는 앱 설치 여부로 갈린다.
@@ -99,9 +119,14 @@ export async function dispatchQueued(opts: {
 
   for (const t of targets) {
     const smart = t.methods.includes("smart");
-    const canPush = pushable.has(t.member_id);
-    const usePush = t.methods.includes("push") || (smart && canPush);
-    const useSms = t.methods.includes("sms") || (smart && !canPush);
+    const hasApp = pushable.has(t.member_id);
+    // 스마트 전송의 채널 선택은 '앱 설치 여부'로만 가른다. 알림을 끈 회원이라고
+    // 문자로 돌리면 본인이 끈 안내가 유료 문자로 가므로, 푸시만 건너뛴다.
+    const usePush = (t.methods.includes("push") || (smart && hasApp)) && !pushOff.has(t.member_id);
+    const useSms = t.methods.includes("sms") || (smart && !hasApp);
+    if (!usePush && pushOff.has(t.member_id) && (t.methods.includes("push") || (smart && hasApp))) {
+      result.push.optedOut += 1;
+    }
 
     if (usePush) pushJobs.push({ id: t.id, memberId: t.member_id, message: t.message, triggerKey: t.trigger_key });
     if (useSms) {

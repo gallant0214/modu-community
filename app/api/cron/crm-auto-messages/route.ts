@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
-import { notifyMembersByIds } from "@/app/lib/member-notify";
-import { sendCrmSms } from "@/app/lib/crm-sms";
-import { smsAllowedForCenter } from "@/app/lib/crm-sms-availability";
-import { logAutoMessagePush } from "@/app/lib/crm-auto-message";
-import { attachAutoCoupon, stripCouponVars } from "@/app/lib/crm-auto-coupon";
+import { smsAllowedForCenter } from "@/app/lib/crm-sms";
+import { dispatchQueued, type QueuedRow } from "@/app/lib/crm-auto-message";
 import {
   SCAN_TRIGGERS,
   computeMatches,
@@ -26,9 +23,15 @@ export const dynamic = "force-dynamic";
  * GET /api/cron/crm-auto-messages — 매시간 실행(vercel.json).
  *
  * 센터가 [자동 메세지]에서 켠(enabled) 설정을, 지정한 발송 시각(config.send_hour, KST)에
- * 조건에 맞는 회원에게 실제 발송한다. 전송 방법(methods)에 따라 앱 푸시 / 문자(솔라피)로 보냄.
+ * 조건에 맞는 회원에게 실제 발송한다.
  *  - 일정/횟수 기준: 지정 시각(send_hour)에만 발송
  *  - 즉시(신규·재등록): 당일 매시간 실행 중 첫 회차에 발송(중복은 dedupe 로 방지)
+ *
+ * 🚨 실제 발송은 반드시 공용 헬퍼 dispatchQueued() 를 쓴다.
+ *   예전엔 이 파일이 발송 로직을 따로 갖고 있어 methods 를 push/sms 로만 봤고,
+ *   그 결과 **'스마트 전송'으로 설정한 알림이 자동 발송에서 통째로 빠졌다**
+ *   (회원권 만료 전 안내가 2026-09 ~ 11 내내 한 건도 안 나갔다).
+ *   쿠폰 첨부·쿠폰 변수 정리·푸시 전송 로그도 모두 그 헬퍼가 함께 처리한다.
  *
  * 중복 방지: crm_auto_message_queue 의 (center_id, dedupe_key) 유니크.
  *   같은 트리거·회원·날짜는 하루 1회만 발송.
@@ -85,9 +88,9 @@ export async function GET(request: Request) {
     if (!immediate && sendHour !== hour) continue;
 
     const methods = Array.isArray(s.methods) ? (s.methods as string[]) : [];
-    const wantPush = methods.includes("push");
-    const wantSms = methods.includes("sms");
-    if (!wantPush && !wantSms) continue; // 발송 채널 미선택 → 건너뜀
+    // 실제로 보낼 수 있는 채널이 하나도 없으면 적재도 하지 않는다
+    // (알림톡 전용은 연동 전이라 대기열에 남기지 않음 — 예전 동작 유지)
+    if (!methods.some((m) => m === "sms" || m === "push" || m === "smart")) continue;
 
     const setting: TriggerSetting = {
       trigger_key: s.trigger_key,
@@ -120,8 +123,8 @@ export async function GET(request: Request) {
       centerCache.set(s.center_id, meta);
     }
 
-    const pushedMemberIds: number[] = [];
-    let lastPushMessage = "";
+    // ── 1) 대기열 적재 — (center_id, dedupe_key) 유니크 위반이면 이미 처리됨 → 건너뜀
+    const queued: QueuedRow[] = [];
     for (const m of matches) {
       if (processed >= MAX_SENDS) break;
       // 중복 방지 키 — 트리거가 정한 키(예: 이용권 1건당 1회)가 있으면 그걸 쓴다
@@ -150,8 +153,7 @@ export async function GET(request: Request) {
         lastVisit: m.lastVisit,
       });
 
-      // 대기열에 pending 적재 시도 — (center_id, dedupe_key) 유니크 위반이면 이미 처리됨 → 건너뜀
-      const { data: queued, error: insErr } = await supabase
+      const { data: row, error: insErr } = await supabase
         .from("crm_auto_message_queue")
         .insert({
           center_id: s.center_id,
@@ -162,87 +164,52 @@ export async function GET(request: Request) {
           status: "pending",
           dedupe_key: dedupeKey,
           scheduled_for: today,
+          // 규칙별로 쿠폰이 다른 트리거(출석일수 쿠폰)는 이 건에 붙일 쿠폰을 행에 적어 둔다
           coupon_id: m.couponId ?? null,
         } as never)
         .select("id")
         .single();
-      if (insErr) {
+      if (insErr || !row) {
         skippedDup += 1;
         continue;
       }
       processed += 1;
-
-      // 06 쿠폰 첨부 — 설정돼 있으면 회원마다 쿠폰 1장 발급 후 메세지에 쿠폰 정보 삽입
-      const withCoupon = await attachAutoCoupon({
-        centerId: s.center_id,
-        queueId: (queued as { id: number }).id,
-        memberId: m.member_id,
-        // 규칙별로 쿠폰이 다른 트리거(출석일수 쿠폰)는 매칭이 정한 쿠폰을 우선한다
-        couponId: m.couponId ?? s.coupon_id,
+      queued.push({
+        id: (row as { id: number }).id,
+        member_id: m.member_id,
         message: rendered,
+        methods,
+        trigger_key: s.trigger_key,
+        coupon_id: m.couponId ?? null,
       });
-      // 쿠폰이 안 붙었으면 본문에 남은 쿠폰 변수를 지운다(글자 그대로 발송 방지)
-      const message = stripCouponVars(withCoupon);
+    }
+    if (queued.length === 0) continue;
 
-      let ok = false;
-      // 앱 푸시 (연동 회원만 수신 — 미연동은 기기토큰 없어 자동 무시)
-      if (wantPush) {
-        try {
-          await notifyMembersByIds(s.center_id, [m.member_id], "message", meta.name || "알림", message);
-          sentPush += 1;
-          ok = true;
-          pushedMemberIds.push(m.member_id);
-          lastPushMessage = message;
-        } catch (e) {
-          errors.push(`push#${m.member_id}: ${e instanceof Error ? e.message : "error"}`);
-        }
-      }
-      // 문자 — 🚨 반드시 sendCrmSms 를 쓴다. 예전엔 solapiSend 를 직접 호출해
-      //   '메세지 전송 로그'(crm_sms_logs)에 자동 발송 이력이 전혀 남지 않았다.
-      //   허용 센터 검사도 이 함수가 함께 처리한다.
-      if (wantSms && smsAllowedForCenter(s.center_id)) {
-        try {
-          const { data: mem } = await supabase
-            .from("crm_members")
-            .select("phone")
-            .eq("id", m.member_id)
-            .maybeSingle();
-          const phone = (mem as { phone?: string | null } | null)?.phone;
-          if (phone) {
-            const r = await sendCrmSms({
-              centerId: s.center_id,
-              uid: "cron",
-              receivers: [phone],
-              msg: message,
-              title: meta.name,
-              tag: "자동메세지",
-            });
-            if (r.sent > 0) {
-              sentSms += 1;
-              ok = true;
-            } else if (r.message) {
-              errors.push(`sms#${m.member_id}: ${r.message}`);
-            }
-          }
-        } catch (e) {
-          errors.push(`sms#${m.member_id}: ${e instanceof Error ? e.message : "error"}`);
-        }
-      }
-
-      await supabase
-        .from("crm_auto_message_queue")
-        .update({ status: ok ? "sent" : "failed", sent_at: ok ? new Date().toISOString() : null } as never)
-        .eq("center_id", s.center_id)
-        .eq("dedupe_key", dedupeKey);
+    // ── 2) 실제 발송 — 문자/푸시/스마트 분기, 쿠폰 첨부, 전송 로그까지 공용 헬퍼가 처리
+    try {
+      const r = await dispatchQueued({
+        centerId: s.center_id,
+        uid: "cron",
+        centerName: meta.name,
+        rows: queued,
+        smsAllowed: smsAllowedForCenter(s.center_id),
+      });
+      sentPush += r.push.sent;
+      sentSms += r.sms.sent;
+      if (r.sms.message) errors.push(`sms ${s.trigger_key}@${s.center_id}: ${r.sms.message}`);
+    } catch (e) {
+      errors.push(`send ${s.trigger_key}@${s.center_id}: ${e instanceof Error ? e.message : "error"}`);
     }
 
-    // 앱 푸시는 문자와 달리 남는 기록이 없어 '메세지 전송 로그'에서 빠졌다 → 트리거별로 한 줄 남긴다
-    await logAutoMessagePush({
-      centerId: s.center_id,
-      triggerKey: s.trigger_key,
-      message: lastPushMessage,
-      memberIds: pushedMemberIds,
-    });
+    // ── 3) 못 보낸 건은 failed 로 닫는다(다음 시간대에 같은 안내가 되풀이되지 않게)
+    const ids = queued.map((q) => q.id);
+    for (let i = 0; i < ids.length; i += 500) {
+      await supabase
+        .from("crm_auto_message_queue")
+        .update({ status: "failed" } as never)
+        .in("id", ids.slice(i, i + 500))
+        .eq("status", "pending");
+    }
   }
 
   return NextResponse.json({

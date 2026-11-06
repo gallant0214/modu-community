@@ -142,6 +142,8 @@ interface DatedRow {
   label: string;
   created_at: string;
   price?: number;
+  /** 행 상태 — 환불·취소·삭제 건은 만료 알림 대상에서 제외한다 */
+  status?: string;
   /** 상품 시작일 (#시작일#) */
   start?: string;
   /** 수강권 전용 부가 정보 */
@@ -172,7 +174,7 @@ async function loadDated(
   return paginateAll<DatedRow>(async (f, t) => {
     const r = await supabase
       .from(table)
-      .select(`member_id, expires_at, created_at, price_won, start_date, ${labelCol}`)
+      .select(`member_id, expires_at, created_at, price_won, start_date, status, ${labelCol}`)
       .eq("center_id", centerId)
       .range(f, t);
     const data = (r.data as Record<string, unknown>[] | null)?.map((x) => ({
@@ -182,16 +184,26 @@ async function loadDated(
       label: String(x[labelCol] ?? ""),
       price: x.price_won != null ? Number(x.price_won) : undefined,
       start: x.start_date ? String(x.start_date) : undefined,
+      status: x.status != null ? String(x.status) : undefined,
     })) as DatedRow[] | null;
     return { data, error: r.error };
   });
 }
 
-/** 회원별 가장 늦은 만료 행 */
+/** 만료·소진 판정에서 제외할 상태(취소·환불·삭제) */
+const DEAD_PASS_STATUS = new Set(["cancelled", "rejected", "refunded", "deleted"]);
+
+/**
+ * 회원별 가장 늦은 만료 행.
+ * 🚨 환불·취소·삭제된 행은 건너뛴다. 예전엔 이걸 안 걸러서, 환불된 무기한(9999-12-31)
+ *    이용권 한 건이 그 회원의 '가장 늦은 만료'로 잡혀 **실제 쓰는 이용권의 만료 알림이
+ *    영구히 안 나가는** 회원이 생겼다(범어점 활성 회원 8명).
+ */
 function latestByMember(rows: DatedRow[]): Map<number, DatedRow> {
   const m = new Map<number, DatedRow>();
   for (const r of rows) {
     if (!r.expires_at) continue;
+    if (r.status && DEAD_PASS_STATUS.has(r.status)) continue;
     const cur = m.get(r.member_id);
     if (!cur || r.expires_at > cur.expires_at) m.set(r.member_id, r);
   }
@@ -240,7 +252,7 @@ async function loadRentals(centerId: number): Promise<DatedRow[]> {
   return paginateAll<DatedRow>(async (f, t) => {
     const r = await supabase
       .from("crm_rentals")
-      .select("member_id, expires_at, created_at, price_won, item_name")
+      .select("member_id, expires_at, created_at, price_won, item_name, status")
       .eq("center_id", centerId)
       .range(f, t);
     const data = (r.data as Record<string, unknown>[] | null)?.map((x) => ({
@@ -249,6 +261,7 @@ async function loadRentals(centerId: number): Promise<DatedRow[]> {
       created_at: String(x.created_at ?? ""),
       label: String(x.item_name ?? ""),
       price: x.price_won != null ? Number(x.price_won) : undefined,
+      status: x.status != null ? String(x.status) : undefined,
     })) as DatedRow[] | null;
     return { data, error: r.error };
   });
@@ -340,9 +353,6 @@ function matchExpiry(
   }
   return out;
 }
-
-/** 소진 판정에서 제외할 수강권 상태(취소·환불 등) */
-const DEAD_PASS_STATUS = new Set(["cancelled", "rejected", "refunded"]);
 
 /**
  * 지정 수강권들 중 consumed(출석·노쇼로 차감) 예약이 있는 pass_id 집합.
@@ -667,6 +677,8 @@ async function enrichMatches(
     m.outstanding = due.get(m.member_id) ?? 0;
     m.totalAttend = attendDays.get(m.member_id)?.size ?? 0;
     m.nextLesson = nextByMember.get(m.member_id);
+    // #마지막방문일# — 장기 미출석 외의 트리거에서도 값이 들어가게 한다(예전엔 빈칸)
+    if (!m.lastVisit && mem?.last_attended_at) m.lastVisit = mem.last_attended_at.slice(0, 10);
     const join = mem?.first_registered_at ?? mem?.registered_at ?? null;
     m.joinDate = join ? join.slice(0, 10) : undefined;
   }
@@ -936,6 +948,9 @@ export async function loadCenterHours(centerId: number): Promise<string> {
       if (e.note) return e.note;
       const days = [...(e.days ?? [])].sort((a, b) => a - b).map((d) => HOURS_DAYS[d]).join("·");
       if (!days || !e.open || !e.close) return "";
+      // 여는 시각과 닫는 시각이 같으면(예: 00:00~00:00) 설정이 안 된 것 —
+      // 문구에 '0시~0시' 가 그대로 나가지 않도록 뺀다.
+      if (e.open === e.close) return "";
       return `${days} ${hm(e.open)}~${hm(e.close)}`;
     })
     .filter(Boolean)

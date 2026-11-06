@@ -14,7 +14,7 @@ import {
   loadJoinLink,
   kstYmd,
 } from "../_engine";
-import { sampleCouponMessage } from "@/app/lib/crm-auto-coupon";
+import { sampleCouponMessage, stripCouponVars } from "@/app/lib/crm-auto-coupon";
 
 export const dynamic = "force-dynamic";
 
@@ -91,8 +91,12 @@ export async function POST(request: Request) {
     nextLesson: "(예시) 11/8(토) 14:00",
     joinDate: kstYmd(),
   });
-  // 06 쿠폰 첨부 — 테스트는 실제 발급 없이 예시 코드(TEST-0000)로 보여준다
-  const msg = await sampleCouponMessage(ctx.centerId, Number(body.coupon_id) || null, rendered);
+  // 06 쿠폰 첨부 — 테스트는 실제 발급 없이 예시 코드(TEST-0000)로 보여준다.
+  // 🚨 쿠폰이 없으면(06 미설정 등) 남은 쿠폰 변수를 지운다 — 실제 자동 발송과 같은 처리.
+  //    안 지우면 테스트 문자에 '#쿠폰혜택#' 같은 글자가 그대로 찍힌다.
+  const msg = stripCouponVars(
+    await sampleCouponMessage(ctx.centerId, Number(body.coupon_id) || null, rendered)
+  );
 
   // 스마트 전송은 실제 자동 발송과 동일하게 앱 설치 여부로 채널을 가른다.
   const pushable = (await loadPushableMembers(ctx.centerId, [memberId])).has(memberId);

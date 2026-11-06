@@ -5,6 +5,7 @@ import { SMS_NOT_READY_MESSAGE } from "@/app/lib/crm-sms-availability";
 import { useAuth } from "@/app/components/auth-provider";
 import {
   AUTO_MESSAGE_CATEGORIES,
+  coerceSendBasis,
   TRIGGER_BY_KEY,
   SEND_BASIS_LABEL,
   MESSAGE_VARIABLES,
@@ -157,6 +158,7 @@ export function AutoMessagesTab({ smsAllowed = true }: { smsAllowed?: boolean })
       const parts: string[] = [];
       if (smsSent > 0) parts.push(`문자 ${smsSent}건`);
       if (pushSent > 0) parts.push(`앱 푸시 ${pushSent}건`);
+      if (data?.push?.optedOut > 0) parts.push(`알림 끔 ${data.push.optedOut}건`);
       if (data?.sms?.failed > 0 || data?.push?.failed > 0)
         parts.push(`실패 ${(data?.sms?.failed ?? 0) + (data?.push?.failed ?? 0)}건`);
       setRunMsg(
@@ -310,6 +312,13 @@ export function AutoMessagesTab({ smsAllowed = true }: { smsAllowed?: boolean })
                       {t.key === ATTENDANCE_RULE_TRIGGER &&
                         ` · 쿠폰 규칙 ${(row?.config?.attendance_rules ?? []).length}개`}
                     </div>
+                    {/* 켜져 있어도 전송 방법이 없으면 한 건도 안 나간다 — 목록에서 바로 보이게 */}
+                    {on &&
+                      (row?.methods ?? []).filter((m) => m !== "alimtalk").length === 0 && (
+                        <div className="text-[11px] font-semibold text-[#C0392B] dark:text-red-300 mt-0.5">
+                          🚨 전송 방법 미선택 · 발송 안 됨
+                        </div>
+                      )}
                   </div>
                   <button
                     type="button"
@@ -402,7 +411,11 @@ function AutoMessageEditor({
   const name = base.name?.trim() || trigger.label; // 고정(수정 불가)
 
   const [enabled, setEnabled] = useState(base.enabled);
-  const [sendBasis, setSendBasis] = useState<SendBasis>((base.send_basis as SendBasis) || "immediate");
+  // 🚨 저장된 기준이 이 트리거가 허용하지 않는 값일 수 있다(목록 스위치로 만들어진 행은
+  //    DB 기본값 'immediate'). 그대로 두면 라디오에 아무 것도 안 잡히고 잘못된 기준이 다시 저장된다.
+  const [sendBasis, setSendBasis] = useState<SendBasis>(
+    coerceSendBasis(triggerKey, base.send_basis)
+  );
   const [sendDays, setSendDays] = useState<number>(
     base.send_days ?? (triggerKey === ATTENDANCE_RULE_TRIGGER ? 7 : 3)
   );
@@ -547,6 +560,14 @@ function AutoMessageEditor({
 
   const bytes = smsByteLength(body);
   const kind = smsKind(body);
+  // 본문에 쓴 #...# 중 지원하지 않는 것(오타 등) — 그대로 발송되므로 경고한다
+  const unknownVars = Array.from(
+    new Set(
+      (body.match(/#[^#\s]{1,12}#/g) ?? []).filter(
+        (tok) => !MESSAGE_VARIABLES.some((v) => v.token === tok)
+      )
+    )
+  );
 
   const submit = async () => {
     setSaving(true);
@@ -886,6 +907,13 @@ function AutoMessageEditor({
                   알림톡은 아직 발송 연동 전이라 선택값만 저장돼요.
                 </p>
               )}
+              {/* 전송 방법을 안 고르면 알림을 켜도 아무 것도 나가지 않는다 — 조용히 실패하지 않게 경고 */}
+              {methods.filter((m) => m !== "alimtalk").length === 0 && (
+                <p className="mt-2 text-[11.5px] leading-relaxed text-[#C0392B] dark:text-red-300">
+                  🚨 전송 방법을 고르지 않으면 알림을 켜도 <strong>발송되지 않습니다.</strong> 문자 · 앱 푸시 ·
+                  스마트 전송 중 하나 이상을 선택해 주세요.
+                </p>
+              )}
             </NumberedField>
 
             {/* 05 파일 첨부 */}
@@ -1147,6 +1175,13 @@ function AutoMessageEditor({
                 placeholder="회원에게 보낼 메세지를 입력하세요. 위 변수를 눌러 자동 삽입할 수 있어요."
                 className="w-full px-3 py-2.5 rounded-lg border border-[#E8E0D0] dark:border-zinc-700 bg-white dark:bg-zinc-950 text-[13px] leading-relaxed text-[#2A251D] dark:text-zinc-100 resize-y"
               />
+              {/* 🚨 오타 변수 경고 — #회원님# 처럼 없는 변수는 치환되지 않고 글자 그대로 발송된다 */}
+              {unknownVars.length > 0 && (
+                <p className="mt-2 text-[11.5px] leading-relaxed text-[#C0392B] dark:text-red-300">
+                  🚨 {unknownVars.join(", ")} 는 없는 변수예요. 치환되지 않고{" "}
+                  <strong>글자 그대로 발송</strong>되니 위 버튼의 변수로 바꿔 주세요.
+                </p>
+              )}
               <div className="mt-1.5 flex items-center justify-end text-[11.5px] text-[#8C8270]">
                 <span>
                   <span className="font-semibold text-[#3A342A] dark:text-zinc-200">{bytes}</span> / 2000 Byte
@@ -1510,7 +1545,11 @@ function MessagePreview({
       <div className="mt-2.5 space-y-1 text-[11px] text-[#6B5D47] dark:text-zinc-400">
         <div>
           전송 방법:{" "}
-          {methods.length ? methods.map((m) => METHOD_LABEL[m]).join(", ") : <span className="text-[#A89B80]">미선택</span>}
+          {methods.length ? (
+            methods.map((m) => METHOD_LABEL[m]).join(", ")
+          ) : (
+            <span className="font-semibold text-[#C0392B] dark:text-red-300">미선택 · 발송 안 됨</span>
+          )}
         </div>
         <div>
           수신 대상: <span className="text-[#4d5a29] dark:text-[#A8B87A] font-medium">{recipient}</span>

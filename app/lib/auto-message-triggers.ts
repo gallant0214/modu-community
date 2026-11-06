@@ -147,6 +147,21 @@ export function attendanceRuleText(
   return `${productName} · 출석 ${rule.max_days}일 미만 → ${couponName}`;
 }
 
+/**
+ * 일정 기준(schedule) 기본 일수 — 설정 화면과 저장 API 가 같은 값을 쓴다.
+ * 🚨 일정 기준인데 일수가 비어 있으면 엔진이 0일(=기준일 당일)로 보고 발송한다.
+ *    목록에서 스위치만 켜서 만들어진 설정이 '당일 발송'으로 새는 걸 막기 위한 기본값.
+ */
+export function defaultSendDays(triggerKey: string): number {
+  return triggerKey === ATTENDANCE_RULE_TRIGGER ? 7 : 3;
+}
+
+/** 트리거가 허용하는 전송 기준으로 맞춘다(허용 목록에 없으면 첫 항목). */
+export function coerceSendBasis(triggerKey: string, basis: string | null | undefined): SendBasis {
+  const bases = TRIGGER_BY_KEY[triggerKey]?.bases ?? ["immediate"];
+  return bases.includes(basis as SendBasis) ? (basis as SendBasis) : bases[0];
+}
+
 export const SEND_BASIS_LABEL: Record<SendBasis, string> = {
   immediate: "즉시",
   schedule: "일정 기준",

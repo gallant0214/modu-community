@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
 import { ctxHasPermission } from "@/app/lib/crm-permissions";
-import { AUTO_MESSAGE_TRIGGER_KEYS } from "@/app/lib/auto-message-triggers";
+import {
+  AUTO_MESSAGE_TRIGGER_KEYS,
+  coerceSendBasis,
+  defaultSendDays,
+} from "@/app/lib/auto-message-triggers";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +66,10 @@ export async function PATCH(request: Request) {
     if (!["immediate", "schedule", "count"].includes(b)) {
       return NextResponse.json({ error: "잘못된 전송 기준" }, { status: 400 });
     }
-    patch.send_basis = b;
+    // 🚨 트리거가 허용하지 않는 기준은 저장하지 않는다.
+    //   예전엔 '출석일수 쿠폰'(일정 기준 전용)이 immediate 로 저장돼
+    //   '만료 7일 전'이 아니라 '만료 당일'에 발송되는 상태로 굳어 있었다.
+    patch.send_basis = coerceSendBasis(triggerKey, b);
   }
   if (body.send_days !== undefined) {
     patch.send_days = body.send_days === null ? null : Math.max(0, Math.floor(Number(body.send_days) || 0));
@@ -82,6 +89,25 @@ export async function PATCH(request: Request) {
   if (body.config !== undefined && typeof body.config === "object") patch.config = body.config;
 
   patch.updated_at = new Date().toISOString();
+
+  // 목록에서 스위치만 켜는 저장(enabled 만 전달)도 들어온다 → 기준·일수가 비면 여기서 메꾼다.
+  // DB 기본값은 'immediate' 라서, 일정 기준 전용 트리거가 '당일 발송'으로 만들어지는 걸 막는다.
+  const { data: before } = await supabase
+    .from("crm_auto_message_settings")
+    .select("send_basis, send_days")
+    .eq("center_id", ctx.centerId)
+    .eq("trigger_key", triggerKey)
+    .maybeSingle();
+  const prev = before as { send_basis?: string | null; send_days?: number | null } | null;
+  if (patch.send_basis === undefined) {
+    const fixed = coerceSendBasis(triggerKey, prev?.send_basis);
+    if (fixed !== prev?.send_basis) patch.send_basis = fixed;
+  }
+  const finalBasis = (patch.send_basis as string | undefined) ?? prev?.send_basis ?? "immediate";
+  if (finalBasis === "schedule") {
+    const days = (patch.send_days as number | null | undefined) ?? prev?.send_days ?? null;
+    if (days === null) patch.send_days = defaultSendDays(triggerKey);
+  }
 
   const { data, error } = await supabase
     .from("crm_auto_message_settings")
