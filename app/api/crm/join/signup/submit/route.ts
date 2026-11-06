@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getClientIp, checkRateLimit } from "@/app/lib/security";
 import { supabase } from "@/app/lib/supabase";
 import {
   onlineSalesEnabled,
@@ -79,6 +80,11 @@ async function memberHasProducts(memberId: number, centerId: number): Promise<bo
  * 금액은 클라이언트 값을 믿지 않고 signup_enabled 상품 가격을 서버에서 합산한다.
  */
 export async function POST(request: Request) {
+  // 🚨 공개(무인증) 경로이고 결제 전에 회원·계약서·주문을 먼저 만든다 → 반복 호출로
+  //   센터 회원 목록에 가짜 회원이 쌓이지 않게 횟수를 제한한다.
+  const rl = checkRateLimit(getClientIp(request), "write");
+  if (rl) return rl;
+
   /* 결제창을 띄울 수 있는 상태인지 — 쓰는 PG 의 키만 본다.
      포트원 키가 비어도 토스로 팔고 있으면 막을 이유가 없다. */
   const pgReady = memberPgProvider() === "toss" ? tossKeysMatch() : portoneConfigured();

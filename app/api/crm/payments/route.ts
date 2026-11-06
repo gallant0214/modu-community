@@ -502,6 +502,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const ctx = await requireCrmContext(request);
   if (isCrmError(ctx)) return ctx;
+  // 🚨 매출(결제) 기록을 만드는 경로 — 예전엔 권한 검사가 없어 강사도 직접 호출하면
+  //   결제 행을 넣을 수 있었다(매출·정산 집계에 그대로 반영). 화면에서 쓰는 곳은 현재 없다.
+  if (!(await ctxHasPermission(ctx, "sales.edit"))) {
+    return NextResponse.json({ error: "매출(결제) 내역 수정 권한이 없습니다" }, { status: 403 });
+  }
 
   let body: {
     pass_id?: number;
