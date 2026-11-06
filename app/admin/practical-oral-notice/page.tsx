@@ -3,6 +3,19 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import RichEditor from "@/app/components/rich-editor";
+import { auth } from "@/app/lib/firebase-client";
+
+/**
+ * 관리자 API 호출 — 구글 로그인 토큰 + 관리자 비밀번호(헤더). 서버가 관리자 계정 로그인과 비밀번호를 둘 다 확인한다.
+ * (비밀번호를 주소 ?password= 에 싣지 않는다 — 접속 기록에 남는다)
+ */
+async function adminFetch(url: string, password: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const token = await auth.currentUser?.getIdToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (password) headers.set("x-admin-password", encodeURIComponent(password));
+  return fetch(url, { ...init, headers });
+}
 
 type Audience = "main" | "disabled";
 
@@ -46,7 +59,7 @@ export default function PracticalOralNoticeAdminPage() {
   const loadNotices = useCallback(async (pw: string, aud: Audience) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/practical-oral-notice?password=${encodeURIComponent(pw)}&audience=${aud}`);
+      const res = await adminFetch(`/api/admin/practical-oral-notice?audience=${aud}`, pw);
       const d = await res.json();
       if (d.error) {
         setError(d.error);
@@ -69,7 +82,7 @@ export default function PracticalOralNoticeAdminPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/admin/practical-oral-notice?password=${encodeURIComponent(password)}&audience=main`);
+      const res = await adminFetch(`/api/admin/practical-oral-notice?audience=main`, password);
       const d = await res.json();
       if (d.error) {
         setError(d.error);
@@ -121,7 +134,7 @@ export default function PracticalOralNoticeAdminPage() {
         ? `/api/admin/practical-oral-notice/${editing.id}`
         : `/api/admin/practical-oral-notice`;
       const method = editing ? "PATCH" : "POST";
-      const res = await fetch(url, {
+      const res = await adminFetch(url, password, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password, ...form }),
@@ -144,7 +157,7 @@ export default function PracticalOralNoticeAdminPage() {
     if (!confirm("정말 삭제하시겠습니까?")) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/practical-oral-notice/${id}`, {
+      const res = await adminFetch(`/api/admin/practical-oral-notice/${id}`, password, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
@@ -164,7 +177,7 @@ export default function PracticalOralNoticeAdminPage() {
     if (!confirm("이 공지를 푸시 알림으로 전체 이용자에게 발송하시겠습니까?")) return;
     setPushing(id);
     try {
-      const res = await fetch(`/api/admin/practical-oral-notice/${id}/push`, {
+      const res = await adminFetch(`/api/admin/practical-oral-notice/${id}/push`, password, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
@@ -183,7 +196,7 @@ export default function PracticalOralNoticeAdminPage() {
   async function toggleActive(n: Notice) {
     setLoading(true);
     try {
-      await fetch(`/api/admin/practical-oral-notice/${n.id}`, {
+      await adminFetch(`/api/admin/practical-oral-notice/${n.id}`, password, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password, is_active: !n.is_active }),

@@ -1,4 +1,5 @@
 import { supabase } from "@/app/lib/supabase";
+import { verifyAdminPassword } from "@/app/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { checkRateLimit, getClientIp } from "@/app/lib/security";
 
@@ -9,7 +10,7 @@ export async function POST(
   { params }: { params: Promise<{ postId: string }> }
 ) {
   const ip = getClientIp(request);
-  const rateLimitResponse = checkRateLimit(ip, "auth");
+  const rateLimitResponse = await checkRateLimit(ip, "auth");
   if (rateLimitResponse) return rateLimitResponse;
 
   const { postId } = await params;
@@ -28,7 +29,8 @@ export async function POST(
     return NextResponse.json({ error: "게시글을 찾을 수 없습니다" }, { status: 404 });
   }
 
-  const isAdmin = password === process.env.ADMIN_PASSWORD;
+  // 글 비밀번호가 맞으면 끝. 틀렸을 때만 관리자 만능 비밀번호 비교(실패 잠금 적용)
+  const isAdmin = data.password !== password && !!password && (await verifyAdminPassword(password));
   if (!isAdmin && data.password !== password) {
     return NextResponse.json({ error: "비밀번호가 일치하지 않습니다" }, { status: 403 });
   }

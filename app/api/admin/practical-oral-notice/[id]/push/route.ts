@@ -1,7 +1,7 @@
 import { supabase } from "@/app/lib/supabase";
 import { sendPushToUser } from "@/app/lib/notifications";
 import { NextResponse } from "next/server";
-import { verifyAdminPassword } from "@/app/lib/admin-auth";
+import { verifyAdmin } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +15,8 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const { password, customMessage } = body;
 
-  if (!(await verifyAdminPassword(password || ""))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(request, password || "");
+  if (adminErr) return adminErr;
 
   const { data: notice, error: noticeErr } = await supabase
     .from("practical_oral_notices")

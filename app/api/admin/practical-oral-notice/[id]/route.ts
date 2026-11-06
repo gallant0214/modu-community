@@ -1,7 +1,7 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { verifyAdminPassword } from "@/app/lib/admin-auth";
+import { verifyAdmin } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +14,8 @@ export async function PATCH(
   const body = await request.json().catch(() => ({}));
   const { password, ...payload } = body;
 
-  if (!(await verifyAdminPassword(password || ""))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(request, password || "");
+  if (adminErr) return adminErr;
 
   const update: {
     icon?: string | null;
@@ -60,9 +59,8 @@ export async function DELETE(
   const body = await request.json().catch(() => ({}));
   const { password } = body;
 
-  if (!(await verifyAdminPassword(password || ""))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(request, password || "");
+  if (adminErr) return adminErr;
 
   const { error } = await supabase
     .from("practical_oral_notices")

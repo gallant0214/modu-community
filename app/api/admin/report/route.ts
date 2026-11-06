@@ -1,6 +1,6 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
-import { verifyAdminPassword } from "@/app/lib/admin-auth";
+import { verifyAdmin } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -236,9 +236,8 @@ async function topCategoriesInRange(cur: Range) {
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const { password, period = "week", offset = 0, customFrom, customTo } = body;
-  if (!(await verifyAdminPassword(password))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(request, password);
+  if (adminErr) return adminErr;
   const validPeriods: Period[] = ["day", "week", "month", "custom"];
   const p: Period = validPeriods.includes(period) ? period : "week";
   const off = Math.max(0, Number(offset) || 0);

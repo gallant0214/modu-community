@@ -92,7 +92,7 @@ export async function PUT(
   }
 
   const ip = getClientIp(request);
-  const rateLimitResponse = checkRateLimit(ip, "write");
+  const rateLimitResponse = await checkRateLimit(ip, "write");
   if (rateLimitResponse) return rateLimitResponse;
 
   const { jobId } = await params;

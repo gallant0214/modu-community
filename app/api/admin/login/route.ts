@@ -7,12 +7,14 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
-  const rateLimitResponse = checkRateLimit(ip, "auth");
+  const rateLimitResponse = await checkRateLimit(ip, "auth");
   if (rateLimitResponse) return rateLimitResponse;
 
   const body = await request.json();
   const { password } = body;
 
+  // 신고·문의 목록(이메일 포함)을 돌려주므로 관리자 구글 로그인 + 비밀번호 둘 다 필요.
+  // (커뮤니티 앱 관리자 화면은 로그인 토큰을 안 보내서 예전부터 401 — 2026-11-06 확인)
   const authError = await verifyAdmin(request, password);
   if (authError) return authError;
 

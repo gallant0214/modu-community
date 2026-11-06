@@ -1,6 +1,6 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
-import { verifyAdminPassword } from "@/app/lib/admin-auth";
+import { verifyAdmin } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +25,8 @@ async function paginateAll<T = any>(buildQuery: () => any, pageSize = 1000, maxP
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const { password, from, to, visitFrom, visitTo, reportFrom, reportTo } = body;
-  if (!(await verifyAdminPassword(password))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(request, password);
+  if (adminErr) return adminErr;
 
   const fromDate = from ? new Date(from).toISOString() : null;
   const toDate = to ? new Date(to).toISOString() : null;

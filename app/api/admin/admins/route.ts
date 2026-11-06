@@ -1,20 +1,18 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
-import { verifyAdminPassword } from "@/app/lib/admin-auth";
+import { verifyAdmin, adminPasswordFrom } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/admin/admins?password=xxx
+ * GET /api/admin/admins  (헤더 x-admin-password + 관리자 로그인)
  * 등록된 관리자 이메일 목록 조회
  */
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const password = searchParams.get("password") || "";
+  const password = adminPasswordFrom(request);
 
-  if (!(await verifyAdminPassword(password))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(request, password);
+  if (adminErr) return adminErr;
 
   const { data, error } = await supabase
     .from("admin_emails")
@@ -31,9 +29,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const { password, email } = await request.json();
 
-  if (!(await verifyAdminPassword(password))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(request, password);
+  if (adminErr) return adminErr;
 
   if (!email?.trim() || !email.includes("@")) {
     return NextResponse.json({ error: "올바른 이메일을 입력해주세요" }, { status: 400 });
@@ -59,9 +56,8 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const { password, email } = await request.json();
 
-  if (!(await verifyAdminPassword(password))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(request, password);
+  if (adminErr) return adminErr;
 
   const { error } = await supabase
     .from("admin_emails")

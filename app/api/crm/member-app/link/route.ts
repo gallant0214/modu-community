@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
  * - 이미 다른 계정에 연동된 레코드는 후보에서 제외.
  */
 export async function POST(request: Request) {
-  const rl = checkRateLimit(getClientIp(request), "auth");
+  const rl = await checkRateLimit(getClientIp(request), "auth");
   if (rl) return rl;
 
   const user = await verifyAuth(request);

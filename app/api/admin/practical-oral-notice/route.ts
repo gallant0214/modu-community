@@ -1,19 +1,18 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { verifyAdminPassword } from "@/app/lib/admin-auth";
+import { verifyAdmin, adminPasswordFrom } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
-// GET ?password=...&audience=main|disabled  → 관리자용 전체 목록 (비활성 포함)
+// GET ?audience=main|disabled (비밀번호는 x-admin-password 헤더)  → 관리자용 전체 목록 (비활성 포함)
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const password = searchParams.get("password") || "";
+  const password = adminPasswordFrom(request);
   const audience = searchParams.get("audience") === "disabled" ? "disabled" : "main";
 
-  if (!(await verifyAdminPassword(password))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(request, password);
+  if (adminErr) return adminErr;
 
   const { data, error } = await supabase
     .from("practical_oral_notices")
@@ -30,9 +29,8 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const { password, ...payload } = body;
 
-  if (!(await verifyAdminPassword(password || ""))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(request, password || "");
+  if (adminErr) return adminErr;
 
   const audience = payload.audience === "disabled" ? "disabled" : "main";
   if (!payload.slug?.trim() || !payload.title?.trim()) {

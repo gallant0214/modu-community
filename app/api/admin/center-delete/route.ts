@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyAdminPassword } from "@/app/lib/admin-auth";
+import { verifyAdmin } from "@/app/lib/admin-auth";
 import { supabase } from "@/app/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -17,9 +17,8 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
-  if (!(await verifyAdminPassword(body?.password ?? ""))) {
-    return NextResponse.json({ error: "관리자 인증 실패" }, { status: 401 });
-  }
+  const adminErr = await verifyAdmin(req, body?.password ?? "");
+  if (adminErr) return adminErr;
   const id = Number(body?.centerId);
   if (!id) {
     return NextResponse.json({ error: "센터를 찾을 수 없습니다" }, { status: 400 });

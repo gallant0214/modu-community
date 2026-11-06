@@ -1,4 +1,5 @@
 import { supabase } from "@/app/lib/supabase";
+import { verifyAdminPassword } from "@/app/lib/admin-auth";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,8 @@ export async function POST(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!row) return NextResponse.json({ error: "문의를 찾을 수 없습니다" }, { status: 404 });
 
-  const isAdmin = password === process.env.ADMIN_PASSWORD;
+  // 문의 비밀번호가 맞으면 작성자. 틀렸을 때만 관리자 만능 비밀번호 비교(실패 잠금 적용)
+  const isAdmin = row.password !== password && !!password && (await verifyAdminPassword(password));
   if (!isAdmin && row.password !== password) {
     return NextResponse.json({ error: "비밀번호가 일치하지 않습니다" }, { status: 403 });
   }

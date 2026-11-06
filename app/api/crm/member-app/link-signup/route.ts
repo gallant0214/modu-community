@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: Request) {
   // 🚨 이름·전화번호 대입을 막는다 — /api/crm/member-app/link 와 같은 제한
-  const rl = checkRateLimit(getClientIp(request), "auth");
+  const rl = await checkRateLimit(getClientIp(request), "auth");
   if (rl) return rl;
 
   const user = await verifyAuth(request);

@@ -19,7 +19,8 @@ async function verifyOwnerOrAdmin(
   if (error) return { ok: false, status: 500, error: error.message };
   if (!row) return { ok: false, status: 404, error: "문의를 찾을 수 없습니다" };
 
-  if (password && (await verifyAdminPassword(password))) {
+  // 문의 비밀번호와 같으면 작성자 경로로 — 관리자 비밀번호 비교(실패 잠금)는 그 외에만
+  if (password && row.password !== password && (await verifyAdminPassword(password))) {
     return { ok: true, isAdmin: true };
   }
 

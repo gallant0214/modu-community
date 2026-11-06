@@ -1,6 +1,6 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
-import { verifyAdminPassword } from "@/app/lib/admin-auth";
+import { verifyAdmin } from "@/app/lib/admin-auth";
 import { invalidateCache } from "@/app/lib/cache";
 
 export const dynamic = "force-dynamic";
@@ -127,9 +127,8 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const { password, confirm, limit } = body as { password?: string; confirm?: boolean; limit?: number };
 
-  if (!(await verifyAdminPassword(password || ""))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(request, password || "");
+  if (adminErr) return adminErr;
 
   // 1) 매칭 후보 조회 — title 이 ... 또는 … 로 끝나는 work24 글
   const { data: posts, error } = await supabase

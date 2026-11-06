@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyAdminPassword } from "@/app/lib/admin-auth";
+import { verifyAdmin } from "@/app/lib/admin-auth";
 import { supabase } from "@/app/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -12,9 +12,8 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: Request) {
   const { password, id } = await req.json().catch(() => ({}));
-  if (!(await verifyAdminPassword(password))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(req, password);
+  if (adminErr) return adminErr;
   const centerId = Number(id);
   if (!centerId) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   const { data, error } = await supabase

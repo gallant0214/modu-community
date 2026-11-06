@@ -1,6 +1,6 @@
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
-import { verifyAdmin, verifyAdminPassword } from "@/app/lib/admin-auth";
+import { verifyAdmin, adminPasswordFrom } from "@/app/lib/admin-auth";
 import { sanitize, validateLength } from "@/app/lib/security";
 import { getApps } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
@@ -123,15 +123,13 @@ export async function POST(request: Request) {
 }
 
 /**
- * GET /api/admin/push?password=xxx — 푸시 전송 이력 조회
+ * GET /api/admin/push  (헤더 x-admin-password + 관리자 로그인) — 푸시 전송 이력 조회
  */
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const password = searchParams.get("password") || "";
+  const password = adminPasswordFrom(request);
 
-  if (!(await verifyAdminPassword(password))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(request, password);
+  if (adminErr) return adminErr;
 
   const { data, error } = await supabase
     .from("notification_logs")

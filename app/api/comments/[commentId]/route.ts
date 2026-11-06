@@ -1,4 +1,5 @@
 import { supabase } from "@/app/lib/supabase";
+import { verifyAdminPassword } from "@/app/lib/admin-auth";
 import { NextResponse } from "next/server";
 import { sanitize, checkRateLimit, getClientIp, validateLength } from "@/app/lib/security";
 import { verifyAuth, isAdminUid } from "@/app/lib/firebase-admin";
@@ -38,7 +39,7 @@ export async function PUT(
   if (!user) return NextResponse.json({ error: "로그인을 해주세요" }, { status: 401 });
 
   const ip = getClientIp(request);
-  const rateLimitResponse = checkRateLimit(ip, "write");
+  const rateLimitResponse = await checkRateLimit(ip, "write");
   if (rateLimitResponse) return rateLimitResponse;
 
   const { commentId } = await params;
@@ -59,8 +60,10 @@ export async function PUT(
 
   const isOwner = row.firebase_uid && row.firebase_uid === user.uid;
   const isAdminUser = await checkIsAdmin(user.uid, user.email);
-  const isAdminPw = password && password === process.env.ADMIN_PASSWORD;
   const isLegacyPw = password && row.password && row.password === password;
+  // 관리자 만능 비밀번호는 본인 확인이 다 실패했을 때만 비교(실패 잠금 적용 — admin-auth)
+  const isAdminPw =
+    !isOwner && !isAdminUser && !isLegacyPw && !!password && (await verifyAdminPassword(password));
   if (!isOwner && !isAdminUser && !isAdminPw && !isLegacyPw) {
     return NextResponse.json({ error: "본인 또는 관리자만 수정할 수 있습니다" }, { status: 403 });
   }
@@ -107,7 +110,7 @@ export async function DELETE(
   if (!user) return NextResponse.json({ error: "로그인을 해주세요" }, { status: 401 });
 
   const ip = getClientIp(request);
-  const rateLimitResponse = checkRateLimit(ip, "write");
+  const rateLimitResponse = await checkRateLimit(ip, "write");
   if (rateLimitResponse) return rateLimitResponse;
 
   const { commentId } = await params;
@@ -124,8 +127,10 @@ export async function DELETE(
 
   const isOwner = row.firebase_uid && row.firebase_uid === user.uid;
   const isAdminUser = await checkIsAdmin(user.uid, user.email);
-  const isAdminPw = password && password === process.env.ADMIN_PASSWORD;
   const isLegacyPw = password && row.password && row.password === password;
+  // 관리자 만능 비밀번호는 본인 확인이 다 실패했을 때만 비교(실패 잠금 적용 — admin-auth)
+  const isAdminPw =
+    !isOwner && !isAdminUser && !isLegacyPw && !!password && (await verifyAdminPassword(password));
   if (!isOwner && !isAdminUser && !isAdminPw && !isLegacyPw) {
     return NextResponse.json({ error: "본인 또는 관리자만 삭제할 수 있습니다" }, { status: 403 });
   }

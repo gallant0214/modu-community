@@ -484,7 +484,7 @@ export function PostView({ initialPost }: PostViewProps) {
       return;
     }
     // 비밀번호 확인을 위해 더미 업데이트 시도
-    const result = await updateNotice(Number(postId), noticeAdminPassword, post!.title, post!.content);
+    const result = await updateNotice(Number(postId), noticeAdminPassword, post!.title, post!.content, (await getIdToken()) ?? undefined);
     if (result?.error) {
       setNoticePasswordError(result.error);
       return;
@@ -500,7 +500,7 @@ export function PostView({ initialPost }: PostViewProps) {
       alert("제목과 내용을 입력해주세요");
       return;
     }
-    const result = await updateNotice(Number(postId), noticeAdminPassword, noticeEditTitle, noticeEditContent);
+    const result = await updateNotice(Number(postId), noticeAdminPassword, noticeEditTitle, noticeEditContent, (await getIdToken()) ?? undefined);
     if (result?.error) {
       alert(result.error);
       return;

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
-import { verifyAdminPassword } from "@/app/lib/admin-auth";
+import { verifyAdmin } from "@/app/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -31,9 +31,8 @@ export async function POST(request: Request) {
     growth_from,
     growth_to,
   } = body as { password?: string; from?: string; to?: string; center_id?: number; growth_from?: string; growth_to?: string };
-  if (!(await verifyAdminPassword(password ?? ""))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(request, password ?? "");
+  if (adminErr) return adminErr;
 
   const rangeFrom = typeof from === "string" ? from : null;
   const rangeTo = typeof to === "string" ? to : null;

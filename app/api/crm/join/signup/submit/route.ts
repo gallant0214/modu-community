@@ -82,7 +82,7 @@ async function memberHasProducts(memberId: number, centerId: number): Promise<bo
 export async function POST(request: Request) {
   // 🚨 공개(무인증) 경로이고 결제 전에 회원·계약서·주문을 먼저 만든다 → 반복 호출로
   //   센터 회원 목록에 가짜 회원이 쌓이지 않게 횟수를 제한한다.
-  const rl = checkRateLimit(getClientIp(request), "write");
+  const rl = await checkRateLimit(getClientIp(request), "write");
   if (rl) return rl;
 
   /* 결제창을 띄울 수 있는 상태인지 — 쓰는 PG 의 키만 본다.

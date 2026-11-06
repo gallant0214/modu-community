@@ -7,7 +7,8 @@
 
 let redis: import("@upstash/redis").Redis | null = null;
 
-function getRedis() {
+/** 공용 Redis 클라이언트 (횟수 제한 등 다른 모듈도 같이 쓴다). env 없으면 null */
+export function getRedis() {
   if (redis) return redis;
   // Vercel Marketplace는 KV_REST_API_*, 수동 설치는 UPSTASH_REDIS_REST_* 사용
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;

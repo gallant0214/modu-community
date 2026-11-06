@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { supabase } from "./supabase";
-import { verifyAdminPassword } from "./admin-auth";
+import { verifyAdminPassword, verifyAdminAction } from "./admin-auth";
 import { verifyIdTokenString } from "./firebase-admin";
 
 async function recomputePostCommentsCount(postId: number) {
@@ -137,7 +137,8 @@ export async function verifyPostPassword(id: number, password: string) {
     .maybeSingle();
   if (!row) return { error: "게시글을 찾을 수 없습니다" };
 
-  const isAdmin = await verifyAdminPassword(password);
+  // 글 비밀번호가 맞으면 끝. 틀렸을 때만 관리자 만능 비밀번호 비교(실패 잠금 적용)
+  const isAdmin = row.password !== password && !!password && (await verifyAdminPassword(password));
   if (!isAdmin && row.password !== password) {
     return { error: "비밀번호가 일치하지 않습니다" };
   }
@@ -154,8 +155,9 @@ export async function deletePost(id: number, categoryId: number, password: strin
   if (!row) return { error: "게시글을 찾을 수 없습니다" };
 
   const isOwner = user && row.firebase_uid && row.firebase_uid === user.uid;
-  const isAdminPw = await verifyAdminPassword(password);
   const isLegacyPw = password && row.password && row.password === password;
+  // 관리자 만능 비밀번호는 본인 확인이 다 실패했을 때만 비교(실패 잠금 적용 — admin-auth)
+  const isAdminPw = !isOwner && !isLegacyPw && !!password && (await verifyAdminPassword(password));
   if (!isOwner && !isAdminPw && !isLegacyPw) {
     return { error: "본인 또는 관리자만 삭제할 수 있습니다" };
   }
@@ -200,8 +202,9 @@ export async function deleteComment(commentId: number, postId: number, categoryI
   if (!row) return { error: "댓글을 찾을 수 없습니다" };
 
   const isOwner = user && row.firebase_uid && row.firebase_uid === user.uid;
-  const isAdminPw = await verifyAdminPassword(password);
   const isLegacyPw = password && row.password && row.password === password;
+  // 관리자 만능 비밀번호는 본인 확인이 다 실패했을 때만 비교(실패 잠금 적용 — admin-auth)
+  const isAdminPw = !isOwner && !isLegacyPw && !!password && (await verifyAdminPassword(password));
   if (!isOwner && !isAdminPw && !isLegacyPw) {
     return { error: "본인 또는 관리자만 삭제할 수 있습니다" };
   }
@@ -254,10 +257,9 @@ export async function viewInquiry(id: number, password: string) {
   };
 }
 
-export async function viewInquiryAdmin(id: number, adminPassword: string) {
-  if (!(await verifyAdminPassword(adminPassword))) {
-    return { error: "관리자 비밀번호가 일치하지 않습니다" };
-  }
+export async function viewInquiryAdmin(id: number, adminPassword: string, idToken?: string) {
+  const adminErr = await verifyAdminAction(adminPassword, idToken);
+  if (adminErr) return { error: adminErr };
   const { data: row } = await supabase
     .from("inquiries")
     .select("content, reply, replied_at")
@@ -272,10 +274,9 @@ export async function viewInquiryAdmin(id: number, adminPassword: string) {
   };
 }
 
-export async function replyToInquiry(id: number, adminPassword: string, replyContent: string) {
-  if (!(await verifyAdminPassword(adminPassword))) {
-    return { error: "관리자 비밀번호가 일치하지 않습니다" };
-  }
+export async function replyToInquiry(id: number, adminPassword: string, replyContent: string, idToken?: string) {
+  const adminErr = await verifyAdminAction(adminPassword, idToken);
+  if (adminErr) return { error: adminErr };
   if (!replyContent?.trim()) {
     return { error: "답글 내용을 입력해주세요" };
   }
@@ -299,8 +300,9 @@ export async function updateInquiry(id: number, password: string, title: string,
     (row.firebase_uid && row.firebase_uid === user.uid) ||
     (user.email && row.email && row.email === user.email)
   );
-  const isAdminPw = password && await verifyAdminPassword(password);
   const isLegacyPw = password && row.password && row.password === password;
+  // 관리자 만능 비밀번호는 본인 확인이 다 실패했을 때만 비교(실패 잠금 적용 — admin-auth)
+  const isAdminPw = !isOwner && !isLegacyPw && !!password && (await verifyAdminPassword(password));
   if (!isOwner && !isAdminPw && !isLegacyPw) {
     return { error: "본인 또는 관리자만 수정할 수 있습니다" };
   }
@@ -315,10 +317,9 @@ export async function updateInquiry(id: number, password: string, title: string,
   revalidatePath("/inquiry");
 }
 
-export async function updateNotice(id: number, adminPassword: string, title: string, content: string) {
-  if (!(await verifyAdminPassword(adminPassword))) {
-    return { error: "관리자 비밀번호가 일치하지 않습니다" };
-  }
+export async function updateNotice(id: number, adminPassword: string, title: string, content: string, idToken?: string) {
+  const adminErr = await verifyAdminAction(adminPassword, idToken);
+  if (adminErr) return { error: adminErr };
   if (!title?.trim() || !content?.trim()) {
     return { error: "제목과 내용을 입력해주세요" };
   }
@@ -362,10 +363,9 @@ export async function createReport(
   });
 }
 
-export async function getReports(adminPassword: string) {
-  if (!(await verifyAdminPassword(adminPassword))) {
-    return { error: "관리자 비밀번호가 일치하지 않습니다" };
-  }
+export async function getReports(adminPassword: string, idToken?: string) {
+  const adminErr = await verifyAdminAction(adminPassword, idToken);
+  if (adminErr) return { error: adminErr };
   try {
     const { loadEnrichedReports } = await import("./admin-data");
     const reports = await loadEnrichedReports();
@@ -376,10 +376,9 @@ export async function getReports(adminPassword: string) {
   }
 }
 
-export async function getInquiries(adminPassword: string) {
-  if (!(await verifyAdminPassword(adminPassword))) {
-    return { error: "관리자 비밀번호가 일치하지 않습니다" };
-  }
+export async function getInquiries(adminPassword: string, idToken?: string) {
+  const adminErr = await verifyAdminAction(adminPassword, idToken);
+  if (adminErr) return { error: adminErr };
   try {
     const { loadEnrichedInquiries } = await import("./admin-data");
     const inquiries = await loadEnrichedInquiries();
@@ -390,20 +389,18 @@ export async function getInquiries(adminPassword: string) {
   }
 }
 
-export async function resolveReport(id: number, adminPassword: string) {
-  if (!(await verifyAdminPassword(adminPassword))) {
-    return { error: "관리자 비밀번호가 일치하지 않습니다" };
-  }
+export async function resolveReport(id: number, adminPassword: string, idToken?: string) {
+  const adminErr = await verifyAdminAction(adminPassword, idToken);
+  if (adminErr) return { error: adminErr };
   await supabase
     .from("reports")
     .update({ resolved: true, resolved_at: new Date().toISOString() })
     .eq("id", id);
 }
 
-export async function deleteReportTarget(reportId: number, adminPassword: string) {
-  if (!(await verifyAdminPassword(adminPassword))) {
-    return { error: "관리자 비밀번호가 일치하지 않습니다" };
-  }
+export async function deleteReportTarget(reportId: number, adminPassword: string, idToken?: string) {
+  const adminErr = await verifyAdminAction(adminPassword, idToken);
+  if (adminErr) return { error: adminErr };
   const { data: row } = await supabase
     .from("reports")
     .select("target_type, target_id, post_id, category_id")
@@ -432,18 +429,16 @@ export async function deleteReportTarget(reportId: number, adminPassword: string
   revalidatePath(`/category/${category_id}`);
 }
 
-export async function hideInquiry(id: number, adminPassword: string) {
-  if (!(await verifyAdminPassword(adminPassword))) {
-    return { error: "관리자 비밀번호가 일치하지 않습니다" };
-  }
+export async function hideInquiry(id: number, adminPassword: string, idToken?: string) {
+  const adminErr = await verifyAdminAction(adminPassword, idToken);
+  if (adminErr) return { error: adminErr };
   await supabase.from("inquiries").update({ hidden: true }).eq("id", id);
   revalidatePath("/inquiry");
 }
 
-export async function unhideInquiry(id: number, adminPassword: string) {
-  if (!(await verifyAdminPassword(adminPassword))) {
-    return { error: "관리자 비밀번호가 일치하지 않습니다" };
-  }
+export async function unhideInquiry(id: number, adminPassword: string, idToken?: string) {
+  const adminErr = await verifyAdminAction(adminPassword, idToken);
+  if (adminErr) return { error: adminErr };
   await supabase.from("inquiries").update({ hidden: false }).eq("id", id);
   revalidatePath("/inquiry");
 }
@@ -461,8 +456,9 @@ export async function deleteInquiry(id: number, password: string, idToken?: stri
     (row.firebase_uid && row.firebase_uid === user.uid) ||
     (user.email && row.email && row.email === user.email)
   );
-  const isAdminPw = password && await verifyAdminPassword(password);
   const isLegacyPw = password && row.password && row.password === password;
+  // 관리자 만능 비밀번호는 본인 확인이 다 실패했을 때만 비교(실패 잠금 적용 — admin-auth)
+  const isAdminPw = !isOwner && !isLegacyPw && !!password && (await verifyAdminPassword(password));
   if (!isOwner && !isAdminPw && !isLegacyPw) {
     return { error: "본인 또는 관리자만 삭제할 수 있습니다" };
   }
@@ -483,8 +479,9 @@ export async function updateComment(commentId: number, postId: number, categoryI
   if (!row) return { error: "댓글을 찾을 수 없습니다" };
 
   const isOwner = user && row.firebase_uid && row.firebase_uid === user.uid;
-  const isAdminPw = password && await verifyAdminPassword(password);
   const isLegacyPw = password && row.password && row.password === password;
+  // 관리자 만능 비밀번호는 본인 확인이 다 실패했을 때만 비교(실패 잠금 적용 — admin-auth)
+  const isAdminPw = !isOwner && !isLegacyPw && !!password && (await verifyAdminPassword(password));
   if (!isOwner && !isAdminPw && !isLegacyPw) {
     return { error: "본인 또는 관리자만 수정할 수 있습니다" };
   }

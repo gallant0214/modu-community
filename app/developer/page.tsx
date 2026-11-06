@@ -8,6 +8,23 @@ import { getReports, resolveReport, deleteReportTarget, getInquiries, hideInquir
 import type { Report, Inquiry } from "@/app/lib/types";
 import { ANALYTICS_EXCLUDE_KEY } from "@/app/lib/use-tab-analytics";
 
+/**
+ * 관리자 API 호출 — 구글 로그인 토큰 + 관리자 비밀번호(헤더)를 함께 보낸다.
+ * 서버(admin-auth)가 관리자 계정 로그인과 비밀번호를 둘 다 확인한다. 비밀번호는 주소에 싣지 않는다.
+ */
+async function adminFetch(url: string, password: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const token = await auth.currentUser?.getIdToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (password) headers.set("x-admin-password", encodeURIComponent(password));
+  return fetch(url, { ...init, headers });
+}
+
+/** 관리자 서버 액션(getReports 등)에 넘길 구글 로그인 토큰 */
+async function adminIdToken(): Promise<string | undefined> {
+  return (await auth.currentUser?.getIdToken()) ?? undefined;
+}
+
 type AuthStep = "loading" | "google" | "blocked" | "password" | "authenticated";
 
 export default function AdminPage() {
@@ -96,7 +113,7 @@ export default function AdminPage() {
     setUserListLoading(true);
     setUserListError("");
     try {
-      const res = await fetch("/api/admin/users/list", {
+      const res = await adminFetch("/api/admin/users/list", storedPassword, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: storedPassword, page, limit: 30 }),
@@ -130,7 +147,7 @@ export default function AdminPage() {
     setAppListLoading(true);
     setAppListError("");
     try {
-      const res = await fetch("/api/admin/users/app-list", {
+      const res = await adminFetch("/api/admin/users/app-list", storedPassword, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: storedPassword, page, limit: 30, q: q ?? "" }),
@@ -173,7 +190,7 @@ export default function AdminPage() {
     setUserError("");
     setUserResult(null);
     try {
-      const res = await fetch("/api/admin/users/lookup", {
+      const res = await adminFetch("/api/admin/users/lookup", storedPassword, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: storedPassword, nickname: q }),
@@ -201,7 +218,7 @@ export default function AdminPage() {
     if (!storedPassword) return;
     setExtKpiLoading(true);
     try {
-      const res = await fetch("/api/admin/kpi/extended", {
+      const res = await adminFetch("/api/admin/kpi/extended", storedPassword, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: storedPassword }),
@@ -360,7 +377,7 @@ export default function AdminPage() {
   ) => {
     setReportLoading(true);
     try {
-      const res = await fetch("/api/admin/report", {
+      const res = await adminFetch("/api/admin/report", storedPassword, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -386,7 +403,7 @@ export default function AdminPage() {
       const main = computeRange(mainMode, kpiFrom, kpiTo);
       const visit = computeRange(visitMode, kpiVisitFrom, kpiVisitTo);
       const report = computeRange(reportMode, kpiReportFrom, kpiReportTo);
-      const res = await fetch("/api/admin/kpi", {
+      const res = await adminFetch("/api/admin/kpi", storedPassword, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -424,7 +441,7 @@ export default function AdminPage() {
       })();
       const fromYmd = r.from ? r.from.slice(0, 10) : fallbackFrom;
       const toYmd = r.to ? r.to.slice(0, 10) : today;
-      const res = await fetch("/api/admin/kpi/tab-stats", {
+      const res = await adminFetch("/api/admin/kpi/tab-stats", storedPassword, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -458,12 +475,14 @@ export default function AdminPage() {
     setAnalyticsExcluded(next);
   }
 
-  const fetchData = useCallback(async (pw: string) => {
-    const [reportResult, inquiryResult] = await Promise.all([
-      getReports(pw),
-      getInquiries(pw),
-    ]);
-    if (reportResult.error) return false;
+  // 성공하면 true, 실패하면 서버가 준 문구(비밀번호 불일치·잠금·관리자 계정 아님).
+  // 신고 목록으로 먼저 확인하고 통과했을 때만 문의 목록을 부른다 — 동시에 부르면 비밀번호 한 번 틀릴 때
+  // 실패가 2번으로 세어져 잠금(1분 5회)이 더 빨리 걸린다.
+  const fetchData = useCallback(async (pw: string): Promise<true | string> => {
+    const token = await adminIdToken();
+    const reportResult = await getReports(pw, token);
+    if (reportResult.error) return reportResult.error;
+    const inquiryResult = await getInquiries(pw, token);
     setReports((reportResult.reports ?? []) as Report[]);
     setInquiries((inquiryResult.inquiries ?? []) as Inquiry[]);
     return true;
@@ -474,7 +493,7 @@ export default function AdminPage() {
     setLoading(true);
     const ok = await fetchData(password);
     setLoading(false);
-    if (!ok) { setError("비밀번호가 일치하지 않습니다"); return; }
+    if (ok !== true) { setError(ok || "비밀번호가 일치하지 않습니다"); return; }
     setStoredPassword(password);
     setAuthStep("authenticated");
     // 관리자 비번 인증한 브라우저는 자동으로 분석 추적 제외 (사이트 방문/탭 통계 모두)
@@ -502,7 +521,7 @@ export default function AdminPage() {
         setCrmError("");
         const r = mode === "all" ? null : computeRange(mode === "custom" ? "custom" : mode, customFrom ?? crmFrom, customTo ?? crmTo);
         const cid = centerIdOverride === undefined ? crmCenterId : centerIdOverride;
-        const res = await fetch("/api/admin/kpi/crm", {
+        const res = await adminFetch("/api/admin/kpi/crm", storedPassword, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -535,7 +554,7 @@ export default function AdminPage() {
   const loadCenters = useCallback(async (q?: string) => {
     setCentersLoading(true);
     try {
-      const res = await fetch("/api/admin/centers-list", {
+      const res = await adminFetch("/api/admin/centers-list", storedPassword, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ password: storedPassword, q: q ?? centersQuery }),
@@ -567,7 +586,7 @@ export default function AdminPage() {
     }
     setDeletingCenterId(c.id);
     try {
-      const res = await fetch("/api/admin/center-delete", {
+      const res = await adminFetch("/api/admin/center-delete", storedPassword, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ password: storedPassword, centerId: c.id }),
@@ -586,7 +605,7 @@ export default function AdminPage() {
     setLicenseView({ id: c.id, name: c.name, business_no: c.business_no, owner_name: c.owner_name, dataUrl: null });
     setLicenseLoading(true);
     try {
-      const res = await fetch("/api/admin/center-license", {
+      const res = await adminFetch("/api/admin/center-license", storedPassword, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ password: storedPassword, id: c.id }),
@@ -620,7 +639,7 @@ export default function AdminPage() {
   }, [authStep, storedPassword, tab, reportData, reportPeriod, reportOffset, loadReport]);
 
   async function handleResolve(id: number) {
-    await resolveReport(id, storedPassword);
+    await resolveReport(id, storedPassword, await adminIdToken());
     setReports((prev) =>
       prev.map((r) => (r.id === id ? { ...r, resolved: true, resolved_at: new Date().toISOString() } : r))
     );
@@ -628,7 +647,7 @@ export default function AdminPage() {
 
   async function handleDelete(id: number) {
     setDeleting(true);
-    await deleteReportTarget(id, storedPassword);
+    await deleteReportTarget(id, storedPassword, await adminIdToken());
     setReports((prev) =>
       prev.map((r) =>
         r.id === id ? { ...r, resolved: true, resolved_at: new Date().toISOString(), deleted_at: new Date().toISOString() } : r
@@ -639,13 +658,13 @@ export default function AdminPage() {
   }
 
   async function handleResolveInquiry(id: number) {
-    await hideInquiry(id, storedPassword);
+    await hideInquiry(id, storedPassword, await adminIdToken());
     setInquiries((prev) => prev.map((inq) => (inq.id === id ? { ...inq, hidden: true } : inq)));
     setSelectedInquiry(null);
   }
 
   async function handleUnhideInquiry(id: number) {
-    await unhideInquiry(id, storedPassword);
+    await unhideInquiry(id, storedPassword, await adminIdToken());
     setInquiries((prev) => prev.map((inq) => (inq.id === id ? { ...inq, hidden: false } : inq)));
     setSelectedInquiry(null);
   }
@@ -662,7 +681,7 @@ export default function AdminPage() {
   async function handleReply(id: number) {
     if (!replyText.trim()) return;
     setReplying(true);
-    await replyToInquiry(id, storedPassword, replyText.trim());
+    await replyToInquiry(id, storedPassword, replyText.trim(), await adminIdToken());
     setInquiries((prev) =>
       prev.map((inq) => (inq.id === id ? { ...inq, reply: replyText.trim(), replied_at: new Date().toISOString() } : inq))
     );
@@ -676,7 +695,7 @@ export default function AdminPage() {
     if (newPw !== confirmPw) { setPwMsg({ type: "error", text: "새 비밀번호가 일치하지 않습니다" }); return; }
     setChangingPw(true);
     try {
-      const res = await fetch("/api/admin/change-password", {
+      const res = await adminFetch("/api/admin/change-password", currentPw, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: currentPw, newPassword: newPw }),
@@ -763,7 +782,7 @@ export default function AdminPage() {
       if (notice && noticeMode === "edit") {
         // 수정
         const token = await firebaseUser?.getIdToken();
-        const res = await fetch(`/api/admin/notices/${notice.id}`, {
+        const res = await adminFetch(`/api/admin/notices/${notice.id}`, storedPassword, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
@@ -781,7 +800,7 @@ export default function AdminPage() {
       } else {
         // 새 공지 생성
         const token = await firebaseUser?.getIdToken();
-        const res = await fetch("/api/admin/notices", {
+        const res = await adminFetch("/api/admin/notices", storedPassword, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -808,7 +827,7 @@ export default function AdminPage() {
 
   async function fetchAdminEmails() {
     try {
-      const res = await fetch(`/api/admin/admins?password=${encodeURIComponent(storedPassword)}`);
+      const res = await adminFetch("/api/admin/admins", storedPassword);
       const data = await res.json();
       if (data.emails) setAdminEmails(data.emails);
     } catch { /* ignore */ }
@@ -817,7 +836,7 @@ export default function AdminPage() {
   async function handleAddAdminEmail() {
     if (!newAdminEmail.trim() || !newAdminEmail.includes("@")) { setEmailMsg({ type: "error", text: "올바른 이메일을 입력해주세요" }); return; }
     try {
-      const res = await fetch("/api/admin/admins", {
+      const res = await adminFetch("/api/admin/admins", storedPassword, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: storedPassword, email: newAdminEmail.trim() }),
@@ -830,7 +849,7 @@ export default function AdminPage() {
 
   async function handleDeleteAdminEmail(email: string) {
     try {
-      await fetch("/api/admin/admins", {
+      await adminFetch("/api/admin/admins", storedPassword, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: storedPassword, email }),

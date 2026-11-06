@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyAdminPassword } from "@/app/lib/admin-auth";
+import { verifyAdmin } from "@/app/lib/admin-auth";
 import { loadEnrichedReports } from "@/app/lib/admin-data";
 
 export const dynamic = "force-dynamic";
@@ -8,9 +8,8 @@ export const dynamic = "force-dynamic";
 // body: { password }
 export async function POST(req: Request) {
   const { password } = await req.json().catch(() => ({}));
-  if (!(await verifyAdminPassword(password))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(req, password);
+  if (adminErr) return adminErr;
   try {
     const reports = await loadEnrichedReports();
     return NextResponse.json({ reports });

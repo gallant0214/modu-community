@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { supabase } from "@/app/lib/supabase";
 import { NextResponse } from "next/server";
-import { verifyAdminPassword } from "@/app/lib/admin-auth";
+import { verifyAdmin } from "@/app/lib/admin-auth";
 import { getAuth } from "firebase-admin/auth";
 import { getFirebaseAdmin } from "@/app/lib/firebase-admin";
 
@@ -51,9 +51,8 @@ export async function POST(request: Request) {
     limit?: number;
     q?: string;
   };
-  if (!(await verifyAdminPassword(password || ""))) {
-    return NextResponse.json({ error: "관리자 비밀번호가 일치하지 않습니다" }, { status: 403 });
-  }
+  const adminErr = await verifyAdmin(request, password || "");
+  if (adminErr) return adminErr;
 
   const page = Math.max(1, Number(pageRaw) || 1);
   const limit = Math.min(100, Math.max(1, Number(limitRaw) || 30));

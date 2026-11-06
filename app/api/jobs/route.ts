@@ -57,7 +57,7 @@ export async function POST(request: Request) {
   }
 
   const ip = getClientIp(request);
-  const rateLimitResponse = checkRateLimit(ip, "write");
+  const rateLimitResponse = await checkRateLimit(ip, "write");
   if (rateLimitResponse) return rateLimitResponse;
 
   const body = await request.json();
