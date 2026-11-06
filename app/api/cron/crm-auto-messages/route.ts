@@ -12,6 +12,7 @@ import {
   paymentText,
   basisText,
   loadCenterName,
+  loadCenterPhone,
   loadJoinLink,
   kstYmd,
   type TriggerSetting,
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
     .select("center_id, trigger_key, send_basis, send_days, send_count, methods, message_body, coupon_id, config")
     .eq("enabled", true);
 
-  const centerCache = new Map<number, { name: string; appLink: string }>();
+  const centerCache = new Map<number, { name: string; appLink: string; phone: string }>();
   let sentPush = 0;
   let sentSms = 0;
   let processed = 0;
@@ -104,7 +105,11 @@ export async function GET(request: Request) {
 
     let meta = centerCache.get(s.center_id);
     if (!meta) {
-      meta = { name: await loadCenterName(s.center_id), appLink: await loadJoinLink(s.center_id) };
+      meta = {
+        name: await loadCenterName(s.center_id),
+        appLink: await loadJoinLink(s.center_id),
+        phone: await loadCenterPhone(s.center_id),
+      };
       centerCache.set(s.center_id, meta);
     }
 
@@ -123,6 +128,13 @@ export async function GET(request: Request) {
         appLink: meta.appLink,
         basis: basisText(s.trigger_key, setting, today, m.expiry),
         attendDays: m.attendDays,
+        startDate: m.startDate,
+        remaining: m.remaining,
+        trainerName: m.trainerName,
+        memberNo: m.memberNo,
+        mileage: m.mileage,
+        centerPhone: meta.phone,
+        lastVisit: m.lastVisit,
       });
 
       // 대기열에 pending 적재 시도 — (center_id, dedupe_key) 유니크 위반이면 이미 처리됨 → 건너뜀

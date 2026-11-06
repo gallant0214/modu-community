@@ -22,6 +22,16 @@ export interface Match {
   couponId?: number;
   /** 중복 방지 키를 트리거가 직접 정할 때 (기본: trigger:member:오늘) */
   dedupeKey?: string;
+  /** 대상 상품 시작일 (#시작일#) */
+  startDate?: string;
+  /** 수강권 남은 횟수 (#잔여횟수#) */
+  remaining?: number;
+  /** 수강권 담당 강사 (#담당강사#) */
+  trainerName?: string;
+  /** 회원 출석번호 (#회원번호#) */
+  memberNo?: string;
+  /** 보유 마일리지 (#마일리지#) */
+  mileage?: number;
 }
 
 export interface TriggerSetting {
@@ -113,6 +123,8 @@ interface MemberLite {
   name: string;
   birth: string | null;
   last_attended_at: string | null;
+  attendance_no: string | null;
+  mileage: number | null;
 }
 interface DatedRow {
   member_id: number;
@@ -120,13 +132,18 @@ interface DatedRow {
   label: string;
   created_at: string;
   price?: number;
+  /** 상품 시작일 (#시작일#) */
+  start?: string;
+  /** 수강권 전용 부가 정보 */
+  remaining?: number;
+  trainerMemberId?: number | null;
 }
 
 async function loadMembers(centerId: number): Promise<Map<number, MemberLite>> {
   const rows = await paginateAll<MemberLite>(async (f, t) => {
     const r = await supabase
       .from("crm_members")
-      .select("id, name, birth, last_attended_at")
+      .select("id, name, birth, last_attended_at, attendance_no, mileage")
       .eq("center_id", centerId)
       .eq("status", "active")
       .range(f, t);
@@ -143,7 +160,7 @@ async function loadDated(
   return paginateAll<DatedRow>(async (f, t) => {
     const r = await supabase
       .from(table)
-      .select(`member_id, expires_at, created_at, price_won, ${labelCol}`)
+      .select(`member_id, expires_at, created_at, price_won, start_date, ${labelCol}`)
       .eq("center_id", centerId)
       .range(f, t);
     const data = (r.data as Record<string, unknown>[] | null)?.map((x) => ({
@@ -152,6 +169,7 @@ async function loadDated(
       created_at: String(x.created_at ?? ""),
       label: String(x[labelCol] ?? ""),
       price: x.price_won != null ? Number(x.price_won) : undefined,
+      start: x.start_date ? String(x.start_date) : undefined,
     })) as DatedRow[] | null;
     return { data, error: r.error };
   });
@@ -183,7 +201,7 @@ async function loadPasses(centerId: number): Promise<PassRow[]> {
     const r = await supabase
       .from("crm_passes")
       .select(
-        "id, member_id, expires_at, created_at, price_won, lesson_kind, product_id, remaining_sessions, status, issue_type"
+        "id, member_id, expires_at, created_at, price_won, lesson_kind, product_id, remaining_sessions, status, issue_type, start_date, trainer_member_id"
       )
       .eq("center_id", centerId)
       .range(f, t);
@@ -198,6 +216,8 @@ async function loadPasses(centerId: number): Promise<PassRow[]> {
       remaining: Number(x.remaining_sessions ?? 0),
       status: String(x.status ?? ""),
       issueType: String(x.issue_type ?? ""),
+      start: x.start_date ? String(x.start_date) : undefined,
+      trainerMemberId: x.trainer_member_id != null ? Number(x.trainer_member_id) : null,
     })) as PassRow[] | null;
     return { data, error: r.error };
   });
@@ -244,6 +264,17 @@ async function loadLockersDated(centerId: number): Promise<DatedRow[]> {
   });
 }
 
+/** 직원 id → 이름 (#담당강사#) */
+async function loadStaffNames(centerId: number): Promise<Map<number, string>> {
+  const { data } = await supabase
+    .from("crm_center_members")
+    .select("id, display_name")
+    .eq("center_id", centerId);
+  return new Map(
+    ((data ?? []) as { id: number; display_name: string }[]).map((r) => [Number(r.id), String(r.display_name)])
+  );
+}
+
 /** 상품 id → type 맵 (수강권/클래스 분류용) */
 async function loadProductTypes(centerId: number): Promise<Map<number, string>> {
   const { data } = await supabase.from("crm_products").select("id, type").eq("center_id", centerId);
@@ -268,14 +299,31 @@ function targetExpiry(setting: TriggerSetting, today: string): string {
 }
 
 /** 만료 트리거 공통: 회원별 최신 만료행 중 target 당일인 회원만 매칭 */
-function matchExpiry(rows: DatedRow[], members: Map<number, MemberLite>, target: string): Match[] {
+function matchExpiry(
+  rows: DatedRow[],
+  members: Map<number, MemberLite>,
+  target: string,
+  staffNames?: Map<number, string>
+): Match[] {
   const latest = latestByMember(rows);
   const out: Match[] = [];
   for (const [memberId, r] of latest) {
     const m = members.get(memberId);
     if (!m) continue;
     if (r.expires_at === target) {
-      out.push({ member_id: memberId, name: m.name, product: r.label, expiry: r.expires_at, price: r.price });
+      out.push({
+        member_id: memberId,
+        name: m.name,
+        product: r.label,
+        expiry: r.expires_at,
+        price: r.price,
+        startDate: r.start,
+        remaining: r.remaining,
+        memberNo: m.attendance_no ?? undefined,
+        mileage: m.mileage ?? undefined,
+        trainerName:
+          r.trainerMemberId && staffNames ? staffNames.get(r.trainerMemberId) ?? undefined : undefined,
+      });
     }
   }
   return out;
@@ -325,7 +373,8 @@ async function matchDepleted(
   passes: PassRow[],
   members: Map<number, MemberLite>,
   target: string,
-  today: string
+  today: string,
+  staffNames?: Map<number, string>
 ): Promise<Match[]> {
   const alive = passes.filter((p) => !DEAD_PASS_STATUS.has(p.status) && p.issueType !== "service");
   const depleted = alive.filter((p) => p.remaining <= 0);
@@ -355,7 +404,19 @@ async function matchDepleted(
     const m = members.get(p.member_id);
     if (!m) continue;
     seen.add(p.member_id);
-    out.push({ member_id: p.member_id, name: m.name, product: p.label, expiry: p.expires_at, price: p.price });
+    out.push({
+      member_id: p.member_id,
+      name: m.name,
+      product: p.label,
+      expiry: p.expires_at,
+      price: p.price,
+      startDate: p.start,
+      remaining: p.remaining,
+      memberNo: m.attendance_no ?? undefined,
+      mileage: m.mileage ?? undefined,
+      trainerName:
+        p.trainerMemberId && staffNames ? staffNames.get(p.trainerMemberId) ?? undefined : undefined,
+    });
   }
   return out;
 }
@@ -502,6 +563,9 @@ async function matchAttendanceCoupon(
       expiry: mb.expires_at,
       price: mb.price_won ?? undefined,
       attendDays,
+      startDate: mb.start_date ?? undefined,
+      memberNo: member.attendance_no ?? undefined,
+      mileage: member.mileage ?? undefined,
       couponId: hit.coupon_id,
       dedupeKey: `attendance_coupon:${mb.member_id}:mb${mb.id}`,
     });
@@ -523,7 +587,13 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
     const target = mmdd(addDays(today, dir * days));
     const out: Match[] = [];
     for (const m of members.values()) {
-      if (m.birth && mmdd(m.birth) === target) out.push({ member_id: m.id, name: m.name });
+      if (m.birth && mmdd(m.birth) === target)
+        out.push({
+          member_id: m.id,
+          name: m.name,
+          memberNo: m.attendance_no ?? undefined,
+          mileage: m.mileage ?? undefined,
+        });
     }
     return out;
   }
@@ -536,7 +606,14 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
     for (const m of members.values()) {
       const last = m.last_attended_at ? ymdOf(new Date(m.last_attended_at)) : null;
       // 마지막 출석일은 #만료일# 이 아니라 #마지막방문일# 로 전달 (상품 만료일과 혼동 방지)
-      if (last && last === cutoff) out.push({ member_id: m.id, name: m.name, lastVisit: last });
+      if (last && last === cutoff)
+        out.push({
+          member_id: m.id,
+          name: m.name,
+          lastVisit: last,
+          memberNo: m.attendance_no ?? undefined,
+          mileage: m.mileage ?? undefined,
+        });
     }
     return out;
   }
@@ -552,7 +629,11 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
     }
     // 수강권/클래스 → crm_passes. 상품 type=class 여부로 분리(수강권=class 제외, 상품 미연결 포함).
     if (key.startsWith("pass_") || key.startsWith("class_")) {
-      const [passes, typeMap] = await Promise.all([loadPasses(centerId), loadProductTypes(centerId)]);
+      const [passes, typeMap, staffNames] = await Promise.all([
+        loadPasses(centerId),
+        loadProductTypes(centerId),
+        loadStaffNames(centerId),
+      ]);
       const wantClass = key.startsWith("class_");
       const filtered = passes.filter((p) => {
         const t = p.productId != null ? typeMap.get(p.productId) : undefined;
@@ -561,9 +642,9 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
       });
       // '수강권 만료 시' 는 만료 판정 기준을 고를 수 있다 — 기간 만료(기본) / 횟수 소진
       if (key === "pass_expired" && setting.expiry_basis === "sessions") {
-        return matchDepleted(centerId, filtered, members, target, today);
+        return matchDepleted(centerId, filtered, members, target, today, staffNames);
       }
-      return matchExpiry(filtered, members, target);
+      return matchExpiry(filtered, members, target, staffNames);
     }
     // 락커 → crm_lockers (배정된 물리 락커)
     if (key.startsWith("locker_")) {
@@ -599,7 +680,17 @@ export async function computeMatches(centerId: number, setting: TriggerSetting):
       const isRenew = total > 1;
       if (isRenew !== wantRenew) continue;
       const m = members.get(r.member_id);
-      if (m) out.push({ member_id: r.member_id, name: m.name, product: r.label, expiry: r.expires_at, price: r.price });
+      if (m)
+        out.push({
+          member_id: r.member_id,
+          name: m.name,
+          product: r.label,
+          expiry: r.expires_at,
+          price: r.price,
+          startDate: r.start,
+          memberNo: m.attendance_no ?? undefined,
+          mileage: m.mileage ?? undefined,
+        });
     }
     return out;
   }
@@ -620,6 +711,12 @@ export function renderMessage(
     basis?: string;
     lastVisit?: string;
     attendDays?: number;
+    startDate?: string;
+    remaining?: number;
+    trainerName?: string;
+    memberNo?: string;
+    mileage?: number;
+    centerPhone?: string;
   }
 ): string {
   return (template || "")
@@ -631,7 +728,13 @@ export function renderMessage(
     .replaceAll("#결제내역#", vars.payment ?? "")
     .replaceAll("#앱설치링크#", vars.appLink ?? "")
     .replaceAll("#전송기준#", vars.basis ?? "")
-    .replaceAll("#출석일수#", vars.attendDays != null ? String(vars.attendDays) : "");
+    .replaceAll("#출석일수#", vars.attendDays != null ? String(vars.attendDays) : "")
+    .replaceAll("#시작일#", vars.startDate ?? "")
+    .replaceAll("#잔여횟수#", vars.remaining != null ? String(vars.remaining) : "")
+    .replaceAll("#담당강사#", vars.trainerName ?? "")
+    .replaceAll("#회원번호#", vars.memberNo ?? "")
+    .replaceAll("#마일리지#", vars.mileage != null ? vars.mileage.toLocaleString() : "")
+    .replaceAll("#센터전화#", vars.centerPhone ?? "");
 }
 
 /** 두 YYYY-MM-DD 사이 일수(b-a). */
@@ -664,6 +767,12 @@ export function basisText(
 export function paymentText(product?: string, price?: number): string {
   const amount = price != null && Number.isFinite(price) ? `${price.toLocaleString()}원` : "";
   return [product, amount].filter(Boolean).join(" ");
+}
+
+/** #센터전화# 용 — 센터 대표 전화번호 */
+export async function loadCenterPhone(centerId: number): Promise<string> {
+  const { data } = await supabase.from("crm_centers").select("phone").eq("id", centerId).maybeSingle();
+  return (data as { phone?: string | null } | null)?.phone ?? "";
 }
 
 export async function loadCenterName(centerId: number): Promise<string> {

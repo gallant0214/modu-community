@@ -11,6 +11,7 @@ import {
   paymentText,
   basisText,
   loadCenterName,
+  loadCenterPhone,
   loadJoinLink,
   kstYmd,
   type TriggerSetting,
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
 
   const center = await loadCenterName(ctx.centerId);
   const appLink = await loadJoinLink(ctx.centerId);
+  const centerPhone = await loadCenterPhone(ctx.centerId);
   const today = kstYmd();
   const byTrigger: Record<string, number> = {};
   let total = 0;
@@ -92,6 +94,12 @@ export async function POST(request: Request) {
         basis: basisText(s.trigger_key, s, today, m.expiry),
         lastVisit: m.lastVisit,
         attendDays: m.attendDays,
+        startDate: m.startDate,
+        remaining: m.remaining,
+        trainerName: m.trainerName,
+        memberNo: m.memberNo,
+        mileage: m.mileage,
+        centerPhone,
       }),
       methods: (Array.isArray(s.methods) ? s.methods : []) as never,
       status: "pending",
