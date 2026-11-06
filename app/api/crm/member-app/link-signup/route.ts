@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getClientIp, checkRateLimit } from "@/app/lib/security";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
 import { digitsOnly } from "@/app/lib/crm-identity";
@@ -13,12 +14,16 @@ export const dynamic = "force-dynamic";
  *
  * body: { centerId? , centerToken? , phone , name? }
  *   - centerId 또는 centerToken(QR 가입링크 토큰) 중 하나로 센터 특정
- *   - name 은 같은 번호의 미연동 회원이 여러 명일 때만 사용(동명이인 방지)
+ *   - name 필수 — 전화번호와 이름이 둘 다 맞아야 연결(🚨 번호만으로 연결되던 구멍 차단)
  *
  * 응답: { ok:true, memberId, centerId, centerName } |
  *       { ok:false, reason:"not_found"|"multiple"|"invalid" }
  */
 export async function POST(request: Request) {
+  // 🚨 이름·전화번호 대입을 막는다 — /api/crm/member-app/link 와 같은 제한
+  const rl = checkRateLimit(getClientIp(request), "auth");
+  if (rl) return rl;
+
   const user = await verifyAuth(request);
   if (!user) return NextResponse.json({ error: "로그인이 필요합니다" }, { status: 401 });
 
@@ -32,6 +37,13 @@ export async function POST(request: Request) {
   const phoneDigits = digitsOnly(body.phone);
   if (phoneDigits.length < 10) {
     return NextResponse.json({ ok: false, reason: "invalid", error: "전화번호를 정확히 입력해 주세요" }, { status: 400 });
+  }
+  // 🚨 이름은 필수다. 예전엔 같은 번호가 여럿일 때만 이름을 봐서, 로그인만 하면
+  //   센터번호 + 전화번호만으로 남의 회원 기록을 내 앱 계정에 연결할 수 있었다
+  //   (연동되면 이용권·예약·계약서·체성분 기록·마일리지까지 보인다).
+  const name = (body.name ?? "").trim();
+  if (!name) {
+    return NextResponse.json({ ok: false, reason: "invalid", error: "이름을 입력해 주세요" }, { status: 400 });
   }
 
   // 센터 특정 — token 우선
@@ -78,20 +90,23 @@ export async function POST(request: Request) {
     .eq("center_id", centerId)
     .eq("status", "active")
     .ilike("phone", `%${last4}%`);
-  let unlinked = (cand ?? []).filter(
-    (m) => !m.linked_firebase_uid && digitsOnly(m.phone) === phoneDigits
+  // 번호와 이름이 **둘 다** 맞는 미연동 회원만
+  const unlinked = (cand ?? []).filter(
+    (m) =>
+      !m.linked_firebase_uid &&
+      digitsOnly(m.phone) === phoneDigits &&
+      m.name.trim().toLowerCase() === name.toLowerCase()
   );
-
-  // 동일 번호 미연동 회원이 여럿이면 이름으로 좁힌다
-  const name = (body.name ?? "").trim();
-  if (unlinked.length > 1 && name) {
-    unlinked = unlinked.filter((m) => m.name.trim().toLowerCase() === name.toLowerCase());
-  }
   if (unlinked.length === 0) {
-    return NextResponse.json({ ok: false, reason: "not_found", error: "해당 센터에 이 번호로 가입된 회원이 없어요" }, { status: 404 });
+    // 번호만 맞는지·이름만 맞는지는 알려주지 않는다(회원 존재 여부 탐색 방지)
+    return NextResponse.json(
+      { ok: false, reason: "not_found", error: "해당 센터에 이름과 전화번호가 일치하는 회원이 없어요" },
+      { status: 404 }
+    );
   }
   if (unlinked.length > 1) {
-    return NextResponse.json({ ok: false, reason: "multiple", error: "같은 번호의 회원이 여러 명이에요. 이름을 함께 입력해 주세요" }, { status: 409 });
+    // 이름·번호까지 같은 미연동 회원이 둘 이상 — 자동으로 고르지 않고 센터 확인을 받게 한다
+    return NextResponse.json({ ok: false, reason: "multiple", error: "같은 이름·번호의 회원이 여러 명이에요. 센터에 문의해 주세요" }, { status: 409 });
   }
 
   const target = unlinked[0];
