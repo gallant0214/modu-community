@@ -88,17 +88,35 @@ export async function GET(request: Request) {
   const period = (url.searchParams.get("period") ?? "month") as
     | "day"
     | "week"
-    | "month";
+    | "month"
+    | "month_select"
+    | "range";
 
   const today = kstYmd();
+  const ymdRe = /^\d{4}-\d{2}-\d{2}$/;
+  const fromParam = url.searchParams.get("from");
+  const toParam = url.searchParams.get("to");
+
   let from: string;
-  if (period === "day") from = today;
-  else if (period === "week") from = shiftYmd(today, -6);
-  else from = firstOfMonth(today);
-  const toExcl = shiftYmd(today, 1); // to (exclusive)
+  let rangeEnd: string; // 조회 구간의 '포함' 종료일(응답 range.to)
+  if ((period === "month_select" || period === "range") && fromParam && toParam && ymdRe.test(fromParam) && ymdRe.test(toParam) && fromParam <= toParam) {
+    // 월선택·기간선택 — 명시 구간. 종료일은 오늘을 넘지 않도록 캡.
+    from = fromParam;
+    rangeEnd = toParam > today ? today : toParam;
+  } else if (period === "day") {
+    from = today;
+    rangeEnd = today;
+  } else if (period === "week") {
+    from = shiftYmd(today, -6);
+    rangeEnd = today;
+  } else {
+    from = firstOfMonth(today);
+    rangeEnd = today;
+  }
+  const toExcl = shiftYmd(rangeEnd, 1); // to (exclusive)
 
   // 대시보드 요약은 가장 자주 열고 무거움(회원 전체 스캔) → 30초 캐시.
-  const cacheKey = crmCacheKey(ctx, "dashboard:summary", `${period}:${today}`);
+  const cacheKey = crmCacheKey(ctx, "dashboard:summary", `${period}:${from}:${rangeEnd}:${today}`);
   const payload = await cached(cacheKey, 30, async () => {
   // 회원 전체 (성별·POS 스냅샷 필드 포함).
   // crm_passes/memberships 정식 임포트 전이라 final_expire_at·registered_at·registration_type 을
@@ -421,7 +439,7 @@ export async function GET(request: Request) {
 
   return {
     period,
-    range: { from, to: today },
+    range: { from, to: rangeEnd },
     members: {
       total: totalMembers,
       active: activeMembers,

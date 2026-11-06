@@ -47,7 +47,7 @@ interface GenderCount {
 }
 
 interface SummaryResp {
-  period: "day" | "week" | "month";
+  period: "day" | "week" | "month" | "month_select" | "range";
   range: { from: string; to: string };
   members: {
     total: GenderCount;
@@ -129,7 +129,18 @@ const ROLE_LABEL: Record<string, string> = {
   trainer: "강사",
 };
 
-type Period = "day" | "week" | "month";
+type Period = "day" | "week" | "month" | "month_select" | "range";
+
+/** YYYY-MM → 해당 월 말일(YYYY-MM-DD, KST). */
+function lastDayOfMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m, 0)); // m월의 0일 = 전월 말일 → (m, 0)=당월 말일
+  return d.toISOString().slice(0, 10);
+}
+/** 오늘(KST) YYYY-MM-DD. */
+function kstTodayYmd(): string {
+  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+}
 
 export default function CrmDashboardPage() {
   const { getIdToken } = useAuth();
@@ -138,6 +149,10 @@ export default function CrmDashboardPage() {
   const [summary, setSummary] = useState<SummaryResp | null>(null);
   const [me, setMe] = useState<BootstrapResp | null>(null);
   const [period, setPeriod] = useState<Period>("month");
+  // 월선택: 조회할 YYYY-MM (기본=이번 달). 기간선택: 시작/종료 YYYY-MM-DD.
+  const [selMonth, setSelMonth] = useState<string>(() => kstTodayYmd().slice(0, 7));
+  const [rangeFrom, setRangeFrom] = useState<string>(() => kstTodayYmd().slice(0, 8) + "01");
+  const [rangeTo, setRangeTo] = useState<string>(() => kstTodayYmd());
   const [joinModal, setJoinModal] = useState<"qr" | "link" | null>(null);
   const [view, setView] = useState<"overview" | "customers" | "finance">("overview");
   const [loading, setLoading] = useState(true);
@@ -160,10 +175,17 @@ export default function CrmDashboardPage() {
       const isTrainer = meData?.centerKind === "solo" || meData?.role === "trainer";
       if (isTrainer) return;
 
+      // 월선택·기간선택은 명시 구간(from/to)을 함께 전달.
+      let summaryUrl = `/api/crm/dashboard/summary?period=${period}`;
+      if (period === "month_select") {
+        summaryUrl += `&from=${selMonth}-01&to=${lastDayOfMonth(selMonth)}`;
+      } else if (period === "range" && rangeFrom && rangeTo && rangeFrom <= rangeTo) {
+        summaryUrl += `&from=${rangeFrom}&to=${rangeTo}`;
+      }
       const [a, b, c] = await Promise.all([
         fetch("/api/crm/stats/trend", { headers: auth }),
         fetch("/api/crm/stats/monthly", { headers: auth }),
-        fetch(`/api/crm/dashboard/summary?period=${period}`, { headers: auth, cache: "no-store" }),
+        fetch(summaryUrl, { headers: auth, cache: "no-store" }),
       ]);
       if (!a.ok || !b.ok || !c.ok) {
         const err = !a.ok ? await a.json() : !b.ok ? await b.json() : await c.json();
@@ -177,7 +199,7 @@ export default function CrmDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [getIdToken, period]);
+  }, [getIdToken, period, selMonth, rangeFrom, rangeTo]);
 
   useEffect(() => {
     load();
@@ -242,7 +264,16 @@ export default function CrmDashboardPage() {
   const registrationTotal = summary
     ? summary.members.newly.count + summary.members.reregistered.count
     : 0;
-  const periodLabel = period === "day" ? "일간" : period === "week" ? "주간" : "월간";
+  const periodLabel =
+    period === "day"
+      ? "일간"
+      : period === "week"
+        ? "주간"
+        : period === "month_select"
+          ? `${selMonth.replace("-", "년 ")}월`
+          : period === "range"
+            ? "기간"
+            : "월간";
 
   // 매출 추이 그래프 — 막대 = 최근 12개월(롤링), 선 = 1년 전 같은 달.
   // trend 는 최근 12개월 배열이고 각 항목에 1년 전 같은 달 값(revenuePrev)이 들어 있다.
@@ -288,21 +319,58 @@ export default function CrmDashboardPage() {
           </div>
 
           <div className="flex flex-col items-start md:items-end gap-2">
-            <div className="inline-flex self-start rounded-lg border border-[#D9CDB8] dark:border-zinc-700 bg-[#F8F4EC] dark:bg-zinc-950 p-1">
-              {(["day", "week", "month"] as const).map((p) => (
+            <div className="inline-flex flex-wrap self-start rounded-lg border border-[#D9CDB8] dark:border-zinc-700 bg-[#F8F4EC] dark:bg-zinc-950 p-1 gap-0.5">
+              {(["day", "week", "month", "month_select", "range"] as const).map((p) => (
                 <button
                   key={p}
                   onClick={() => setPeriod(p)}
-                  className={`px-3.5 py-1.5 rounded-md text-[12.5px] font-semibold transition-colors
+                  className={`px-3 py-1.5 rounded-md text-[12.5px] font-semibold transition-colors
                     ${period === p
                       ? "bg-[#2F3A2B] text-white dark:bg-[#A8B87A] dark:text-zinc-950"
                       : "text-[#6B5D47] dark:text-zinc-400 hover:bg-white/80 dark:hover:bg-zinc-800"
                     }`}
                 >
-                  {p === "day" ? "일간" : p === "week" ? "주간" : "월간"}
+                  {p === "day"
+                    ? "일간"
+                    : p === "week"
+                      ? "주간"
+                      : p === "month"
+                        ? "월간"
+                        : p === "month_select"
+                          ? "월선택"
+                          : "기간선택"}
                 </button>
               ))}
             </div>
+            {period === "month_select" && (
+              <input
+                type="month"
+                value={selMonth}
+                max={kstTodayYmd().slice(0, 7)}
+                onChange={(e) => e.target.value && setSelMonth(e.target.value)}
+                className="self-start rounded-lg border border-[#D9CDB8] dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-1.5 text-[12.5px] text-[#2A251D] dark:text-zinc-100"
+              />
+            )}
+            {period === "range" && (
+              <div className="flex items-center gap-1.5 self-start flex-wrap">
+                <input
+                  type="date"
+                  value={rangeFrom}
+                  max={rangeTo || kstTodayYmd()}
+                  onChange={(e) => e.target.value && setRangeFrom(e.target.value)}
+                  className="rounded-lg border border-[#D9CDB8] dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-[12.5px] text-[#2A251D] dark:text-zinc-100"
+                />
+                <span className="text-[#8C8270] text-[12.5px]">~</span>
+                <input
+                  type="date"
+                  value={rangeTo}
+                  min={rangeFrom}
+                  max={kstTodayYmd()}
+                  onChange={(e) => e.target.value && setRangeTo(e.target.value)}
+                  className="rounded-lg border border-[#D9CDB8] dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2.5 py-1.5 text-[12.5px] text-[#2A251D] dark:text-zinc-100"
+                />
+              </div>
+            )}
             {/* 결제링크 · 센터 연결 QR 생성 */}
             <div className="flex flex-wrap gap-1.5">
               <PayLinkButton />
