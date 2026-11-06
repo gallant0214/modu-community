@@ -1109,14 +1109,31 @@ function AutoMessageEditor({
               title="메세지 입력"
               hint="아래 변수 버튼을 누르면 커서 위치에 삽입됩니다. 발송 시 회원별 값으로 자동 치환되고, 값이 없는 변수는 빈칸으로 나갑니다. 90Byte를 넘으면 장문(LMS)으로 전환돼 문자 요금이 올라가요."
             >
+              {/* 변수 버튼 — 쿠폰 변수는 '쿠폰이 붙은 알림에서만' 값이 채워지므로 따로 묶어 보여준다 */}
               <div className="flex flex-wrap gap-1.5 mb-2">
-                {MESSAGE_VARIABLES.map((v) => (
+                {MESSAGE_VARIABLES.filter((v) => !v.token.startsWith("#쿠폰")).map((v) => (
                   <button
                     key={v.token}
                     type="button"
                     onClick={() => insertVar(v.token)}
                     title={v.desc}
                     className="px-2 py-1 rounded-md text-[11.5px] font-semibold border border-[#E8E0D0] dark:border-zinc-700 text-[#6B7B3A] dark:text-[#A8B87A] bg-white dark:bg-zinc-900 hover:bg-[#6B7B3A]/5"
+                  >
+                    {v.token}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                <span className="text-[11px] text-[#A89B80] dark:text-zinc-500">
+                  쿠폰 {showAttendanceRules ? "(06 규칙의 쿠폰)" : "(06 쿠폰 첨부 시)"}
+                </span>
+                {MESSAGE_VARIABLES.filter((v) => v.token.startsWith("#쿠폰")).map((v) => (
+                  <button
+                    key={v.token}
+                    type="button"
+                    onClick={() => insertVar(v.token)}
+                    title={v.desc}
+                    className="px-2 py-1 rounded-md text-[11.5px] font-semibold border border-[#B47B2A]/40 text-[#B47B2A] dark:text-amber-300 bg-[#F5E4C8]/20 hover:bg-[#F5E4C8]/40"
                   >
                     {v.token}
                   </button>
