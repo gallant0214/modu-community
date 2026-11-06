@@ -70,7 +70,7 @@ export async function GET(
  * PATCH /api/crm/staff/[id] — 등급/access_level/status/표시명 변경
  *
  * 접근:
- *  - owner/admin/manager: 모든 직원 수정
+ *  - owner/admin/manager: 모든 직원 수정 (등급·상태·동료 개인정보는 staff.manage 필요)
  *  - trainer(본인): display_name/phone/email/address/birth 만 수정 허용
  *
  * 본인(센터의 마지막 owner) 등급을 trainer 로 내려서 센터가 owner 없는 상태가 되는 것 방지.
@@ -162,6 +162,33 @@ export async function PATCH(
   //   owner/admin 은 ctxHasPermission 이 항상 통과시키므로 영향 없음.
   if (touchesStaffCore && !(await ctxHasPermission(ctx, "staff.manage"))) {
     return NextResponse.json({ error: "직원 관리 권한이 없습니다" }, { status: 403 });
+  }
+
+  // 동료의 개인정보(이름·연락처·이메일·주소·생년월일)도 staff.manage 필요 — 본인 것은 자유롭게.
+  // 생년월일은 센터 탈퇴·양도 본인확인 인자라, 권한 없는 팀장이 바꿀 수 있으면 안 된다.
+  //   직원 상세 화면은 저장할 때 연락처 칸을 항상 같이 보내므로, '실제로 바뀐 값'이 있을 때만 막는다
+  //   (수업료만 고치는 팀장이 연락처 동봉 때문에 403 받지 않게). 안 바뀐 값은 그냥 무시.
+  const PERSONAL_KEYS = ["display_name", "phone", "email", "address", "birth"] as const;
+  let unchangedPersonalDropped = false;
+  const sentPersonal = PERSONAL_KEYS.filter((k) => body[k] !== undefined);
+  if (sentPersonal.length > 0 && !isSelf && !(await ctxHasPermission(ctx, "staff.manage"))) {
+    const { data: cur } = await supabase
+      .from("crm_center_members")
+      .select("display_name, phone, email, address, birth")
+      .eq("id", memberId)
+      .eq("center_id", ctx.centerId)
+      .maybeSingle();
+    // 전화번호는 하이픈 유무만 다른 경우(화면이 formatPhone 으로 보냄)를 같은 값으로 본다
+    const norm = (k: string, v: unknown) => {
+      const t = (typeof v === "string" ? v.trim() : v) || null;
+      return k === "phone" && typeof t === "string" ? t.replace(/\D/g, "") || null : t;
+    };
+    const curRow = (cur ?? {}) as Record<string, unknown>;
+    if (sentPersonal.some((k) => norm(k, body[k]) !== norm(k, curRow[k]))) {
+      return NextResponse.json({ error: "다른 직원의 정보를 수정할 권한이 없습니다" }, { status: 403 });
+    }
+    for (const k of sentPersonal) delete body[k];
+    unchangedPersonalDropped = true;
   }
 
   const patch: Record<string, unknown> = {};
@@ -316,6 +343,8 @@ export async function PATCH(
     patch.employment_type = body.employment_type || null;
   }
   if (Object.keys(patch).length === 0) {
+    // 안 바뀐 연락처만 왔던 저장 → 바뀐 게 없으니 성공으로 처리
+    if (unchangedPersonalDropped) return NextResponse.json({ ok: true });
     return NextResponse.json({ error: "변경할 항목이 없습니다" }, { status: 400 });
   }
 
