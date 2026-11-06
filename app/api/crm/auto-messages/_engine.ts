@@ -40,6 +40,9 @@ export interface Match {
   nextLesson?: string;
   /** 센터 첫 등록일 (#가입일#) */
   joinDate?: string;
+  /** 홀딩 시작일·종료일 (#홀딩시작일# #홀딩종료일#) — 홀딩 알림에서만 */
+  holdStart?: string;
+  holdEnd?: string;
 }
 
 export interface TriggerSetting {
@@ -72,6 +75,7 @@ export const SCAN_TRIGGERS = new Set<string>([
   "membership_new",
   "membership_renew",
   "attendance_coupon",
+  "hold_ending_soon",
 ]);
 
 /** 만료 임박(#전송기준# 잔여일 계산) 트리거 */
@@ -350,6 +354,109 @@ function matchExpiry(
           r.trainerMemberId && staffNames ? staffNames.get(r.trainerMemberId) ?? undefined : undefined,
       });
     }
+  }
+  return out;
+}
+
+/**
+ * 홀딩 종료 임박 — 홀딩(crm_pauses) 종료일이 target 인 회원.
+ *
+ * 한 번 홀딩하면 회원권·수강권·대여권(락커·운동복)이 묶음으로 같이 홀딩돼 행이 여러 개 생긴다
+ * (같은 회원·같은 종료일). 회원 1명당 1건으로 묶고 #상품명# 에 홀딩된 상품을 모두 적는다.
+ *  - 조기 해제(cancelled)는 제외. 종료일 '후' 발송이면 크론이 이미 ended 로 마감했을 수 있어 같이 본다.
+ *  - #만료일# = 홀딩 연장이 반영된 상품 만료일(회원권 우선), #전송기준# = 홀딩 종료일까지 남은 일수.
+ *  - 중복 방지 키는 '홀딩 종료일' 기준 — 같은 홀딩에 한 번만. 종료일을 바꾸면 새 날짜로 다시 나간다.
+ */
+async function matchHoldEnding(
+  centerId: number,
+  members: Map<number, MemberLite>,
+  target: string
+): Promise<Match[]> {
+  type PauseRow = {
+    member_id: number;
+    start_date: string;
+    end_date: string;
+    membership_id: number | null;
+    pass_id: number | null;
+    rental_id: number | null;
+  };
+  const pauses = await paginateAll<PauseRow>(async (f, t) => {
+    const r = await supabase
+      .from("crm_pauses")
+      .select("member_id, start_date, end_date, membership_id, pass_id, rental_id")
+      .eq("center_id", centerId)
+      .eq("end_date", target)
+      .in("status", ["active", "ended"])
+      .order("id", { ascending: true })
+      .range(f, t);
+    return { data: r.data as PauseRow[] | null, error: r.error };
+  });
+  if (pauses.length === 0) return [];
+
+  const ids = (k: "membership_id" | "pass_id" | "rental_id") =>
+    Array.from(new Set(pauses.map((p) => p[k]).filter((v): v is number => v != null)));
+  const [mIds, pIds, rIds] = [ids("membership_id"), ids("pass_id"), ids("rental_id")];
+  type Item = { id: number; label: string; expires_at: string | null; status: string | null };
+  const pick = async (table: string, col: string, list: number[]): Promise<Map<number, Item>> => {
+    if (list.length === 0) return new Map();
+    const { data } = await supabase
+      .from(table as "crm_memberships")
+      .select(`id, ${col}, expires_at, status`)
+      .eq("center_id", centerId)
+      .in("id", list);
+    return new Map(
+      ((data ?? []) as unknown as Record<string, unknown>[]).map((x) => [
+        Number(x.id),
+        {
+          id: Number(x.id),
+          label: String(x[col] ?? ""),
+          expires_at: x.expires_at ? String(x.expires_at) : null,
+          status: x.status != null ? String(x.status) : null,
+        },
+      ])
+    );
+  };
+  const [mships, passes, rentals] = await Promise.all([
+    pick("crm_memberships", "plan_name", mIds),
+    pick("crm_passes", "lesson_kind", pIds),
+    pick("crm_rentals", "item_name", rIds),
+  ]);
+
+  const byMember = new Map<number, { start: string; end: string; items: Item[]; mainExpiry?: string }>();
+  for (const p of pauses) {
+    const item =
+      p.membership_id != null
+        ? mships.get(p.membership_id)
+        : p.pass_id != null
+          ? passes.get(p.pass_id)
+          : p.rental_id != null
+            ? rentals.get(p.rental_id)
+            : undefined;
+    // 홀딩 중에 환불·삭제된 상품은 안내하지 않는다
+    if (!item || (item.status && DEAD_PASS_STATUS.has(item.status))) continue;
+    const e = byMember.get(p.member_id) ?? { start: p.start_date, end: p.end_date, items: [] };
+    if (p.start_date < e.start) e.start = p.start_date;
+    if (!e.items.some((x) => x.label === item.label)) e.items.push(item);
+    // 만료일: 회원권 > 수강권 > 대여권 순으로 첫 값
+    if (!e.mainExpiry && item.expires_at && p.rental_id == null) e.mainExpiry = item.expires_at;
+    byMember.set(p.member_id, e);
+  }
+
+  const out: Match[] = [];
+  for (const [memberId, e] of byMember) {
+    const m = members.get(memberId);
+    if (!m || e.items.length === 0) continue;
+    out.push({
+      member_id: memberId,
+      name: m.name,
+      product: e.items.map((x) => x.label).filter(Boolean).join(", "),
+      expiry: e.mainExpiry ?? e.items[0].expires_at ?? undefined,
+      holdStart: e.start,
+      holdEnd: e.end,
+      memberNo: m.attendance_no ?? undefined,
+      mileage: m.mileage ?? undefined,
+      dedupeKey: `hold_ending_soon:${memberId}:${e.end}`,
+    });
   }
   return out;
 }
@@ -834,6 +941,11 @@ async function matchTrigger(
     }
   }
 
+  // 홀딩 종료 임박 — 홀딩 종료일 N일 전(또는 후)
+  if (key === "hold_ending_soon") {
+    return matchHoldEnding(centerId, members, targetExpiry(setting, today));
+  }
+
   // 출석일수 기준 쿠폰 전송 — 지정 상품 회원권의 만료일이 target 인 회원 중,
   // 그 이용권 기간(시작일~오늘) 출석일수가 규칙 기준 미만인 사람에게 규칙별 쿠폰을 보낸다.
   if (key === "attendance_coupon") {
@@ -899,6 +1011,8 @@ export function renderMessage(
     totalAttend?: number;
     nextLesson?: string;
     joinDate?: string;
+    holdStart?: string;
+    holdEnd?: string;
   }
 ): string {
   return (template || "")
@@ -922,7 +1036,9 @@ export function renderMessage(
     .replaceAll("#미수금#", vars.outstanding ? vars.outstanding.toLocaleString() : "0")
     .replaceAll("#총출석#", vars.totalAttend != null ? String(vars.totalAttend) : "")
     .replaceAll("#다음수업#", vars.nextLesson ?? "")
-    .replaceAll("#가입일#", vars.joinDate ?? "");
+    .replaceAll("#가입일#", vars.joinDate ?? "")
+    .replaceAll("#홀딩시작일#", vars.holdStart ?? "")
+    .replaceAll("#홀딩종료일#", vars.holdEnd ?? "");
 }
 
 /** 두 YYYY-MM-DD 사이 일수(b-a). */
@@ -935,6 +1051,7 @@ export function daysBetween(a: string, b: string): number {
 /**
  * #전송기준# 값 — 만료 임박 트리거는 회원별 실제 잔여일("10일"),
  * 그 외 스케줄/횟수 기준은 설정값("N일"/"N회"), 즉시는 빈 문자열.
+ * 홀딩 종료 임박은 `expiry` 자리에 홀딩 종료일을 넘긴다(호출처: m.holdEnd ?? m.expiry).
  */
 export function basisText(
   triggerKey: string,
@@ -942,7 +1059,10 @@ export function basisText(
   today: string,
   expiry?: string
 ): string {
-  if ((EXPIRING_TRIGGERS.has(triggerKey) || triggerKey === "attendance_coupon") && expiry) {
+  if (
+    (EXPIRING_TRIGGERS.has(triggerKey) || triggerKey === "attendance_coupon" || triggerKey === "hold_ending_soon") &&
+    expiry
+  ) {
     return `${Math.max(0, daysBetween(today, expiry))}일`;
   }
   if (EXPIRED_TRIGGERS.has(triggerKey)) return "0일";

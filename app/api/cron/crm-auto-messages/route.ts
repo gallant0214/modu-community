@@ -135,7 +135,7 @@ export async function GET(request: Request) {
         expiry: m.expiry,
         payment: paymentText(m.product, m.price),
         appLink: meta.appLink,
-        basis: basisText(s.trigger_key, setting, today, m.expiry),
+        basis: basisText(s.trigger_key, setting, today, m.holdEnd ?? m.expiry),
         attendDays: m.attendDays,
         startDate: m.startDate,
         remaining: m.remaining,
@@ -149,6 +149,8 @@ export async function GET(request: Request) {
         totalAttend: m.totalAttend,
         nextLesson: m.nextLesson,
         joinDate: m.joinDate,
+        holdStart: m.holdStart,
+        holdEnd: m.holdEnd,
         lastVisit: m.lastVisit,
       });
 

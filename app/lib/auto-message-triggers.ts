@@ -160,6 +160,7 @@ export const DISPATCHABLE_TRIGGERS = new Set<string>([
   "sportswear_expired",
   "long_absence",
   "attendance_coupon",
+  "hold_ending_soon",
   // 즉시형(발급·결제 직후 발사) — 신규/재등록은 스캔형에도 있다
   "membership_new",
   "membership_renew",
@@ -219,7 +220,7 @@ export const SEGMENT_OPTIONS: { key: string; label: string }[] = [
  *   /api/crm/auto-messages/var-samples 가 돌려준 실제 값으로 덮어쓴다.
  *
  * 🚨 변수를 새로 추가하면 렌더 경로 5곳(renderMessage 시그니처 · 크론 · /run ·
- *   test-send · fireAutoMessage)을 모두 고쳐야 한다. 한 곳이라도 빠지면 그 경로만 빈칸으로 발송된다.
+ *   test-send · fireAutoMessage)을 모두 고쳐야 한다. (트리거 전용 값은 해당 경로만 — 예: 홀딩일은 즉시형에 없음) 한 곳이라도 빠지면 그 경로만 빈칸으로 발송된다.
  */
 export const MESSAGE_VARIABLES: {
   token: string;
@@ -284,6 +285,18 @@ export const MESSAGE_VARIABLES: {
     sample: "11/8(토) 14:00",
   },
   { token: "#가입일#", desc: "센터 첫 등록일", example: "가입일 #가입일#", sample: "2026-09-12" },
+  {
+    token: "#홀딩시작일#",
+    desc: "홀딩 시작 날짜 (홀딩 알림에서만 값이 채워짐)",
+    example: "홀딩 시작 #홀딩시작일#",
+    sample: "2026-11-03",
+  },
+  {
+    token: "#홀딩종료일#",
+    desc: "홀딩 마지막 날짜 (다음 날부터 다시 이용)",
+    example: "홀딩 종료 #홀딩종료일#",
+    sample: "2026-11-16",
+  },
   {
     token: "#앱설치링크#",
     desc: "회원 앱 설치 링크",

@@ -90,6 +90,8 @@ export async function POST(request: Request) {
     totalAttend: 24, // (예시) 누적 출석일수
     nextLesson: "(예시) 11/8(토) 14:00",
     joinDate: kstYmd(),
+    holdStart: kstYmd(), // (예시) 홀딩 시작일·종료일
+    holdEnd: kstYmd(),
   });
   // 06 쿠폰 첨부 — 테스트는 실제 발급 없이 예시 코드(TEST-0000)로 보여준다.
   // 🚨 쿠폰이 없으면(06 미설정 등) 남은 쿠폰 변수를 지운다 — 실제 자동 발송과 같은 처리.
