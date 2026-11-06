@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -81,7 +82,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       .eq("center_id", ctx.centerId)
       .eq("payment_id", row.id);
     if (delErr) {
-      return NextResponse.json({ error: "환불 이력 삭제 실패", detail: delErr.message }, { status: 500 });
+      return NextResponse.json({ error: "환불 이력 삭제 실패", detail: errDetail(delErr) }, { status: 500 });
     }
   }
 
@@ -92,7 +93,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .eq("id", row.id)
     .eq("center_id", ctx.centerId);
   if (payErr) {
-    return NextResponse.json({ error: "결제 복원 실패", detail: payErr.message }, { status: 500 });
+    return NextResponse.json({ error: "결제 복원 실패", detail: errDetail(payErr) }, { status: 500 });
   }
 
   // 3) 연결 상품 복원 (refunded 인 것만 — 다른 이유로 만료된 건 건드리지 않는다)

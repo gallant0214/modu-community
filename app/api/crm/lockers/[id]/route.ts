@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -273,7 +274,7 @@ export async function PATCH(
       } as never)
       .eq("id", toId);
     if (moveErr) {
-      return NextResponse.json({ error: "이동 실패", detail: moveErr.message }, { status: 500 });
+      return NextResponse.json({ error: "이동 실패", detail: errDetail(moveErr) }, { status: 500 });
     }
 
     // 원본 락커 비우기 (비밀번호는 위 규칙에 따라 유지/교환)
@@ -322,7 +323,7 @@ export async function PATCH(
     .eq("center_id", ctx.centerId);
 
   if (upErr) {
-    return NextResponse.json({ error: "저장 실패", detail: upErr.message }, { status: 500 });
+    return NextResponse.json({ error: "저장 실패", detail: errDetail(upErr) }, { status: 500 });
   }
 
   // 배정된 락커의 시작/만료일이 바뀐 경우 매칭 대여권(crm_rentals)도 자동 동기화.

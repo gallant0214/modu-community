@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
     .update({ linked_firebase_uid: null, member_type: "provisional" } as never)
     .eq("linked_firebase_uid", user.uid);
   if (error) {
-    return NextResponse.json({ error: "탈퇴 처리 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "탈퇴 처리 실패", detail: errLogOnly(error) }, { status: 500 });
   }
 
   // 이 계정의 모든 푸시 토큰 삭제

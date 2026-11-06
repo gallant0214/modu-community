@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
       .update(linkPatch as never)
       .eq("id", match.id)
       .is("linked_firebase_uid", null);
-    if (linkErr) return NextResponse.json({ error: "가입 실패", detail: linkErr.message }, { status: 500 });
+    if (linkErr) return NextResponse.json({ error: "가입 실패", detail: errLogOnly(linkErr) }, { status: 500 });
     return NextResponse.json({ ok: true, memberId: match.id, linkedExisting: true });
   }
 
@@ -141,7 +142,7 @@ export async function POST(request: Request) {
     .select("id")
     .single();
   if (error || !created) {
-    return NextResponse.json({ error: "가입 실패", detail: error?.message }, { status: 500 });
+    return NextResponse.json({ error: "가입 실패", detail: errLogOnly(error) }, { status: 500 });
   }
 
   // 가입 및 등록 알림 — 권한 있는 직원에게 신규가입 알림

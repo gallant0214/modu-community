@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -283,7 +284,7 @@ export async function POST(request: Request) {
 
   if (error || !created) {
     return NextResponse.json(
-      { error: "요청 생성 실패", detail: error?.message },
+      { error: "요청 생성 실패", detail: errDetail(error) },
       { status: 500 }
     );
   }

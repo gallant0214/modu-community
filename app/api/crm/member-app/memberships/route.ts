@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
       .eq("status", "valid"),
   ]);
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errLogOnly(error) }, { status: 500 });
   }
 
   const todayYmd = new Date(new Date().getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);

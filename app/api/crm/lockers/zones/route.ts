@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
     .order("zone_number", { ascending: true });
 
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   // 시드 없을 때 자동 생성
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
       .select("zone_number, name, locker_count, start_number, layout_rows, layout_cols")
       .order("zone_number", { ascending: true });
     if (insErr) {
-      return NextResponse.json({ error: "초기화 실패", detail: insErr.message }, { status: 500 });
+      return NextResponse.json({ error: "초기화 실패", detail: errDetail(insErr) }, { status: 500 });
     }
     return NextResponse.json({ zones: created ?? [] });
   }

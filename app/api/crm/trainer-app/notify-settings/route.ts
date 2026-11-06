@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -55,7 +56,7 @@ export async function PATCH(request: Request) {
     { onConflict: "center_member_id" }
   );
   if (error) {
-    return NextResponse.json({ error: "저장 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "저장 실패", detail: errDetail(error) }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
 }

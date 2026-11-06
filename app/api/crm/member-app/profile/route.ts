@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
@@ -102,7 +103,7 @@ export async function PATCH(request: Request) {
     .eq("center_id", ctx.centerId)
     .eq("linked_firebase_uid", ctx.uid);
   if (error) {
-    return NextResponse.json({ error: "수정 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "수정 실패", detail: errLogOnly(error) }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
 }

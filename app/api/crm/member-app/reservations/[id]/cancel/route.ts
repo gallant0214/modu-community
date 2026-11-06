@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
@@ -89,7 +90,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .eq("center_id", ctx.centerId)
     .eq("member_id", ctx.memberId);
   if (error) {
-    return NextResponse.json({ error: "취소 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "취소 실패", detail: errLogOnly(error) }, { status: 500 });
   }
 
   // 담당 강사에게 취소 알림(알림함 저장 + 강사앱 푸시)

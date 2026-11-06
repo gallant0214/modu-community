@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
     .eq("center_id", ctx.centerId)
     .eq("linked_firebase_uid", ctx.uid); // 본인 연동분만
   if (error) {
-    return NextResponse.json({ error: "연동 해제 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "연동 해제 실패", detail: errLogOnly(error) }, { status: 500 });
   }
 
   // 이 회원 앞으로 가던 푸시 토큰 제거 (센터 알림·쿠폰 중단)

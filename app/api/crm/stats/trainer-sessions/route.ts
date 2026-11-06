@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -64,7 +65,7 @@ export async function GET(request: Request) {
     }
     const { data: staff, error: staffErr } = await staffQuery;
     if (staffErr) {
-      return NextResponse.json({ error: "조회 실패", detail: staffErr.message }, { status: 500 });
+      return NextResponse.json({ error: "조회 실패", detail: errDetail(staffErr) }, { status: 500 });
     }
 
     // 출석완료 예약 (수업 진행)
@@ -128,7 +129,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ months: months.map((m) => m.ym), trainers });
   } catch (e) {
     return NextResponse.json(
-      { error: "조회 실패", detail: e instanceof Error ? e.message : String(e) },
+      { error: "조회 실패", detail: errDetail(e) },
       { status: 500 }
     );
   }

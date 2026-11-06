@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -113,7 +114,7 @@ export async function PATCH(
     .eq("id", rid)
     .eq("center_id", ctx.centerId);
   if (error) {
-    return NextResponse.json({ error: "수정 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "수정 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   // 락커 대여권이면 물리 락커(crm_lockers) 시작/만료일도 자동 동기화 (공용 헬퍼)
@@ -212,7 +213,7 @@ export async function DELETE(
     error = e;
   }
   if (error) {
-    return NextResponse.json({ error: "환불 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "환불 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   // 결제내역에도 환불 기록을 남긴다 (결제내역 탭·누적 결제 금액과 숫자가 맞아야 한다)

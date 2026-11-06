@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -52,7 +53,7 @@ export async function POST(
     .eq("id", memberId)
     .eq("center_id", ctx.centerId);
   if (error) {
-    return NextResponse.json({ error: "연동 해제 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "연동 해제 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   // 이 회원 앞으로 가던 앱 푸시 토큰 제거 (member_id 또는 연동 uid 기준)

@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse, after } from "next/server";
 import { escapePostgrestQuery } from "@/app/lib/security";
 import { supabase } from "@/app/lib/supabase";
@@ -165,7 +166,7 @@ export async function GET(request: Request) {
     }
   } catch (e) {
     return NextResponse.json(
-      { error: "조회 실패", detail: e instanceof Error ? e.message : String(e) },
+      { error: "조회 실패", detail: errDetail(e) },
       { status: 500 }
     );
   }
@@ -602,7 +603,7 @@ export async function POST(request: Request) {
     .single();
 
   if (error || !data) {
-    return NextResponse.json({ error: "등록 실패", detail: error?.message }, { status: 500 });
+    return NextResponse.json({ error: "등록 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   await supabase.from("crm_audit_logs").insert({

@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -41,7 +42,7 @@ export async function GET(
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
   if (!pass) {
     return NextResponse.json({ error: "수강권을 찾을 수 없습니다" }, { status: 404 });
@@ -325,7 +326,7 @@ export async function PATCH(
     .eq("center_id", ctx.centerId);
 
   if (error) {
-    return NextResponse.json({ error: "수정 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "수정 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   await supabase.from("crm_audit_logs").insert({
@@ -465,7 +466,7 @@ export async function DELETE(
   }
 
   if (error) {
-    return NextResponse.json({ error: "환불 처리 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "환불 처리 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   // 결제내역에도 환불 기록을 남긴다 (결제내역 탭·누적 결제 금액과 숫자가 맞아야 한다)

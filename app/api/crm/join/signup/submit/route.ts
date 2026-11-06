@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { getClientIp, checkRateLimit } from "@/app/lib/security";
 import { supabase } from "@/app/lib/supabase";
@@ -296,7 +297,7 @@ export async function POST(request: Request) {
       .select("id")
       .single();
     if (mErr || !created)
-      return NextResponse.json({ error: "회원 생성 실패", detail: mErr?.message }, { status: 500 });
+      return NextResponse.json({ error: "회원 생성 실패", detail: errLogOnly(mErr) }, { status: 500 });
     memberId = (created as { id: number }).id;
   }
 
@@ -361,7 +362,7 @@ export async function POST(request: Request) {
     .select("id")
     .single();
   if (oErr || !order)
-    return NextResponse.json({ error: "주문 생성 실패", detail: oErr?.message }, { status: 500 });
+    return NextResponse.json({ error: "주문 생성 실패", detail: errLogOnly(oErr) }, { status: 500 });
   const orderId = (order as { id: number }).id;
 
   const { error: itemErr } = await supabase.from("crm_order_items").insert(
@@ -381,7 +382,7 @@ export async function POST(request: Request) {
   );
   if (itemErr) {
     await supabase.from("crm_orders").delete().eq("id", orderId);
-    return NextResponse.json({ error: "주문 생성 실패", detail: itemErr.message }, { status: 500 });
+    return NextResponse.json({ error: "주문 생성 실패", detail: errLogOnly(itemErr) }, { status: 500 });
   }
 
   const payToken = signOrderToken(orderUid);

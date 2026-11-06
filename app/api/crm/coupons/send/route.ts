@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse, after } from "next/server";
 import { SMS_NOT_READY_MESSAGE, smsAllowedForCenter } from "@/app/lib/crm-sms-availability";
 import { supabase } from "@/app/lib/supabase";
@@ -161,7 +162,7 @@ export async function POST(request: Request) {
     .select("id")
     .single();
   if (sendErr || !send) {
-    return NextResponse.json({ error: "발송 기록 생성 실패", detail: sendErr?.message }, { status: 500 });
+    return NextResponse.json({ error: "발송 기록 생성 실패", detail: errDetail(sendErr) }, { status: 500 });
   }
   const sendId = (send as { id: number }).id;
 
@@ -185,7 +186,7 @@ export async function POST(request: Request) {
         break;
       }
       if (attempt === 2) {
-        return NextResponse.json({ error: "쿠폰 발급 중 오류가 났어요", detail: error.message }, { status: 500 });
+        return NextResponse.json({ error: "쿠폰 발급 중 오류가 났어요", detail: errDetail(error) }, { status: 500 });
       }
     }
   }

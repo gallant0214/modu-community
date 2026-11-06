@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
@@ -54,7 +55,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .eq("center_id", ctx.centerId)
     .eq("member_id", ctx.memberId);
   if (error) {
-    return NextResponse.json({ error: "수정 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "수정 실패", detail: errLogOnly(error) }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
 }
@@ -76,7 +77,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     .eq("center_id", ctx.centerId)
     .eq("member_id", ctx.memberId);
   if (error) {
-    return NextResponse.json({ error: "삭제 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "삭제 실패", detail: errLogOnly(error) }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
 }

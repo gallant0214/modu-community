@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
     .order("created_at", { ascending: true });
 
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
   return NextResponse.json({ types: data ?? [] });
 }
@@ -116,7 +117,7 @@ export async function POST(request: Request) {
     if (error.code === "23505") {
       return NextResponse.json({ error: "이미 같은 유형이 있어요" }, { status: 409 });
     }
-    return NextResponse.json({ error: "추가 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "추가 실패", detail: errDetail(error) }, { status: 500 });
   }
   return NextResponse.json({ type: data });
 }

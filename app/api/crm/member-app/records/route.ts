@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
     .lte("record_date", to)
     .order("record_date", { ascending: false });
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errLogOnly(error) }, { status: 500 });
   }
   const list = records ?? [];
 
@@ -119,7 +120,7 @@ export async function POST(request: Request) {
     .select("id")
     .single();
   if (error || !rec) {
-    return NextResponse.json({ error: "저장 실패", detail: error?.message }, { status: 500 });
+    return NextResponse.json({ error: "저장 실패", detail: errLogOnly(error) }, { status: 500 });
   }
 
   // items 교체 (넘어온 경우에만)

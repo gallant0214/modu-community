@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
@@ -262,7 +263,7 @@ export async function POST(request: Request) {
 
   if (centerErr || !center) {
     return NextResponse.json(
-      { error: "센터 생성 실패", detail: centerErr?.message },
+      { error: "센터 생성 실패", detail: errDetail(centerErr) },
       { status: 500 }
     );
   }
@@ -290,7 +291,7 @@ export async function POST(request: Request) {
     // 롤백: 방금 만든 센터 삭제
     await supabase.from("crm_centers").delete().eq("id", center.id);
     return NextResponse.json(
-      { error: "멤버십 생성 실패", detail: memberErr?.message },
+      { error: "멤버십 생성 실패", detail: errDetail(memberErr) },
       { status: 500 }
     );
   }

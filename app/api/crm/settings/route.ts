@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   // 없으면 디폴트 row 생성 (onboarding 에서 만들지만 안전망)
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
       .select("*")
       .single();
     if (insErr) {
-      return NextResponse.json({ error: "초기화 실패", detail: insErr.message }, { status: 500 });
+      return NextResponse.json({ error: "초기화 실패", detail: errDetail(insErr) }, { status: 500 });
     }
     return NextResponse.json({ settings: created });
   }
@@ -136,7 +137,7 @@ export async function PATCH(request: Request) {
     .upsert({ center_id: ctx.centerId, ...patch } as never, { onConflict: "center_id" });
 
   if (error) {
-    return NextResponse.json({ error: "저장 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "저장 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   await supabase.from("crm_audit_logs").insert({

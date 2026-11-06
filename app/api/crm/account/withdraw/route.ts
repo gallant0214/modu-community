@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth, getFirebaseAdmin } from "@/app/lib/firebase-admin";
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     .update({ status: "deleted" } as never)
     .eq("firebase_uid", user.uid);
   if (error) {
-    return NextResponse.json({ error: "탈퇴 처리 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "탈퇴 처리 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   // Firebase 계정 삭제 (재로그인 불가). 실패해도 소속 비활성화는 완료된 상태이므로 성공 처리.

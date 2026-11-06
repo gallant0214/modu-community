@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (centerErr) {
-    return NextResponse.json({ error: "DB 오류", detail: centerErr.message }, { status: 500 });
+    return NextResponse.json({ error: "DB 오류", detail: errDetail(centerErr) }, { status: 500 });
   }
   if (!center || center.kind !== "center" || center.status !== "active") {
     return NextResponse.json({ error: "가입할 수 없는 센터입니다" }, { status: 404 });
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
       } as never)
       .eq("id", existingRow.id);
     if (reErr) {
-      return NextResponse.json({ error: "요청 실패", detail: reErr.message }, { status: 500 });
+      return NextResponse.json({ error: "요청 실패", detail: errDetail(reErr) }, { status: 500 });
     }
     return NextResponse.json({ pending: true, centerId: center.id, centerName: center.name });
   }
@@ -115,7 +116,7 @@ export async function POST(request: Request) {
 
   if (memberErr) {
     return NextResponse.json(
-      { error: "요청 실패", detail: memberErr.message },
+      { error: "요청 실패", detail: errDetail(memberErr) },
       { status: 500 }
     );
   }

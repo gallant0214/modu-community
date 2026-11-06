@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { paginateAll } from "@/app/lib/crm-coupons-db";
@@ -72,7 +73,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   // 회원 이름 join
@@ -347,7 +348,7 @@ export async function POST(request: Request) {
     .single();
 
   if (error || !created) {
-    return NextResponse.json({ error: "예약 생성 실패", detail: error?.message }, { status: 500 });
+    return NextResponse.json({ error: "예약 생성 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   // 회원 알림: 강사가 수업을 예약함 (수업 예약 알림 on 일 때만) — 회원 언어로 발송

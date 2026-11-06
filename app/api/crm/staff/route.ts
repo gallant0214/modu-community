@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { supabase } from "@/app/lib/supabase";
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
       .eq("center_id", ctx.centerId)
       .eq("status", "active")
       .order("role", { ascending: false });
-    if (error) return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
     return NextResponse.json({ staff: data ?? [] });
   }
 
@@ -55,7 +56,7 @@ export async function GET(request: Request) {
     .order("joined_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   // 등급 라벨 매핑 (grade_id → crm_grades.label)
@@ -198,7 +199,7 @@ export async function POST(request: Request) {
       .eq("id", existing.id);
 
     if (upErr) {
-      return NextResponse.json({ error: "재등록 실패", detail: upErr.message }, { status: 500 });
+      return NextResponse.json({ error: "재등록 실패", detail: errDetail(upErr) }, { status: 500 });
     }
 
     // 권한 row 보장
@@ -243,7 +244,7 @@ export async function POST(request: Request) {
     .single();
 
   if (insErr || !created) {
-    return NextResponse.json({ error: "추가 실패", detail: insErr?.message }, { status: 500 });
+    return NextResponse.json({ error: "추가 실패", detail: errDetail(insErr) }, { status: 500 });
   }
 
   // trainer/manager 면 권한 row 디폴트 (전부 true)

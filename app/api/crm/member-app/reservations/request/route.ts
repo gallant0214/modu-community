@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
@@ -143,7 +144,7 @@ export async function POST(request: Request) {
     .select("id")
     .single();
   if (error || !created) {
-    return NextResponse.json({ error: "예약 요청 실패", detail: error?.message }, { status: 500 });
+    return NextResponse.json({ error: "예약 요청 실패", detail: errLogOnly(error) }, { status: 500 });
   }
 
   after(async () => {

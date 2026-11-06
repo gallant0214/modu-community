@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -108,7 +109,7 @@ export async function GET(request: Request) {
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
   return NextResponse.json({
     settings: data ?? { center_id: ctx.centerId, ...DEFAULTS },
@@ -185,7 +186,7 @@ export async function PUT(request: Request) {
     .from("crm_touch_attendance_settings")
     .upsert(patch as never, { onConflict: "center_id" });
   if (error) {
-    return NextResponse.json({ error: "저장 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "저장 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   await supabase.from("crm_audit_logs").insert({

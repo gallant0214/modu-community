@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -27,7 +28,7 @@ export async function GET(
     .eq("center_id", ctx.centerId)
     .maybeSingle();
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
   if (!data) return NextResponse.json({ error: "계약서를 찾을 수 없습니다" }, { status: 404 });
   // 직원 계약서는 staff_contracts.view, 회원 계약서는 contracts.member_edit 권한 필요
@@ -61,7 +62,7 @@ export async function DELETE(
     .eq("id", cid)
     .eq("center_id", ctx.centerId);
   if (error) {
-    return NextResponse.json({ error: "무효화 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "무효화 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   await supabase.from("crm_audit_logs").insert({

@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
   const failed = results.filter((r) => r.error);
   if (failed.length > 0) {
     return NextResponse.json(
-      { error: "일부 저장 실패", detail: failed[0].error?.message },
+      { error: "일부 저장 실패", detail: errDetail(failed[0].error) },
       { status: 500 }
     );
   }

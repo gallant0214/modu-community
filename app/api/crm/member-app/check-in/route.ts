@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
 
   const result = await runCheckIn(center.centerId, member, "app");
   if ("error" in result) {
-    return NextResponse.json({ error: result.error, detail: result.detail }, { status: result.status });
+    return NextResponse.json({ error: result.error, detail: errLogOnly(result.detail) }, { status: result.status });
   }
   if (!("duplicate" in result && result.duplicate)) {
     const memberName = member.name;

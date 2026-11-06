@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -53,7 +54,7 @@ export async function GET(
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
   if (!member) {
     return NextResponse.json({ error: "회원을 찾을 수 없습니다" }, { status: 404 });
@@ -525,7 +526,7 @@ export async function PATCH(
     .eq("center_id", ctx.centerId);
 
   if (updErr) {
-    return NextResponse.json({ error: "수정 실패", detail: updErr.message }, { status: 500 });
+    return NextResponse.json({ error: "수정 실패", detail: errDetail(updErr) }, { status: 500 });
   }
 
   // 실제 변경된 필드만 before/after diff 로 기록
@@ -585,7 +586,7 @@ export async function DELETE(
     .eq("center_id", ctx.centerId);
 
   if (error) {
-    return NextResponse.json({ error: "삭제 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "삭제 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   await supabase.from("crm_audit_logs").insert({

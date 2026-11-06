@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -89,7 +90,7 @@ export async function PATCH(
       .eq("id", expenseId)
       .eq("center_id", ctx.centerId);
     if (endErr) {
-      return NextResponse.json({ error: "수정 실패", detail: endErr.message }, { status: 500 });
+      return NextResponse.json({ error: "수정 실패", detail: errDetail(endErr) }, { status: 500 });
     }
 
     const { error: insErr } = await supabase.from("crm_fixed_expenses").insert({
@@ -105,7 +106,7 @@ export async function PATCH(
       effective_from: monthStart,
     } as never);
     if (insErr) {
-      return NextResponse.json({ error: "수정 실패", detail: insErr.message }, { status: 500 });
+      return NextResponse.json({ error: "수정 실패", detail: errDetail(insErr) }, { status: 500 });
     }
 
     await supabase.from("crm_audit_logs").insert({
@@ -125,7 +126,7 @@ export async function PATCH(
     .eq("id", expenseId)
     .eq("center_id", ctx.centerId);
   if (error) {
-    return NextResponse.json({ error: "수정 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "수정 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   await supabase.from("crm_audit_logs").insert({
@@ -161,7 +162,7 @@ export async function DELETE(
     .eq("id", expenseId)
     .eq("center_id", ctx.centerId);
   if (error) {
-    return NextResponse.json({ error: "삭제 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "삭제 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   await supabase.from("crm_audit_logs").insert({

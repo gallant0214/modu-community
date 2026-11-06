@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
   // 온라인 판매 스위치를 화면에 띄울지 — 스페셜바디 범어점 전용(파일럿)
   return NextResponse.json({
@@ -246,7 +247,7 @@ export async function POST(request: Request) {
     .single();
 
   if (error || !created) {
-    return NextResponse.json({ error: "추가 실패", detail: error?.message }, { status: 500 });
+    return NextResponse.json({ error: "추가 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   await supabase.from("crm_audit_logs").insert({

@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -58,7 +59,7 @@ export async function DELETE(
     .eq("id", attId)
     .eq("center_id", ctx.centerId);
   if (error) {
-    return NextResponse.json({ error: "취소 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "취소 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   // 마지막 출석일 스냅샷 재계산 — 남은 출석기록의 최신일(KST), 없으면 null.

@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -65,7 +66,7 @@ export async function POST(
     .eq("id", memberId)
     .eq("center_id", ctx.centerId);
   if (updErr) {
-    return NextResponse.json({ error: "수정 실패", detail: updErr.message }, { status: 500 });
+    return NextResponse.json({ error: "수정 실패", detail: errDetail(updErr) }, { status: 500 });
   }
 
   // 회원앱 마일리지 내역 원장 (센터 수동 조정: 방향별로 '센터 추가'/'센터 차감')

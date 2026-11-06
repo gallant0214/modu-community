@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
     .update({ mileage: balanceAfter } as never)
     .eq("id", ctx.memberId);
   if (upErr) {
-    return NextResponse.json({ error: "적립 실패", detail: upErr.message }, { status: 500 });
+    return NextResponse.json({ error: "적립 실패", detail: errLogOnly(upErr) }, { status: 500 });
   }
 
   await supabase.from("crm_member_mileage_logs").insert({

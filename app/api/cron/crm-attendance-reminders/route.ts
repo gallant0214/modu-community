@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextRequest, NextResponse } from "next/server";
 import { isCronAuthorized } from "@/app/lib/cron-auth";
 import { supabase } from "@/app/lib/supabase";
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
     .limit(2000);
 
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
   const rows = (pending ?? []).filter((r) => r.trainer_member_id);
   if (rows.length === 0) {

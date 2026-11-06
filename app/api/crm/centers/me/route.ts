@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     .eq("id", ctx.centerId)
     .maybeSingle();
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
   if (!data) return NextResponse.json({ error: "센터를 찾을 수 없어요" }, { status: 404 });
   return NextResponse.json({ center: data });
@@ -163,7 +164,7 @@ export async function PATCH(request: Request) {
     .update(patch as never)
     .eq("id", ctx.centerId);
   if (error) {
-    return NextResponse.json({ error: "수정 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "수정 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   // 감사 로그: 로고 data URL 은 용량이 커서 값 대신 변경 여부만 기록
@@ -252,7 +253,7 @@ export async function DELETE(request: Request) {
     .eq("id", ctx.centerId);
 
   if (error) {
-    return NextResponse.json({ error: "탈퇴 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "탈퇴 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

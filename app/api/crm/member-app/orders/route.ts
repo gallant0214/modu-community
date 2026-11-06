@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
@@ -212,7 +213,7 @@ export async function POST(request: Request) {
     // 주문이 안 만들어졌으면 잠가둔 쿠폰을 반드시 풀어준다
     if (couponIssueId) await releaseCoupon(couponIssueId);
     return NextResponse.json(
-      { error: "주문 생성에 실패했어요", detail: error?.message },
+      { error: "주문 생성에 실패했어요", detail: errLogOnly(error) },
       { status: 500 }
     );
   }
@@ -239,7 +240,7 @@ export async function POST(request: Request) {
     if (couponIssueId) await releaseCoupon(couponIssueId);
     await supabase.from("crm_orders").delete().eq("id", order.id);
     return NextResponse.json(
-      { error: "주문 생성에 실패했어요", detail: itemErr.message },
+      { error: "주문 생성에 실패했어요", detail: errLogOnly(itemErr) },
       { status: 500 }
     );
   }

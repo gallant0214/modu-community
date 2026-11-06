@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { resolveKioskCenter } from "@/app/lib/kiosk-auth";
@@ -34,7 +35,7 @@ export async function GET(
     .eq("attendance_no", no)
     .order("name", { ascending: true });
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errLogOnly(error) }, { status: 500 });
   }
 
   // 얼굴 사진 자체는 공개하지 않고, '등록 여부(has_face)'만 반환 —

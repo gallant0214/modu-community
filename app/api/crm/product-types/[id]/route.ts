@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -39,7 +40,7 @@ export async function PATCH(
     .eq("id", typeId)
     .eq("center_id", ctx.centerId);
   if (error) {
-    return NextResponse.json({ error: "수정 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "수정 실패", detail: errDetail(error) }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
 }
@@ -88,7 +89,7 @@ export async function DELETE(
       .eq("id", typeId)
       .eq("center_id", ctx.centerId);
     if (error) {
-      return NextResponse.json({ error: "이름 복원 실패", detail: error.message }, { status: 500 });
+      return NextResponse.json({ error: "이름 복원 실패", detail: errDetail(error) }, { status: 500 });
     }
     return NextResponse.json({ ok: true, reverted: true });
   }
@@ -111,7 +112,7 @@ export async function DELETE(
     .update({ status: "inactive" } as never)
     .eq("id", typeId);
   if (error) {
-    return NextResponse.json({ error: "삭제 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "삭제 실패", detail: errDetail(error) }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
 }

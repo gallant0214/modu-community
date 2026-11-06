@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
     .eq("center_member_id", ctx.centerMemberId)
     .is("read_at", null);
   if (error) {
-    return NextResponse.json({ error: "처리 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "처리 실패", detail: errDetail(error) }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
 }

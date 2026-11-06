@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -127,7 +128,7 @@ export async function POST(request: Request) {
       .eq("status", "valid")
       .eq("is_paused", false);
     if (error) {
-      return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+      return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
     }
     for (const r of data ?? []) {
       if (!r.expires_at) continue;
@@ -158,7 +159,7 @@ export async function POST(request: Request) {
   }));
   const { error: pErr } = await supabase.from("crm_pauses").insert(pauseRows as never);
   if (pErr) {
-    return NextResponse.json({ error: "홀딩 기록 실패", detail: pErr.message }, { status: 500 });
+    return NextResponse.json({ error: "홀딩 기록 실패", detail: errDetail(pErr) }, { status: 500 });
   }
 
   // 각 이용권 만료일 연장 + is_paused (테이블별 병렬, 25건씩 청크)

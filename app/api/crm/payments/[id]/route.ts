@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse, after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -235,7 +236,7 @@ export async function PATCH(
     .update(patch as never)
     .eq("id", paymentId)
     .eq("center_id", ctx.centerId);
-  if (error) return NextResponse.json({ error: "수정 실패", detail: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: "수정 실패", detail: errDetail(error) }, { status: 500 });
 
   /* 환불로 바뀐 순간을 이력에 남기고, 발급된 이용권을 회수한다.
      결제내역은 원장이라 결제 행의 status 만 바꾸면 "결제했다"는 사실이 사라진다.
@@ -288,7 +289,7 @@ export async function PATCH(
     } as never);
     if (refErr) {
       return NextResponse.json(
-        { error: "환불 이력 기록 실패", detail: refErr.message },
+        { error: "환불 이력 기록 실패", detail: errDetail(refErr) },
         { status: 500 }
       );
     }
@@ -566,7 +567,7 @@ export async function DELETE(
     .delete()
     .eq("id", paymentId)
     .eq("center_id", ctx.centerId);
-  if (error) return NextResponse.json({ error: "삭제 실패", detail: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: "삭제 실패", detail: errDetail(error) }, { status: 500 });
 
   await supabase.from("crm_audit_logs").insert({
     center_id: ctx.centerId,

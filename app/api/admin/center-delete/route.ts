@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { verifyAdmin } from "@/app/lib/admin-auth";
 import { supabase } from "@/app/lib/supabase";
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
 
   const { error } = await supabase.from("crm_centers").delete().eq("id", id);
   if (error) {
-    return NextResponse.json({ error: "삭제 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "삭제 실패", detail: errDetail(error) }, { status: 500 });
   }
   return NextResponse.json({ ok: true, deleted: { id, name: (center as { name: string }).name } });
 }

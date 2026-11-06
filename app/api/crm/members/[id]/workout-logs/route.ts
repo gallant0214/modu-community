@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -32,7 +33,7 @@ export async function GET(
     .order("id", { ascending: false })
     .limit(100);
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
   return NextResponse.json({ logs: data ?? [] });
 }
@@ -90,7 +91,7 @@ export async function POST(
     .select("id, log_date, memo, created_by_uid, created_at, updated_at")
     .single();
   if (error || !created) {
-    return NextResponse.json({ error: "저장 실패", detail: error?.message }, { status: 500 });
+    return NextResponse.json({ error: "저장 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   await supabase.from("crm_audit_logs").insert({

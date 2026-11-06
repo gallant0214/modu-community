@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { supabase } from "@/app/lib/supabase";
@@ -71,7 +72,7 @@ export async function PATCH(
     .maybeSingle();
 
   if (curErr) {
-    return NextResponse.json({ error: "조회 실패", detail: curErr.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(curErr) }, { status: 500 });
   }
   if (!cur) return NextResponse.json({ error: "예약을 찾을 수 없습니다" }, { status: 404 });
 
@@ -115,7 +116,7 @@ export async function PATCH(
         .eq("center_id", ctx.centerId)
         .eq("status", "requested"); // 경합 방지
       if (upErr) {
-        return NextResponse.json({ error: "승인 실패", detail: upErr.message }, { status: 500 });
+        return NextResponse.json({ error: "승인 실패", detail: errDetail(upErr) }, { status: 500 });
       }
 
       after(async () => {
@@ -144,7 +145,7 @@ export async function PATCH(
       .eq("center_id", ctx.centerId)
       .eq("status", "requested");
     if (upErr) {
-      return NextResponse.json({ error: "거절 실패", detail: upErr.message }, { status: 500 });
+      return NextResponse.json({ error: "거절 실패", detail: errDetail(upErr) }, { status: 500 });
     }
 
     after(async () => {
@@ -270,7 +271,7 @@ export async function PATCH(
       .eq("center_id", ctx.centerId);
 
     if (upErr) {
-      return NextResponse.json({ error: "수정 실패", detail: upErr.message }, { status: 500 });
+      return NextResponse.json({ error: "수정 실패", detail: errDetail(upErr) }, { status: 500 });
     }
 
     await supabase.from("crm_audit_logs").insert({
@@ -360,7 +361,7 @@ export async function PATCH(
     .eq("center_id", ctx.centerId);
 
   if (upErr) {
-    return NextResponse.json({ error: "수정 실패", detail: upErr.message }, { status: 500 });
+    return NextResponse.json({ error: "수정 실패", detail: errDetail(upErr) }, { status: 500 });
   }
 
   if (newStatus === "cancelled" || newStatus === "noshow") {

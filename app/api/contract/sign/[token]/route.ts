@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 
@@ -198,7 +199,7 @@ export async function POST(
     .eq("id", existing.id);
 
   if (error) {
-    return NextResponse.json({ error: "저장 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "저장 실패", detail: errLogOnly(error) }, { status: 500 });
   }
   return NextResponse.json({ ok: true, id: existing.id });
 }

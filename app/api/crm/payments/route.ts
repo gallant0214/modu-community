@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -100,7 +101,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await q;
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   /* 결제내역 순서 — **결제일(날짜) 최신순, 같은 날짜면 입력한 순서(id) 최신순**.
@@ -569,7 +570,7 @@ export async function POST(request: Request) {
     status: "completed",
   });
   if (payErr) {
-    return NextResponse.json({ error: "결제 기록 실패", detail: payErr.message }, { status: 500 });
+    return NextResponse.json({ error: "결제 기록 실패", detail: errDetail(payErr) }, { status: 500 });
   }
 
   // 3) outstanding 차감 + payment_status 갱신
@@ -581,7 +582,7 @@ export async function POST(request: Request) {
     .update({ outstanding_won: newOutstanding, payment_status: newStatus } as never)
     .eq("id", targetId);
   if (updErr) {
-    return NextResponse.json({ error: "상태 갱신 실패", detail: updErr.message }, { status: 500 });
+    return NextResponse.json({ error: "상태 갱신 실패", detail: errDetail(updErr) }, { status: 500 });
   }
 
   // 4) 감사 로그

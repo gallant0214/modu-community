@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
@@ -166,7 +167,7 @@ export async function POST(request: Request) {
 
   if (error || !inserted) {
     return NextResponse.json(
-      { error: "주문을 만들지 못했어요", detail: error?.message },
+      { error: "주문을 만들지 못했어요", detail: errDetail(error) },
       { status: 500 }
     );
   }

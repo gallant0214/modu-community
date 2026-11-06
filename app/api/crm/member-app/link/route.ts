@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { verifyAuth } from "@/app/lib/firebase-admin";
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
     .in("id", ids)
     .is("linked_firebase_uid", null);
   if (updErr) {
-    return NextResponse.json({ error: "연동 실패", detail: updErr.message }, { status: 500 });
+    return NextResponse.json({ error: "연동 실패", detail: errLogOnly(updErr) }, { status: 500 });
   }
 
   // 앱 계정 이메일을 CRM 기본정보에 채운다 — 비어 있는 회원만(직원이 적어둔 값은 건드리지 않음)

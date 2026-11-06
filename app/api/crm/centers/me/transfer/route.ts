@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -121,7 +122,7 @@ export async function POST(request: Request) {
       .eq("id", existing.id);
     if (upErr) {
       return NextResponse.json(
-        { error: "대상 멤버 갱신 실패", detail: upErr.message },
+        { error: "대상 멤버 갱신 실패", detail: errDetail(upErr) },
         { status: 500 }
       );
     }
@@ -138,7 +139,7 @@ export async function POST(request: Request) {
     });
     if (insErr) {
       return NextResponse.json(
-        { error: "대상 멤버 등록 실패", detail: insErr.message },
+        { error: "대상 멤버 등록 실패", detail: errDetail(insErr) },
         { status: 500 }
       );
     }
@@ -151,7 +152,7 @@ export async function POST(request: Request) {
     .eq("id", ctx.centerMemberId);
   if (demoteErr) {
     return NextResponse.json(
-      { error: "권한 변경 실패", detail: demoteErr.message },
+      { error: "권한 변경 실패", detail: errDetail(demoteErr) },
       { status: 500 }
     );
   }
@@ -163,7 +164,7 @@ export async function POST(request: Request) {
     .eq("id", ctx.centerId);
   if (ownerErr) {
     return NextResponse.json(
-      { error: "센터 대표자 변경 실패", detail: ownerErr.message },
+      { error: "센터 대표자 변경 실패", detail: errDetail(ownerErr) },
       { status: 500 }
     );
   }

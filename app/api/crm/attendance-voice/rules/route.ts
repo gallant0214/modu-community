@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
     .order("id", { ascending: true });
 
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
   return NextResponse.json({ rules: data ?? [] });
 }
@@ -113,7 +114,7 @@ export async function PUT(request: Request) {
     .delete()
     .eq("center_id", ctx.centerId);
   if (delErr) {
-    return NextResponse.json({ error: "삭제 실패", detail: delErr.message }, { status: 500 });
+    return NextResponse.json({ error: "삭제 실패", detail: errDetail(delErr) }, { status: 500 });
   }
 
   if (clean.length > 0) {
@@ -121,7 +122,7 @@ export async function PUT(request: Request) {
       .from("crm_attendance_voice_rules")
       .insert(clean as never);
     if (insErr) {
-      return NextResponse.json({ error: "저장 실패", detail: insErr.message }, { status: 500 });
+      return NextResponse.json({ error: "저장 실패", detail: errDetail(insErr) }, { status: 500 });
     }
   }
 

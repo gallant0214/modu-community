@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
   }
   const { data: sessions, error } = await q;
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   const ids = (sessions ?? []).map((s) => s.id);
@@ -135,7 +136,7 @@ export async function POST(request: Request) {
     .select("id")
     .single();
   if (error) {
-    return NextResponse.json({ error: "등록 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "등록 실패", detail: errDetail(error) }, { status: 500 });
   }
   return NextResponse.json({ ok: true, id: (created as { id: number }).id });
 }

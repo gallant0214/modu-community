@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse, after } from "next/server";
 import { SMS_NOT_READY_MESSAGE, smsAllowedForCenter } from "@/app/lib/crm-sms-availability";
 import { supabase } from "@/app/lib/supabase";
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
     .limit(100);
 
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   // 각 broadcast 의 읽음 카운트
@@ -184,7 +185,7 @@ export async function POST(request: Request) {
 
   if (bErr || !broadcast) {
     return NextResponse.json(
-      { error: "발송 실패", detail: bErr?.message },
+      { error: "발송 실패", detail: errDetail(bErr) },
       { status: 500 }
     );
   }
@@ -208,7 +209,7 @@ export async function POST(request: Request) {
       // 실패 시 broadcast 롤백 시도 (best-effort)
       await supabase.from("crm_message_broadcasts").delete().eq("id", broadcast.id);
       return NextResponse.json(
-        { error: "수신자 저장 실패", detail: rErr.message },
+        { error: "수신자 저장 실패", detail: errDetail(rErr) },
         { status: 500 }
       );
     }

@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
     .in("type", ["membership", "apparel", "locker"])
     .order("duration_value", { ascending: true });
   if (error) {
-    return NextResponse.json({ error: "상품 조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "상품 조회 실패", detail: errLogOnly(error) }, { status: 500 });
   }
 
   type P = {

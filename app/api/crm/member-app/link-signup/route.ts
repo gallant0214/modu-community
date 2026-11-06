@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { getClientIp, checkRateLimit } from "@/app/lib/security";
 import { supabase } from "@/app/lib/supabase";
@@ -123,7 +124,7 @@ export async function POST(request: Request) {
     .eq("id", target.id)
     .is("linked_firebase_uid", null); // 경합 방지 — 아직 미연동일 때만
   if (linkErr) {
-    return NextResponse.json({ ok: false, reason: "invalid", error: "연동 실패", detail: linkErr.message }, { status: 500 });
+    return NextResponse.json({ ok: false, reason: "invalid", error: "연동 실패", detail: errLogOnly(linkErr) }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, memberId: target.id, centerId, centerName: center.name, linked: true });

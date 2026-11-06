@@ -1,3 +1,4 @@
+import { errLogOnly } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireMemberForCenter, isMemberError } from "@/app/lib/member-auth";
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
     .eq("type", "notice")
     .is("read_at", null);
   if (error) {
-    return NextResponse.json({ error: "처리 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "처리 실패", detail: errLogOnly(error) }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
 }

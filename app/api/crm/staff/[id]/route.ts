@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError, type CrmRole } from "@/app/lib/crm-auth";
@@ -47,7 +48,7 @@ export async function GET(
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
   if (!member) {
     return NextResponse.json({ error: "직원을 찾을 수 없습니다" }, { status: 404 });
@@ -400,7 +401,7 @@ export async function PATCH(
     .eq("center_id", ctx.centerId);
 
   if (updErr) {
-    return NextResponse.json({ error: "수정 실패", detail: updErr.message }, { status: 500 });
+    return NextResponse.json({ error: "수정 실패", detail: errDetail(updErr) }, { status: 500 });
   }
 
   // 🚨 수업료 설정 이력 저장 — 통계·급여는 수업일에 유효한 버전으로 계산하므로 과거 달이 바뀌지 않는다
@@ -498,10 +499,10 @@ export async function DELETE(
     if ((error as { code?: string }).code === "23503") {
       return NextResponse.json({
         error: "이 직원의 판매·예약·스케줄 이력이 남아 있어 삭제할 수 없어요. 퇴사 상태로 유지됩니다.",
-        detail: error.message,
+        detail: errDetail(error),
       }, { status: 400 });
     }
-    return NextResponse.json({ error: "삭제 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "삭제 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   await supabase.from("crm_audit_logs").insert({

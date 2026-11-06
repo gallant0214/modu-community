@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { SMS_NOT_READY_MESSAGE, smsAllowedForCenter } from "@/app/lib/crm-sms-availability";
 import { supabase } from "@/app/lib/supabase";
@@ -68,7 +69,7 @@ export async function GET(request: Request) {
 
   const [{ data: smsRows, error: smsErr }, { data: pushRows }] = await Promise.all([smsQ, pushQ]);
   if (smsErr) {
-    return NextResponse.json({ error: "조회 실패", detail: smsErr.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(smsErr) }, { status: 500 });
   }
 
   // 문자 발송자 이름 매핑(uid → display_name)

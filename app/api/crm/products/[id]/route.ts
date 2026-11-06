@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 import { requireCrmContext, isCrmError } from "@/app/lib/crm-auth";
@@ -29,7 +30,7 @@ export async function GET(
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
   if (!data) return NextResponse.json({ error: "상품을 찾을 수 없습니다" }, { status: 404 });
   return NextResponse.json({ product: data });
@@ -138,7 +139,7 @@ export async function PATCH(
     .eq("center_id", ctx.centerId);
 
   if (error) {
-    return NextResponse.json({ error: "수정 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "수정 실패", detail: errDetail(error) }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
 }
@@ -175,7 +176,7 @@ export async function DELETE(
     .eq("center_id", ctx.centerId);
 
   if (error) {
-    return NextResponse.json({ error: "삭제 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "삭제 실패", detail: errDetail(error) }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
 }

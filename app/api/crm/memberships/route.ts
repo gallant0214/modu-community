@@ -1,3 +1,4 @@
+import { errDetail } from "@/app/lib/api-error";
 import { NextResponse, after } from "next/server";
 import {
   claimCoupon,
@@ -60,7 +61,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) {
-    return NextResponse.json({ error: "조회 실패", detail: error.message }, { status: 500 });
+    return NextResponse.json({ error: "조회 실패", detail: errDetail(error) }, { status: 500 });
   }
 
   type Row = Record<string, unknown> & { member_id: number; purchased_at?: string | null; id: number };
@@ -271,7 +272,7 @@ export async function POST(request: Request) {
 
   if (error || !created) {
     if (couponIssueId) await releaseCoupon(couponIssueId);
-    return NextResponse.json({ error: "발급 실패", detail: error?.message }, { status: 500 });
+    return NextResponse.json({ error: "발급 실패", detail: errDetail(error) }, { status: 500 });
   }
   if (couponIssueId) await finalizeCouponUse(couponIssueId, "membership", created.id);
 
