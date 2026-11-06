@@ -10965,7 +10965,8 @@ function BodyMeasurementModal({
   onDone: () => void;
 }) {
   const { getIdToken } = useAuth();
-  const [measuredAt, setMeasuredAt] = useState(() => new Date().toISOString().slice(0, 10));
+  // 측정일 기본값 = 한국 오늘 (UTC 로 잡으면 0~9시에 어제 날짜가 들어간다)
+  const [measuredAt, setMeasuredAt] = useState(() => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10));
   const [weight, setWeight] = useState("");
   const [muscle, setMuscle] = useState("");
   const [fatKg, setFatKg] = useState("");
@@ -10980,7 +10981,7 @@ function BodyMeasurementModal({
 
   useEffect(() => {
     if (!open) {
-      setMeasuredAt(new Date().toISOString().slice(0, 10));
+      setMeasuredAt(new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10));
       setWeight("");
       setMuscle("");
       setFatKg("");
